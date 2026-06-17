@@ -56,6 +56,11 @@ Read in order:
 - [Test design: governance adapters for Sojourn](testdesign-sojourn.md) — a worked
   second-adopter test on a deterministic Rust 4X game: multiple gameplay-invariant
   and software-development adapters that reify the project's existing ad-hoc rules.
+- [Adapter proposal: Sojourn's research system](adapter-sojourn-research.md) — a
+  deep dive on the single richest invariant surface in the game (Understanding
+  Levels + TRL maturation, seeding, breakthroughs, the science tide, reliability):
+  complex reified rules (graph folds, property laws, determinism ordering, seed-sweep
+  bands) and what the adapter buys over scattered Rust tests and implicit clamps.
 - [Lessons and anti-goals](lessons.md) — why the previous attempt became opaque
   and oppressive, the anti-goals that prevent a repeat, and how this design
   honours the project-split decision.
