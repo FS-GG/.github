@@ -127,6 +127,32 @@ change.
 - **AgentReviewed:** design soundness; failure-mode reasoning.
 - **HumanOnly:** safety sign-off.
 
+## Composing several adapters in one project
+
+A real project runs several adapters at once — an Elmish / FS.GG.Render product
+using Ant Design *and* Spec Kit *and* a software-surface adapter. They compose at
+a single **composition root** via a coproduct fact type, with each adapter's
+rules lifted into it:
+
+```fsharp
+type ProjectFact =
+    | Design   of DesignSystemFact
+    | SpecKit  of SpecKitFact
+    | Software of SoftwareFact
+```
+
+This is a closed-union specialization of *Data Types à la Carte*: the kernel
+folds one `ProjectFact` algebra assembled from the per-domain pieces. Single-domain
+adapters stay dumb and independent; everything cross-cutting lives in the root.
+
+**Cross-domain coupling is an explicit, deterministic combinator, never ad-hoc
+glue** — a "design task must carry a recorded review" rule is written as `Implies`
+over the coproduct's facts, combined under a fixed order-independent precedence
+(a blocking result always wins). The set of cross-domain rules stays small,
+named, and reviewed in one place. See [Theory and composition](theory-and-composition.md)
+for the footing (DTalC, the process-algebra warning against ad-hoc
+synchronization, and how lifting boilerplate is tamed).
+
 ## Adoption bar
 
 A domain counts as a real adopter only if it can define its own fact domain, run

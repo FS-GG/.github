@@ -49,6 +49,10 @@ Read in order:
 - [Spec Kit in the system](speckit-in-the-system.md) — how the Spec Kit workflow
   is expressed: a spec-kit adapter, phase checks as reified rules, run-modes
   mapped to phases, and the constitution as the dial.
+- [Theory and composition](theory-and-composition.md) — the footing: Data Types à
+  la Carte, applicative inspectability, the phase-machine-emits-facts layering,
+  explicit deterministic cross-domain combinators, and the policy-engine prior art
+  (Cedar, OPA/Rego), with citations.
 - [Lessons and anti-goals](lessons.md) — why the previous attempt became opaque
   and oppressive, the anti-goals that prevent a repeat, and how this design
   honours the project-split decision.

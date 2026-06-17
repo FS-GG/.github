@@ -65,6 +65,13 @@ type Check<'fact> =
     | Opaque  of name: string * (FactSet<'fact> -> Outcome)
 ```
 
+The combinators are deliberately **applicative, never monadic**: there is no
+`bind` or data-dependent sequencing inside a `Check`, so its structure is fixed a
+priori and can be folded (`hash`, `render`, `explain`) *without executing* it.
+That inspectability is the property the whole design rests on; see
+[Theory and composition](theory-and-composition.md) for why (Free Applicative
+Functors) and for how this algebra relates to *Data Types à la Carte*.
+
 ## The readable surface
 
 Deliberately the lightest embedding — smart constructors, pipeline operators, and
