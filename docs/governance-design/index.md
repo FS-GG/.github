@@ -53,6 +53,9 @@ Read in order:
   la Carte, applicative inspectability, the phase-machine-emits-facts layering,
   explicit deterministic cross-domain combinators, and the policy-engine prior art
   (Cedar, OPA/Rego), with citations.
+- [Test design: governance adapters for Sojourn](testdesign-sojourn.md) — a worked
+  second-adopter test on a deterministic Rust 4X game: multiple gameplay-invariant
+  and software-development adapters that reify the project's existing ad-hoc rules.
 - [Lessons and anti-goals](lessons.md) — why the previous attempt became opaque
   and oppressive, the anti-goals that prevent a repeat, and how this design
   honours the project-split decision.
