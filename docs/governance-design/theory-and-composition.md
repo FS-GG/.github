@@ -108,6 +108,127 @@ glue:
 The set of cross-domain rules stays small, named, and listed in the composition
 root, so it is the one surface code review guards.
 
+## Ordering and confluence
+
+A governance verdict must not depend on the order rules happen to be written or
+evaluated in. The design is **order-independent by intent**, and most layers are
+confluent by construction; the residual hazards are a short, known list, each with
+a standard mitigation.
+
+### Confluent by construction
+
+- **Fixed-point derivation** is forward chaining with **monotonic** rules (rules
+  only add facts), so it has a *unique least fixed point* regardless of order —
+  the Datalog guarantee.
+- **`All` / `Any` verdicts** use Kleene three-valued logic, which is commutative
+  and associative.
+- **Route gate sets** are unions (deduped) and **tiers** are a `max`.
+- **Merge combination** uses deterministic precedence (a blocking result always
+  wins; default allow-unless-fenced), chosen precisely so it is commutative.
+- **Taint propagation** is a transitive closure over a DAG (`EvidenceGraph`
+  rejects cycles), so it is a least fixed point too.
+
+### Hazard 1 — negation-as-failure (the important one)
+
+A rule that fires on the *absence* of a fact is non-monotonic, and its outcome
+depends on what has been derived so far:
+
+```fsharp
+// HAZARD: fires on the absence of a recorded verdict
+let reviewRule facts =
+    match recordedVerdict facts ruleId key with        // negation-as-failure
+    | Some v -> [ recordedReviewFact ruleId v ]
+    | None   -> [ reviewRequestFact { Id = ruleId; (* … *) } ]
+// If another rule could DERIVE a recordedReviewFact in the same run, whether the
+// request is emitted depends on which fired first — non-confluent.
+```
+
+Mitigation: **stratify.** Facts that other rules negate-check live in a lower
+stratum — supplied before evaluation, never derived inside the same fixed point:
+
+```fsharp
+let supplied = readEvidenceStore () @ phaseMachine.emit ()   // stratum 0 (facts)
+let result   = FixedPoint.evaluate identify rules supplied   // stratum 1 reads them
+```
+
+(Note: `Check.Not` is *not* this hazard — it negates an evaluated sub-verdict,
+which is total and order-free. Only rule-level "is this fact absent?" tests are
+non-monotonic.)
+
+### Hazard 2 — provenance and reason order
+
+The fact *set* is confluent, but `eval` reports the *first* failing clause, so
+reordering a commutative node changes the message even though the verdict is
+identical:
+
+```fsharp
+eval facts (All [ contrast; spacing ])   // Fail "contrast 3.1:1 < 4.5:1"
+eval facts (All [ spacing; contrast ])   // Fail "spacing 6px off-scale"
+```
+
+Mitigation: collect *every* failing reason (or tie-break by `RuleId`), not the
+first:
+
+```fsharp
+| All cs ->
+    let vs = List.map (eval facts) cs
+    match List.choose failReason vs with
+    | []      -> if List.exists isUncertain vs then firstUncertain vs else Pass
+    | reasons -> Fail (String.concat "; " (List.sort reasons))   // order-free
+```
+
+### Hazard 3 — hashing commutative nodes
+
+`hash (All [a; b])` should equal `hash (All [b; a])`; they are the same check, so
+they must share a cache key or you get spurious re-review. Canonicalize the
+commutative nodes by sorting, but keep positional hashing where order is
+meaningful:
+
+```fsharp
+let rec hash = function
+    | Atom p       -> h ("atom", p.Name, p.Args, p.Reads)        // positional: args ARE ordered
+    | All cs       -> h ("all", List.sort (List.map hash cs))    // sorted: commutative
+    | Any cs       -> h ("any", List.sort (List.map hash cs))    // sorted: commutative
+    | Not c        -> h ("not", hash c)
+    | Implies(a,b) -> h ("implies", hash a, hash b)              // positional: a==>b ≠ b==>a
+    | Opaque(n,_)  -> h ("opaque", n)
+```
+
+### Hazard 4 — dedup and `identify`
+
+If `identify : 'fact -> FactId` is not injective on value-bearing facts, dedup's
+"keep which?" becomes order-dependent. Mitigation: an injective `identify`, with
+dedup keeping the first under a total order and asserting collisions are equal.
+
+### Hazard 5 — never positional rules
+
+The classic firewall/iptables failure mode is "first matching rule decides," where
+order is load-bearing. It is forbidden here; combination is always by deterministic
+precedence:
+
+```fsharp
+// HAZARD (forbidden): first match wins — order-dependent
+let verdict = rules |> List.tryPick (fun r -> matchRule r change)
+
+// MITIGATION: deterministic precedence — commutative, order-free
+let verdict =
+    let vs = rules |> List.map (evalRule change)
+    if   List.exists isBlockingFail vs then Blocked        // forbid trumps permit
+    elif List.forall isPass vs         then Allowed
+    else NeedsReview
+```
+
+This is also the process-algebra warning made concrete: express cross-domain
+coupling as `Implies` plus precedence, never as "run A then B."
+
+### The constraint
+
+Two disciplines keep the whole system confluent: **keep the rule set stratified**
+(no negation over still-being-derived facts), and **canonicalize hashing and
+provenance for commutative nodes**. All *intended* ordering is quarantined in the
+phase [state machine](speckit-in-the-system.md), which is explicitly sequential and
+emits facts; the check algebra over those facts stays an order-free fold.
+
 ## Taming lifting boilerplate
 
 The honest cost of the closed coproduct is hand-written injections. Keep them to
