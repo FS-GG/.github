@@ -3,7 +3,7 @@ title: "Test design: governance adapters for Sojourn"
 category: Governance design
 categoryindex: 7
 index: 9
-description: A worked test design applying the governance system to Sojourn — a deterministic Rust 4X game — with multiple gameplay-invariant and software-development adapters that reify the project's existing ad-hoc rules.
+description: A worked test design applying the governance system to Sojourn — a deterministic Rust 4X game — with multiple gameplay-invariant and software-development adapters that reify the project's existing ad-hoc rules, plus a deeper pass of complex gameplay-design rules (tech-web graph folds, seed-sweep balance probes, and cross-domain composites).
 ---
 
 # Test design: governance adapters for Sojourn
@@ -68,6 +68,7 @@ checks. Gameplay-invariant adapters first, then software-development adapters.
 | Crate architecture & surface | FA-04 C1 | `Cargo.toml` graph, slice query APIs, `postcard` DTOs, `deny.toml` | Det + Agent + Human |
 | Data-dense presentation | P4, FR-UI-1505 | `sojourn-ui`, `sojourn-ui-desktop`, theme config | Det + Agent |
 | Spec Kit lifecycle | existing | `.specify`, `specs/FA-*`, `tasks.md` | reused as-is |
+| Playtest / balance | P3, P5, harness | seed sweeps over `scenarios/*.ron` via `sojourn-harness` | Det + Agent + Human |
 
 All rule code below is **illustrative**: probes are thin readers over Sojourn's
 existing formats, and the algebra is the [reified `Check`](rule-edsl.md)
@@ -224,6 +225,246 @@ Reused unchanged from [Spec Kit in the system](speckit-in-the-system.md): Sojour
 already has `.specify` / `specs/FA-*` / `tasks.md`, so the lifecycle adapter
 attaches with no new work.
 
+## Deeper gameplay rules (a second pass)
+
+The eight adapters above mostly *reify hygiene Sojourn already runs* — provenance,
+conservation, determinism, decoupling. This section pushes further, into rules that
+govern the **shape of the game** rather than the correctness of a file. They
+exercise capabilities of the [reified algebra](rule-edsl.md) the first pass leaves
+idle: **graph folds** over the tech web, **deeper `Implies` chains** spanning four
+or five domains, the **`HumanOnly` tier** on a genuinely ethical call, and a new
+kind of probe that the deterministic core makes almost free — the **seed sweep**.
+
+### The seed-sweep probe (and a ninth adapter)
+
+Because the core is bit-deterministic from `seed + decision script`, and
+`sojourn-harness` already drives scenarios, a probe can *run the simulation across a
+seed sweep and assert a distributional property* — and stay **Deterministic**,
+because the run is reproducible. The judgement is not in the computation; it is in
+the **acceptance band**. That split lands on the tiers exactly:
+
+> The sweep is `Deterministic`. The band it must fall inside — "is this *fair*?",
+> "is this *fun-shaped*?" — is `HumanOnly`. The diagnosis of *why* a sweep drifted
+> out of band is `AgentReviewed`.
+
+That is its own adapter — **Playtest / balance** — and it is the one addition that
+turns governance-of-the-codebase into governance-of-the-*design*.
+
+```fsharp
+let seedSweep scenario metric n =
+    probe "seed-sweep" [ ref "scenario" scenario; ref "crate" "sojourn-harness" ]
+          [ LiteralArg scenario; NumberArg (float n) ]
+          (fun _ -> (* drive `scenario` across n seeds; reduce to the `metric` distribution;
+                       Met iff distribution ∈ the declared band, else Unmet w/ the outlier seed *) Met)
+```
+
+### Currency economy — "nothing is free" as contract
+
+The six conserved currencies (funds, delta-v, mass, crew-time, ops-capacity,
+political capital) are a stated pillar but only the *physical* ones conserve in
+`validation.ron` today. Make the design contract checkable, and watch the soft
+currencies — reputation, political capital — which are the likely leak.
+
+```fsharp
+// every player-issuable action must debit >= 2 of the six currencies
+let noFreeLunch =
+    probe "no-free-lunch" [ ref "data" "data/econ/actions.ron" ] []
+          (fun _ -> (* each action's cost vector touches >= 2 currencies *) Met)
+
+let currencyClosure =
+    rule "p2-currency-closure" Deterministic P2
+        (All [ Atom noFreeLunch
+               Atom (everyCurrencyHasDeclaredSource "funds")
+               Atom (everyCurrencyHasDeclaredSource "political") ])
+    |> blocking
+
+// a commodity's value must not fall as its delta-v distance from a sink rises
+let deltaVAddress =
+    rule "p2-deltav-address" Deterministic P2
+        (Atom (priceMonotoneInDeltaV "data/econ/commodities.ron"))
+    |> advisory
+```
+
+### Research curve — the tech web as a governed graph
+
+```fsharp
+// UL -> EngineeringProgram -> Technology must be a DAG, every tech reachable from UL=0
+let techWebWellFormed =
+    probe "tech-web-dag" [ ref "data" "data/tech/web.ron"; ref "data" "data/research/domains.ron" ] []
+          (fun _ -> (* topo-sort; Met iff acyclic AND every tech reachable by some
+                       path that does not require itself *) Met)
+
+let researchGraph =
+    rule "p3-tech-web" Deterministic P3 (Atom techWebWellFormed) |> blocking
+
+// the README's own promise: ~1 breakthrough / 8-15 yr in a heavily-invested domain
+let breakthroughCadence =
+    rule "p3-breakthrough-cadence" Deterministic P3
+        (Atom (seedSweep "scenarios/deep_invest.ron" "mean_breakthrough_interval_years" 200))
+    |> advisory   // the band [8.0, 15.0] is the human dial; the sweep itself is mechanical
+
+// a failure must teach: no pure-loss outcome
+let failureTeaches =
+    rule "p3-failure-teaches" Deterministic P3
+        (Atom (everyFailureInjectsUnderstanding "data/research")) |> blocking
+
+// over-investing to leapfrog must cost strictly more basic science than the stage-by-stage path
+let leapfrogCost =
+    rule "p3-leapfrog-cost" AgentReviewed P3
+        (Opaque ("leapfrog-not-dominant", fun _ -> Unknown "judgement"))
+    |> asking "Does the leapfrog path cost strictly more basic science than going stage-by-stage?"
+```
+
+### Faction asymmetry — "asymmetric but fair", measured
+
+The first pass only checks the *negative* (faction data never touches physics
+constants). Add the positive: asymmetry must be sourced, and balance must measure.
+
+```fsharp
+// every faction bonus/penalty must cite real-world heritage (P5 x P1)
+let asymmetryIsSourced =
+    rule "p5-asymmetry-sourced" AgentReviewed Cross
+        (forEachFactionBonus ==> hasCredibleSource)
+    |> asking "Does this faction asymmetry cite flown hardware / a funded program (e.g. Roscosmos NTP heritage)?"
+
+// across a seed sweep, no faction's score distribution leaves the fairness band
+let factionFairnessBand =
+    rule "p5-fairness-band" Deterministic P5
+        (Atom (seedSweep "scenarios/all_factions.ron" "score_spread_by_faction" 200))
+    |> blocking   // the band is a HumanOnly dial; the measurement is reproducible
+
+// every faction has at least one non-failure path at default difficulty
+let noUnplayableFaction =
+    rule "p5-no-dead-faction" AgentReviewed P5
+        (Atom (seedSweep "scenarios/all_factions.ron" "min_faction_survival_rate" 200))
+    |> asking "Is any faction's survival rate ~0 at default difficulty (e.g. Astrolith's revenue-or-bankrupt)?"
+
+// no single propulsion architecture should win every Grand Goal
+let noDominantArchitecture =
+    rule "p5-strategy-diversity" AgentReviewed P5
+        (Atom (seedSweep "scenarios/grand_goals.ron" "winning_architecture_by_goal" 200))
+    |> asking "Does one of NTP / NEP / reusable-chemical win all four Grand Goals across the sweep?"
+```
+
+### Mission coherence — feasibility, not just dimensions
+
+```fsharp
+// no contract may be physically impossible with any researchable vehicle inside its window
+let contractsFeasible =
+    rule "p2-contracts-feasible" AgentReviewed Cross
+        (contractOffered ==> existsResearchableVehicleWithin)   // astro x vehicle x economy
+    |> asking "Is there a researchable vehicle that closes this contract's delta-v inside its window?"
+
+// a contract's quoted delta-v must be >= the n-body authoritative cost, not the cheaper patched-conic
+let authorityBudget =
+    rule "p2-authority-budget" Deterministic P2
+        (Atom (quotedDeltaVGteNBody "data/econ/contracts.ron")) |> blocking
+```
+
+### Astrobiology — where the Human tier earns its keep
+
+```fsharp
+// confidence may only rise through the staged ladder; no stage skipped to "confirmed"
+let detectionStaging =
+    rule "p8-detection-staging" Deterministic P1
+        (Atom (stagingMonotone "data/astro/biosignatures.ron")) // orbital -> in-situ -> microscopy -> sample return
+    |> blocking
+
+// every positive-detection path must model a competing abiotic explanation (educational honesty)
+let abioticCompetitor =
+    rule "p8-false-positive-honesty" AgentReviewed P1
+        (positiveDetectionPath ==> hasModeledAbioticExplanation)
+    |> asking "Does this detection path model a competing abiotic explanation?"
+
+// detected life is a science object, never an actor (v1.0 scope)
+let lifeNeverActs =
+    rule "p9-life-not-actor" Deterministic P1
+        (Not (anyEventWhere "subject" "detected_life")) |> blocking
+
+// entering a Special Region requires sterility OR a wired-up science/reputation penalty (astro x polity)
+let planetaryProtection =
+    rule "p1-cospar-teeth" Deterministic Cross
+        (entersSpecialRegion ==> (isSterileLander .| modelsScienceRepPenalty)) |> blocking
+
+// admitting a new candidate-life world / editing the seeded ground-truth prior is reserved for humans
+let newLifeWorld =
+    rule "p8-new-life-world" HumanOnly P1
+        (Opaque ("admit-life-world", fun _ -> Unknown "decision"))
+```
+
+### Educational honesty — the Sojournal as a governed surface
+
+```fsharp
+// every mechanic consuming a sourced constant must have a Sojournal entry citing the SAME source
+let mechanicExplained =
+    rule "p8-sojournal-coverage" Deterministic P1 (Atom everyMechanicHasSojournalEntry) |> advisory
+
+// a Sojournal claim may not contradict its own citation
+let sojournalConsistent =
+    rule "p8-sojournal-consistent" AgentReviewed P1
+        (Opaque ("claim-matches-cite", fun _ -> Unknown "judgement"))
+    |> asking "Does this Sojournal claim contradict the source it cites?"
+```
+
+### Difficulty meta-invariant
+
+```fsharp
+// difficulty alters harshness, never physics
+let difficultyNotPhysics =
+    rule "p2-difficulty-not-physics" Deterministic P2
+        (Not (difficultyTable |> touchesPhysicsConstant)) |> blocking
+```
+
+### The flagship composites
+
+The highest-value rules bind four-plus domains in one explicit `Implies` — the
+pattern [theory](theory-and-composition.md) names as most valuable. These extend
+the simpler `new-propulsion` rule in [Composition](#composition):
+
+```fsharp
+// admitting new propulsion: sourced AND conserves AND climbs the TRL ladder AND
+// faction-neutral physics AND explained AND reachable by some feasible contract.
+let newPropulsionAdmission =
+    rule "new-propulsion-admission" AgentReviewed Cross
+        (   addsEngineeringNode "propulsion"
+        ==> All [ hasCredibleSource                 // Plausibility
+                  rocketEquationHolds               // Conservation
+                  followsResearchStages             // Research
+                  physicsIsFactionNeutral           // Fairness
+                  hasSojournalEntry                 // Educational honesty
+                  existsResearchableVehicleWithin ]) // Mission coherence
+    |> blocking
+
+// the Homestead Grand Goal, restated as an invariant: a "survivable" settlement
+// must close every budget simultaneously over the 5-year resupply embargo.
+let homesteadSurvivable =
+    rule "homestead-survivable" AgentReviewed Cross
+        (   settlementTemplate
+        ==> All [ closesMassBudget; closesPowerThermal
+                  closesLifeSupport; closesIsruOverEmbargo ]) // base x crew x economy x astro
+    |> blocking
+```
+
+`homesteadSurvivable` is the Homestead win condition and a governance rule at once
+— which is the whole thesis: the design *is* the contract.
+
+### Why these are "more complex"
+
+The first eight adapters are per-artifact predicates. This pass adds four shapes the
+algebra supports but the first pass leaves idle:
+
+- **Graph folds** — `techWebWellFormed` and `detectionStaging` are reachability /
+  topology over a DAG, not field checks.
+- **Distributional probes** — the seed sweep reduces hundreds of deterministic runs
+  to a single band test, with the band as the only human input.
+- **Deep `Implies` chains** — `newPropulsionAdmission` spans five domains in one
+  named, centrally-reviewable combinator.
+- **The `HumanOnly` tier on a real decision** — `newLifeWorld` is the genuinely
+  ethical call the tier exists for.
+
+None of this needs a kernel change: they are new facts, artifacts, and probes. The
+adoption bar holds even as the rules get materially harder.
+
 ## Composition
 
 The eight adapters compose at one root via a coproduct (see
@@ -239,6 +480,7 @@ type SojournFact =
     | Architecture   of ArchitectureFact
     | Presentation   of PresentationFact
     | SpecKit        of SpecKitFact
+    | Balance        of BalanceFact
 ```
 
 The valuable rules are cross-domain — expressed as explicit, deterministic
