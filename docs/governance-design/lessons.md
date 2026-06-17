@@ -2,7 +2,7 @@
 title: Lessons and anti-goals
 category: Governance design
 categoryindex: 7
-index: 7
+index: 8
 description: Why the previous attempt became opaque and oppressive, the anti-goals that prevent a repeat, and how this design honours the project-split decision.
 ---
 
