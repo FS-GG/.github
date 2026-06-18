@@ -14,7 +14,7 @@ tooling live in separate repositories, each using standard
 | Repo | What it is | Status |
 |---|---|---|
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Elmish/MVU apps rendered with SkiaSharp over OpenGL (GL). Scene, layout, input, viewer/host, controls, design-system/themes, templates. | Active |
-| **FS.GG.Governance** | Optional rule/evidence/route tooling, developed as a normal tool product. Rendering never depends on it. | Planned |
+| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule/evidence/route tooling, developed as a normal tool product. Rendering never depends on it. | Bootstrapping |
 
 ## Operating rule
 
