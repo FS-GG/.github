@@ -2,8 +2,8 @@
 title: Transition and boundaries
 category: FS.GG
 categoryindex: 6
-index: 6
-description: Transition guidance for moving from the current repository to split rendering and governance projects.
+index: 7
+description: Transition guidance for moving from the current repository to split rendering, SDD, and governance projects.
 ---
 
 # Transition and boundaries
@@ -14,12 +14,13 @@ working software, clear ownership, and small contracts.
 
 ## Repository boundaries
 
-Start with two projects:
+Start with three focused projects:
 
 | Repository | Owns | Does not own |
 |---|---|---|
 | Rendering | Runtime code, controls, docs, tests, templates, packages, release notes. | Experimental governance platform internals. |
-| Governance | Optional rule, evidence, route, and Spec Kit tooling. | Rendering product identity or release authority. |
+| SDD | Lifecycle artifacts, normalized work model, generated views, and agent guidance. | Rule-engine enforcement or rendering product identity. |
+| Governance | Optional rule, evidence, route, profile, and gate tooling. | SDD lifecycle ownership or rendering release authority. |
 
 Add a third template repository only if template release cadence, ownership, or
 distribution requirements become materially different from the rendering
@@ -29,15 +30,17 @@ runtime.
 
 This repository should become source inventory, provenance, and archive
 material. It should not be transformed into either destination repository. The
-rendering and governance repositories should be created first as fresh standard
-Spec Kit repositories, then selected material can be imported from here.
+rendering, SDD, and governance repositories should be created first as fresh
+standard Spec Kit repositories, then selected material can be imported from
+here.
 
 Its job is to help answer:
 
 - which runtime source paths should be copied into the rendering project;
 - which tests and docs are still current;
 - which package and template identities are retained, renamed, or deprecated;
-- which governance experiments should be copied into the governance project;
+- which lifecycle workflow ideas belong in SDD;
+- which rule/evidence experiments should be copied into Governance;
 - which tests, generated fixtures, and checks justify their cost in the initial
   rendering repository;
 - which historical specs and reports remain archive-only.
@@ -59,8 +62,9 @@ rebrand decision is already firm. A practical order is:
 ## Docs and templates
 
 Docs and templates should move with the rendering project by default because
-they describe and instantiate the product. Governance docs should move only when
-they describe governance tooling as a separate product.
+they describe and instantiate the product. SDD docs should move only when they
+describe lifecycle tooling. Governance docs should move only when they describe
+rule/evidence tooling as a separate product.
 
 Template behavior should be treated as a rendering product contract, but it
 does not need a custom product graph to start. Standard checks are enough:
@@ -78,11 +82,12 @@ Keep cross-repo contracts small:
 - versioned package APIs;
 - command-line interfaces;
 - JSON report formats only when needed;
+- documented SDD readiness formats if lifecycle tooling produces them;
 - documented support-bundle formats if governance tooling produces them;
 - release notes and migration guides.
 
 Avoid shared mutable state, generated workflow projections, or custom graph
-schemas across repositories until the governance project has matured.
+schemas across repositories until each owning project has matured.
 
 ## Bridge policy
 
@@ -91,7 +96,7 @@ The old repository should eventually carry:
 - a bridge README or report;
 - source commit and migration notes;
 - package/template deprecation guidance if names change;
-- links to the rendering and governance repositories;
+- links to the rendering, SDD, and governance repositories;
 - archived historical reports.
 
 It should not keep receiving normal product features after the rendering project

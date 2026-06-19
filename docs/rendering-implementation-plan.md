@@ -2,7 +2,7 @@
 title: Rendering implementation plan
 category: FS.GG
 categoryindex: 6
-index: 9
+index: 10
 description: Implementation plan for the rendering repository, starting from a fresh standard Spec Kit repository.
 ---
 

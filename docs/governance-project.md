@@ -10,7 +10,7 @@ description: Scope and adoption bar for a separate governance and rule-tooling p
 
 The governance project should be treated as a tool product, not as the hidden
 operating system of the rendering repository. It may explore rule evaluation,
-evidence models, route explanation, and Spec Kit extensions, but it must earn
+evidence models, route explanation, and optional validators, but it must earn
 adoption by staying small and useful.
 
 ## Scope
@@ -23,7 +23,7 @@ The governance project may own:
 - route-analysis helpers;
 - package, template, docs, and release drift analyzers;
 - support-bundle tooling;
-- optional Spec Kit extensions;
+- optional validators or report generators consumed by Spec Kit or SDD;
 - examples that validate external repositories without requiring them to adopt a
   custom platform.
 
@@ -62,10 +62,10 @@ An adoption should count only if the consuming project can:
 If adoption requires the consumer to become shaped like the rendering project,
 the tool is not generic.
 
-## Relationship to standard Spec Kit
+## Relationship to standard Spec Kit and SDD
 
-The governance project should prefer additive integration with standard Spec
-Kit. Useful forms include:
+The governance project should prefer additive integration with standard Spec Kit
+and FS.GG.SDD. Useful forms include:
 
 - read-only status or trace commands;
 - report generators;
@@ -75,7 +75,8 @@ Kit. Useful forms include:
 - focused extensions that can be removed without breaking the project.
 
 It should not start by replacing Spec Kit's authored artifacts with a custom
-graph authority.
+graph authority, and it should not own the SDD lifecycle model. SDD may emit
+structured artifacts that Governance inspects later.
 
 ## Development stance
 

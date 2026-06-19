@@ -2,7 +2,7 @@
 title: Governance implementation plan
 category: FS.GG
 categoryindex: 6
-index: 10
+index: 11
 description: Implementation plan for the separate governance tooling repository, after rendering is established.
 ---
 

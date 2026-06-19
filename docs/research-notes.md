@@ -2,7 +2,7 @@
 title: Research notes
 category: FS.GG
 categoryindex: 6
-index: 7
+index: 8
 description: Durable research findings preserved from the earlier SpecFlow graph operating system report.
 ---
 

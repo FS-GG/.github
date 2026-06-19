@@ -3,15 +3,17 @@ title: Project split decision
 category: FS.GG
 categoryindex: 6
 index: 2
-description: Decision record for splitting rendering and governance into separate projects that use standard Spec Kit.
+description: Decision record for splitting rendering, SDD lifecycle, and governance into separate projects that use standard Spec Kit.
 ---
 
 # Project split decision
 
-Split the rendering framework and governance tooling into separate projects.
-The rendering project should use standard Spec Kit plus narrow deterministic
-checks. The governance project should be developed as a separate product and
-should not be required for rendering contributors to make progress.
+Split the rendering framework, SDD lifecycle tooling, and governance tooling
+into separate projects. The rendering project should use standard Spec Kit plus
+narrow deterministic checks. The SDD project should own lifecycle artifacts and
+agent guidance. The governance project should own optional rule/evidence tooling
+and should not be required for rendering or SDD contributors to make ordinary
+progress.
 
 ## Context
 
@@ -43,14 +45,15 @@ Use a split-repository direction:
 | Project | Purpose | Workflow baseline |
 |---|---|---|
 | Rendering/runtime | Scene, layout, input, viewer, controls, design systems, themes, templates, docs, tests, packages. | Standard Spec Kit plus narrow repo-owned checks. |
-| Governance/tooling | Rule kernels, evidence helpers, route analyzers, optional Spec Kit extensions or validators. | Standard Spec Kit, developed as a normal tool product. |
+| SDD/lifecycle | Charter, specify, clarify, checklist, plan, tasks, normalized work model, generated views, agent commands/skills. | Standard Spec Kit with the F# constitution. |
+| Governance/tooling | Rule kernels, evidence helpers, route analyzers, optional validators, profile/gate/report tooling. | Standard Spec Kit, developed as a normal tool product. |
 | Templates/package support | Optional later split if release cadence differs from runtime. | Standard Spec Kit or rendering repo workflow, decided later. |
 
-The rendering repository should not depend on the governance repository for
-ordinary build, test, package, docs, or release work. Governance tooling may
-observe the rendering repository from the outside, validate it as a customer,
-or provide optional helpers, but it must not become the rendering project's
-foundation until it has proved itself.
+The rendering and SDD repositories should not depend on the governance
+repository for ordinary build, test, package, docs, or release work. Governance
+tooling may observe them from the outside, validate them as customers, or
+provide optional helpers, but it must not become either project's foundation
+until it has proved itself.
 
 Implementation starts from fresh standard Spec Kit repositories. This repository
 is used as source inventory and provenance, not as the base that is transformed
@@ -59,13 +62,13 @@ into either destination.
 ## Pros
 
 - Lower cognitive load for runtime contributors.
-- Smaller blast radius when governance ideas change.
-- Independent release cadence for runtime and tooling.
+- Smaller blast radius when governance or lifecycle ideas change.
+- Independent release cadence for runtime, lifecycle, and rule tooling.
 - Cleaner boundaries between product behavior and process experiments.
 - Easier deletion or replacement of governance experiments.
 - Better adoption test for governance tooling, because it must work as an
   external tool rather than absorbing local exceptions.
-- Standard Spec Kit remains available as a familiar baseline in both projects.
+- Standard Spec Kit remains available as a familiar baseline in all projects.
 
 ## Cons
 
@@ -90,7 +93,7 @@ separate, earned tooling:
 - package and template drift checks;
 - release provenance checks;
 - support-bundle helpers;
-- optional Spec Kit extensions.
+- optional validators or report generators.
 
 The rendering repository keeps only checks that are simple, local, and clearly
 worth their cost.
