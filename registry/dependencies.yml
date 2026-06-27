@@ -101,6 +101,27 @@ coherence:
     resolved_by: "FS-GG/FS.GG.Rendering@57be86c — tag fs-skia-ui/v0.1.50-preview.1 (closes #1)"
     impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers can build the rendering app against a tagged, reproducible FS.GG.UI.* set."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/1"
+  - id: fs-skia-ui-bom
+    coherent: true
+    owner: rendering
+    summary: >
+      Resolved 2026-06-27 (Feature 207): an OPTIONAL full-set BOM / metapackage FS.GG.UI is
+      published at 0.1.51-preview.1 alongside the 16 coherent FS.GG.UI.* members, behind the
+      immutable annotated tag fs-skia-ui/v0.1.51-preview.1. Referencing the single FS.GG.UI package
+      at one version pins the entire coherent set at that version (live-verified: one
+      FS.GG.UI@0.1.51-preview.1 reference -> all 16 members at V, clean build, byte-reproducible
+      across two cache-cleared restores, preview channel matched). The metapackage ships no assembly
+      (exact [$version$] member deps only) and its membership is locked to the packable FS.GG.UI.*
+      set by an always-on parity test. Deviation is DETECTED in both directions — NU1605 (downgrade
+      Y<V) / NU1608 (upgrade Y>V) — and becomes a hard restore/build failure under the
+      warnings-as-errors posture (WarningsAsErrors=NU1605;NU1608 / TreatWarningsAsErrors, the repo +
+      governed-template default); by default the codes are warnings. Adoption is additive/optional:
+      the fs-gg-ui template default pin remains FsSkiaUiVersion=0.1.50-preview.1 and is NOT migrated
+      to the BOM (this corrects research R1's NU1605/NU1107 claim to the observed NU1605/NU1608 +
+      consumer policy).
+    resolved_by: "FS-GG/FS.GG.Rendering@d9f4c81 — tag fs-skia-ui/v0.1.51-preview.1 (feature 207)"
+    impact: "Consumers can collapse up to 16 individual FS.GG.UI.* pins to one FS.GG.UI reference; any out-of-set member version is surfaced loudly under warnings-as-errors instead of silently resolving to a mixed graph."
+    tracking: "https://github.com/FS-GG/FS.GG.Rendering (feature 207; no separate tracking issue filed)"
   - id: fs-gg-ui-template
     coherent: true
     owner: rendering
