@@ -1,7 +1,8 @@
 # ADR-0003: Rename the `fs-skia-ui` version-coherence machinery to `fs-gg-ui`
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-27
+- **Accepted:** 2026-06-27 — implemented by FS.GG.Rendering feature 208 (property `FsSkiaUiVersion`→`FsGgUiVersion` verified by a live generate→restore→build of the bumped template `FS.GG.UI.Template@0.1.51-preview.1`; tags re-pointed `fs-skia-ui/v*`→`fs-gg-ui/v*` at the same commits; registry ids `fs-skia-ui-version`/`fs-skia-ui-bom`→`fs-gg-ui-version`/`fs-gg-ui-bom`).
 - **Affects:** FS.GG.Rendering, FS.GG.Templates, FS.GG.SDD, .github
 
 ## Context

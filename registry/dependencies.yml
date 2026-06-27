@@ -45,7 +45,7 @@ contracts:
     surface: ".fsgg/tooling.yml"
     consumers: [templates]
   - id: fs-gg-ui-template
-    version: "0.1.50-preview.1"   # template FsSkiaUiVersion pin (tag fs-skia-ui/v0.1.50-preview.1)
+    version: "0.1.50-preview.1"   # template FsGgUiVersion pin (tag fs-gg-ui/v0.1.50-preview.1)
     package-version: "0.1.50-preview.1"   # PUBLISHED FS.GG.UI.Template package (was 0.1.17-preview.1)
     package-tag: "fs-gg-ui-template/v0.1.50-preview.1"   # template-scoped coherent-set tag (Feature 206)
     owner: rendering
@@ -87,27 +87,31 @@ dependencies:
 
 # Known coherence state. `coherent: false` is a standing cross-repo request.
 coherence:
-  - id: fs-skia-ui-version
+  - id: fs-gg-ui-version
     coherent: true
     owner: rendering
     summary: >
-      Resolved 2026-06-27: the fs-gg-ui template pins FsSkiaUiVersion=0.1.50-preview.1 — the
+      Resolved 2026-06-27: the fs-gg-ui template pins FsGgUiVersion=0.1.50-preview.1 — the
       complete coherent 16-package FS.GG.UI.* set — behind the immutable annotated tag
-      fs-skia-ui/v0.1.50-preview.1. All four template profiles (app, headless-scene, governed,
+      fs-gg-ui/v0.1.50-preview.1. All four template profiles (app, headless-scene, governed,
       sample-pack) generate -> restore -> build -> evidence -> governance green against the single
       pin; the phantom FS.GG.UI.Color / FS.GG.UI.SkillSupport pins were removed; restores are
       byte-reproducible (RestorePackagesWithLockFile). The 0.1.0-preview.1 pin and the missing
       release tag are gone.
-    resolved_by: "FS-GG/FS.GG.Rendering@57be86c — tag fs-skia-ui/v0.1.50-preview.1 (closes #1)"
+    resolved_by: "FS-GG/FS.GG.Rendering@57be86c — tag fs-gg-ui/v0.1.50-preview.1 (closes #1)"
+    note: >
+      Renamed fs-skia-ui-version -> fs-gg-ui-version (version property FsSkiaUiVersion ->
+      FsGgUiVersion; tag namespace fs-skia-ui/v* -> fs-gg-ui/v* at the same commits) by
+      FS.GG.Rendering feature 208 — a clean break, no compatibility alias (ADR-0003 Accepted).
     impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers can build the rendering app against a tagged, reproducible FS.GG.UI.* set."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/1"
-  - id: fs-skia-ui-bom
+  - id: fs-gg-ui-bom
     coherent: true
     owner: rendering
     summary: >
       Resolved 2026-06-27 (Feature 207): an OPTIONAL full-set BOM / metapackage FS.GG.UI is
       published at 0.1.51-preview.1 alongside the 16 coherent FS.GG.UI.* members, behind the
-      immutable annotated tag fs-skia-ui/v0.1.51-preview.1. Referencing the single FS.GG.UI package
+      immutable annotated tag fs-gg-ui/v0.1.51-preview.1. Referencing the single FS.GG.UI package
       at one version pins the entire coherent set at that version (live-verified: one
       FS.GG.UI@0.1.51-preview.1 reference -> all 16 members at V, clean build, byte-reproducible
       across two cache-cleared restores, preview channel matched). The metapackage ships no assembly
@@ -116,10 +120,13 @@ coherence:
       Y<V) / NU1608 (upgrade Y>V) — and becomes a hard restore/build failure under the
       warnings-as-errors posture (WarningsAsErrors=NU1605;NU1608 / TreatWarningsAsErrors, the repo +
       governed-template default); by default the codes are warnings. Adoption is additive/optional:
-      the fs-gg-ui template default pin remains FsSkiaUiVersion=0.1.50-preview.1 and is NOT migrated
+      the fs-gg-ui template default pin remains FsGgUiVersion=0.1.50-preview.1 and is NOT migrated
       to the BOM (this corrects research R1's NU1605/NU1107 claim to the observed NU1605/NU1608 +
       consumer policy).
-    resolved_by: "FS-GG/FS.GG.Rendering@d9f4c81 — tag fs-skia-ui/v0.1.51-preview.1 (feature 207)"
+    resolved_by: "FS-GG/FS.GG.Rendering@d9f4c81 — tag fs-gg-ui/v0.1.51-preview.1 (feature 207)"
+    note: >
+      Id renamed fs-skia-ui-bom -> fs-gg-ui-bom by FS.GG.Rendering feature 208 (clean break, no
+      alias; ADR-0003 Accepted); the snapshot tag is now fs-gg-ui/v0.1.51-preview.1 at the same commit.
     impact: "Consumers can collapse up to 16 individual FS.GG.UI.* pins to one FS.GG.UI reference; any out-of-set member version is surfaced loudly under warnings-as-errors instead of silently resolving to a mixed graph."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering (feature 207; no separate tracking issue filed)"
   - id: fs-gg-ui-template
@@ -129,7 +136,7 @@ coherence:
       Resolved 2026-06-27 (Feature 206): the FS.GG.UI.Template package is PUBLISHED at
       0.1.50-preview.1 (was 0.1.17-preview.1), carrying the ADR-0002 lifecycle choice symbol
       (spec-kit|sdd|none) and the Feature 205 side-effect-free initGit opt-in (skipGitInit removed),
-      over the coherent FS.GG.UI.* 0.1.50-preview.1 framework set (tag fs-skia-ui/v0.1.50-preview.1).
+      over the coherent FS.GG.UI.* 0.1.50-preview.1 framework set (tag fs-gg-ui/v0.1.50-preview.1).
       Snapshotted behind the immutable template-scoped tag fs-gg-ui-template/v0.1.50-preview.1.
       Verified against the INSTALLED package: resolvable > 0.1.17; manifest carries lifecycle + initGit
       (skipGitInit absent); lifecycle=spec-kit byte-identical to the prior baseline for all four
