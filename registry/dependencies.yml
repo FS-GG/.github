@@ -48,7 +48,7 @@ contracts:
     version: "0.1.50-preview.1"   # template FsSkiaUiVersion pin (tag fs-skia-ui/v0.1.50-preview.1)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
-    consumers: [templates]
+    consumers: [templates, sdd]
     # ADR-0002: lifecycle is a template parameter (choice symbol).
     parameters:
       lifecycle:
@@ -57,6 +57,22 @@ contracts:
         notes: >
           sdd -> app-only product + SDD skeleton; none -> emits neither .specify/ nor a
           constitution. Gates .specify/, constitution, .agents/, .template.config/generated/.
+    behavior-break:
+      feature: "FS.GG.Rendering Feature 205 — side-effect-free template generation"
+      date: "2026-06-27"
+      summary: >
+        The fs-gg-ui template no longer auto-runs git-init/chmod post-actions at generation time.
+        The `skipGitInit` opt-out option is REMOVED; a new `initGit` opt-in (bool, default false)
+        reproduces the convenience for direct callers (pair with `--allow-scripts yes` for
+        non-interactive runs). Default generation is now side-effect-free: no spawned process, no
+        Git repository, no hang in CI / IDE "new project" hosts. No emitted file changes.
+      consumer-action: >
+        SDD scaffold path must stop relying on template auto-init and own repo-init + chmod as
+        explicit post-instantiation steps (contract §5 S1–S3). Direct callers that passed
+        `--skipGitInit true` simply drop the flag; callers that relied on auto-init pass
+        `--initGit true`.
+      contract-doc: "FS.GG.Rendering specs/205-scaffold-git-init-chmod/contracts/fs-gg-ui-template-generation.md (Accepted)"
+      tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/1 (cross-repo follow-up for the scaffold-path execution)"
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:

@@ -25,7 +25,7 @@ FS.GG.Rendering ──(depends on no FS-GG product; never depends on Governance)
 | `governance-policy` | 1 | Governance | `.fsgg/policy.yml` | Templates |
 | `governance-capabilities` | 2 | Governance | `.fsgg/capabilities.yml` | Templates |
 | `governance-tooling` | 1 | Governance | `.fsgg/tooling.yml` | Templates |
-| `fs-gg-ui-template` | 0.1.50-preview.1 | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates |
+| `fs-gg-ui-template` | 0.1.50-preview.1 | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
 
 ## Coherence state
 
@@ -38,3 +38,9 @@ visible: a downstream consumer (Templates) discovered an upstream (Rendering)
 template↔framework incoherence that had no release tag and no notification path. It was
 resolved 2026-06-27 by pinning the template to a tagged, reproducible `FS.GG.UI.*` snapshot
 (`fs-skia-ui/v0.1.50-preview.1`) and closing [FS.GG.Rendering#1](https://github.com/FS-GG/FS.GG.Rendering/issues/1).
+
+## Behavioral breaks
+
+| Contract | Break | Consumer action |
+|---|---|---|
+| `fs-gg-ui-template` | **Feature 205 (2026-06-27): side-effect-free generation.** The `fs-gg-ui` template no longer auto-runs git-init/chmod post-actions at generation time. `skipGitInit` (opt-out) is **removed**; `initGit` (opt-in, bool, default `false`) is **added**; default generation spawns no process, creates no repo, and never hangs in CI/IDE hosts. No emitted-file changes. Contract: [`fs-gg-ui-template-generation.md`](https://github.com/FS-GG/FS.GG.Rendering/blob/main/specs/205-scaffold-git-init-chmod/contracts/fs-gg-ui-template-generation.md) (Accepted). | **SDD scaffold path** must own repo-init + chmod as explicit post-instantiation steps (contract §5 S1–S3) and stop relying on template auto-init. Direct callers: drop `--skipGitInit true`; pass `--initGit true` (plus `--allow-scripts yes` non-interactively) to reproduce the old auto-init. |
