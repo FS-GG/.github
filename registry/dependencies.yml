@@ -45,7 +45,7 @@ contracts:
     surface: ".fsgg/tooling.yml"
     consumers: [templates]
   - id: fs-gg-ui-template
-    version: "0.1.0-preview.1"   # template FsSkiaUiVersion pin
+    version: "0.1.50-preview.1"   # template FsSkiaUiVersion pin (tag fs-skia-ui/v0.1.50-preview.1)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
     consumers: [templates]
@@ -61,13 +61,16 @@ dependencies:
 # Known coherence state. `coherent: false` is a standing cross-repo request.
 coherence:
   - id: fs-skia-ui-version
-    coherent: false
+    coherent: true
     owner: rendering
     summary: >
-      The fs-gg-ui template pins FsSkiaUiVersion=0.1.0-preview.1, but the FS.GG.UI.*
-      framework source HEAD produces per-project versions 0.1.36–0.1.47 with a
-      refactored Scene API. The template's sample app (template/base/src/Product/*.fs,
-      last changed 2026-06-15) no longer compiles against src/Scene/Types.fsi
-      (changed 2026-06-22), and there are no release tags pinning a coherent set.
-    impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers cannot build the rendering app."
+      Resolved 2026-06-27: the fs-gg-ui template pins FsSkiaUiVersion=0.1.50-preview.1 — the
+      complete coherent 16-package FS.GG.UI.* set — behind the immutable annotated tag
+      fs-skia-ui/v0.1.50-preview.1. All four template profiles (app, headless-scene, governed,
+      sample-pack) generate -> restore -> build -> evidence -> governance green against the single
+      pin; the phantom FS.GG.UI.Color / FS.GG.UI.SkillSupport pins were removed; restores are
+      byte-reproducible (RestorePackagesWithLockFile). The 0.1.0-preview.1 pin and the missing
+      release tag are gone.
+    resolved_by: "FS-GG/FS.GG.Rendering@57be86c — tag fs-skia-ui/v0.1.50-preview.1 (closes #1)"
+    impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers can build the rendering app against a tagged, reproducible FS.GG.UI.* set."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/1"

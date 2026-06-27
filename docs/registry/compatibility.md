@@ -25,14 +25,16 @@ FS.GG.Rendering ──(depends on no FS-GG product; never depends on Governance)
 | `governance-policy` | 1 | Governance | `.fsgg/policy.yml` | Templates |
 | `governance-capabilities` | 2 | Governance | `.fsgg/capabilities.yml` | Templates |
 | `governance-tooling` | 1 | Governance | `.fsgg/tooling.yml` | Templates |
-| `fs-gg-ui-template` | 0.1.0-preview.1 | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates |
+| `fs-gg-ui-template` | 0.1.50-preview.1 | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates |
 
 ## Coherence state
 
 | Id | Coherent? | Owner | Summary |
 |---|---|---|---|
-| `fs-skia-ui-version` | ❌ no | Rendering | The `fs-gg-ui` template pins `FsSkiaUiVersion=0.1.0-preview.1`, but the `FS.GG.UI.*` framework HEAD is `0.1.36–0.1.47` with a refactored Scene API. The template's sample app (2026-06-15) no longer compiles against `src/Scene/Types.fsi` (2026-06-22), and there are **no release tags** pinning a coherent set. **Impact:** `fs-gg-fullstack` and SDD scaffold consumers can't build the rendering app. **Tracking:** [FS.GG.Rendering#1](https://github.com/FS-GG/FS.GG.Rendering/issues/1). |
+| `fs-skia-ui-version` | ✅ yes | Rendering | Resolved 2026-06-27: the `fs-gg-ui` template pins `FsSkiaUiVersion=0.1.50-preview.1` (the complete coherent 16-package `FS.GG.UI.*` set) behind the immutable tag [`fs-skia-ui/v0.1.50-preview.1`](https://github.com/FS-GG/FS.GG.Rendering/releases/tag/fs-skia-ui/v0.1.50-preview.1) (commit `57be86c`). All four profiles (app, headless-scene, governed, sample-pack) generate→restore→build→evidence→governance green; the phantom `FS.GG.UI.Color`/`FS.GG.UI.SkillSupport` pins were removed; restores are byte-reproducible (`RestorePackagesWithLockFile`). **Tracking:** [FS.GG.Rendering#1](https://github.com/FS-GG/FS.GG.Rendering/issues/1) (resolved). |
 
-This row is exactly the failure that a cross-repo coordination mechanism exists to make
+This row was exactly the failure that a cross-repo coordination mechanism exists to make
 visible: a downstream consumer (Templates) discovered an upstream (Rendering)
-template↔framework incoherence that has no release tag and no notification path.
+template↔framework incoherence that had no release tag and no notification path. It was
+resolved 2026-06-27 by pinning the template to a tagged, reproducible `FS.GG.UI.*` snapshot
+(`fs-skia-ui/v0.1.50-preview.1`) and closing [FS.GG.Rendering#1](https://github.com/FS-GG/FS.GG.Rendering/issues/1).
