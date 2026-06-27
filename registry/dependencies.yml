@@ -188,6 +188,18 @@ coherence:
       FS.GG.Rendering feature 208 — a clean break, no compatibility alias (ADR-0003 Accepted).
     impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers can build the rendering app against a tagged, reproducible FS.GG.UI.* set."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/1"
+    enforcement: >
+      2026-06-28 (FS.GG.Rendering Feature 209): drift on this row is now STRUCTURALLY enforced by
+      FS.GG.Rendering's merge-blocking gate. A new "Version coherence guard" step
+      (scripts/validate-version-coherence.fsx) re-derives, on every PR before merge to main, that the
+      single FsGgUiVersion literal matches an existing fs-gg-ui/v* snapshot tag and does NOT lag the
+      latest (preview-aware compare), independent of any warnings-as-errors policy; a scoped Release
+      pack + clean restore grounds that the pin resolves to the COMPLETE member set (FR-008). During
+      Feature 209 the guard caught a real staleness instance (the FsGgUiVersion literal lagging the
+      latest fs-gg-ui/v* snapshot tag), which was corrected in-repo; the gate then keeps this row's
+      pin current structurally on every subsequent PR. The authoritative current pin value is the
+      row summary above (and the fs-gg-ui-template contract). No registry schema change — coherent:
+      true is now upheld automatically rather than by manual review. Tier 2, upheld not modified.
   - id: fs-gg-ui-bom
     coherent: true
     owner: rendering
@@ -212,6 +224,15 @@ coherence:
       alias; ADR-0003 Accepted); the snapshot tag is now fs-gg-ui/v0.1.51-preview.1 at the same commit.
     impact: "Consumers can collapse up to 16 individual FS.GG.UI.* pins to one FS.GG.UI reference; any out-of-set member version is surfaced loudly under warnings-as-errors instead of silently resolving to a mixed graph."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering (feature 207; no separate tracking issue filed)"
+    enforcement: >
+      2026-06-28 (FS.GG.Rendering Feature 209): the BOM coherence shape (single [$version$] exact
+      bracket on every member, dependency-id set == the discovered packable FS.GG.UI.* set) is now
+      re-derived structurally on every PR by the merge-blocking "Version coherence guard"
+      (scripts/validate-version-coherence.fsx), independent of the NU1605/NU1608 warnings-as-errors
+      posture (FR-004) — a half-bump (one member off the token, a dropped/extra dependency) reds the
+      gate by direct compare. The scoped restore-grounded proof (FR-008) additionally confirms one
+      FS.GG.UI@V reference resolves to all members of the set at V. Complements the always-on parity
+      test; no registry schema change. Tier 2, upheld not modified.
   - id: fs-gg-ui-template
     coherent: true
     owner: rendering
