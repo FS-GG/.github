@@ -1,0 +1,73 @@
+# FS-GG cross-repo contract & dependency registry.
+# The machine-readable source of truth for who depends on whom and which contract
+# versions are coherent. A `contract-change` issue MUST update this file as part of
+# its resolution. Human projection: docs/registry/compatibility.md.
+schemaVersion: 1
+updated: "2026-06-27"
+
+repos:
+  sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
+  rendering:  { name: FS.GG.Rendering,  role: "Skia/OpenGL + Elmish UI framework + fs-gg-ui template" }
+  governance: { name: FS.GG.Governance, role: "optional rule/evidence/gate tooling" }
+  templates:  { name: FS.GG.Templates,  role: "downstream composition (fs-gg-fullstack, providers, overlays)" }
+
+# Versioned contracts and where they are owned/consumed.
+contracts:
+  - id: scaffold-provider
+    version: "1.0.0"
+    owner: sdd
+    surface: ".fsgg/providers.yml + provider invocation protocol (dotnet new wrapper)"
+    consumers: [templates, rendering]   # rendering authors a provider descriptor; templates registers one
+  - id: scaffold-provenance
+    version: "1.0.0"
+    owner: sdd
+    surface: ".fsgg/scaffold-provenance.json"
+    consumers: [sdd]
+  - id: governance-handoff
+    version: "1.0.0"
+    range: "1.x"
+    owner: sdd
+    surface: "readiness/<id>/governance-handoff.json"
+    consumers: [governance]
+  - id: governance-policy
+    version: "1"
+    owner: governance
+    surface: ".fsgg/policy.yml"
+    consumers: [templates]
+  - id: governance-capabilities
+    version: "2"
+    owner: governance
+    surface: ".fsgg/capabilities.yml"
+    consumers: [templates]
+  - id: governance-tooling
+    version: "1"
+    owner: governance
+    surface: ".fsgg/tooling.yml"
+    consumers: [templates]
+  - id: fs-gg-ui-template
+    version: "0.1.0-preview.1"   # template FsSkiaUiVersion pin
+    owner: rendering
+    surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
+    consumers: [templates]
+
+# Hard dependency edges (downstream -> upstream).
+dependencies:
+  - { from: templates, to: rendering,  via: "vendors fs-gg-ui payload + FS.GG.UI.* framework (pinned FsSkiaUiVersion)" }
+  - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton" }
+  - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
+  - { from: sdd,       to: governance, via: "governance-handoff@1 (OPTIONAL; SDD runs fully without Governance)" }
+  # rendering depends on no other FS-GG product (it never depends on Governance).
+
+# Known coherence state. `coherent: false` is a standing cross-repo request.
+coherence:
+  - id: fs-skia-ui-version
+    coherent: false
+    owner: rendering
+    summary: >
+      The fs-gg-ui template pins FsSkiaUiVersion=0.1.0-preview.1, but the FS.GG.UI.*
+      framework source HEAD produces per-project versions 0.1.36–0.1.47 with a
+      refactored Scene API. The template's sample app (template/base/src/Product/*.fs,
+      last changed 2026-06-15) no longer compiles against src/Scene/Types.fsi
+      (changed 2026-06-22), and there are no release tags pinning a coherent set.
+    impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers cannot build the rendering app."
+    tracking: ""   # link the FS-GG/FS.GG.Rendering cross-repo issue here

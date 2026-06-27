@@ -1,0 +1,51 @@
+name: Cross-repo request
+description: Ask another FS-GG repo's maintainers/agents for a change, decision, or release. Open this in the TARGET repo.
+title: "[cross-repo] "
+labels: ["cross-repo", "cross-repo:request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open this issue **in the repo you are requesting from** (the target). Responses
+        are comments on this issue; resolution closes it. See the
+        [cross-repo coordination protocol](https://github.com/FS-GG/.github/blob/main/docs/coordination/README.md).
+  - type: input
+    id: from
+    attributes:
+      label: From (requesting repo / agent)
+      placeholder: "FS.GG.SDD"
+    validations:
+      required: true
+  - type: input
+    id: blocking
+    attributes:
+      label: Blocking work (issue/PR/commit this unblocks)
+      placeholder: "FS-GG/FS.GG.Templates#12, commit 68dccc9"
+  - type: textarea
+    id: request
+    attributes:
+      label: Request
+      description: What do you need, and why? Be specific about the contract/version/file involved.
+    validations:
+      required: true
+  - type: textarea
+    id: contract
+    attributes:
+      label: Affected contract / registry entry
+      description: Name the contract or registry id (e.g. `scaffold-provider@1`, `governance-handoff@1`, `fs-skia-ui-version`). Link the registry entry if one exists.
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - blocking
+        - high
+        - normal
+        - low
+    validations:
+      required: true
+  - type: input
+    id: refs
+    attributes:
+      label: Other references
+      placeholder: "schema files, prior decisions, ADRs"
