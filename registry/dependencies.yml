@@ -70,4 +70,4 @@ coherence:
       last changed 2026-06-15) no longer compiles against src/Scene/Types.fsi
       (changed 2026-06-22), and there are no release tags pinning a coherent set.
     impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers cannot build the rendering app."
-    tracking: ""   # link the FS-GG/FS.GG.Rendering cross-repo issue here
+    tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/1"

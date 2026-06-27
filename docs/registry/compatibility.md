@@ -31,7 +31,7 @@ FS.GG.Rendering ──(depends on no FS-GG product; never depends on Governance)
 
 | Id | Coherent? | Owner | Summary |
 |---|---|---|---|
-| `fs-skia-ui-version` | ❌ no | Rendering | The `fs-gg-ui` template pins `FsSkiaUiVersion=0.1.0-preview.1`, but the `FS.GG.UI.*` framework HEAD is `0.1.36–0.1.47` with a refactored Scene API. The template's sample app (2026-06-15) no longer compiles against `src/Scene/Types.fsi` (2026-06-22), and there are **no release tags** pinning a coherent set. **Impact:** `fs-gg-fullstack` and SDD scaffold consumers can't build the rendering app. Open a `cross-repo:request` in FS.GG.Rendering and link it here. |
+| `fs-skia-ui-version` | ❌ no | Rendering | The `fs-gg-ui` template pins `FsSkiaUiVersion=0.1.0-preview.1`, but the `FS.GG.UI.*` framework HEAD is `0.1.36–0.1.47` with a refactored Scene API. The template's sample app (2026-06-15) no longer compiles against `src/Scene/Types.fsi` (2026-06-22), and there are **no release tags** pinning a coherent set. **Impact:** `fs-gg-fullstack` and SDD scaffold consumers can't build the rendering app. **Tracking:** [FS.GG.Rendering#1](https://github.com/FS-GG/FS.GG.Rendering/issues/1). |
 
 This row is exactly the failure that a cross-repo coordination mechanism exists to make
 visible: a downstream consumer (Templates) discovered an upstream (Rendering)
