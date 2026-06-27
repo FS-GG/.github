@@ -45,6 +45,14 @@ the org **Coordination** board (Projects v2 #1).
    repo ships the F# lifecycle constitution (Rendering vs SDD) is resolved as a P0 decision
    item and reflected in P2 once settled.
 
+5. **Versioning is hardened so the staleness bug class is structurally impossible.** Consumer
+   products and composition tests commit `packages.lock.json` and restore with `--locked-mode`
+   in CI, and promote `NU1603` to an error (the silent nearest-version float that broke
+   `fs-gg-fullstack` becomes a hard failure). Rendering keeps the lockstep single-version
+   `FS.GG.UI.*` set behind the coherent tag, optionally fronted by a `FS.GG.UI` BOM/metapackage;
+   `sync-from-rendering.sh` is replaced by version bumps (Renovate grouped `FS.GG.UI.*`, or a
+   `repository_dispatch` auto-PR on upstream release tags). Tracked as P5.
+
 ## Consequences
 
 - **Templates** repoints `providers/rendering.providers.yml` at `FS.GG.UI.Template@<ver>` with
