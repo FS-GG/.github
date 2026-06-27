@@ -16,6 +16,7 @@ each using standard [Spec Kit](https://github.com/github/spec-kit).
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Elmish/MVU apps rendered with SkiaSharp over OpenGL (GL). Scene, layout, input, viewer/host, controls, design-system/themes, templates. | Active |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule/evidence/route tooling, developed as a normal tool product. Rendering and SDD never depend on it for ordinary local work. | Active |
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | Spec-driven development lifecycle tooling: charter, specify, clarify, checklist, plan, tasks, normalized work model, generated views, and agent guidance. | Scaffolded |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | Downstream composition: `dotnet new` templates (`fs-gg-fullstack`, `fs-gg-governance`) and scaffold providers that wire SDD + Rendering + Governance into a ready-to-run product. Depends on the others; none depend back on it. | Active |
 
 ## Operating rule
 
