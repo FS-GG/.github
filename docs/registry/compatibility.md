@@ -25,13 +25,14 @@ FS.GG.Rendering ──(depends on no FS-GG product; never depends on Governance)
 | `governance-policy` | 1 | Governance | `.fsgg/policy.yml` | Templates |
 | `governance-capabilities` | 2 | Governance | `.fsgg/capabilities.yml` | Templates |
 | `governance-tooling` | 1 | Governance | `.fsgg/tooling.yml` | Templates |
-| `fs-gg-ui-template` | 0.1.50-preview.1 | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
+| `fs-gg-ui-template` | 0.1.50-preview.1 (pkg published; tag [`fs-gg-ui-template/v0.1.50-preview.1`](https://github.com/FS-GG/FS.GG.Rendering/releases/tag/fs-gg-ui-template/v0.1.50-preview.1)) | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
 
 ## Coherence state
 
 | Id | Coherent? | Owner | Summary |
 |---|---|---|---|
 | `fs-skia-ui-version` | ✅ yes | Rendering | Resolved 2026-06-27: the `fs-gg-ui` template pins `FsSkiaUiVersion=0.1.50-preview.1` (the complete coherent 16-package `FS.GG.UI.*` set) behind the immutable tag [`fs-skia-ui/v0.1.50-preview.1`](https://github.com/FS-GG/FS.GG.Rendering/releases/tag/fs-skia-ui/v0.1.50-preview.1) (commit `57be86c`). All four profiles (app, headless-scene, governed, sample-pack) generate→restore→build→evidence→governance green; the phantom `FS.GG.UI.Color`/`FS.GG.UI.SkillSupport` pins were removed; restores are byte-reproducible (`RestorePackagesWithLockFile`). **Tracking:** [FS.GG.Rendering#1](https://github.com/FS-GG/FS.GG.Rendering/issues/1) (resolved). |
+| `fs-gg-ui-template` | ✅ yes | Rendering | Resolved 2026-06-27 (Feature 206): the `FS.GG.UI.Template` package is **published at 0.1.50-preview.1** (was 0.1.17-preview.1), carrying the ADR-0002 `lifecycle` choice symbol (`spec-kit\|sdd\|none`) and the Feature 205 side-effect-free `initGit` opt-in (`skipGitInit` removed), over the coherent `FS.GG.UI.* 0.1.50-preview.1` set. Snapshotted behind the immutable tag [`fs-gg-ui-template/v0.1.50-preview.1`](https://github.com/FS-GG/FS.GG.Rendering/releases/tag/fs-gg-ui-template/v0.1.50-preview.1) (commit `2862caf`). Verified against the **installed** package: resolvable > 0.1.17; manifest carries `lifecycle`+`initGit`; `spec-kit` byte-identical for all four profiles; default generation side-effect-free (no `.git`); all four profiles restore→build green (0 NU1101 / 0 conflict); double-restore byte-reproducible; from-tag repack reproduces the package. **Tracking:** [FS.GG.SDD#1](https://github.com/FS-GG/FS.GG.SDD/issues/1) (dependent scaffold-path request — responded). |
 
 This row was exactly the failure that a cross-repo coordination mechanism exists to make
 visible: a downstream consumer (Templates) discovered an upstream (Rendering)
