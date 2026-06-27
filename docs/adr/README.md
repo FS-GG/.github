@@ -6,3 +6,4 @@ repo. Use [template.md](template.md) for a new record; number sequentially.
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-cross-repo-coordination-via-issues.md) | Cross-repo coordination via GitHub issues + a registry | Accepted |
+| [0002](0002-composition-by-scaffold-lifecycle-parameter-governance-populated.md) | Composition by scaffold, `lifecycle` template parameter, governance populated-by-default | Accepted |

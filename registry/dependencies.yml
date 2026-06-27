@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-27"
+updated: "2026-06-27"   # ADR-0002: composition-by-scaffold; lifecycle parameter; governance populated
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -49,10 +49,19 @@ contracts:
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
     consumers: [templates]
+    # ADR-0002: lifecycle is a template parameter (choice symbol).
+    parameters:
+      lifecycle:
+        type: "choice (spec-kit|sdd|none)"
+        default: "spec-kit"   # byte-identical to pre-ADR-0002 output; existing profile tests unchanged
+        notes: >
+          sdd -> app-only product + SDD skeleton; none -> emits neither .specify/ nor a
+          constitution. Gates .specify/, constitution, .agents/, .template.config/generated/.
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
-  - { from: templates, to: rendering,  via: "vendors fs-gg-ui payload + FS.GG.UI.* framework (pinned FsSkiaUiVersion)" }
+  # ADR-0002: vendoring retired. Templates composes the rendering app via scaffold, not a fork.
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.1.50-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: sdd,       to: governance, via: "governance-handoff@1 (OPTIONAL; SDD runs fully without Governance)" }
@@ -74,3 +83,14 @@ coherence:
     resolved_by: "FS-GG/FS.GG.Rendering@57be86c — tag fs-skia-ui/v0.1.50-preview.1 (closes #1)"
     impact: "FS.GG.Templates fs-gg-fullstack and FS.GG.SDD scaffold consumers can build the rendering app against a tagged, reproducible FS.GG.UI.* set."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/1"
+  - id: governance-overlay-populated
+    coherent: false
+    owner: governance
+    summary: >
+      ADR-0002: Templates' fs-gg-governance overlay currently ships EMPTY (advertises governance
+      capability it does not enforce). The overlay must carry real gates — a populated reference
+      .fsgg gate set (build/test + EvidenceGraph/EvidenceAudit, non-empty checks:/commands:) owned
+      by Governance (P3), consumed by Templates (P4). Standing request until P3 publishes the gate
+      set and P4 populates the overlay.
+    impact: "Until resolved, governance-policy/capabilities/tooling consumed by Templates are declared but not enforced."
+    tracking: "https://github.com/orgs/FS-GG/projects/1 (Coordination — P3 Governance, P4 Templates)"
