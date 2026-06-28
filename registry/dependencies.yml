@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-28"   # #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
+updated: "2026-06-28"   # #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -89,6 +89,18 @@ contracts:
         `--initGit true`.
       contract-doc: "FS.GG.Rendering specs/205-scaffold-git-init-chmod/contracts/fs-gg-ui-template-generation.md (Accepted)"
       tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/1 (cross-repo follow-up for the scaffold-path execution)"
+  - id: shared-build-config
+    version: "1.0.0"
+    owner: github   # the FS-GG/.github org repo is the source of truth
+    # ADR-0006 / .github#19 (H3, Pillar 5): the canonical org-shared .NET build config —
+    # Directory.Build.props (determinism, CPM + transitive pinning, lockfile-restore-enforcement
+    # gate, NU1603/NU1608->error), Directory.Packages.props (CPM + org FSharp.Core 10.1.301 pin),
+    # and .config/dotnet-tools.json (fake-cli 6.1.4). Distributed verbatim via
+    # scripts/sync-build-config.sh; repo-specific settings live in the imported *.local.props.
+    # The script's --check mode is the drift gate consumed by the reusable coherence workflow (#18).
+    surface: "dist/dotnet/{Directory.Build.props,Directory.Packages.props,.config/dotnet-tools.json} + scripts/sync-build-config.sh"
+    consumers: [rendering, sdd, governance, templates]
+    docs: "docs/build/README.md"
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
@@ -193,6 +205,12 @@ coherence:
       has no PackageReferences, so its committed lockfile is empty — a forward guardrail only; the
       load-bearing FS.GG.UI.* enforcement for scaffolded apps stays upstream in the rendering
       template (Feature 204/211) + the scaffold path. All consumer gates restore→build green on merge.
+    unified_by: >
+      ADR-0006 / FS-GG/.github#19 (H3): the gate condition is canonicalized to GITHUB_ACTIONS and
+      published in the org-shared `shared-build-config` (dist/dotnet/Directory.Build.props). This
+      SUPERSEDES Rendering's ContinuousIntegrationBuild gate — the lone outlier — with the
+      GITHUB_ACTIONS spelling SDD/Governance already use. Per-repo re-sync to the canonical file is
+      sequenced as H3 adoption follow-ups; drift is caught by sync-build-config.sh --check (wired by #18).
     resolved_by: >
       rendering Feature 211 (landed) + FS-GG/FS.GG.SDD#6 (gate green 48s),
       FS-GG/FS.GG.Governance#12 (gate green 3m25s, full 165-project build),

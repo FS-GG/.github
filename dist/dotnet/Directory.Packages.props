@@ -1,0 +1,30 @@
+<Project>
+
+  <!-- ════════════════════════════════════════════════════════════════════════════
+       FS-GG ORG-SHARED CENTRAL PACKAGE MANAGEMENT BASELINE
+       Source of truth: FS-GG/.github → dist/dotnet/Directory.Packages.props
+       Distributed by scripts/sync-build-config.sh. DO NOT EDIT in a consumer repo.
+       Repo-specific PackageVersion items go in Directory.Packages.local.props,
+       imported at the end. A package pinned here MUST NOT be re-declared locally
+       (CPM raises NU1504/NU1011 on a duplicate PackageVersion).
+       Contract: shared-build-config (registry/dependencies.yml).
+       ════════════════════════════════════════════════════════════════════════════ -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- Org-wide baseline: versions every FS-GG repo MUST agree on. This is the cross-repo
+       coherence point — one place that pins the runtime/language floor shared by all repos.
+       FSharp.Core 10.1.301 is currently the common pin in Rendering, SDD, and Governance;
+       centralising it here keeps the F# core in lockstep across the org. Adopting repos
+       remove their local FSharp.Core PackageVersion (see docs/build/README.md). -->
+  <ItemGroup Label="org-baseline">
+    <PackageVersion Include="FSharp.Core" Version="10.1.301" />
+  </ItemGroup>
+
+  <!-- Repo-specific package versions. -->
+  <Import Project="Directory.Packages.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Packages.local.props')" />
+
+</Project>
