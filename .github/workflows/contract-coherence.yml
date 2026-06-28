@@ -1,0 +1,114 @@
+# Reusable cross-repo contract-coherence gate (FS-GG/.github#18, epic #16 Pillar 3).
+#
+# Every FS-GG repo's CI calls this via `workflow_call`. It enforces three things:
+#   1. The org registry (FS-GG/.github registry/dependencies.yml) is schema-valid.
+#   2. The registry's declared `fsgg-contracts` pin equals the ACTUAL FS.GG.Contracts
+#      package version (read from FS-GG/FS.GG.SDD, the schema authority) — fails on drift.
+#   3. The calling repo's org-shared .NET build config matches the canonical source of
+#      truth (shared-build-config@1.0.0) via scripts/sync-build-config.sh --check.
+#
+# The registry + scripts are sourced from FS-GG/.github (public); FS.GG.Contracts is read
+# from FS-GG/FS.GG.SDD (public). No org token required — sidesteps the H4 feed/App-token
+# blocker (#21). See docs/coordination/README.md and ADR-0001.
+name: contract-coherence
+
+on:
+  workflow_call:
+    inputs:
+      repo-path:
+        description: "Path within the caller's checkout to drift-check (build config)."
+        type: string
+        default: "."
+      check-build-config:
+        description: "Run the shared-build-config drift gate against the caller. Set false for repos that are not consumers (e.g. .github itself)."
+        type: boolean
+        default: true
+      github-ref:
+        description: "Ref of FS-GG/.github to source the registry + scripts from."
+        type: string
+        default: "main"
+      contracts-ref:
+        description: "Ref of FS-GG/FS.GG.SDD to read the actual FS.GG.Contracts version from."
+        type: string
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  coherence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout caller
+        uses: actions/checkout@v4
+        with:
+          path: caller
+
+      - name: Checkout FS-GG/.github (registry + scripts authority)
+        uses: actions/checkout@v4
+        with:
+          repository: FS-GG/.github
+          ref: ${{ inputs.github-ref }}
+          path: dotgithub
+
+      - name: Checkout FS.GG.Contracts source (version authority)
+        uses: actions/checkout@v4
+        with:
+          repository: FS-GG/FS.GG.SDD
+          ref: ${{ inputs.contracts-ref }}
+          path: sdd
+          sparse-checkout: src/FS.GG.Contracts
+          sparse-checkout-cone-mode: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Resolve actual FS.GG.Contracts version
+        id: contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="sdd/src/FS.GG.Contracts"
+          fsproj_ver="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$base/FS.GG.Contracts.fsproj" | head -1)"
+          src_ver="$(sed -n 's:.*let[[:space:]]\+value[[:space:]]*=[[:space:]]*"\([^"]*\)".*:\1:p' "$base/ContractVersion.fs" | head -1)"
+          echo "fsproj <Version> = '$fsproj_ver'; ContractVersion.value = '$src_ver'"
+          if [[ -z "$fsproj_ver" || -z "$src_ver" ]]; then
+            echo "::error::Could not read FS.GG.Contracts version from SDD source." >&2
+            exit 1
+          fi
+          if [[ "$fsproj_ver" != "$src_ver" ]]; then
+            echo "::error::FS.GG.Contracts is internally incoherent: fsproj <Version>='$fsproj_ver' != ContractVersion.value='$src_ver'." >&2
+            exit 1
+          fi
+          echo "version=$fsproj_ver" >> "$GITHUB_OUTPUT"
+
+      - name: Assert build-config source .props are well-formed XML
+        shell: bash
+        run: |
+          # Source-of-truth guard (.github#29): a malformed-but-verbatim .props passes the
+          # byte-for-byte drift check yet breaks every adopter's restore (MSB4024). Catch it
+          # at the source on every coherence run, for every caller.
+          set -euo pipefail
+          for f in dotgithub/dist/dotnet/*.props; do
+            [ -f "$f" ] || continue
+            python -c 'import sys,xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1])' "$f"
+            echo "ok (well-formed): $f"
+          done
+
+      - name: Validate registry schema + assert fsgg-contracts pin
+        shell: bash
+        run: |
+          python dotgithub/scripts/validate-registry.py \
+            dotgithub/registry/dependencies.yml \
+            --expect "fsgg-contracts=${{ steps.contracts.outputs.version }}"
+
+      - name: Build-config drift gate
+        if: ${{ inputs.check-build-config }}
+        shell: bash
+        run: |
+          bash dotgithub/scripts/sync-build-config.sh --check "caller/${{ inputs.repo-path }}"

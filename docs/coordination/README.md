@@ -78,3 +78,10 @@ contract versions are coherent — live in the
 ([`registry/dependencies.yml`](../../registry/dependencies.yml)). Any `contract-change`
 issue must update the registry as part of its resolution. Larger cross-repo decisions
 are recorded as [ADRs](../adr/README.md).
+
+## Enforcement → the contract-coherence gate
+
+The registry is not just documentation: the reusable
+[contract-coherence gate](contract-coherence-gate.md) (`workflow_call`) makes every repo's CI go
+red when its actual pins/build-config stop matching the registry's declared values. Wire it into
+each repo's CI (see the doc for the snippet).

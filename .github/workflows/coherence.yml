@@ -1,0 +1,23 @@
+# FS-GG/.github's own contract-coherence gate (#18).
+#
+# .github OWNS the registry and the shared build config, so it is not a build-config
+# *consumer* (check-build-config: false). This gate proves its own registry is schema-valid
+# and that the registry's declared fsgg-contracts pin still equals the actual FS.GG.Contracts
+# package version in FS-GG/FS.GG.SDD. The four product repos call the same reusable workflow
+# with check-build-config: true (their CI adopts it as an H3 follow-up).
+name: coherence
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-coherence:
+    uses: ./.github/workflows/contract-coherence.yml
+    with:
+      check-build-config: false

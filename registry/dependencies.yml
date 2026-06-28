@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-28"   # #29: shared-build-config defect fix — XML-invalid comment (`--` inside <!-- -->) in dist/dotnet/Directory.Build.props broke every adopter's build (MSB4024); reworded + sync-build-config.sh now asserts source .props well-formedness (surface unchanged, no version bump); #27: register fsgg-contracts@1.0.0 (H2, epic #16 Pillar 2 — typed coherence backbone; SDD#8); #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
+updated: "2026-06-28"   # #18: reusable contract-coherence gate landed (H3, epic #16 Pillar 3) — .github/workflows/contract-coherence.yml (workflow_call) + scripts/validate-registry.py; validates this registry's schema, asserts the declared fsgg-contracts pin == the actual FS.GG.Contracts package version (FS.GG.SDD), and runs sync-build-config.sh --check for build-config drift; .github gained its first workflows (coherence.yml self-gate). New coherence id registry-validator-typed (coherent:false) tracks converging Fsgg.Registry onto the real registry schema (FS.GG.SDD#12). #29: shared-build-config defect fix — XML-invalid comment (`--` inside <!-- -->) in dist/dotnet/Directory.Build.props broke every adopter's build (MSB4024); reworded + sync-build-config.sh now asserts source .props well-formedness (surface unchanged, no version bump); #27: register fsgg-contracts@1.0.0 (H2, epic #16 Pillar 2 — typed coherence backbone; SDD#8); #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -40,8 +40,13 @@ contracts:
       validator) / Fsgg.ContractVersion (= 1.0.0).
     consumers: [sdd, governance, templates]   # re-type tracked: SDD#9 / Governance#14 / Templates#13
     notes: >
-      The reusable contract-coherence workflow (#18) validates this registry/dependencies.yml against
-      Fsgg.Registry; the apicompat/PublicApiAnalyzers gate (#20) guards FS.GG.Contracts' public surface.
+      The reusable contract-coherence workflow (#18, LANDED) asserts this registry's declared
+      fsgg-contracts version equals the ACTUAL FS.GG.Contracts package version (read from FS.GG.SDD,
+      the schema authority) and fails on drift. Registry-schema validation currently runs through a
+      stand-in (scripts/validate-registry.py) that mirrors Fsgg.Registry's rule kinds, because
+      Fsgg.Registry has no YAML loader and its abstract model/version-grammar diverge from this file
+      (coherence id registry-validator-typed; FS.GG.SDD#12). The apicompat/PublicApiAnalyzers gate
+      (#20) guards FS.GG.Contracts' public surface.
   - id: scaffold-provenance
     version: "1.0.0"
     owner: sdd
@@ -116,7 +121,8 @@ contracts:
     # gate, NU1603/NU1608->error), Directory.Packages.props (CPM + org FSharp.Core 10.1.301 pin),
     # and .config/dotnet-tools.json (fake-cli 6.1.4). Distributed verbatim via
     # scripts/sync-build-config.sh; repo-specific settings live in the imported *.local.props.
-    # The script's --check mode is the drift gate consumed by the reusable coherence workflow (#18).
+    # The script's --check mode is the drift gate consumed by the reusable coherence workflow
+    # (#18, LANDED): consumer repos call contract-coherence.yml with check-build-config: true.
     # #29: --check compares byte-for-byte (not XML-aware), so a malformed-but-verbatim source could
     # pass the gate yet fail every adopter's build (MSB4024); the script now asserts source .props
     # XML well-formedness before distributing/checking.
@@ -232,10 +238,27 @@ coherence:
       published in the org-shared `shared-build-config` (dist/dotnet/Directory.Build.props). This
       SUPERSEDES Rendering's ContinuousIntegrationBuild gate — the lone outlier — with the
       GITHUB_ACTIONS spelling SDD/Governance already use. Per-repo re-sync to the canonical file is
-      sequenced as H3 adoption follow-ups; drift is caught by sync-build-config.sh --check (wired by #18).
+      sequenced as H3 adoption follow-ups; drift is caught by sync-build-config.sh --check (wired by
+      the reusable contract-coherence workflow, #18 — LANDED).
     resolved_by: >
       rendering Feature 211 (landed) + FS-GG/FS.GG.SDD#6 (gate green 48s),
       FS-GG/FS.GG.Governance#12 (gate green 3m25s, full 165-project build),
       FS-GG/FS.GG.Templates#11 (composition green 22s).
     impact: "A stale or silently substituted FS.GG.UI.* (or any) dependency version now fails restore in CI in every consumer repo instead of resolving quietly."
     tracking: "https://github.com/FS-GG/.github/issues/7"
+  - id: registry-validator-typed
+    coherent: false
+    owner: sdd
+    summary: >
+      Standing request (2026-06-28, from FS-GG/.github#18): the reusable contract-coherence gate
+      should validate this registry against the TYPED FS.GG.Contracts validator (Fsgg.Registry), but
+      cannot yet. Fsgg.Registry has no YAML loader (no `load : string -> RegistryModel`) and its
+      abstract model (Components{Id,Version}/Edges{Consumer,Provider,CompatibleRange}, strict SemVer
+      triples) diverges from this file's real shape (contracts[]/dependencies[]/coherence[]) and
+      grammar (which also permits bare-integer schema versions such as governance-policy `1` and
+      ranges such as `1.x`). Until it converges, #18 validates the schema through a stand-in
+      (scripts/validate-registry.py) that mirrors Fsgg.Registry's rule kinds (MissingField /
+      UnknownComponent / MalformedVersion); the typed fsgg-contracts version-coupling assertion IS
+      live (registry's declared pin == actual package version).
+    impact: "Registry-schema validation is a Python stand-in, not the typed org validator; the two could drift in detail until Fsgg.Registry models the real schema."
+    tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/12"
