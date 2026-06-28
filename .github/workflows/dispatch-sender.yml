@@ -1,0 +1,110 @@
+# Reusable cross-repo dispatch sender (FS-GG/.github#22, epic #16 Pillar 4).
+#
+# A producer repo's release workflow calls this via `workflow_call` to notify a downstream
+# repo that a new coherent version exists — e.g. Rendering -> Templates on an fs-gg-ui
+# template release (FS.GG.Rendering H4 #10), or Templates -> SDD on a composition-acceptance
+# registry update (FS.GG.Templates H4 #15). It mints a least-privilege GitHub App
+# installation token scoped to the TARGET repo and POSTs a `repository_dispatch` carrying
+# `{event_type, client_payload:{version, ...}}`. The target's `on: repository_dispatch`
+# workflow then opens the auto-update PR.
+#
+# Why an App token, not GITHUB_TOKEN: a workflow's GITHUB_TOKEN cannot dispatch to another
+# repo or trigger its workflows (research C4) — only a GitHub App installation token can.
+# The App + its `app-id`/`app-private-key` secrets are provisioned by org-admin in
+# FS-GG/.github#21 (BLOCKS this at runtime). This workflow is authored ahead of that so a
+# producer just wires the call + the admin just sets two org secrets — it stays DORMANT and
+# fails closed with a pointer to #21 until they exist.
+name: dispatch-sender
+
+on:
+  workflow_call:
+    inputs:
+      target-repo:
+        description: "owner/name of the repo to dispatch to (e.g. FS-GG/FS.GG.Templates)."
+        type: string
+        required: true
+      event-type:
+        description: "repository_dispatch event_type the target listens for (e.g. fs-gg-ui-template-released)."
+        type: string
+        required: true
+      version:
+        description: "The released/updated version to advertise (becomes client_payload.version)."
+        type: string
+        required: true
+      payload:
+        description: "Optional extra JSON object merged into client_payload (must be a JSON object string)."
+        type: string
+        default: "{}"
+    secrets:
+      app-id:
+        description: "GitHub App id (org cross-repo dispatch App; provisioned by .github#21)."
+        required: true
+      app-private-key:
+        description: "GitHub App private key (PEM) for the same App."
+        required: true
+
+permissions:
+  contents: read   # the App installation token — not GITHUB_TOKEN — performs the cross-repo write.
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preflight — App credentials present
+        shell: bash
+        env:
+          APP_ID: ${{ secrets.app-id }}
+          APP_KEY: ${{ secrets.app-private-key }}
+          TARGET: ${{ inputs.target-repo }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APP_ID}" || -z "${APP_KEY}" ]]; then
+            echo "::error::dispatch-sender: the cross-repo GitHub App secrets (app-id/app-private-key) are not set." >&2
+            echo "::error::These are provisioned by org-admin in FS-GG/.github#21 (the H4 App + feed). Until then this sender is dormant." >&2
+            exit 1
+          fi
+          if [[ "${TARGET}" != */* ]]; then
+            echo "::error::target-repo must be 'owner/name', got '${TARGET}'." >&2
+            exit 1
+          fi
+          echo "owner=${TARGET%%/*}"  >> "$GITHUB_OUTPUT"
+          echo "name=${TARGET##*/}"   >> "$GITHUB_OUTPUT"
+        id: target
+
+      - name: Mint installation token (scoped to the target repo only)
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+          owner: ${{ steps.target.outputs.owner }}
+          repositories: ${{ steps.target.outputs.name }}
+
+      - name: Build + POST repository_dispatch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TARGET: ${{ inputs.target-repo }}
+          EVENT_TYPE: ${{ inputs.event-type }}
+          VERSION: ${{ inputs.version }}
+          PAYLOAD: ${{ inputs.payload }}
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          # `--argjson extra "$PAYLOAD"` both validates that PAYLOAD is a JSON object and merges
+          # it last, so a caller can add fields (and override the defaults) without changing this file.
+          body="$(jq -cn \
+            --arg et   "$EVENT_TYPE" \
+            --arg v    "$VERSION" \
+            --arg repo "$SOURCE_REPO" \
+            --arg sha  "$SOURCE_SHA" \
+            --arg ref  "$SOURCE_REF" \
+            --argjson extra "$PAYLOAD" \
+            '{event_type: $et,
+              client_payload: ({version: $v, source_repo: $repo, source_sha: $sha, source_ref: $ref} + $extra)}')"
+          echo "Dispatching '${EVENT_TYPE}' (version=${VERSION}) to ${TARGET}:"
+          echo "$body" | jq .
+          echo "$body" | gh api -X POST "repos/${TARGET}/dispatches" --input -
+          echo "Dispatched."
