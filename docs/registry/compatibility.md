@@ -28,6 +28,7 @@ FS.GG.Rendering ──(depends on no FS-GG product; never depends on Governance)
 | `governance-descriptor` | 1 | Governance | `.fsgg/governance.yml` (project descriptor / `ProjectFacts`; renamed from `project.yml`, ADR-0005) | Governance |
 | `fs-gg-ui-template` | 0.1.50-preview.1 (pkg published; tag [`fs-gg-ui-template/v0.1.50-preview.1`](https://github.com/FS-GG/FS.GG.Rendering/releases/tag/fs-gg-ui-template/v0.1.50-preview.1)) | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
 | `shared-build-config` | 1.0.0 | .github | [`dist/dotnet/`](../../dist/dotnet/) `Directory.Build.props` + `Directory.Packages.props` + `.config/dotnet-tools.json`, synced by [`scripts/sync-build-config.sh`](../../scripts/sync-build-config.sh) ([ADR-0006](../adr/0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md), [guide](../build/README.md)) | Rendering, SDD, Governance, Templates |
+| `fsgg-contracts` | 1.0.0 | SDD | `FS.GG.Contracts` NuGet package (F# namespace `Fsgg`) — typed `.fsgg` schemas + named version constants, extended `ProviderDescriptor` (optional `Build`/`Test`/`Run`/`Verify` + canonical name param `name`), cross-repo registry types + pure validator; BCL-only (`FSharp.Core`-only closure). Create-only/additive ([SDD#8](https://github.com/FS-GG/FS.GG.SDD/issues/8); re-type tracked as [SDD#9](https://github.com/FS-GG/FS.GG.SDD/issues/9)); local folder feed until org feed (H4). | SDD, Governance, Templates, Rendering |
 
 ## `.fsgg/` slot ownership
 

@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-28"   # #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
+updated: "2026-06-28"   # SDD#8: register fsgg-contracts@1.0.0 (org-shared FS.GG.Contracts package — typed .fsgg schemas+versions, extended ProviderDescriptor, registry types+validator; create-only/additive); #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -101,6 +101,23 @@ contracts:
     surface: "dist/dotnet/{Directory.Build.props,Directory.Packages.props,.config/dotnet-tools.json} + scripts/sync-build-config.sh"
     consumers: [rendering, sdd, governance, templates]
     docs: "docs/build/README.md"
+  - id: fsgg-contracts
+    version: "1.0.0"
+    owner: sdd
+    # FS-GG/FS.GG.SDD#8: org-shared, SDD-owned, BCL-only F# contract package (NuGet id
+    # FS.GG.Contracts; F# namespace Fsgg). One typed source of truth for every `.fsgg` schema
+    # (each paired with a named version constant), the extended template-provider descriptor
+    # (existing identity fields + optional Build/Test/Run/Verify commands + canonical name param
+    # defaulting to `name`), and the cross-repo dependency-registry types with a pure validator.
+    # Typed models + pure validators only — raw YAML/JSON (de)serialization stays at each
+    # consumer's edge, so the closure carries FSharp.Core only (no YamlDotNet/System.Text.Json/etc).
+    surface: "FS.GG.Contracts NuGet package — Fsgg.Schemas / Fsgg.Provider / Fsgg.Registry / Fsgg.ContractVersion"
+    consumers: [sdd, governance, templates, rendering]
+    # Create-only/additive: SDD does not reference the package yet and no existing artifact changes;
+    # the SDD re-type onto these records is tracked separately as FS-GG/FS.GG.SDD#9. Distributed via a
+    # local folder feed until the org NuGet feed lands.
+    distribution: "local folder feed (artifacts/local-feed) until org feed (H4)"
+    tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/8 (re-type follow-up: FS-GG/FS.GG.SDD#9)"
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
