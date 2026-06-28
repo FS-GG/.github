@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-28"   # #27: register fsgg-contracts@1.0.0 (H2, epic #16 Pillar 2 — typed coherence backbone; SDD#8); #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
+updated: "2026-06-28"   # #29: shared-build-config defect fix — XML-invalid comment (`--` inside <!-- -->) in dist/dotnet/Directory.Build.props broke every adopter's build (MSB4024); reworded + sync-build-config.sh now asserts source .props well-formedness (surface unchanged, no version bump); #27: register fsgg-contracts@1.0.0 (H2, epic #16 Pillar 2 — typed coherence backbone; SDD#8); #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -117,6 +117,9 @@ contracts:
     # and .config/dotnet-tools.json (fake-cli 6.1.4). Distributed verbatim via
     # scripts/sync-build-config.sh; repo-specific settings live in the imported *.local.props.
     # The script's --check mode is the drift gate consumed by the reusable coherence workflow (#18).
+    # #29: --check compares byte-for-byte (not XML-aware), so a malformed-but-verbatim source could
+    # pass the gate yet fail every adopter's build (MSB4024); the script now asserts source .props
+    # XML well-formedness before distributing/checking.
     surface: "dist/dotnet/{Directory.Build.props,Directory.Packages.props,.config/dotnet-tools.json} + scripts/sync-build-config.sh"
     consumers: [rendering, sdd, governance, templates]
     docs: "docs/build/README.md"

@@ -4,7 +4,7 @@
        FS-GG ORG-SHARED MSBuild PROPERTIES
        Source of truth: FS-GG/.github → dist/dotnet/Directory.Build.props
        Distributed by scripts/sync-build-config.sh. DO NOT EDIT in a consumer repo —
-       edits are overwritten on the next sync and fail the drift check (`--check`).
+       edits are overwritten on the next sync and fail the drift check (check mode).
        Repo-specific properties (TargetFramework, package metadata, F# warning
        promotions, fsdocs, …) go in Directory.Build.local.props, imported at the end
        so a repo may override anything below (last definition wins).
