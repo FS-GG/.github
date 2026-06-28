@@ -83,12 +83,22 @@ contracts:
     surface: ".fsgg/governance.yml"
     consumers: [governance]
   - id: fs-gg-ui-template
-    version: "0.1.50-preview.1"   # template FsGgUiVersion pin (tag fs-gg-ui/v0.1.50-preview.1)
-    package-version: "0.1.50-preview.1"   # PUBLISHED FS.GG.UI.Template package (was 0.1.17-preview.1)
-    package-tag: "fs-gg-ui-template/v0.1.50-preview.1"   # template-scoped coherent-set tag (Feature 206)
+    version: "0.1.52-preview.1"   # template FsGgUiVersion pin (tag fs-gg-ui/v0.1.52-preview.1)
+    package-version: "0.1.52-preview.1"   # PUBLISHED FS.GG.UI.Template package (was 0.1.50-preview.1)
+    package-tag: "fs-gg-ui-template/v0.1.52-preview.1"   # template-scoped coherent-set tag (Feature 206/215)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
     consumers: [templates, sdd]
+    # Feature 212 (FS.GG.Rendering#9), released as the coherent set 0.1.52-preview.1 (Feature 215):
+    # the template now GUARANTEES a root-buildable generated product. Additive (no behavior break);
+    # emitted for every profile × lifecycle, byte-neutral across designSystem. SDD composition-
+    # acceptance probes consume this stock surface; the release.yml template-product-tests gate
+    # asserts it on the real release. See coherence id fs-gg-ui-template.
+    root-buildable:
+      since: "Feature 212 (2026-06-28); released 0.1.52-preview.1 (Feature 215)"
+      surface: "root <Name>.slnx (refs src/<Name> + tests/<Name>.Tests) + global.json (net10.0 band, rollForward latestFeature) + build.sh/build.cmd verb wrapper (restore|build|test|run|verify|pack → FAKE; Verify/Test frozen)"
+      stock-commands: "dotnet restore|build|test; dotnet run --project src/<Name> (headless exit 0 via UnsupportedEnvironment) — no FAKE knowledge required"
+      tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/9"
     # ADR-0002: lifecycle is a template parameter (choice symbol).
     parameters:
       lifecycle:
@@ -202,9 +212,15 @@ coherence:
       profiles; default generation side-effect-free (no .git); all four profiles
       restore→build green (0 NU1101 / 0 version-conflict); double-restore byte-reproducible; from-tag
       repack reproduces the package.
-    resolved_by: "FS-GG/FS.GG.Rendering@2862caf — tag fs-gg-ui-template/v0.1.50-preview.1"
-    impact: "Consumers (Templates, SDD) can install the lifecycle + side-effect-free template surface by id and pin the coherent template↔framework snapshot."
-    tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/1 (dependent scaffold-path request — responded)"
+      Advanced 2026-06-28 (Feature 212/215, FS.GG.Rendering#9): the coherent set is re-released at
+      0.1.52-preview.1 (tag fs-gg-ui-template/v0.1.52-preview.1 over fs-gg-ui/v0.1.52-preview.1) and the
+      template now GUARANTEES a root-buildable generated product — root <Name>.slnx + net10.0 global.json
+      pin + build.sh/build.cmd verb wrapper; stock dotnet restore/build/test/run at the product root, zero
+      FAKE. Proven on the real release by the release.yml template-product-tests gate (the load-bearing #9
+      evidence). See the fs-gg-ui-template contract entry's root-buildable block.
+    resolved_by: "FS-GG/FS.GG.Rendering — tag fs-gg-ui-template/v0.1.52-preview.1 (root-buildable, Feature 212/215); prior 2862caf at 0.1.50-preview.1"
+    impact: "Consumers (Templates, SDD) can install the lifecycle + side-effect-free + root-buildable template surface by id and pin the coherent template↔framework snapshot; SDD composition-acceptance probes run the stock root commands."
+    tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/9 (root-buildable guarantee, Feature 212/215); https://github.com/FS-GG/FS.GG.SDD/issues/1 (dependent scaffold-path request — responded)"
   - id: governance-overlay-populated
     coherent: true
     owner: governance
