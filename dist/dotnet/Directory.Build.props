@@ -37,6 +37,45 @@
     <WarningsAsErrors>$(WarningsAsErrors);NU1603;NU1608</WarningsAsErrors>
   </PropertyGroup>
 
+  <!-- api-breaking-change-gate (H3 / .github#20, epic #16 Pillar 5): catch accidental public-API
+       breaks on packable libraries (FS.GG.Contracts, FS.GG.UI.*) so a break forces a SemVer major,
+       which the registry version ranges then enforce.
+
+       OPT-IN and OFF by default (FsggApiGate unset). Turning it on adds a PackageReference, so a
+       repo enables it deliberately as an adoption step and regenerates its packages.lock.json then.
+       This keeps a plain sync of the shared config non-breaking under locked restore.
+
+       Stages (set FsggApiGate in Directory.Build.local.props):
+         unset / false  → off.
+         advisory / true → on; public-API analyzer diagnostics stay WARNINGS even under the repo's
+                           TreatWarningsAsErrors, so adoption never breaks a build. Add the baselines
+                           (PublicAPI.Shipped.txt / PublicAPI.Unshipped.txt) per packable project.
+         required        → ratchet; the same diagnostics surface as build-breaking errors, and a repo
+                           that also sets PackageValidationBaselineVersion gets ApiCompat at pack. -->
+  <PropertyGroup Label="api-breaking-change-gate"
+                 Condition="'$(FsggApiGate)' != '' And '$(FsggApiGate)' != 'false'">
+    <!-- Package Validation = the SDK-integrated ApiCompat: compares the packed output against the
+         last published baseline at pack. Dormant until a repo sets PackageValidationBaselineVersion
+         (in *.local.props, to its last released version), so enabling it here is harmless. -->
+    <EnablePackageValidation Condition="'$(IsPackable)' != 'false'">true</EnablePackageValidation>
+    <!-- Advisory keeps the public-API analyzer diagnostics non-breaking regardless of the repo's
+         TreatWarningsAsErrors; FsggApiGate=required drops this demotion so they fail the build.
+         RS0016/RS0017 symbol (not) in declared API; RS0022 constructor; RS0024/RS0025/RS0026/RS0027
+         shape/overload; RS0036/RS0037 nullability/annotation; RS0041 oblivious API. -->
+    <WarningsNotAsErrors Condition="'$(FsggApiGate)' != 'required'">$(WarningsNotAsErrors);RS0016;RS0017;RS0022;RS0024;RS0025;RS0026;RS0027;RS0036;RS0037;RS0041</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup Label="api-breaking-change-gate"
+             Condition="'$(FsggApiGate)' != '' And '$(FsggApiGate)' != 'false'">
+    <!-- Analyzer-only (PrivateAssets=all): never flows to a package's dependencies. Version is
+         centrally pinned in Directory.Packages.props. The analyzer tracks the declared API only when
+         both baseline files are present, so an opt-in repo that has not added them yet stays silent
+         (run the analyzer's code-fix to generate them). -->
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="PublicAPI.Shipped.txt"   Condition="Exists('$(MSBuildProjectDirectory)/PublicAPI.Shipped.txt')" />
+    <AdditionalFiles Include="PublicAPI.Unshipped.txt" Condition="Exists('$(MSBuildProjectDirectory)/PublicAPI.Unshipped.txt')" />
+  </ItemGroup>
+
   <!-- Repo-specific overrides. Keep this import LAST so a repo can override any org
        default above (MSBuild property last-write-wins). -->
   <Import Project="Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
