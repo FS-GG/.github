@@ -6,6 +6,10 @@ Organization-level files for the [FS-GG](https://github.com/FS-GG) org.
 - [`docs/`](docs/) — cross-repo split decision and implementation plans (the
   shared decision record for the FS-GG project). Start at
   [`docs/index.md`](docs/index.md).
+- [`dist/dotnet/`](dist/dotnet/) — the org-shared .NET build config (MSBuild props,
+  CPM, pinned tool manifest) distributed to every repo via
+  [`scripts/sync-build-config.sh`](scripts/sync-build-config.sh). See
+  [`docs/build/README.md`](docs/build/README.md).
 
 Product docs live in each product repository; only cross-cutting material lives
 here.

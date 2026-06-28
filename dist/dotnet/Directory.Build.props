@@ -1,0 +1,44 @@
+<Project>
+
+  <!-- ════════════════════════════════════════════════════════════════════════════
+       FS-GG ORG-SHARED MSBuild PROPERTIES
+       Source of truth: FS-GG/.github → dist/dotnet/Directory.Build.props
+       Distributed by scripts/sync-build-config.sh. DO NOT EDIT in a consumer repo —
+       edits are overwritten on the next sync and fail the drift check (`--check`).
+       Repo-specific properties (TargetFramework, package metadata, F# warning
+       promotions, fsdocs, …) go in Directory.Build.local.props, imported at the end
+       so a repo may override anything below (last definition wins).
+       Contract: lockfile-restore-enforcement + shared-build-config (registry/dependencies.yml).
+       ════════════════════════════════════════════════════════════════════════════ -->
+
+  <PropertyGroup Label="Determinism">
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Central Package Management">
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <PropertyGroup Label="lockfile-restore-enforcement">
+    <!-- Commit packages.lock.json and restore in locked mode in CI so any dependency-graph
+         drift (a stale or silently substituted FS.GG.UI.* version, or any transitive bump)
+         FAILS restore instead of resolving quietly. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- UNIFIED GATE (H3 / .github#19, ADR-0006): gate on GITHUB_ACTIONS, NOT on
+         ContinuousIntegrationBuild. Rationale: some repos (SDD) force CIB=true
+         unconditionally for determinism, so a CIB gate fails-closed on a fresh local
+         clone; GITHUB_ACTIONS is the real CI signal present in every repo's workflow.
+         `And Exists(...lockfile)` lets a first restore bootstrap the lockfile instead
+         of blocking, so a brand-new project is never wedged. -->
+    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true' And Exists('$(MSBuildProjectDirectory)/packages.lock.json')">true</RestoreLockedMode>
+    <!-- Restore-phase NU16xx are not reliably promoted by TreatWarningsAsErrors, so promote
+         silent substitution (NU1603) and out-of-range (NU1608) explicitly. -->
+    <WarningsAsErrors>$(WarningsAsErrors);NU1603;NU1608</WarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Repo-specific overrides. Keep this import LAST so a repo can override any org
+       default above (MSBuild property last-write-wins). -->
+  <Import Project="Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
+
+</Project>
