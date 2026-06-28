@@ -31,9 +31,11 @@ import sys
 
 import yaml
 
-# A SemVer-ish version: major.minor.patch with optional -prerelease (+build ignored),
+# A SemVer-ish version: major.minor.patch with an OPTIONAL 4th numeric segment (NuGet/
+# System.Version 4-part versions, e.g. governance-reference-gate-set `1.2.1.1` derived from the
+# four contained schemaVersions) and optional -prerelease (+build ignored),
 # OR a bare integer schema-version (governance config schemas declare e.g. `1`/`2`).
-SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 INT_VERSION_RE = re.compile(r"^\d+$")
 # A range like "1.x" or a SemVer comparator set; permissive, only used for the `range` field.
 RANGE_RE = re.compile(r"^[\d.xX*\s<>=~^|.-]+$")
