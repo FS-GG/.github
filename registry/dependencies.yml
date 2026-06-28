@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-28"   # #7: lockfile-restore-enforcement live across SDD/Governance/Templates (coherent)
+updated: "2026-06-28"   # #14: governance-overlay-populated coherent (P3 gate set + P4 overlay); #7: lockfile-restore-enforcement coherent
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -147,16 +147,23 @@ coherence:
     impact: "Consumers (Templates, SDD) can install the lifecycle + side-effect-free template surface by id and pin the coherent template↔framework snapshot."
     tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/1 (dependent scaffold-path request — responded)"
   - id: governance-overlay-populated
-    coherent: false
+    coherent: true
     owner: governance
     summary: >
-      ADR-0002: Templates' fs-gg-governance overlay currently ships EMPTY (advertises governance
-      capability it does not enforce). The overlay must carry real gates — a populated reference
-      .fsgg gate set (build/test + EvidenceGraph/EvidenceAudit, non-empty checks:/commands:) owned
-      by Governance (P3), consumed by Templates (P4). Standing request until P3 publishes the gate
-      set and P4 populates the overlay.
-    impact: "Until resolved, governance-policy/capabilities/tooling consumed by Templates are declared but not enforced."
-    tracking: "https://github.com/orgs/FS-GG/projects/1 (Coordination — P3 Governance, P4 Templates)"
+      Resolved 2026-06-28 (ADR-0002; P3 Governance + P4 Templates): Templates' fs-gg-governance
+      overlay no longer ships EMPTY — it carries REAL gates. Governance (P3) published the populated
+      reference .fsgg gate set at samples/sdd-reference-gate-set/.fsgg/ (policy/capabilities/project/
+      tooling); Templates (P4) populated templates/fs-gg-governance/.fsgg/ from it: capabilities.yml
+      has non-empty checks: (build/test/evidence, each wired to a tooling command, block-on-ship /
+      warn maturities), tooling.yml has non-empty commands: (dotnet-build, dotnet-test, build-evidence
+      EvidenceGraph/EvidenceAudit). The advertised governance-policy@1 / capabilities@2 / tooling@1
+      surfaces are now enforced, not just declared.
+    resolved_by: >
+      FS-GG/FS.GG.Governance#9 (publish populated reference gate set) +
+      FS-GG/FS.GG.Templates#9 (populate fs-gg-governance overlay from P3) +
+      FS-GG/FS.GG.Templates#10 (delete fs-gg-fullstack/ + sync-from-rendering.sh). All closed.
+    impact: "Templates' governance overlay enforces the build/test/evidence gates it advertises; the empty-stub capability gap (ADR-0002) is closed."
+    tracking: "https://github.com/FS-GG/.github/issues/14"
   - id: lockfile-restore-enforcement
     coherent: true
     owner: rendering
