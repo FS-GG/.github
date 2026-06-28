@@ -11,8 +11,8 @@ Contracts: `shared-build-config` + `lockfile-restore-enforcement`
 
 | File | Purpose |
 |---|---|
-| `Directory.Build.props` | Deterministic builds; Central Package Management (CPM) + transitive pinning; the `lockfile-restore-enforcement` gate; `NU1603`/`NU1608`→error. |
-| `Directory.Packages.props` | CPM enablement + the org-wide `FSharp.Core` pin (`10.1.301`). |
+| `Directory.Build.props` | Deterministic builds; Central Package Management (CPM) + transitive pinning; the `lockfile-restore-enforcement` gate; `NU1603`/`NU1608`→error; the opt-in `api-breaking-change-gate`. |
+| `Directory.Packages.props` | CPM enablement + the org-wide `FSharp.Core` pin (`10.1.301`) + the centrally-pinned `PublicApiAnalyzers` (`3.3.4`) for the gate. |
 | `.config/dotnet-tools.json` | Pinned local tool manifest (`fake-cli` `6.1.4`, matching the `Fake.Core.*` library pin). |
 
 ## The unified `RestoreLockedMode` gate
@@ -30,6 +30,39 @@ Contracts: `shared-build-config` + `lockfile-restore-enforcement`
 
 Net effect: any stale or silently substituted dependency version fails restore **in CI** in every
 repo, while local development stays unblocked.
+
+## The `api-breaking-change-gate` (opt-in; advisory → required)
+
+Pillar 5 of [epic #16](https://github.com/FS-GG/.github/issues/16) ([.github#20](https://github.com/FS-GG/.github/issues/20)):
+catch an accidental public-API break on a packable library (`FS.GG.Contracts`, `FS.GG.UI.*`) so it
+forces a **SemVer major** — which the registry version ranges then enforce — instead of slipping out
+in a patch and silently breaking a consumer.
+
+Two mechanisms, both carried by the shared config:
+
+- **`Microsoft.CodeAnalysis.PublicApiAnalyzers`** — tracks the declared public surface in committed
+  `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` files; flags any addition/removal not recorded
+  there. Centrally pinned (`3.3.4`); analyzer-only (`PrivateAssets=all`).
+- **Package Validation** — the SDK-integrated `ApiCompat`. With `EnablePackageValidation` on, `pack`
+  compares the package against the last published baseline (`PackageValidationBaselineVersion`) and
+  fails on a break. No package reference needed.
+
+### Off by default — turning it on is an adoption step
+
+The gate is **off** unless a repo sets `FsggApiGate` in `Directory.Build.local.props`. It is off by
+default on purpose: enabling it adds a `PackageReference`, which changes the restore graph and so the
+committed `packages.lock.json`. A repo turns it on deliberately and **regenerates its lockfile** in
+the same change, keeping a plain re-sync of the shared config non-breaking under locked restore.
+
+| `FsggApiGate` | Effect |
+|---|---|
+| unset / `false` | Off (default). |
+| `advisory` / `true` | Analyzer on; its diagnostics stay **warnings** even under the repo's `TreatWarningsAsErrors`, so adoption never breaks a build. Add `PublicAPI.{Shipped,Unshipped}.txt` per packable project (the analyzer's code-fix generates them). |
+| `required` | The same diagnostics become **build-breaking**; a repo that also sets `PackageValidationBaselineVersion` gets `ApiCompat` at `pack`. |
+
+Adoption is sequenced per repo as H3 follow-ups (the consumer-repo children of
+[.github#20](https://github.com/FS-GG/.github/issues/20)): start `advisory`, commit the API baselines,
+then ratchet to `required` once the surface is stable.
 
 ## Adoption model — sync, don't fork
 
