@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-28"   # #14: governance-overlay-populated coherent (P3 gate set + P4 overlay); #7: lockfile-restore-enforcement coherent
+updated: "2026-06-28"   # #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -18,6 +18,11 @@ contracts:
     owner: sdd
     surface: ".fsgg/providers.yml + provider invocation protocol (dotnet new wrapper)"
     consumers: [templates, rendering]   # rendering authors a provider descriptor; templates registers one
+    # ADR-0005: the canonical product-name parameter is `name` (was `productName`); invocation passes --param name=<product>.
+    parameters:
+      name:
+        type: "string (product name)"
+        notes: "Canonical scaffold product-name param. Supersedes the drifted `productName` spelling (ADR-0005)."
   - id: scaffold-provenance
     version: "1.0.0"
     owner: sdd
@@ -44,6 +49,15 @@ contracts:
     owner: governance
     surface: ".fsgg/tooling.yml"
     consumers: [templates]
+  - id: governance-descriptor
+    version: "1"
+    owner: governance
+    # ADR-0005: governance's project descriptor (ProjectFacts, read by Config.Loader) is the
+    # `.fsgg/governance.yml` slot — renamed from `.fsgg/project.yml` (clean break, no alias) so it
+    # no longer collides with SDD's `.fsgg/project.yml` in a shared `.fsgg/`. Internal type names
+    # (ProjectFacts) unchanged; only the on-disk filename/slot moves.
+    surface: ".fsgg/governance.yml"
+    consumers: [governance]
   - id: fs-gg-ui-template
     version: "0.1.50-preview.1"   # template FsGgUiVersion pin (tag fs-gg-ui/v0.1.50-preview.1)
     package-version: "0.1.50-preview.1"   # PUBLISHED FS.GG.UI.Template package (was 0.1.17-preview.1)

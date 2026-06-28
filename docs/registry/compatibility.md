@@ -19,13 +19,30 @@ FS.GG.Rendering ──(depends on no FS-GG product; never depends on Governance)
 
 | Contract | Version | Owner | Surface | Consumers |
 |---|---|---|---|---|
-| `scaffold-provider` | 1.0.0 | SDD | `.fsgg/providers.yml` + invocation protocol | Templates, Rendering |
+| `scaffold-provider` | 1.0.0 | SDD | `.fsgg/providers.yml` + invocation protocol (canonical product-name param `name`, ADR-0005) | Templates, Rendering |
 | `scaffold-provenance` | 1.0.0 | SDD | `.fsgg/scaffold-provenance.json` | SDD |
 | `governance-handoff` | 1.0.0 (`1.x`) | SDD | `readiness/<id>/governance-handoff.json` | Governance |
 | `governance-policy` | 1 | Governance | `.fsgg/policy.yml` | Templates |
 | `governance-capabilities` | 2 | Governance | `.fsgg/capabilities.yml` | Templates |
 | `governance-tooling` | 1 | Governance | `.fsgg/tooling.yml` | Templates |
+| `governance-descriptor` | 1 | Governance | `.fsgg/governance.yml` (project descriptor / `ProjectFacts`; renamed from `project.yml`, ADR-0005) | Governance |
 | `fs-gg-ui-template` | 0.1.50-preview.1 (pkg published; tag [`fs-gg-ui-template/v0.1.50-preview.1`](https://github.com/FS-GG/FS.GG.Rendering/releases/tag/fs-gg-ui-template/v0.1.50-preview.1)) | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
+
+## `.fsgg/` slot ownership
+
+`.fsgg/` is a **shared namespace**; a scaffolded product carries both SDD and Governance
+artifacts in one directory. Ownership is an explicit contract
+([ADR-0005](../adr/0005-fsgg-slot-ownership-sdd-project-governance-governance.md)) — a new
+product writing into `.fsgg/` checks this map before claiming a filename, so the
+`project.yml` collision class cannot silently recur.
+
+| Slot | Owner | Schema |
+|---|---|---|
+| `project.yml` | SDD | lifecycle project descriptor |
+| `sdd.yml`, `agents.yml`, `constitution.md` | SDD | lifecycle skeleton (constitution per ADR-0004) |
+| `providers.yml`, `scaffold-provenance.json` | SDD | scaffold contracts |
+| `governance.yml` | Governance | governance project descriptor (`ProjectFacts`; was `project.yml`) |
+| `policy.yml`, `capabilities.yml`, `tooling.yml` | Governance | gate set config |
 
 ## Coherence state
 
