@@ -85,3 +85,11 @@ The registry is not just documentation: the reusable
 [contract-coherence gate](contract-coherence-gate.md) (`workflow_call`) makes every repo's CI go
 red when its actual pins/build-config stop matching the registry's declared values. Wire it into
 each repo's CI (see the doc for the snippet).
+
+## Propagation → the cross-repo auto-update fabric
+
+The coherence gate goes *red* on stale pins; the [auto-update fabric](auto-update-fabric.md)
+keeps them *fresh* in the first place — a reusable `dispatch-sender` workflow (producer release →
+consumer `repository_dispatch`) plus an org-shared Renovate preset (custom managers for every
+embedded cross-repo pin). Both are authored in `.github` and dormant until the H4 admin step
+([#21](https://github.com/FS-GG/.github/issues/21)) provisions the App + Packages feed.

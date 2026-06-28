@@ -1,0 +1,75 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "FS-GG org-shared Renovate preset (FS-GG/.github#22, epic #16 Pillar 4). Custom managers for EVERY embedded cross-repo pin that the standard managers miss — the fs-gg-ui template pin (FsGgUiVersion MSBuild property), the FS.GG.Governance gate-set pin, and any literal annotated with a `renovate:` comment — resolved from the org GitHub Packages NuGet feed. The standard `nuget` manager already covers <PackageReference>/<PackageVersion> (FS.GG.Contracts and friends). Consume from a product repo with: \"extends\": [\"github>FS-GG/.github\"]. DORMANT until org-admin provisions the GitHub Packages feed + the Renovate app install (FS-GG/.github#21): the feed URL is deterministic from the org login, but private-feed auth comes from that install."
+  ],
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "packageRules": [
+    {
+      "description": "All FS.GG.* packages resolve from the org GitHub Packages NuGet feed.",
+      "matchDatasources": ["nuget"],
+      "matchPackageNames": ["/^FS\\.GG\\./"],
+      "registryUrls": ["https://nuget.pkg.github.com/FS-GG/index.json"]
+    },
+    {
+      "description": "The fs-gg-ui coherent set moves as one — group FS.GG.UI.* (members + BOM + template) into a single PR.",
+      "matchDatasources": ["nuget"],
+      "matchPackageNames": ["/^FS\\.GG\\.UI($|\\.)/"],
+      "groupName": "FS.GG.UI coherent set"
+    },
+    {
+      "description": "FS-GG packages ship on a -preview channel; track prereleases instead of pinning to a non-existent stable.",
+      "matchDatasources": ["nuget"],
+      "matchPackageNames": ["/^FS\\.GG\\./"],
+      "ignoreUnstable": false,
+      "respectLatest": false
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "fs-gg-ui template pin: the FsGgUiVersion MSBuild property → FS.GG.UI.Template (the published coherent-set version).",
+      "fileMatch": [
+        "(^|/)Directory\\.Build\\.props$",
+        "(^|/)Directory\\.Build\\.local\\.props$",
+        "\\.props$",
+        "\\.targets$",
+        "\\.template\\.config/.*\\.json$"
+      ],
+      "matchStrings": [
+        "<FsGgUiVersion>(?<currentValue>[^<]+)</FsGgUiVersion>",
+        "\"FsGgUiVersion\"\\s*:\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "FS.GG.UI.Template",
+      "datasourceTemplate": "nuget",
+      "versioningTemplate": "nuget"
+    },
+    {
+      "customType": "regex",
+      "description": "Generic annotation-driven manager: any embedded pin tagged `# renovate: datasource=<ds> depName=<pkg> [versioning=<v>]` on the line(s) above the version literal. Used for the FS.GG.Governance gate-set pin and any other non-standard embedded literal across repos.",
+      "fileMatch": [
+        "\\.ya?ml$",
+        "\\.props$",
+        "\\.targets$",
+        "\\.json$",
+        "\\.fsproj$",
+        "\\.sh$"
+      ],
+      "matchStrings": [
+        "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?[^\\n]*\\n[^\\n]*?(?<currentValue>\\d[A-Za-z0-9.+-]*)"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}nuget{{/if}}"
+    }
+  ],
+  "hostRules": [
+    {
+      "description": "Auth for the org GitHub Packages NuGet feed. The token is supplied by the Renovate app install / an encrypted host secret provisioned in FS-GG/.github#21; this rule only declares the host + type.",
+      "matchHost": "nuget.pkg.github.com",
+      "hostType": "nuget"
+    }
+  ]
+}

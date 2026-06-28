@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-28"   # #20: api-breaking-change-gate carried by shared-build-config (H3, epic #16 Pillar 5) — PublicApiAnalyzers (centrally pinned 3.3.4) + SDK Package Validation/ApiCompat wired into dist/dotnet as an OPT-IN, advisory-by-default gate (FsggApiGate); off by default so a plain re-sync stays non-breaking under locked restore (enabling it adds a PackageReference → the adopting repo regenerates its lockfile). New coherence id apicompat-publicapi-gate (coherent:false) tracks per-repo adoption on FS.GG.Contracts + FS.GG.UI.*. #18: reusable contract-coherence gate landed (H3, epic #16 Pillar 3) — .github/workflows/contract-coherence.yml (workflow_call) + scripts/validate-registry.py; validates this registry's schema, asserts the declared fsgg-contracts pin == the actual FS.GG.Contracts package version (FS.GG.SDD), and runs sync-build-config.sh --check for build-config drift; .github gained its first workflows (coherence.yml self-gate). New coherence id registry-validator-typed (coherent:false) tracks converging Fsgg.Registry onto the real registry schema (FS.GG.SDD#12). #29: shared-build-config defect fix — XML-invalid comment (`--` inside <!-- -->) in dist/dotnet/Directory.Build.props broke every adopter's build (MSB4024); reworded + sync-build-config.sh now asserts source .props well-formedness (surface unchanged, no version bump); #27: register fsgg-contracts@1.0.0 (H2, epic #16 Pillar 2 — typed coherence backbone; SDD#8); #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
+updated: "2026-06-28"   # #22: cross-repo auto-update fabric authored (H4, epic #16 Pillar 4) — reusable dispatch-sender workflow (.github/workflows/dispatch-sender.yml, workflow_call; App-token repository_dispatch, since GITHUB_TOKEN can't dispatch cross-repo) + org-shared Renovate preset (default.json, `extends: github>FS-GG/.github`) with custom managers for every embedded pin the nuget manager misses (FsGgUiVersion->FS.GG.UI.Template + annotation-driven gate-set) on the org GitHub Packages feed. New coherence id cross-repo-auto-update (coherent:false) — DORMANT/fail-closed until org-admin provisions the App + feed (#21). No contract surface/version change. #20: api-breaking-change-gate carried by shared-build-config (H3, epic #16 Pillar 5) — PublicApiAnalyzers (centrally pinned 3.3.4) + SDK Package Validation/ApiCompat wired into dist/dotnet as an OPT-IN, advisory-by-default gate (FsggApiGate); off by default so a plain re-sync stays non-breaking under locked restore (enabling it adds a PackageReference → the adopting repo regenerates its lockfile). New coherence id apicompat-publicapi-gate (coherent:false) tracks per-repo adoption on FS.GG.Contracts + FS.GG.UI.*. #18: reusable contract-coherence gate landed (H3, epic #16 Pillar 3) — .github/workflows/contract-coherence.yml (workflow_call) + scripts/validate-registry.py; validates this registry's schema, asserts the declared fsgg-contracts pin == the actual FS.GG.Contracts package version (FS.GG.SDD), and runs sync-build-config.sh --check for build-config drift; .github gained its first workflows (coherence.yml self-gate). New coherence id registry-validator-typed (coherent:false) tracks converging Fsgg.Registry onto the real registry schema (FS.GG.SDD#12). #29: shared-build-config defect fix — XML-invalid comment (`--` inside <!-- -->) in dist/dotnet/Directory.Build.props broke every adopter's build (MSB4024); reworded + sync-build-config.sh now asserts source .props well-formedness (surface unchanged, no version bump); #27: register fsgg-contracts@1.0.0 (H2, epic #16 Pillar 2 — typed coherence backbone; SDD#8); #19: ADR-0006 shared-build-config contract + lockfile-restore-enforcement gate unified to GITHUB_ACTIONS (.github source of truth); #17: ADR-0005 .fsgg slot ownership (SDD project.yml / Governance governance.yml; canonical scaffold param `name`); #14: governance-overlay-populated coherent; #7: lockfile-restore-enforcement coherent
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -285,3 +285,27 @@ coherence:
       under the gate.
     impact: "Public-API breaks on FS.GG.Contracts / FS.GG.UI.* are not yet caught: the shared gate is published but unadopted, so a break can still ship in a non-major release until each repo commits API baselines and turns FsggApiGate on."
     tracking: "https://github.com/FS-GG/.github/issues/20"
+  - id: cross-repo-auto-update
+    coherent: false
+    owner: github
+    summary: >
+      H4 / FS-GG/.github#22 (epic #16 Pillar 4): the org-owned cross-repo auto-update fabric is
+      authored — both halves now live in .github. PUSH: a reusable dispatch-sender workflow
+      (.github/workflows/dispatch-sender.yml, workflow_call) mints a GitHub App installation token
+      scoped to the target repo and POSTs repository_dispatch {event_type, client_payload:{version,
+      ...}} so a producer release fires the consumer's auto-update workflow (GITHUB_TOKEN cannot
+      dispatch cross-repo — research C4). PULL: an org-shared Renovate preset (default.json,
+      consumed via `extends: ["github>FS-GG/.github"]`) adds custom managers for every embedded
+      cross-repo pin the standard nuget manager misses — the FsGgUiVersion MSBuild property
+      (-> FS.GG.UI.Template) and an annotation-driven manager (`# renovate: datasource=.. depName=..`)
+      for the FS.GG.Governance gate-set + any other non-standard literal — over the org GitHub
+      Packages feed (https://nuget.pkg.github.com/FS-GG/index.json), grouping FS.GG.UI.* and allowing
+      the -preview channel. Both are DORMANT and fail closed until org-admin provisions the GitHub
+      App secrets + the Packages feed/Renovate-app auth in FS-GG/.github#21 (BLOCKS at runtime).
+    impact: >
+      A new coherent version in one repo does not yet propagate automatically: the sender + preset
+      are committed but inert until #21's App + feed exist, and no producer/consumer has wired its
+      end (Rendering H4 #10 release->Templates; Templates H4 #15 registry->SDD; SDD H4 #10 consumes
+      the dispatched registry). Stays coherent:false until the App lands and at least one
+      producer->consumer dispatch + Renovate sweep runs green.
+    tracking: "https://github.com/FS-GG/.github/issues/22"
