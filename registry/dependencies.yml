@@ -52,6 +52,15 @@ contracts:
       because Fsgg.Registry has no YAML loader and its abstract model/version-grammar diverge from
       this file (coherence id registry-validator-typed; FS.GG.SDD#12). The apicompat gate (#20) guards
       FS.GG.Contracts' public surface (SDK Package Validation/ApiCompat — the F#-viable detector).
+      Feed/visibility (2026-06-28): the FS.GG.Contracts 1.0.1 package is PUBLISHED on the org
+      GitHub Packages NuGet feed and its visibility was changed private→PUBLIC so consumer-repo
+      CI restores it with the run-scoped GITHUB_TOKEN (permissions: packages: read) — no PAT or
+      per-repo Actions secret. GitHub Packages NuGet still requires a token even for public
+      packages (anonymous restore 401s), so the feed credential stays wired to GITHUB_TOKEN.
+      Consumer re-type Governance#14 is DONE (FS.GG.Governance PR #24, merged); SDD#9 / Templates#13
+      remain. Adopters add a repo-root nuget.config (fsgg-github + packageSourceMapping FS.GG.*),
+      which changes FSharp.Core's resolved lockfile contentHash vs a no-config repo — regenerate
+      lockfiles under that config (--force-evaluate) or locked restore fails NU1403.
   - id: scaffold-provenance
     version: "1.0.0"
     owner: sdd
