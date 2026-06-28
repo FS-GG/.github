@@ -28,6 +28,36 @@ FILES=(
 # A canonical synced file carries this marker; a hand-authored repo file does not.
 MARKER="Source of truth: FS-GG/.github"
 
+# XML well-formedness guard (.github#29). The drift check compares files byte-for-byte,
+# so a malformed-but-verbatim source (e.g. a `--` inside an XML comment) passes --check
+# yet fails every adopter's `dotnet restore`/`pack` with MSB4024. Assert the source .props
+# are loadable XML BEFORE we distribute or pass-check them, so the source of truth can't
+# ship invalid XML again. Prefer xmllint; fall back to python3; warn (don't block) if neither.
+assert_source_xml_wellformed() {
+  local validator=""
+  if command -v xmllint >/dev/null 2>&1; then
+    validator="xmllint"
+  elif command -v python3 >/dev/null 2>&1; then
+    validator="python3"
+  else
+    echo "WARN: no xmllint or python3 found; skipping XML well-formedness check of source .props" >&2
+    return 0
+  fi
+  local f bad=0
+  for f in "$SRC"/*.props; do
+    [[ -f "$f" ]] || continue
+    case "$validator" in
+      xmllint) xmllint --noout "$f" || bad=1 ;;
+      python3) python3 -c 'import sys,xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1])' "$f" || bad=1 ;;
+    esac
+  done
+  if [[ "$bad" -ne 0 ]]; then
+    echo "Source .props in $SRC are not well-formed XML; refusing to distribute. Fix the source of truth first." >&2
+    exit 1
+  fi
+}
+assert_source_xml_wellformed
+
 mode="apply"
 case "${1:-}" in
   --check) mode="check"; shift ;;
