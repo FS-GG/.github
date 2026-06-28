@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-06-27"   # ADR-0002: composition-by-scaffold; lifecycle parameter; governance populated
+updated: "2026-06-28"   # #7: lockfile-restore-enforcement live across SDD/Governance/Templates (coherent)
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -157,3 +157,24 @@ coherence:
       set and P4 populates the overlay.
     impact: "Until resolved, governance-policy/capabilities/tooling consumed by Templates are declared but not enforced."
     tracking: "https://github.com/orgs/FS-GG/projects/1 (Coordination — P3 Governance, P4 Templates)"
+  - id: lockfile-restore-enforcement
+    coherent: true
+    owner: rendering
+    summary: >
+      Resolved 2026-06-28 (P5 — FS-GG/.github#7, epic #5): the FsGgUiVersion-style staleness bug
+      class is structurally impossible across every consumer repo — committed packages.lock.json +
+      CI --locked-mode + NU1603 (silent substitution) / NU1608 (out-of-range) promoted to errors —
+      not just convention-enforced. Rendering is the reference impl (Feature 211; props gate
+      RestoreLockedMode on ContinuousIntegrationBuild). The other three consumers adopt the same
+      posture gating RestoreLockedMode on GITHUB_ACTIONS (SDD forces CIB=true unconditionally for
+      determinism, so a CIB gate would fail-closed on a fresh local clone). SDD and Governance each
+      gained their first/only per-PR CI gate as the enforcement point. Templates' packaging project
+      has no PackageReferences, so its committed lockfile is empty — a forward guardrail only; the
+      load-bearing FS.GG.UI.* enforcement for scaffolded apps stays upstream in the rendering
+      template (Feature 204/211) + the scaffold path. All consumer gates restore→build green on merge.
+    resolved_by: >
+      rendering Feature 211 (landed) + FS-GG/FS.GG.SDD#6 (gate green 48s),
+      FS-GG/FS.GG.Governance#12 (gate green 3m25s, full 165-project build),
+      FS-GG/FS.GG.Templates#11 (composition green 22s).
+    impact: "A stale or silently substituted FS.GG.UI.* (or any) dependency version now fails restore in CI in every consumer repo instead of resolving quietly."
+    tracking: "https://github.com/FS-GG/.github/issues/7"
