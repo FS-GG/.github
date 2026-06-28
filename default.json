@@ -64,13 +64,5 @@
       ],
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}nuget{{/if}}"
     }
-  ],
-  "hostRules": [
-    {
-      "description": "Auth for the org GitHub Packages NuGet feed (private; FS.GG.* are not on nuget.org). The token is the read:packages PAT uploaded as the org-level Mend App Secret FSGG_PACKAGES_READ_TOKEN (Mend-hosted apps no longer support config-based encrypted secrets — secrets are UI-uploaded and referenced by name). Provisioned under FS-GG/.github#21.",
-      "matchHost": "nuget.pkg.github.com",
-      "hostType": "nuget",
-      "token": "{{ secrets.FSGG_PACKAGES_READ_TOKEN }}"
-    }
   ]
 }
