@@ -62,8 +62,8 @@ scripts/sync-build-config.sh --check /path/to/FS.GG.Rendering
 ## Per-repo adoption status
 
 Adoption is sequenced as H3 follow-ups on the Coordination board. Until a repo re-syncs and its
-`--check` gate is wired ([.github#18](https://github.com/FS-GG/.github/issues/18)), drift is flagged
-rather than silently tolerated.
+`--check` gate is wired (via the reusable [contract-coherence gate](../coordination/contract-coherence-gate.md),
+[.github#18](https://github.com/FS-GG/.github/issues/18)), drift is flagged rather than silently tolerated.
 
 | Repo | Action on adoption |
 |---|---|
