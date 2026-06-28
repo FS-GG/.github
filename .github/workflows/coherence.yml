@@ -21,3 +21,8 @@ jobs:
     uses: ./.github/workflows/contract-coherence.yml
     with:
       check-build-config: false
+      # .github IS the registry + scripts authority, so validate THIS checkout (the commit under
+      # test) rather than the published main — otherwise a PR that adds/edits the registry or the
+      # validator script is gated against the stale main copy (and the bootstrapping PR that first
+      # introduces the validator can't pass at all). Consumer repos keep the `main` default.
+      github-ref: ${{ github.sha }}
