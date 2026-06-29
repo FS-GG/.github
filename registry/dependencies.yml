@@ -473,9 +473,13 @@ coherence:
     note: >
       089 also closed a code gap: the CLI `route` command previously never read the handoff (Host MVU
       sensed only SpecKit/DesignSystem), so a built tool exited 0 on a failing handoff. The shipped
-      1.1.0 folds the SddHandoff consumer into the route verdict. coherent:false pending the
-      downstream-observable acceptance (D7): the FS.GG.Templates#25 composition probe flipping SKIP →
-      asserting the strict-blocks/light-passes matrix against the published CLI.
+      1.1.0 folds the SddHandoff consumer into the route verdict. It is a STRICT-ONLY baseline: it
+      enforces a failing handoff at `--mode gate` regardless of the policy profile. The FS.GG.Templates#25
+      composition probe has FLIPPED SKIP → asserting against 1.1.0 (30/31: strict-blocks ✓, strict-
+      satisfied-passes ✓), with ONE assertion pending — light profile should RELAX the boundary
+      (light + failing → exit 0), which 1.1.0 over-blocks. coherent:false until profile-aware enforcement
+      ships (FS.GG.Governance#34, a follow-up CLI version) and the Templates#25 strict-blocks/light-passes
+      matrix is fully green.
     resolved_by: "FS-GG/FS.GG.Governance#29 (route-exit wiring) + #33 (publish gate) + tag v1.1.0 (the org-feed publish)"
     impact: "FS.GG.Templates#25 composition stage flips SKIP → asserting (strict blocks / light passes) against the installed fsgg-governance."
     tracking: "https://github.com/FS-GG/FS.GG.Governance/issues/28"
