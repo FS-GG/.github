@@ -456,3 +456,26 @@ coherence:
       lookup green end-to-end and opened the auto-PR (only third-party Renovate PRs observed so far).
       Flips coherent:true on the first green FS.GG.* Renovate sweep.
     tracking: "https://github.com/FS-GG/.github/issues/22"
+  - id: governance-cli-handoff-consumer-published
+    coherent: false
+    owner: governance
+    summary: >
+      Consumer-side verification of governance-handoff@1.0.0 (CONTRACT entry unchanged — this is a
+      coherence assertion, not a contract surface bump). FS.GG.Governance.Cli@1.1.0 is published to the
+      org GitHub Packages feed (was 404; now resolves at https://nuget.pkg.github.com/FS-GG, version
+      count 1) and its PackAsTool closure bundles FS.GG.Governance.Adapters.SddHandoff.dll, so a fresh
+      `dotnet tool install FS.GG.Governance.Cli --version 1.1.0` yields an `fsgg-governance` whose
+      `route --mode gate` is DRIVEN by a produced readiness/<id>/governance-handoff.json: a failing
+      handoff blocks (exit 2 GovernedBlocking), a passing one passes (exit 0), and light/non-strict
+      mode does not block (exit 0). Verified end-to-end against the published artifact (FS.GG.Governance
+      spec 089, ADR-0004). The publish is gated by a real-evidence green-by-omission smoke (pack →
+      install → run vs committed fixtures) so a consumer-less build cannot ship under this identity.
+    note: >
+      089 also closed a code gap: the CLI `route` command previously never read the handoff (Host MVU
+      sensed only SpecKit/DesignSystem), so a built tool exited 0 on a failing handoff. The shipped
+      1.1.0 folds the SddHandoff consumer into the route verdict. coherent:false pending the
+      downstream-observable acceptance (D7): the FS.GG.Templates#25 composition probe flipping SKIP →
+      asserting the strict-blocks/light-passes matrix against the published CLI.
+    resolved_by: "FS-GG/FS.GG.Governance#29 (route-exit wiring) + #33 (publish gate) + tag v1.1.0 (the org-feed publish)"
+    impact: "FS.GG.Templates#25 composition stage flips SKIP → asserting (strict blocks / light passes) against the installed fsgg-governance."
+    tracking: "https://github.com/FS-GG/FS.GG.Governance/issues/28"
