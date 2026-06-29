@@ -1,86 +1,123 @@
 # FS-GG
 
-F# UI tooling, split into focused products that each stand on their own.
+**F# tooling for building desktop UI products** — a SkiaSharp/OpenGL UI
+framework, a spec-driven development lifecycle CLI, and optional governance,
+composed into one runnable product on `net10.0`.
 
-The project began as one self-hosting platform (the archived
-[`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI)), which bundled a UI
-runtime together with an experimental governance system. That got too heavy to
-develop on. **FS-GG** is the split: the rendering product, the governance
-tooling, the spec-driven development lifecycle, and the downstream composition
-each live in their own repository, each using standard
-[Spec Kit](https://github.com/github/spec-kit), and each shippable on its own.
+You describe a Model-View-Update (MVU) app; FS-GG renders it, scaffolds it,
+drives it through a structured lifecycle from charter to ship, and — only if you
+opt in — checks it against rules you control. Each piece ships on its own and is
+usable on its own; you adopt only what you need.
 
-## Repositories
+> New here? Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
+> install, scaffold, build, run, and ship your first product in one sitting.
 
-| Repo | What it is | Ships | Status |
-|---|---|---|---|
-| [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Elmish/MVU apps rendered with SkiaSharp over OpenGL. Scene, layout, input, viewer/host, controls, design-system/themes. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template (`net10.0`) | Active preview |
-| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / route tooling, developed as a normal tool product. A pure inference kernel over typed facts and rules — light and advisory by default. | the `fsgg-governance` CLI, ~70 `FS.GG.Governance.*` packages, and the reference gate set | Active |
-| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | Spec-driven development lifecycle tooling: `init`/`scaffold → charter → specify → clarify → checklist → plan → tasks → analyze → evidence → verify → ship`, a normalized work model, generated views, and agent guidance. Also the org's typed contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + the `FS.GG.Contracts` schema-authority package | Active |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | Downstream composition: wires SDD + Rendering + Governance into a ready-to-run product. Depends on the others; none depend back on it. | the `fs-gg-governance` config overlay template + the rendering scaffold provider | Active |
+## Get started in three commands
 
-## How they compose
+```sh
+# 1. Install the lifecycle CLI (a dotnet global tool).
+dotnet tool install --global FS.GG.SDD.Cli
 
-Composition happens **at scaffold time**, not by vendoring
-([ADR-0002](https://github.com/FS-GG/.github/blob/main/docs/adr/0002-composition-by-scaffold-lifecycle-parameter-governance-populated.md)):
-`fsgg-sdd scaffold` installs and drives the live, version-pinned upstream
-rendering template, and the Governance overlay drops the reference gate set into
-the project. There is no single "full-stack" template, because `dotnet new`
-cannot depend on another template — a one-shot template could only exist by
-vendoring a rendering copy that goes stale, exactly the failure mode that broke
-the old monolith.
+# 2. Scaffold a runnable Skia/Elmish app under an SDD-managed lifecycle.
+fsgg-sdd scaffold --root ./MyApp --provider rendering --param productName=MyApp
 
-```text
-FS.GG.Templates ──compose (scaffold-time)──▶ FS.GG.SDD · FS.GG.Rendering · FS.GG.Governance
-FS.GG.SDD ──── governance-handoff@1 (optional) ────▶ FS.GG.Governance
-FS.GG.SDD ──── owns FS.GG.Contracts ───────────────▶ consumed by Governance + the coherence gate
-FS.GG.Rendering ── depends on no FS-GG product (never on Governance)
+# 3. Build and run it.
+cd ./MyApp && dotnet build && dotnet run
 ```
 
-## Operating rule
+That gives you a real, windowed F# UI app plus the `.fsgg/` lifecycle skeleton.
+Continue with `fsgg-sdd charter` to drive the work lifecycle, and add governance
+later if you want gates. Full walkthrough →
+**[Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md)**.
 
-> Governance tooling may *inspect* rendering or SDD artifacts; rendering and SDD
-> must never *require* governance tooling for ordinary local build, test,
-> document, package, or release work.
+## What you can build
 
-A contributor should be able to clone a product repo, read its Spec Kit
-artifacts, run the documented commands, and ship a change without learning a
-custom platform. The dependency direction is one-way and the inner loop is never
-blocked by governance — that escape valve is what keeps the split honest.
+- **A desktop UI app** — Elmish/MVU windows rendered with
+  [SkiaSharp](https://github.com/mono/SkiaSharp) over OpenGL: a scene of
+  primitives, or a tree of semantic controls (Button, TextBox, DataGrid…) with
+  theming, layout, and input routing. The render core is Elmish-free; idiomatic
+  Elmish is an optional adapter.
+- **A lifecycle-managed product** — every feature moves through
+  `charter → specify → clarify → checklist → plan → tasks → analyze → evidence →
+  verify → ship`, where each step reads and writes structured artifacts and emits
+  a deterministic report you (and your agents and CI) can consume.
+- **A governed product** *(optional)* — rules that declare **who decides**
+  (machine, agent, or human) and **whether failure stops you**, advisory by
+  default, with an honest local escape hatch and an explanation for every verdict.
 
-## Cross-repo coordination
+## Pick your path
 
-The four products evolve independently but share versioned contracts. The
-coordination machinery lives in this repository
-([`docs/coordination/`](https://github.com/FS-GG/.github/tree/main/docs/coordination)):
+| You want to… | Use | Start at |
+|---|---|---|
+| Just render an F# UI | **FS.GG.Rendering** packages / `fs-gg-ui` template | [Rendering usage](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/usage.md) |
+| Run a managed dev lifecycle | **FS.GG.SDD** (`fsgg-sdd`) | [SDD quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md) |
+| Scaffold a full-stack product | **FS.GG.Templates** (`rendering` provider) | [Templates](https://github.com/FS-GG/FS.GG.Templates#create-a-full-stack-product-composition-primary-path) |
+| Add rules / gates to a project | **FS.GG.Governance** overlay | [Adopting governance](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/adopting-governance.md) |
 
-- **Requests are GitHub issues.** A cross-repo request is an issue opened in the
-  target repo with the `cross-repo` label (template:
-  [`cross-repo-request`](https://github.com/FS-GG/.github/blob/main/.github/ISSUE_TEMPLATE/cross-repo-request.yml));
-  the org-level **Coordination** Projects-v2 board aggregates them, anchored by
-  the *Homogeneous build · contracts · auto-update fabric* epic.
-- **Durable facts live in the registry, not issues.** Who depends on whom and
-  which contract versions are coherent is the machine-readable source of truth in
-  [`registry/dependencies.yml`](https://github.com/FS-GG/.github/blob/main/registry/dependencies.yml)
-  (`fsgg-contracts`, `governance-handoff`, `governance-{policy,capabilities,tooling,descriptor}`,
-  `governance-reference-gate-set`, `fs-gg-ui-template`, `scaffold-provider`,
-  `shared-build-config`, …). Larger decisions are recorded as
-  [ADRs](https://github.com/FS-GG/.github/tree/main/docs/adr).
-- **A CI coherence gate enforces it.** The reusable `contract-coherence`
-  workflow turns a repo's CI red when reality stops matching the registry — it
-  validates the registry with the typed `fsgg-sdd registry validate`, asserts the
-  declared `FS.GG.Contracts` pin equals the published package, and checks the
-  shared build config for drift.
-- **Shared, drift-checked .NET build config.** `Directory.Build.props` /
-  `Directory.Packages.props` are distributed from `dist/dotnet/` with a unified
-  locked-restore gate ([ADR-0006](https://github.com/FS-GG/.github/blob/main/docs/adr/0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md)),
-  and an API-compat breaking-change gate keeps published-package version numbers
-  honest. An auto-update fabric (cross-repo dispatch + an org Renovate preset)
-  keeps pins fresh so the gate rarely goes red.
+Not sure? See **[Which products do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md)**
 
-## Cross-repo docs
+## The products
 
-The split decision and the staged implementation plans live in
-[`docs/`](../../tree/main/docs) — see [`index.md`](../../blob/main/docs/index.md)
-for the map. These supersede the earlier monolithic plan; the archived
-`FS-Skia-UI` repo remains as source inventory and provenance only.
+| Product | What it gives you | Ships |
+|---|---|---|
+| [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework: Scene, layout, input, viewer/host, controls, themes — Elmish/MVU over SkiaSharp/OpenGL. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
+| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI: scaffold a product, then drive `charter → ship` with structured artifacts and JSON/text/rich reports. | `FS.GG.SDD.Cli` (`fsgg-sdd`) |
+| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / route tooling — a pure inference kernel that checks your artifacts, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition: wires SDD + Rendering + Governance into one ready-to-run product at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
+
+## How it composes
+
+Composition happens **at scaffold time**, not by vendoring: `fsgg-sdd scaffold`
+installs the live, version-pinned rendering template, and the Governance overlay
+drops a reference gate set into the project. There is no single all-in-one
+template, because that could only exist by bundling a rendering copy that goes
+stale.
+
+```text
+       you ──run──▶ fsgg-sdd scaffold ──installs──▶ FS.GG.Rendering app (live, pinned)
+                          │
+                          ├──skeleton──▶ .fsgg/ lifecycle (charter … ship)
+                          └──overlay (optional)──▶ FS.GG.Governance reference gate set
+
+FS.GG.Rendering depends on no other FS-GG product — never on Governance.
+```
+
+## The one rule that keeps it honest
+
+> Governance may **inspect** your rendering or lifecycle artifacts; rendering and
+> the lifecycle never **require** governance to build, test, document, package, or
+> release.
+
+The dependency direction is one-way and your inner loop is never blocked by
+governance. You can clone a product repo, read its [Spec Kit](https://github.com/github/spec-kit)
+artifacts, run the documented commands, and ship — without learning a custom
+platform. If governance ever feels heavy, you drop it and keep building.
+
+## Consumer documentation
+
+The **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)**
+collects the cross-product processes in one place:
+
+- [Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md) — your first product, end to end.
+- [Which products do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md) — a decision guide.
+- [The development lifecycle](https://github.com/FS-GG/.github/blob/main/docs/consumer/lifecycle.md) — `charter → ship`, step by step.
+- [Adopting governance](https://github.com/FS-GG/.github/blob/main/docs/consumer/governance.md) — profiles, gates, and the escape hatch.
+- [Output, automation & CI](https://github.com/FS-GG/.github/blob/main/docs/consumer/automation.md) — the JSON contract and scripting.
+- [Versions, feeds & updates](https://github.com/FS-GG/.github/blob/main/docs/consumer/versioning-and-updates.md) — installing, pinning, staying current.
+- [FAQ & troubleshooting](https://github.com/FS-GG/.github/blob/main/docs/consumer/faq.md).
+
+Authoritative per-product docs live in each repository; the consumer guide is the
+map and the cross-product processes that connect them.
+
+## Status
+
+Active preview. Rendering ships `FS.GG.UI.*` preview packages and the `fs-gg-ui`
+template; SDD and Governance are active and installable. APIs and package
+versions may still move before a stable line — pin versions and read each
+product's installation and versioning docs. FS-GG is the split of the archived
+[`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI) monolith into focused,
+independently shippable products.
+
+## License
+
+MIT.

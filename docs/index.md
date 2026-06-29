@@ -8,6 +8,11 @@ description: Index for the FS.GG split-repository direction and the documents th
 
 # FS.GG project split
 
+> **Building a product with FS-GG rather than developing FS-GG itself?** This
+> page and the documents below are the cross-repo *decision record* for people
+> developing the platform. If you just want to use FS-GG, start at the
+> **[consumer guide](consumer/index.md)** instead.
+
 The current recommendation is to stop treating the UI runtime, lifecycle
 workflow, and governance system as one self-hosting platform. The rendering
 framework should be developed as a normal product repository using standard
