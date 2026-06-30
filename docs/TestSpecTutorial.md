@@ -109,6 +109,13 @@ fsgg-sdd --version
 For pinned versions and feeds, see
 [Versions, feeds & updates](consumer/versioning-and-updates.md).
 
+> **`fsgg-sdd --version` is the *lifecycle CLI* version — not "the fs-gg version" of
+> your app.** The CLI and the rendered `FS.GG.UI` set move on **independent** lines:
+> updating the tool (`dotnet tool update --global FS.GG.SDD.Cli`) does **not** change
+> which UI version you scaffold. The fs-gg-ui version is pinned by the provider
+> descriptor in step 2, and you verify it in the generated product (`FsGgUiVersion`,
+> step 3). Don't read "newest fs-gg version" off `fsgg-sdd --version`.
+
 ### 2. Scaffold a runnable product
 
 `fsgg-sdd scaffold` lays down the SDD lifecycle skeleton **and** materializes a
@@ -117,28 +124,31 @@ real, runnable app in one command, via a template *provider*. The reference
 [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering) `fs-gg-ui` app.
 
 SDD embeds no provider, so first register the `rendering` descriptor into your
-project's `.fsgg/providers.yml`. We'll name the project after the game.
+project's `.fsgg/providers.yml`. **This descriptor's `source:` line is the one pin
+that sets your fs-gg-ui version** (`FS.GG.UI.Template::<version>`). We'll name the
+project after the game.
 
-> **Pin the descriptor for a reproducible scaffold.** The descriptor you register
-> determines which template version you get, so prefer a **tagged** copy over the
-> moving `main`. Copy `providers/rendering.providers.yml` from a checkout of
-> [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) **at a release tag**
-> into `./Pong/.fsgg/providers.yml`:
->
-> ```sh
-> mkdir -p ./Pong/.fsgg
-> git -C /path/to/FS.GG.Templates show <tag>:providers/rendering.providers.yml \
->   > ./Pong/.fsgg/providers.yml
-> ```
-
-For a quick first run you can instead pull the descriptor straight from `main`
-(unpinned — fine for following along, but it can move under you):
+Fetch the descriptor from `main` to get the **newest** coherent set — Templates
+keeps its `FS.GG.UI.Template` pin moved up to the latest release, so `main` is the
+newest — then **confirm the version you just pinned**:
 
 ```sh
 mkdir -p ./Pong/.fsgg
 curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
   -o ./Pong/.fsgg/providers.yml
+
+grep 'source:' ./Pong/.fsgg/providers.yml      # -> FS.GG.UI.Template::<version>  (this IS your fs-gg-ui version)
 ```
+
+> **For a reproducible scaffold, freeze the version instead of tracking `main`.**
+> `main` can move under you. To pin an exact version, copy the descriptor from a
+> **release tag** of [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) —
+> or simply edit the `source:` line to the version you want:
+>
+> ```sh
+> git -C /path/to/FS.GG.Templates show <tag>:providers/rendering.providers.yml \
+>   > ./Pong/.fsgg/providers.yml
+> ```
 
 Then scaffold:
 
@@ -166,8 +176,22 @@ never reported as complete.
 
 ### 3. Build and run the stock app
 
+First **confirm the fs-gg-ui version the scaffold actually pinned** — the generated
+product carries a single source of version truth, and this is the authoritative
+"am I on the newest fs-gg version?" check (not `fsgg-sdd --version`):
+
 ```sh
 cd ./Pong
+grep FsGgUiVersion Directory.Packages.props   # the one FS.GG.UI.* version literal
+```
+
+> **Feed:** `FS.GG.UI.*` are **preview** packages served from the org GitHub feed
+> (`https://nuget.pkg.github.com/FS-GG/index.json`), not nuget.org. If `dotnet
+> build` can't find them, add that feed to the product's `NuGet.config` (or your
+> global config). To move to a newer set later, it's **one edit** to `FsGgUiVersion`
+> + `dotnet restore` — see [Versions, feeds & updates](consumer/versioning-and-updates.md).
+
+```sh
 dotnet build
 dotnet run            # opens the live window (needs a GL/X11 session)
 ```

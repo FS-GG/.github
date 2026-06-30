@@ -93,7 +93,9 @@ dotnet tool install --global FS.GG.SDD.Cli
 
 # 2. Register the reference `rendering` provider. It ships in FS.GG.Templates,
 #    not in the CLI, so scaffold can't resolve `--provider rendering` until its
-#    descriptor is in your project's .fsgg/providers.yml.
+#    descriptor is in your project's .fsgg/providers.yml. The descriptor's
+#    `source:` pin (not `fsgg-sdd --version`) sets your fs-gg-ui version; `main`
+#    tracks the newest set.
 mkdir -p ./MyApp/.fsgg
 curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
   -o ./MyApp/.fsgg/providers.yml
@@ -101,7 +103,9 @@ curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/provider
 # 3. Scaffold a runnable Skia/Elmish app under an SDD-managed lifecycle.
 fsgg-sdd scaffold --root ./MyApp --provider rendering --param productName=MyApp
 
-# 4. Build and run it.
+# 4. Build and run it. (FS.GG.UI.* are preview packages on the org GitHub feed,
+#    nuget.pkg.github.com/FS-GG — add it to NuGet.config if restore can't find them.
+#    `grep FsGgUiVersion ./MyApp/Directory.Packages.props` shows your fs-gg-ui version.)
 cd ./MyApp && dotnet build && dotnet run
 ```
 
