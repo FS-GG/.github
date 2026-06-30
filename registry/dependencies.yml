@@ -165,7 +165,17 @@ contracts:
         default: "spec-kit"   # byte-identical to pre-ADR-0002 output; existing profile tests unchanged
         notes: >
           sdd -> app-only product + SDD skeleton; none -> emits neither .specify/ nor a
-          constitution. Gates .specify/, constitution, .agents/, .template.config/generated/.
+          constitution. Gates ONLY the lifecycle WORKSPACE: .specify/, constitution, the
+          .agents//.claude/ agent-context tree, the blanket authoring-skills copy + speckit-*
+          command skills, .template.config/generated/, and docs/skillist-reference.md (the
+          full-registry catalog). Feature 219 (FS.GG.Rendering#30, additive / surface-neutral):
+          the framework product-usage skills under .agents/skills/fs-gg-* and
+          .claude/skills/fs-gg-* are NOT lifecycle-gated — they follow the product PROFILE and
+          emit under EVERY lifecycle (spec-kit|sdd|none), so the recommended SDD path and the
+          full-stack composition now carry the profile-appropriate fs-gg-* skills. spec-kit stays
+          byte-identical (no parameter add/remove/rename; the sdd/none paths gain skills, no file
+          removed). fs-gg-symbology is recorded not-vendored (its product variant is not
+          byte-equal to the spec-kit blanket-copy wrapper; wiring it would change spec-kit output).
     behavior-break:
       feature: "FS.GG.Rendering Feature 205 — side-effect-free template generation"
       date: "2026-06-27"
