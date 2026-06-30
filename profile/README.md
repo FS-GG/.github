@@ -9,8 +9,11 @@ drives it through a structured lifecycle from charter to ship, and — only if y
 opt in — checks it against rules you control. Each piece ships on its own and is
 usable on its own; you adopt only what you need.
 
-> New here? Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
-> install, scaffold, build, run, and ship your first product in one sitting.
+> **New here?**
+> - **Building a product?** Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
+>   install, scaffold, build, run, and ship your first product in one sitting.
+> - **Want to understand how FS-GG is built?** Read the **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
+>   the four-product split, the one-way dependency rule, the contract registry, and how it all composes.
 
 ## Get started in three commands
 
