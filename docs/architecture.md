@@ -208,6 +208,25 @@ edge. Each command projects a `CommandReport` as JSON/text/rich. Authored output
 lands in `work/<id>/*`; structured output (including `governance-handoff.json`)
 in `readiness/<id>/*`.
 
+> **Coming from Spec Kit? There is no `implement` command — by design.** SDD
+> *brackets* implementation rather than owning it: it tracks the artifacts and
+> evidence *around* your work, it does not produce your product code. The Spec Kit
+> `/implement` step is the **unmanaged gap between `analyze` and `evidence`** — the
+> [quickstart lifecycle table](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md)
+> names the action after `analyze` literally as *"implement, then `evidence`."*
+> `analyze` reports `analysis.json` as *implementation-ready* (the gate before you
+> code); **you implement**; then `evidence` authors `work/<id>/evidence.yml`
+> recording proof that it happened — the closest command equivalent. The
+> [migration guide](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/migration-from-spec-kit.md)
+> maps `spec`/`clarify`/`plan`/`tasks`/`evidence` but has no `implement` row, and
+> there is no `Implement` case in the `SddCommand` union.
+>
+> | Spec Kit | SDD |
+> |---|---|
+> | `/specify` `/clarify` `/plan` `/tasks` `/analyze` | `specify` `clarify` (`checklist`) `plan` `tasks` `analyze` |
+> | **`/implement`** | **(no command — the act between `analyze` and `evidence`); `evidence` records it** |
+> | — | `verify` → `ship` (SDD-specific readiness / merge-boundary stages) |
+
 **The scaffold provider mechanism** (`fsgg-sdd scaffold --provider rendering`)
 reads `.fsgg/providers.yml`, validates the provider's contract major, then plans
 `dotnet new install <source>` → SDD skeleton → `dotnet new <templateId>`. It
