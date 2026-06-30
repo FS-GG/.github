@@ -54,6 +54,28 @@ A scaffolded project carries:
 You author in Markdown; the CLI keeps the structured artifacts in sync and never
 treats a generated view as a second source of truth.
 
+## Load-bearing authoring contracts
+
+A few authoring inputs are parsed by a **strict grammar** — get the shape subtly
+wrong and a gate blocks with no obvious remedy. You don't have to reverse-engineer
+them: the exact accepted (and rejected) forms are published in SDD's
+[Authoring Contracts](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/reference/authoring-contracts.md)
+reference, and restated in a scaffolded product's `.fsgg/early-stage-guidance.md`.
+The two you'll meet first:
+
+- **Requirement→acceptance coverage line** (`checklist`). A functional requirement
+  counts as *covered* only when a list item leads with `- FR-###:` and carries its
+  acceptance reference **on the same line**, e.g.
+  `- FR-001: W/S move the left paddle. (covers AC-002)`. A **bold** id
+  (`**FR-001** …`) or a missing colon is counted but reported **uncovered** — the
+  form looks present but establishes no coverage.
+- **`evidence.yml` kind/result vocabulary** (`evidence`/`verify`). An obligation is
+  *satisfied* only by a declaration whose `result` is `pass` **and** whose
+  `synthetic` is `false`. A synthetic pass discloses a stand-in and does **not**
+  satisfy; an unrecognized `kind` silently becomes `verification`. (This is the
+  SDD lifecycle `evidence.yml` — not any same-named "evidence" doc a scaffolded
+  product ships of its own.)
+
 ## Cross-cutting commands
 
 These are **not** lifecycle stages and never alter the `charter → ship` ordering:

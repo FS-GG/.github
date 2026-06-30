@@ -259,6 +259,15 @@ Given/When/Then scenario becomes a checklist item — e.g. *"ball reflects with 
 steeper angle when it strikes the paddle's edge,"* *"a point resets the ball to
 center and serves toward the loser."* This list is your definition of done.
 
+> **Coverage is a strict grammar.** `checklist` marks a requirement *covered*
+> only when a list item leads with `- FR-###:` and carries its acceptance id **on
+> the same line** — `- FR-001: W/S move the left paddle. (covers AC-002)`. A
+> **bold** id (`**FR-001** …`) or a missing colon is *counted but reported
+> uncovered*: the form looks present but establishes no coverage, and `plan` stays
+> blocked. The exact accepted/rejected forms are in SDD's
+> [Authoring Contracts](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/reference/authoring-contracts.md)
+> reference (also restated in `.fsgg/early-stage-guidance.md`).
+
 ### 5. `plan` — design the implementation
 
 ```sh
@@ -347,6 +356,18 @@ fsgg-sdd evidence --rich
 `evidence` captures declared implementation, verification, synthetic, and
 deferral evidence — the audit trail that the work was actually done and how it
 was checked (link the tests from Part C here).
+
+> **What actually satisfies an obligation.** In `evidence.yml`, a `verify`
+> obligation is *satisfied* only by a declaration whose `result` is `pass` **and**
+> whose `synthetic` is `false`. A `synthetic: true` pass discloses a stand-in and
+> does **not** satisfy; `result: deferred` records an accepted deferral, not a
+> satisfaction; an unrecognized `kind` silently becomes `verification`. So link a
+> real passing Part C test (`kind: verification`, `result: pass`, `synthetic:
+> false`) — a synthetic placeholder will keep `verify` short. Full `kind`/`result`
+> vocabulary and copyable examples: SDD's
+> [Authoring Contracts](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/reference/authoring-contracts.md)
+> reference. (This is the lifecycle `evidence.yml`, not any same-named doc the
+> scaffolded app ships.)
 
 ### 9. `verify` — evaluate verification readiness
 
