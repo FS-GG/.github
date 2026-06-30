@@ -41,6 +41,19 @@ runnable app — in one command. The reference `rendering` provider materializes
 the live, version-pinned [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering)
 `fs-gg-ui` app.
 
+First register the provider. SDD embeds no provider — the reference `rendering`
+descriptor ships in [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates),
+so `scaffold` can't resolve `--provider rendering` until that descriptor is in
+your project's `.fsgg/providers.yml`. Fetch the canonical (version-pinned) copy:
+
+```sh
+mkdir -p ./MyApp/.fsgg
+curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
+  -o ./MyApp/.fsgg/providers.yml
+```
+
+Then scaffold:
+
 ```sh
 fsgg-sdd scaffold --root ./MyApp --provider rendering --param productName=MyApp
 ```
@@ -59,13 +72,12 @@ meaningful — malformed input (unknown provider, missing parameter, target
 collision) exits `1`; a provider defect exits `2`; an incomplete scaffold is
 never reported as complete.
 
-> **Where does the `rendering` provider come from?** SDD embeds no provider, but
-> the reference provider descriptor ships in
-> [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates). If `--provider
-> rendering` isn't resolvable yet, register it first by copying the descriptor
-> into your project's `.fsgg/providers.yml` (see
+> **Provider registration, in depth.** The fetch above grabs the descriptor from
+> `main`; to pin it, copy from a checkout of
+> [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) at a tag instead, or
+> merge the entry into an existing `.fsgg/providers.yml` (see
 > [Which products do I need?](which-products.md#the-full-stack-path)). For the
-> skeleton only — no runtime app — use `fsgg-sdd init`.
+> skeleton only — no runtime app, no provider needed — use `fsgg-sdd init`.
 
 ## 3. Build and run it
 

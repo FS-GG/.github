@@ -85,16 +85,23 @@ operating model. If governance ever feels heavy, you drop it and keep building.
 
 ---
 
-## Get started in three commands
+## Get started
 
 ```sh
 # 1. Install the lifecycle CLI (a dotnet global tool).
 dotnet tool install --global FS.GG.SDD.Cli
 
-# 2. Scaffold a runnable Skia/Elmish app under an SDD-managed lifecycle.
+# 2. Register the reference `rendering` provider. It ships in FS.GG.Templates,
+#    not in the CLI, so scaffold can't resolve `--provider rendering` until its
+#    descriptor is in your project's .fsgg/providers.yml.
+mkdir -p ./MyApp/.fsgg
+curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
+  -o ./MyApp/.fsgg/providers.yml
+
+# 3. Scaffold a runnable Skia/Elmish app under an SDD-managed lifecycle.
 fsgg-sdd scaffold --root ./MyApp --provider rendering --param productName=MyApp
 
-# 3. Build and run it.
+# 4. Build and run it.
 cd ./MyApp && dotnet build && dotnet run
 ```
 
