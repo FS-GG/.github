@@ -50,7 +50,14 @@ your project's `.fsgg/providers.yml`. Fetch the canonical (version-pinned) copy:
 mkdir -p ./MyApp/.fsgg
 curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
   -o ./MyApp/.fsgg/providers.yml
+
+grep 'source:' ./MyApp/.fsgg/providers.yml     # -> FS.GG.UI.Template::<version>  (this pin IS your fs-gg-ui version)
 ```
+
+The descriptor's `source:` pin — **not** `fsgg-sdd --version` — is the fs-gg-ui
+version your app gets; the CLI and the `FS.GG.UI` set move on independent lines.
+Fetching from `main` gives the newest set; pin a tag to freeze it (see the note
+below).
 
 Then scaffold:
 
@@ -83,9 +90,16 @@ never reported as complete.
 
 ```sh
 cd ./MyApp
+grep FsGgUiVersion Directory.Packages.props   # the single FS.GG.UI.* version literal — your fs-gg-ui version
 dotnet build
 dotnet run            # opens the live window (needs a GL/X11 session)
 ```
+
+> **Feed:** `FS.GG.UI.*` are **preview** packages on the org GitHub feed
+> (`https://nuget.pkg.github.com/FS-GG/index.json`), not nuget.org — if `dotnet
+> build` can't find them, add that feed to `NuGet.config`. Moving to a newer set
+> later is one edit to `FsGgUiVersion` + `dotnet restore`
+> ([Versions, feeds & updates](versioning-and-updates.md)).
 
 You now have a real product. Everything from here is the lifecycle — optional but
 recommended, and never required to keep building and running.
