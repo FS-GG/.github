@@ -109,6 +109,7 @@ That gives you a real, windowed F# UI app plus the `.fsgg/` lifecycle skeleton.
 Continue with `fsgg-sdd charter` to drive the work lifecycle, and add governance
 later if you want gates. Full walkthrough →
 **[Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md)**.
+Or create a ready specced sample game: https://github.com/FS-GG/.github/blob/main/docs/TestSpecTutorial.md
 
 ---
 
