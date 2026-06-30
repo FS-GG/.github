@@ -42,6 +42,10 @@ The new direction is deliberately simpler:
 
 ## Documents
 
+- [Architecture](architecture.md) is the newcomer's map of the whole system — the
+  four-product split, the one-way dependency rule, the contract registry, the
+  shared F# house style, and how the repositories compose — with links to every
+  source. **Start here for the big picture.**
 - [Project split decision](project-split-decision.md) records why the monolithic
   graph operating system is being replaced by a split-repository strategy.
 - [Rendering project](rendering-project.md) defines the runtime repository's

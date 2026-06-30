@@ -2,6 +2,9 @@
 
 Organization-level files for the [FS-GG](https://github.com/FS-GG) org.
 
+- [`docs/architecture.md`](docs/architecture.md) — the **architecture guide**: the
+  four-product split, the one-way dependency rule, the contract registry, and how
+  the repositories compose. Start here for the big picture.
 - [`profile/README.md`](profile/README.md) — the org landing page.
 - [`docs/consumer/`](docs/consumer/index.md) — the **consumer guide**: install,
   scaffold, run, drive the lifecycle, and optionally govern a product built with

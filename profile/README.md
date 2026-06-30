@@ -82,6 +82,12 @@ stale.
 FS.GG.Rendering depends on no other FS-GG product — never on Governance.
 ```
 
+> **📐 Want the full picture?** Read the
+> **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
+> the four-product split, the one-way dependency rule, the contract registry, the
+> shared F# house style, and how the repositories compose into one runnable
+> product, with links to every source.
+
 ## The one rule that keeps it honest
 
 > Governance may **inspect** your rendering or lifecycle artifacts; rendering and
