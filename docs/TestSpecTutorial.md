@@ -117,7 +117,22 @@ real, runnable app in one command, via a template *provider*. The reference
 [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering) `fs-gg-ui` app.
 
 SDD embeds no provider, so first register the `rendering` descriptor into your
-project's `.fsgg/providers.yml`. We'll name the project after the game:
+project's `.fsgg/providers.yml`. We'll name the project after the game.
+
+> **Pin the descriptor for a reproducible scaffold.** The descriptor you register
+> determines which template version you get, so prefer a **tagged** copy over the
+> moving `main`. Copy `providers/rendering.providers.yml` from a checkout of
+> [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) **at a release tag**
+> into `./Pong/.fsgg/providers.yml`:
+>
+> ```sh
+> mkdir -p ./Pong/.fsgg
+> git -C /path/to/FS.GG.Templates show <tag>:providers/rendering.providers.yml \
+>   > ./Pong/.fsgg/providers.yml
+> ```
+
+For a quick first run you can instead pull the descriptor straight from `main`
+(unpinned — fine for following along, but it can move under you):
 
 ```sh
 mkdir -p ./Pong/.fsgg
@@ -145,10 +160,9 @@ meaningful: malformed input (unknown provider, missing parameter, target
 collision) exits `1`; a provider defect exits `2`; an incomplete scaffold is
 never reported as complete.
 
-> To pin the provider descriptor instead of pulling from `main`, copy
-> `providers/rendering.providers.yml` from a checkout of
-> [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) at a tag. For the
-> skeleton only — no runtime app — use `fsgg-sdd init`.
+> For the skeleton only — no runtime app — use `fsgg-sdd init` instead of
+> `scaffold` (see the pinned-descriptor note above for reproducible provider
+> registration either way).
 
 ### 3. Build and run the stock app
 
@@ -369,6 +383,11 @@ arrange/act/assert test against your pure `update` function. Because the MVU
 `update` is a pure `Model -> Msg -> Model`, you test the whole simulation with no
 window and no GL.
 
+The `rendering` scaffold's test project uses **[Expecto](https://github.com/haf/expecto)**
+(`open Expecto`, `testList`/`test`, `Expect.*`) with the `YoloDev.Expecto.TestSdk`
+runner — not xUnit. Author your tests in that style so they compile and run under
+the scaffolded `dotnet test`.
+
 Take this Pong-style scenario:
 
 > **Ball reflects off the top wall.**
@@ -376,22 +395,32 @@ Take this Pong-style scenario:
 > When one physics step occurs,
 > Then its vertical velocity is inverted and it stays inside the playfield.
 
-It becomes a test like:
+It becomes an Expecto test like:
 
 ```fsharp
-[<Fact>]
-let ``ball reflects off the top wall`` () =
-    let model =
-        { initial with
-            Ball = { Pos = { X = 640.0; Y = 8.0 }
-                     Vel = { X = 300.0; Y = -300.0 } } }
-    let stepped = update (Tick (1.0 / 60.0)) model
-    Assert.True(stepped.Ball.Vel.Y > 0.0)              // inverted
-    Assert.True(stepped.Ball.Pos.Y >= 0.0)             // stayed inside
+open Expecto
+
+[<Tests>]
+let ballPhysics =
+    testList "ball physics" [
+        test "ball reflects off the top wall" {
+            let model =
+                { initial with
+                    Ball = { Pos = { X = 640.0; Y = 8.0 }
+                             Vel = { X = 300.0; Y = -300.0 } } }
+            let stepped = update (Tick (1.0 / 60.0)) model
+            Expect.isGreaterThan stepped.Ball.Vel.Y 0.0
+                "vertical velocity is inverted"
+            Expect.isGreaterThanOrEqual stepped.Ball.Pos.Y 0.0
+                "ball stayed inside the playfield"
+        }
+    ]
 ```
 
-Work through every numbered scenario in §14 the same way. Two rules from §13
-make this reliable:
+Group related scenarios in one `testList` and mark the top-level list with
+`[<Tests>]` so `YoloDev.Expecto.TestSdk` discovers it under `dotnet test` — no
+manual `runTests` entry point is needed. Work through every numbered scenario in
+§14 the same way. Two rules from §13 make this reliable:
 
 - **Fixed timestep** — drive the simulation with an explicit `dt`, never with
   wall-clock time, so a step is reproducible.
