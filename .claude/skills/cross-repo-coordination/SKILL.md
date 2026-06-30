@@ -142,6 +142,42 @@ Record larger cross-repo decisions as an ADR under `docs/adr/`.
 > of install-at-scaffold-time; the governance overlay moves empty-stub → **populated** gate
 > set. These land as `contract-change`s + a new ADR, sequenced as P0–P5 on the board.
 
+## Release a coherent set (publish-before-flip)
+
+Delivering a versioned package to consumers is a **two-actor, ordered** dance — get the order
+wrong and the registry advertises a version the feed can't serve. The universal rule is
+**publish-before-flip (FR-007): the package is LIVE on the feed before the registry says so.**
+
+1. **Publish.** The producing repo bumps its version-of-truth, cuts the release (its own
+   `release.yml` / tag flow), and pushes the package(s) to the org feed
+   (`nuget.pkg.github.com/FS-GG`). The producing repo's **release-only gates** (e.g. package
+   consumption + generated-product tests) must be green — they fail-closed and SKIP the push,
+   which is the safety net, not a nuisance. Confirm `"Your package was pushed"` before step 2.
+2. **Flip the registry** (only now): in `FS-GG/.github` update `registry/dependencies.yml` — the
+   contract entry's `version` / `package-version` / `package-tag`, the **consuming edge**
+   (`{ from: <consumer>, to: <producer>, via: "<id>@<V> …" }`), and prepend a note to the
+   top-level `updated:` annotation. Then update the **hand-maintained** projection
+   `docs/registry/compatibility.md` (dependency-graph line + versioned-contracts row + the
+   relevant coherence row). Validate with the typed validator — the SAME one the gate runs:
+   `fsgg-sdd registry validate registry/dependencies.yml` → `"valid": true`. Open the PR; the
+   `contract-coherence` check must pass. The PR may `Closes <producer>#<n>`.
+3. **Re-pin downstream.** Publishing makes the feed coherent, but a consumer only *receives* the
+   new version when its pin moves. **Direct-pin** consumers self-bump (one version literal +
+   restore). **Provider/composition-pinned** consumers need a re-pin PR in the consuming repo
+   (e.g. `FS.GG.Templates` → `providers/<provider>.providers.yml` `source: <PkgId>::<V>`); its
+   own CI (e.g. `composition`) must pass.
+4. **Land + record.** Merge both PRs, confirm the producer issue closed, flip the board item(s)
+   and parent epic to `Done`.
+
+> **Worked example — Rendering's `fs-gg-ui` coherent set.** Bump the two version-of-truth files
+> (`template/base/Directory.Packages.props` `<FsGgUiVersion>` + `.template.package/FS.GG.UI.Template.fsproj`
+> `<Version>`); cut the **tag triple** `v<V>` + `fs-gg-ui/v<V>` + `fs-gg-ui-template/v<V>` (only `v*`
+> triggers `release.yml`; push the two snapshot tags first); the publish job `needs:` the two gate
+> jobs. Then flip `fs-gg-ui-template` in the registry and re-pin `FS.GG.Templates`
+> `providers/rendering.providers.yml`. The producing repo holds the full step-by-step — including
+> the repo-local test-matrix rows a newly shipped item needs (a release-only gate, not the push
+> gate, catches a missed row).
+
 ## Labels
 
 `cross-repo`, `cross-repo:request`, `cross-repo:response`, `blocked`, `contract-change`.
