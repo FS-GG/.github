@@ -36,6 +36,12 @@ You only adopt what you need. The hard rule is one-directional: governance may
 *inspect* your work, but rendering and the lifecycle never *require* governance
 to build, test, or ship. Your inner loop is never blocked by a platform.
 
+> **New here? Build something first.** The
+> **[TestSpec tutorial](../TestSpecTutorial.md)** is the recommended first
+> hands-on path: install, scaffold, then build a real game (Pong) from a ready-made
+> [TestSpec](../TestSpecs/) by driving it through the whole `charter → ship`
+> lifecycle. Come back to the map below when you want the bigger picture.
+
 ## Read in order
 
 1. **[Getting started](getting-started.md)** — install the CLI, scaffold a
