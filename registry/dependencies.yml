@@ -178,7 +178,7 @@ contracts:
           byte-equal to the spec-kit blanket-copy wrapper; wiring it would change spec-kit output).
     profiles:
       game:
-        type: "choice value app|headless-scene|governed|sample-pack|game"
+        type: "choice (app|headless-scene|governed|sample-pack|game)"
         added: "Feature 220 (FS.GG.Rendering#31, 2026-06-30) — UNRELEASED until next republish"
         notes: >
           ADDITIVE new profile: `dotnet new fs-gg-ui --profile game` emits a minimal, replaceable
