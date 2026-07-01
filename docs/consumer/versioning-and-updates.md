@@ -19,14 +19,14 @@ version and feed details live in each product's installation doc.
 |---|---|---|
 | **SDD** | `FS.GG.SDD.Cli` global tool (`fsgg-sdd`) | `dotnet tool install --global FS.GG.SDD.Cli` |
 | **Rendering** | `FS.GG.UI.*` packages + `fs-gg-ui` template | reference the projects, `dotnet pack` to a local feed, or scaffold from the template |
-| **Governance** | `FS.GG.Governance.Cli` global tool (`fsgg-governance`) + reference gate set | `dotnet tool install --global FS.GG.Governance.Cli --add-source https://nuget.pkg.github.com/FS-GG/index.json` |
+| **Governance** | `FS.GG.Governance.Cli` global tool (`fsgg-governance`) + reference gate set | `dotnet tool install --global FS.GG.Governance.Cli` |
 | **Templates** | `FS.GG.Templates` template package (`fs-gg-governance` overlay, `rendering` provider) | `dotnet new install FS.GG.Templates` |
 
-The org's published packages are read from the GitHub Packages feed
-(`https://nuget.pkg.github.com/FS-GG/index.json`). Rendering's `FS.GG.UI.*` are
-**preview** packages on `net10.0`; if they aren't on a feed you can reach yet,
-reference the projects directly or `dotnet pack` to a local feed — see
-[Rendering · getting the packages](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/usage.md#getting-the-packages).
+All FS-GG packages are published to **public nuget.org**, so the installs above need no
+`--add-source`. Rendering's `FS.GG.UI.*` are **preview** packages on `net10.0` — nuget.org
+serves prereleases, and your `FsGgUiVersion` pins the exact preview version. The org GitHub
+Packages feed (`https://nuget.pkg.github.com/FS-GG/index.json`) remains the coherence/`-preview`
+source of truth (Renovate reads it), but public consumption no longer requires it.
 
 ## Updating each artifact
 

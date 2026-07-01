@@ -446,6 +446,15 @@ install is what keeps the composition honest. See the
   `extends: ["github>FS-GG/.github"]`) with custom managers for the embedded pins
   the standard NuGet manager misses. Producers push to the org GitHub Packages
   feed on release; consumers auto-PR the bump.
+- **Public distribution (dual-publish, [ADR-0012](adr/0012-dual-publish-to-nuget-org.md) +
+  [ADR-0013](adr/0013-trusted-publishing-oidc-for-nuget-org.md)).** On release each producer
+  additionally pushes the **byte-identical** `.nupkg` to **public nuget.org** (after the
+  org-feed push), so public consumers `dotnet tool install` / `dotnet add package` with no
+  `--add-source`. Auth is **Trusted Publishing (OIDC)** — a short-lived `NuGet/login` key per
+  run, no stored secret. The org GitHub Packages feed stays the **coherence/`-preview` source
+  of truth** (Renovate and the contract-coherence gate read it); nuget.org is an additive
+  public target (`nuget-org-published` ✅). Package IDs on nuget.org are permanent, freezing the
+  `FS.GG.*` identities (no rename — [ADR-0003](adr/0003-rename-fs-skia-ui-version-machinery-to-fs-gg-ui.md)).
 
 ---
 

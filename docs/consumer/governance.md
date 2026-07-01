@@ -33,8 +33,7 @@ existing SDD-owned files. The kernel CLI, if you want to run checks directly, is
 a global tool:
 
 ```sh
-dotnet tool install --global FS.GG.Governance.Cli \
-  --add-source https://nuget.pkg.github.com/FS-GG/index.json   # exposes `fsgg-governance`
+dotnet tool install --global FS.GG.Governance.Cli   # exposes `fsgg-governance` (public on nuget.org)
 ```
 
 ## Pick a posture (profiles)
