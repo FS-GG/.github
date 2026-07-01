@@ -238,6 +238,13 @@ embeds *no* rendering-specific identity — the runnable provider ships in Templ
 (descriptor) and Rendering (template). The skeleton (`fsgg-sdd init`) writes the
 `.fsgg/` slots SDD owns (`project.yml`/`sdd.yml`/`agents.yml`), per ADR-0005.
 
+Today the descriptor must be registered in `.fsgg/providers.yml` *before* scaffolding
+(by hand, or via Templates' `new-fullstack.sh`). **ADR-0010** decides the SDD-native
+successor — pending implementation in FS.GG.SDD — an inline `fsgg-sdd scaffold
+--provider-source <source>` that fetches+registers the descriptor for you, with currency
+kept *explicit* (`doctor`/`upgrade`, per ADR-0009) and a *config-driven* governance
+default (which keeps Governance optional, per the one-way rule).
+
 A separate `fsgg-sdd registry validate <path>` composes the YAML load edge with
 `Fsgg.Registry.validateDocument` — this is the typed validator the contract
 coherence gate runs (§5).
