@@ -95,10 +95,11 @@ dotnet build
 dotnet run            # opens the live window (needs a GL/X11 session)
 ```
 
-> **Feed:** `FS.GG.UI.*` are **preview** packages on the org GitHub feed
-> (`https://nuget.pkg.github.com/FS-GG/index.json`), not nuget.org — if `dotnet
-> build` can't find them, add that feed to `NuGet.config`. Moving to a newer set
-> later is one edit to `FsGgUiVersion` + `dotnet restore`
+> **Feed:** `FS.GG.UI.*` are **preview** packages published on **public nuget.org** —
+> `dotnet build` resolves them with no extra feed config (`FsGgUiVersion` pins the exact
+> preview version). They also remain on the org GitHub feed
+> (`https://nuget.pkg.github.com/FS-GG/index.json`), which stays the coherence/`-preview`
+> source. Moving to a newer set later is one edit to `FsGgUiVersion` + `dotnet restore`
 > ([Versions, feeds & updates](versioning-and-updates.md)).
 
 You now have a real product. Everything from here is the lifecycle — optional but
