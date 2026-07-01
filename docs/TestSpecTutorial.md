@@ -79,8 +79,9 @@ spec's front-matter:
 | **`pong.md`** | simple (~5 min) | **Recommended first build.** Two paddles, one ball, no RNG spawning, tiny state model. |
 | `snake.md` | simple (~5 min) | Grid stepping, a direction queue, one classic edge case (180° reversal). |
 | `breakout.md`, `space-invaders.md` | simple | Once Pong feels easy. |
-| `tetris.md`, `tower-defense.md` | medium/complex | After your first end-to-end pass. |
-| `metroidvania.md`, `sandbox-survival.md` | complex (35–45 min) | Save these for later. |
+| `tetris.md` | simple (~10 min) | After your first end-to-end pass — a fuller state model (piece bag, lock delay, line clears). |
+| `tower-defense.md` | complex (~25 min) | Your first genuinely complex spec: economy, waves, pathing. |
+| `metroidvania.md`, `sandbox-survival.md` | complex (~45 min) | Save these for later. |
 
 The rest of this tutorial uses **Pong**. Everything generalizes — swap the slug
 and the section references and the workflow is identical.
@@ -156,7 +157,9 @@ Then scaffold:
 fsgg-sdd scaffold --root ./Pong --provider rendering --param productName=Pong
 ```
 
-What you get:
+What you get (the `rendering` provider defaults to its **`game`** starter profile — a
+small playable game scene, the ideal base to replace with Pong; pass
+`--param profile=app` instead for the controls-showcase starter):
 
 - a runnable **Skia/OpenGL Elmish/MVU** app (Scene, SkiaViewer, Controls);
 - the **`.fsgg/` lifecycle skeleton** (`project.yml`, `sdd.yml`, `agents.yml`,

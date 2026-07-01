@@ -291,7 +291,7 @@ Checklist (optional in v1):
   continues — death ends the run immediately.
 - **Win:** the snake fills all **576** cells (no free cell remains for food). This is a
   perfect game; show a distinct "PERFECT!" message on the Game Over screen and treat the
-  run as a win. (Practically rare, but must be handled — see §14 scenario 8.)
+  run as a win. (Practically rare, but must be handled — see §14 scenario 12.)
 
 ## 12. Difficulty & Balancing
 | Parameter | Default | Range | Effect |

@@ -62,11 +62,12 @@ delay.
 ## 4. Mechanics (detailed)
 
 ### 4.1 The Well (playfield grid)
-The board is a grid **10 columns × 20 visible rows**, plus **2 hidden buffer rows above**
-the top (rows -1, -2) where pieces spawn. Total logical grid is 10×22, with rows 0–19
+The board is a grid **10 columns × 20 visible rows**, plus **2 hidden buffer rows above
+the top** where pieces spawn. Total logical grid is 10×22, with rows 0–19
 visible. Each cell is either `Empty` or `Filled of color`. Coordinates: column `x`
-increases rightward 0→9; row `y` increases **downward** 0→21 (y=0 is top visible row, y=21
-is floor row). Gravity moves pieces toward increasing `y`.
+increases rightward 0→9; row `y` increases **downward**, with **y=0 the top visible row
+and y=19 the floor (bottom visible) row**. The two hidden buffer rows (where pieces spawn)
+are not drawn. Gravity moves pieces toward increasing `y`.
 
 ### 4.2 Tetrominoes
 Exactly 7 pieces, each 4 cells, identified by letter with a fixed Tetris-guideline color:
@@ -189,7 +190,7 @@ square, so the 10×20 visible well is **320×640 px**, drawn at origin `(480, 40
 well; next-queue panel and score HUD sit to the right.
 
 ### 6.2 Levels & difficulty ramp
-- The game starts at **level 0** (or a chosen start level 0–9).
+- The game starts at **level 0** (or a chosen start level 0–19).
 - **Level up:** every **10 lines cleared** total increases the level by 1 (line counter is
   cumulative; level = `totalLines / 10`, capped at the start level as a floor).
 - Higher level = faster gravity. Gravity interval per level (frames at 60 FPS, classic
@@ -444,8 +445,8 @@ All scenarios assume a fixed RNG seed and the default tunables unless stated.
     interval drops to 0.717 s/cell.
 
 11. **7-bag fairness.** *Given* a fresh game, *when* the first 7 pieces are spawned, *then*
-    each of the 7 tetromino kinds appears exactly once (in some order); *and* across any
-    14 consecutive pieces, no kind appears more than twice.
+    each of the 7 tetromino kinds appears exactly once (in some order); *and* no kind is
+    ever more than 12 pieces apart (the guaranteed 7-bag drought bound, §4.7).
 
 12. **Hold piece, once per spawn.** *Given* an active piece and an empty hold slot, *when*
     Hold is pressed, *then* the piece moves to hold and the next-queue piece spawns; *when*

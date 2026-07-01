@@ -361,7 +361,7 @@ by default.
 6. **Multiple pipes can score in one tick.**
    GIVEN two unpassed pairs both with `x + pipeWidth` just past `birdX` after a large `dt`
    WHEN one `Tick` is applied
-   THEN `score` increases by 2 (the scorer loops all unpassed passed pairs).
+   THEN `score` increases by 2 (the scorer loops all unpassed pairs).
 
 7. **Collision with a pipe is instant death.**
    GIVEN a `Playing` model where the bird AABB overlaps a top pipe rect

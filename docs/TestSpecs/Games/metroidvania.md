@@ -80,7 +80,7 @@ All constants are given in **logical pixels** and **seconds**. The simulation ru
 ### 4.2 Jump, gravity, and assists
 - Gravity (rising): **2000 px/s²**.
 - Gravity (falling): **2600 px/s²** (heavier fall = less floaty, classic feel).
-- Jump impulse (initial up velocity): **620 px/s** → apex height ≈ **96 px** (~3 tiles).
+- Jump impulse (initial up velocity): **620 px/s** → apex height ≈ **96 px** (~6 tiles).
 - Max fall speed (terminal): **900 px/s**.
 - **Variable jump height:** while Jump is held and `vy < 0`, rising gravity applies.
   On Jump release while still rising, set `vy = max(vy, -180 px/s)` (cut the jump short).
@@ -126,7 +126,7 @@ All constants are given in **logical pixels** and **seconds**. The simulation ru
 
 ### 4.7 Combat — ranged (Bolt)
 - Bolt projectile: **8 × 8 px**, speed **520 px/s**, lifetime **1.2 s** or until
-  collision. Damage **8**. Costs **1 mana** (see 4.9).
+  collision. Damage **8**. Costs **12 mana** (see 4.9).
 - Max 4 bolts live simultaneously (cap).
 - Bolts pass through terrain? No — destroyed on solid tile. Pass through hazards: no.
 
@@ -141,7 +141,7 @@ All constants are given in **logical pixels** and **seconds**. The simulation ru
 
 ### 4.9 Health & Mana
 - **Health:** starts at **50 HP**, shown as 5 masks × 10 HP. +1 mask (max **+5**) per
-  **Vessel Shard** (4 shards = 1 mask). Cap **100 HP** at full upgrade.
+  **4 Vessel Shards** (4 shards = 1 mask). Cap **100 HP** at full upgrade.
 - **Mana (Veil):** pool of **100**, regenerates **8/s** out of combat (no damage dealt
   or taken for 1.5 s), **0/s** in combat. Melee hit grants **+6 mana** on connect
   (encourages aggression). Bolt costs ~ see 4.7 (1 mana = 1 unit; bolt = 12 mana).
@@ -354,7 +354,7 @@ drawing). It emits ordered draw commands (§8) that the Skia host executes. It r
 - **Input subscription:** OS keyboard events → `KeyDown`/`KeyUp`.
 
 ### 7.6 MVU scaling: the real-time tradeoff (important)
-A Metroidvania is a heavy real-time sim: ~30–60 entities, swept collision, boss FSMs,
+A Metroidvania is a heavy real-time sim: ~30–40 entities, swept collision, boss FSMs,
 all at 60 Hz. Pushing **all** of that through a strictly pure, allocation-per-frame
 `update : Msg -> Model -> Model * Cmd` is the main architectural risk.
 

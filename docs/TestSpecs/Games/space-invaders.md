@@ -71,7 +71,7 @@ All positions in logical pixels on a 1280×720 playfield. Origin top-left, +x ri
 ### 4.3 Alien formation
 - Grid **5 rows × 11 columns = 55 aliens**.
 - Cell spacing: **48 px horizontal pitch**, **48 px vertical pitch**. Alien sprites are
-  **32×24 px**, centered in cells.
+  sized per type (see the table below), centered in cells.
 - Initial formation top-left at **(x = 180, y = 120)** for the top row; rows stack
   downward. Formation bounding box is computed from *living* aliens only.
 - Row identity / point values (top to bottom of the spawned grid):
@@ -281,7 +281,7 @@ type Msg =
      vs cannon (→ lose life), bunkers (erode), player bullet (cancel), off-screen.
   7. **UFO:** `UfoTimer` countdown → maybe spawn; integrate; despawn off-screen.
   8. If `Aliens` empty → `Phase = WaveCleared 1.5`.
-- **`Tick`** in `PlayerDying/WaveCleared/PlayerDying` advances the respective timer; on
+- **`Tick`** in `PlayerDying/WaveCleared` advances the respective timer; on
   expiry, respawn cannon (life lost) or start next wave (`Wave+1`, rebuild grid+bunkers).
 
 ### view
@@ -366,7 +366,7 @@ Data-driven tunables (load from a config record so balance is editable without c
 | `marchStepPx` | 8 px | 4–16 | Distance per march step |
 | `marchDropPx` | 24 px | 12–32 | Descent per edge bounce |
 | `stepIntervalMaxMs` | 800 | 400–1200 | Interval at 55 aliens (slowest) |
-| `stepIntervalMinMs` | 48 | 30–120 | Interval at 1 alien (fastest) |
+| `stepIntervalMinMs` | 48 | 30–120 | Interval floor (lerp base at n=0; n=1 is ≈62 ms) |
 | `waveSpeedup` | 0.92 | 0.80–0.98 | Per-wave interval multiplier |
 | `bombSpeed` | 220 px/s | 120–400 | Enemy bomb fall speed |
 | `bombSpeedPerWave` | 10 px/s | 0–30 | Added bomb speed each wave |
@@ -382,7 +382,8 @@ Data-driven tunables (load from a config record so balance is editable without c
 
 ## 13. Technical Notes
 - **Entity budget**: ≤ 55 aliens + 1 bullet + 3 bombs + 1 UFO + 4×(22×16=352) bunker
-  cells = ~1468 bunker cells max. Trivial for Skia at 60 FPS / 16.7 ms frame. Cull Dead
+  cells = ~1408 bunker cells (≈1468 entities total) max. Trivial for Skia at 60 FPS /
+  16.7 ms frame. Cull Dead
   aliens from the list; iterate bunker cells with simple AABB pre-filter (only test the
   ~1 bunker a bullet overlaps).
 - **Timestep**: the *march* uses a **fixed-step accumulator** (deterministic regardless

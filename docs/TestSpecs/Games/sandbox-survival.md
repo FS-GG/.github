@@ -274,7 +274,7 @@ projectiles created on attack, destroyed on hit/timeout.
 **Logical resolution:** 1280×720 px. **Tile:** 32×32 px → viewport shows ~40×23 tiles.
 
 **World dimensions (default "small"):** `WorldWidth = 4200 tiles`, `WorldHeight = 1200
-tiles` (≈ 134 km² of tiles). Stored in **chunks of 64×64 tiles** → 66×19 ≈ **1254 chunks**.
+tiles`. Stored in **chunks of 64×64 tiles** → 66×19 ≈ **1254 chunks**.
 
 **Vertical layer bands** (by tile Y, top = 0):
 
@@ -423,7 +423,7 @@ type Msg =
 - **`OpenInventory`** sets `UiState=InventoryOpen` and **pauses simulation ticks** (or
   not, configurable); crafting commands are dispatched while open.
 - **Craft message** (a UI action) checks the recipe table against combined inventory +
-  in-range station, removes inputs, adds outputs (§Crafting).
+  in-range station, removes inputs, adds outputs (§12).
 - **`StartNewWorld seed`** seeds both `worldgen` (deterministic, from `seed`) and the sim
   `Rng`, generates spawn-area chunks, places the player on the surface heightmap.
 - **`SaveWorld`/`LoadWorld`** are `Cmd`s to an async persistence service (§13); the world

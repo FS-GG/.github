@@ -341,12 +341,12 @@ Checklist (optional in v1):
 | `enemyStartAlt` | 3000 px | 1500–6000 | When enemies begin |
 | `jetpackDuration` | 2.2 s | 1.5–3.5 | Jetpack thrust length |
 | Spring weight | 0.08 | 0–0.2 | Fraction of platforms with springs |
-| Moving weight | f(alt): 0.05→0.35 | — | Rises with altitude |
+| Moving weight | f(alt): 0.05→0.30 | — | Rises with altitude |
 | Breakable weight | f(alt): 0.0→0.30 | — | Rises with altitude |
 | Static weight | remainder | — | Falls with altitude |
 
 **Type-weight schedule (per spawned platform), interpolated by altitude:**
-- altitude 0: Static 0.92, Moving 0.05, Breakable 0.0, (Spring 0.08 applied as an independent
+- altitude 0: Static 0.95, Moving 0.05, Breakable 0.0, (Spring 0.08 applied as an independent
   roll on whatever non-breakable platform is chosen).
 - altitude 6000+: Static 0.40, Moving 0.30, Breakable 0.30 (Spring roll unchanged).
 Weights are data-driven so balancing is config, not code.
