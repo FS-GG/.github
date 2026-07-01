@@ -18,6 +18,7 @@ LABELS=(
   "cross-repo:response|5319e7|Response/handoff back to another repo"
   "blocked|b60205|Blocked on another repo"
   "contract-change|d93f0b|Changes a versioned cross-repo contract (update the registry)"
+  "architecture-map:unaffected|c5def5|Opt out of the architecture-map reconcile gate (change does not alter the system shape)"
 )
 
 for repo in "${REPOS[@]}"; do

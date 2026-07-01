@@ -129,6 +129,13 @@ installed, follow the
 for what each stage means in consumer terms, see
 [The development lifecycle](lifecycle.md).
 
+> **Staying coherent.** `fsgg-sdd` is also the *orchestrator* of your project's
+> coherent set (template + framework + the CLI itself). It checks read-only on every
+> command and, if your CLI is behind the pin, warns interactively / fails closed in
+> CI — then `fsgg-sdd doctor` reports and `fsgg-sdd upgrade` reconciles as a
+> reviewable diff. It never self-updates behind your back. See
+> [Versions, feeds & updates](versioning-and-updates.md#the-cli-keeps-you-coherent--but-never-behind-your-back).
+
 ## 5. (Optional) add governance
 
 When you want gates, drop the populated FS-GG reference gate set into the project

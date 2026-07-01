@@ -65,6 +65,31 @@ automatically (a Renovate manager and an upstream-release auto-PR move it), so y
 mostly just consume newer template versions as they land. If you maintain your own
 provider descriptor, that single pin is the thing to bump.
 
+## The CLI keeps you coherent — but never behind your back
+
+A scaffolded project has three moving pins, not two: the **template**, the
+**framework** (`FS.GG.UI.*`), and the **`fsgg-sdd` CLI itself** — because the CLI
+seeds artifacts a product on a given template pin is expected to contain (the
+`fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`). An old CLI on a new
+pin silently omits them, so the CLI is treated as a first-class member of the
+*coherent set* and **orchestrates** its own currency (ADR-0008 / ADR-0009):
+
+- **It detects, read-only, on every command.** If your installed CLI is behind the
+  pin's required minimum, an interactive run **warns** (and points at `upgrade`); a
+  CI / non-interactive run **fails closed** (non-zero). Detection never writes.
+- **It remediates only when you ask.** `fsgg-sdd doctor` reports coherence read-only;
+  `fsgg-sdd upgrade` reconciles — self-update + template re-pin + agent re-seed
+  (`refresh-agents`) — **each shown as a confirmable diff**. Nothing self-updates as
+  a side effect, and it only rewrites state you own (your `.fsgg/providers.yml`), not
+  the governed pin (that stays a PR in its owning repo).
+
+So "stay current" is one explicit command (`fsgg-sdd upgrade`), and CI won't let a
+behind-CLI scaffold pass unnoticed. Pin the tool in `dotnet-tools.json` as above; the
+fail-closed check *protects* that pin rather than fighting it.
+
+> These orchestration verbs roll out with the SDD orchestrator work; run
+> `fsgg-sdd --help` to see what your installed version exposes.
+
 ## Schema versions
 
 The lifecycle and governance config files carry a `schemaVersion`. The CLIs parse

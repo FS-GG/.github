@@ -82,6 +82,12 @@ These are **not** lifecycle stages and never alter the `charter → ship` orderi
 
 - **`fsgg-sdd scaffold`** — create a runnable, SDD-managed product from a template
   provider (see [Getting started](getting-started.md)).
+- **`fsgg-sdd doctor`** — read-only: report whether the project is coherent with its
+  pinned set (CLI version, template pin, seeded artifacts). See
+  [Versions, feeds & updates](versioning-and-updates.md#the-cli-keeps-you-coherent--but-never-behind-your-back).
+- **`fsgg-sdd upgrade`** — reconcile a project to its coherent set (self-update +
+  template re-pin + agent re-seed), **each shown as a confirmable diff** — the
+  orchestrator's explicit, never-silent remediation path (ADR-0009).
 - **`fsgg-sdd agents`** — generate per-target Claude/Codex command + skill
   guidance from `readiness/<id>/work-model.json`, marked generated.
 - **`fsgg-sdd refresh`** — bring a work item's generated views back to currency.

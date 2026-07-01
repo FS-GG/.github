@@ -170,7 +170,9 @@ proves and what it does not.
 **The `fs-gg-ui` template** (manifest
 [`.template.config/template.json`](https://github.com/FS-GG/FS.GG.Rendering/blob/main/.template.config/template.json),
 packaged by `.template.package/` as `FS.GG.UI.Template`). Parameters: `profile`
-(`app`/`headless-scene`/`governed`/`sample-pack`), `designSystem` (`wcag`/`ant`),
+(`app`/`game`/`headless-scene`/`governed`/`sample-pack` — `game` is a minimal
+replaceable Pong-style starter and the intended game/rendering default, Feature
+220), `designSystem` (`wcag`/`ant`),
 `lifecycle` (`spec-kit`/`sdd`/`none`, ADR-0002), `productName` (the additive alias
 of the canonical `--name`, ADR-0005), and `initGit` (the side-effect-free opt-in
 from the Feature 205 behavior break — generation no longer auto-runs git/chmod).
@@ -239,6 +241,19 @@ embeds *no* rendering-specific identity — the runnable provider ships in Templ
 A separate `fsgg-sdd registry validate <path>` composes the YAML load edge with
 `Fsgg.Registry.validateDocument` — this is the typed validator the contract
 coherence gate runs (§5).
+
+**The CLI is also the orchestrator** (ADR-0008 / ADR-0009). A scaffolded product is
+`template@<pin>` **+ `fsgg-sdd`@`<installed>`**, and the CLI seeds artifacts that pin's
+product is expected to contain (`fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`),
+so the CLI is a first-class member of the coherent set — the *orchestrator axis* of §5.
+It is the single orchestration and enforcement surface but **not** the source of truth
+(that stays declarative in the registry): on every command it **detects** drift
+read-only — its own version vs. the pin's required minimum, and the seeded artifacts
+present vs. those the pin expects — **warning when interactive and failing closed in
+CI**. Remediation is never a side effect: a read-only `fsgg-sdd doctor` reports, and an
+explicit `fsgg-sdd upgrade` (self-update + template re-pin + `refresh-agents` re-seed)
+reconciles, **each as a confirmable diff**, touching only consumer-owned state. It
+stamps the CLI version used + required minimum into `scaffold-provenance.json`.
 
 ### 4.3 FS.GG.Governance — the optional inference kernel
 
@@ -341,6 +356,23 @@ Dependency edges (downstream → upstream): Templates → Rendering (template),
 Templates → SDD (scaffold-provider), Templates → Governance (policy/overlay),
 SDD → Governance (handoff, **optional**). Rendering points at nothing.
 
+**The coherent set has three axes, not two.** A `fs-gg-ui-template@<V>` pin snapshots
+the *template* and the *framework* — but a scaffolded product also carries the
+`fsgg-sdd` CLI that generated it, and the CLI seeds artifacts the pin's product is
+expected to contain (the `fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`).
+An old CLI on the newest pin silently omits them. **ADR-0008** closes that hole by
+making the CLI a **first-class member of the coherent set** — the *orchestrator* axis
+alongside template and framework — so the `fs-gg-ui-template` registry entry carries a
+`minimum-fsgg-sdd` version (the oldest CLI that seeds those artifacts), validated by
+`fsgg-sdd registry validate` and gated by `contract-coherence`. **ADR-0009** fixes the
+*policy*: the CLI is the single orchestration and enforcement surface but **not** the
+source of truth — it **detects** drift read-only on every command (interactive warns,
+CI fails closed) and **remediates only through an explicit, diff-reviewed `fsgg-sdd
+upgrade`** (self-update + re-pin + re-seed), never a silent auto-update. Truth stays
+declarative in the registry so it can be diffed, gated, and flipped after publish
+(`FR-007`). The `fsgg-sdd-orchestrator-axis` coherence row is `coherent: false` until a
+CLI that seeds those artifacts is published and its concrete minimum is pinned.
+
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
 fails restore in CI in every repo), `apicompat-publicapi-gate` (a public-API break
@@ -350,7 +382,8 @@ BOM coherence guarded on every Rendering PR), and
 through the composed product). Cross-repo decisions are recorded as ADRs
 (ADR-0002 composition-by-scaffold, ADR-0005 `.fsgg` slot ownership + canonical
 `name`, ADR-0006 shared-build-config, ADR-0007 reference-gate-set version
-derivation).
+derivation, ADR-0008 the CLI orchestrator axis, ADR-0009 detect-and-remediate
+orchestration policy).
 
 ---
 
@@ -436,6 +469,13 @@ install is what keeps the composition honest. See the
 - [FS.GG.Governance](https://github.com/FS-GG/FS.GG.Governance) — [`README.md`](https://github.com/FS-GG/FS.GG.Governance/blob/main/README.md), [reference gate set](https://github.com/FS-GG/FS.GG.Governance/tree/main/samples/sdd-reference-gate-set/.fsgg)
 - [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) — [provider descriptor](https://github.com/FS-GG/FS.GG.Templates/blob/main/providers/rendering.providers.yml), [composition harness](https://github.com/FS-GG/FS.GG.Templates/blob/main/tests/composition/run.sh)
 
-> This document is a map maintained alongside the code. When a cross-repo contract
-> changes, update [`registry/dependencies.yml`](../registry/dependencies.yml)
-> first (the protocol), then reconcile this page if the architecture shifted.
+> **Process status.** This page is the project's one **system-overview artifact** —
+> the synthesis the point artifacts (ADRs, the registry) don't individually produce.
+> It is **owned by `FS-GG/.github`** and non-authoritative (detail stays in the
+> registry, the ADRs, and each product repo). Its maintenance is a process
+> obligation, mirroring the "a `contract-change` must update the registry" rule:
+> **any ADR that changes the shape of the system, and any `contract-change` that
+> alters the §5 picture, MUST reconcile this page as part of its resolution** —
+> update [`registry/dependencies.yml`](../registry/dependencies.yml) first (the
+> protocol), then this page. See the
+> [coordination protocol](coordination/README.md#system-overview--the-architecture-map).
