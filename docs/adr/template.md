@@ -15,3 +15,7 @@
 ## Consequences
 
 <Trade-offs, follow-ups, what this obliges each repo to do.>
+
+<!-- If this decision changes the shape of the system (repos, boundaries, the
+coherent-set axes, the contract picture), reconcile docs/architecture.md as part of
+resolution — after the registry update. See docs/coordination/README.md#system-overview--the-architecture-map. -->

@@ -1,0 +1,92 @@
+# Architecture-map reconcile gate.
+#
+# docs/architecture.md is the project's one system-overview artifact (see
+# docs/coordination/README.md#system-overview--the-architecture-map). Its maintenance is a
+# process obligation: any ADR that changes the shape of the system, and any contract-change
+# that alters the map's contract picture (its §5), MUST reconcile docs/architecture.md.
+#
+# This gate is a REMINDER, not a hard block: whether a change is "shape-changing" is a
+# judgment call, so a PR that adds/edits an ADR or touches the registry must EITHER also
+# touch docs/architecture.md, OR carry an explicit one-line opt-out. Routine version bumps
+# and typo fixes take the opt-out; genuine shape changes reconcile the map. Loud, but never
+# in the way — the same posture as the other workflow-level gates in this org (no branch
+# protection; the run simply reds the PR).
+name: architecture-map
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require an architecture-map reconcile (or an explicit opt-out)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Passed via env (never interpolated into the script) to avoid injection.
+          PR_BODY: ${{ github.event.pull_request.body }}
+          # Escape-hatch label, evaluated in the safe expression context.
+          OPT_OUT_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'architecture-map:unaffected') }}
+        run: |
+          set -euo pipefail
+
+          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+
+          # A numbered ADR (docs/adr/NNNN-*.md — not README.md / template.md), or the registry.
+          adr_touched="$(printf '%s\n' "$changed" | grep -E '^docs/adr/[0-9]{4}-.*\.md$' || true)"
+          registry_touched="$(printf '%s\n' "$changed" | grep -xq 'registry/dependencies.yml' && echo yes || echo no)"
+          map_touched="$(printf '%s\n' "$changed" | grep -xq 'docs/architecture.md' && echo yes || echo no)"
+
+          if [ -z "$adr_touched" ] && [ "$registry_touched" = "no" ]; then
+            echo "No ADR or registry change in this PR — architecture map reconcile not required."
+            exit 0
+          fi
+
+          echo "This PR touches an ADR and/or registry/dependencies.yml:"
+          [ -n "$adr_touched" ] && printf '  ADR:      %s\n' $adr_touched
+          [ "$registry_touched" = "yes" ] && echo "  registry: registry/dependencies.yml"
+
+          if [ "$map_touched" = "yes" ]; then
+            echo "✓ docs/architecture.md is also updated — the map is reconciled."
+            exit 0
+          fi
+
+          # Opt-out: a PR-body marker line, or the architecture-map:unaffected label.
+          if printf '%s' "$PR_BODY" | grep -qiE '^[[:space:]]*architecture-map:[[:space:]]*unaffected'; then
+            echo "✓ Opt-out: PR body declares 'architecture-map: unaffected'. Skipping."
+            exit 0
+          fi
+          if [ "$OPT_OUT_LABEL" = "true" ]; then
+            echo "✓ Opt-out: 'architecture-map:unaffected' label present. Skipping."
+            exit 0
+          fi
+
+          echo "::error::docs/architecture.md was not reconciled."
+          cat <<'EOF'
+
+          ────────────────────────────────────────────────────────────────────────
+          This PR changes an ADR or the contract registry but does not touch
+          docs/architecture.md — the system-overview artifact.
+
+          Per docs/coordination/README.md#system-overview--the-architecture-map, a
+          change that alters the SHAPE of the system (repos, boundaries, the
+          coherent-set axes, the §5 contract picture) must reconcile the map as part
+          of resolution — after the registry update, not instead of it.
+
+          Do ONE of:
+            • Update docs/architecture.md to reflect the shape change, OR
+            • If this change does NOT affect the map (a version bump, a coherence-row
+              or prose edit, a typo, an ADR status flip with no shape change), opt out:
+                – add a line to the PR body:  architecture-map: unaffected
+                – or apply the label:         architecture-map:unaffected
+          ────────────────────────────────────────────────────────────────────────
+          EOF
+          exit 1

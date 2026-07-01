@@ -117,6 +117,69 @@ Or create a ready specced sample game: https://github.com/FS-GG/.github/blob/mai
 
 ---
 
+## The `fsgg-sdd` CLI
+
+`fsgg-sdd` (the `FS.GG.SDD.Cli` global tool) is the **single surface** you drive an
+FS-GG product with. It does three jobs: it **scaffolds** a runnable product, it
+**drives** the `charter → ship` lifecycle, and it **orchestrates coherence** —
+keeping a scaffolded project aligned with its pinned *coherent set* (the
+[template + framework **+ the CLI itself**](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#5-the-contract-registry--the-single-source-of-truth)).
+As the orchestrator it never silently self-updates or rewrites your files: it
+**detects** drift read-only on every command, and **remediates only through an
+explicit, diff-reviewed command**.
+
+```sh
+dotnet tool install --global FS.GG.SDD.Cli   # exposes `fsgg-sdd`
+fsgg-sdd --version                            # the CLI's OWN version — not your fs-gg-ui version
+```
+
+### Commands
+
+| Group | Command | What it does |
+|---|---|---|
+| **Scaffold** | `fsgg-sdd scaffold` | Materialize a runnable app **and** the `.fsgg/` lifecycle skeleton from a provider. |
+| | `fsgg-sdd init` | Write the `.fsgg/` skeleton **only** — no runtime app, no provider. |
+| **Lifecycle** | `charter` · `specify` · `clarify` · `checklist` · `plan` · `tasks` · `analyze` · `evidence` · `verify` · `ship` | Drive a unit of work through the fixed, ordered lifecycle (each emits a report). |
+| **Orchestrate** | `fsgg-sdd doctor` | **Read-only:** report whether the project (CLI + template pin + seeded artifacts) is coherent with its set. |
+| | `fsgg-sdd upgrade` | Reconcile to the coherent set — self-update + template re-pin + artifact re-seed — **each shown as a confirmable diff**. |
+| | `fsgg-sdd refresh-agents` | Re-seed the CLI-owned agent artifacts (`fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`). |
+| | `fsgg-sdd refresh` | Bring a work item's generated views back to currency. |
+| **Utility** | `fsgg-sdd agents` | Generate per-target Claude/Codex command + skill guidance. |
+| | `fsgg-sdd registry validate <path>` | Validate a cross-repo `dependencies.yml` with the typed validator. |
+| | `fsgg-sdd validate` | Self-test: exhaustively exercise the command × projection × state matrices. |
+
+### Parameters
+
+**`scaffold` / `init`:**
+
+| Flag | Meaning |
+|---|---|
+| `--root <dir>` | Target project directory. |
+| `--provider <id>` | Template provider to invoke (e.g. `rendering`); resolved from `.fsgg/providers.yml`. |
+| `--param name=<Product>` | The **canonical** product-name parameter (ADR-0005). `--param productName=<Product>` is an accepted alias. |
+| `--dry-run` | Plan the steps without executing. |
+| `--no-update` | Skip refreshing the template before scaffolding. |
+| `--force` | Materialize into a non-empty directory. |
+
+**Every command — output projection** (precedence `--rich` > `--text` > `--json` > default):
+
+| Flag | Output |
+|---|---|
+| *(default)* / `--json` | Deterministic JSON — **the automation contract**. |
+| `--text` | Portable plain-text summary. |
+| `--rich` | [Spectre.Console](https://spectreconsole.net/) rendering; degrades to zero-ANSI when non-interactive or `NO_COLOR`/`TERM=dumb`. |
+
+**Exit codes** (`scaffold`): `0` success · `1` malformed input (unknown provider, missing parameter, target collision) · `2` provider defect. When the installed CLI is **behind the coherent set's minimum**, an *interactive* run warns and points at `fsgg-sdd upgrade`; a *CI / non-interactive* run **fails closed** (non-zero).
+
+> The orchestration verbs (`doctor` / `upgrade` / `refresh-agents`) and the
+> behind-the-pin drift check are the CLI's orchestrator role, decided in
+> [ADR-0008](https://github.com/FS-GG/.github/blob/main/docs/adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md) /
+> [ADR-0009](https://github.com/FS-GG/.github/blob/main/docs/adr/0009-cli-single-orchestrator-detect-and-remediate.md)
+> and rolling out with the SDD orchestrator work — run `fsgg-sdd --help` to see what
+> your installed version exposes.
+
+---
+
 ## The products
 
 | Product | What it gives you | Ships |

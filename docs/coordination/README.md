@@ -79,6 +79,30 @@ contract versions are coherent — live in the
 issue must update the registry as part of its resolution. Larger cross-repo decisions
 are recorded as [ADRs](../adr/README.md).
 
+## System overview → the architecture map
+
+The registry and the ADRs are **point artifacts** — the registry records *what is
+currently coherent*, an ADR records *why one decision was made*. Neither produces the
+**synthesis**: a single narrative of *what the system is*. That synthesis is
+[`docs/architecture.md`](../architecture.md) — the one system-overview artifact, owned
+by `FS-GG/.github`. It is **non-authoritative** (detail stays in the registry, the
+ADRs, and each product repo) but it is **process-owned**, not ad hoc:
+
+> **Reconcile trigger.** Any ADR that changes the shape of the system, and any
+> `contract-change` that alters the architecture map's contract picture (its §5),
+> MUST reconcile `docs/architecture.md` as part of its resolution — after the registry
+> update, not instead of it.
+
+This is the same discipline as "a `contract-change` must update the registry," applied
+to the overview so it can't silently drift while staying the documented "start here."
+
+A lightweight reminder gate enforces it: [`architecture-map.yml`](../../.github/workflows/architecture-map.yml)
+reds a PR that adds/edits a numbered ADR or touches `registry/dependencies.yml` without
+also touching `docs/architecture.md`. Because "shape-changing" is a judgment call, it is
+not a hard block — a non-structural change (a version bump, a coherence-row edit, a typo,
+an ADR status flip) opts out with a one-line `architecture-map: unaffected` in the PR body
+or the `architecture-map:unaffected` label. Loud, but never in the way.
+
 ## Enforcement → the contract-coherence gate
 
 The registry is not just documentation: the reusable
