@@ -51,13 +51,16 @@ to build, test, or ship. Your inner loop is never blocked by a platform.
    governance).
 3. **[The development lifecycle](lifecycle.md)** — what each stage from `charter`
    to `ship` reads, writes, and reports.
-4. **[Adopting governance](governance.md)** — enabling gates, the
+4. **[Who drives the lifecycle](who-drives-the-lifecycle.md)** — who runs the
+   commands (human, agent, CI), why they're real CLI commands and not Spec Kit
+   slash-commands, and how a Claude Code agent drives them via the seeded skills.
+5. **[Adopting governance](governance.md)** — enabling gates, the
    light/strict/release profiles, the four `.fsgg` files, and the escape hatch.
-5. **[Output, automation & CI](automation.md)** — the JSON automation contract,
+6. **[Output, automation & CI](automation.md)** — the JSON automation contract,
    the `--json` / `--text` / `--rich` projections, and wiring commands into CI.
-6. **[Versions, feeds & updates](versioning-and-updates.md)** — installing from
+7. **[Versions, feeds & updates](versioning-and-updates.md)** — installing from
    the right feeds, pinning, and staying current.
-7. **[FAQ & troubleshooting](faq.md)** — common questions and failure modes.
+8. **[FAQ & troubleshooting](faq.md)** — common questions and failure modes.
 
 ## Per-product authoritative docs
 

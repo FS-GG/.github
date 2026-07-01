@@ -2,7 +2,7 @@
 title: FS-GG consumer FAQ & troubleshooting
 category: FS.GG
 categoryindex: 6
-index: 17
+index: 18
 description: Common questions and failure modes for people building products with FS-GG.
 ---
 

@@ -2,7 +2,7 @@
 title: Adopting governance
 category: FS.GG
 categoryindex: 6
-index: 14
+index: 15
 description: How an FS-GG consumer turns on governance — the reference gate set, the light/strict/release profiles, the four .fsgg files, and the escape hatch.
 ---
 

@@ -14,7 +14,13 @@ fixed, ordered lifecycle. Every stage reads and writes **structured artifacts**
 contract) and emits a **deterministic report**. Humans, agents, CLI automation,
 and optional governance all read the same contract.
 
-This page is the consumer-level tour. The command-by-command walkthrough with no
+This page is the consumer-level tour of *what each stage does*. For *who runs these
+commands* — human, agent, or CI — why they are real `fsgg-sdd` CLI commands rather
+than Spec Kit slash-commands, and exactly how a Claude Code agent drives them
+through the seeded process skills, see
+[Who drives the lifecycle](who-drives-the-lifecycle.md).
+
+The command-by-command walkthrough with no
 governance installed is the
 [SDD quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md);
 the schemas are the
