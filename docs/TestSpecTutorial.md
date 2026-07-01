@@ -129,37 +129,39 @@ For pinned versions and feeds, see
 
 The fastest path composes all three products at once — the SDD lifecycle
 skeleton, a runnable [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering)
-`fs-gg-ui` app, and a Governance config — via FS.GG.Templates'
-[`new-fullstack.sh`](https://github.com/FS-GG/FS.GG.Templates/blob/main/scripts/new-fullstack.sh)
-composition script. It registers the `rendering` provider for you (no manual
-`.fsgg/providers.yml`), runs `fsgg-sdd scaffold`, and applies the
-`fs-gg-governance` overlay.
+`fs-gg-ui` app, and a Governance config — via the
+[`new-sdd-fullstack.sh`](https://github.com/FS-GG/.github/blob/main/scripts/new-sdd-fullstack.sh)
+script. It chains the commands that already exist: **fetch** the newest rendering
+descriptor (no clone), **`fsgg-sdd scaffold`**, apply the **`fs-gg-governance`**
+overlay, and **`fsgg-sdd doctor`** to confirm coherence.
 
-**One-time setup.** The script reads its sibling `providers/` and `templates/`
-files, so clone the Templates repo once, then alias it (nushell shown; for
-bash/zsh use `alias new-fullstack='bash ~/projects/FS.GG.Templates/scripts/new-fullstack.sh'`):
+**One-time setup.** Download the script and (optionally) alias it (nushell shown;
+for bash/zsh use `alias new-sdd-fullstack='bash ~/.local/bin/new-sdd-fullstack.sh'`):
 
 ```sh
-git clone https://github.com/FS-GG/FS.GG.Templates ~/projects/FS.GG.Templates
+mkdir -p ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/FS-GG/.github/main/scripts/new-sdd-fullstack.sh \
+  -o ~/.local/bin/new-sdd-fullstack.sh && chmod +x ~/.local/bin/new-sdd-fullstack.sh
 ```
 
 ```nu
 # ~/.config/nushell/config.nu
-alias new-fullstack = bash ~/projects/FS.GG.Templates/scripts/new-fullstack.sh
+alias new-sdd-fullstack = bash ~/.local/bin/new-sdd-fullstack.sh
 ```
 
-**Create the product** — three args, `<target-dir> <product-name>
-<fs-gg-ui-template-source>`. We name it after the game:
+**Create the product** — `<target-dir> <product-name>`, newest coherent set +
+governance. We name it after the game:
 
 ```nu
-new-fullstack ./Pong Pong 'FS.GG.UI.Template::0.1.58-preview.1'
+new-sdd-fullstack ./Pong Pong
 ```
 
-> **Where your fs-gg-ui version comes from.** The effective pin is the `source:`
-> line in the descriptor committed in your Templates checkout
-> (`providers/rendering.providers.yml`), so keep it current
-> (`git -C ~/projects/FS.GG.Templates pull`) to track the newest coherent set.
-> Confirm the actual pin in the generated product in step 3 (`FsGgUiVersion`).
+> **Reproducibility & options.** Defaults to the newest set from
+> `FS.GG.Templates@main`; pass `--ref <tag>` (e.g.
+> `--ref fs-gg-ui-template/v0.1.58-preview.1`) to **pin** a reproducible version.
+> `--no-governance` skips the overlay; `--upgrade` reconciles a behind project.
+> Confirm the pinned fs-gg-ui version in the generated product in step 3
+> (`FsGgUiVersion`).
 
 What you get:
 
@@ -178,8 +180,9 @@ What you get:
 > **Prefer to compose the steps yourself** — or skip governance? Use the plain
 > `fsgg-sdd scaffold --provider rendering` path (register the descriptor, then
 > scaffold) documented in [Getting started](consumer/getting-started.md) §2, or
-> `fsgg-sdd init` for the lifecycle skeleton only. `new-fullstack` is just those
-> steps glued together, with the governance overlay included.
+> `fsgg-sdd init` for the lifecycle skeleton only. `new-sdd-fullstack` just chains
+> those steps — fetch descriptor → scaffold → governance → `doctor` — through
+> existing machinery; read it with `cat ~/.local/bin/new-sdd-fullstack.sh`.
 
 ### 3. Build and run the stock app
 
@@ -486,7 +489,7 @@ When every §14 scenario has a passing test, `verify` goes green and your
 
 ## Part D — Governance (already in your project)
 
-`new-fullstack` (step 2) already dropped the **`fs-gg-governance`** overlay into
+`new-sdd-fullstack` (step 2) already dropped the **`fs-gg-governance`** overlay into
 your product — the reference gate set at `.fsgg/policy.yml` / `capabilities.yml` /
 `tooling.yml`. Governance is **advisory by default and never required** to build,
 run, or ship; it only gates when you choose a blocking posture.
@@ -496,9 +499,10 @@ To pick a posture — `light` is the non-blocking inner-loop default; `strict` /
 gates check, see [Adopting governance](consumer/governance.md). Choosing a posture
 never changes how you build and run.
 
-> **Didn't want governance?** Scaffold with the plain `fsgg-sdd scaffold` path in
-> [Getting started](consumer/getting-started.md) §2 instead of `new-fullstack` — it
-> adds no `.fsgg/policy.yml` / `capabilities.yml` / `tooling.yml`.
+> **Didn't want governance?** Run `new-sdd-fullstack … --no-governance`, or scaffold
+> with the plain `fsgg-sdd scaffold` path in
+> [Getting started](consumer/getting-started.md) §2 — either adds no
+> `.fsgg/policy.yml` / `capabilities.yml` / `tooling.yml`.
 
 ---
 
@@ -518,12 +522,13 @@ through `charter → ship` → turn acceptance criteria into tests. To go furthe
 
 ### If a step misbehaved
 
-- `new-fullstack` failed → confirm the **FS.GG.Templates checkout exists** at the
-  path in your alias and that `fsgg-sdd` is installed (step 1). The script registers
-  the provider for you, so a `providerUnknown` error almost always means the checkout
-  path in the alias is wrong. Composing the steps by hand? See
-  [Getting started](consumer/getting-started.md) §2 (check `.fsgg/providers.yml`
-  exists and `--provider rendering` matches its descriptor).
+- `new-sdd-fullstack` failed → confirm `fsgg-sdd` is installed (step 1) and the
+  script is on disk + executable (`~/.local/bin/new-sdd-fullstack.sh`). The script
+  fetches + registers the provider for you, so a `providerUnknown` error usually
+  means the `curl` step couldn't reach the descriptor (check network / the `--ref`).
+  The governance step is best-effort — if the org feed isn't reachable it's skipped
+  with a message, and the product still builds. Composing the steps by hand? See
+  [Getting started](consumer/getting-started.md) §2.
 - The window won't open → you likely have no GL/X11 session; the build and tests
   still run headless.
 - A lifecycle command surprised you → [FAQ & troubleshooting](consumer/faq.md)
