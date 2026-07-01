@@ -196,7 +196,7 @@ Two products in one repo (**11 projects: 5 src + 6 test**).
 **FSharp.Core-only BCL leaf** (no project references, no I/O), namespace `Fsgg`,
 four modules:
 
-- `Fsgg.ContractVersion` — a self-describing package SemVer (`val value = "1.1.1"`) so a consumer knows which surface it compiled against.
+- `Fsgg.ContractVersion` — a self-describing package SemVer (`val value = "1.2.0"`) so a consumer knows which surface it compiled against.
 - [`Fsgg.Schemas`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Schemas.fsi) — one typed source of truth for every `.fsgg` schema shape and its version constant (SDD- and Governance-owned).
 - [`Fsgg.Provider`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Provider.fsi) — the extended scaffold-provider descriptor (canonical `NameParameter`).
 - [`Fsgg.Registry`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Registry.fsi) — **the validator for this repo's [`registry/dependencies.yml`](../registry/dependencies.yml)**. Its version grammar deliberately mirrors `scripts/validate-registry.py` byte-for-byte, including the 4-segment `major.minor.patch.revision` form (ADR-0007), so the typed validator and the (now retired) Python authority cannot disagree.
