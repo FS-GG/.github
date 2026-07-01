@@ -686,4 +686,4 @@ coherence:
       version. No contract surface/version change (new coherence id + additive distribution target only).
     resolved_by: "FS-GG/.github ADR-0012 (decision; this registry PR registers the coherence id)"
     impact: "Public consumers install FS-GG with no --add-source (dotnet tool install -g FS.GG.SDD.Cli / dotnet add package FS.GG.Contracts) and discover the packages on nuget.org; the org feed remains the -preview coherence feed and the auto-update fabric is unchanged."
-    tracking: "ADR-0012 (issues to be filed: .github admin-provisioning + FS.GG.SDD/FS.GG.Rendering/FS.GG.Governance release-workflow wiring)"
+    tracking: "https://github.com/FS-GG/.github/issues/103 (admin: nuget.org org + FS.GG. prefix + NUGET_ORG_API_KEY — BLOCKER) + FS.GG.SDD#56 + FS.GG.Rendering#40 + FS.GG.Governance#41 (release.yml wirings, blocked on #103)"
