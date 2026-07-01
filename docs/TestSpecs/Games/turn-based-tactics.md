@@ -342,7 +342,7 @@ Movement and ability defaults assume `move-then-act` unless the unit has `Mobile
 | **Bruiser** | 3 | 2 | Slam | 1 (melee) | 2 | 1 (toward enemy) — *pulls? no, pushes player away* | Tanky front-liner. |
 | **Bomber** | 2 | 3 | Detonate (blast r=1 at target tile + neighbours) | 2 | 1 (AoE) | 1 (radial) | Building-weight ×8. The grid's nemesis. |
 | **Leaper (Flyer)** | 2 | 5 | Pounce (melee after long move) | 1 | 2 | 0 | `Flying`. Picks off backline units. |
-| **Behemoth** | 5 | 1 | Stomp (cross shape) | 1 | 2 | 1 (radial) | `Massive` (immovable; blocks LoS). Mini-boss; mission 3+. |
+| **Behemoth** | 5 | 1 | Stomp (cross shape) | 1 | 2 | 1 (radial) | `Massive` (immovable; blocks LoS). Mini-boss; mission 4. |
 
 ### 5.3 Props / hazards
 
@@ -731,10 +731,11 @@ required**. Boards are given as legends; coordinates are `(col,row)`.
    *Given* a Skirmisher (`moveRange = 4`) at `(0,0)` on otherwise-Ground board with
    `Rough` (cost 2) at `(2,0)`,
    *When* it is selected,
-   *Then* `Reachable` contains `(4,0)` with cost 4 (`.→.→.→.→` straight), contains
-   `(2,0)` with cost 2 and `(3,0)` only via a non-rough path if one exists within 4,
-   and **does not contain** any tile whose cheapest path cost exceeds 4. Tiles
-   occupied by enemies are excluded from both path and destination.
+   *Then* `Reachable` contains `(2,0)` with cost 3 (`1 + 2` for the rough tile) and
+   `(3,0)` with cost 4 (cheapest, through the rough tile), **does not contain** `(4,0)`
+   (its cheapest path costs 5, exceeding `moveRange = 4`), and contains no tile whose
+   cheapest path cost exceeds 4. Tiles occupied by enemies are excluded from both path
+   and destination.
 
 2. **Move preview is non-destructive; confirm mutates; undo restores.**
    *Given* a unit at `(1,1)` and `PreviewMove (3,1)` issued (valid),

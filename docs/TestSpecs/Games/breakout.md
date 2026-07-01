@@ -70,7 +70,7 @@ HUD occupies the top 48 px band; the brick field begins below it.
 - Ball is a circle, radius **7** px (diameter 14).
 - Constant speed magnitude; direction changes on bounce. **Speed is preserved exactly on
   wall and brick bounces** (perfectly elastic, no energy loss).
-- Base speed **360 px/s** at level 1 serve. Speed increases with progression (see §4.4
+- Base speed **360 px/s** at level 1 serve. Speed increases with progression (see §4.5
   and §6).
 - Gravity: **none**. Drag: **none**. The ball travels in straight lines between
   collisions.
@@ -131,9 +131,9 @@ a new capsule refreshes/replaces. Capsule size: 28×14 px.
 | **Widen** | Blue | Paddle width 104 → **168** px. | 15 s |
 | **Laser** | Red | Paddle gains twin cannons; Space/Click fires a laser bolt that travels up at 700 px/s and destroys one brick (HP −1) on contact. Fire rate capped at 4/s. | 12 s |
 
-Power-up drop selection is uniform across the four types unless tuned (§12). Only one
-capsule may be on screen per the slot rule below: drops are allowed to stack on screen,
-but a hard cap of **3 falling capsules** prevents clutter (excess drops are skipped).
+Power-up drop selection is uniform across the four types unless tuned (§12). Capsules are
+allowed to stack on screen, but a hard cap of **3 falling capsules** prevents clutter
+(excess drops are skipped).
 
 ### 4.7 Lives & serving
 - Start with **3 lives**.

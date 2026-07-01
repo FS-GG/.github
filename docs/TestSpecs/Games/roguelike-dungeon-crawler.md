@@ -357,7 +357,7 @@ target). Enemy bullets ignore `pierce/homing` unless a boss pattern sets them.
 ## 6. World / Levels / Progression
 
 - **Logical playfield:** 1280×720. A single **room** occupies the central play area
-  `1160×620` with a `60 px` wall border. Tile grid: `40×40 px` tiles ⇒ playable interior
+  `1160×600` with a `60 px` wall border. Tile grid: `40×40 px` tiles ⇒ playable interior
   ≈ `29×15` tiles. Doors sit at the midpoint of each wall.
 - **Camera:** room-locked (no scrolling within a room); the whole room is always on screen.
   Room transitions slide the camera `560/620 px` over `0.35 s` to the adjacent room.
@@ -726,9 +726,9 @@ and `dropNothingWeight`.
 
 **14.8 — Fixed-timestep accumulator advances the sim correctly.**
 - **Given** `Accumulator = 0` and `FIXED_DT = 1/120`,
-- **When** a `Tick 0.05` (50 ms) is processed,
-- **Then** exactly `6` sim steps run (`floor(0.05 / (1/120)) = 6`) and `Accumulator` holds
-  the remainder (`0.05 − 6/120 ≈ 0.00 s`, within float epsilon);
+- **When** a `Tick 0.033` (≈ 1/30 s) is processed,
+- **Then** exactly `4` sim steps run (`floor((1/30) / (1/120)) = 4`) and `Accumulator` holds
+  the remainder (`(1/30) − 4/120 ≈ 0.00 s`, within float epsilon);
 - **And When** a single `Tick 1.0` arrives (huge stall), **Then** at most `MAX_STEPS = 5`
   steps run and the remainder is clamped (no spiral of death).
 

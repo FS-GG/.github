@@ -276,7 +276,7 @@ the chosen branch). Costs are upgrade-only (not cumulative shown). Stats are *re
 F# sketch:
 ```fsharp
 type TowerKind = Arrow | Cannon | Frost | Tesla
-type Branch = None | A | B
+type Branch = NoBranch | A | B
 type TargetingMode = First | Last | Strongest | Closest
 
 type Tower = {
@@ -690,9 +690,9 @@ Verifiable Given/When/Then. Coordinates assume *Serpentine* (fixed map) unless n
     between 15 and 30 each per linear falloff, and all three lose HP that frame.
 
 11. **Tesla chains to multiple targets with falloff.**
-    Given a Tesla T1 (dmg 18, chain ×3, falloff 0.6) and 4 enemies spaced within `chainRange`.
-    When it fires at the primary. Then primary takes 18, jump1 ≈ 10.8, jump2 ≈ 6.48, and the 4th
-    enemy is untouched (chain count exhausted).
+    Given a Tesla T1 (dmg 18, chain ×3, falloff 0.6) and 5 enemies spaced within `chainRange`.
+    When it fires at the primary. Then primary takes 18, jump1 ≈ 10.8, jump2 ≈ 6.48, jump3 ≈ 3.89
+    (the 4th enemy), and the 5th enemy is untouched (chain count exhausted).
 
 12. **Targeting mode changes the chosen target.**
     Given two enemies in range — A nearer the Goal (higher progress), B nearer the tower (closer).

@@ -55,9 +55,9 @@ no time and triggers no animation.
 
 ## 4. Mechanics (detailed)
 
-The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 64 px` tall, on a
+The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 60 px` tall, on a
 1280×720 logical canvas. That gives **20 columns** (1280 / 64) and a vertical stack of
-**rows** described in §6. Column index `0..19`; the frog's logical position is a cell
+**12 rows** (12 × 60 = 720) described in §6. Column index `0..19`; the frog's logical position is a cell
 `(col, row)` for snapped state, plus a smooth pixel offset during a hop and a fractional
 `subX` while riding a platform.
 
@@ -77,7 +77,7 @@ The playfield is a **grid of cells**, `CellW = 64 px` wide and `CellH = 64 px` t
   fixed speed.
 - Vehicles are **lethal**: if the frog's hitbox overlaps any vehicle hitbox at any time
   (including while standing still as a car drives into it), the frog dies instantly.
-- Lane directions alternate; speeds increase toward the median. Base values (level 1):
+- Lane directions alternate; each lane has its own speed (see the table below). Base values (level 1):
 
 | Lane (row) | Vehicle | Direction | Speed (px/s) | Count | Spacing (px) | Hitbox (w×h) |
 |---|---|---|---|---|---|---|
@@ -200,10 +200,11 @@ type Vehicle =
 ```
 
 ## 6. World / Levels / Progression
-Logical canvas **1280×720**, grid 64×64 → **20 cols × 11.25 rows**. We use a fixed row
-layout (top = home, bottom = start). Top HUD band occupies y ∈ [0, 32); play rows start
-below it. Row → y-top mapping (each row 64 px), `rowY(r) = 32 + r*64` is illustrative; the
-implementer MAY adjust the HUD band height so 12 bands fit 720 px.
+Logical canvas **1280×720**. Columns are `64 px` (20 cols = 1280); the layout is a fixed
+stack of **12 rows** (top = home, bottom = start). Twelve 64 px rows would be 768 px and
+overrun the height, so the vertical **row pitch is 60 px** (12 × 60 = 720) and the HUD is
+drawn as a top overlay (§8, §9) rather than reserving its own band. Row → y-top mapping:
+`rowY(r) = r*60` (r = 0…11).
 
 | Row | y band | Contents |
 |---|---|---|
@@ -371,7 +372,7 @@ On death: lose 1 life, respawn at start, reset timer & `MaxRowReached`. **Lives 
 ## 12. Difficulty & Balancing
 | Param | Default | Range | Effect |
 |---|---|---|---|
-| `CellW`/`CellH` | 64 / 64 px | 48–80 | Grid scale |
+| `CellW`/`CellH` | 64 / 60 px | 48–80 | Grid scale (cell width / row pitch) |
 | `HopDuration` | 0.12 s | 0.06–0.25 | Hop snappiness |
 | `LifeTime` | 30 s | 15–45 | Time pressure |
 | Road speeds | 60–160 px/s | 40–260 | Traffic difficulty |
