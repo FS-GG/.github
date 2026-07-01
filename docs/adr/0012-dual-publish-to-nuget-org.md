@@ -1,6 +1,6 @@
 # ADR-0012: Dual-publish FS-GG packages to nuget.org (public) alongside the org GitHub Packages feed
 
-- **Status:** Accepted
+- **Status:** Accepted — **§6 (push authentication / admin gate) superseded by [ADR-0013](0013-trusted-publishing-oidc-for-nuget-org.md)** (2026-07-01): the nuget.org push authenticates via **Trusted Publishing (OIDC)**, not a long-lived `NUGET_ORG_API_KEY` secret; login+push live in each producer's own workflow (no cross-repo reusable workflow). §1–§5 (dual-publish, scope, byte-identical, gated ordering, listing metadata) stand.
 - **Date:** 2026-07-01
 - **Affects:** `.github` (registry, org provisioning), FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance (producer release workflows)
 
@@ -67,6 +67,14 @@ rename anything.
    push key as the org secret **`NUGET_ORG_API_KEY`**. Until that secret exists, each
    producer's nuget.org push step **fails closed with a pointer to this ADR** — it never
    silently no-ops, and never half-publishes a subset of a coherent set.
+
+   > **Superseded by [ADR-0013](0013-trusted-publishing-oidc-for-nuget-org.md).** The push
+   > authenticates via **Trusted Publishing (OIDC)** instead: no `NUGET_ORG_API_KEY` secret;
+   > `NuGet/login@v1` mints a short-lived key per run; login+push live in **each producer's own
+   > workflow** (a cross-repo reusable workflow fails the OIDC policy match — NuGet/login#6).
+   > The admin gate becomes **one Trusted Publishing policy per producer repo** (+ the `FS.GG.`
+   > prefix reservation, still required). Fail-closed is intrinsic: no policy → `NuGet/login`
+   > 401 → the release fails loud.
 
 ## Consequences
 

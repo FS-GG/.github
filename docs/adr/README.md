@@ -15,4 +15,5 @@ repo. Use [template.md](template.md) for a new record; number sequentially.
 | [0008](0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md) | The `fsgg-sdd` CLI is a first-class member of the coherent set (orchestrator axis) | Accepted |
 | [0009](0009-cli-single-orchestrator-detect-and-remediate.md) | The `fsgg-sdd` CLI is the single orchestrator — detect-and-remediate, not silent auto-update | Accepted |
 | [0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) | Every agent-skill root carries the full skill union; `fsgg-sdd` owns the mirror (orchestrator fan-out) | Accepted |
-| [0012](0012-dual-publish-to-nuget-org.md) | Dual-publish FS-GG packages to nuget.org (public) alongside the org GitHub Packages feed | Accepted |
+| [0012](0012-dual-publish-to-nuget-org.md) | Dual-publish FS-GG packages to nuget.org (public) alongside the org GitHub Packages feed | Accepted (§6 auth superseded by 0013) |
+| [0013](0013-trusted-publishing-oidc-for-nuget-org.md) | Publish to nuget.org via Trusted Publishing (OIDC), not a long-lived API key | Accepted |

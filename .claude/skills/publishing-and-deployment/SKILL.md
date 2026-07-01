@@ -133,7 +133,7 @@ in sync.
 - **Consumer-facing install/update:** `docs/consumer/versioning-and-updates.md`, `docs/consumer/getting-started.md`
 - **Fabric & gates:** `docs/coordination/auto-update-fabric.md`, `docs/coordination/contract-coherence-gate.md`
 
-## Public nuget.org (decided, wiring pending — ADR-0012)
+## Public nuget.org (decided, wiring pending — ADR-0012 + ADR-0013)
 
 Everything above targets the **org GitHub Packages** feed. **[ADR-0012](../../../docs/adr/0012-dual-publish-to-nuget-org.md)**
 adds **dual-publish to public nuget.org** for **all** currently-published packages (both
@@ -143,30 +143,45 @@ source of truth (Renovate / contract-coherence gate / registry `package-version`
 reading it), nuget.org is a public distribution target. Registry coherence id:
 **`nuget-org-published`** (`coherent: false` until wired).
 
-The mechanism, per producer release job. Don't hand-roll the push — call the **reusable
-[`nuget-org-push.yml`](../../../.github/workflows/nuget-org-push.yml)** (`.github#103`, the code half of
-the ADR-0012 §6 forward-guardrail, mirroring `dispatch-sender.yml` for the GitHub-feed
-fabric). It fails closed when `NUGET_ORG_API_KEY` is absent and pushes with `--skip-duplicate`:
+**Auth = Trusted Publishing (OIDC), not a stored key** — [ADR-0013](../../../docs/adr/0013-trusted-publishing-oidc-for-nuget-org.md)
+supersedes ADR-0012 §6. There is **no `NUGET_ORG_API_KEY` secret**: each producer's release
+job requests an OIDC token (`id-token: write`), `NuGet/login@v1` exchanges it at nuget.org
+for a **single-use key valid ~1 hour**, and the push uses that. Login+push live in **each
+producer's own `release.yml`** — a cross-repo reusable workflow trips the OIDC policy match
+([NuGet/login#6](https://github.com/NuGet/login/issues/6)), so there is **no** shared
+`.github` push workflow for this (the earlier `nuget-org-push.yml` from `.github#104` was
+retired). Wire it inline, **after** the org-feed push + all gates (ApiCompat, G1–G7 guard)
+are green (ADR-0012 §4 gated ordering):
 
 ```yaml
-# in the producer's release.yml, AFTER the org-feed push + all gates (ApiCompat, G1–G7 guard):
-nuget-org:
-  needs: [pack, publish-org-feed]            # gated ordering (ADR-0012 §4): org feed first
-  uses: FS-GG/.github/.github/workflows/nuget-org-push.yml@main
-  with:
-    artifact-name: nupkgs                     # the byte-identical set the pack job uploaded
-  secrets:
-    nuget-org-api-key: ${{ secrets.NUGET_ORG_API_KEY }}
+# in the producer's release.yml — the job that already holds the gated .nupkg set:
+    permissions:
+      id-token: write      # mint the GitHub OIDC token
+      contents: read
+    steps:
+      # ... org-feed push + gates already green ...
+      - name: NuGet login (OIDC → short-lived key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}    # nuget.org PROFILE name (not email); non-sensitive
+      - name: Push byte-identical set to nuget.org
+        run: >
+          dotnet nuget push "**/*.nupkg"
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json --skip-duplicate
 ```
 
-The pack job must `actions/upload-artifact` the **byte-identical** gate-verified `.nupkg`
-set (no re-pack — ADR-0012 §3); the reusable workflow downloads it and pushes each file.
-Each packable also needs listing metadata (`PackageLicenseExpression`, `PackageReadmeFile`,
-`RepositoryUrl`, icon).
+Push the **byte-identical** gate-verified `.nupkg` (no re-pack — ADR-0012 §3). Each packable
+also needs listing metadata (`PackageLicenseExpression`, `PackageReadmeFile`, `RepositoryUrl`,
+icon — ADR-0012 §5).
 
-**Blocked on an admin gate** (same forward-guardrail model as `.github#21`): provision the
-FS-GG nuget.org org, reserve the `FS.GG.` **reserved ID prefix**, and add the org secret
-`NUGET_ORG_API_KEY`. Until it exists, push steps must **fail closed** with a pointer to
-ADR-0012 — never a silent no-op, never a half-published coherent set. **Permanence:** a
-nuget.org ID is claimed forever (unlist ≠ delete), so the current `FS.GG.*` IDs are frozen
-as the public identities (no rename — ADR-0003).
+**Blocked on an admin gate** — now **Trusted Publishing policies**, not a secret (ADR-0013 §4).
+An org-admin signed in to nuget.org as the FS-GG-org owner creates **one policy per producer
+repo** (Repository Owner `FS-GG`; Repository `FS.GG.SDD` / `FS.GG.Rendering` /
+`FS.GG.Governance`; Workflow File = that repo's release workflow filename only, e.g.
+`release.yml`), reserves the `FS.GG.` **ID prefix** (anti-squat — still required), and
+optionally sets `NUGET_USER`. **Fail-closed is intrinsic:** until a matching policy exists,
+`NuGet/login` returns `401` and the release fails loud — never a silent no-op, never a
+half-published set. **Permanence:** a nuget.org ID is claimed forever (unlist ≠ delete), so
+the current `FS.GG.*` IDs are frozen as the public identities (no rename — ADR-0003).
