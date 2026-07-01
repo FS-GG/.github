@@ -116,6 +116,14 @@ For pinned versions and feeds, see
 > which UI version you scaffold. The fs-gg-ui version is pinned by the provider
 > descriptor in step 2, and you verify it in the generated product (`FsGgUiVersion`,
 > step 3). Don't read "newest fs-gg version" off `fsgg-sdd --version`.
+>
+> **Your CLI version does still govern one thing, though.** As the lifecycle
+> *orchestrator* ([ADR-0008](adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md)),
+> `fsgg-sdd` **seeds** the `fs-gg-sdd-*` process skills and `.fsgg/early-stage-guidance.md`
+> a scaffold is expected to carry — so install (or `dotnet tool update` to) a **current
+> CLI (`0.3.0`+)**, otherwise the scaffold silently omits them. `fsgg-sdd doctor`
+> reports whether a project is coherent with its set and `fsgg-sdd upgrade` reconciles
+> it. See [Who drives the lifecycle](consumer/who-drives-the-lifecycle.md).
 
 ### 2. Scaffold a runnable product
 
@@ -164,8 +172,12 @@ small playable game scene, the ideal base to replace with Pong; pass
 - a runnable **Skia/OpenGL Elmish/MVU** app (Scene, SkiaViewer, Controls);
 - the **`.fsgg/` lifecycle skeleton** (`project.yml`, `sdd.yml`, `agents.yml`,
   `work/`, `readiness/`);
+- the **CLI-seeded process artifacts** — `.fsgg/early-stage-guidance.md` and the
+  `fs-gg-sdd-*` process skills under the agent skill folders (`.claude/skills/`,
+  `.agents/skills/`) — which is why a current CLI matters (see the note above);
 - a `.fsgg/scaffold-provenance.json` recording the externally owned files the
-  provider wrote.
+  provider wrote — and, as of CLI `0.3.0`, the `fsgg-sdd` version used (the
+  orchestrator axis).
 
 Useful flags: `--dry-run` plans without executing; `--no-update` skips refreshing
 the template; `--force` materializes into a non-empty directory. Exit codes are
