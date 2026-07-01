@@ -370,8 +370,11 @@ source of truth — it **detects** drift read-only on every command (interactive
 CI fails closed) and **remediates only through an explicit, diff-reviewed `fsgg-sdd
 upgrade`** (self-update + re-pin + re-seed), never a silent auto-update. Truth stays
 declarative in the registry so it can be diffed, gated, and flipped after publish
-(`FR-007`). The `fsgg-sdd-orchestrator-axis` coherence row is `coherent: false` until a
-CLI that seeds those artifacts is published and its concrete minimum is pinned.
+(`FR-007`). As of SDD v0.3.0 (2026-07-01) the registry pins `minimum-fsgg-sdd: 0.3.0`
+(the oldest published CLI that seeds those artifacts); the `fsgg-sdd-orchestrator-axis`
+coherence row stays `coherent: false` only until the Templates provider descriptor —
+which is what a scaffold actually reads — mirrors that minimum and a behind-CLI scaffold
+is verified to warn.
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
