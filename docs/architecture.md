@@ -370,12 +370,18 @@ source of truth — it **detects** drift read-only on every command (interactive
 CI fails closed) and **remediates only through an explicit, diff-reviewed `fsgg-sdd
 upgrade`** (self-update + re-pin + re-seed), never a silent auto-update. Truth stays
 declarative in the registry so it can be diffed, gated, and flipped after publish
-(`FR-007`). As of SDD v0.3.0 (2026-07-01) the registry pins `minimum-fsgg-sdd: 0.3.0`
-(the oldest published CLI that seeds those artifacts), and the `fsgg-sdd-orchestrator-axis`
-coherence row is `coherent: true`: the Templates provider descriptor — which is what a
-scaffold actually reads — mirrors that minimum (Templates#45), and a behind-CLI scaffold
-is verified to warn (`scaffold.cliBehindMinimum`) and stamp used+minimum into
-`scaffold-provenance` (closing epic #85).
+(`FR-007`). As of SDD v0.4.0 (2026-07-01) the registry pins `minimum-fsgg-sdd: 0.4.0`
+(the oldest published CLI that seeds those artifacts — advanced `0.3.0→0.4.0` because
+feature 056 made `fsgg-sdd` the sole skill-mirror authority, seeding the `fs-gg-sdd-*`
+skills into a *third* root `.agents/skills/` and fanning the byte-identical union into
+`.claude`/`.codex`/`.agents`, growing the seeded surface, FR-011). The
+`fsgg-sdd-orchestrator-axis` coherence row is transiently `coherent: false` after that
+publish-before-flip advance: the 0.4.0 CLI is LIVE on the org feed and the registry pins
+0.4.0, but the Templates provider descriptor — what a scaffold actually reads — still
+mirrors `0.3.0`; it re-coheres to `true` when Templates#47 re-mirrors `minimumFsggSdd
+0.3.0→0.4.0` (alongside the `fs-gg-ui` template emitting UI skills into `.agents/skills/`
+only). A behind-CLI scaffold is verified to warn (`scaffold.cliBehindMinimum`) and stamp
+used+minimum into `scaffold-provenance` (original axis resolution closed epic #85).
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
