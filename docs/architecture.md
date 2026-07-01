@@ -371,10 +371,11 @@ CI fails closed) and **remediates only through an explicit, diff-reviewed `fsgg-
 upgrade`** (self-update + re-pin + re-seed), never a silent auto-update. Truth stays
 declarative in the registry so it can be diffed, gated, and flipped after publish
 (`FR-007`). As of SDD v0.3.0 (2026-07-01) the registry pins `minimum-fsgg-sdd: 0.3.0`
-(the oldest published CLI that seeds those artifacts); the `fsgg-sdd-orchestrator-axis`
-coherence row stays `coherent: false` only until the Templates provider descriptor —
-which is what a scaffold actually reads — mirrors that minimum and a behind-CLI scaffold
-is verified to warn.
+(the oldest published CLI that seeds those artifacts), and the `fsgg-sdd-orchestrator-axis`
+coherence row is `coherent: true`: the Templates provider descriptor — which is what a
+scaffold actually reads — mirrors that minimum (Templates#45), and a behind-CLI scaffold
+is verified to warn (`scaffold.cliBehindMinimum`) and stamp used+minimum into
+`scaffold-provenance` (closing epic #85).
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
