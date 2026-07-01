@@ -17,3 +17,4 @@ repo. Use [template.md](template.md) for a new record; number sequentially.
 | [0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md) | Every agent-skill root carries the full skill union; `fsgg-sdd` owns the mirror (orchestrator fan-out) | Accepted |
 | [0012](0012-dual-publish-to-nuget-org.md) | Dual-publish FS-GG packages to nuget.org (public) alongside the org GitHub Packages feed | Accepted (§6 auth superseded by 0013) |
 | [0013](0013-trusted-publishing-oidc-for-nuget-org.md) | Publish to nuget.org via Trusted Publishing (OIDC), not a long-lived API key | Accepted |
+| [0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) | Skill vendoring & mirroring — one manifest, one materialize-and-verify, content-addressed (extends 0011) | Accepted |

@@ -1,0 +1,131 @@
+# ADR-0014: Skill vendoring & mirroring — one manifest, one materialize-and-verify, content-addressed
+
+- **Status:** Accepted
+- **Date:** 2026-07-01
+- **Affects:** FS.GG.SDD (orchestrator/CLI + `FS.GG.Contracts`), FS.GG.Rendering (`fs-gg-ui` template), FS.GG.Templates (composition gate), `.github` (this ADR, registry, roadmap)
+- **Relationship:** **Extends and amends [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md).** ADR-0011's five *invariants* stand (byte-identical union in every root; single mirror authority; providers confined to `.agents/skills/`; strict `isSddTree`; materialized copies, not symlinks). ADR-0014 replaces its *implementation* — which fragmented into four hand-maintained mirror mechanisms and shipped **no content verification** — with one shared, content-addressed algorithm, and draws the missing product/dev-surface boundary. Where the two disagree on mechanism, ADR-0014 wins.
+
+## Context
+
+The goal is simple: a scaffolded product's three agent-skill roots (`.claude/skills/`,
+`.codex/skills/`, `.agents/skills/`) must each hold the **same, correct** set of skills —
+the union of SDD *process* skills and provider *product* skills — so the runtimes are
+interchangeable (ADR-0011 §1). ADR-0011 chose the right invariants. The **implementation**,
+audited 2026-07-01 across all four repos, is where the fragility lives:
+
+1. **Four divergent implementations of the same "materialize union → N roots" idea**, each
+   hand-maintained and kept in sync by convention:
+   - `fsgg-sdd scaffold` post-instantiation mirror (`HandlersScaffold.fs`),
+   - `fsgg-sdd refresh` re-mirror (`HandlersRefresh.fs`),
+   - `fsgg-sdd doctor`/`upgrade` expected-artifact set (`Drift.fs`),
+   - and — new as of FS.GG.Rendering Feature 230 — the `fs-gg-ui` template's **standalone**
+     self-mirror: **12 skill sources × 3 roots = 36 hand-written `template.json` twins.**
+
+2. **No content verification anywhere.** `doctor`/`upgrade` drift checks only path
+   **presence** (`HandlersDoctor.fs`, `Drift.fs`); the composition gate
+   (`FS.GG.Templates` `tests/composition/run.sh`) asserts **nothing** about the skill roots
+   (only that the product builds). `scaffold-provenance.json` records `{ Path; Owner }` and
+   **no digest** — so ADR-0011's stated rationale that "provenance stores sha256 digests …
+   a symlink can't satisfy" describes a schema that **does not exist**. A root that exists
+   but has drifted bytes, a provider skill missing from one root, or a `.codex` that diverges
+   from `.claude` are all **invisible**. The apparatus that exists to guarantee "the three
+   roots are the byte-identical union" does not check that they are.
+
+3. **Providers vendor their own developer skill-surface into products.** The `fs-gg-ui`
+   template copies the Rendering repo's own `.agents/skills/` wholesale, including
+   `fs-gg-product-*` aliases and framework wrappers whose bodies route to *repo-internal*
+   paths (`../../../src/**`, `../../../template/product-skills/**`). Those paths don't exist
+   in a scaffolded product, so a spec-kit product ships **~13 dangling skill wrappers** — and
+   no guard catches it (parity checks the repo, not the product).
+
+4. **Ownership is enforced downstream of the actor that violates it.** Skill destinations are
+   hand-written per template source; the only thing stopping the template from writing an
+   SDD-owned root is SDD's `isSddTree` guard, discovered *at scaffold time in another repo*.
+   The result was **#47**: a one-line missing template condition amplified into a five-repo,
+   three-reframing epic (Templates #47/#48, SDD #53/#55/#57, Rendering #227/#228/#229/#230,
+   `.github` ADR-0011/#107), still open at time of writing, with a manual `rm`+`doctor`
+   incoherence window.
+
+The invariants are sound; the fragility is *implementation multiplicity* + *missing
+verification* + *a leaky product boundary*. This ADR fixes those three.
+
+## Decision
+
+**Skills are content-addressed data with one canonical body each, materialized and verified by
+one shared algorithm across every lane.**
+
+1. **One skill manifest per producer.** Each producer (SDD; each provider) declares its skills
+   in a machine-readable **skill manifest** — `id`, `scope` (`process` | `product`),
+   `sha256` of the canonical body, and the body itself (or a resolvable in-package path). The
+   manifest is the contract; the fan-out reads manifests, never ad-hoc directory scans or
+   per-source `template.json` strings. A skill has **exactly one canonical body**; the roots
+   are copies of it.
+
+2. **One `materialize-and-verify` library, in `FS.GG.Contracts`.** Two pure functions —
+   `mirror(union, roots) → writes` and `verify(roots, union) → diagnostics` — implemented
+   **once** and consumed by every lane:
+   - **Orchestrated lane** (`fsgg-sdd` present): the CLI computes `union = SDD manifest ∪
+     provider manifest(s)` and calls `mirror`/`verify`. `scaffold`, `refresh`, `doctor`, and
+     `upgrade` all route through this one library — the three current SDD implementations
+     collapse to one.
+   - **Standalone lane** (spec-kit, no `fsgg-sdd`): the template ships its manifest plus a
+     **single** thin, cross-platform materialize step (one template post-action / build
+     target invoking the same algorithm — a vendored copy of the same `FS.GG.Contracts`
+     logic), replacing Feature 230's 36 hand-written twins. One mechanism, two entry points.
+
+3. **Content-addressed provenance + a real content-equality guard.** `scaffold-provenance.json`
+   gains a per-skill `sha256` (a `scaffold-provenance` contract minor bump). `verify` asserts,
+   for **every** skill in the union (process **and** product): (a) present in each configured
+   root, (b) **byte-identical across roots**, (c) hash matches the manifest. This is what
+   ADR-0011 §Consequences intended ("extend the guard to claude≡codex≡agents = union") and
+   what P9 promised; ADR-0014 makes it real. `doctor` reports divergence; `upgrade`
+   re-materializes to repair it; the **composition gate asserts it end-to-end**.
+
+4. **A declared product/dev boundary + a no-dangling-route guard.** A producer ships **only**
+   skills whose `scope: product` — never its internal developer surface. Emitted skill bodies
+   must be **self-contained**: a guard rejects any shipped skill whose body references a path
+   that does not exist in the product tree (kills the dangling-wrapper class). The
+   `fs-gg-product-*` alias layer and `src/**`-routing framework wrappers stay in the repo,
+   out of the product manifest.
+
+5. **The root set is one declared constant.** `AGENT_SKILL_ROOTS` (currently `.claude`,
+   `.codex`, `.agents`) is declared once in the contract and consumed everywhere. Adding or
+   renaming a runtime root is a one-line contract change, not an N-place edit across four
+   repos; `mirror`/`verify`/`doctor` all derive their targets from it. Destinations are
+   **computed**, never hand-written per source — so a provider *cannot* accidentally target an
+   SDD-owned root, and the `isSddTree` guard becomes a backstop rather than the primary
+   defense.
+
+6. **Invariants retained from ADR-0011.** Single mirror authority per lane; providers write
+   only `.agents/skills/` in the orchestrated lane; strict `isSddTree`; materialized copies
+   (not symlinks — the Windows-git-symlink and `dotnet new`/`WriteFile`-emits-real-files
+   reasons hold; the sha256 reason is now *true* rather than aspirational).
+
+## Consequences
+
+- **`FS.GG.SDD`:** add the `materialize-and-verify` library + manifest + `AGENT_SKILL_ROOTS` to
+  `FS.GG.Contracts`; route `scaffold`/`refresh`/`doctor`/`upgrade` through it (delete the three
+  bespoke fan-outs); add per-skill `sha256` to `scaffold-provenance` (contract minor bump);
+  make drift **content-aware** and cover **provider** skills, not just seeded ones. A coherent
+  CLI release advances the orchestrator-axis minimum (ADR-0008), sequenced publish-before-flip.
+- **`FS.GG.Rendering`:** publish a **product skill manifest** (`scope: product` only); replace
+  Feature 230's 36 `template.json` twins with the single shared materialize step; stop
+  vendoring the repo's `.agents/skills/` dev surface; fix the ~13 dangling wrappers; scope the
+  `effectiveNameLower.replaces:"product"` token so it stops rewriting the English word.
+- **`FS.GG.Templates`:** the composition gate asserts the three roots are the **byte-identical
+  union** (content, not presence) in every lane; re-pin to the new coherent CLI + template set
+  (closes the #47 chain).
+- **`.github`:** this ADR; the roadmap
+  ([`docs/reports/2026-07-01-skill-vendoring-robustness-roadmap.md`](../reports/2026-07-01-skill-vendoring-robustness-roadmap.md));
+  a registry coherence id **`skill-mirror-verified`** (`coherent: false`) tracking the rollout;
+  the `scaffold-provenance` contract minor bump recorded in the registry.
+- **Net:** four mirror implementations → one; presence-only → content-addressed verification in
+  every lane; leaky product boundary → declared manifest + no-dangling guard; hand-written
+  destinations → one computed root-set constant. Simpler (one algorithm, one manifest) **and**
+  more robust (the invariant is now machine-checked where it's produced and where it's consumed).
+- **Migration is additive and staged** (see the roadmap): the manifest + library land first and
+  run *alongside* today's mechanisms behind the same outputs; verification flips from advisory
+  to enforcing once green; the hand-maintained twins/fan-outs are deleted last.
+
+<!-- Reconcile docs/architecture.md's composition/skill picture once `skill-mirror-verified`
+flips coherent and the composition gate asserts the union end-to-end. -->
