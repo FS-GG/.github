@@ -133,13 +133,31 @@ in sync.
 - **Consumer-facing install/update:** `docs/consumer/versioning-and-updates.md`, `docs/consumer/getting-started.md`
 - **Fabric & gates:** `docs/coordination/auto-update-fabric.md`, `docs/coordination/contract-coherence-gate.md`
 
-## Not yet: public nuget.org
+## Public nuget.org (decided, wiring pending — ADR-0012)
 
-Everything above targets the **org GitHub Packages** feed. Publishing to **nuget.org**
-is not part of the current process. Adding it would mean, per package: a nuget.org API
-key (org secret), a second `dotnet nuget push --source https://api.nuget.org/v3/index.json`
-step in each producer release workflow, deciding which artifacts go public (tools and
-`FS.GG.Contracts` are the natural first candidates; content-only/gate-set packages may
-stay private), package metadata/license/README for public listing, and a registry note
-recording the second publish target. Design it as an additive push step — don't move
-the GitHub Packages feed.
+Everything above targets the **org GitHub Packages** feed. **[ADR-0012](../../../docs/adr/0012-dual-publish-to-nuget-org.md)**
+adds **dual-publish to public nuget.org** for **all** currently-published packages (both
+`.Cli` tools, `FS.GG.Contracts`, the `FS.GG.UI.*` set + BOM + Template,
+`FS.GG.Governance.ReferenceGateSet`) — **additive**: the org feed stays the coherence
+source of truth (Renovate / contract-coherence gate / registry `package-version` keep
+reading it), nuget.org is a public distribution target. Registry coherence id:
+**`nuget-org-published`** (`coherent: false` until wired).
+
+The mechanism, per producer release job:
+
+```sh
+# after the org-feed push + all gates (ApiCompat, G1–G7 guard) are green:
+dotnet nuget push <same .nupkg> \
+  --source https://api.nuget.org/v3/index.json \
+  --api-key "$NUGET_ORG_API_KEY" --skip-duplicate
+```
+
+Push the **byte-identical** gate-verified `.nupkg` (no re-pack). Each packable also needs
+listing metadata (`PackageLicenseExpression`, `PackageReadmeFile`, `RepositoryUrl`, icon).
+
+**Blocked on an admin gate** (same forward-guardrail model as `.github#21`): provision the
+FS-GG nuget.org org, reserve the `FS.GG.` **reserved ID prefix**, and add the org secret
+`NUGET_ORG_API_KEY`. Until it exists, push steps must **fail closed** with a pointer to
+ADR-0012 — never a silent no-op, never a half-published coherent set. **Permanence:** a
+nuget.org ID is claimed forever (unlist ≠ delete), so the current `FS.GG.*` IDs are frozen
+as the public identities (no rename — ADR-0003).
