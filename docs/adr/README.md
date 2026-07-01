@@ -11,3 +11,5 @@ repo. Use [template.md](template.md) for a new record; number sequentially.
 | [0004](0004-constitution-ownership-for-lifecycle-sdd-products.md) | SDD owns the `lifecycle=sdd` constitution, shipped at `.fsgg/constitution.md` | Accepted |
 | [0005](0005-fsgg-slot-ownership-sdd-project-governance-governance.md) | `.fsgg/` slot ownership — SDD owns `project.yml`, Governance owns `governance.yml` | Accepted |
 | [0006](0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md) | `.github` owns the org-shared .NET build config; `RestoreLockedMode` gates on `GITHUB_ACTIONS` | Accepted |
+| [0007](0007-reference-gate-set-package-version-derivation.md) | `FS.GG.Governance.ReferenceGateSet` version-derivation rule | Accepted |
+| [0008](0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md) | The `fsgg-sdd` CLI is a first-class member of the coherent set (orchestrator axis) | Accepted |
