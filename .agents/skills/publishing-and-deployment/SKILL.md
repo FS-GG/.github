@@ -143,17 +143,26 @@ source of truth (Renovate / contract-coherence gate / registry `package-version`
 reading it), nuget.org is a public distribution target. Registry coherence id:
 **`nuget-org-published`** (`coherent: false` until wired).
 
-The mechanism, per producer release job:
+The mechanism, per producer release job. Don't hand-roll the push — call the **reusable
+[`nuget-org-push.yml`](../../../.github/workflows/nuget-org-push.yml)** (`.github#103`, the code half of
+the ADR-0012 §6 forward-guardrail, mirroring `dispatch-sender.yml` for the GitHub-feed
+fabric). It fails closed when `NUGET_ORG_API_KEY` is absent and pushes with `--skip-duplicate`:
 
-```sh
-# after the org-feed push + all gates (ApiCompat, G1–G7 guard) are green:
-dotnet nuget push <same .nupkg> \
-  --source https://api.nuget.org/v3/index.json \
-  --api-key "$NUGET_ORG_API_KEY" --skip-duplicate
+```yaml
+# in the producer's release.yml, AFTER the org-feed push + all gates (ApiCompat, G1–G7 guard):
+nuget-org:
+  needs: [pack, publish-org-feed]            # gated ordering (ADR-0012 §4): org feed first
+  uses: FS-GG/.github/.github/workflows/nuget-org-push.yml@main
+  with:
+    artifact-name: nupkgs                     # the byte-identical set the pack job uploaded
+  secrets:
+    nuget-org-api-key: ${{ secrets.NUGET_ORG_API_KEY }}
 ```
 
-Push the **byte-identical** gate-verified `.nupkg` (no re-pack). Each packable also needs
-listing metadata (`PackageLicenseExpression`, `PackageReadmeFile`, `RepositoryUrl`, icon).
+The pack job must `actions/upload-artifact` the **byte-identical** gate-verified `.nupkg`
+set (no re-pack — ADR-0012 §3); the reusable workflow downloads it and pushes each file.
+Each packable also needs listing metadata (`PackageLicenseExpression`, `PackageReadmeFile`,
+`RepositoryUrl`, icon).
 
 **Blocked on an admin gate** (same forward-guardrail model as `.github#21`): provision the
 FS-GG nuget.org org, reserve the `FS.GG.` **reserved ID prefix**, and add the org secret
