@@ -14,4 +14,3 @@ repo. Use [template.md](template.md) for a new record; number sequentially.
 | [0007](0007-reference-gate-set-package-version-derivation.md) | `FS.GG.Governance.ReferenceGateSet` version-derivation rule | Accepted |
 | [0008](0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md) | The `fsgg-sdd` CLI is a first-class member of the coherent set (orchestrator axis) | Accepted |
 | [0009](0009-cli-single-orchestrator-detect-and-remediate.md) | The `fsgg-sdd` CLI is the single orchestrator — detect-and-remediate, not silent auto-update | Accepted |
-| [0010](0010-sdd-native-scaffold-and-config-driven-governance.md) | SDD-native scaffold — inline `--provider-source`, explicit currency, config-driven governance default | Accepted |
