@@ -125,69 +125,61 @@ For pinned versions and feeds, see
 > reports whether a project is coherent with its set and `fsgg-sdd upgrade` reconciles
 > it. See [Who drives the lifecycle](consumer/who-drives-the-lifecycle.md).
 
-### 2. Scaffold a runnable product
+### 2. Scaffold a full-stack product (one command)
 
-`fsgg-sdd scaffold` lays down the SDD lifecycle skeleton **and** materializes a
-real, runnable app in one command, via a template *provider*. The reference
-`rendering` provider materializes the live, version-pinned
-[FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering) `fs-gg-ui` app.
+The fastest path composes all three products at once — the SDD lifecycle
+skeleton, a runnable [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering)
+`fs-gg-ui` app, and a Governance config — via FS.GG.Templates'
+[`new-fullstack.sh`](https://github.com/FS-GG/FS.GG.Templates/blob/main/scripts/new-fullstack.sh)
+composition script. It registers the `rendering` provider for you (no manual
+`.fsgg/providers.yml`), runs `fsgg-sdd scaffold`, and applies the
+`fs-gg-governance` overlay.
 
-SDD embeds no provider, so first register the `rendering` descriptor into your
-project's `.fsgg/providers.yml`. **This descriptor's `source:` line is the one pin
-that sets your fs-gg-ui version** (`FS.GG.UI.Template::<version>`). We'll name the
-project after the game.
-
-Fetch the descriptor from `main` to get the **newest** coherent set — Templates
-keeps its `FS.GG.UI.Template` pin moved up to the latest release, so `main` is the
-newest — then **confirm the version you just pinned**:
+**One-time setup.** The script reads its sibling `providers/` and `templates/`
+files, so clone the Templates repo once, then alias it (nushell shown; for
+bash/zsh use `alias new-fullstack='bash ~/projects/FS.GG.Templates/scripts/new-fullstack.sh'`):
 
 ```sh
-mkdir -p ./Pong/.fsgg
-curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
-  -o ./Pong/.fsgg/providers.yml
-
-grep 'source:' ./Pong/.fsgg/providers.yml      # -> FS.GG.UI.Template::<version>  (this IS your fs-gg-ui version)
+git clone https://github.com/FS-GG/FS.GG.Templates ~/projects/FS.GG.Templates
 ```
 
-> **For a reproducible scaffold, freeze the version instead of tracking `main`.**
-> `main` can move under you. To pin an exact version, copy the descriptor from a
-> **release tag** of [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) —
-> or simply edit the `source:` line to the version you want:
->
-> ```sh
-> git -C /path/to/FS.GG.Templates show <tag>:providers/rendering.providers.yml \
->   > ./Pong/.fsgg/providers.yml
-> ```
-
-Then scaffold:
-
-```sh
-fsgg-sdd scaffold --root ./Pong --provider rendering --param productName=Pong
+```nu
+# ~/.config/nushell/config.nu
+alias new-fullstack = bash ~/projects/FS.GG.Templates/scripts/new-fullstack.sh
 ```
 
-What you get (the `rendering` provider defaults to its **`game`** starter profile — a
-small playable game scene, the ideal base to replace with Pong; pass
-`--param profile=app` instead for the controls-showcase starter):
+**Create the product** — three args, `<target-dir> <product-name>
+<fs-gg-ui-template-source>`. We name it after the game:
 
-- a runnable **Skia/OpenGL Elmish/MVU** app (Scene, SkiaViewer, Controls);
-- the **`.fsgg/` lifecycle skeleton** (`project.yml`, `sdd.yml`, `agents.yml`,
-  `work/`, `readiness/`);
+```nu
+new-fullstack ./Pong Pong 'FS.GG.UI.Template::0.1.58-preview.1'
+```
+
+> **Where your fs-gg-ui version comes from.** The effective pin is the `source:`
+> line in the descriptor committed in your Templates checkout
+> (`providers/rendering.providers.yml`), so keep it current
+> (`git -C ~/projects/FS.GG.Templates pull`) to track the newest coherent set.
+> Confirm the actual pin in the generated product in step 3 (`FsGgUiVersion`).
+
+What you get:
+
+- a runnable **Skia/OpenGL Elmish/MVU** app (Scene, SkiaViewer, Controls) on the
+  **`game`** starter profile — a small playable scene, the ideal base to replace with Pong;
+- the **`.fsgg/` lifecycle skeleton** (`project.yml`, `sdd.yml`, `agents.yml`, `work/`, `readiness/`);
 - the **CLI-seeded process artifacts** — `.fsgg/early-stage-guidance.md` and the
   `fs-gg-sdd-*` process skills under the agent skill folders (`.claude/skills/`,
-  `.agents/skills/`) — which is why a current CLI matters (see the note above);
-- a `.fsgg/scaffold-provenance.json` recording the externally owned files the
-  provider wrote — and, as of CLI `0.3.0`, the `fsgg-sdd` version used (the
-  orchestrator axis).
+  `.agents/skills/`) — which is why a current CLI (`0.3.0`+) matters (see the note above);
+- a **Governance config** (the `fs-gg-governance` overlay: `.fsgg/policy.yml` /
+  `capabilities.yml` / `tooling.yml`), applied after scaffold — advisory by default,
+  never required to build or run (see [Part D](#part-d--governance-already-in-your-project));
+- a `.fsgg/scaffold-provenance.json` recording the externally owned files written,
+  plus the `fsgg-sdd` version used (the orchestrator axis).
 
-Useful flags: `--dry-run` plans without executing; `--no-update` skips refreshing
-the template; `--force` materializes into a non-empty directory. Exit codes are
-meaningful: malformed input (unknown provider, missing parameter, target
-collision) exits `1`; a provider defect exits `2`; an incomplete scaffold is
-never reported as complete.
-
-> For the skeleton only — no runtime app — use `fsgg-sdd init` instead of
-> `scaffold` (see the pinned-descriptor note above for reproducible provider
-> registration either way).
+> **Prefer to compose the steps yourself** — or skip governance? Use the plain
+> `fsgg-sdd scaffold --provider rendering` path (register the descriptor, then
+> scaffold) documented in [Getting started](consumer/getting-started.md) §2, or
+> `fsgg-sdd init` for the lifecycle skeleton only. `new-fullstack` is just those
+> steps glued together, with the governance overlay included.
 
 ### 3. Build and run the stock app
 
@@ -492,19 +484,21 @@ When every §14 scenario has a passing test, `verify` goes green and your
 
 ---
 
-## Part D — (Optional) add governance
+## Part D — Governance (already in your project)
 
-Governance is **never required** to build, run, or ship. When you want gates,
-drop in the reference gate set and choose a posture:
+`new-fullstack` (step 2) already dropped the **`fs-gg-governance`** overlay into
+your product — the reference gate set at `.fsgg/policy.yml` / `capabilities.yml` /
+`tooling.yml`. Governance is **advisory by default and never required** to build,
+run, or ship; it only gates when you choose a blocking posture.
 
-```sh
-dotnet new install FS.GG.Templates
-dotnet new fs-gg-governance -o ./Pong --appName Pong --defaultProfile light
-```
+To pick a posture — `light` is the non-blocking inner-loop default; `strict` /
+`release` make the block-on-ship gates actually block — or to understand what the
+gates check, see [Adopting governance](consumer/governance.md). Choosing a posture
+never changes how you build and run.
 
-`light` is the non-blocking inner-loop posture; `strict` / `release` make the
-block-on-ship gates actually block. This never changes how you build and run.
-See [Adopting governance](consumer/governance.md).
+> **Didn't want governance?** Scaffold with the plain `fsgg-sdd scaffold` path in
+> [Getting started](consumer/getting-started.md) §2 instead of `new-fullstack` — it
+> adds no `.fsgg/policy.yml` / `capabilities.yml` / `tooling.yml`.
 
 ---
 
@@ -524,9 +518,12 @@ through `charter → ship` → turn acceptance criteria into tests. To go furthe
 
 ### If a step misbehaved
 
-- Scaffolding or provider resolution failed → re-read
-  [Getting started](consumer/getting-started.md) §2 and check
-  `.fsgg/providers.yml` exists and `--provider rendering` matches its descriptor.
+- `new-fullstack` failed → confirm the **FS.GG.Templates checkout exists** at the
+  path in your alias and that `fsgg-sdd` is installed (step 1). The script registers
+  the provider for you, so a `providerUnknown` error almost always means the checkout
+  path in the alias is wrong. Composing the steps by hand? See
+  [Getting started](consumer/getting-started.md) §2 (check `.fsgg/providers.yml`
+  exists and `--provider rendering` matches its descriptor).
 - The window won't open → you likely have no GL/X11 session; the build and tests
   still run headless.
 - A lifecycle command surprised you → [FAQ & troubleshooting](consumer/faq.md)
