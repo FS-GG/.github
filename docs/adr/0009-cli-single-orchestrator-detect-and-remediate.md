@@ -1,6 +1,6 @@
 # ADR-0009: The `fsgg-sdd` CLI is the single orchestrator — detect-and-remediate, not silent auto-update
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-01
 - **Affects:** FS.GG.SDD (CLI producer + policy owner), .github (registry/ADR owner), FS.GG.Templates + every scaffolded consumer
 
