@@ -374,14 +374,24 @@ declarative in the registry so it can be diffed, gated, and flipped after publis
 (the oldest published CLI that seeds those artifacts — advanced `0.3.0→0.4.0` because
 feature 056 made `fsgg-sdd` the sole skill-mirror authority, seeding the `fs-gg-sdd-*`
 skills into a *third* root `.agents/skills/` and fanning the byte-identical union into
-`.claude`/`.codex`/`.agents`, growing the seeded surface, FR-011). The
-`fsgg-sdd-orchestrator-axis` coherence row is transiently `coherent: false` after that
-publish-before-flip advance: the 0.4.0 CLI is LIVE on the org feed and the registry pins
-0.4.0, but the Templates provider descriptor — what a scaffold actually reads — still
-mirrors `0.3.0`; it re-coheres to `true` when Templates#47 re-mirrors `minimumFsggSdd
-0.3.0→0.4.0` (alongside the `fs-gg-ui` template emitting UI skills into `.agents/skills/`
-only). A behind-CLI scaffold is verified to warn (`scaffold.cliBehindMinimum`) and stamp
-used+minimum into `scaffold-provenance` (original axis resolution closed epic #85).
+`.claude`/`.codex`/`.agents`, growing the seeded surface, FR-011). Both halves are in
+lockstep (2026-07-02, Templates#49/#51): the provider descriptor mirrors `minimumFsggSdd
+0.4.0`, the pinned `fs-gg-ui` template (`0.1.61-preview.1`) emits UI skills into
+`.agents/skills/` only on the sdd path, and the `fsgg-sdd-orchestrator-axis` coherence
+row is `coherent: true`. A behind-CLI scaffold is verified to warn
+(`scaffold.cliBehindMinimum`) and stamp used+minimum into `scaffold-provenance`
+(original axis resolution closed epic #85).
+
+**The skill union is content-verified in every lane (ADR-0014).** Skills are
+content-addressed data: each producer declares a skill-manifest (`{id, scope,
+sha256}`, canonical SKILL.md-body digest); ONE `mirror`/`verify` library
+(`Fsgg.SkillMirror`, FS.GG.Contracts ≥ 1.4.0) owns all orchestrated fan-out, and the
+standalone spec-kit lane runs a vendored byte-equivalent as its single materialize
+step. The invariant — three byte-identical union roots, nothing dangling — is
+asserted where skills are produced (`doctor`, per-skill `sha256` in
+`scaffold-provenance`) *and* where they are consumed: the Templates composition gate
+enforces it hard in both lanes via the reusable `skill-union-assert.sh`
+(`skill-mirror-verified` coherence row, `coherent: true` since 2026-07-02).
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
