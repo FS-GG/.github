@@ -12,6 +12,33 @@ repos:
   templates:  { name: FS.GG.Templates,  role: "downstream composition (fs-gg-fullstack, providers, overlays)" }
 
 # Versioned contracts and where they are owned/consumed.
+#
+# FIELD VOCABULARY (M5 — .github#131, review §3). The typed validator (`fsgg-sdd registry validate`,
+# Fsgg.Registry) treats most fields as OPTIONAL because they are entry-specific; this block documents
+# the intended meaning so a future validator can tighten (report §6.9 — register the schema itself as a
+# governed contract). Until then this comment is the schema-of-record for reviewers.
+#   contract entries (`contracts:` list):
+#     id            (required) contract id, referenced by dependency edges + coherence rows.
+#     version       (required) SemVer of the contract SURFACE/SOURCE — EXCEPT `fs-gg-ui-template`, where
+#                   `version` is the FRAMEWORK pin (FsGgUiVersion, the generated product's FS.GG.UI.* pin)
+#                   and is DISTINCT from `package-version` (the template package). For fsgg-contracts,
+#                   `version` == the FS.GG.Contracts source SemVer and is the ONE gate-coupled scalar
+#                   (contract-coherence asserts it == SDD's actual package version).
+#     owner         (required) the repo key (see repos:) that is the source of truth for the surface.
+#     surface       (required) prose/one-line description of the on-disk or package surface.
+#     consumers     (required) repo keys that depend on the contract.
+#     package-version  present ONLY where the contract ships as a NuGet package (fsgg-contracts,
+#                   governance-reference-gate-set, fs-gg-ui-template) — the NEWEST version LIVE on the org
+#                   feed (publish-before-flip FR-007: it never leads `version`).
+#     package-tag   present ONLY for fs-gg-ui-template — the immutable coherent-set release tag.
+#     range         accepted SemVer range for consumers (scaffold-provenance, governance-handoff).
+#     bundles       contract ids a meta/content package subsumes (governance-reference-gate-set).
+#     parameters / profiles / minimum-fsgg-sdd / root-buildable / behavior-break — contract-specific
+#                   structured sub-blocks (scaffold-provider, fs-gg-ui-template); each is documented inline.
+#   coherence entries (`coherence:` list):
+#     id, coherent (bool — the assertion), owner  (required); `coherent:false` is a standing cross-repo request.
+#     summary / note / impact / resolved_by / tracking / enforcement / unified_by — OPTIONAL prose;
+#                   date-stamp or past-tense historical claims (report §6.6) so present-tense text does not rot.
 contracts:
   - id: scaffold-provider
     version: "1.0.0"
@@ -29,26 +56,29 @@ contracts:
     owner: sdd
     # H2 (epic #16, Pillar 2): the typed coherence backbone. A BCL-only F# leaf library
     # (FSharp.Core-only closure, no project references) that owns the machine-readable form of
-    # every other .fsgg contract id's schema + version constants. Published to a local folder feed
-    # until the H4 feed exists (SDD#8). Implemented & in review; consumers re-type onto it next:
-    # SDD#9, Governance#14, Templates#13.
+    # every other .fsgg contract id's schema + version constants. PUBLISHED on the org GitHub Packages
+    # feed since 2026-06-28 (SDD#8/#27; the local folder-feed bootstrap is retired). All three consumer
+    # re-types have LANDED: SDD#9, Governance#14, Templates#13 (all closed).
     surface: >
       FS.GG.Contracts package — Fsgg.Schemas (typed .fsgg schema records + version constants for
       providers/project/sdd/agents/governance/policy/capabilities/tooling/scaffold-provenance/
       governance-handoff) / Fsgg.Provider (extended ProviderDescriptor + optional Build/Test/Run/Verify
       commands + canonical NameParameter default "name") / Fsgg.Registry (dependencies.yml types +
       validator; 1.1.0 adds the typed registry validator over the real dependencies.yml, SDD#26 /
-      feature 042 — additive) / Fsgg.ContractVersion (= 1.2.0).
-    consumers: [sdd, governance, templates]   # re-type tracked: SDD#9 / Governance#14 / Templates#13
+      feature 042 — additive) / Fsgg.SkillMirror (1.4.0, ADR-0014 P1 / SDD#61: the pure BCL-only
+      materialize-and-verify library — `mirror`/`verify` over the single `agentSkillRoots` constant,
+      the one skill-fan-out code path for scaffold/refresh/doctor/upgrade) / Fsgg.ContractVersion (= 1.4.0).
+    consumers: [sdd, governance, templates]   # re-type LANDED: SDD#9 / Governance#14 / Templates#13 (all closed)
     notes: >
       The reusable contract-coherence workflow (#18, LANDED) asserts this registry's declared
       fsgg-contracts version equals the ACTUAL FS.GG.Contracts package version (read from FS.GG.SDD,
-      the schema authority) and fails on drift. Source advanced 1.0.1 → 1.1.0 in SDD#26 (feature 042,
-      additive typed registry validator); this entry tracks that source version. RELEASE LAG CLOSED
-      (2026-06-28): 1.1.0 is now PUBLISHED on the org feed (SDD#27 / feature 043, release.yml dispatch
-      version=1.1.0, run 28334268175 "Your package was pushed"; feed serves 1.1.0 + 1.0.1), so
-      package-version advanced 1.0.1 → 1.1.0 (this entry) and consumers now resolve 1.1.0 —
-      package-version == version == feed(newest) == SDD source == 1.1.0. Registry-schema validation now
+      the schema authority) and fails on drift. HISTORICAL (2026-06-28): source advanced 1.0.1 → 1.1.0 in
+      SDD#26 (feature 042, additive typed registry validator) and 1.1.0 was published to the org feed
+      (SDD#27 / feature 043, run 28334268175 "Your package was pushed"), closing the first release lag —
+      at that point package-version == version == feed(newest) == SDD source == 1.1.0. CURRENT (2026-07-02):
+      the coherent set has since advanced to 1.4.0 (ADR-0014 P0–P1; SDD#60/#61/#63) — the authoritative
+      values are the `version` (line 27) and `package-version` (line 28) fields, and the same equality
+      holds at 1.4.0: package-version == version == feed(newest) == SDD source == 1.4.0. Registry-schema validation now
       runs through the TYPED Fsgg.Registry validator (`fsgg-sdd registry validate`, FS.GG.SDD.Cli) — the
       scripts/validate-registry.py stand-in was retired once the typed validator reached parity (coherence
       id registry-validator-typed → coherent:true; .github#49, SDD#26/#32). The apicompat gate (#20) guards
@@ -58,8 +88,8 @@ contracts:
       CI restores it with the run-scoped GITHUB_TOKEN (permissions: packages: read) — no PAT or
       per-repo Actions secret. GitHub Packages NuGet still requires a token even for public
       packages (anonymous restore 401s), so the feed credential stays wired to GITHUB_TOKEN.
-      Consumer re-type Governance#14 is DONE (FS.GG.Governance PR #24, merged); SDD#9 / Templates#13
-      remain. Adopters add a repo-root nuget.config (fsgg-github + packageSourceMapping FS.GG.*),
+      Consumer re-type is COMPLETE — Governance#14 (FS.GG.Governance PR #24), SDD#9, and Templates#13 are
+      all closed. Adopters add a repo-root nuget.config (fsgg-github + packageSourceMapping FS.GG.*),
       which changes FSharp.Core's resolved lockfile contentHash vs a no-config repo — regenerate
       lockfiles under that config (--force-evaluate) or locked restore fails NU1403.
   - id: scaffold-provenance
@@ -144,10 +174,12 @@ contracts:
                                # seeded-artifact surface a product on this pin is EXPECTED to contain, so per
                                # FR-011 the minimum coherent CLI ADVANCES 0.3.0->0.4.0 (0.4.0 is the oldest
                                # published CLI that seeds the 3-root skill union; 0.3.0 seeded fewer roots).
-                               # Advancing the minimum flips the coherence row `fsgg-sdd-orchestrator-axis`
-                               # coherent:true->false ONLY until the Templates provider descriptor re-mirrors
-                               # this (minimumFsggSdd 0.3.0->0.4.0, Templates#47) and a full-stack scaffold is
-                               # verified to produce three byte-identical union roots end-to-end.
+                               # Advancing the minimum flipped the coherence row `fsgg-sdd-orchestrator-axis`
+                               # coherent:true->false until the Templates provider descriptor re-mirrored this
+                               # (minimumFsggSdd 0.3.0->0.4.0) — LANDED via Templates#49 / PR Templates#51
+                               # (merged 574e90c, 2026-07-02; superseded the #47/#43 chain) with a full-stack
+                               # scaffold verified to produce three byte-identical union roots end-to-end, so
+                               # the axis has since RE-COHERED (coherent:true — see that coherence id below).
       requires: "FS.GG.SDD Feature 049 (early-stage-guidance) + Feature 051 (seeded fs-gg-sdd-* process skills)"
       adr: "docs/adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md"
       tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/49"   # CLI records used+minimum in scaffold-provenance + warns
@@ -309,7 +341,10 @@ coherence:
       Feature 209 the guard caught a real staleness instance (the FsGgUiVersion literal lagging the
       latest fs-gg-ui/v* snapshot tag), which was corrected in-repo; the gate then keeps this row's
       pin current structurally on every subsequent PR. The authoritative current pin value is the
-      row summary above (and the fs-gg-ui-template contract). No registry schema change — coherent:
+      fs-gg-ui-template contract entry's framework `version` field (0.1.58-preview.1 today) — this
+      row's summary above records the resolved-2026-06-27 snapshot (0.1.50-preview.1) and is NOT
+      re-stamped on each framework bump, so read the contract entry, not the summary, for the current
+      value. No registry schema change — coherent:
       true is now upheld automatically rather than by manual review. Tier 2, upheld not modified.
   - id: fs-gg-ui-bom
     coherent: true
@@ -610,15 +645,16 @@ coherence:
       Renovate does NOT substitute `{{ secrets }}` inside an `extends` preset, so the feed hostRules
       token lives in each repo's own renovate.json, not default.json.
     impact: >
-      The fabric is fully wired + individually verified, and BOTH producer halves have now fired:
-      FS.GG.SDD release v1.0.1 pushed FS.GG.Contracts 1.0.1, and FS.GG.Rendering's release
-      (fs-gg-ui-template/v0.1.52-preview.1) pushed the full coherent set — FS.GG.UI.Template + the
-      FS.GG.UI.* packages — to the org feed. The feed-presence blocker is RESOLVED: 19 FS.GG.*
-      packages now resolve on https://nuget.pkg.github.com/FS-GG (FS.GG.Contracts 1.0.1 and the
-      FS.GG.UI.* set incl. FS.GG.UI.Template at 0.1.52-preview.1); none is a 404 no-result. Stays
-      coherent:false for ONE remaining reason: no Renovate sweep has yet resolved an FS.GG.* feed
-      lookup green end-to-end and opened the auto-PR (only third-party Renovate PRs observed so far).
-      Flips coherent:true on the first green FS.GG.* Renovate sweep.
+      The fabric is fully wired + individually verified, and BOTH producer halves have fired:
+      FS.GG.SDD's release pushed FS.GG.Contracts and FS.GG.Rendering's release pushed the full coherent
+      set (FS.GG.UI.Template + the FS.GG.UI.* packages) to the org feed. The feed-presence blocker is
+      RESOLVED. HISTORICAL SNAPSHOT (2026-06-28, when the blocker cleared): 19 FS.GG.* packages resolved
+      on https://nuget.pkg.github.com/FS-GG (FS.GG.Contracts 1.0.1 and the FS.GG.UI.* set incl.
+      FS.GG.UI.Template at 0.1.52-preview.1), none a 404; the feed has since advanced many times, so read
+      the current versions from the contract entries above — the literals here are a dated snapshot, not
+      current. Stays coherent:false for ONE remaining reason: no Renovate sweep has yet resolved an
+      FS.GG.* feed lookup green end-to-end and opened the auto-PR (only third-party Renovate PRs observed
+      so far). Flips coherent:true on the first green FS.GG.* Renovate sweep.
     tracking: "https://github.com/FS-GG/.github/issues/22"
   - id: governance-cli-handoff-consumer-published
     coherent: true
@@ -743,10 +779,13 @@ coherence:
       one-time per-repo packaging add. NB: a nuget.org ID is claimed PERMANENTLY (unlist != delete),
       so this freezes the current FS.GG.* IDs as the public identities (no rename — ADR-0003 discipline).
     note: >
-      COHERENT 2026-07-01: all 22 in-scope packages RESOLVE on nuget.org at their current version —
-      FS.GG.Contracts 1.2.0, FS.GG.SDD.Cli 0.4.0, FS.GG.Governance.Cli 1.2.0,
-      FS.GG.Governance.ReferenceGateSet 1.2.1.1, and the FS.GG.UI.* coherent set (17 libs) + FS.GG.UI BOM
-      + FS.GG.UI.Template @ 0.1.58-preview.1 — dual-published via Trusted Publishing (OIDC), byte-identical
+      COHERENT since 2026-07-01: all 22 in-scope packages resolve on nuget.org. Because each producer
+      release pushes to nuget.org only AFTER the org-feed push (below), nuget.org TRACKS the org feed —
+      the current authoritative versions live in the contract entries above (fsgg-contracts,
+      fs-gg-ui-template, …), NOT in this note. At the 2026-07-01 flip the resolving set was FS.GG.Contracts
+      1.2.0, FS.GG.SDD.Cli 0.4.0, FS.GG.Governance.Cli 1.2.0, FS.GG.Governance.ReferenceGateSet 1.2.1.1,
+      and the FS.GG.UI.* coherent set (17 libs) + FS.GG.UI BOM + FS.GG.UI.Template @ 0.1.58-preview.1 (all
+      since advanced) — dual-published via Trusted Publishing (OIDC), byte-identical
       to the org-feed artifacts. Delivered end-to-end: the ADMIN gate (.github#103) is satisfied (packages
       owned by nuget.org account Paradigma11; three Active per-producer Trusted Publishing policies
       fs-gg-sdd-release / fs-gg-rendering-release / fs-gg-governance-publish) and all three producer
