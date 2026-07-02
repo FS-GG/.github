@@ -8,6 +8,13 @@ description: Scope and operating model for the rendering/runtime repository in t
 
 # Rendering project
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 The rendering project owns the UI framework as a product. It should be possible
 to build, test, package, document, and release it with normal repository tools
 and standard Spec Kit, without depending on an experimental governance platform.

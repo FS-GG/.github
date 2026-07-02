@@ -8,6 +8,13 @@ description: Decision record for splitting rendering, SDD lifecycle, and governa
 
 # Project split decision
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 Split the rendering framework, SDD lifecycle tooling, and governance tooling
 into separate projects. The rendering project should use standard Spec Kit plus
 narrow deterministic checks. The SDD project should own lifecycle artifacts and

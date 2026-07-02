@@ -8,6 +8,13 @@ description: Transition guidance for moving from the current repository to split
 
 # Transition and boundaries
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 The split should reduce pressure on the rendering project, not create a larger
 multi-repository process. The transition should therefore be staged around
 working software, clear ownership, and small contracts.

@@ -13,6 +13,36 @@ description: Index for the FS.GG split-repository direction and the documents th
 > developing the platform. If you just want to use FS-GG, start at the
 > **[consumer guide](consumer/index.md)** instead.
 
+> **Two kinds of document live here.** The **[Living reference](#living-reference)**
+> below (architecture map, ADRs, registry projection, coordination protocol, build
+> config, reports) is kept **current** and is the instruction of record. The
+> **[Documents](#documents)** further down are the **2026-06 planning corpus** — the
+> historical proposal for the split, written in future tense about work that has
+> since shipped. Read them as a record of intent, not as current instruction; each
+> now carries a status banner pointing at what actually shipped.
+
+## Living reference
+
+Kept current — the system as built, and the machinery that keeps it coherent.
+
+- [Architecture](architecture.md) — the newcomer's map of the whole system: the
+  four-product split, the one-way dependency rule, the contract registry, the shared
+  F# house style, and how the repositories compose. **Start here.**
+- [Architecture Decision Records](adr/README.md) — cross-repo decisions (ADR-0001…),
+  each with status and supersession history.
+- [Registry compatibility projection](registry/compatibility.md) — the human-readable
+  projection of `registry/dependencies.yml`: every cross-repo contract, its coherence
+  flag, and the evidence behind it.
+- [Cross-repo coordination](coordination/README.md) — the coordination protocol, the
+  [contract-coherence gate](coordination/contract-coherence-gate.md), the
+  [skill-union assertion](coordination/skill-union-assertion.md), and the
+  [auto-update fabric](coordination/auto-update-fabric.md).
+- [Build config](build/) — the org-shared .NET build configuration (ADR-0006) and how
+  consumer repos restore it.
+- [Reports](reports/) — dated review/analysis artifacts, including the
+  [2026-07-02 code-quality & architecture review](reports/2026-07-02-code-quality-architecture-review.md)
+  and the [2026-06-30 project-management topologies analysis](2026-06-30-project-management-topologies-adr-registry-projects-v2-analysis.md).
+
 The current recommendation is to stop treating the UI runtime, lifecycle
 workflow, and governance system as one self-hosting platform. The rendering
 framework should be developed as a normal product repository using standard
@@ -41,6 +71,11 @@ The new direction is deliberately simpler:
   evolve without becoming the governance rule engine.
 
 ## Documents
+
+> **Historical planning corpus (2026-06).** The documents in this section proposed the
+> split and are preserved as a record of intent; the work they describe in future tense
+> has since shipped. For the system as built and the machinery that keeps it coherent,
+> see the [Living reference](#living-reference) above.
 
 - [Architecture](architecture.md) is the newcomer's map of the whole system — the
   four-product split, the one-way dependency rule, the contract registry, the

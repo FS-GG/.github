@@ -8,6 +8,13 @@ description: Coordination page for the separate FS.GG rendering, SDD, and govern
 
 # FS.GG implementation plans
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 The split is implemented through separate plans. The rendering plan starts from
 a fresh standard Spec Kit repository. The SDD lifecycle plan lives in its own
 fresh standard Spec Kit repository. The governance rule-engine plan lives in its

@@ -1,6 +1,6 @@
 # ADR-0011: Every agent-skill root carries the full skill union; `fsgg-sdd` owns the mirror
 
-- **Status:** Accepted
+- **Status:** Accepted — **implementation superseded by [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md)** (2026-07-01): this ADR's five *invariants* stand, but where the two disagree on *mechanism* ADR-0014 wins — it replaces the four hand-maintained mirror mechanisms described here with one shared, content-addressed materialize-and-verify.
 - **Date:** 2026-07-01
 - **Affects:** FS.GG.SDD, FS.GG.Rendering (the `fs-gg-ui` template), FS.GG.Templates (provider pin), `.github` (registry)
 
