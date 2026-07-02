@@ -110,6 +110,11 @@ The registry is not just documentation: the reusable
 red when its actual pins/build-config stop matching the registry's declared values. Wire it into
 each repo's CI (see the doc for the snippet).
 
+A second reusable gate, the [skill-union assertion](skill-union-assertion.md) (`workflow_call`),
+proves a scaffolded product's agent-skill roots are the **byte-identical union** of process +
+product skills — content, not presence (ADR-0014's consumer-side check; the composition gate is its
+first caller).
+
 ## Propagation → the cross-repo auto-update fabric
 
 The coherence gate goes *red* on stale pins; the [auto-update fabric](auto-update-fabric.md)
