@@ -76,8 +76,12 @@ Issues are for *transient* requests. The **stable** facts — who depends on who
 contract versions are coherent — live in the
 [contract & compatibility registry](../registry/compatibility.md)
 ([`registry/dependencies.yml`](../../registry/dependencies.yml)). Any `contract-change`
-issue must update the registry as part of its resolution. Larger cross-repo decisions
-are recorded as [ADRs](../adr/README.md).
+issue must update the registry as part of its resolution. Every registry change also
+**prepends one dated entry** (newest-first) to the registry changelog
+[`registry/CHANGELOG.md`](../../registry/CHANGELOG.md) — `- **YYYY-MM-DD** — HEADER
+(owner; refs): body` — and sets the file's `updated:` date to match. One entry per change
+keeps PR diffs reviewable (this replaced the former ~42 KB single-line `updated:` comment;
+see .github#129). Larger cross-repo decisions are recorded as [ADRs](../adr/README.md).
 
 ## System overview → the architecture map
 

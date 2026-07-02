@@ -119,12 +119,15 @@ still has to pass.
 
 ## The registry republish-train convention
 
-When you publish a new coherent set, record it in `registry/dependencies.yml` as a
-**republish-train** update (see recent commits like *"registry: republish train —
-fsgg-contracts 1.2.0, fs-gg-ui-template 0.1.58, fsgg-sdd 0.3.0"*), and flip any
-coherence flags the release satisfies. A `contract-change` issue MUST update the
-registry as part of its resolution. Keep the projection (`docs/registry/compatibility.md`)
-in sync.
+When you publish a new coherent set, update `registry/dependencies.yml` (contract
+`version`/`package-version`/`package-tag`, consuming edges, coherence flags the release
+satisfies, and the top-level `updated:` date) and **prepend one dated entry** to the
+registry changelog `registry/CHANGELOG.md` — `- **YYYY-MM-DD** — HEADER (owner; refs):
+body` (see recent entries like *"republish train — fsgg-contracts 1.2.0, fs-gg-ui-template
+0.1.58, fsgg-sdd 0.3.0"*). One entry per change keeps PR diffs reviewable; the former
+single-line `updated:` comment is retired (.github#129). A `contract-change` issue MUST
+update the registry as part of its resolution. Keep the projection
+(`docs/registry/compatibility.md`) in sync.
 
 ## Per-product authoritative docs
 
