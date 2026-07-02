@@ -10,13 +10,17 @@ repos:
   rendering:  { name: FS.GG.Rendering,  role: "Skia/OpenGL + Elmish UI framework + fs-gg-ui template" }
   governance: { name: FS.GG.Governance, role: "optional rule/evidence/gate tooling" }
   templates:  { name: FS.GG.Templates,  role: "downstream composition (fs-gg-fullstack, providers, overlays)" }
+  github:     { name: FS-GG/.github,    role: "cross-repo contract registry, org-shared build config, coordination + decision docs" }   # .github#135: now a first-class consumer/edge node (registry-schema) — not just a contract owner (shared-build-config).
 
 # Versioned contracts and where they are owned/consumed.
 #
 # FIELD VOCABULARY (M5 — .github#131, review §3). The typed validator (`fsgg-sdd registry validate`,
 # Fsgg.Registry) treats most fields as OPTIONAL because they are entry-specific; this block documents
-# the intended meaning so a future validator can tighten (report §6.9 — register the schema itself as a
-# governed contract). Until then this comment is the schema-of-record for reviewers.
+# the intended meaning so a future validator can tighten. This schema is ITSELF a governed contract now
+# (report §6.9 / .github#135 → the `registry-schema` contract below + ADR-0015): growing it — a new field
+# or a tightened rule — is a registered contract-change (bump `registry-schema.version` + the top-level
+# `schemaVersion` in the SAME PR that teaches Fsgg.Registry, and advance the gate's FS.GG.SDD.Cli pin to a
+# CLI carrying that Fsgg.Registry version). This comment remains the schema-of-record for reviewers.
 #   contract entries (`contracts:` list):
 #     id            (required) contract id, referenced by dependency edges + coherence rows.
 #     version       (required) SemVer of the contract SURFACE/SOURCE — EXCEPT `fs-gg-ui-template`, where
@@ -35,6 +39,9 @@ repos:
 #     bundles       contract ids a meta/content package subsumes (governance-reference-gate-set).
 #     parameters / profiles / minimum-fsgg-sdd / root-buildable / behavior-break — contract-specific
 #                   structured sub-blocks (scaffold-provider, fs-gg-ui-template); each is documented inline.
+#     validator     present ONLY for `registry-schema` — the gate pin (FS.GG.SDD.Cli in contract-coherence.yml)
+#                   that validates THIS document; couples a schema-version advance to a validator-pin advance
+#                   (.github#135 / ADR-0015), so the additive-tolerance degradation of H2/#127 cannot recur.
 #   coherence entries (`coherence:` list):
 #     id, coherent (bool — the assertion), owner  (required); `coherent:false` is a standing cross-repo request.
 #     summary / note / impact / resolved_by / tracking / enforcement / unified_by — OPTIONAL prose;
@@ -300,6 +307,28 @@ contracts:
     surface: "dist/dotnet/{Directory.Build.props,Directory.Packages.props,.config/dotnet-tools.json} + scripts/sync-build-config.sh"
     consumers: [rendering, sdd, governance, templates]
     docs: "docs/build/README.md"
+  - id: registry-schema
+    version: "1"            # == THIS file's top-level `schemaVersion` — the on-disk registry-document schema contract.
+    owner: sdd              # Fsgg.Registry (in FS.GG.Contracts) is the typed authority: RegistryDocument model + validateDocument.
+    # .github#135 (review §6.9, epic #124): register the registry's OWN schema as a governed contract — the one
+    # contract in the system that previously wasn't. Rationale (H2 + M5 together): the typed-validator investment
+    # only pays off if the schema is versioned AND the gate's validator pin advances with it. H2 (.github#127) found
+    # the pin frozen at FS.GG.SDD.Cli 0.2.1 for three minors while the registry grew one-off fields under additive
+    # tolerance (M5), degrading the typed gate toward a YAML-parses check. Registering the schema makes schema growth
+    # a tracked contract-change: bump this `version` (and the file's top-level schemaVersion) in the SAME PR that
+    # teaches Fsgg.Registry a new field/rule, and advance the gate's FS.GG.SDD.Cli pin to a CLI carrying that
+    # Fsgg.Registry version. Decision recorded in ADR-0015; state in coherence id `registry-schema-governed`.
+    surface: >
+      registry/dependencies.yml DOCUMENT schema — the top-level `schemaVersion` scalar plus the field-vocabulary
+      block (the schema-of-record comment near the head of this file). Modeled + validated by FS.GG.Contracts'
+      Fsgg.Registry (RegistryDocument.load + validateDocument), shipped in the fsgg-sdd CLI (`fsgg-sdd registry
+      validate`). `version` tracks the on-disk schemaVersion (currently 1); the Fsgg.Registry code that reads it is
+      a facet of the `fsgg-contracts` package version (advancing the schema advances both).
+    consumers: [github]     # .github's own contract-coherence gate validates THIS file against the schema.
+    validator: >
+      FS.GG.SDD.Cli pin in .github/workflows/contract-coherence.yml (`fsgg-sdd registry validate`). Coupled to the
+      newest published CLI via the org Renovate preset's annotation manager (`# renovate: datasource=nuget
+      depName=FS.GG.SDD.Cli`, .github#127), so a schema/validator advance cannot silently freeze the gate (the H2 defect).
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
@@ -309,6 +338,8 @@ dependencies:
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }
   - { from: sdd,       to: governance, via: "governance-handoff@1 (OPTIONAL; SDD runs fully without Governance)" }
+  # .github#135: the contract-coherence gate validates THIS registry with SDD's typed Fsgg.Registry validator.
+  - { from: github,    to: sdd,        via: "registry-schema@1 (Fsgg.Registry / fsgg-sdd validates registry/dependencies.yml; gate pins FS.GG.SDD.Cli — ADR-0015)" }
   # rendering depends on no other FS-GG product (it never depends on Governance).
 
 # Known coherence state. `coherent: false` is a standing cross-repo request.
@@ -572,6 +603,29 @@ coherence:
       package version) remains a dedicated gate step. Callers must grant `packages: read` so the gate
       restores the validator from the org feed (viable since the H4 provisioning blocker #21 closed).
     impact: "CI schema validation is now the typed Fsgg.Registry validator; the Python stand-in is retired. The gate gains a feed dependency — every caller must grant `packages: read` (run-scoped GITHUB_TOKEN authenticates the NuGet restore). The four product-repo callers adopt the same `packages: read` grant as an .github#49 follow-up."
+  - id: registry-schema-governed
+    coherent: true
+    owner: github
+    summary: >
+      RESOLVED 2026-07-02 (.github#135, review §6.9, epic #124): the registry's OWN schema is now a governed
+      contract (`registry-schema`, owner sdd — Fsgg.Registry is the typed authority), closing the one gap the
+      H2+M5 pair exposed — the typed-validator investment only pays off if the schema is versioned AND the gate's
+      validator pin advances with it. BEFORE: schema growth was invisible drift — H2 (.github#127) found the
+      FS.GG.SDD.Cli pin frozen at 0.2.1 for three minors while the registry grew one-off fields under additive
+      tolerance (M5), degrading the typed gate toward a YAML-parses check. NOW: (1) the `registry-schema` contract
+      entry versions the on-disk registry-document schema (== top-level `schemaVersion`, currently 1) with owner
+      sdd / consumer github; (2) ADR-0015 makes schema growth a REGISTERED contract-change — a new Fsgg.Registry
+      field/rule bumps this contract `version` + the file's `schemaVersion` in the same PR that teaches the
+      validator, and advances the contract-coherence.yml FS.GG.SDD.Cli pin to a CLI carrying that Fsgg.Registry
+      version; (3) the pin<->feed coupling (org Renovate annotation manager, .github#127) keeps the validator
+      current structurally so the additive-tolerance degradation cannot silently recur. The .github
+      contract-coherence gate is the consumer and continues to validate this file via `fsgg-sdd registry validate`
+      (the typed Fsgg.Registry validator — see [[registry-validator-typed]]). No behavioural gate change lands
+      with the registration itself (schemaVersion stays 1; `fsgg-sdd registry validate` stays valid/0-diagnostics
+      over this file); this row records the GOVERNANCE decision, enforced going forward by ADR-0015 + the field-
+      vocabulary comment's schema-of-record.
+    impact: "Registry schema growth is now a tracked contract-change, not silent additive drift; the gate's validator pin advancing in lockstep with the schema is a recorded obligation (ADR-0015) rather than an unowned one-off (H2/M5)."
+    tracking: "https://github.com/FS-GG/.github/issues/135"
   - id: apicompat-publicapi-gate
     coherent: true
     owner: github
