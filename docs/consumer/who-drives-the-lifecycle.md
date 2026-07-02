@@ -79,9 +79,11 @@ and sign off; the agent (A) authors and implements within known patterns; the CL
 This is the mechanism that isn't obvious. The CLI commands aren't skills, **but a
 scaffolded project ships companion *process skills* that wrap them.**
 
-When you scaffold with `lifecycle=sdd`, the `fsgg-sdd` CLI **seeds `fs-gg-sdd-*`
-process skills** into the project's agent skill folders (`.claude/skills/` for
-Claude Code, `.agents/skills/` for other runners). Unlike `/speckit-plan`, these
+When you scaffold with `lifecycle=sdd`, the `fsgg-sdd` CLI **seeds the `fs-gg-sdd-*`
+process skills** and — as the **sole mirror authority** (ADR-0011) — fans the
+byte-identical **union** of process + provider skills into all three agent-skill roots
+(`.claude/skills/` for Claude Code, `.codex/skills/` for Codex, `.agents/skills/` for the
+generic agent convention), so the runtimes are interchangeable. Unlike `/speckit-plan`, these
 skills don't *contain* the lifecycle logic — they **tell the agent when and how to
 shell out to the real `fsgg-sdd` commands**, and which strict authoring-contract
 grammars to respect (see [Load-bearing authoring contracts](lifecycle.md#load-bearing-authoring-contracts)).
