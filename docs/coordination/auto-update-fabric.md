@@ -16,24 +16,28 @@ backstop** (a scheduled sweep that opens a bump PR for every embedded pin even i
 missed). Both write to the consumer, neither bypasses review — they open PRs, the consumer's CI
 (the [contract-coherence gate](contract-coherence-gate.md)) still has to pass.
 
-## ⚠️ Dormant until the H4 admin step (#21)
+## Status: wired + provisioned + verified — one green sweep from coherent
 
-Both halves are authored and committed, but **inert** until org-admin completes
-[#21](https://github.com/FS-GG/.github/issues/21):
+Both halves are authored, committed, **and provisioned**. The H4 admin step
+[#21](https://github.com/FS-GG/.github/issues/21) is **closed and verified end-to-end**:
 
-- A `GITHUB_TOKEN` **cannot** dispatch to another repo or trigger its workflows — a GitHub App
-  installation token is required. The dispatch-sender mints one with
-  [`actions/create-github-app-token`](https://github.com/actions/create-github-app-token); the App
-  and its `app-id` / `app-private-key` org secrets are #21's deliverable. Until they exist the
-  sender **fails closed** with a pointer to #21 (it never silently no-ops).
-- Renovate resolves FS.GG.* from `https://nuget.pkg.github.com/FS-GG/index.json` — the feed URL is
-  deterministic from the org login, but the feed itself and the Renovate app's auth to it are #21's
-  deliverable.
+- **Push works.** A `GITHUB_TOKEN` cannot dispatch to another repo, so the dispatch-sender mints a
+  GitHub App installation token (via [`actions/create-github-app-token`](https://github.com/actions/create-github-app-token))
+  scoped to the target repo, from the `app-id` / `app-private-key` org secrets #21 provisioned. The
+  cross-repo dispatch has been **smoke-tested end-to-end**, and both producer halves have fired:
+  FS.GG.SDD's release pushed `FS.GG.Contracts` and FS.GG.Rendering's release pushed the full
+  `FS.GG.UI.*` coherent set.
+- **Pull works.** Renovate is installed, resolves the `github>FS-GG/.github` preset, and
+  authenticates to `https://nuget.pkg.github.com/FS-GG/index.json` (HTTP 200 via the
+  `FSGG_PACKAGES_READ_TOKEN` org secret). NB: Renovate does **not** substitute `{{ secrets }}` inside
+  an `extends` preset, so the feed `hostRules` token lives in each repo's own `renovate.json`, not in
+  [`default.json`](../../default.json).
 
-This ordering is deliberate (the same "forward-guardrail, opt-in" model as the
-[shared-build-config api-gate](../build/README.md#the-api-breaking-change-gate-opt-in-advisory--required)):
-ship the config now so the admin step is a pure secrets/feed provisioning with nothing left to
-design, and each producer/consumer wires its end independently.
+The registry coherence id [`cross-repo-auto-update`](../../registry/dependencies.yml)
+([projection](../registry/compatibility.md)) stays **`coherent: false` for one remaining reason**:
+no scheduled Renovate sweep has yet resolved an `FS.GG.*` feed lookup green end-to-end and opened the
+auto-PR (only third-party Renovate PRs observed so far). It flips **`coherent: true` on the first
+green `FS.GG.*` Renovate sweep** — not on any further admin step.
 
 ## The dispatch sender
 
@@ -48,7 +52,7 @@ jobs:
       target-repo: FS-GG/FS.GG.Templates
       event-type:  fs-gg-ui-template-released
       version:     ${{ needs.release.outputs.version }}
-      # payload:   '{"tag":"fs-gg-ui-template/v0.1.50-preview.1"}'   # optional extra client_payload fields
+      # payload:   '{"tag":"fs-gg-ui-template/v0.1.61-preview.1"}'   # optional extra client_payload fields
     secrets:
       app-id:          ${{ secrets.FSGG_DISPATCH_APP_ID }}
       app-private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}

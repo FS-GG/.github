@@ -25,8 +25,8 @@ exactly one more product than the last.
 You just want the UI framework — you have your own app, build, and release.
 
 - Reference the `FS.GG.UI.*` packages (or the `fs-gg-ui` template). They're
-  preview packages on `net10.0`; today you reference the projects directly,
-  `dotnet pack` to a local feed, or scaffold from the template.
+  preview packages on `net10.0`, published on **public nuget.org** — add a
+  `<PackageReference>` (restore needs no extra feed) or scaffold from the template.
 - No `fsgg-sdd`, no `.fsgg/`, no governance.
 
 → [FS.GG.Rendering · usage](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/usage.md#getting-the-packages)

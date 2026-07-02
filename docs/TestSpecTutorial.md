@@ -195,11 +195,10 @@ cd ./Pong
 grep FsGgUiVersion Directory.Packages.props   # the one FS.GG.UI.* version literal
 ```
 
-> **Feed:** `FS.GG.UI.*` are **preview** packages served from the org GitHub feed
-> (`https://nuget.pkg.github.com/FS-GG/index.json`), not nuget.org. If `dotnet
-> build` can't find them, add that feed to the product's `NuGet.config` (or your
-> global config). To move to a newer set later, it's **one edit** to `FsGgUiVersion`
-> + `dotnet restore` — see [Versions, feeds & updates](consumer/versioning-and-updates.md).
+> **Feed:** `FS.GG.UI.*` are **preview** packages published on **public nuget.org** —
+> `dotnet build` resolves them with no extra feed config. To move to a newer set later,
+> it's **one edit** to `FsGgUiVersion` + `dotnet restore` — see
+> [Versions, feeds & updates](consumer/versioning-and-updates.md).
 
 ```sh
 dotnet build

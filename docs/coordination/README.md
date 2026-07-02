@@ -120,5 +120,8 @@ first caller).
 The coherence gate goes *red* on stale pins; the [auto-update fabric](auto-update-fabric.md)
 keeps them *fresh* in the first place — a reusable `dispatch-sender` workflow (producer release →
 consumer `repository_dispatch`) plus an org-shared Renovate preset (custom managers for every
-embedded cross-repo pin). Both are authored in `.github` and dormant until the H4 admin step
-([#21](https://github.com/FS-GG/.github/issues/21)) provisions the App + Packages feed.
+embedded cross-repo pin). Both are authored in `.github`, and the H4 admin step
+([#21](https://github.com/FS-GG/.github/issues/21) — App + Packages feed) is **done and verified**:
+push is smoke-tested, both producer halves have fired, and Renovate authenticates to the feed. The
+fabric is one green `FS.GG.*` Renovate sweep from `coherent: true` (see
+[auto-update fabric](auto-update-fabric.md)).

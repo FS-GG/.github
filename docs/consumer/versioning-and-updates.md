@@ -18,7 +18,7 @@ version and feed details live in each product's installation doc.
 | Product | Artifact | Install |
 |---|---|---|
 | **SDD** | `FS.GG.SDD.Cli` global tool (`fsgg-sdd`) | `dotnet tool install --global FS.GG.SDD.Cli` |
-| **Rendering** | `FS.GG.UI.*` packages + `fs-gg-ui` template | reference the projects, `dotnet pack` to a local feed, or scaffold from the template |
+| **Rendering** | `FS.GG.UI.*` packages + `fs-gg-ui` template | `<PackageReference>` from nuget.org (pin via `FsGgUiVersion`), or scaffold from the `fs-gg-ui` template |
 | **Governance** | `FS.GG.Governance.Cli` global tool (`fsgg-governance`) + reference gate set | `dotnet tool install --global FS.GG.Governance.Cli` |
 | **Templates** | `FS.GG.Templates` template package (`fs-gg-governance` overlay, `rendering` provider) | `dotnet new install FS.GG.Templates` |
 

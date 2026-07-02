@@ -103,9 +103,9 @@ curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/provider
 # 3. Scaffold a runnable Skia/Elmish app under an SDD-managed lifecycle.
 fsgg-sdd scaffold --root ./MyApp --provider rendering --param productName=MyApp
 
-# 4. Build and run it. (FS.GG.UI.* are preview packages on the org GitHub feed,
-#    nuget.pkg.github.com/FS-GG — add it to NuGet.config if restore can't find them.
-#    `grep FsGgUiVersion ./MyApp/Directory.Packages.props` shows your fs-gg-ui version.)
+# 4. Build and run it. (FS.GG.UI.* are preview packages on public nuget.org — restore
+#    needs no extra feed. `grep FsGgUiVersion ./MyApp/Directory.Packages.props` shows your
+#    fs-gg-ui version; feeds & pinning → docs/consumer/versioning-and-updates.md.)
 cd ./MyApp && dotnet build && dotnet run
 ```
 
