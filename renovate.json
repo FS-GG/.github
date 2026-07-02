@@ -1,6 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "This repo dogfoods its own org-shared preset (default.json, consumed elsewhere as `github>FS-GG/.github`) instead of vanilla config:recommended, so the dist/dotnet pins it distributes are managed under the same semantics every product repo gets — dependency dashboard, semantic commits, and FS.GG.* feed/grouping/prerelease routing (review M9, #132). The FS.GG.* rules are inert here today (no FS.GG.* PackageReferences), but self-applying the preset keeps the asymmetry from silently returning."
+  ],
   "extends": [
-    "config:recommended"
+    "github>FS-GG/.github"
   ]
 }
