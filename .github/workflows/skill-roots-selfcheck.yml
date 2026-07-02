@@ -1,0 +1,35 @@
+# Dogfood the skill-union assertion on THIS repo's own agent-skill roots (review M10, #132).
+#
+# skill-union-selftest.yml proves scripts/skill-union-assert.sh works (synthetic fixtures);
+# this proves *this* repo actually holds the byte-identical union it preaches. .codex/skills
+# doesn't exist here (ADR-0011/0014 scope the three-root invariant to scaffolded products), so
+# the defaults would die on "configured root is absent" — we pass the two roots this repo keeps
+# explicitly. Until this gate existed, .claude/skills ≡ .agents/skills held by manual discipline.
+name: skill-roots-selfcheck
+
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "scripts/skill-union-assert.sh"
+      - ".github/workflows/skill-roots-selfcheck.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "scripts/skill-union-assert.sh"
+      - ".github/workflows/skill-roots-selfcheck.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  roots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assert own skill roots are the byte-identical union
+        run: bash scripts/skill-union-assert.sh --product . --roots ".claude/skills .agents/skills"
