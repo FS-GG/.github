@@ -11,27 +11,30 @@
 # FS.GG.Templates composition gate is the first caller — FS.GG.Templates#49 / roadmap T3.2).
 #
 # It checks CONTENT, not presence — the gap ADR-0014 F2 found (doctor/composition asserted only
-# `Option.isSome`). For every union skill it asserts:
+# `Option.isSome`). For every skill present under any root it asserts:
 #   1. present        — the skill directory exists in EVERY configured root (else: partitioned);
 #   2. byte-identical — its bytes are identical across all roots (else: divergent);
-#   3. matches-manifest (only when --manifest is given) — its content digest equals the digest
-#      the producer's skill-manifest declares, and no root carries a skill the manifest does not
-#      declare (else: drifted / dangling).
+#   3. matches-manifest (only when --manifest is given) — its SKILL.md digest equals the digest
+#      the producer's skill-manifest declares (else: drifted), and every root skill is either
+#      declared by the manifest or matches a --co-tenants pattern (else: dangling).
 #
-# Checks 1-2 are self-contained and enforce today (they need nothing but the product tree — the
-# highest-value, currently-unchecked property). Check 3 activates the moment a producer ships a
-# skill-manifest with per-skill digests (FS.GG.SDD#60 / FS.GG.Rendering#43, ADR-0014 P0/P2);
-# until then the assertion runs the content-equality half and skips the manifest cross-check.
-# This is publish-before-flip: the reusable mechanism lands and can enforce cross-root identity
-# now; the manifest side wires in when the manifest exists.
-#
-# The per-skill content digest (check 3) is a deterministic tree hash so it survives multi-file
-# skills (SKILL.md + references/**): sha256 over the C-locale-sorted stream of "<relpath>\n<sha256
-# of that file>\n" for every regular file under the skill dir. A producer's manifest MUST emit
-# `sha256` with the SAME algorithm. See docs/coordination/skill-union-assertion.md.
+# Checks 1-2 are self-contained and enforce with nothing but the product tree. Check 3 follows
+# the PRODUCERS' manifest semantics (aligned with the shipped manifests per .github#120 —
+# `Fsgg.SkillMirror` in FS.GG.Contracts 1.4.0 / SDD#61 and fs-gg-ui-template 0.1.61-preview.1 /
+# Rendering#43 are ADR-0014's "one implementation"; the assertion follows them):
+#   - digest: canonical-body sha256 of the skill's SKILL.md ONLY (byte-equivalent to
+#     `sha256sum SKILL.md`). Multi-file skills (SKILL.md + references/**) are covered by the
+#     cross-root identity of checks 1-2, not by the digest.
+#   - set: the manifest is a superset CATALOG, an upper bound — emission is lifecycle/profile-
+#     conditioned, so declared∧present ⇒ digest must match; declared∧absent-everywhere ⇒ fine
+#     (skipped, counted); present∧undeclared ⇒ dangling UNLESS the id matches a --co-tenants
+#     glob (process skills from a co-tenant producer, e.g. "fs-gg-sdd-* speckit-*").
+# A skill declared and present in SOME roots but not all still fails check 1 ([partitioned]).
+# See docs/coordination/skill-union-assertion.md.
 #
 # Usage:
 #   skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
+#                         [--co-tenants "<glob> <glob> ..."]
 # Roots default to AGENT_SKILL_ROOTS (env) or ADR-0011's three: ".claude/skills .codex/skills
 # .agents/skills". Roots are resolved relative to --product. Exit 0 = union coherent; non-zero =
 # at least one violation (each printed with its class).
@@ -41,6 +44,7 @@ set -euo pipefail
 PRODUCT="."
 ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .codex/skills .agents/skills}"
 MANIFEST=""
+CO_TENANTS=""
 
 die() { echo "::error::skill-union-assert: $*" >&2; exit 2; }
 
@@ -48,32 +52,41 @@ DIGEST_ONLY=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --product)  PRODUCT="${2:?--product needs a value}"; shift 2 ;;
-    --roots)    ROOTS="${2:?--roots needs a value}"; shift 2 ;;
-    --manifest) MANIFEST="${2:?--manifest needs a value}"; shift 2 ;;
-    --digest)   DIGEST_ONLY="${2:?--digest needs a skill dir}"; shift 2 ;;
-    -h|--help)  sed -n '2,40p' "$0"; exit 0 ;;
-    *)          die "unknown argument: $1" ;;
+    --product)    PRODUCT="${2:?--product needs a value}"; shift 2 ;;
+    --roots)      ROOTS="${2:?--roots needs a value}"; shift 2 ;;
+    --manifest)   MANIFEST="${2:?--manifest needs a value}"; shift 2 ;;
+    --co-tenants) CO_TENANTS="${2:?--co-tenants needs a value}"; shift 2 ;;
+    --digest)     DIGEST_ONLY="${2:?--digest needs a skill dir}"; shift 2 ;;
+    -h|--help)    sed -n '2,44p' "$0"; exit 0 ;;
+    *)            die "unknown argument: $1" ;;
   esac
 done
 
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum not found (required for content hashing)."
 
-# Deterministic per-skill content tree hash (see header). This is the CANONICAL digest algorithm
-# a producer's skill-manifest must use for its per-skill `sha256`; `--digest <skill-dir>` exposes
-# it as a reference generator so producers and this assertion never drift.
+# Per-skill digest (see header): canonical-body sha256 of SKILL.md only — the producers' shipped
+# algorithm (`Fsgg.SkillMirror`, FS.GG.Contracts 1.4.0; byte-equivalent to `sha256sum SKILL.md`,
+# verified in .github#120). `--digest <skill-dir>` exposes it as a reference generator so
+# producers and this assertion never drift. Multi-file remainder is covered by checks 1-2.
 skill_digest() {
-  local dir="$1" stream
-  stream="$(cd "$dir" && find . -type f | LC_ALL=C sort | while IFS= read -r f; do
-    printf '%s\n' "$f"
-    sha256sum "$f" | cut -d' ' -f1
-  done)"
-  printf '%s' "$stream" | sha256sum | cut -d' ' -f1
+  local dir="$1"
+  [ -f "$dir/SKILL.md" ] || return 1
+  sha256sum "$dir/SKILL.md" | cut -d' ' -f1
+}
+
+# Does <id> match any --co-tenants glob?
+is_co_tenant() {
+  local id="$1" pat
+  for pat in $CO_TENANTS; do
+    # shellcheck disable=SC2254
+    case "$id" in $pat) return 0 ;; esac
+  done
+  return 1
 }
 
 if [ -n "$DIGEST_ONLY" ]; then
   [ -d "$DIGEST_ONLY" ] || die "skill dir not found: $DIGEST_ONLY"
-  skill_digest "$DIGEST_ONLY"
+  skill_digest "$DIGEST_ONLY" || die "no SKILL.md under: $DIGEST_ONLY"
   exit 0
 fi
 
@@ -104,20 +117,19 @@ if [ -n "$MANIFEST" ]; then
   done < <(jq -r '.skills[] | [.id, (.sha256 // "")] | @tsv' "$MANIFEST")
 fi
 
-# Union of skill ids = every subdirectory across all roots, plus every manifest id.
+# Union of skill ids = every subdirectory across all roots. Manifest ids are NOT unioned in:
+# the manifest is a superset catalog (emission is lifecycle/profile-conditioned), so an id that
+# is declared but materialized nowhere is legitimate — check 3 only cross-checks what exists.
 union_ids() {
-  {
-    for r in "${ROOT_ARR[@]}"; do
-      find "$PRODUCT/$r" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null
-    done
-    for id in $MANIFEST_IDS; do printf '%s\n' "$id"; done
-  } | LC_ALL=C sort -u
+  for r in "${ROOT_ARR[@]}"; do
+    find "$PRODUCT/$r" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null
+  done | LC_ALL=C sort -u
 }
 
 fail=0
-present_ct=0; identical_ct=0; manifest_ct=0; skill_ct=0
+present_ct=0; identical_ct=0; manifest_ct=0; cotenant_ct=0; skill_ct=0
 
-echo "skill-union-assert: product='$PRODUCT' roots='${ROOT_ARR[*]}'${MANIFEST:+ manifest='$MANIFEST'}"
+echo "skill-union-assert: product='$PRODUCT' roots='${ROOT_ARR[*]}'${MANIFEST:+ manifest='$MANIFEST'}${CO_TENANTS:+ co-tenants='$CO_TENANTS'}"
 
 while IFS= read -r id; do
   [ -n "$id" ] || continue
@@ -150,18 +162,27 @@ while IFS= read -r id; do
   fi
   identical_ct=$((identical_ct + 1))
 
-  # (3) matches-manifest — only when a manifest is supplied
+  # (3) matches-manifest — only when a manifest is supplied. Producer semantics (.github#120):
+  # declared∧present ⇒ SKILL.md digest must match; undeclared ⇒ dangling unless co-tenant.
   if [ -n "$MANIFEST" ]; then
     if [ -z "${MANIFEST_SHA[$id]+x}" ]; then
-      echo "::error::[dangling] skill '$id' is present in the roots but the manifest does not declare it"
+      if is_co_tenant "$id"; then
+        cotenant_ct=$((cotenant_ct + 1))
+        continue
+      fi
+      echo "::error::[dangling] skill '$id' is present in the roots but the manifest does not declare it (and it matches no --co-tenants pattern)"
       fail=1
       continue
     fi
     want="${MANIFEST_SHA[$id]}"
     if [ -n "$want" ]; then
-      got="$(skill_digest "$PRODUCT/$ref/$id")"
+      if ! got="$(skill_digest "$PRODUCT/$ref/$id")"; then
+        echo "::error::[drifted] skill '$id' has no SKILL.md to digest (manifest declares $want)"
+        fail=1
+        continue
+      fi
       if [ "$got" != "$want" ]; then
-        echo "::error::[drifted] skill '$id' digest $got != manifest $want"
+        echo "::error::[drifted] skill '$id' SKILL.md digest $got != manifest $want"
         fail=1
         continue
       fi
@@ -170,11 +191,19 @@ while IFS= read -r id; do
   fi
 done < <(union_ids)
 
+# Declared-but-absent-everywhere ids are fine (superset catalog) — surface the count for signal.
+declared_absent_ct=0
+if [ -n "$MANIFEST" ]; then
+  for id in $MANIFEST_IDS; do
+    [ -d "$PRODUCT/${ROOT_ARR[0]}/$id" ] || declared_absent_ct=$((declared_absent_ct + 1))
+  done
+fi
+
 if [ "$skill_ct" -eq 0 ]; then
   die "no skills found under any root — expected at least one skill in the union."
 fi
 
-echo "skill-union-assert: $skill_ct skill(s) — present=$present_ct byte-identical=$identical_ct${MANIFEST:+ manifest-matched=$manifest_ct}"
+echo "skill-union-assert: $skill_ct skill(s) — present=$present_ct byte-identical=$identical_ct${MANIFEST:+ manifest-matched=$manifest_ct co-tenant=$cotenant_ct declared-absent=$declared_absent_ct}"
 if [ "$fail" -ne 0 ]; then
   echo "::error::skill-union-assert: FAILED — the roots are not the byte-identical union (see above)."
   exit 1

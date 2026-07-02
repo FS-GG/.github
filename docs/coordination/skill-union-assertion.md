@@ -29,16 +29,17 @@ Over the configured `AGENT_SKILL_ROOTS` (default ADR-0011's three: `.claude/skil
 
 1. **present** — the skill directory exists in **every** root (a miss is a *partitioned* root);
 2. **byte-identical** — its bytes are identical across all roots (a diff is a *divergent* root);
-3. **matches-manifest** *(only with `--manifest`)* — its content digest equals the digest the
-   producer's [skill-manifest](#the-manifest-and-the-canonical-digest) declares (*drifted*), and
-   no root carries a skill the manifest does not declare (*dangling*).
+3. **matches-manifest** *(only with `--manifest`)* — if the producer's
+   [skill-manifest](#the-manifest-and-the-canonical-digest) declares it, its `SKILL.md` digest
+   equals the declared digest (*drifted*); if the manifest does **not** declare it, it must match
+   a `--co-tenants` glob (*dangling* otherwise).
 
-Checks 1–2 are **self-contained** — they need nothing but the product tree, so they enforce today
-(the highest-value, previously-unchecked property). Check 3 activates the moment a producer ships a
-manifest with per-skill digests ([FS.GG.SDD#60](https://github.com/FS-GG/FS.GG.SDD/issues/60) /
-[FS.GG.Rendering#43](https://github.com/FS-GG/FS.GG.Rendering/issues/43), ADR-0014 P0/P2). This is
-**publish-before-flip**: the mechanism lands and can enforce cross-root identity now; the manifest
-cross-check wires in when the manifest exists.
+Checks 1–2 are **self-contained** — they need nothing but the product tree. Check 3 cross-checks
+the manifests the producers actually ship ([FS.GG.SDD#61](https://github.com/FS-GG/FS.GG.SDD/issues/61) /
+[FS.GG.Rendering#43](https://github.com/FS-GG/FS.GG.Rendering/issues/43), ADR-0014 P0–P2), in
+**their** semantics — aligned by [.github#120](https://github.com/FS-GG/.github/issues/120):
+`Fsgg.SkillMirror` (FS.GG.Contracts 1.4.0) is ADR-0014's "one implementation", so the assertion
+follows it, not vice versa.
 
 ## The manifest and the canonical digest
 
@@ -47,22 +48,31 @@ The producer manifest is JSON — ADR-0014's `{ id, scope, sha256, body }` per s
 ```json
 { "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
   "skills": [
-    { "id": "cross-repo-coordination", "scope": "process", "sha256": "<tree-hash>" },
-    { "id": "fs-gg-ui-render",          "scope": "product", "sha256": "<tree-hash>" }
+    { "id": "cross-repo-coordination", "scope": "process", "sha256": "<SKILL.md body sha256>" },
+    { "id": "fs-gg-ui-render",          "scope": "product", "sha256": "<SKILL.md body sha256>" }
   ] }
 ```
 
-The `sha256` is a **deterministic content tree hash** so it survives multi-file skills
-(`SKILL.md` + `references/**`): `sha256` over the C-locale-sorted stream of `"<relpath>\n<sha256 of
-that file>\n"` for every regular file under the skill dir. The assertion exposes this exact
-algorithm as a **reference generator** so producers never drift from the checker:
+**Digest.** The `sha256` is the **canonical-body sha256 of the skill's `SKILL.md` only** — the
+algorithm `Fsgg.SkillMirror` ships (byte-equivalent to `sha256sum SKILL.md`, verified in
+[.github#120](https://github.com/FS-GG/.github/issues/120)). Multi-file skills (`SKILL.md` +
+`references/**`) are covered by the **cross-root identity** of checks 1–2, not by the digest.
+The assertion exposes the algorithm as a **reference generator** so producers and checker never
+drift:
 
 ```sh
 scripts/skill-union-assert.sh --digest .claude/skills/<id>   # prints the canonical digest
 ```
 
-A producer's manifest **must** emit `sha256` with this generator (or a byte-equivalent
-reimplementation, per ADR-0014 §6's content-parity requirement).
+**Set semantics.** The manifest is a **superset catalog** — an *upper bound*, not an exact set.
+Producers declare every skill they can emit, but emission is lifecycle/profile-conditioned, so:
+
+- **declared ∧ present** → the digest must match (else `[drifted]`);
+- **declared ∧ absent from every root** → legitimate (skipped, surfaced in the summary count);
+- **declared ∧ present in only some roots** → still `[partitioned]` (check 1);
+- **present ∧ undeclared** → `[dangling]`, **unless** the id matches a `--co-tenants` glob —
+  the roots legitimately hold process skills from co-tenant producers the product manifest
+  doesn't own (e.g. `--co-tenants "fs-gg-sdd-* speckit-*"` for the sdd / spec-kit lanes).
 
 ## Usage
 
@@ -71,7 +81,8 @@ Directly:
 ```sh
 scripts/skill-union-assert.sh --product <product-dir> \
   [--roots ".claude/skills .codex/skills .agents/skills"] \
-  [--manifest <manifest.json>]
+  [--manifest <manifest.json>] \
+  [--co-tenants "fs-gg-sdd-* speckit-*"]
 ```
 
 `AGENT_SKILL_ROOTS` (env) overrides the default root set — ADR-0014's "one declared constant":
@@ -91,6 +102,7 @@ jobs:
       product-path: "path/to/scaffolded/product"
       # roots: ".claude/skills .codex/skills .agents/skills"   # AGENT_SKILL_ROOTS, if non-default
       # manifest: "path/to/skill-manifest.json"                # enables the digest cross-check
+      # co-tenants: "fs-gg-sdd-* speckit-*"                    # undeclared co-tenant ids to admit
 ```
 
 The [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49)
@@ -101,8 +113,11 @@ lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2
 
 [`tests/skill-union/run.sh`](../../tests/skill-union/run.sh) — run in CI by
 [`skill-union-selftest.yml`](../../.github/workflows/skill-union-selftest.yml) — builds throwaway
-product trees and proves the assertion **passes** on a coherent union and **fails** on a divergent,
-partitioned, dangling, and manifest-drifted root. This is the acceptance evidence for #111.
+product trees and proves the assertion **passes** on a coherent union (including a
+superset-catalog manifest with declared-but-absent ids and `--co-tenants`-admitted process
+skills) and **fails** on a divergent (`SKILL.md` *and* `references/**`), partitioned, dangling,
+and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md`. This
+is the acceptance evidence for #111 (semantics aligned by #120).
 
 ## Where this sits
 

@@ -13,8 +13,9 @@
 # docs/coordination/skill-union-assertion.md.
 #
 # Checks 1-2 (present ∧ byte-identical-across-roots) enforce with nothing but the product tree.
-# Check 3 (matches a producer's skill-manifest digests) activates when `manifest` is supplied —
-# publish-before-flip: pass it once FS.GG.SDD#60 / FS.GG.Rendering#43 ship manifests.
+# Check 3 (matches a producer's skill-manifest digests) activates when `manifest` is supplied,
+# in the PRODUCERS' shipped semantics (.github#120): SKILL.md canonical-body sha256, superset
+# catalog, undeclared co-tenant ids admitted via `co-tenants` globs.
 name: skill-union-assert
 
 on:
@@ -30,6 +31,10 @@ on:
         default: ".claude/skills .codex/skills .agents/skills"
       manifest:
         description: "Optional path (in the caller's checkout) to a producer skill-manifest JSON; enables the digest cross-check."
+        type: string
+        default: ""
+      co-tenants:
+        description: "Space-separated globs of co-tenant skill ids (e.g. 'fs-gg-sdd-* speckit-*') the manifest legitimately does not declare; only used with manifest."
         type: string
         default: ""
       github-ref:
@@ -65,5 +70,8 @@ jobs:
           args=(--product "caller/${{ inputs.product-path }}" --roots "${{ inputs.roots }}")
           if [ -n "${{ inputs.manifest }}" ]; then
             args+=(--manifest "caller/${{ inputs.manifest }}")
+          fi
+          if [ -n "${{ inputs.co-tenants }}" ]; then
+            args+=(--co-tenants "${{ inputs.co-tenants }}")
           fi
           bash dotgithub/scripts/skill-union-assert.sh "${args[@]}"
