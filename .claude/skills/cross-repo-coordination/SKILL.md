@@ -155,8 +155,11 @@ wrong and the registry advertises a version the feed can't serve. The universal 
    which is the safety net, not a nuisance. Confirm `"Your package was pushed"` before step 2.
 2. **Flip the registry** (only now): in `FS-GG/.github` update `registry/dependencies.yml` — the
    contract entry's `version` / `package-version` / `package-tag`, the **consuming edge**
-   (`{ from: <consumer>, to: <producer>, via: "<id>@<V> …" }`), and prepend a note to the
-   top-level `updated:` annotation. Then update the **hand-maintained** projection
+   (`{ from: <consumer>, to: <producer>, via: "<id>@<V> …" }`), and set the top-level
+   `updated:` date. **Prepend one dated entry** (newest-first) to the registry changelog
+   `registry/CHANGELOG.md` — `- **YYYY-MM-DD** — HEADER (owner; refs): body` — one entry
+   per change, so diffs stay reviewable (the old single-line `updated:` comment is retired,
+   .github#129). Then update the **hand-maintained** projection
    `docs/registry/compatibility.md` (dependency-graph line + versioned-contracts row + the
    relevant coherence row). Validate with the typed validator — the SAME one the gate runs:
    `fsgg-sdd registry validate registry/dependencies.yml` → `"valid": true`. Open the PR; the
