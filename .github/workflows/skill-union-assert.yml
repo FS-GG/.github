@@ -45,12 +45,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout caller
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: caller
 
       - name: Checkout FS-GG/.github (assertion-script authority)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: FS-GG/.github
           ref: ${{ inputs.github-ref }}
