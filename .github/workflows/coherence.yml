@@ -28,3 +28,20 @@ jobs:
       # validator script is gated against the stale main copy (and the bootstrapping PR that first
       # introduces the validator can't pass at all). Consumer repos keep the `main` default.
       github-ref: ${{ github.sha }}
+
+  # Projection gate (#128 / review H4). The registry ↔ docs/registry/compatibility.md coherence
+  # is a .github-INTERNAL invariant (both files live here), so it runs in this self-gate rather
+  # than the reusable contract-coherence.yml that the four product repos call. It converts the
+  # recurring "coherence id shipped but never projected" / "contract row went stale" drift class
+  # into a red check. Pure-stdlib + PyYAML; no network, no feed token.
+  projection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Assert compatibility.md projects the registry
+        run: python scripts/check-projection.py registry/dependencies.yml docs/registry/compatibility.md
