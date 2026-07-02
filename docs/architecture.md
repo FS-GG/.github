@@ -351,10 +351,22 @@ The contracts that hold the system together:
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
 | `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` | all four |
+| `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
 
 Dependency edges (downstream → upstream): Templates → Rendering (template),
 Templates → SDD (scaffold-provider), Templates → Governance (policy/overlay),
-SDD → Governance (handoff, **optional**). Rendering points at nothing.
+SDD → Governance (handoff, **optional**), and **.github → SDD** (`registry-schema` —
+the coherence gate validates this registry with SDD's typed `Fsgg.Registry`).
+Rendering points at nothing.
+
+**The registry's own schema is a governed contract too (ADR-0015).** It was the one
+contract in the system that wasn't: the typed validator (the `registry-validator-typed`
+coherence row) only pays off if the schema is *versioned* and the gate's `FS.GG.SDD.Cli`
+pin *advances with it* — a [review](reports/2026-07-02-code-quality-architecture-review.md)
+found the pin frozen for three minors while the schema grew fields under additive
+tolerance, degrading the gate toward a YAML-parses check. The `registry-schema` entry (owner SDD, consumer .github) versions the on-disk
+`schemaVersion`, so schema growth is now a tracked `contract-change` (bump the version +
+advance the pin, in lockstep) rather than silent drift.
 
 **The coherent set has three axes, not two.** A `fs-gg-ui-template@<V>` pin snapshots
 the *template* and the *framework* — but a scaffolded product also carries the
