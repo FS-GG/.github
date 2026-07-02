@@ -34,6 +34,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Preflight: steps 2/4/5 orchestrate `fsgg-sdd`, so fail fast with an actionable message if the CLI
+# is not installed — better than a bare "command not found" mid-scaffold with a half-written tree.
+if ! command -v fsgg-sdd >/dev/null 2>&1; then
+  echo "error: fsgg-sdd is not on PATH — install the CLI first, then re-run:" >&2
+  echo "  dotnet tool install --global FS.GG.SDD.Cli" >&2
+  exit 127
+fi
+
 DESCRIPTOR_URL="https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/${REF}/providers/rendering.providers.yml"
 
 # 1. Fetch the newest rendering provider descriptor (no clone). The committed descriptor is
@@ -52,11 +60,14 @@ fsgg-sdd scaffold --root "$TARGET" --provider rendering --param "productName=$PR
 #    flagged writing into the SDD-owned .fsgg/ tree.
 if [ "$GOVERNANCE" = "yes" ]; then
   echo "==> adding governance overlay (default: light / non-blocking)"
-  if dotnet new install FS.GG.Templates >/dev/null 2>&1; then
+  # Capture install output (don't discard it) so a feed/auth failure is diagnosable — the overlay
+  # is non-blocking, but a silent 2>/dev/null hid WHY it was skipped.
+  if install_log="$(dotnet new install FS.GG.Templates 2>&1)"; then
     dotnet new fs-gg-governance -o "$TARGET" --appName "$PRODUCT" --defaultProfile light \
       || echo "!!  governance overlay failed — the product is fine without it."
   else
-    echo "!!  could not install the FS.GG.Templates template (feed not reachable?). Skipping."
+    echo "!!  could not install the FS.GG.Templates template (feed not reachable?). Skipping." >&2
+    printf '%s\n' "$install_log" | sed 's/^/    | /' >&2
     echo "    add later:  dotnet new install FS.GG.Templates && dotnet new fs-gg-governance -o $TARGET --appName $PRODUCT"
   fi
 fi

@@ -87,12 +87,14 @@ jobs:
         env:
           # Public package, but the GitHub Packages NuGet feed still requires a token to restore.
           # Provisioning blocker #21 is closed, so the run-scoped GITHUB_TOKEN (packages: read)
-          # resolves FS.GG.SDD.Cli from the org feed.
+          # resolves FS.GG.SDD.Cli from the org feed. Both values are env-passed (never interpolated
+          # into the run script) — the org's uniform anti-injection pattern (cf. architecture-map.yml).
           NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
           dotnet nuget add source "https://nuget.pkg.github.com/FS-GG/index.json" \
-            --name fsgg --username "${{ github.actor }}" --password "$NUGET_TOKEN" \
+            --name fsgg --username "$ACTOR" --password "$NUGET_TOKEN" \
             --store-password-in-clear-text
           # Pin == newest published FS.GG.SDD.Cli on the org feed. Coupled so it can't silently
           # freeze (the .github#127/H2 defect: pin sat at 0.2.1 while the org shipped 0.5.0, so
@@ -147,6 +149,10 @@ jobs:
 
       - name: Assert fsgg-contracts pin == actual FS.GG.Contracts version
         shell: bash
+        env:
+          # Env-passed (never interpolated into the run script) — the org's uniform anti-injection
+          # pattern (cf. architecture-map.yml); read as sys.argv[2] below.
+          CONTRACTS_VERSION: ${{ steps.contracts.outputs.version }}
         run: |
           # Version-coupling gate: the registry's declared fsgg-contracts `version` must equal the
           # actual package version read from FS.GG.SDD source. `fsgg-sdd registry validate` checks
@@ -165,7 +171,7 @@ jobs:
               sys.exit(f"::error::fsgg-contracts pin drift: registry declares {str(decl)!r} but the "
                        f"actual FS.GG.Contracts package version is {want!r}.")
           print(f"ok: fsgg-contracts registry pin == actual package version == {want}")
-          ' "dotgithub/registry/dependencies.yml" "${{ steps.contracts.outputs.version }}"
+          ' "dotgithub/registry/dependencies.yml" "$CONTRACTS_VERSION"
 
       - name: Build-config drift gate
         if: ${{ inputs.check-build-config }}

@@ -33,12 +33,10 @@
     {
       "customType": "regex",
       "description": "fs-gg-ui template pin: the FsGgUiVersion MSBuild property → FS.GG.UI.Template (the published coherent-set version).",
-      "fileMatch": [
-        "(^|/)Directory\\.Build\\.props$",
-        "(^|/)Directory\\.Build\\.local\\.props$",
-        "\\.props$",
-        "\\.targets$",
-        "\\.template\\.config/.*\\.json$"
+      "managerFilePatterns": [
+        "/\\.props$/",
+        "/\\.targets$/",
+        "/\\.template\\.config/.*\\.json$/"
       ],
       "matchStrings": [
         "<FsGgUiVersion>(?<currentValue>[^<]+)</FsGgUiVersion>",
@@ -51,16 +49,16 @@
     {
       "customType": "regex",
       "description": "Generic annotation-driven manager: any embedded pin tagged `# renovate: datasource=<ds> depName=<pkg> [versioning=<v>]` on the line(s) above the version literal. Used for the FS.GG.Governance gate-set pin and any other non-standard embedded literal across repos.",
-      "fileMatch": [
-        "\\.ya?ml$",
-        "\\.props$",
-        "\\.targets$",
-        "\\.json$",
-        "\\.fsproj$",
-        "\\.sh$"
+      "managerFilePatterns": [
+        "/\\.ya?ml$/",
+        "/\\.props$/",
+        "/\\.targets$/",
+        "/\\.json$/",
+        "/\\.fsproj$/",
+        "/\\.sh$/"
       ],
       "matchStrings": [
-        "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?[^\\n]*\\n[^\\n]*?(?<currentValue>\\d[A-Za-z0-9.+-]*)"
+        "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?[^\\n]*\\n(?:[^\\n]*\\n){0,1}?[^\\n]*?[\\s=:\"'>/]v?(?<currentValue>\\d+(?:\\.\\d+)*[\\w.+-]*)"
       ],
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}nuget{{/if}}"
     }

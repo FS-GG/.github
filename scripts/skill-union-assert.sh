@@ -35,9 +35,10 @@
 # Usage:
 #   skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
 #                         [--co-tenants "<glob> <glob> ..."]
+#   skill-union-assert.sh --digest <skill-dir>   # print the canonical SKILL.md digest and exit
 # Roots default to AGENT_SKILL_ROOTS (env) or ADR-0011's three: ".claude/skills .codex/skills
-# .agents/skills". Roots are resolved relative to --product. Exit 0 = union coherent; non-zero =
-# at least one violation (each printed with its class).
+# .agents/skills". Roots are resolved relative to --product. Exit 0 = union coherent; 1 = at least
+# one violation (each printed with its class); 2 = misconfiguration. `-h`/`--help` prints usage.
 
 set -euo pipefail
 
@@ -48,6 +49,30 @@ CO_TENANTS=""
 
 die() { echo "::error::skill-union-assert: $*" >&2; exit 2; }
 
+usage() {
+  cat <<'EOF'
+skill-union-assert.sh — assert a scaffolded product's agent-skill roots are the byte-identical
+union of process + product skills (ADR-0014 P3.G3.1, FS-GG/.github#111).
+
+Usage:
+  skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
+                        [--co-tenants "<glob> <glob> ..."]
+  skill-union-assert.sh --digest <skill-dir>
+
+Options:
+  --product <dir>         product tree to check (default: ".")
+  --roots "<r1> ..."      space-separated skill roots, relative to --product
+                          (default: $AGENT_SKILL_ROOTS or ".claude/skills .codex/skills .agents/skills")
+  --manifest <file.json>  producer skill-manifest; enables the digest cross-check (check 3)
+  --co-tenants "<glob>…"  globs of undeclared co-tenant skill ids to admit (only with --manifest)
+  --digest <skill-dir>    reference generator: print the canonical-body sha256 of the dir's SKILL.md,
+                          then exit (so producers and this assertion never drift)
+  -h, --help              print this help
+
+Exit: 0 = union coherent; 1 = at least one violation (each printed with its class); 2 = misconfiguration.
+EOF
+}
+
 DIGEST_ONLY=""
 
 while [ $# -gt 0 ]; do
@@ -57,7 +82,7 @@ while [ $# -gt 0 ]; do
     --manifest)   MANIFEST="${2:?--manifest needs a value}"; shift 2 ;;
     --co-tenants) CO_TENANTS="${2:?--co-tenants needs a value}"; shift 2 ;;
     --digest)     DIGEST_ONLY="${2:?--digest needs a skill dir}"; shift 2 ;;
-    -h|--help)    sed -n '2,44p' "$0"; exit 0 ;;
+    -h|--help)    usage; exit 0 ;;
     *)            die "unknown argument: $1" ;;
   esac
 done

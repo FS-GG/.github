@@ -33,14 +33,24 @@ expect_pass() {
   fi
 }
 
-# expect_fail <name> <product-dir> [extra assertion args...]
+# expect_fail <name> <class> <product-dir> [extra assertion args...]
+# A genuine violation must (a) exit 1 — NOT 2, which is a misconfiguration `die` (a bad --flag,
+# a missing root) that never exercised the violation path — and (b) emit the expected class tag
+# (::error::[partitioned]/[divergent]/[dangling]/[drifted]). Asserting both stops a mere non-zero
+# exit (esp. an exit-2 setup error) from masquerading as the violation class under test (review M2).
 expect_fail() {
-  local name="$1" prod="$2"; shift 2
+  local name="$1" class="$2" prod="$3"; shift 3
   local args=(--product "$prod" --roots "$ROOTS" "$@")
-  if bash "$ASSERT" "${args[@]}" >"$WORK/out" 2>&1; then
-    echo "FAIL  (expected failure, got pass) $name"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+  local rc=0
+  bash "$ASSERT" "${args[@]}" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "FAIL  (expected [$class] failure, got pass) $name"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+  elif [ "$rc" -eq 2 ]; then
+    echo "FAIL  (expected [$class] failure, got misconfiguration die exit 2) $name"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+  elif ! grep -q "::error::\[$class\]" "$WORK/out"; then
+    echo "FAIL  (expected [$class] failure, exit $rc but no [$class] tag) $name"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
   else
-    echo "PASS  (expected fail) $name — $(grep -m1 '::error::\[' "$WORK/out" | sed 's/::error:://' || true)"
+    echo "PASS  (expected [$class] fail) $name — $(grep -m1 "::error::\[$class\]" "$WORK/out" | sed 's/::error:://' || true)"
     pass=$((pass+1))
   fi
 }
@@ -96,26 +106,26 @@ expect_pass "coherent union (+ superset-catalog manifest)" "$GOOD" --manifest "$
 # --- 3. divergent bytes: one root's skill body differs → FAIL ---
 DIV="$WORK/divergent"; build_good "$DIV"
 printf '# alpha skill TAMPERED\n' > "$DIV/.codex/skills/alpha/SKILL.md"
-expect_fail "divergent root (bytes differ across roots)" "$DIV"
+expect_fail "divergent root (bytes differ across roots)" divergent "$DIV"
 
 # --- 3b. divergent NON-SKILL.md bytes: references/** differs in one root → FAIL (the multi-file
 #         remainder is covered by cross-root identity, not the SKILL.md digest) ---
 DIVREF="$WORK/divergent-ref"; build_good "$DIVREF"
 printf 'tampered reference\n' > "$DIVREF/.codex/skills/alpha/references/notes.md"
-expect_fail "divergent root (references/** differ, SKILL.md identical)" "$DIVREF" --manifest "$MANIFEST"
+expect_fail "divergent root (references/** differ, SKILL.md identical)" divergent "$DIVREF" --manifest "$MANIFEST"
 
 # --- 4. partitioned: a skill missing from one root → FAIL (with the manifest supplied:
 #        declared∧present-in-SOME-roots is still a partition, not a catalog skip) ---
 PART="$WORK/partitioned"; build_good "$PART"
 rm -rf "$PART/.agents/skills/beta"
-expect_fail "partitioned root (skill absent from one root)" "$PART"
-expect_fail "partitioned root (declared skill absent from one root, manifest supplied)" "$PART" --manifest "$MANIFEST"
+expect_fail "partitioned root (skill absent from one root)" partitioned "$PART"
+expect_fail "partitioned root (declared skill absent from one root, manifest supplied)" partitioned "$PART" --manifest "$MANIFEST"
 
 # --- 5. dangling: an extra skill present + identical in EVERY root but not declared by the
 #        manifest → FAIL (exercises the [dangling] branch, not the earlier partition check) ---
 DANG="$WORK/dangling"; build_good "$DANG"
 for r in $ROOTS; do mk_skill "$DANG/$r" gamma "# undeclared gamma"; done
-expect_fail "dangling skill (present in all roots but undeclared by manifest)" "$DANG" --manifest "$MANIFEST"
+expect_fail "dangling skill (present in all roots but undeclared by manifest)" dangling "$DANG" --manifest "$MANIFEST"
 
 # --- 5b. co-tenant: undeclared process skills from a co-tenant producer are admitted by
 #         --co-tenants globs; a non-matching undeclared skill still fails ---
@@ -126,12 +136,12 @@ for r in $ROOTS; do
 done
 expect_pass "co-tenant skills admitted by --co-tenants globs" "$COT" --manifest "$MANIFEST" --co-tenants "fs-gg-sdd-* speckit-*"
 for r in $ROOTS; do mk_skill "$COT/$r" gamma "# undeclared gamma"; done
-expect_fail "dangling skill still fails alongside admitted co-tenants" "$COT" --manifest "$MANIFEST" --co-tenants "fs-gg-sdd-* speckit-*"
+expect_fail "dangling skill still fails alongside admitted co-tenants" dangling "$COT" --manifest "$MANIFEST" --co-tenants "fs-gg-sdd-* speckit-*"
 
 # --- 6. manifest drift: bytes identical across roots but != declared digest → FAIL ---
 DRIFT="$WORK/drift"; build_good "$DRIFT"
 for r in $ROOTS; do printf '# alpha skill v2\n' > "$DRIFT/$r/alpha/SKILL.md"; done  # identical across roots, but no longer matches manifest
-expect_fail "manifest drift (identical across roots, != declared digest)" "$DRIFT" --manifest "$MANIFEST"
+expect_fail "manifest drift (identical across roots, != declared digest)" drifted "$DRIFT" --manifest "$MANIFEST"
 
 echo "--------------------------------------------"
 echo "skill-union fixture: $pass passed, $failcount failed"

@@ -32,7 +32,7 @@ body:
     id: contract
     attributes:
       label: Affected contract / registry entry
-      description: Name the contract or registry id (e.g. `scaffold-provider@1`, `governance-handoff@1`, `fs-skia-ui-version`). Link the registry entry if one exists.
+      description: Name the contract or registry id (e.g. `scaffold-provider@1`, `governance-handoff@1`, `fs-gg-ui-version`). Link the registry entry if one exists.
   - type: dropdown
     id: priority
     attributes:
