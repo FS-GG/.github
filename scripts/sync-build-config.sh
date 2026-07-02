@@ -95,7 +95,18 @@ for rel in "${FILES[@]}"; do
         local_dst="${dst%.props}.local.props"
         if [[ "$mode" == "adopt" ]]; then
           if [[ -e "$local_dst" ]]; then
-            echo "skip adopt (exists): $(basename "$local_dst") already present for $rel" >&2
+            # Both a hand-authored $rel and a pre-existing *.local.props exist. We cannot move the
+            # hand-authored file onto *.local.props (that target is taken), and falling through to the
+            # canonical `cp` below would silently destroy the hand-authored file's settings. Refuse this
+            # file — fail-closed, exactly like apply-mode's refusal below (.github#126, review M1). The
+            # operator merges the wanted settings from $rel into the existing *.local.props, deletes
+            # $rel, then re-runs --adopt.
+            echo "REFUSING to adopt $rel: a hand-authored $rel and $(basename "$local_dst") both exist." >&2
+            echo "  Adopting would overwrite the hand-authored $rel, but its content cannot be moved to" >&2
+            echo "  $(basename "$local_dst") (already present). Merge the settings you want from $rel into" >&2
+            echo "  $(basename "$local_dst"), then delete $rel and re-run --adopt." >&2
+            drift=1
+            continue
           else
             mv "$dst" "$local_dst"
             echo "adopted: $rel -> $(basename "$local_dst")"
