@@ -6,8 +6,11 @@
        Distributed by scripts/sync-build-config.sh. DO NOT EDIT in a consumer repo —
        edits are overwritten on the next sync and fail the drift check (check mode).
        Repo-specific properties (TargetFramework, package metadata, F# warning
-       promotions, fsdocs, …) go in Directory.Build.local.props, imported at the end
-       so a repo may override anything below (last definition wins).
+       promotions, fsdocs, …) go in Directory.Build.local.props, imported after the
+       org defaults so a repo may override any of them (last definition wins). The one
+       block deliberately placed AFTER that import is the api-breaking-change-gate: it
+       must READ the adopter's $(FsggApiGate), which is set in local.props (H1 fix,
+       .github#125 — see its note below).
        Contract: lockfile-restore-enforcement + shared-build-config (registry/dependencies.yml).
        ════════════════════════════════════════════════════════════════════════════ -->
 
@@ -37,6 +40,16 @@
     <WarningsAsErrors>$(WarningsAsErrors);NU1603;NU1608</WarningsAsErrors>
   </PropertyGroup>
 
+  <!-- Repo-specific overrides. This import sits AFTER the org defaults above (so a consumer can
+       override any of them — MSBuild property last-write-wins) and BEFORE the api-breaking-change-gate
+       below (so that gate can READ the adopter's $(FsggApiGate), which is set here in local.props).
+       H1 (.github#125): MSBuild evaluates PropertyGroup Conditions in document order, so a gate placed
+       ABOVE this import would test $(FsggApiGate) before local.props defines it and silently no-op the
+       EnablePackageValidation / WarningsNotAsErrors demotion — while its ItemGroup, evaluated in the
+       later item pass, would STILL inject the analyzer PackageReference, breaking an adopter's
+       TreatWarningsAsErrors build. Placing the whole gate after this import removes that asymmetry. -->
+  <Import Project="Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
+
   <!-- api-breaking-change-gate (H3 / .github#20, epic #16 Pillar 5): catch accidental public-API
        breaks on packable libraries (FS.GG.Contracts, FS.GG.UI.*) so a break forces a SemVer major,
        which the registry version ranges then enforce.
@@ -44,6 +57,17 @@
        OPT-IN and OFF by default (FsggApiGate unset). Turning it on adds a PackageReference, so a
        repo enables it deliberately as an adoption step and regenerates its packages.lock.json then.
        This keeps a plain sync of the shared config non-breaking under locked restore.
+
+       Evaluated AFTER the *.local.props import above so the Condition observes the adopter's
+       $(FsggApiGate) (H1 fix, .github#125).
+
+       F# NO-OP (M7 / .github#125; mechanism recorded on the apicompat-publicapi-gate registry row +
+       the #20 note): Microsoft.CodeAnalysis.PublicApiAnalyzers is a Roslyn C#/VB source analyzer and
+       is a SILENT NO-OP on the org's F# packables (FS.GG.Contracts, FS.GG.UI.*) — the RS00xx
+       diagnostics never fire there. On F# projects only the Package Validation / ApiCompat half
+       (EnablePackageValidation, below) yields API-break signal; the F# source-surface record stays the
+       constitution's committed .fsi signatures + surface/*.surface.txt baselines. Do NOT rely on the
+       RS00xx analyzer half to guard an F# public API — it bites on C#/VB packables only.
 
        Stages (set FsggApiGate in Directory.Build.local.props):
          unset / false  → off.
@@ -56,7 +80,8 @@
                  Condition="'$(FsggApiGate)' != '' And '$(FsggApiGate)' != 'false'">
     <!-- Package Validation = the SDK-integrated ApiCompat: compares the packed output against the
          last published baseline at pack. Dormant until a repo sets PackageValidationBaselineVersion
-         (in *.local.props, to its last released version), so enabling it here is harmless. -->
+         (in *.local.props, to its last released version), so enabling it here is harmless. This is the
+         ONLY half of the gate that bites on the F# packables (see F# NO-OP above). -->
     <EnablePackageValidation Condition="'$(IsPackable)' != 'false'">true</EnablePackageValidation>
     <!-- Advisory keeps the public-API analyzer diagnostics non-breaking regardless of the repo's
          TreatWarningsAsErrors; FsggApiGate=required drops this demotion so they fail the build.
@@ -70,14 +95,10 @@
     <!-- Analyzer-only (PrivateAssets=all): never flows to a package's dependencies. Version is
          centrally pinned in Directory.Packages.props. The analyzer tracks the declared API only when
          both baseline files are present, so an opt-in repo that has not added them yet stays silent
-         (run the analyzer's code-fix to generate them). -->
+         (run the analyzer's code-fix to generate them). C#/VB only — a no-op on F# (see above). -->
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
     <AdditionalFiles Include="PublicAPI.Shipped.txt"   Condition="Exists('$(MSBuildProjectDirectory)/PublicAPI.Shipped.txt')" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" Condition="Exists('$(MSBuildProjectDirectory)/PublicAPI.Unshipped.txt')" />
   </ItemGroup>
-
-  <!-- Repo-specific overrides. Keep this import LAST so a repo can override any org
-       default above (MSBuild property last-write-wins). -->
-  <Import Project="Directory.Build.local.props" Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
 
 </Project>

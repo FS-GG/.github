@@ -255,6 +255,16 @@ contracts:
     # OFF by default so a re-sync stays non-breaking under locked restore. Surface unchanged (same 3
     # files + script); no shared-build-config version bump. Per-repo adoption: coherence id
     # apicompat-publicapi-gate.
+    # #125 (H1 bug fix): the api-breaking-change-gate PropertyGroup was evaluated BEFORE the
+    # *.local.props import, so a Condition reading $(FsggApiGate)-set-in-local.props never fired —
+    # EnablePackageValidation + the RS00xx WarningsNotAsErrors demotion stayed dead while the ItemGroup
+    # (later item pass) STILL injected the analyzer PackageReference, so an adopter with
+    # TreatWarningsAsErrors got a broken build and `required` never got package validation. The gate now
+    # sits AFTER the import (proven via `dotnet msbuild -getProperty`). Latent-only: no repo drives the
+    # shared FsggApiGate knob today (F# packables use a dedicated api-compatibility-gate job). Byte
+    # change to Directory.Build.props → adopters re-sync via the --check drift gate; surface unchanged,
+    # no version bump. Also documents the M7 F# no-op (PublicApiAnalyzers is C#/VB-only) in the props
+    # header, catching the props guidance up to the mechanism already recorded on apicompat-publicapi-gate.
     surface: "dist/dotnet/{Directory.Build.props,Directory.Packages.props,.config/dotnet-tools.json} + scripts/sync-build-config.sh"
     consumers: [rendering, sdd, governance, templates]
     docs: "docs/build/README.md"
