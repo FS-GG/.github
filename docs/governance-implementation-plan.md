@@ -8,6 +8,13 @@ description: Implementation plan for the separate governance tooling repository,
 
 # Governance implementation plan
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 The governance repository is implemented after the rendering repository is
 usable. It starts as its own fresh standard Spec Kit repository and develops
 optional tooling. It must not become a prerequisite for rendering product work.

@@ -8,6 +8,13 @@ description: Scope and boundaries for the separate FS.GG.SDD lifecycle project.
 
 # SDD project
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 FS.GG.SDD is the spec-driven development lifecycle product for FS.GG. It owns
 the authoring and structured artifact flow around project charter, specify,
 clarify, checklist, plan, tasks, evidence declarations, normalized work model,

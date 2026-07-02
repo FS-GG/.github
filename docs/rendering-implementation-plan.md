@@ -8,6 +8,13 @@ description: Implementation plan for the rendering repository, starting from a f
 
 # Rendering implementation plan
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 The rendering repository is implemented first. It starts as a fresh standard
 Spec Kit repository, then imports selected FS.Skia.UI runtime material. The goal
 is a product repository that can build, test, document, package, validate

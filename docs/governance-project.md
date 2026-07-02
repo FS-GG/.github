@@ -8,6 +8,13 @@ description: Scope and adoption bar for a separate governance and rule-tooling p
 
 # Governance project
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 The governance project should be treated as a tool product, not as the hidden
 operating system of the rendering repository. It may explore rule evaluation,
 evidence models, route explanation, and optional validators, but it must earn

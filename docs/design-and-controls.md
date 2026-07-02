@@ -8,6 +8,13 @@ description: Boundary between design-system primitives, themes, semantic control
 
 # Design and controls
 
+> **Historical planning record (2026-06).** This document is part of the planning
+> corpus that proposed the FS.GG split; the work it describes has since shipped. It is
+> preserved as a record of intent, not current instruction — for the system as built
+> see [architecture.md](architecture.md); for live status see the [ADRs](adr/README.md),
+> the [registry projection](registry/compatibility.md), and the
+> [Coordination board](coordination/README.md).
+
 Design and controls belong with the rendering product, not with governance. They
 should still be separate layers inside the rendering project: controls own
 semantics and behavior, while design-system and theme layers own visual
