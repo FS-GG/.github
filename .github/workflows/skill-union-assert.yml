@@ -1,0 +1,69 @@
+# Reusable skill-union assertion gate (FS-GG/.github#111, epic #110, ADR-0014 P3.G3.1).
+#
+# A consumer repo's CI calls this via `workflow_call` to assert a scaffolded product's agent-skill
+# roots are the byte-identical union of process + product skills — content, not presence. It is
+# the CONSUMER-side arm of ADR-0014: producers (SDD `mirror` / the fs-gg-ui template's single
+# materialize) write the roots; this proves they did so correctly, in EVERY lane. The first caller
+# is the FS.GG.Templates composition gate (FS.GG.Templates#49 / roadmap T3.2), which will call it
+# for both the orchestrated and standalone lanes.
+#
+# It mirrors the `contract-coherence` / `dispatch-sender` reusable pattern: the check lives in one
+# script authored here (scripts/skill-union-assert.sh), sourced from public FS-GG/.github, and this
+# thin workflow wraps it so any caller wires it with one `uses:` block. See
+# docs/coordination/skill-union-assertion.md.
+#
+# Checks 1-2 (present ∧ byte-identical-across-roots) enforce with nothing but the product tree.
+# Check 3 (matches a producer's skill-manifest digests) activates when `manifest` is supplied —
+# publish-before-flip: pass it once FS.GG.SDD#60 / FS.GG.Rendering#43 ship manifests.
+name: skill-union-assert
+
+on:
+  workflow_call:
+    inputs:
+      product-path:
+        description: "Path within the caller's checkout of the scaffolded product to assert."
+        type: string
+        default: "."
+      roots:
+        description: "Space-separated AGENT_SKILL_ROOTS to check, relative to product-path."
+        type: string
+        default: ".claude/skills .codex/skills .agents/skills"
+      manifest:
+        description: "Optional path (in the caller's checkout) to a producer skill-manifest JSON; enables the digest cross-check."
+        type: string
+        default: ""
+      github-ref:
+        description: "Ref of FS-GG/.github to source the assertion script from."
+        type: string
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  skill-union:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout caller
+        uses: actions/checkout@v4
+        with:
+          path: caller
+
+      - name: Checkout FS-GG/.github (assertion-script authority)
+        uses: actions/checkout@v4
+        with:
+          repository: FS-GG/.github
+          ref: ${{ inputs.github-ref }}
+          path: dotgithub
+          sparse-checkout: scripts/skill-union-assert.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Assert the skill union is byte-identical across roots
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--product "caller/${{ inputs.product-path }}" --roots "${{ inputs.roots }}")
+          if [ -n "${{ inputs.manifest }}" ]; then
+            args+=(--manifest "caller/${{ inputs.manifest }}")
+          fi
+          bash dotgithub/scripts/skill-union-assert.sh "${args[@]}"
