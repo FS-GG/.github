@@ -48,19 +48,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout caller
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: caller
 
       - name: Checkout FS-GG/.github (registry + scripts authority)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: FS-GG/.github
           ref: ${{ inputs.github-ref }}
           path: dotgithub
 
       - name: Checkout FS.GG.Contracts source (version authority)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: FS-GG/FS.GG.SDD
           ref: ${{ inputs.contracts-ref }}
