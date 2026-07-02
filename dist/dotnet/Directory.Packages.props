@@ -6,7 +6,7 @@
        Distributed by scripts/sync-build-config.sh. DO NOT EDIT in a consumer repo.
        Repo-specific PackageVersion items go in Directory.Packages.local.props,
        imported at the end. A package pinned here MUST NOT be re-declared locally
-       (CPM raises NU1504/NU1011 on a duplicate PackageVersion).
+       (CPM raises NU1506 on a duplicate PackageVersion).
        Contract: shared-build-config (registry/dependencies.yml).
        ════════════════════════════════════════════════════════════════════════════ -->
 

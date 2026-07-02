@@ -40,6 +40,21 @@
     <WarningsAsErrors>$(WarningsAsErrors);NU1603;NU1608</WarningsAsErrors>
   </PropertyGroup>
 
+  <!-- Bootstrap fail-open guard (review low). The RestoreLockedMode condition above deliberately
+       `And Exists(...lockfile)` so a first restore can bootstrap a missing lockfile instead of
+       wedging a brand-new project. The cost: a repo that NEVER committed packages.lock.json restores
+       UNLOCKED in CI with no signal — the lockfile-restore-enforcement gate silently does nothing.
+       Surface it as a high-importance MESSAGE (not a Warning: an MSBuild <Warning> is promoted to an
+       error under `-warnaserror`/`MSBuildTreatWarningsAsErrors`, which would fail the very first
+       bootstrap restore and re-wedge the case this is meant to keep unblocked). Hooked to the single
+       restore target CollectPackageReferences so it prints once per restore; the repo closes the hole
+       by committing the generated lockfile. -->
+  <Target Name="FsggWarnMissingLockfileInCI"
+          BeforeTargets="CollectPackageReferences"
+          Condition="'$(GITHUB_ACTIONS)' == 'true' And '$(RestorePackagesWithLockFile)' == 'true' And !Exists('$(MSBuildProjectDirectory)/packages.lock.json')">
+    <Message Importance="high" Text="[lockfile-restore-enforcement] packages.lock.json is missing in CI (GITHUB_ACTIONS=true) — locked restore is NOT enforced for $(MSBuildProjectName); restore is running UNLOCKED (bootstrap fail-open). Commit the generated packages.lock.json to arm the gate." />
+  </Target>
+
   <!-- Repo-specific overrides. This import sits AFTER the org defaults above (so a consumer can
        override any of them — MSBuild property last-write-wins) and BEFORE the api-breaking-change-gate
        below (so that gate can READ the adopter's $(FsggApiGate), which is set here in local.props).

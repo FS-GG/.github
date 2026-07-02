@@ -65,13 +65,20 @@ jobs:
 
       - name: Assert the skill union is byte-identical across roots
         shell: bash
+        env:
+          # Passed via env (never interpolated into the run script) to avoid injection — the org's
+          # uniform pattern (cf. architecture-map.yml). `workflow_call` inputs are caller-controlled.
+          PRODUCT_PATH: ${{ inputs.product-path }}
+          ROOTS: ${{ inputs.roots }}
+          MANIFEST: ${{ inputs.manifest }}
+          CO_TENANTS: ${{ inputs.co-tenants }}
         run: |
           set -euo pipefail
-          args=(--product "caller/${{ inputs.product-path }}" --roots "${{ inputs.roots }}")
-          if [ -n "${{ inputs.manifest }}" ]; then
-            args+=(--manifest "caller/${{ inputs.manifest }}")
+          args=(--product "caller/${PRODUCT_PATH}" --roots "${ROOTS}")
+          if [ -n "${MANIFEST}" ]; then
+            args+=(--manifest "caller/${MANIFEST}")
           fi
-          if [ -n "${{ inputs.co-tenants }}" ]; then
-            args+=(--co-tenants "${{ inputs.co-tenants }}")
+          if [ -n "${CO_TENANTS}" ]; then
+            args+=(--co-tenants "${CO_TENANTS}")
           fi
           bash dotgithub/scripts/skill-union-assert.sh "${args[@]}"

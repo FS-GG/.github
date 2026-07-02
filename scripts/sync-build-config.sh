@@ -58,6 +58,24 @@ assert_source_xml_wellformed() {
 }
 assert_source_xml_wellformed
 
+# JSON well-formedness guard (companion to the XML guard above): the drift check compares
+# .config/dotnet-tools.json byte-for-byte, so a malformed source would pass --check yet break every
+# adopter's `dotnet tool restore`. Assert the source tool-manifest is valid JSON BEFORE we
+# distribute it. Prefer jq; fall back to python3; warn (don't block) if neither is present.
+assert_source_json_wellformed() {
+  local f="$SRC/.config/dotnet-tools.json"
+  [[ -f "$f" ]] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    jq -e . "$f" >/dev/null || { echo "Source $f is not valid JSON; refusing to distribute. Fix the source of truth first." >&2; exit 1; }
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import sys,json; json.load(open(sys.argv[1]))' "$f" \
+      || { echo "Source $f is not valid JSON; refusing to distribute. Fix the source of truth first." >&2; exit 1; }
+  else
+    echo "WARN: no jq or python3 found; skipping JSON well-formedness check of $f" >&2
+  fi
+}
+assert_source_json_wellformed
+
 mode="apply"
 case "${1:-}" in
   --check) mode="check"; shift ;;
