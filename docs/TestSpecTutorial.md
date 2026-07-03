@@ -135,13 +135,17 @@ tool. It chains the commands that already exist: **fetch** the newest rendering
 descriptor (no clone), **`fsgg-sdd scaffold`**, apply the **`fs-gg-governance`**
 overlay, and **`fsgg-sdd doctor`** to confirm coherence.
 
-**One-time setup.** Install the tool from the org feed (it drives `fsgg-sdd`, installed in
-step 1):
+**One-time setup.** Install the tool (it drives `fsgg-sdd`, installed in step 1). It ships on
+the org's `-preview` channel, so pass `--prerelease`; the install needs an **authenticated**
+FS-GG feed source configured — the org GitHub Packages feed authenticates every read, even for
+public packages:
 
 ```sh
-dotnet tool install --global FS.GG.NewSddFullstack \
-  --add-source https://nuget.pkg.github.com/FS-GG/index.json
+dotnet tool install --global FS.GG.NewSddFullstack --prerelease
 ```
+
+For feed + auth setup and pinned versions, see
+[Versions, feeds & updates](consumer/versioning-and-updates.md).
 
 **Create the product** — `<target-dir> <product-name>`, newest coherent set +
 governance. We name it after the game:
@@ -516,12 +520,13 @@ through `charter → ship` → turn acceptance criteria into tests. To go furthe
 ### If a step misbehaved
 
 - `new-sdd-fullstack` failed → confirm `fsgg-sdd` is installed (step 1) and the
-  script is on disk + executable (`~/.local/bin/new-sdd-fullstack.sh`). The script
+  `new-sdd-fullstack` tool is on PATH (`dotnet tool list --global`). The tool
   fetches + registers the provider for you, so a `providerUnknown` error usually
-  means the `curl` step couldn't reach the descriptor (check network / the `--ref`).
-  The governance step is best-effort — if the org feed isn't reachable it's skipped
-  with a message, and the product still builds. Composing the steps by hand? See
-  [Getting started](consumer/getting-started.md) §2.
+  means the descriptor fetch couldn't reach FS.GG.Templates (check network / the `--ref`).
+  The governance step is best-effort — if the `FS.GG.Templates` template can't be installed
+  (the org feed needs an **authenticated** source — set `FSGG_PACKAGES_TOKEN`/`GH_TOKEN`, or
+  configure the feed credentials) it's skipped with a message, and the product still builds.
+  Composing the steps by hand? See [Getting started](consumer/getting-started.md) §2.
 - The window won't open → you likely have no GL/X11 session; the build and tests
   still run headless.
 - A lifecycle command surprised you → [FAQ & troubleshooting](consumer/faq.md)
