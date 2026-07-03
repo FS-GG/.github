@@ -71,8 +71,8 @@ dotnet new fs-gg-governance -o ./MyApp --appName MyApp --defaultProfile light
 cd ./MyApp && dotnet build && dotnet run
 ```
 
-[`scripts/new-sdd-fullstack.sh <target> <product>`](https://github.com/FS-GG/.github/blob/main/scripts/new-sdd-fullstack.sh)
-(in FS-GG/.github) wraps these three steps — no FS.GG.Templates checkout required.
+The [`new-sdd-fullstack <target> <product>`](https://github.com/FS-GG/.github/tree/main/scripts/NewSddFullstack)
+dotnet tool (in FS-GG/.github) wraps these three steps — no FS.GG.Templates checkout required.
 
 → [FS.GG.Templates · full-stack](https://github.com/FS-GG/FS.GG.Templates#create-a-full-stack-product-composition-primary-path)
 
