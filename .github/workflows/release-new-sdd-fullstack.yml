@@ -1,0 +1,90 @@
+name: release-new-sdd-fullstack
+
+# Publishes the FS.GG.NewSddFullstack dotnet tool (the `new-sdd-fullstack` full-stack
+# scaffolder; ADR-0016) to the org GitHub Packages feed. Unlike the product repos, .github
+# does not normally own a release workflow — this is the exception: the tool lives here, so
+# its publish does too. Version is the EVALUATED fsproj <Version> (msbuild -getProperty), not
+# a grep and not a value pinned in this header (avoids staleness). Push uses the run-scoped
+# GITHUB_TOKEN (packages: write, no PAT), --skip-duplicate, only from the canonical repo.
+#
+# Trigger a release by pushing a tag `new-sdd-fullstack/v<version>` matching the fsproj
+# <Version>; or run manually (workflow_dispatch) with publish=true. A manual run with
+# publish=false is a pack-only dry run.
+
+on:
+  push:
+    tags: ['new-sdd-fullstack/v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Push to the org feed (false = pack-only dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-new-sdd-fullstack-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack & publish new-sdd-fullstack
+    runs-on: ubuntu-latest
+    if: github.repository == 'FS-GG/.github'
+    # Least-privilege: only this job gains packages: write; the push uses the run-scoped
+    # GITHUB_TOKEN, never a PAT.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Resolve version + publish decision
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          proj=scripts/NewSddFullstack/NewSddFullstack.fsproj
+          version="$(dotnet msbuild "$proj" -getProperty:Version | tr -d '[:space:]')"
+          if [ -z "$version" ]; then
+            echo "::error::could not read <Version> from $proj (build defect); refusing to publish."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if [ "$EVENT" = "push" ]; then
+            # Tag is a coherence check against the evaluated version, never the source of truth.
+            tag_version="${REF#new-sdd-fullstack/v}"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::tag $REF ($tag_version) does not match fsproj <Version> ($version)."
+              exit 1
+            fi
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$DISPATCH_PUBLISH" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::dry run — packing $version but NOT pushing (manual dispatch, publish=false)."
+          fi
+
+      - name: Pack
+        run: dotnet pack scripts/NewSddFullstack/NewSddFullstack.fsproj -c Release -o artifacts/packages
+
+      - name: Push to org GitHub Packages feed
+        if: steps.v.outputs.push == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.NewSddFullstack.*.nupkg" \
+            --source https://nuget.pkg.github.com/FS-GG/index.json \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate

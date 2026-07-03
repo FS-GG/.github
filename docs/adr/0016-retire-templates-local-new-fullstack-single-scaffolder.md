@@ -56,6 +56,20 @@ provide. So the wrapper could not simply be deleted; the test had to absorb its 
   `<rendering-source>` third argument the older invocation advertised (review F1) — and drops the
   now-dangling back-reference from `new-sdd-fullstack.sh`'s own header. `docs/architecture.md` is
   reconciled as part of this decision (per the template footer).
+
+## Update (2026-07-04) — reimplemented as the `FS.GG.NewSddFullstack` dotnet tool
+
+The single-scaffolder decision stands; only its *implementation* changed. `scripts/new-sdd-fullstack.sh`
+was rewritten as an F# / Spectre.Console console app (`scripts/NewSddFullstack`, package
+`FS.GG.NewSddFullstack`, command `new-sdd-fullstack`) that shows a rich per-step progress UI and a
+"what worked / what didn't" summary, and adds the `fsgg-sdd` preflight + captured `dotnet new install`
+diagnostics the shell version lacked (flagged in the 2026-07-02 review). It is **packed as a dotnet
+tool and published to the org GitHub Packages feed**, so the clone-free install ADR-0010's withdrawal
+relied on is preserved: `dotnet tool install --global FS.GG.NewSddFullstack`, then the same
+`new-sdd-fullstack <target> <product>` command. This makes `.github` a package producer with its own
+`release-new-sdd-fullstack.yml` — the one exception to "product repos own release workflows," since the
+tool lives here. The tool has no consumers and no coherence edges, so it is **not** a registry contract
+(`dependencies.yml` unchanged).
 - The dated `2026-07-02` Templates review is left as a historical record; its F1 finding is
   resolved by this deletion.
 - Tracked on the Coordination board via a `cross-repo` issue in FS.GG.Templates (the target repo

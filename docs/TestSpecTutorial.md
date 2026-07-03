@@ -130,23 +130,17 @@ For pinned versions and feeds, see
 The fastest path composes all three products at once — the SDD lifecycle
 skeleton, a runnable [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering)
 `fs-gg-ui` app, and a Governance config — via the
-[`new-sdd-fullstack.sh`](https://github.com/FS-GG/.github/blob/main/scripts/new-sdd-fullstack.sh)
-script. It chains the commands that already exist: **fetch** the newest rendering
+[`new-sdd-fullstack`](https://github.com/FS-GG/.github/tree/main/scripts/NewSddFullstack)
+tool. It chains the commands that already exist: **fetch** the newest rendering
 descriptor (no clone), **`fsgg-sdd scaffold`**, apply the **`fs-gg-governance`**
 overlay, and **`fsgg-sdd doctor`** to confirm coherence.
 
-**One-time setup.** Download the script and (optionally) alias it (nushell shown;
-for bash/zsh use `alias new-sdd-fullstack='bash ~/.local/bin/new-sdd-fullstack.sh'`):
+**One-time setup.** Install the tool from the org feed (it drives `fsgg-sdd`, installed in
+step 1):
 
 ```sh
-mkdir -p ~/.local/bin
-curl -fsSL https://raw.githubusercontent.com/FS-GG/.github/main/scripts/new-sdd-fullstack.sh \
-  -o ~/.local/bin/new-sdd-fullstack.sh && chmod +x ~/.local/bin/new-sdd-fullstack.sh
-```
-
-```nu
-# ~/.config/nushell/config.nu
-alias new-sdd-fullstack = bash ~/.local/bin/new-sdd-fullstack.sh
+dotnet tool install --global FS.GG.NewSddFullstack \
+  --add-source https://nuget.pkg.github.com/FS-GG/index.json
 ```
 
 **Create the product** — `<target-dir> <product-name>`, newest coherent set +
@@ -182,7 +176,7 @@ What you get:
 > scaffold) documented in [Getting started](consumer/getting-started.md) §2, or
 > `fsgg-sdd init` for the lifecycle skeleton only. `new-sdd-fullstack` just chains
 > those steps — fetch descriptor → scaffold → governance → `doctor` — through
-> existing machinery; read it with `cat ~/.local/bin/new-sdd-fullstack.sh`.
+> existing machinery ([source](https://github.com/FS-GG/.github/tree/main/scripts/NewSddFullstack)).
 
 ### 3. Build and run the stock app
 

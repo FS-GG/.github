@@ -304,10 +304,10 @@ on another template, so rather than vendoring a rendering copy that goes stale,
 the provider descriptor
 [`providers/rendering.providers.yml`](https://github.com/FS-GG/FS.GG.Templates/blob/main/providers/rendering.providers.yml)
 pins `FS.GG.UI.Template::<version>` and SDD installs the **live, pinned** upstream
-package at scaffold time. [`scripts/new-sdd-fullstack.sh`](https://github.com/FS-GG/.github/blob/main/scripts/new-sdd-fullstack.sh)
-does the three steps — register the provider → `fsgg-sdd scaffold` → apply the governance
-overlay *after* (so it is not flagged writing into the SDD-owned `.fsgg/` tree) — with no
-FS.GG.Templates checkout, fetching the pinned descriptor over the network.
+package at scaffold time. The [`new-sdd-fullstack`](https://github.com/FS-GG/.github/tree/main/scripts/NewSddFullstack)
+dotnet tool (F# / Spectre.Console) does the three steps — register the provider → `fsgg-sdd scaffold`
+→ apply the governance overlay *after* (so it is not flagged writing into the SDD-owned `.fsgg/` tree)
+— with no FS.GG.Templates checkout, fetching the pinned descriptor over the network.
 
 **The `fs-gg-governance` overlay** ships a **populated** gate set (real
 build/test/evidence checks wired to tooling commands), authored to Governance's
