@@ -23,8 +23,8 @@
 # Restore mirrors gate.yml: setup-dotnet + `dotnet restore --force-evaluate`. A repo that builds
 # its org packages from source or a local feed (SDD / Rendering) needs no NuGet auth; a pure
 # CONSUMER of a token-gated org-feed package (Governance → FS.GG.Contracts) 401s anonymously, so
-# the FS-GG nuget.config credential placeholders are wired from the App token below (which carries
-# `packages: read` in addition to `contents: write`) — see the Regenerate step.
+# the FS-GG nuget.config credential placeholders are wired from the run-scoped GITHUB_TOKEN
+# (packages:read) — see the Regenerate step. A consuming caller must also grant `packages: read`.
 #
 # PREREQUISITES per adopting repo (both org-admin, both fail visibly if missing):
 #   1. The fs-gg-cross-repo-dispatch App (repository_selection: selected) must include the repo
@@ -60,10 +60,13 @@ on:
         description: "GitHub App private key (PEM) for the same App."
         required: true
 
-# The App installation token below — not GITHUB_TOKEN — performs the write; the default
-# run-scoped token stays read-only.
+# The App installation token performs the git WRITE (contents:write on the repo). The run-scoped
+# GITHUB_TOKEN stays read-only for git, but carries `packages: read` so it can authenticate the
+# org NuGet feed for pure consumers (see the Regenerate step). A consuming caller must also grant
+# `packages: read`, or the effective (intersected) token won't have it.
 permissions:
   contents: read
+  packages: read
 
 jobs:
   sync:
@@ -101,15 +104,17 @@ jobs:
       # Feed auth: a pure CONSUMER of an org-feed package (e.g. FS.GG.Governance consuming the
       # PUBLIC-but-token-gated FS.GG.Contracts) 401s on an anonymous restore, so the FS-GG
       # nuget.config credential placeholders (`%FSGG_PACKAGES_ACTOR%` / `%FSGG_PACKAGES_READ_TOKEN%`)
-      # must be wired. The minted App installation token carries `packages: read`, so it doubles as
-      # the feed credential — no extra secret. Harmless for repos that build the package from source
-      # or a local feed (SDD / Rendering), whose nuget.config never references these vars.
+      # must be wired. Use the run-scoped GITHUB_TOKEN (packages:read) — NOT the App token: the App
+      # installation token is scoped to this repo's install and 403s reading a package OWNED by
+      # another repo (FS.GG.SDD), whereas GITHUB_TOKEN reads a public org package cross-repo (exactly
+      # as the caller's gate.yml does). Harmless for repos that build the package from source or a
+      # local feed (SDD / Rendering), whose nuget.config never references these vars.
       - name: Regenerate lockfiles
         working-directory: ${{ inputs.working-directory }}
         env:
           RESTORE_TARGET: ${{ inputs.restore-target }}
           FSGG_PACKAGES_ACTOR: ${{ github.actor }}
-          FSGG_PACKAGES_READ_TOKEN: ${{ steps.app-token.outputs.token }}
+          FSGG_PACKAGES_READ_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ -n "$RESTORE_TARGET" ]; then
