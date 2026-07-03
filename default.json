@@ -22,6 +22,12 @@
       "groupName": "FS.GG.UI coherent set"
     },
     {
+      "description": "The Expecto/FsCheck test stack is version-locked: Expecto.FsCheck N peer-depends on both Expecto N and a specific FsCheck major (e.g. Expecto.FsCheck 11 → FsCheck 3, Expecto.FsCheck 10 → FsCheck 2). Split across separate PRs, any single major bump violates the peer constraint (NU1608) and can never go green alone. Group them so the coherent set moves as one PR.",
+      "matchDatasources": ["nuget"],
+      "matchPackageNames": ["/^Expecto($|\\.)/", "/^FsCheck($|\\.)/"],
+      "groupName": "Expecto/FsCheck test stack"
+    },
+    {
       "description": "FS-GG packages ship on a -preview channel; track prereleases instead of pinning to a non-existent stable.",
       "matchDatasources": ["nuget"],
       "matchPackageNames": ["/^FS\\.GG\\./"],
