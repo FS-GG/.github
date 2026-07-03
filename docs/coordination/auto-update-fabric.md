@@ -9,12 +9,16 @@ instead of via a hand-edited pin that silently goes stale. Two halves, both owne
 |---|---|---|
 | **Push** — producer announces a release | [`.github/workflows/dispatch-sender.yml`](../../.github/workflows/dispatch-sender.yml) (reusable `workflow_call`) | producer → consumer (`repository_dispatch`) |
 | **Pull** — consumer watches a feed | [`default.json`](../../default.json) Renovate preset (custom managers) | consumer ← org GitHub Packages feed |
+| **Heal** — make the bump PR mergeable | [`.github/workflows/lockfile-sync.yml`](../../.github/workflows/lockfile-sync.yml) (reusable `workflow_call`) | consumer PR ← refreshed `packages.lock.json` |
 
-The two are complementary: dispatch is **immediate and targeted** (fires the consumer's
+The two write halves are complementary: dispatch is **immediate and targeted** (fires the consumer's
 auto-update workflow the moment a coherent set is tagged); Renovate is the **drift-catching
 backstop** (a scheduled sweep that opens a bump PR for every embedded pin even if a dispatch is
 missed). Both write to the consumer, neither bypasses review — they open PRs, the consumer's CI
-(the [contract-coherence gate](contract-coherence-gate.md)) still has to pass.
+(the [contract-coherence gate](contract-coherence-gate.md)) still has to pass. **Heal** closes the
+last gap so those PRs can actually go green: the [locked-restore gate](../adr/0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md)
+rejects any bump whose committed `packages.lock.json` wasn't regenerated, and neither writer runs
+restore — so every referenced-package bump lands **NU1004** until the lockfiles are refreshed.
 
 ## Status: wired + provisioned + verified — one green sweep from coherent
 
@@ -81,6 +85,50 @@ embedded pins the standard `nuget` manager can't see:
 - Standard `<PackageReference>` / `<PackageVersion>` (e.g. `FS.GG.Contracts`) need no custom manager —
   `config:recommended`'s `nuget` manager already handles them; the preset only adds the
   org-feed `registryUrls`, groups `FS.GG.UI.*` into one PR, and allows the `-preview` channel.
+
+## The lockfile-sync job
+
+Every consumer's [locked-restore gate](../adr/0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md)
+enforces `dotnet restore --locked-mode` against a committed `packages.lock.json`, but neither
+writer half regenerates that lockfile when a version moves. Renovate (and a dispatch-opened bump
+PR) edit the central `<PackageVersion>` without running restore, so every **referenced-package**
+bump is dead-on-arrival with `NU1004` (`Lock file [old,) ≠ central [new,)`) until a human runs
+`dotnet restore --force-evaluate` by hand. (Version-only pins with no `<PackageReference>` never
+enter the restore graph, so they merge clean — that's why a `PublicApiAnalyzers` bump goes green
+while a real dependency bump stays red.)
+
+`lockfile-sync.yml` closes that gap. A consumer adds a ~10-line caller:
+
+```yaml
+# .github/workflows/lockfile-sync.yml (in each consumer repo)
+name: lockfile-sync
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read            # the App token in the reusable workflow does the write
+jobs:
+  sync:
+    uses: FS-GG/.github/.github/workflows/lockfile-sync.yml@main
+    with:
+      restore-target: FS.GG.SDD.slnx      # omit to restore the single solution in the repo root
+    secrets:
+      app-id:          ${{ secrets.FSGG_DISPATCH_APP_ID }}
+      app-private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+```
+
+On a `renovate/*` same-repo PR (fork PRs are skipped) it runs `dotnet restore --force-evaluate`,
+then commits the refreshed `packages.lock.json` back to the PR branch. The commit is authored with
+the **`fs-gg-cross-repo-dispatch` App installation token** (the same `FSGG_DISPATCH_APP_*` secrets
+the dispatch sender uses), **not** `GITHUB_TOKEN` — App-token pushes re-trigger `on: pull_request`,
+so the gate re-evaluates the freshened lockfile; a `GITHUB_TOKEN` push would not. It is
+self-limiting: the second pass finds no drift → no commit → no loop.
+
+> **Prerequisite per repo.** The App is `repository_selection: selected` and needs
+> **`contents: write`** on each adopting repo, else the push 403s. Rendering was confirmed in the
+> selected list (org admin, 2026-07-03); confirm SDD / Governance / Templates before they rely on
+> it. Proven first in [FS.GG.Rendering#61](https://github.com/FS-GG/FS.GG.Rendering/pull/61) as a
+> repo-local workflow, then promoted here ([#145](https://github.com/FS-GG/.github/issues/145)).
 
 ## See also
 
