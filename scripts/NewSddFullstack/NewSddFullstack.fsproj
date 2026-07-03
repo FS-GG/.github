@@ -14,7 +14,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>new-sdd-fullstack</ToolCommandName>
     <PackageId>FS.GG.NewSddFullstack</PackageId>
-    <Version>0.1.0-preview.1</Version>
+    <Version>0.1.1-preview.1</Version>
     <AssemblyName>new-sdd-fullstack</AssemblyName>
 
     <Description>Full-stack FS.GG product scaffolder (SDD lifecycle + runnable Rendering app + Governance overlay) with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>

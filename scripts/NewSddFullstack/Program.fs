@@ -51,13 +51,16 @@ let private dim (line: string) =
     lock consoleGate (fun () -> AnsiConsole.MarkupLine(sprintf "[grey37]  │ %s[/]" (Markup.Escape line)))
 
 /// Run a child process, streaming its stdout+stderr (dimmed, indented) when `echo`, and
-/// returning (exitCode, combinedOutput). A missing executable maps to exit 127 — the
-/// shell's "command not found", so callers keep the script's exit-code contract.
-let private runProcess (echo: bool) (exe: string) (args: string list) : int * string =
+/// returning (exitCode, combinedOutput). `workingDir` sets the process CWD (used so
+/// `dotnet new install` discovers a specific nuget.config — it has no --configfile). A
+/// missing executable maps to exit 127 — the shell's "command not found", so callers keep
+/// the script's exit-code contract.
+let private runProcessIn (workingDir: string option) (echo: bool) (exe: string) (args: string list) : int * string =
     let psi = ProcessStartInfo(exe)
     psi.RedirectStandardOutput <- true
     psi.RedirectStandardError <- true
     psi.UseShellExecute <- false
+    workingDir |> Option.iter (fun d -> psi.WorkingDirectory <- d)
     args |> List.iter psi.ArgumentList.Add
     use p = new Process()
     p.StartInfo <- psi
@@ -77,6 +80,56 @@ let private runProcess (echo: bool) (exe: string) (args: string list) : int * st
         p.ExitCode, sb.ToString()
     with :? System.ComponentModel.Win32Exception ->
         127, sprintf "%s: command not found" exe
+
+let private runProcess (echo: bool) (exe: string) (args: string list) : int * string =
+    runProcessIn None echo exe args
+
+/// The org GitHub Packages feed. It authenticates ALL reads, including PUBLIC packages
+/// (FS-GG/FS.GG.Templates#82), so a bare `dotnet new install FS.GG.Templates` is anonymous
+/// and fails with exit 103 — that is why the governance overlay used to always skip.
+let private orgFeed = "https://nuget.pkg.github.com/FS-GG/index.json"
+
+/// A feed read token from the environment, if any — a dedicated var first, then the ones CI
+/// and the `gh` CLI already export. `read:packages` scope is enough (the package is public).
+let private feedToken () =
+    [ "FSGG_PACKAGES_TOKEN"; "GH_TOKEN"; "GITHUB_TOKEN" ]
+    |> List.tryPick (fun name ->
+        match Environment.GetEnvironmentVariable name with
+        | null | "" -> None
+        | v -> Some v)
+
+/// Install the FS.GG.Templates template package (which carries the `fs-gg-governance` template).
+/// If a feed token is present, run the install from a temp dir carrying a credentialed
+/// nuget.config (`dotnet new install` has no --configfile; it discovers config from CWD upward),
+/// then delete it. With no token, fall back to the ambient/global config — which works when the
+/// caller already has an authenticated org-feed source (the common consumer case).
+let private installGovernanceTemplate () : int * string =
+    match feedToken () with
+    | None -> runProcess false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
+    | Some token ->
+        let dir = Path.Combine(Path.GetTempPath(), "new-sdd-fullstack-" + Guid.NewGuid().ToString "N")
+        Directory.CreateDirectory dir |> ignore
+        try
+            let cfg =
+                String.concat "\n"
+                    [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                      "<configuration>"
+                      "  <packageSources>"
+                      "    <clear />"
+                      sprintf "    <add key=\"fs-gg-github\" value=\"%s\" />" orgFeed
+                      "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" />"
+                      "  </packageSources>"
+                      "  <packageSourceCredentials>"
+                      "    <fs-gg-github>"
+                      "      <add key=\"Username\" value=\"fs-gg\" />"
+                      sprintf "      <add key=\"ClearTextPassword\" value=\"%s\" />" (System.Security.SecurityElement.Escape token)
+                      "    </fs-gg-github>"
+                      "  </packageSourceCredentials>"
+                      "</configuration>" ]
+            File.WriteAllText(Path.Combine(dir, "nuget.config"), cfg)
+            runProcessIn (Some dir) false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
+        finally
+            try Directory.Delete(dir, true) with _ -> ()
 
 /// `command -v <cmd>` — is the executable resolvable on PATH? (dotnet global tools install
 /// to a directory that is itself on PATH, so this finds `fsgg-sdd`.)
@@ -270,7 +323,7 @@ let private run (opts: Options) : int =
             results.Add { Title = "governance overlay"; Outcome = Skipped "--no-governance" }
         elif not fatal then
             step 3 "governance overlay"
-            let installCode, installLog = runProcess false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
+            let installCode, installLog = installGovernanceTemplate ()
             if installCode = 0 then
                 let govCode, _ =
                     runProcess true "dotnet"
@@ -282,7 +335,14 @@ let private run (opts: Options) : int =
                     AnsiConsole.MarkupLine "  [yellow]⚠[/] overlay command failed — the product is fine without it"
                     results.Add { Title = "governance overlay"; Outcome = Warned "overlay command failed; product is fine without it" }
             else
-                AnsiConsole.MarkupLine "  [yellow]⊘[/] could not install the FS.GG.Templates template (feed not reachable?) — skipped"
+                let reason =
+                    match feedToken () with
+                    | Some _ -> "could not install the FS.GG.Templates template from the org feed"
+                    | None ->
+                        "could not install the FS.GG.Templates template — the org feed authenticates every read, "
+                        + "so set FSGG_PACKAGES_TOKEN (or GH_TOKEN) to a read:packages token, or configure an "
+                        + "authenticated nuget.pkg.github.com/FS-GG source"
+                AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s — skipped" reason)
                 installLog.Replace("\r\n", "\n").Split('\n')
                 |> Array.iter (fun l -> if not (String.IsNullOrWhiteSpace l) then dim l)
                 AnsiConsole.MarkupLine(
