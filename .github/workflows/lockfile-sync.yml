@@ -20,14 +20,19 @@
 # freshened lockfile; GITHUB_TOKEN pushes would not. Self-limiting: the second pass finds no
 # drift -> no commit -> no push, so there is no loop.
 #
-# Restore mirrors gate.yml exactly (setup-dotnet + plain restore, no NuGet auth): the gate's
-# locked restore already resolves every feed — it reaches NU1004, a lockfile mismatch, not a
-# 404 — so --force-evaluate needs nothing more.
+# Restore mirrors gate.yml: setup-dotnet + `dotnet restore --force-evaluate`. A repo that builds
+# its org packages from source or a local feed (SDD / Rendering) needs no NuGet auth; a pure
+# CONSUMER of a token-gated org-feed package (Governance → FS.GG.Contracts) 401s anonymously, so
+# the FS-GG nuget.config credential placeholders are wired from the App token below (which carries
+# `packages: read` in addition to `contents: write`) — see the Regenerate step.
 #
-# PREREQUISITE per adopting repo: the fs-gg-cross-repo-dispatch App (repository_selection:
-# selected) must include the repo AND grant `contents: write`, else the push 403s. Rendering
-# was confirmed in the selected list (org admin, 2026-07-03); confirm SDD / Governance /
-# Templates before they rely on this.
+# PREREQUISITES per adopting repo (both org-admin, both fail visibly if missing):
+#   1. The fs-gg-cross-repo-dispatch App (repository_selection: selected) must include the repo
+#      with `contents: write` — else the push 403s.
+#   2. The org Actions secrets FSGG_DISPATCH_APP_ID / _PRIVATE_KEY must be visible to the repo
+#      (selected-repos list) — else `secrets.app-id` resolves empty and the token step fails.
+# Rendering, SDD, and Governance were confirmed on both (org admin, 2026-07-03); confirm any new
+# adopter before it relies on this.
 name: lockfile-sync
 
 on:
@@ -84,7 +89,6 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           persist-credentials: true
 
-      # Match gate.yml: same SDK, no NuGet auth (locked restore already resolves every feed).
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -93,10 +97,19 @@ jobs:
       # --force-evaluate rewrites every packages.lock.json to match the bumped central graph.
       # RESTORE_TARGET is env-passed, never interpolated into the run script — the org's uniform
       # anti-injection pattern (cf. contract-coherence.yml / architecture-map.yml).
+      #
+      # Feed auth: a pure CONSUMER of an org-feed package (e.g. FS.GG.Governance consuming the
+      # PUBLIC-but-token-gated FS.GG.Contracts) 401s on an anonymous restore, so the FS-GG
+      # nuget.config credential placeholders (`%FSGG_PACKAGES_ACTOR%` / `%FSGG_PACKAGES_READ_TOKEN%`)
+      # must be wired. The minted App installation token carries `packages: read`, so it doubles as
+      # the feed credential — no extra secret. Harmless for repos that build the package from source
+      # or a local feed (SDD / Rendering), whose nuget.config never references these vars.
       - name: Regenerate lockfiles
         working-directory: ${{ inputs.working-directory }}
         env:
           RESTORE_TARGET: ${{ inputs.restore-target }}
+          FSGG_PACKAGES_ACTOR: ${{ github.actor }}
+          FSGG_PACKAGES_READ_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           if [ -n "$RESTORE_TARGET" ]; then
