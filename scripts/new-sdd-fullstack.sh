@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # new-sdd-fullstack — create a full-stack FS.GG product using only existing, published
-# machinery, with NO FS.GG.Templates checkout required (unlike Templates' new-fullstack.sh).
+# machinery, with NO FS.GG.Templates checkout required. This is the sole full-stack scaffolder;
+# the older, checkout-bound Templates new-fullstack.sh has been retired.
 #
 # It orchestrates the commands that already exist today:
 #   1. fetch the newest rendering provider descriptor from FS.GG.Templates (curl, no clone)
