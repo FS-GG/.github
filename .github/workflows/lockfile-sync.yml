@@ -1,0 +1,122 @@
+# Reusable Renovate lockfile-sync (FS-GG/.github#145, epic #16 Pillar 4).
+#
+# The gap this closes is org-wide: every FS-GG consumer's gate.yml enforces
+# `dotnet restore --locked-mode` against a committed packages.lock.json (Feature 211,
+# FR-002 / board .github#7), but nothing REGENERATES those lockfiles when a dependency
+# version moves. Renovate edits the central PackageVersion (Directory.Packages.local.props)
+# without running restore, so every referenced-package Renovate NuGet PR fails the gate with
+# NU1004 (`Lock file [old,) != central [new,)`) until a human runs --force-evaluate by hand.
+# This job does that automatically and pushes the freshened lockfiles back to the PR branch —
+# the .github#6 "auto-PR" half made real.
+#
+# FS.GG.Rendering proved this in FS.GG.Rendering#61 (merged 2026-07-03) as a repo-local
+# workflow; this is that workflow promoted into the shared preset (alongside coherence.yml,
+# contract-coherence.yml, dispatch-sender.yml) so SDD / Governance / Templates adopt it with a
+# ~10-line `on: pull_request` caller and Rendering repoints its local copy here.
+#
+# Re-trigger mechanics (carried over from #61, already validated): the commit is authored with
+# the org `fs-gg-cross-repo-dispatch` GitHub *App* installation token, NOT GITHUB_TOKEN.
+# App-token pushes DO re-run `on: pull_request` workflows, so the caller's gate re-evaluates the
+# freshened lockfile; GITHUB_TOKEN pushes would not. Self-limiting: the second pass finds no
+# drift -> no commit -> no push, so there is no loop.
+#
+# Restore mirrors gate.yml exactly (setup-dotnet + plain restore, no NuGet auth): the gate's
+# locked restore already resolves every feed — it reaches NU1004, a lockfile mismatch, not a
+# 404 — so --force-evaluate needs nothing more.
+#
+# PREREQUISITE per adopting repo: the fs-gg-cross-repo-dispatch App (repository_selection:
+# selected) must include the repo AND grant `contents: write`, else the push 403s. Rendering
+# was confirmed in the selected list (org admin, 2026-07-03); confirm SDD / Governance /
+# Templates before they rely on this.
+name: lockfile-sync
+
+on:
+  workflow_call:
+    inputs:
+      restore-target:
+        description: >-
+          Solution/project to restore (e.g. FS.GG.SDD.slnx). Leave empty to restore whatever
+          `dotnet restore` resolves in the working directory (single solution/project only).
+        type: string
+        default: ""
+      dotnet-version:
+        description: "SDK to install — must match the caller's gate.yml (Feature 211 uses 10.0.x)."
+        type: string
+        default: "10.0.x"
+      working-directory:
+        description: "Directory to run the restore from, relative to the repo root."
+        type: string
+        default: "."
+    secrets:
+      app-id:
+        description: "GitHub App id (org fs-gg-cross-repo-dispatch App; provisioned by .github#21)."
+        required: true
+      app-private-key:
+        description: "GitHub App private key (PEM) for the same App."
+        required: true
+
+# The App installation token below — not GITHUB_TOKEN — performs the write; the default
+# run-scoped token stays read-only.
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Sync packages.lock.json
+    runs-on: ubuntu-latest
+    # Renovate branches only, same-repo only (never fork PRs — a fork push would 403, and we
+    # never want to auto-commit to an untrusted head). Evaluated in the caller's event context.
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Mint App installation token (contents:write on this repo)
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      # Match gate.yml: same SDK, no NuGet auth (locked restore already resolves every feed).
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      # --force-evaluate rewrites every packages.lock.json to match the bumped central graph.
+      # RESTORE_TARGET is env-passed, never interpolated into the run script — the org's uniform
+      # anti-injection pattern (cf. contract-coherence.yml / architecture-map.yml).
+      - name: Regenerate lockfiles
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          RESTORE_TARGET: ${{ inputs.restore-target }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RESTORE_TARGET" ]; then
+            dotnet restore "$RESTORE_TARGET" --force-evaluate
+          else
+            dotnet restore --force-evaluate
+          fi
+
+      - name: Commit and push if changed
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          APP_ID: ${{ secrets.app-id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain -- '*packages.lock.json')" ]; then
+            echo "No lockfile drift — nothing to sync."
+            exit 0
+          fi
+          git config user.name  'fsgg-dispatch[bot]'
+          git config user.email "${APP_ID}+fsgg-dispatch[bot]@users.noreply.github.com"
+          git add -- '*packages.lock.json'
+          git commit -m 'chore: sync packages.lock.json (dotnet restore --force-evaluate)'
+          git push
