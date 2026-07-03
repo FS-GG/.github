@@ -22,3 +22,4 @@ sequence stays gap-free to a reader.
 | [0013](0013-trusted-publishing-oidc-for-nuget-org.md) | Publish to nuget.org via Trusted Publishing (OIDC), not a long-lived API key | Accepted |
 | [0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) | Skill vendoring & mirroring — one manifest, one materialize-and-verify, content-addressed (extends 0011) | Accepted |
 | [0015](0015-register-the-registry-schema-as-a-governed-contract.md) | Register the registry schema as a governed contract (`registry-schema`; schema growth = tracked contract-change) | Accepted |
+| [0016](0016-retire-templates-local-new-fullstack-single-scaffolder.md) | Retire the Templates-local `new-fullstack.sh`; `new-sdd-fullstack.sh` is the sole full-stack scaffolder (completes 0010's withdrawal) | Accepted |
