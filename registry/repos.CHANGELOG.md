@@ -17,6 +17,7 @@ single-authority invariant, the `receives` vocabulary, and content-addressed kit
 
 ## Entries
 
+- **2026-07-04** — Coordination-kit `cross-repo-coordination` sha256 bumped (@.github; ADR-0003, ADR-0019): the kit `SKILL.md` carried the pre-rename contract id `fs-skia-ui-version`; corrected to `fs-gg-ui-version` (ADR-0003) in both skill roots, re-digesting the kit `460542a2…` → `9ff9ed86…`. Propagates to `coordination-kit` receivers; unblocks Governance's ADR-0003 rename guard (Governance#90).
 - **2026-07-04** — Roster registry established (@.github; ADR-0019, slice 1): seed `repos.yml` with
   the five framework repos (`.github` authority + `sdd`/`rendering`/`governance`/`templates`), the
   `labels` + `coordination-kit` capabilities populated, and the coordination kit
