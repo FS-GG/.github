@@ -125,12 +125,12 @@ For pinned versions and feeds, see
 > reports whether a project is coherent with its set and `fsgg-sdd upgrade` reconciles
 > it. See [Who drives the lifecycle](consumer/who-drives-the-lifecycle.md).
 
-### 2. Scaffold a full-stack product (one command)
+### 2. Scaffold a workspace (one command)
 
 The fastest path composes all three products at once — the SDD lifecycle
 skeleton, a runnable [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering)
 `fs-gg-ui` app, and a Governance config — via the
-[`new-sdd-fullstack`](https://github.com/FS-GG/.github/tree/main/scripts/NewSddFullstack)
+[`new-sdd-workspace`](https://github.com/FS-GG/.github/tree/main/scripts/NewSddWorkspace)
 tool. It chains the commands that already exist: **fetch** the newest rendering
 descriptor (no clone), **`fsgg-sdd scaffold`**, apply the **`fs-gg-governance`**
 overlay, and **`fsgg-sdd doctor`** to confirm coherence.
@@ -140,7 +140,7 @@ public **nuget.org** — no `--add-source`, no auth, same as the other FS-GG too
 on the `-preview` channel, so pass `--prerelease`:
 
 ```sh
-dotnet tool install --global FS.GG.NewSddFullstack --prerelease
+dotnet tool install --global FS.GG.NewSddWorkspace --prerelease
 ```
 
 For pinned versions and feeds, see
@@ -150,7 +150,7 @@ For pinned versions and feeds, see
 governance. We name it after the game:
 
 ```nu
-new-sdd-fullstack ./Pong Pong
+new-sdd-workspace ./Pong Pong
 ```
 
 > **Reproducibility & options.** Defaults to the newest set from
@@ -177,9 +177,9 @@ What you get:
 > **Prefer to compose the steps yourself** — or skip governance? Use the plain
 > `fsgg-sdd scaffold --provider rendering` path (register the descriptor, then
 > scaffold) documented in [Getting started](consumer/getting-started.md) §2, or
-> `fsgg-sdd init` for the lifecycle skeleton only. `new-sdd-fullstack` just chains
+> `fsgg-sdd init` for the lifecycle skeleton only. `new-sdd-workspace` just chains
 > those steps — fetch descriptor → scaffold → governance → `doctor` — through
-> existing machinery ([source](https://github.com/FS-GG/.github/tree/main/scripts/NewSddFullstack)).
+> existing machinery ([source](https://github.com/FS-GG/.github/tree/main/scripts/NewSddWorkspace)).
 
 ### 3. Build and run the stock app
 
@@ -485,7 +485,7 @@ When every §14 scenario has a passing test, `verify` goes green and your
 
 ## Part D — Governance (already in your project)
 
-`new-sdd-fullstack` (step 2) already dropped the **`fs-gg-governance`** overlay into
+`new-sdd-workspace` (step 2) already dropped the **`fs-gg-governance`** overlay into
 your product — the reference gate set at `.fsgg/policy.yml` / `capabilities.yml` /
 `tooling.yml`. Governance is **advisory by default and never required** to build,
 run, or ship; it only gates when you choose a blocking posture.
@@ -495,7 +495,7 @@ To pick a posture — `light` is the non-blocking inner-loop default; `strict` /
 gates check, see [Adopting governance](consumer/governance.md). Choosing a posture
 never changes how you build and run.
 
-> **Didn't want governance?** Run `new-sdd-fullstack … --no-governance`, or scaffold
+> **Didn't want governance?** Run `new-sdd-workspace … --no-governance`, or scaffold
 > with the plain `fsgg-sdd scaffold` path in
 > [Getting started](consumer/getting-started.md) §2 — either adds no
 > `.fsgg/policy.yml` / `capabilities.yml` / `tooling.yml`.
@@ -518,8 +518,8 @@ through `charter → ship` → turn acceptance criteria into tests. To go furthe
 
 ### If a step misbehaved
 
-- `new-sdd-fullstack` failed → confirm `fsgg-sdd` is installed (step 1) and the
-  `new-sdd-fullstack` tool is on PATH (`dotnet tool list --global`). The tool
+- `new-sdd-workspace` failed → confirm `fsgg-sdd` is installed (step 1) and the
+  `new-sdd-workspace` tool is on PATH (`dotnet tool list --global`). The tool
   fetches + registers the provider for you, so a `providerUnknown` error usually
   means the descriptor fetch couldn't reach FS.GG.Templates (check network / the `--ref`).
   The governance step is best-effort — `FS.GG.Templates` publishes to public

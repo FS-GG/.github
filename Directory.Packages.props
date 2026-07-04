@@ -1,6 +1,6 @@
 <Project>
   <!-- Central Package Management for the .github repo. The repo is docs/registry/scripts;
-       the only .NET project is scripts/NewSddFullstack (the full-stack scaffolder). Pins
+       the only .NET project is scripts/NewSddWorkspace (the workspace scaffolder). Pins
        track the org-common set: FSharp.Core 10.1.301 and Spectre.Console 0.57.2 (the version
        verified in FS.GG.SDD / FS.GG.Governance — see the spectre-console skill, "Version scope"). -->
   <PropertyGroup>

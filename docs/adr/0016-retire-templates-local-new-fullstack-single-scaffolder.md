@@ -74,3 +74,32 @@ tool lives here. The tool has no consumers and no coherence edges, so it is **no
   resolved by this deletion.
 - Tracked on the Coordination board via a `cross-repo` issue in FS.GG.Templates (the target repo
   for the deletion + test rewire); no registry PR accompanies it.
+
+## Update (2026-07-04b) — renamed `new-sdd-fullstack` → `new-sdd-workspace`
+
+The single-scaffolder decision still stands; only the tool's **name** changed. "Fullstack" was
+adopted when the tool produced one app shape, but the interactive-wizard work added a `--profile`
+axis (`game` / `app` / `headless-scene` / `governed` / `sample-pack`) and governance is opt-out
+(`--no-governance`) — so the tool no longer produces a single "full-stack" thing. It scaffolds a
+**workspace** — precisely the term [ADR-0020](0020-platform-workspace-component-vocabulary.md)
+reserves for "what you scaffold with the platform" (a generated repo carrying an app, the `.fsgg/`
+lifecycle, agent skills, and optional governance). The name now matches the vocabulary.
+
+- **Renamed:** command `new-sdd-fullstack` → **`new-sdd-workspace`**; package
+  `FS.GG.NewSddFullstack` → **`FS.GG.NewSddWorkspace`**; project dir `scripts/NewSddFullstack` →
+  `scripts/NewSddWorkspace`; workflow `release-new-sdd-fullstack.yml` →
+  `release-new-sdd-workspace.yml` (tag trigger `new-sdd-workspace/v*`).
+- **Package identity is immutable** (a NuGet id cannot be renamed in place). This is a **new**
+  package id, not a move: `FS.GG.NewSddWorkspace` starts at `0.3.0-preview.1` (version continuity
+  preserved — same tool, same maturity). The old id's published preview builds
+  (`FS.GG.NewSddFullstack` ≤ `0.1.1-preview.1`, tags `new-sdd-fullstack/v0.1.0-preview.1`,
+  `…/v0.1.1-preview.1`) are **superseded** and should be **delisted/deprecated** on the org
+  GitHub Packages feed (org-owner action). Harm is nil: the tool is org-internal, preview-only,
+  has no consumers and no coherence edges, so — as recorded above — it remains **not** a registry
+  contract (`dependencies.yml` unchanged).
+- **Publish is a separate, deliberate step:** no `new-sdd-workspace/v*` tag is cut by this rename.
+  The first release under the new id happens when an owner pushes that tag (or runs the workflow
+  with `publish=true`).
+- **Cross-repo sweep:** any sibling-repo docs that still say `new-sdd-fullstack` (e.g.
+  FS.GG.Templates README/design, repointed here per the 2026-07-03 consequences) need the same
+  rename — filed as a `cross-repo` heads-up in the affected repos.

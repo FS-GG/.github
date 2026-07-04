@@ -1,15 +1,20 @@
-# FS.GG.NewSddFullstack (`new-sdd-fullstack`)
+# FS.GG.NewSddWorkspace (`new-sdd-workspace`)
 
-The **sole** full-stack FS.GG product scaffolder — an F# / Spectre.Console dotnet tool that
+The **sole** FS.GG workspace scaffolder — an F# / Spectre.Console dotnet tool that
 composes the SDD lifecycle skeleton, a runnable [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering)
-`fs-gg-ui` app, and a Governance overlay in one command, using only existing published
-machinery. No `FS.GG.Templates` checkout required. Successor to the retired
-`scripts/new-sdd-fullstack.sh` (see [ADR-0016](https://github.com/FS-GG/.github/blob/main/docs/adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md)).
+`fs-gg-ui` app (profile-selectable), and an optional Governance overlay in one command, using
+only existing published machinery. No `FS.GG.Templates` checkout required. Successor to the
+retired `scripts/new-sdd-fullstack.sh` (see [ADR-0016](https://github.com/FS-GG/.github/blob/main/docs/adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md)).
+
+> **Renamed from `new-sdd-fullstack` / `FS.GG.NewSddFullstack`.** "Fullstack" implied a single
+> app shape, but `--profile` lets you pick the output app (`game`/`app`/`headless-scene`/…) and
+> `--no-governance` drops a layer — so the honest name is **workspace**, the ADR-0020 term for
+> what a consumer scaffolds. The old preview id (≤`0.1.1-preview.1`) is superseded.
 
 ## Install
 
 ```sh
-dotnet tool install --global FS.GG.NewSddFullstack \
+dotnet tool install --global FS.GG.NewSddWorkspace \
   --add-source https://nuget.pkg.github.com/FS-GG/index.json
 ```
 
@@ -18,7 +23,7 @@ Requires the `fsgg-sdd` CLI on PATH (`dotnet tool install --global FS.GG.SDD.Cli
 ## Use
 
 ```sh
-new-sdd-fullstack ./Pong Pong          # <target-dir> <product-name>
+new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>
 ```
 
 Run it with **no arguments** on an interactive terminal and it walks you through the same
@@ -61,7 +66,7 @@ when **both** feeds fail, and the product is fine without it.
 From an `FS-GG/.github` checkout:
 
 ```sh
-dotnet run --project scripts/NewSddFullstack -- ./Pong Pong
+dotnet run --project scripts/NewSddWorkspace -- ./Pong Pong
 ```
 
 Output degrades to plain (ANSI-free) when piped, under `NO_COLOR`, or on a non-TTY.

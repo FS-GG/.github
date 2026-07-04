@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Roll forward if the exact net10.0 runtime is absent on the host, matching the org's
+         CLI convention (FS.GG.SDD.Cli). -->
+    <RollForward>Major</RollForward>
+
+    <!-- Distribute as a .NET global tool so the clone-free install the tutorial documents
+         keeps working: `dotnet tool install -g FS.GG.NewSddWorkspace` exposes the
+         `new-sdd-workspace` command (the F# successor to the retired shell script; ADR-0016).
+         Renamed from FS.GG.NewSddFullstack — "fullstack" wrongly implied one app shape once the
+         profile flag made the output-app shape selectable; "workspace" is the ADR-0020 term for
+         what a consumer scaffolds. Package identity = product identity, do not rename in place;
+         the old preview id (up to 0.1.1-preview.1) is superseded/delisted, not moved. -->
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>new-sdd-workspace</ToolCommandName>
+    <PackageId>FS.GG.NewSddWorkspace</PackageId>
+    <Version>0.3.0-preview.1</Version>
+    <AssemblyName>new-sdd-workspace</AssemblyName>
+
+    <Description>FS.GG workspace scaffolder — composes the SDD lifecycle skeleton, a runnable Rendering app (profile-selectable), and an optional Governance overlay in one command, with a rich Spectre.Console progress UI. Orchestrates existing published machinery; no FS.GG.Templates checkout required.</Description>
+    <Authors>FS-GG</Authors>
+    <Company>FS-GG</Company>
+    <PackageTags>fsgg;scaffold;workspace;dotnet-tool;sdd;spectre</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/scripts/NewSddWorkspace</PackageProjectUrl>
+
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Spectre.Console" />
+  </ItemGroup>
+</Project>

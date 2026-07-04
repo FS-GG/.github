@@ -1,7 +1,8 @@
-/// new-sdd-fullstack — scaffold a full-stack FS.GG product (SDD lifecycle + runnable Rendering
-/// app + Governance overlay) using only existing, published machinery, with NO FS.GG.Templates
-/// checkout required. This is the sole full-stack scaffolder — the F# successor to the retired
-/// scripts/new-sdd-fullstack.sh (ADR-0016).
+/// new-sdd-workspace — scaffold an FS.GG workspace (SDD lifecycle + runnable Rendering
+/// app + optional Governance overlay) using only existing, published machinery, with NO
+/// FS.GG.Templates checkout required. This is the sole workspace scaffolder — the F# successor
+/// to the retired scripts/new-sdd-fullstack.sh (ADR-0016; renamed from new-sdd-fullstack once
+/// `--profile` made the output-app shape selectable — "workspace" is the ADR-0020 term).
 ///
 /// It orchestrates the commands that already exist today:
 ///   1. fetch the newest rendering provider descriptor from FS.GG.Templates (HTTP, no clone)
@@ -12,7 +13,7 @@
 ///
 /// Currency stays EXPLICIT (ADR-0009): fetching `main` gives the current coherent set; pass
 /// --ref <tag> to pin a reproducible version; run --upgrade to reconcile a behind project.
-module NewSddFullstack.Program
+module NewSddWorkspace.Program
 
 open System
 open System.IO
@@ -112,7 +113,7 @@ let private feedToken () =
 /// that no ambient source can widen — a 401-on-read org feed in the caller's global config then
 /// can't poison the restore (one source hard-failing fails the whole restore).
 let private installFromTempConfig (configXml: string) : int * string =
-    let dir = Path.Combine(Path.GetTempPath(), "new-sdd-fullstack-" + Guid.NewGuid().ToString "N")
+    let dir = Path.Combine(Path.GetTempPath(), "new-sdd-workspace-" + Guid.NewGuid().ToString "N")
     Directory.CreateDirectory dir |> ignore
     try
         File.WriteAllText(Path.Combine(dir, "nuget.config"), configXml)
@@ -240,7 +241,7 @@ let private header (opts: Options) =
     if opts.Upgrade then
         grid.AddRow("[grey]upgrade[/]", "reconcile if behind") |> ignore
     let panel = Panel(grid)
-    panel.Header <- PanelHeader "[bold]new-sdd-fullstack[/]"
+    panel.Header <- PanelHeader "[bold]new-sdd-workspace[/]"
     panel.Border <- BoxBorder.Rounded
     panel.Padding <- Padding(1, 0, 1, 0)
     AnsiConsole.Write panel
@@ -262,7 +263,7 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
     AnsiConsole.Write panel
     if not fatal then
         AnsiConsole.WriteLine()
-        AnsiConsole.MarkupLine(sprintf "[bold]Done:[/] full-stack product in [green]%s[/]" (Markup.Escape opts.Target))
+        AnsiConsole.MarkupLine(sprintf "[bold]Done:[/] workspace in [green]%s[/]" (Markup.Escape opts.Target))
         AnsiConsole.MarkupLine(
             sprintf
                 "[bold]Next:[/] cd %s && dotnet build && dotnet run   [grey]# then: fsgg-sdd charter[/]"
@@ -285,11 +286,11 @@ let private hasGameCore (profile: string) =
 
 let private usage () =
     AnsiConsole.MarkupLine
-        "[bold]new-sdd-fullstack[/] — scaffold a full-stack FS.GG product (SDD + Rendering + Governance)"
+        "[bold]new-sdd-workspace[/] — scaffold an FS.GG workspace (SDD + Rendering + optional Governance)"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Usage[/]"
-    AnsiConsole.MarkupLine "  new-sdd-fullstack [grey]<target-dir> <product-name>[/] [[options]]"
-    AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddFullstack -- <target-dir> <product-name>)[/]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
+    AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   render profile (default: game = provider default)"
@@ -353,11 +354,11 @@ let private paramsPanel (d: Draft) =
     panel
 
 /// Right card: a tree of what the run will produce, growing as the answers land. Structural
-/// nodes are always present (a full-stack product always has them); their annotations and the
+/// nodes are always present (a workspace always has them); their annotations and the
 /// optional leaves (game-core, governance, upgrade) concretise as the draft fills in.
 let private previewPanel (d: Draft) =
     let root = d.Target |> Option.map Markup.Escape |> Option.defaultValue "[grey37]<target>[/]"
-    let tree = Tree(sprintf "[bold]%s[/]  [grey]· new full-stack product[/]" root)
+    let tree = Tree(sprintf "[bold]%s[/]  [grey]· new workspace[/]" root)
     tree.Guide <- TreeGuide.BoldLine
 
     let refAnno = d.Ref |> Option.map (fun r -> sprintf "[aqua]@ %s[/]" (Markup.Escape r)) |> Option.defaultValue pendingCell
@@ -397,7 +398,7 @@ let private previewPanel (d: Draft) =
 /// only shows for a non-default profile (game defers to the provider, so the flag is redundant).
 let private equivalentCommand (d: Draft) =
     let parts = ResizeArray<string>()
-    parts.Add "new-sdd-fullstack"
+    parts.Add "new-sdd-workspace"
     parts.Add(d.Target |> Option.defaultValue "<target>")
     parts.Add(d.Product |> Option.defaultValue "<product>")
     (match d.Profile with Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
@@ -410,7 +411,7 @@ let private equivalentCommand (d: Draft) =
 /// sit beneath. Called before each question so the just-captured answer shows up above.
 let private draftView (d: Draft) =
     AnsiConsole.Clear()
-    AnsiConsole.Write((Rule "[bold aqua]new-sdd-fullstack[/] [grey]· interactive setup[/]").LeftJustified())
+    AnsiConsole.Write((Rule "[bold aqua]new-sdd-workspace[/] [grey]· interactive setup[/]").LeftJustified())
     AnsiConsole.WriteLine()
     let cards = ResizeArray<Rendering.IRenderable>()
     cards.Add(paramsPanel d :> Rendering.IRenderable)
