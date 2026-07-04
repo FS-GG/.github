@@ -223,6 +223,13 @@ expect_pass "condition-aware justified absence + compound-true present (feedback
 # 7e. --params without --manifest is a misconfiguration (nothing declares the conditions) → exit 2.
 expect_die "--params without --manifest is a misconfiguration (exit 2)" "$MISS" --params "$PROV"
 
+# 7f. EVERY declared-required skill dropped (roots exist but are empty) is a genuine coherence
+#     failure [missing]/exit 1 — it must NOT be masked by the empty-union misconfiguration die
+#     (exit 2). Guards the check-4-vs-skill_ct==0 ordering.
+EMPTY="$WORK/cond-empty"
+for r in $ROOTS; do mkdir -p "$EMPTY/$r"; done          # roots present but hold no skills
+expect_fail "condition-aware [missing] survives an empty union (not masked by the misconfig die)" missing "$EMPTY" --manifest "$MAN_MISS" --params "$PROV"
+
 echo "--------------------------------------------"
 echo "skill-union fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1

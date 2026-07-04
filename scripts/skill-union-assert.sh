@@ -150,9 +150,12 @@ eval_clause() {
   if [[ "$c" == *" in ["* ]]; then
     key="$(trim "${c%% in [*}")"
     rhs="${c#*[}"; rhs="${rhs%]}"                    # contents between [ and ]
-    local IFS=','
+    local IFS=',' item_t
     for item in $rhs; do
-      [ "${PARAM[$key]-}" = "$(trim "$item")" ] && return 0
+      item_t="$(trim "$item")"
+      [ -n "$item_t" ] || continue                   # skip empties (a trailing/doubled comma) — an
+                                                     # empty token must never match an unset param
+      [ "${PARAM[$key]-}" = "$item_t" ] && return 0
     done
     return 1
   fi
@@ -346,8 +349,8 @@ missing_ct=0
 if [ -n "$MANIFEST" ]; then
   for id in $MANIFEST_IDS; do
     absent_everywhere "$id" || continue
-    if [ -n "$PARAMS" ] && eval_condition "${MANIFEST_WHEN[$id]}"; then
-      echo "::error::[missing] skill '$id' is declared with a true materializes-when ('${MANIFEST_WHEN[$id]}') but is absent from every root"
+    if [ -n "$PARAMS" ] && eval_condition "${MANIFEST_WHEN[$id]-always}"; then
+      echo "::error::[missing] skill '$id' is declared with a true materializes-when ('${MANIFEST_WHEN[$id]-always}') but is absent from every root"
       fail=1
       missing_ct=$((missing_ct + 1))
     else
@@ -356,7 +359,10 @@ if [ -n "$MANIFEST" ]; then
   done
 fi
 
-if [ "$skill_ct" -eq 0 ]; then
+# An empty union is a misconfiguration (exit 2) — UNLESS check 4 already found real [missing]
+# violations (every declared, required skill dropped): those are a genuine coherence failure and
+# must exit 1, not be masked by the misconfig die below.
+if [ "$skill_ct" -eq 0 ] && [ "$fail" -eq 0 ]; then
   die "no skills found under any root — expected at least one skill in the union."
 fi
 
