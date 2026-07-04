@@ -23,6 +23,13 @@ it via `repos.sh list --receives <cap>` instead of hardcoding the repo list.
 (the analog of `fsgg-sdd` for product skills). It is the SOURCE of the coordination kit, so it never
 *receives* `coordination-kit` — an invariant the validator enforces.
 
+**Participation audit.** The fabrics are opt-in (a receiver participates by calling a reusable
+`.github` workflow), so `receives` only *declares* intent. [`scripts/repos-audit.sh`](../../scripts/repos-audit.sh)
+— run weekly by [`repos-audit.yml`](../../.github/workflows/repos-audit.yml) — closes the loop:
+for each capability that maps to a reusable workflow (today `coordination-kit` →
+`coordination-coherence.yml`), it verifies every declared receiver actually calls it. A
+declared-but-unwired repo fails the audit, so `receives` has teeth.
+
 ## Capabilities (`receives` vocabulary)
 
 | Capability | What the repo participates in | Consumer | Status |
