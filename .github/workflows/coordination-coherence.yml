@@ -1,0 +1,46 @@
+# Reusable coordination-kit coherence gate (ADR-0019 slice 2).
+#
+# Every FS-GG repo that `receives: coordination-kit` (per FS-GG/.github registry/repos.yml) calls this
+# via `workflow_call`. It checks out the caller and FS-GG/.github (the ADR-0019 authority / canonical
+# kit source), then runs `scripts/coordination-sync --check`, so the caller's CI fails if its copy of
+# the coordination kit (the cross-repo-coordination skill + the fsgg-coord client) has drifted from —
+# or is missing against — the canonical source. `--repo ${{ github.repository }}` gates on the roster:
+# a repo that is NOT a coordination-kit receiver (e.g. .github itself) passes trivially with nothing
+# to check. Mirrors the contract-coherence / skill-union-assert reusable-gate pattern.
+#
+# Callers must be public or grant the checkout token read on FS-GG/.github (public). No packages/
+# write scopes are needed — this gate is pure file comparison, deliberately taking no dependency on
+# the SDD-owned typed tooling.
+name: coordination-coherence
+
+on:
+  workflow_call:
+    inputs:
+      github-ref:
+        description: "Ref of FS-GG/.github to source the canonical kit + roster from."
+        type: string
+        default: "main"
+      target-path:
+        description: "Path within the caller's checkout to verify (the repo root by default)."
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  coordination-kit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the calling repo
+        uses: actions/checkout@v7
+        with:
+          path: caller
+      - name: Checkout FS-GG/.github (canonical kit + roster)
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: ${{ inputs.github-ref }}
+          path: dotgithub
+      - name: Verify the coordination kit is coherent
+        run: bash dotgithub/scripts/coordination-sync --check --repo "${{ github.repository }}" "caller/${{ inputs.target-path }}"

@@ -1,0 +1,46 @@
+# Self-test + gate for the org repo roster (registry/repos.yml) and its validator (ADR-0019).
+#
+# Runs tests/repos-registry/run.sh, which proves scripts/repos.sh validate PASSES on a well-formed
+# roster and FAILS on each violation class (unknown capability, duplicate id, bad role, not-exactly-
+# one-authority, authority-receives-kit, kit digest drift, missing source, malformed name), that
+# `list`/`digest` behave, and — the gate on the real file — that the checked-in registry/repos.yml
+# validates. Because the paths below include registry/repos.yml, any edit to the roster re-runs this,
+# so a bad row (or a stale kit sha256) fails the PR. Mirrors skill-union-selftest.yml.
+name: repos-registry-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/repos.sh"
+      - "registry/repos.yml"
+      - "scripts/apply-labels.sh"
+      - "tests/repos-registry/**"
+      - ".github/workflows/repos-registry-selftest.yml"
+      # kit sources — an edit here changes the content-addressed digest, so re-validate that
+      # registry/repos.yml's kit sha256 still matches (ADR-0019).
+      - "scripts/fsgg-coord"
+      - ".claude/skills/cross-repo-coordination/**"
+      - ".agents/skills/cross-repo-coordination/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/repos.sh"
+      - "registry/repos.yml"
+      - "scripts/apply-labels.sh"
+      - "tests/repos-registry/**"
+      - ".github/workflows/repos-registry-selftest.yml"
+      - "scripts/fsgg-coord"
+      - ".claude/skills/cross-repo-coordination/**"
+      - ".agents/skills/cross-repo-coordination/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the repos-registry fixture
+        run: bash tests/repos-registry/run.sh

@@ -64,6 +64,11 @@ Cross-repo issues are aggregated on the org-level **Coordination** Project (Proj
 v2) so blocked/in-flight requests are visible across repos in one board. Add an issue
 with `gh project item-add`.
 
+Projects v2 is GraphQL-only, so board work spends from GitHub's GraphQL rate limit.
+Route reads/writes through the thrifty client [`scripts/fsgg-coord`](../../scripts/fsgg-coord)
+— it caches the static field/option ids, resolves board items narrowly, and reads issues
+over REST with an ETag. See [graphql-budget.md](graphql-budget.md) for the cost model.
+
 > One-time setup (needs the `project` scope: `gh auth refresh -s project,read:project`):
 > ```sh
 > gh project create --owner FS-GG --title "Coordination"

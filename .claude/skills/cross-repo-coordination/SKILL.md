@@ -12,6 +12,7 @@ contracts. Coordinate through **GitHub-native primitives** — never a shared fi
 - Protocol: `FS-GG/.github` → `docs/coordination/README.md`
 - Registry: `FS-GG/.github` → `registry/dependencies.yml` + `docs/registry/compatibility.md`
 - Decisions: `FS-GG/.github` → `docs/adr/` (ADR-0001 mandates the Coordination board)
+- GraphQL budget: `FS-GG/.github` → `docs/coordination/graphql-budget.md` (the `fsgg-coord` client)
 - Board plan & architecture: `FS.GG.Templates` → `docs/reports/2026-06-27-github-projects-v2-coordination-roadmap-plan.md`
   and `docs/reports/2026-06-27-fsgg-packaging-composition-and-governance-architecture.md`
 
@@ -110,8 +111,19 @@ gh project field-create $P --owner FS-GG --name "Phase" --data-type SINGLE_SELEC
 # ...Repo / Workstream / Effort single-selects; Start / Target dates; Contract / Blocked by text
 gh project item-add    $P --owner FS-GG --url https://github.com/FS-GG/<repo>/issues/<n>
 gh project item-create $P --owner FS-GG --title "<draft item>" --body "<acceptance criteria>"
-# set fields: gh project item-edit --id <itemId> --field-id <fid> --single-select-option-id <oid> ...
+# set fields (prefer the thrifty client): scripts/fsgg-coord set-field <issue> <Field> <Value>
+# raw form: gh project item-edit --id <itemId> --field-id <fid> --single-select-option-id <oid> ...
 ```
+
+> **Keep GraphQL cheap — route board work through `scripts/fsgg-coord`.** Projects v2 is
+> GraphQL-only and the primary rate limit (5,000 pts/hr) is metered by *nodes requested*, not by
+> request count — so batching buys nothing; the wins are not re-fetching static ids, narrow item
+> lookups, and putting plain issue reads on REST. `fsgg-coord` does all three: `bootstrap` caches
+> the project/field/option ids **once**; `set-field <issue> <Field> <Value>` resolves every id from
+> cache and auto-routes by the field's dataType (one mutation, no introspection); `item-id` resolves
+> via `issue → projectItems` (not a whole-board scan); `issues <repo> --label …` reads over REST with
+> an ETag (304s cost nothing). Watch the meters with `fsgg-coord budget` (and `FSGG_COORD_DEBUG=1`
+> logs each call's cost). Full cost model: `docs/coordination/graphql-budget.md`.
 
 **Manual steps (need org-admin in the UI, not the `project` scope):**
 

@@ -1,4 +1,4 @@
-# ADR-0019: Name the two products precisely — **platform**, **component**, **workspace**
+# ADR-0020: Name the two products precisely — **platform**, **component**, **workspace**
 
 - **Status:** Accepted
 - **Date:** 2026-07-04

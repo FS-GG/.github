@@ -16,7 +16,7 @@ usable on its own; you adopt only what you need.
 > `.fsgg/` lifecycle, agent skills, and optional governance. Within the platform,
 > each repository is a **component**. *The platform is what we maintain; a workspace
 > is what you build with it.* →
-> [vocabulary (ADR-0019)](https://github.com/FS-GG/.github/blob/main/docs/adr/0019-platform-workspace-component-vocabulary.md)
+> [vocabulary (ADR-0020)](https://github.com/FS-GG/.github/blob/main/docs/adr/0020-platform-workspace-component-vocabulary.md)
 
 > **New here?**
 > - **Building an app?** Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
