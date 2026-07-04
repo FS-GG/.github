@@ -31,6 +31,7 @@ the decision records linked throughout.
                          ┌───────────────────────────────────────────────┐
                          │  FS-GG/.github  (this repo — coordination)     │
                          │  • registry/dependencies.yml (contract truth)  │
+                         │  • registry/repos.yml (repo roster; ADR-0019)  │
                          │  • dist/dotnet/ (org-shared build config)      │
                          │  • docs/ (decision records + consumer guide)   │
                          └───────────────────────────────────────────────┘
@@ -57,7 +58,7 @@ Five repositories under [github.com/FS-GG](https://github.com/FS-GG):
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one product at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
-| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, org-shared build config, consumer + decision docs. | — |
+| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. | — |
 
 ---
 
@@ -339,6 +340,16 @@ The protocol: **a `contract-change` issue MUST update this file as part of its
 resolution.** The registry is validated in CI by the typed `Fsgg.Registry`
 validator (`fsgg-sdd registry validate`), and a coherence gate asserts the
 declared `fsgg-contracts` version equals the actual published package version.
+
+**Sibling registries in this repo.** Two more `.github`-owned registries sit alongside
+`dependencies.yml`: [`registry/skills.yml`](../registry/skills.yml) (the skill catalog —
+also a versioned contract, `skill-registry`, in the table below) and
+[`registry/repos.yml`](../registry/repos.yml) (the **org repo roster**, ADR-0019 — the
+single authoritative list of framework repos each org fabric iterates, gated per a
+`receives` capability). The roster is *not* a versioned cross-repo contract — it is
+validated self-contained by `scripts/repos.sh`, not the typed `Fsgg.Registry` — but it is
+the source of truth for participation in each fabric (labels, the coordination-kit
+distribution/audit, …), with `.github` as the kit authority.
 
 The contracts that hold the system together:
 

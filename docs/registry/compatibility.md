@@ -5,6 +5,10 @@ the cross-repo source of truth for who depends on whom and which contract versio
 coherent. Update **both** when a versioned cross-repo contract changes (a
 `contract-change` issue must do this as part of its resolution).
 
+> Sibling registries: [`repos.md`](repos.md) projects `registry/repos.yml` (the org repo roster —
+> which framework repos participate in which fabrics, ADR-0019); the skill registry is projected in
+> the §Skill-registry sections below.
+
 ## Dependency graph
 
 ```text

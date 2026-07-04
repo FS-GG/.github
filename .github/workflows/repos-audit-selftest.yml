@@ -1,0 +1,32 @@
+# Self-test for scripts/repos-audit.sh — the roster participation audit (ADR-0019 follow-up). Runs
+# tests/repos-audit/run.sh, which drives the audit against a temp roster and a PATH-shim `gh` and
+# proves a wired receiver passes, an unwired one (or one with no workflows) fails and is named, and
+# the authority is never audited. Mirrors repos-registry-selftest.yml / fsgg-coord-selftest.yml.
+name: repos-audit-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/repos-audit.sh"
+      - "scripts/repos.sh"
+      - "tests/repos-audit/**"
+      - ".github/workflows/repos-audit-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/repos-audit.sh"
+      - "scripts/repos.sh"
+      - "tests/repos-audit/**"
+      - ".github/workflows/repos-audit-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the repos-audit fixture
+        run: bash tests/repos-audit/run.sh
