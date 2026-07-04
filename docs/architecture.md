@@ -353,12 +353,14 @@ The contracts that hold the system together:
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
 | `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` | all four |
 | `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
+| `skill-registry` | **.github** | [`registry/skills.yml`](../registry/skills.yml) — the org's authoritative skill catalog (process + product; `id`, `scope`, `owner`, canonical-body `sha256`, `materializes-when`), reconciled from the producer skill-manifests (ADR-0017) | **.github** (the union gate + registry validation) |
 
 Dependency edges (downstream → upstream): Templates → Rendering (template),
 Templates → SDD (scaffold-provider), Templates → Governance (policy/overlay),
-SDD → Governance (handoff, **optional**), and **.github → SDD** (`registry-schema` —
-the coherence gate validates this registry with SDD's typed `Fsgg.Registry`).
-Rendering points at nothing.
+SDD → Governance (handoff, **optional**), **.github → SDD** (`registry-schema` —
+the coherence gate validates this registry with SDD's typed `Fsgg.Registry`), and
+**.github → Rendering + SDD** (`skill-registry` — `skills.yml` is reconciled from the two
+producers' skill-manifests). Rendering points at nothing.
 
 **The registry's own schema is a governed contract too (ADR-0015).** It was the one
 contract in the system that wasn't: the typed validator (the `registry-validator-typed`
@@ -405,6 +407,19 @@ asserted where skills are produced (`doctor`, per-skill `sha256` in
 `scaffold-provenance`) *and* where they are consumed: the Templates composition gate
 enforces it hard in both lanes via the reusable `skill-union-assert.sh`
 (`skill-mirror-verified` coherence row, `coherent: true` since 2026-07-02).
+
+**Skill *absence* is checkable too (ADR-0017).** The manifest is a superset catalog —
+a producer declares every skill it *can* emit, but emission is profile/lifecycle-gated,
+so "declared ∧ absent" was blanket-tolerated and a genuinely-dropped skill was
+indistinguishable from an off-profile one. ADR-0017 records the emission condition per
+entry (`materializes-when`) and lifts it into a single authoritative catalog
+[`registry/skills.yml`](../registry/skills.yml) (the `skill-registry` governed contract);
+the union gate's `--params` mode then evaluates each condition against a scaffold's
+provenance and adds `[missing]` (declared ∧ true ∧ absent) and `[unexpected]`
+(present ∧ false) — closing the blind spot. Rollout is board-sequenced (`skill-registry-published`
+coherence row): the catalog + contract land product-complete now; the enforcing flip waits on
+SDD emitting a process manifest (the `SkillManifest` types are done via SDD#60/spec-057; the
+emitting step is a separate, not-yet-authored SDD deliverable) and Rendering's predicate-grammar alignment.
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
