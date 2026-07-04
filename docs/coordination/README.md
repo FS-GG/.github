@@ -37,7 +37,7 @@ gh issue create --repo FS-GG/FS.GG.Rendering \
   --title "[cross-repo] fs-gg-ui template drifted from framework HEAD" \
   --label cross-repo --label cross-repo:request --label blocked \
   --body "From: FS.GG.Templates. Blocks: FS-GG/FS.GG.Templates build of fs-gg-fullstack.
-Contract: fs-skia-ui-version. template/base/src/Product/*.fs (2026-06-15) no longer
+Contract: fs-gg-ui-version. template/base/src/Product/*.fs (2026-06-15) no longer
 compiles against src/Scene/Types.fsi (2026-06-22). No release tag pins a coherent set."
 
 # triage / respond
