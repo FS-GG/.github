@@ -135,16 +135,15 @@ tool. It chains the commands that already exist: **fetch** the newest rendering
 descriptor (no clone), **`fsgg-sdd scaffold`**, apply the **`fs-gg-governance`**
 overlay, and **`fsgg-sdd doctor`** to confirm coherence.
 
-**One-time setup.** Install the tool (it drives `fsgg-sdd`, installed in step 1). It ships on
-the org's `-preview` channel, so pass `--prerelease`; the install needs an **authenticated**
-FS-GG feed source configured — the org GitHub Packages feed authenticates every read, even for
-public packages:
+**One-time setup.** Install the tool (it drives `fsgg-sdd`, installed in step 1). It's on
+public **nuget.org** — no `--add-source`, no auth, same as the other FS-GG tools — and ships
+on the `-preview` channel, so pass `--prerelease`:
 
 ```sh
 dotnet tool install --global FS.GG.NewSddFullstack --prerelease
 ```
 
-For feed + auth setup and pinned versions, see
+For pinned versions and feeds, see
 [Versions, feeds & updates](consumer/versioning-and-updates.md).
 
 **Create the product** — `<target-dir> <product-name>`, newest coherent set +
