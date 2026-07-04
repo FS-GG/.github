@@ -38,6 +38,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write      # ADR-0013: mint the GitHub OIDC token for nuget.org Trusted Publishing
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,4 +88,27 @@ jobs:
           dotnet nuget push "artifacts/packages/FS.GG.NewSddFullstack.*.nupkg" \
             --source https://nuget.pkg.github.com/FS-GG/index.json \
             --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      # ADR-0012 dual-publish to public nuget.org (ADR-0013 auth = Trusted Publishing OIDC, no
+      # stored key). Pushes the BYTE-IDENTICAL org-feed .nupkg (no re-pack). Gated on the repo
+      # variable NUGET_ORG_PUBLISH so it stays DORMANT — org-feed releases keep working —
+      # until an org-owner creates the nuget.org Trusted Publishing policy for this repo +
+      # workflow file and sets `vars.NUGET_ORG_PUBLISH=true` (see FS-GG/.github#156). Without
+      # the policy, NuGet/login fail-closes (401), so the gate avoids breaking every release in
+      # the interim. Login+push live inline here (a cross-repo reusable workflow trips the OIDC
+      # policy match — NuGet/login#6).
+      - name: NuGet login (OIDC → short-lived key)
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push byte-identical package to nuget.org
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.NewSddFullstack.*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
