@@ -1,0 +1,27 @@
+# Roster participation audit (ADR-0019 follow-up) — the AUTHORITY-side check.
+#
+# registry/repos.yml declares who SHOULD participate in each fabric (`receives: <cap>`); the fabrics
+# themselves are opt-in reusable workflows. This runs scripts/repos-audit.sh on a schedule to verify
+# every declared receiver ACTUALLY wired the matching reusable workflow (e.g. every
+# `receives: coordination-kit` repo calls coordination-coherence.yml) — a declared-but-unwired repo
+# fails the audit. Complements the per-receiver pull coherence gate: this is .github auditing the
+# whole roster centrally. Reads the (public) FS-GG repos with the run-scoped token.
+name: repos-audit
+
+on:
+  schedule:
+    - cron: "17 8 * * 1"   # weekly, Monday 08:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Audit roster participation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/repos-audit.sh

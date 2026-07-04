@@ -8,7 +8,7 @@ description: Index for the FS.GG split-repository direction and the documents th
 
 # FS.GG project split
 
-> **Building a product with FS-GG rather than developing FS-GG itself?** This
+> **Building an app with FS-GG rather than developing FS-GG itself?** This
 > page and the documents below are the cross-repo *decision record* for people
 > developing the platform. If you just want to use FS-GG, start at the
 > **[consumer guide](consumer/index.md)** instead.
@@ -26,7 +26,7 @@ description: Index for the FS.GG split-repository direction and the documents th
 Kept current — the system as built, and the machinery that keeps it coherent.
 
 - [Architecture](architecture.md) — the newcomer's map of the whole system: the
-  four-product split, the one-way dependency rule, the contract registry, the shared
+  four-component split, the one-way dependency rule, the contract registry, the shared
   F# house style, and how the repositories compose. **Start here.**
 - [Architecture Decision Records](adr/README.md) — cross-repo decisions (ADR-0001…),
   each with status and supersession history.
@@ -45,7 +45,7 @@ Kept current — the system as built, and the machinery that keeps it coherent.
 
 The current recommendation is to stop treating the UI runtime, lifecycle
 workflow, and governance system as one self-hosting platform. The rendering
-framework should be developed as a normal product repository using standard
+framework should be developed as a normal component repository using standard
 Spec Kit and narrow repo-owned checks. Governance rule-engine tooling and SDD
 lifecycle tooling should live in separate projects where they can evolve without
 blocking rendering work or each other.
@@ -78,7 +78,7 @@ The new direction is deliberately simpler:
 > see the [Living reference](#living-reference) above.
 
 - [Architecture](architecture.md) is the newcomer's map of the whole system — the
-  four-product split, the one-way dependency rule, the contract registry, the
+  four-component split, the one-way dependency rule, the contract registry, the
   shared F# house style, and how the repositories compose — with links to every
   source. **Start here for the big picture.**
 - [Project split decision](project-split-decision.md) records why the monolithic
@@ -90,7 +90,7 @@ The new direction is deliberately simpler:
 - [Governance project](governance-project.md) defines the separate tooling
   experiment and its adoption bar.
 - [SDD project](sdd-project.md) defines the separate spec-driven development
-  lifecycle product and its relationship to Governance.
+  lifecycle component and its relationship to Governance.
 - [Transition and boundaries](transition-and-boundaries.md) explains how the old
   repository, package identities, docs, templates, and cross-repo contracts
   should be handled.
@@ -107,6 +107,6 @@ The new direction is deliberately simpler:
 ## Operating rule
 
 The rendering and SDD projects may be customers of governance tooling, but they
-must not depend on that tooling to do ordinary product work. If governance
-tooling becomes heavy, brittle, or distracting, the product repositories should
+must not depend on that tooling to do ordinary component work. If governance
+tooling becomes heavy, brittle, or distracting, the component repositories should
 continue on standard Spec Kit and normal build/test/release practices.

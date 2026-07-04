@@ -3,25 +3,32 @@ title: Architecture
 category: FS.GG
 categoryindex: 6
 index: 0
-description: A newcomer's guide to the FS-GG architecture — the four-product split, the one-way dependency rule, the contract registry, and how the repositories compose into one runnable product.
+description: A newcomer's guide to the FS-GG architecture — the four-component split, the one-way dependency rule, the contract registry, and how the repositories compose into one runnable workspace.
 ---
 
 # FS-GG architecture
 
 > **Audience.** This document is for people who want to understand *how FS-GG is
 > built* — its repositories, boundaries, contracts, and the decisions that shape
-> them. If you only want to *use* FS-GG to build a product, start with the
+> them. If you only want to *use* FS-GG to build an app, start with the
 > [consumer guide](consumer/index.md) instead.
 
-FS-GG is **F# tooling for building desktop UI products on `net10.0`**: a
+FS-GG is **F# tooling for building desktop UI apps on `net10.0`**: a
 SkiaSharp/OpenGL UI framework, a spec-driven development (SDD) lifecycle CLI, and
-optional governance tooling, that compose into one runnable product. It is the
+optional governance tooling, that compose into one runnable workspace. It is the
 split of the archived [`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI)
-monolith into four focused, independently shippable products plus an
+monolith into four focused, independently shippable components plus an
 organization-level coordination repository.
 
-This page is a map. Authoritative detail lives in each product repository and in
+This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
+
+> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the five
+> repositories below. Each repository is a **component**. What a consumer
+> *scaffolds* with the platform is a **workspace** — the generated repo with a
+> runnable **app**, the `.fsgg/` lifecycle, skills, and optional governance. This
+> page uses those words precisely; see
+> [ADR-0020](adr/0020-platform-workspace-component-vocabulary.md).
 
 ---
 
@@ -31,6 +38,7 @@ the decision records linked throughout.
                          ┌───────────────────────────────────────────────┐
                          │  FS-GG/.github  (this repo — coordination)     │
                          │  • registry/dependencies.yml (contract truth)  │
+                         │  • registry/repos.yml (repo roster; ADR-0019)  │
                          │  • dist/dotnet/ (org-shared build config)      │
                          │  • docs/ (decision records + consumer guide)   │
                          └───────────────────────────────────────────────┘
@@ -56,8 +64,8 @@ Five repositories under [github.com/FS-GG](https://github.com/FS-GG):
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — Scene, layout, input, viewer/host, controls, themes; Elmish/MVU over SkiaSharp/OpenGL. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one product at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
-| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, org-shared build config, consumer + decision docs. | — |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
+| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. | — |
 
 ---
 
@@ -97,7 +105,7 @@ layering rules live in [`docs/design-and-controls.md`](design-and-controls.md).
 > release.
 
 The dependency direction is **one-way**. **FS.GG.Rendering depends on no other
-FS-GG product** — never on Governance. SDD depends on Governance only through an
+FS-GG component** — never on Governance. SDD depends on Governance only through an
 *optional* handoff document it can produce and ignore. Your inner development loop
 is never blocked by governance, and if governance ever feels heavy you can drop it
 and keep building. This rule is restated on the
@@ -106,7 +114,7 @@ and keep building. This rule is restated on the
 
 ---
 
-## 3. House style (shared across all four product repos)
+## 3. House style (shared across all four component repos)
 
 Reading one repo teaches you all of them. The conventions are consistent:
 
@@ -137,7 +145,7 @@ Reading one repo teaches you all of them. The conventions are consistent:
 
 ---
 
-## 4. The product repositories in detail
+## 4. The component repositories in detail
 
 ### 4.1 FS.GG.Rendering — the UI framework
 
@@ -176,9 +184,9 @@ replaceable Pong-style starter and the intended game/rendering default, Feature
 `lifecycle` (`spec-kit`/`sdd`/`none`, ADR-0002), `productName` (the additive alias
 of the canonical `--name`, ADR-0005), and `initGit` (the side-effect-free opt-in
 from the Feature 205 behavior break — generation no longer auto-runs git/chmod).
-The template generates a **root-buildable** product: `Product.slnx` + `global.json`
+The template generates a **root-buildable** workspace: `Product.slnx` + `global.json`
 + `build.sh`/`build.cmd` FAKE verb wrapper, so `dotnet restore|build|test|run`
-works at the product root with zero FAKE knowledge.
+works at the workspace root with zero FAKE knowledge.
 
 An optional **BOM metapackage** `FS.GG.UI` (`src/Meta/`) pins all 16
 `FS.GG.UI.*` members at one exact version so drift fails restore.
@@ -190,7 +198,7 @@ consumption tests; `template-dispatch.yml` fires the cross-repo
 
 ### 4.2 FS.GG.SDD — lifecycle CLI + contract backbone
 
-Two products in one repo (**11 projects: 5 src + 6 test**).
+Two packages in one repo (**11 projects: 5 src + 6 test**).
 
 **`FS.GG.Contracts`** — the typed cross-repo contract backbone. A
 **FSharp.Core-only BCL leaf** (no project references, no I/O), namespace `Fsgg`,
@@ -212,7 +220,7 @@ in `readiness/<id>/*`.
 
 > **Coming from Spec Kit? There is no `implement` command — by design.** SDD
 > *brackets* implementation rather than owning it: it tracks the artifacts and
-> evidence *around* your work, it does not produce your product code. The Spec Kit
+> evidence *around* your work, it does not produce your application code. The Spec Kit
 > `/implement` step is the **unmanaged gap between `analyze` and `evidence`** — the
 > [quickstart lifecycle table](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md)
 > names the action after `analyze` literally as *"implement, then `evidence`."*
@@ -242,9 +250,9 @@ A separate `fsgg-sdd registry validate <path>` composes the YAML load edge with
 `Fsgg.Registry.validateDocument` — this is the typed validator the contract
 coherence gate runs (§5).
 
-**The CLI is also the orchestrator** (ADR-0008 / ADR-0009). A scaffolded product is
+**The CLI is also the orchestrator** (ADR-0008 / ADR-0009). A scaffolded workspace is
 `template@<pin>` **+ `fsgg-sdd`@`<installed>`**, and the CLI seeds artifacts that pin's
-product is expected to contain (`fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`),
+workspace is expected to contain (`fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`),
 so the CLI is a first-class member of the coherent set — the *orchestrator axis* of §5.
 It is the single orchestration and enforcement surface but **not** the source of truth
 (that stays declarative in the registry): on every command it **detects** drift
@@ -340,6 +348,16 @@ resolution.** The registry is validated in CI by the typed `Fsgg.Registry`
 validator (`fsgg-sdd registry validate`), and a coherence gate asserts the
 declared `fsgg-contracts` version equals the actual published package version.
 
+**Sibling registries in this repo.** Two more `.github`-owned registries sit alongside
+`dependencies.yml`: [`registry/skills.yml`](../registry/skills.yml) (the skill catalog —
+also a versioned contract, `skill-registry`, in the table below) and
+[`registry/repos.yml`](../registry/repos.yml) (the **org repo roster**, ADR-0019 — the
+single authoritative list of framework repos each org fabric iterates, gated per a
+`receives` capability). The roster is *not* a versioned cross-repo contract — it is
+validated self-contained by `scripts/repos.sh`, not the typed `Fsgg.Registry` — but it is
+the source of truth for participation in each fabric (labels, the coordination-kit
+distribution/audit, …), with `.github` as the kit authority.
+
 The contracts that hold the system together:
 
 | Contract | Owner | Surface | Consumed by |
@@ -372,8 +390,8 @@ tolerance, degrading the gate toward a YAML-parses check. The `registry-schema` 
 advance the pin, in lockstep) rather than silent drift.
 
 **The coherent set has three axes, not two.** A `fs-gg-ui-template@<V>` pin snapshots
-the *template* and the *framework* — but a scaffolded product also carries the
-`fsgg-sdd` CLI that generated it, and the CLI seeds artifacts the pin's product is
+the *template* and the *framework* — but a scaffolded workspace also carries the
+`fsgg-sdd` CLI that generated it, and the CLI seeds artifacts the pin's workspace is
 expected to contain (the `fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`).
 An old CLI on the newest pin silently omits them. **ADR-0008** closes that hole by
 making the CLI a **first-class member of the coherent set** — the *orchestrator* axis
@@ -428,7 +446,7 @@ fails restore in CI in every repo), `apicompat-publicapi-gate` (a public-API bre
 on a packable forces a SemVer major), `fs-gg-ui-version`/`-bom` (single-pin and
 BOM coherence guarded on every Rendering PR), and
 `governance-cli-handoff-consumer-published` (the full strict/light matrix proven
-through the composed product). Cross-repo decisions are recorded as ADRs
+through the composed workspace). Cross-repo decisions are recorded as ADRs
 (ADR-0002 composition-by-scaffold, ADR-0005 `.fsgg` slot ownership + canonical
 `name`, ADR-0006 shared-build-config, ADR-0007 reference-gate-set version
 derivation, ADR-0008 the CLI orchestrator axis, ADR-0009 detect-and-remediate
@@ -499,10 +517,10 @@ install is what keeps the composition honest. See the
 
 ## 8. Where to start
 
-- **Use FS-GG to build a product** → the [consumer guide](consumer/index.md)
+- **Use FS-GG to build an app** → the [consumer guide](consumer/index.md)
   (install, scaffold, run, drive the lifecycle, optionally govern).
 - **Develop FS-GG itself** → start at [`docs/index.md`](index.md) (the split
-  decision record), then read the target product's repo `README.md`,
+  decision record), then read the target component's repo `README.md`,
   `CONTRIBUTING.md`, and its `specs/` history.
 - **Change a cross-repo contract** → read this page's §5, follow the
   `contract-change` protocol, and update
@@ -521,7 +539,7 @@ install is what keeps the composition honest. See the
 - [`docs/consumer/index.md`](consumer/index.md) — the consumer guide
 - [`dist/dotnet/`](../dist/dotnet/), [`scripts/sync-build-config.sh`](../scripts/sync-build-config.sh), [`scripts/apply-labels.sh`](../scripts/apply-labels.sh)
 
-**Product repositories**
+**Component repositories**
 - [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering) — [solution](https://github.com/FS-GG/FS.GG.Rendering/blob/main/FS.GG.Rendering.slnx), [template manifest](https://github.com/FS-GG/FS.GG.Rendering/blob/main/.template.config/template.json), [reference rendering verdict](https://github.com/FS-GG/FS.GG.Rendering/blob/main/src/SkiaViewer/ReferenceRendering.fsi)
 - [FS.GG.SDD](https://github.com/FS-GG/FS.GG.SDD) — [`Fsgg.Registry`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Registry.fsi), [`Fsgg.Schemas`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Schemas.fsi), [`CommandWorkflow.fs`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.SDD.Commands/CommandWorkflow.fs)
 - [FS.GG.Governance](https://github.com/FS-GG/FS.GG.Governance) — [`README.md`](https://github.com/FS-GG/FS.GG.Governance/blob/main/README.md), [reference gate set](https://github.com/FS-GG/FS.GG.Governance/tree/main/samples/sdd-reference-gate-set/.fsgg)
@@ -530,7 +548,7 @@ install is what keeps the composition honest. See the
 > **Process status.** This page is the project's one **system-overview artifact** —
 > the synthesis the point artifacts (ADRs, the registry) don't individually produce.
 > It is **owned by `FS-GG/.github`** and non-authoritative (detail stays in the
-> registry, the ADRs, and each product repo). Its maintenance is a process
+> registry, the ADRs, and each component repo). Its maintenance is a process
 > obligation, mirroring the "a `contract-change` must update the registry" rule:
 > **any ADR that changes the shape of the system, and any `contract-change` that
 > alters the §5 picture, MUST reconcile this page as part of its resolution** —

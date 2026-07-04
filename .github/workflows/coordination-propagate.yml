@@ -1,0 +1,108 @@
+# Coordination-kit propagation arm (ADR-0019 follow-up) — the AUTHORITY-side PUSH.
+#
+# The pull coherence gate (coordination-coherence.yml) makes a receiver FAIL when its kit drifts; this
+# is the other half — when the canonical kit changes on .github's main (the cross-repo-coordination
+# skill or the fsgg-coord client), open a sync PR in every `receives: coordination-kit` repo so they
+# converge without a human noticing the gate went red. The receiver list is read from the roster
+# (registry/repos.yml) — no hardcoded targets.
+#
+# CROSS-REPO WRITE — needs the org GitHub App, not GITHUB_TOKEN. Opening a branch + PR in ANOTHER
+# repo is a cross-repo write; GITHUB_TOKEN is scoped to .github and cannot. This mints an
+# `fs-gg-cross-repo-dispatch` App installation token scoped to the single target repo (same App +
+# pattern as lockfile-sync.yml / dispatch-sender.yml). PREREQUISITES (both org-admin, both fail
+# visibly if missing): the App must have contents:write + pull_requests:write on each receiver, and
+# the org secrets FSGG_DISPATCH_APP_ID / FSGG_DISPATCH_APP_PRIVATE_KEY must be visible to .github.
+#
+# NOTE: this workflow is inherently un-runnable in a fixture (it needs the App + cross-repo write), so
+# unlike the rest of ADR-0019 it ships without an offline self-test — only its roster-driven matrix
+# (the plan job) is exercisable. Review it as a privileged-infra change.
+name: coordination-propagate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fsgg-coord"
+      - ".claude/skills/cross-repo-coordination/**"
+      - ".agents/skills/cross-repo-coordination/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Read the receiver list from the roster into a matrix — {full, owner, name} per repo.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      repos: ${{ steps.roster.outputs.repos }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: roster
+        run: |
+          set -euo pipefail
+          repos="$(bash scripts/repos.sh list --receives coordination-kit \
+            | jq -R -s -c 'split("\n") | map(select(length>0)) | map({full:., owner:(split("/")[0]), name:(split("/")[1])})')"
+          echo "repos=$repos" >> "$GITHUB_OUTPUT"
+          echo "coordination-kit receivers: $repos"
+
+  propagate:
+    needs: plan
+    if: ${{ needs.plan.outputs.repos != '[]' && needs.plan.outputs.repos != '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false          # one receiver's failure must not block the others
+      matrix:
+        repo: ${{ fromJSON(needs.plan.outputs.repos) }}
+    steps:
+      - name: Checkout FS-GG/.github (canonical kit + sync script)
+        uses: actions/checkout@v7
+        with:
+          path: dotgithub
+
+      - name: Mint App installation token (scoped to ${{ matrix.repo.full }})
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: ${{ matrix.repo.owner }}
+          repositories: ${{ matrix.repo.name }}
+
+      - name: Checkout the receiver
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ matrix.repo.full }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: receiver
+          persist-credentials: true
+
+      - name: Sync the kit and open a PR if it changed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          TARGET: ${{ matrix.repo.full }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # coordination-sync derives its canonical source from its own location (dotgithub/).
+          bash dotgithub/scripts/coordination-sync receiver
+          cd receiver
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Kit already coherent in $TARGET — nothing to propagate."
+            exit 0
+          fi
+          short="${SOURCE_SHA:0:12}"
+          branch="coordination-kit/sync-${short}"
+          git config user.name  'fsgg-dispatch[bot]'
+          git config user.email "${APP_ID}+fsgg-dispatch[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -A
+          git commit -m "chore: sync coordination kit from FS-GG/.github@${short}"
+          git push -u origin "$branch" --force-with-lease
+          # Reuse an open sync PR if one exists (idempotent across repeated runs).
+          if ! gh pr view "$branch" --repo "$TARGET" >/dev/null 2>&1; then
+            gh pr create --repo "$TARGET" --base main --head "$branch" \
+              --title "chore: sync coordination kit (cross-repo-coordination + fsgg-coord)" \
+              --body "Automated sync of the coordination kit from FS-GG/.github@\`${short}\` (ADR-0019). Brings this repo's \`cross-repo-coordination\` skill + \`scripts/fsgg-coord\` back in line with canonical; the \`coordination-coherence\` gate goes green once merged. Opened by the \`coordination-propagate\` workflow."
+          fi

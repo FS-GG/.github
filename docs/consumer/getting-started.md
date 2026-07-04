@@ -9,12 +9,12 @@ description: Install the FS-GG lifecycle CLI, scaffold a runnable Skia/Elmish ap
 # Getting started
 
 This takes you from nothing to a running F# UI app under a managed lifecycle, in
-one sitting. By the end you will have a windowed Skia/Elmish product, the
+one sitting. By the end you will have a windowed Skia/Elmish app, the
 `.fsgg/` lifecycle skeleton, and one feature driven from charter toward ship.
 
 ## Prerequisites
 
-- **.NET SDK with `net10.0`** — the FS-GG products target `net10.0`.
+- **.NET SDK with `net10.0`** — the FS-GG components target `net10.0`.
 - **A GL/X11 session** to see a live window. The renderer's offscreen and
   deterministic test paths run headless; only the live windowed viewer needs a
   GL/X11 display (e.g. `DISPLAY=:1` on Linux).
@@ -33,7 +33,7 @@ For specific versions and feeds, see
 [FS.GG.SDD · installation](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/release/installation.md)
 and [Versions, feeds & updates](versioning-and-updates.md).
 
-## 2. Scaffold a runnable product
+## 2. Scaffold a runnable workspace
 
 The default way to start is `fsgg-sdd scaffold`. It establishes the SDD
 lifecycle skeleton **and** invokes a template provider to materialize a real,
@@ -83,7 +83,7 @@ never reported as complete.
 > `main`; to pin it, copy from a checkout of
 > [FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates) at a tag instead, or
 > merge the entry into an existing `.fsgg/providers.yml` (see
-> [Which products do I need?](which-products.md#the-full-stack-path)). For the
+> [Which components do I need?](which-products.md#the-full-stack-path)). For the
 > skeleton only — no runtime app, no provider needed — use `fsgg-sdd init`.
 
 ## 3. Build and run it
@@ -102,7 +102,7 @@ dotnet run            # opens the live window (needs a GL/X11 session)
 > source. Moving to a newer set later is one edit to `FsGgUiVersion` + `dotnet restore`
 > ([Versions, feeds & updates](versioning-and-updates.md)).
 
-You now have a real product. Everything from here is the lifecycle — optional but
+You now have a real workspace. Everything from here is the lifecycle — optional but
 recommended, and never required to keep building and running.
 
 ## 4. Make one pass through the lifecycle
@@ -111,7 +111,7 @@ Drive a unit of work through the stages. Each command reads and writes structure
 artifacts under `work/` and `readiness/` and prints a deterministic report:
 
 ```sh
-fsgg-sdd charter           # frame the product's intent
+fsgg-sdd charter           # frame the workspace's intent
 fsgg-sdd specify           # write the spec for a feature
 fsgg-sdd clarify           # resolve underspecified points
 fsgg-sdd plan              # design approach
@@ -153,7 +153,7 @@ see [Adopting governance](governance.md).
 
 ## Where to go next
 
-- [Which products do I need?](which-products.md) — if the `rendering`-provider
+- [Which components do I need?](which-products.md) — if the `rendering`-provider
   path above isn't the shape you want.
 - [The development lifecycle](lifecycle.md) — a deeper tour of `charter → ship`.
 - [Output, automation & CI](automation.md) — feed these commands' JSON into CI.

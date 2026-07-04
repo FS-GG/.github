@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# repos.sh — validator + query helper for registry/repos.yml, the FS-GG org repo roster (ADR-0019).
+#
+# The roster is the ONE authoritative list of framework repos the org fabrics iterate, with a
+# per-repo `receives` capability list. This script is how the fabrics READ it (so they stop
+# hardcoding the list) and how CI VALIDATES it (schema + invariants + content-addressed kit).
+# Deliberately shell + jq (YAML read via yq or python3+pyyaml) so .github stays self-contained and
+# takes no dependency on the SDD-owned typed registry validator. Mirrors scripts/skill-union-assert.sh.
+#
+# Usage:
+#   repos.sh validate [--registry <file>] [--root <dir>]   # schema + invariants + kit digests
+#   repos.sh list --receives <cap> [--field id|full] [--registry <file>]
+#                                                           # roster query for consumers (apply-labels …)
+#   repos.sh digest <path>                                  # reference digest: skill dir -> sha256 of its
+#                                                           # SKILL.md; file -> sha256 of the file
+#   repos.sh -h | --help
+#
+# Exit: 0 = ok; 1 = a validation violation (each printed with ::error::); 2 = misconfiguration.
+
+set -euo pipefail
+
+ROOT_DEFAULT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REG_DEFAULT="$ROOT_DEFAULT/registry/repos.yml"
+
+# The controlled set of capabilities a repo may `receive`. A `receives` value outside this set is a
+# validation error — so a typo can't silently exclude a repo from a fabric. Grow it deliberately.
+KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contract-coherence"]'
+
+die() { echo "::error::repos-registry: $*" >&2; exit 2; }
+
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
+
+command -v jq >/dev/null 2>&1 || die "jq not found (required)."
+
+# YAML -> JSON on stdout. Prefer yq (present on GitHub runners), fall back to python3+pyyaml
+# (the same fallback ladder scripts/sync-build-config.sh uses for XML validation).
+yaml2json() {
+  if command -v yq >/dev/null 2>&1; then
+    yq -o=json '.' "$1"
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import sys,yaml,json; json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout, default=str)' "$1"
+  else
+    die "need yq or python3+pyyaml to read YAML: $1"
+  fi
+}
+
+# Reference digest generator (shared rule so the sync/coherence gate and the registry never drift):
+# a skill directory digests its SKILL.md only (byte-equivalent to skill-union-assert's skill_digest);
+# a plain file digests the file.
+digest() {
+  local path="$1"
+  if [ -d "$path" ]; then
+    [ -f "$path/SKILL.md" ] || die "no SKILL.md under skill dir: $path"
+    sha256sum "$path/SKILL.md" | cut -d' ' -f1
+  elif [ -f "$path" ]; then
+    sha256sum "$path" | cut -d' ' -f1
+  else
+    die "source not found: $path"
+  fi
+}
+
+cmd_list() {
+  local cap="" field="full" reg="$REG_DEFAULT"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --receives) cap="${2:?--receives needs a value}"; shift 2 ;;
+      --field)    field="${2:?--field needs a value}"; shift 2 ;;
+      --registry) reg="${2:?--registry needs a value}"; shift 2 ;;
+      *)          die "list: unknown arg '$1'." ;;
+    esac
+  done
+  [ -n "$cap" ] || die "list: --receives <cap> is required."
+  case "$field" in id|full) ;; *) die "list: --field must be id or full." ;; esac
+  [ -f "$reg" ] || die "registry not found: $reg"
+  yaml2json "$reg" | jq -r --arg cap "$cap" --arg f "$field" \
+    '.repos[] | select((.receives // []) | index($cap)) | .[$f]'
+}
+
+cmd_validate() {
+  local reg="$REG_DEFAULT" root="$ROOT_DEFAULT"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --registry) reg="${2:?--registry needs a value}"; shift 2 ;;
+      --root)     root="${2:?--root needs a value}"; shift 2 ;;
+      *)          die "validate: unknown arg '$1'." ;;
+    esac
+  done
+  [ -f "$reg" ] || die "registry not found: $reg"
+  local json; json="$(yaml2json "$reg")" || die "cannot parse YAML: $reg"
+  echo "$json" | jq -e '.repos | type=="array" and length>0' >/dev/null \
+    || die "repos[] is missing or empty."
+
+  local fail=0
+  err() { echo "::error::repos-registry: $*" >&2; fail=1; }
+
+  # --- top-level shape ---
+  echo "$json" | jq -e '.schemaVersion | type=="number"' >/dev/null || err "schemaVersion must be a number."
+  echo "$json" | jq -e '(.updated // "") | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")' >/dev/null \
+    || err "updated must be a YYYY-MM-DD date."
+  local authority; authority="$(echo "$json" | jq -r '.authority // ""')"
+  [ -n "$authority" ] || err "top-level 'authority' is required."
+
+  # --- duplicate ids ---
+  local dups; dups="$(echo "$json" | jq -r '[.repos[].id] | group_by(.)[] | select(length>1)[0]')"
+  [ -z "$dups" ] || err "duplicate repo id(s): $(echo "$dups" | tr '\n' ' ')"
+
+  # --- per-repo fields + receives vocabulary ---
+  local id full role recv cap
+  while IFS=$'\t' read -r id full role recv; do
+    [ -n "$id" ] || continue
+    [[ "$id"   =~ ^[a-z0-9.][a-z0-9._-]*$ ]] || err "repo id '$id' must be lowercase kebab/dotted."
+    [[ "$full" =~ ^FS-GG/.+ ]]               || err "repo '$id' full '$full' must be 'FS-GG/<repo>'."
+    case "$role" in authority|framework) ;; *) err "repo '$id' role '$role' invalid (authority|framework)." ;; esac
+    for cap in $recv; do
+      echo "$KNOWN_CAPS" | jq -e --arg c "$cap" 'index($c)' >/dev/null \
+        || err "repo '$id' receives unknown capability '$cap' (known: $(echo "$KNOWN_CAPS" | jq -r 'join(", ")'))."
+    done
+  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" "))] | @tsv')
+
+  # --- exactly one authority, matching the top-level, and not a kit receiver ---
+  local authct; authct="$(echo "$json" | jq '[.repos[] | select(.role=="authority")] | length')"
+  if [ "$authct" != "1" ]; then
+    err "exactly one repo must have role 'authority' (found $authct)."
+  else
+    local authfull; authfull="$(echo "$json" | jq -r '.repos[] | select(.role=="authority") | .full')"
+    [ "$authfull" = "$authority" ] || err "authority repo '$authfull' != top-level authority '$authority'."
+  fi
+  if echo "$json" | jq -e --arg a "$authority" \
+      '.repos[] | select(.full==$a and ((.receives // []) | index("coordination-kit")))' >/dev/null; then
+    err "authority repo '$authority' must not RECEIVE coordination-kit — it is the source."
+  fi
+
+  # --- content-addressed kit: source exists and digest matches ---
+  local kid kind ksrc ksha got
+  while IFS=$'\t' read -r kid kind ksrc ksha; do
+    [ -n "$kid" ] || continue
+    case "$kind" in skill|client) ;; *) err "kit '$kid' kind '$kind' invalid (skill|client)." ;; esac
+    if [ ! -e "$root/$ksrc" ]; then err "kit '$kid' source missing: $ksrc"; continue; fi
+    got="$(digest "$root/$ksrc")" || { err "kit '$kid' cannot digest $ksrc."; continue; }
+    [ "$got" = "$ksha" ] || err "kit '$kid' digest $got != registry $ksha (regenerate: repos.sh digest $ksrc)."
+  done < <(echo "$json" | jq -r '(.kit // [])[] | [.id, .kind, .source, (.sha256 // "")] | @tsv')
+
+  if [ "$fail" -ne 0 ]; then
+    echo "::error::repos-registry: INVALID — see errors above." >&2
+    exit 1
+  fi
+  echo "repos-registry: OK — $(echo "$json" | jq '.repos | length') repo(s), $(echo "$json" | jq '(.kit // []) | length') kit item(s), authority=$authority"
+}
+
+case "${1:-}" in
+  validate) shift; cmd_validate "$@" ;;
+  list)     shift; cmd_list "$@" ;;
+  digest)   shift; [ $# -ge 1 ] || die "digest: <path> required."; digest "$1" ;;
+  -h|--help|help|"") usage ;;
+  *)        die "unknown command '${1:-}' (try: repos.sh --help)." ;;
+esac

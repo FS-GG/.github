@@ -1,0 +1,38 @@
+# Self-test for scripts/coordination-sync — the coordination-kit distributor/coherence gate (ADR-0019
+# slice 2). Runs tests/coordination-sync/run.sh, which proves apply writes the full kit (client +
+# skill in each root, client executable), --check passes when coherent and fails (exit 1) on a
+# drifted/missing kit file, and the --repo roster gate skips a non-receiver and proceeds for a real
+# one. Also triggers on kit-source edits (the skill / fsgg-coord), since those change what the gate
+# distributes. Mirrors repos-registry-selftest.yml / skill-union-selftest.yml.
+name: coordination-sync-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/coordination-sync"
+      - "scripts/fsgg-coord"
+      - ".claude/skills/cross-repo-coordination/**"
+      - ".agents/skills/cross-repo-coordination/**"
+      - "tests/coordination-sync/**"
+      - ".github/workflows/coordination-sync-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/coordination-sync"
+      - "scripts/fsgg-coord"
+      - ".claude/skills/cross-repo-coordination/**"
+      - ".agents/skills/cross-repo-coordination/**"
+      - "tests/coordination-sync/**"
+      - ".github/workflows/coordination-sync-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the coordination-sync fixture
+        run: bash tests/coordination-sync/run.sh

@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# coordination-sync — distribute/verify the coordination kit into a receiver repo (ADR-0019 slice 2).
+#
+# The coordination kit (the cross-repo-coordination skill + the fsgg-coord client) is declared,
+# content-addressed, in registry/repos.yml. This script is the DISTRIBUTION + COHERENCE arm over that
+# declaration — the participant-side analog of scripts/sync-build-config.sh, whose shape it mirrors:
+#
+#   coordination-sync <target>            # write/update the kit into <target> (a receiver checkout)
+#   coordination-sync --check <target>    # drift check only; exit 1 on drift (the CI coherence gate)
+#   coordination-sync --repo <full> ...   # gate on the roster: if <full> does not `receives:
+#                                         # coordination-kit`, there is nothing to do — exit 0
+#
+# `.github` (this repo, the ADR-0019 authority) is the canonical SOURCE — the kit files under this
+# checkout are the source of truth, exactly as sync-build-config's dist/dotnet/ is. The reusable
+# workflow .github/workflows/coordination-coherence.yml checks out both this repo and the caller, then
+# runs `--check` so every `coordination-kit` receiver's CI fails on drift. Propagation of a kit change
+# (opening the update PRs) rides the existing dispatch fabric / a receiver re-running this in apply mode.
+#
+# Managed kit files (source here -> path in the receiver):
+#   scripts/fsgg-coord                                          -> scripts/fsgg-coord              (chmod +x)
+#   .claude/skills/cross-repo-coordination/SKILL.md             -> <root>/cross-repo-coordination/SKILL.md
+#     ...for each root in AGENT_SKILL_ROOTS (default: ".claude/skills .agents/skills")
+# The skill's SKILL.md is the content-addressed unit (its sha256 is the repos.yml kit digest); a
+# multi-file skill's remainder would be added here alongside it.
+#
+# Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default ".claude/skills .agents/skills").
+# Exit: 0 = in sync / written; 1 = drift (check mode); 2 = misconfiguration.
+
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
+REG="$SRC_ROOT/registry/repos.yml"
+ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .agents/skills}"
+SKILL_SRC=".claude/skills/cross-repo-coordination/SKILL.md"   # canonical SKILL.md for every target root
+
+die()   { echo "coordination-sync: $*" >&2; exit 2; }
+usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
+
+mode="apply"; repo=""; target=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check) mode="check"; shift ;;
+    --repo)  repo="${2:?--repo needs a value}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    -*)      die "unknown flag '$1'." ;;
+    *)       [ -z "$target" ] && target="$1" || die "unexpected argument '$1'."; shift ;;
+  esac
+done
+[ -n "$target" ] || { usage; exit 2; }
+[ -d "$target" ] || die "target not found: $target"
+target="$(cd "$target" && pwd)"
+
+# Roster gate: only repos that `receives: coordination-kit` hold the kit. If --repo is a non-receiver
+# (e.g. the authority .github itself, or a repo removed from the kit list), there is nothing to do.
+if [ -n "$repo" ]; then
+  [ -f "$REG" ] || die "registry not found: $REG"
+  if ! bash "$SRC_ROOT/scripts/repos.sh" list --receives coordination-kit --registry "$REG" \
+        | grep -qx "$repo"; then
+    echo "coordination-sync: $repo does not receive coordination-kit (per repos.yml) — nothing to do."
+    exit 0
+  fi
+fi
+
+# Build the managed source::dest list (dest is relative to the receiver root).
+managed() {
+  printf '%s::%s\n' "scripts/fsgg-coord" "scripts/fsgg-coord"
+  local r
+  for r in $ROOTS; do
+    printf '%s::%s\n' "$SKILL_SRC" "$r/cross-repo-coordination/SKILL.md"
+  done
+}
+
+drift=0
+while IFS= read -r entry; do
+  [ -n "$entry" ] || continue
+  rel_src="${entry%%::*}"; rel_dst="${entry##*::}"
+  src="$SRC_ROOT/$rel_src"; dst="$target/$rel_dst"
+  [ -f "$src" ] || die "canonical kit source missing: $rel_src (is this a .github checkout?)"
+
+  case "$mode" in
+    check)
+      if [ ! -f "$dst" ]; then
+        echo "::error::coordination-sync: DRIFT (missing): $rel_dst"; drift=1
+      elif ! diff -q "$src" "$dst" >/dev/null 2>&1; then
+        echo "::error::coordination-sync: DRIFT (differs): $rel_dst"; drift=1
+      else
+        echo "ok: $rel_dst"
+      fi
+      ;;
+    apply)
+      mkdir -p "$(dirname "$dst")"
+      cp "$src" "$dst"
+      case "$rel_dst" in */fsgg-coord) chmod +x "$dst" ;; esac
+      echo "wrote: $rel_dst"
+      ;;
+  esac
+done < <(managed)
+
+if [ "$mode" = "check" ]; then
+  [ "$drift" -eq 0 ] || { echo "::error::coordination-sync: kit is INCOHERENT — run 'coordination-sync $target' from a .github checkout to fix." >&2; exit 1; }
+  echo "coordination-sync: OK — kit coherent in $target"
+else
+  echo "coordination-sync: kit written into $target"
+fi
