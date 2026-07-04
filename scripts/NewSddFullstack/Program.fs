@@ -39,7 +39,11 @@ type Options =
       Product: string
       Ref: string
       Upgrade: bool
-      Governance: bool }
+      Governance: bool
+      /// The `fs-gg-ui` render profile (game/app/headless-scene/governed/sample-pack).
+      /// None = pass no `--param profile`, deferring to the scaffold-provider default (game) —
+      /// keeps the bare-CLI invocation byte-identical to before this flag existed.
+      Profile: string option }
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -222,6 +226,11 @@ let private header (opts: Options) =
     grid.AddColumn() |> ignore
     grid.AddRow("[grey]product[/]", sprintf "[bold]%s[/]" (Markup.Escape opts.Product)) |> ignore
     grid.AddRow("[grey]target[/]", Markup.Escape opts.Target) |> ignore
+    grid.AddRow(
+        "[grey]profile[/]",
+        (opts.Profile |> Option.map Markup.Escape |> Option.defaultValue "[dim]game (provider default)[/]")
+    )
+    |> ignore
     grid.AddRow("[grey]descriptor ref[/]", Markup.Escape opts.Ref) |> ignore
     grid.AddRow(
         "[grey]governance[/]",
@@ -260,6 +269,20 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
                 (Markup.Escape opts.Target)
         )
 
+/// The `fs-gg-ui` render profiles, in menu order — id + one-line gloss. `game` is the
+/// scaffold-provider default (a minimal Pong-style starter); the rest are the sibling lanes.
+let private profiles =
+    [ "game", "minimal Pong-style starter (default)"
+      "app", "controls-showcase MVU/Elmish app"
+      "headless-scene", "scene render, no interactive shell"
+      "governed", "scene/app pre-wired for the governance gates"
+      "sample-pack", "a pack of sample scenes" ]
+
+/// Profiles that vendor the deterministic simulation core (`fs-gg-game-core`) —
+/// `materializes-when: profile in [game, sample-pack]` in the render skill-manifest.
+let private hasGameCore (profile: string) =
+    profile = "game" || profile = "sample-pack"
+
 let private usage () =
     AnsiConsole.MarkupLine
         "[bold]new-sdd-fullstack[/] — scaffold a full-stack FS.GG product (SDD + Rendering + Governance)"
@@ -269,16 +292,216 @@ let private usage () =
     AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddFullstack -- <target-dir> <product-name>)[/]"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
+    AnsiConsole.MarkupLine "  [green]--profile[/] <name>   render profile (default: game = provider default)"
+    AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
     AnsiConsole.MarkupLine "  [green]--upgrade[/]          also run `fsgg-sdd upgrade` after scaffolding (reconcile if behind)"
     AnsiConsole.MarkupLine "  [green]--no-governance[/]    skip the governance overlay"
+    AnsiConsole.WriteLine()
+    AnsiConsole.MarkupLine "[dim]Run with no arguments on an interactive terminal to build the invocation with prompts.[/]"
+
+// ── Interactive wizard (no-arg invocation) ────────────────────────────────────
+
+/// The answers gathered so far — every field optional so the live preview can render a
+/// half-built invocation and fill in as the user answers, step by step.
+type private Draft =
+    { Product: string option
+      Target: string option
+      Profile: string option
+      Governance: bool option
+      Ref: string option
+      Upgrade: bool option }
+
+let private emptyDraft =
+    { Product = None; Target = None; Profile = None; Governance = None; Ref = None; Upgrade = None }
+
+/// Require a non-blank answer — the shared validator for the text prompts.
+let private required (label: string) (s: string) =
+    if String.IsNullOrWhiteSpace s then ValidationResult.Error(sprintf "[red]%s is required[/]" label)
+    else ValidationResult.Success()
+
+let private pendingCell = "[grey37]· pending[/]"
+
+/// Left card: the parameters as a key/value grid, answered rows lit, unanswered dimmed.
+let private paramsPanel (d: Draft) =
+    let grid = Grid()
+    grid.AddColumn() |> ignore
+    grid.AddColumn() |> ignore
+    let row (k: string) (v: string) = grid.AddRow(sprintf "[grey]%s[/]" k, v) |> ignore
+    row "product" (d.Product |> Option.map (fun p -> sprintf "[bold green]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
+    row "target" (d.Target |> Option.map (fun t -> sprintf "[green]%s[/]" (Markup.Escape t)) |> Option.defaultValue pendingCell)
+    row "profile" (d.Profile |> Option.map (fun p -> sprintf "[magenta]%s[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell)
+    row "governance"
+        (match d.Governance with
+         | Some true -> "[green]light[/] [grey]overlay[/]"
+         | Some false -> "[grey]none (skipped)[/]"
+         | None -> pendingCell)
+    row "descriptor ref"
+        (match d.Ref with
+         | Some "main" -> "[aqua]main[/] [grey](newest set)[/]"
+         | Some r -> sprintf "[aqua]%s[/] [grey](pinned)[/]" (Markup.Escape r)
+         | None -> pendingCell)
+    row "upgrade"
+        (match d.Upgrade with
+         | Some true -> "[green]yes[/] [grey](reconcile)[/]"
+         | Some false -> "[grey]no[/]"
+         | None -> pendingCell)
+    let panel = Panel(grid)
+    panel.Header <- PanelHeader "[bold]parameters[/]"
+    panel.Border <- BoxBorder.Rounded
+    panel.Padding <- Padding(1, 0, 1, 0)
+    panel
+
+/// Right card: a tree of what the run will produce, growing as the answers land. Structural
+/// nodes are always present (a full-stack product always has them); their annotations and the
+/// optional leaves (game-core, governance, upgrade) concretise as the draft fills in.
+let private previewPanel (d: Draft) =
+    let root = d.Target |> Option.map Markup.Escape |> Option.defaultValue "[grey37]<target>[/]"
+    let tree = Tree(sprintf "[bold]%s[/]  [grey]· new full-stack product[/]" root)
+    tree.Guide <- TreeGuide.BoldLine
+
+    let refAnno = d.Ref |> Option.map (fun r -> sprintf "[aqua]@ %s[/]" (Markup.Escape r)) |> Option.defaultValue pendingCell
+    tree.AddNode(sprintf "[grey].fsgg/providers.yml[/]  rendering descriptor %s" refAnno) |> ignore
+
+    let prodAnno =
+        d.Product |> Option.map (fun p -> sprintf "[grey](productName=[/][green]%s[/][grey])[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell
+    let sdd = tree.AddNode(sprintf "SDD lifecycle skeleton  %s" prodAnno)
+    sdd.AddNode "[grey37]charter · spec · plan · tasks[/]" |> ignore
+
+    let profileAnno =
+        d.Profile |> Option.map (fun p -> sprintf "[grey](fs-gg-ui · profile [/][magenta]%s[/][grey])[/]" (Markup.Escape p)) |> Option.defaultValue pendingCell
+    let app = tree.AddNode(sprintf "runnable Rendering app  %s" profileAnno)
+    app.AddNode "[grey37]dotnet build && dotnet run[/]" |> ignore
+    // The simulation core materializes only for the game-family profiles (game, sample-pack).
+    match d.Profile with
+    | Some p when hasGameCore p -> app.AddNode "[grey37]+ fs-gg-game-core (fixed-step · seeded RNG · AABB)[/]" |> ignore
+    | _ -> ()
+
+    (match d.Governance with
+     | Some true -> tree.AddNode "[green]governance overlay[/]  [grey](profile: light)[/]"
+     | Some false -> tree.AddNode "[grey37]governance overlay — skipped[/]"
+     | None -> tree.AddNode(sprintf "governance overlay  %s" pendingCell))
+    |> ignore
+
+    match d.Upgrade with
+    | Some true -> tree.AddNode "[green]fsgg-sdd upgrade[/]  [grey](reconcile to the coherent set)[/]" |> ignore
+    | _ -> ()
+
+    let panel = Panel(tree)
+    panel.Header <- PanelHeader "[bold]scaffold preview[/]"
+    panel.Border <- BoxBorder.Rounded
+    panel.Padding <- Padding(1, 0, 1, 0)
+    panel
+
+/// The CLI you could have typed to skip the wizard — taught back as a dim footer. `--profile`
+/// only shows for a non-default profile (game defers to the provider, so the flag is redundant).
+let private equivalentCommand (d: Draft) =
+    let parts = ResizeArray<string>()
+    parts.Add "new-sdd-fullstack"
+    parts.Add(d.Target |> Option.defaultValue "<target>")
+    parts.Add(d.Product |> Option.defaultValue "<product>")
+    (match d.Profile with Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
+    (match d.Ref with Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r) | _ -> ())
+    (match d.Governance with Some false -> parts.Add "--no-governance" | _ -> ())
+    (match d.Upgrade with Some true -> parts.Add "--upgrade" | _ -> ())
+    String.Join(" ", parts)
+
+/// Clear and repaint the whole preview — the "getting fuller and fuller" frame the prompts
+/// sit beneath. Called before each question so the just-captured answer shows up above.
+let private draftView (d: Draft) =
+    AnsiConsole.Clear()
+    AnsiConsole.Write((Rule "[bold aqua]new-sdd-fullstack[/] [grey]· interactive setup[/]").LeftJustified())
+    AnsiConsole.WriteLine()
+    let cards = ResizeArray<Rendering.IRenderable>()
+    cards.Add(paramsPanel d :> Rendering.IRenderable)
+    cards.Add(previewPanel d :> Rendering.IRenderable)
+    AnsiConsole.Write(Columns(cards))
+    AnsiConsole.MarkupLine(sprintf "[grey]equivalent:[/] [dim]%s[/]" (Markup.Escape(equivalentCommand d)))
+    AnsiConsole.WriteLine()
+
+/// When invoked with no arguments on an interactive terminal, walk the user through the
+/// scaffold parameters with Spectre.Console prompts instead of failing with a usage error.
+/// The surface mirrors the CLI exactly: product + target (text), profile + governance + ref
+/// (selection), upgrade (confirm). A live preview grows beside the prompts. A non-interactive
+/// stdin never reaches here (see `main`), so the piped/CI usage-error contract is unchanged.
+/// Returns None if the user declines the final confirmation.
+let private interactive () : Options option =
+    let mutable draft = emptyDraft
+
+    draftView draft
+    let product =
+        AnsiConsole.Prompt(
+            TextPrompt<string>("[green]Product[/] name?")
+                .Validate(fun (s: string) -> required "product name" s)).Trim()
+    draft <- { draft with Product = Some product }
+
+    draftView draft
+    let target =
+        AnsiConsole.Prompt(
+            TextPrompt<string>("[green]Target[/] directory?")
+                .DefaultValue("./" + product)
+                .Validate(fun (s: string) -> required "target directory" s)).Trim()
+    draft <- { draft with Target = Some target }
+
+    draftView draft
+    let profile =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title("Render [magenta]profile[/]?")
+                .AddChoices(profiles |> List.map (fun (id, gloss) -> sprintf "%s — %s" id gloss) |> List.toArray))
+            .Split(' ').[0]
+    draft <- { draft with Profile = Some profile }
+
+    draftView draft
+    let governance =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title("[green]Governance[/] overlay?")
+                .AddChoices([| "light — apply the overlay (recommended)"; "none — skip it (--no-governance)" |]))
+            .StartsWith "light"
+    draft <- { draft with Governance = Some governance }
+
+    draftView draft
+    let gitRef =
+        let choice =
+            AnsiConsole.Prompt(
+                SelectionPrompt<string>()
+                    .Title("Descriptor [green]ref[/] to pin the coherent set?")
+                    .AddChoices([| "main — newest coherent set"; "pin a specific ref…" |]))
+        if choice.StartsWith "main" then
+            "main"
+        else
+            AnsiConsole.Prompt(
+                TextPrompt<string>("  Git ref [grey](tag / branch / sha)[/]?")
+                    .Validate(fun (s: string) -> required "ref" s)).Trim()
+    draft <- { draft with Ref = Some gitRef }
+
+    draftView draft
+    let upgrade =
+        AnsiConsole.Confirm("Also run [green]fsgg-sdd upgrade[/] after scaffolding (reconcile if behind)?", false)
+    draft <- { draft with Upgrade = Some upgrade }
+
+    // Final full preview, then a go/no-go before anything touches disk.
+    draftView draft
+    if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
+        Some
+            { Options.Target = target
+              Product = product
+              Ref = gitRef
+              Upgrade = upgrade
+              Governance = governance
+              Profile = Some profile }
+    else
+        None
 
 // ── Arg parsing ──────────────────────────────────────────────────────────────
 
 let private parse (argv: string list) : Result<Options, string> =
-    let rec flags acc rest =
+    let rec flags (acc: Options) rest =
         match rest with
         | [] -> Ok acc
+        | "--profile" :: value :: t -> flags { acc with Profile = Some value } t
+        | [ "--profile" ] -> Error "--profile needs a value"
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
         | [ "--ref" ] -> Error "--ref needs a value"
         | "--upgrade" :: t -> flags { acc with Upgrade = true } t
@@ -287,11 +510,12 @@ let private parse (argv: string list) : Result<Options, string> =
     match argv with
     | target :: product :: rest when not (target.StartsWith "--") && not (product.StartsWith "--") ->
         flags
-            { Target = target
+            { Options.Target = target
               Product = product
               Ref = "main"
               Upgrade = false
-              Governance = true }
+              Governance = true
+              Profile = None }
             rest
     | _ -> Error "target dir and product name are required"
 
@@ -340,9 +564,16 @@ let private run (opts: Options) : int =
         // 2 · fsgg-sdd scaffold (fatal on failure)
         if not fatal then
             step 2 "fsgg-sdd scaffold"
+            // Pin the profile only when chosen; None defers to the provider default (game).
+            let profileParam =
+                match opts.Profile with
+                | Some p -> [ "--param"; sprintf "profile=%s" p ]
+                | None -> []
             let code, _ =
                 runProcess true "fsgg-sdd"
-                    [ "scaffold"; "--root"; opts.Target; "--provider"; "rendering"; "--param"; sprintf "productName=%s" opts.Product ]
+                    ([ "scaffold"; "--root"; opts.Target; "--provider"; "rendering" ]
+                     @ profileParam
+                     @ [ "--param"; sprintf "productName=%s" opts.Product ])
             if code = 0 then
                 AnsiConsole.MarkupLine "  [green]✓[/] SDD skeleton + runnable Rendering app scaffolded"
                 results.Add { Title = "scaffold"; Outcome = Succeeded }
@@ -415,10 +646,24 @@ let private run (opts: Options) : int =
 
 [<EntryPoint>]
 let main argv =
-    match parse (List.ofArray argv) with
-    | Ok opts -> run opts
-    | Error msg ->
-        AnsiConsole.MarkupLine(sprintf "[red]error:[/] %s" (Markup.Escape msg))
-        AnsiConsole.WriteLine()
+    match List.ofArray argv with
+    | [ "-h" ] | [ "--help" ] ->
         usage ()
-        2
+        0
+    // No arguments on an interactive terminal → prompt for the parameters. A redirected/CI
+    // stdin (not Interactive) falls through to `parse`, which keeps the usage-error exit-2
+    // contract — prompting there would only hang or throw.
+    | [] when AnsiConsole.Profile.Capabilities.Interactive ->
+        match interactive () with
+        | Some opts -> run opts
+        | None ->
+            AnsiConsole.MarkupLine "[yellow]aborted[/] — no scaffold created."
+            130
+    | args ->
+        match parse args with
+        | Ok opts -> run opts
+        | Error msg ->
+            AnsiConsole.MarkupLine(sprintf "[red]error:[/] %s" (Markup.Escape msg))
+            AnsiConsole.WriteLine()
+            usage ()
+            2
