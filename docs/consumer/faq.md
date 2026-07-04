@@ -3,15 +3,15 @@ title: FS-GG consumer FAQ & troubleshooting
 category: FS.GG
 categoryindex: 6
 index: 18
-description: Common questions and failure modes for people building products with FS-GG.
+description: Common questions and failure modes for people building apps with FS-GG.
 ---
 
 # FAQ & troubleshooting
 
-## Do I have to use all four products?
+## Do I have to use all four components?
 
 No. Each ships and runs on its own. Adopt only what your goal needs — see
-[Which products do I need?](which-products.md). The common case is Rendering plus
+[Which components do I need?](which-products.md). The common case is Rendering plus
 the SDD lifecycle, with governance added later (or never).
 
 ## Do I have to use governance?
@@ -29,7 +29,7 @@ one-shot full-stack template could only exist by **vendoring** a copy of the
 rendering payload — which goes stale the moment Rendering changes. That staleness
 is exactly what broke the old monolith. FS-GG composes at scaffold time instead:
 `fsgg-sdd scaffold` installs the live, version-pinned rendering template, so
-there's no fork to drift. See [Which products do I need?](which-products.md#the-full-stack-path).
+there's no fork to drift. See [Which components do I need?](which-products.md#the-full-stack-path).
 
 ## `fsgg-sdd scaffold --provider rendering` says the provider isn't found
 
@@ -74,12 +74,12 @@ See [Output, automation & CI](automation.md).
 
 `dotnet tool update --global FS.GG.SDD.Cli` for the CLIs, `dotnet new update` for
 template packages, and your normal dependency tooling for `FS.GG.UI.*` package
-references. Pin versions in anything you ship and read each product's versioning
+references. Pin versions in anything you ship and read each component's versioning
 policy before a bump. See [Versions, feeds & updates](versioning-and-updates.md).
 
 ## Where's the authoritative doc for X?
 
-The consumer guide is the map; each product owns the details:
+The consumer guide is the map; each component owns the details:
 
 - Rendering / packages → [usage](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/usage.md)
 - Lifecycle / `init` → `ship` → [quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md)
@@ -89,7 +89,7 @@ The consumer guide is the map; each product owns the details:
 
 ## I want to contribute to FS-GG itself, not just use it
 
-This guide is for consumers. For contributing to a product, read that repo's
+This guide is for consumers. For contributing to a component, read that repo's
 `DEVELOPING.md` / `CONTRIBUTING` and the cross-repo
 [decision record](../index.md). Cross-repo coordination is issue-based and tracked
 on the org Coordination board, described in the

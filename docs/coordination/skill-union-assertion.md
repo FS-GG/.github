@@ -2,7 +2,7 @@
 
 A single reusable check — [`scripts/skill-union-assert.sh`](../../scripts/skill-union-assert.sh),
 wrapped by the [`skill-union-assert.yml`](../../.github/workflows/skill-union-assert.yml)
-(`workflow_call`) workflow — that any consumer CI calls to prove a scaffolded product's
+(`workflow_call`) workflow — that any consumer CI calls to prove a scaffolded workspace's
 agent-skill roots are the **byte-identical union** of process + product skills. It is the
 **consumer-side arm** of [ADR-0014](../adr/0014-skill-vendoring-one-manifest-one-materialize-verify.md)'s
 content-addressed design, delivered by [.github#111](https://github.com/FS-GG/.github/issues/111)
@@ -39,7 +39,7 @@ Over the configured `AGENT_SKILL_ROOTS` (default ADR-0011's three: `.claude/skil
    *missing* (declared ∧ condition true ∧ absent everywhere) and *unexpected* (present ∧ condition
    false). Without `--params` the gate keeps the check-3 superset semantics exactly.
 
-Checks 1–2 are **self-contained** — they need nothing but the product tree. Check 3 cross-checks
+Checks 1–2 are **self-contained** — they need nothing but the workspace tree. Check 3 cross-checks
 the manifests the producers actually ship ([FS.GG.SDD#61](https://github.com/FS-GG/FS.GG.SDD/issues/61) /
 [FS.GG.Rendering#43](https://github.com/FS-GG/FS.GG.Rendering/issues/43), ADR-0014 P0–P2), in
 **their** semantics — aligned by [.github#120](https://github.com/FS-GG/.github/issues/120):
@@ -166,7 +166,7 @@ lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2
 
 [`tests/skill-union/run.sh`](../../tests/skill-union/run.sh) — run in CI by
 [`skill-union-selftest.yml`](../../.github/workflows/skill-union-selftest.yml) — builds throwaway
-product trees and proves the assertion **passes** on a coherent union (including a
+workspace trees and proves the assertion **passes** on a coherent union (including a
 superset-catalog manifest with declared-but-absent ids and `--co-tenants`-admitted process
 skills) and **fails** on a divergent (`SKILL.md` *and* `references/**`), partitioned, dangling,
 and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md`. For the
@@ -181,7 +181,7 @@ false), a **justified** absence + compound-true present that **pass**, that the 
 
 - **Produced** by the P1 SDD `mirror`/`verify` library and the P2 fs-gg-ui single-materialize step
   (ADR-0014) — they write the roots and self-verify at the source.
-- **Consumed** here — asserted again where products are composed, so a non-identical set fails a
+- **Consumed** here — asserted again where workspaces are composed, so a non-identical set fails a
   gate instead of shipping green.
 - Flips **enforcing** and the `skill-mirror-verified` coherence id to `coherent: true` at roadmap
   **P4**, closing the [#47](https://github.com/FS-GG/FS.GG.Templates/issues/47) chain.

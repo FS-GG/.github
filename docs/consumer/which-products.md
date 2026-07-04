@@ -1,24 +1,24 @@
 ---
-title: Which FS-GG products do I need?
+title: Which FS-GG components do I need?
 category: FS.GG
 categoryindex: 6
 index: 12
 description: A decision guide for the four common FS-GG consumer goals — render a UI, run a lifecycle, scaffold the full stack, or add governance.
 ---
 
-# Which products do I need?
+# Which components do I need?
 
 You never adopt the whole platform at once. Pick by your goal; each path adds
-exactly one more product than the last.
+exactly one more component than the last.
 
 ## Quick decision
 
 | Your goal | What you adopt | Don't need |
 |---|---|---|
 | Render an F# UI inside an app you already have | **Rendering** only | SDD, Governance, Templates |
-| Start a new product with a managed dev lifecycle | **SDD** (+ Rendering via the provider) | Governance |
-| Stand up a runnable full-stack product in one go | **Templates** (drives SDD + Rendering) | — |
-| Add rules / gates to an existing SDD project | **Governance** overlay | new scaffolding |
+| Start a new workspace with a managed dev lifecycle | **SDD** (+ Rendering via the provider) | Governance |
+| Stand up a runnable full-stack workspace in one go | **Templates** (drives SDD + Rendering) | — |
+| Add rules / gates to an existing SDD workspace | **Governance** overlay | new scaffolding |
 
 ## The rendering-only path
 
@@ -34,7 +34,7 @@ covers all three ways to get the packages and the package map.
 
 ## The lifecycle path
 
-You want a structured `charter → ship` lifecycle around a new product, and the
+You want a structured `charter → ship` lifecycle around a new workspace, and the
 reference UI app as the starting point.
 
 ```sh
@@ -74,7 +74,7 @@ cd ./MyApp && dotnet build && dotnet run
 The [`new-sdd-fullstack <target> <product>`](https://github.com/FS-GG/.github/tree/main/scripts/NewSddFullstack)
 dotnet tool (in FS-GG/.github) wraps these three steps — no FS.GG.Templates checkout required.
 
-→ [FS.GG.Templates · full-stack](https://github.com/FS-GG/FS.GG.Templates#create-a-full-stack-product-composition-primary-path)
+→ [FS.GG.Templates · full-stack](https://github.com/FS-GG/FS.GG.Templates#create-a-full-stack-workspace-composition-primary-path)
 
 ## The add-governance path
 
@@ -95,7 +95,7 @@ the project. Governance only inspects — it never becomes a build dependency.
 ```text
 Templates ──compose (scaffold-time)──▶ SDD · Rendering · Governance
 SDD ──── governance-handoff (optional) ────▶ Governance
-Rendering ── depends on no FS-GG product — never on Governance
+Rendering ── depends on no FS-GG component — never on Governance
 ```
 
 Rendering is always at the bottom and never reaches up. That's what lets you stop

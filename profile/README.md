@@ -1,19 +1,28 @@
 # FS-GG
 
-**F# tooling for building desktop UI products** — a SkiaSharp/OpenGL UI
+**F# tooling for building desktop UI apps** — a SkiaSharp/OpenGL UI
 framework, a spec-driven development lifecycle CLI, and optional governance,
-composed into one runnable product on `net10.0`.
+composed into one runnable workspace on `net10.0`.
 
 You describe a Model-View-Update (MVU) app; FS-GG renders it, scaffolds it,
 drives it through a structured lifecycle from charter to ship, and — only if you
 opt in — checks it against rules you control. Each piece ships on its own and is
 usable on its own; you adopt only what you need.
 
+> **📖 Two things, named precisely.** FS-GG is the **platform** — the five
+> repositories in this org (Rendering, SDD, Governance, Templates, and this
+> coordination repo), the framework we build and publish. What you scaffold *with*
+> the platform is a **workspace**: a generated repo carrying a runnable **app**, the
+> `.fsgg/` lifecycle, agent skills, and optional governance. Within the platform,
+> each repository is a **component**. *The platform is what we maintain; a workspace
+> is what you build with it.* →
+> [vocabulary (ADR-0019)](https://github.com/FS-GG/.github/blob/main/docs/adr/0019-platform-workspace-component-vocabulary.md)
+
 > **New here?**
-> - **Building a product?** Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
->   install, scaffold, build, run, and ship your first product in one sitting.
+> - **Building an app?** Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
+>   install, scaffold, build, run, and ship your first workspace in one sitting.
 > - **Want to understand how FS-GG is built?** Read the **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
->   the four-product split, the one-way dependency rule, the contract registry, and how it all composes.
+>   the four-component split, the one-way dependency rule, the contract registry, and how it all composes.
 
 ---
 
@@ -78,8 +87,8 @@ The house style is not incidental — it is what makes work *capturable as M*:
 > the lifecycle never **require** governance to build, test, document, package, or
 > release.
 
-The dependency direction is one-way and your inner loop is never blocked by a
-platform. You can clone a product repo, read its [Spec Kit](https://github.com/github/spec-kit)
+The dependency direction is one-way and your inner loop is never blocked by
+governance. You can clone a component repo, read its [Spec Kit](https://github.com/github/spec-kit)
 artifacts, run the documented commands, and ship — without learning a custom
 operating model. If governance ever feels heavy, you drop it and keep building.
 
@@ -120,9 +129,9 @@ Or create a ready specced sample game: https://github.com/FS-GG/.github/blob/mai
 ## The `fsgg-sdd` CLI
 
 `fsgg-sdd` (the `FS.GG.SDD.Cli` global tool) is the **single surface** you drive an
-FS-GG product with. It does three jobs: it **scaffolds** a runnable product, it
+FS-GG workspace with. It does three jobs: it **scaffolds** a runnable workspace, it
 **drives** the `charter → ship` lifecycle, and it **orchestrates coherence** —
-keeping a scaffolded project aligned with its pinned *coherent set* (the
+keeping a workspace aligned with its pinned *coherent set* (the
 [template + framework **+ the CLI itself**](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#5-the-contract-registry--the-single-source-of-truth)).
 As the orchestrator it never silently self-updates or rewrites your files: it
 **detects** drift read-only on every command, and **remediates only through an
@@ -180,14 +189,14 @@ fsgg-sdd --version                            # the CLI's OWN version — not yo
 
 ---
 
-## The products
+## The components
 
-| Product | What it gives you | Ships |
+| Component | What it gives you | Ships |
 |---|---|---|
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework: Scene, layout, input, viewer/host, controls, themes — Elmish/MVU over SkiaSharp/OpenGL. The render core is Elmish-free; idiomatic Elmish is an optional adapter. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
-| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI: scaffold a product, then drive `charter → ship` with structured artifacts and JSON/text/rich reports. Also ships `FS.GG.Contracts`, the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
+| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI: scaffold a workspace, then drive `charter → ship` with structured artifacts and JSON/text/rich reports. Also ships `FS.GG.Contracts`, the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / route tooling — a pure inference kernel that checks your artifacts, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition: wires SDD + Rendering + Governance into one ready-to-run product at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition: wires SDD + Rendering + Governance into one ready-to-run workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
 
 ### Pick your path
 
@@ -195,10 +204,10 @@ fsgg-sdd --version                            # the CLI's OWN version — not yo
 |---|---|---|
 | Just render an F# UI | **FS.GG.Rendering** packages / `fs-gg-ui` template | [Rendering usage](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/usage.md) |
 | Run a managed dev lifecycle | **FS.GG.SDD** (`fsgg-sdd`) | [SDD quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md) |
-| Scaffold a full-stack product | **FS.GG.Templates** (`rendering` provider) | [Templates](https://github.com/FS-GG/FS.GG.Templates#create-a-full-stack-product-composition-primary-path) |
-| Add rules / gates to a project | **FS.GG.Governance** overlay | [Adopting governance](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/adopting-governance.md) |
+| Scaffold a full-stack workspace | **FS.GG.Templates** (`rendering` provider) | [Templates](https://github.com/FS-GG/FS.GG.Templates#create-a-full-stack-workspace-composition-primary-path) |
+| Add rules / gates to a workspace | **FS.GG.Governance** overlay | [Adopting governance](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/adopting-governance.md) |
 
-Not sure? See **[Which products do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md)**
+Not sure? See **[Which components do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md)**
 
 ---
 
@@ -246,7 +255,7 @@ stale.
                           ├──skeleton──▶ .fsgg/ lifecycle (charter … ship)
                           └──overlay (optional)──▶ FS.GG.Governance reference gate set
 
-FS.GG.Rendering depends on no other FS-GG product — never on Governance.
+FS.GG.Rendering depends on no other FS-GG component — never on Governance.
 ```
 
 Every feature moves through
@@ -260,27 +269,27 @@ surface stays machine-checkable.
 
 > **📐 Want the full picture?** Read the
 > **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
-> the four-product split, the one-way dependency rule, the contract registry, the
+> the four-component split, the one-way dependency rule, the contract registry, the
 > shared F# house style, and how the repositories compose into one runnable
-> product, with links to every source.
+> workspace, with links to every source.
 
 ---
 
 ## Consumer documentation
 
 The **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)**
-collects the cross-product processes in one place:
+collects the cross-component processes in one place:
 
-- [Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md) — your first product, end to end.
-- [Which products do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md) — a decision guide.
+- [Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md) — your first workspace, end to end.
+- [Which components do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md) — a decision guide.
 - [The development lifecycle](https://github.com/FS-GG/.github/blob/main/docs/consumer/lifecycle.md) — `charter → ship`, step by step.
 - [Adopting governance](https://github.com/FS-GG/.github/blob/main/docs/consumer/governance.md) — profiles, gates, and the escape hatch.
 - [Output, automation & CI](https://github.com/FS-GG/.github/blob/main/docs/consumer/automation.md) — the JSON contract and scripting.
 - [Versions, feeds & updates](https://github.com/FS-GG/.github/blob/main/docs/consumer/versioning-and-updates.md) — installing, pinning, staying current.
 - [FAQ & troubleshooting](https://github.com/FS-GG/.github/blob/main/docs/consumer/faq.md).
 
-Authoritative per-product docs live in each repository; the consumer guide is the
-map and the cross-product processes that connect them.
+Authoritative per-component docs live in each repository; the consumer guide is the
+map and the cross-component processes that connect them.
 
 ---
 
@@ -289,9 +298,9 @@ map and the cross-product processes that connect them.
 Active preview. Rendering ships `FS.GG.UI.*` preview packages and the `fs-gg-ui`
 template; SDD and Governance are active and installable. APIs and package
 versions may still move before a stable line — pin versions and read each
-product's installation and versioning docs. FS-GG is the split of the archived
+component's installation and versioning docs. FS-GG is the split of the archived
 [`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI) monolith into focused,
-independently shippable products.
+independently shippable components.
 
 ## License
 
