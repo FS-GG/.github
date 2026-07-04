@@ -89,16 +89,13 @@ skills:
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack and lifecycle == spec-kit" }
   - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: e6c16f33a3f9b06995378952ba07408cee8a9f4eb4a9ce18bf2142602c40f499, materializes-when: "feedback == true and lifecycle == spec-kit" }
 
-  # The ADR-0017 §C2 seam, resolved on the Rendering side (FS.GG.Rendering#71, PR #76): Rendering
-  # gates fs-gg-project to `lifecycle == spec-kit`; SDD's SeededSkills EXCLUDES it. Under the `sdd`
-  # lane neither producer supplies it — now recorded HONESTLY as declared ∧ condition-false ∧ absent
-  # (materializes-when false ⇒ legitimate off-lane absence), not a blanket-tolerated gap. In the
-  # spec-kit lane Rendering supplies it. `supplied-by` records the intended owner per lane so the
-  # validator can fail if the named owner does not in fact emit it.
-  - id: fs-gg-project
-    scope: product
-    owner: fs-gg-rendering
-    source: FS.GG.Rendering/template/base/.agents/skills/fs-gg-project/SKILL.md
-    sha256: 3dc0b55b9681c99485c39cb0eabd1effaba70061d8a9e5eb57f270061c4aa16d
-    materializes-when: "lifecycle == spec-kit"
-    supplied-by: { spec-kit: fs-gg-rendering, sdd: none }   # sdd lane: legitimately unsupplied (condition false)
+  # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
+  # fs-gg-project was formerly gated `lifecycle == spec-kit`, so under the `sdd`/`none` lanes NEITHER
+  # producer supplied it (SDD's SeededSkills deliberately EXCLUDES the product-internal project skill)
+  # — a genuine supply gap the "declared ∧ absent" tolerance hid (§C2). Rendering chose Option A:
+  # widen the producer condition to be profile-scoped and lifecycle-INDEPENDENT, so the
+  # product-orientation umbrella now materializes on EVERY lane whose profile matches. This row is now
+  # an ordinary profile-gated product skill (same predicate as fs-gg-scene above); SDD's SeededSkills
+  # exclusion is moot for the orientation-skill gap. sha256 + source (manifest supplied-by path)
+  # unchanged; registry = manifest = bytes preserved.
+  - { id: fs-gg-project,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/base/.agents/skills/fs-gg-project/SKILL.md, sha256: 3dc0b55b9681c99485c39cb0eabd1effaba70061d8a9e5eb57f270061c4aa16d, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }

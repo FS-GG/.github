@@ -38,6 +38,17 @@ Three consequences follow, all observed on the shipped `SpaceInvaders`/`SpaceInv
   off-profile). (Adjacent to the Rendering↔SDD skill-tree seam already tracked as
   [FS.GG.SDD#53](https://github.com/FS-GG/FS.GG.SDD/issues/53).)
 
+  - **C2 RESOLVED (2026-07-04, FS.GG.Rendering#91 / PR #101; registry reconcile [.github#183](https://github.com/FS-GG/.github/issues/183)).**
+    Rendering chose **Option A**: widen the producer condition from `lifecycle == spec-kit` to the
+    profile-scoped, **lifecycle-independent** predicate `profile in [app, headless-scene, governed,
+    sample-pack, game]`, so the product-orientation umbrella now materializes on **every** lane whose
+    profile matches — the `sdd`/`none` supply gap is closed at the source. `fs-gg-project` is now an
+    ordinary profile-gated product row in `registry/skills.yml` (same predicate as `fs-gg-scene`);
+    SDD's `SeededSkills` exclusion of the product-internal project skill is **moot** for this
+    orientation-skill gap (SDD never owned it — Rendering supplies it on all lanes). `sha256` +
+    `source` unchanged, so registry = manifest = bytes holds. The gap that "declared ∧ absent"
+    tolerance hid no longer exists to hide.
+
 - **C3 — no authoritative full-set catalog exists.** The process set lives only in
   `SeededSkills.fs`; the product set only in Rendering's `template/skill-manifest/`. The union is
   an **emergent per-scaffold computation** (SDD manifest ∪ provider manifest). No single surface
@@ -86,8 +97,11 @@ skill catalog — mirroring the [registry-schema governance][ADR-0015] precedent
 
 - **Rendering** — the product-manifest generator emits `materializes-when` from the
   `template.json` `condition` it already parses (no new source of truth). Owns the `fs-gg-project`
-  resolution: either record it honestly as `lifecycle == spec-kit` **and** stop `new-sdd-fullstack`
-  implying it, or arrange for it to be supplied in the `sdd` lane.
+  resolution: **RESOLVED via Option A** (Rendering#91 / PR #101; registry reconcile .github#183) —
+  arranged for it to be supplied on every lane by widening the condition to the profile-scoped,
+  lifecycle-independent `profile in [app, headless-scene, governed, sample-pack, game]` (see §C2
+  RESOLVED above), rather than the narrower "record `lifecycle == spec-kit` and stop
+  `new-sdd-fullstack` implying it" alternative.
 - **SDD** — the process manifest carries `materializes-when: always` for the 15 `fs-gg-sdd-*`
   skills; SDD owns the other half of the `fs-gg-project` seam (`SeededSkills` exclusion) and its
   `doctor`/provenance path (which today derives "expected" from `ProducedPaths`, not the manifest —
