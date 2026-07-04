@@ -98,6 +98,12 @@ jobs:
       # the policy, NuGet/login fail-closes (401), so the gate avoids breaking every release in
       # the interim. Login+push live inline here (a cross-repo reusable workflow trips the OIDC
       # policy match — NuGet/login#6).
+      #
+      # ⚠ The Trusted Publishing policy is bound to BOTH this workflow's FILENAME and the target
+      # package id. Renaming either (as the fullstack→workspace rename did, ADR-0016) invalidates
+      # the OIDC token exchange with a 401 "Workflow mismatch" until an org-owner updates the
+      # nuget.org policy to `release-new-sdd-workspace.yml` + package `FS.GG.NewSddWorkspace`. The
+      # org-feed push above is unaffected (run-scoped GITHUB_TOKEN, not OIDC).
       - name: NuGet login (OIDC → short-lived key)
         if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
         id: login
