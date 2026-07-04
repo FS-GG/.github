@@ -1,0 +1,33 @@
+# Self-test for scripts/fsgg-coord — the GraphQL-budget-thrifty Coordination-board client.
+#
+# Runs tests/fsgg-coord/run.sh, which drives fsgg-coord against a PATH-shim `gh` stub that COUNTS
+# calls, and asserts the consumption levers fire: the board map is introspected once then served
+# from cache (later reads add zero GraphQL calls), item lookup is narrow + cached, set-field
+# auto-routes by dataType, and issues revalidate over REST with an ETag (304 -> cache). It guards
+# the helper the same way skill-union-selftest.yml guards the reusable assertion.
+name: fsgg-coord-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/fsgg-coord"
+      - "tests/fsgg-coord/**"
+      - ".github/workflows/fsgg-coord-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fsgg-coord"
+      - "tests/fsgg-coord/**"
+      - ".github/workflows/fsgg-coord-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the fsgg-coord fixture
+        run: bash tests/fsgg-coord/run.sh
