@@ -123,24 +123,6 @@ That gives you a real, windowed F# UI app plus the `.fsgg/` lifecycle skeleton
 Continue with `fsgg-sdd charter` to drive the work lifecycle, and add governance
 later if you want gates.
 
-<details>
-<summary><b>Under the hood</b> — the primitive <code>fsgg-sdd scaffold</code> path (CI, or no wrapper)</summary>
-
-`new-sdd-workspace` wraps the primitive path: register the reference `rendering`
-provider (it ships in FS.GG.Templates, not the CLI, so `scaffold` can't resolve
-`--provider rendering` until its descriptor is in your project's `.fsgg/providers.yml`;
-the descriptor's `source:` pin — not `fsgg-sdd --version` — sets your fs-gg-ui version,
-`main` tracks the newest set), then scaffold under an SDD-managed lifecycle.
-
-```sh
-mkdir -p ./MyApp/.fsgg
-curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
-  -o ./MyApp/.fsgg/providers.yml
-fsgg-sdd scaffold --root ./MyApp --provider rendering --param productName=MyApp
-cd ./MyApp && dotnet build && dotnet run
-```
-</details>
-
 Full walkthrough →
 **[Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md)**.
 Or create a ready specced sample game: https://github.com/FS-GG/.github/blob/main/docs/TestSpecTutorial.md
