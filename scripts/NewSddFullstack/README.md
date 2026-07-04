@@ -21,8 +21,16 @@ Requires the `fsgg-sdd` CLI on PATH (`dotnet tool install --global FS.GG.SDD.Cli
 new-sdd-fullstack ./Pong Pong          # <target-dir> <product-name>
 ```
 
+Run it with **no arguments** on an interactive terminal and it walks you through the same
+parameters with prompts (product → target → profile → governance → descriptor ref → upgrade).
+Beside the prompts a live preview fills in as you answer — a **parameters** card next to a
+**scaffold preview** tree of what the run will produce — and a final go/no-go confirmation
+guards the disk. When stdin is redirected (pipes, CI), it skips the wizard and keeps the
+usage-error contract, so scripted callers must still pass `<target-dir> <product-name>`.
+
 | Option | Effect |
 |---|---|
+| `--profile <name>` | `fs-gg-ui` render profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the scaffold-provider default (`game`). |
 | `--ref <git-ref>` | `FS.GG.Templates` ref to fetch the provider descriptor from (default: `main` = newest coherent set). Pass a tag to pin a reproducible version. |
 | `--upgrade` | also run `fsgg-sdd upgrade` after scaffolding (reconcile if behind — ADR-0009: never automatic) |
 | `--no-governance` | skip the Governance overlay |
