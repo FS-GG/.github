@@ -44,7 +44,7 @@ Spec Kit keeps the lifecycle **logic in agent prompts** (A re-derives the workfl
 each run). FS-GG **freezes the lifecycle bookkeeping into the CLI** (M) — what stage
 you're on, which artifacts exist, whether requirements are covered, whether the
 readiness gates pass — and leaves the agent only the genuinely novel part. See
-[Architecture §3, House style](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#3-house-style-shared-across-all-four-product-repos)
+[Architecture §3, House style](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#3-house-style-shared-across-all-four-component-repos)
 and [§4.2](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#42-fsggsdd--lifecycle-cli--contract-backbone).
 
 ---
@@ -103,7 +103,7 @@ CLI's report and acts. Two supporting pieces:
 - **`fsgg-sdd agents`** regenerates per-target Claude/Codex command + skill guidance
   from `readiness/<id>/work-model.json`, marked generated and never a second source
   of truth ([automation §Agents](automation.md#agents)).
-- **These seeded skills are part of the coherent set.** Because a scaffolded product
+- **These seeded skills are part of the coherent set.** Because a scaffolded workspace
   *= template@pin + `fsgg-sdd` CLI@installed*, and the CLI is what seeds the
   `fs-gg-sdd-*` skills, [ADR-0008](https://github.com/FS-GG/.github/blob/main/docs/adr/0008-fsgg-sdd-cli-first-class-member-of-coherent-set.md)
   makes the CLI a first-class member of the coherent set (the *orchestrator axis*).
@@ -137,7 +137,7 @@ The stages map roughly one-to-one — with **one deliberate gap**:
 
 **There is no `implement` command, by design.** SDD *brackets* implementation — it
 tracks the artifacts and evidence *around* your work; it does not produce your
-product code. The act of implementing is the gap between `analyze` and `evidence`
+application code. The act of implementing is the gap between `analyze` and `evidence`
 (see [Architecture §4.2](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#42-fsggsdd--lifecycle-cli--contract-backbone)).
 
 ---
@@ -161,7 +161,7 @@ So a typical unit of work is a back-and-forth:
 | Actor | Does |
 |---|---|
 | **M** (`fsgg-sdd`) | scaffolds artifacts, keeps `readiness/*.json` coherent, reports coverage & readiness, enforces the ordering and the authoring grammars |
-| **A** (agent) | authors the Markdown, **implements the product code** (the `analyze`→`evidence` gap), fixes what the CLI reports uncovered |
+| **A** (agent) | authors the Markdown, **implements the application code** (the `analyze`→`evidence` gap), fixes what the CLI reports uncovered |
 | **H** (you) | frames intent, makes novel calls, reviews, signs off at the merge boundary |
 
 Governance, if adopted, is a fourth reader of the same contract — it *inspects*,

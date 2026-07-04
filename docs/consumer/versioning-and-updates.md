@@ -3,7 +3,7 @@ title: Versions, feeds & updates
 category: FS.GG
 categoryindex: 6
 index: 17
-description: How an FS-GG consumer installs from the right feeds, pins versions, and stays current across the four products.
+description: How an FS-GG consumer installs from the right feeds, pins versions, and stays current across the four components.
 ---
 
 # Versions, feeds & updates
@@ -11,11 +11,11 @@ description: How an FS-GG consumer installs from the right feeds, pins versions,
 FS-GG ships as standard .NET artifacts — global tools, NuGet packages, and
 `dotnet new` template packages — so the normal install/update paths apply. This
 page maps which artifact comes from where and how to stay current. Authoritative
-version and feed details live in each product's installation doc.
+version and feed details live in each component's installation doc.
 
 ## What ships, and how you get it
 
-| Product | Artifact | Install |
+| Component | Artifact | Install |
 |---|---|---|
 | **SDD** | `FS.GG.SDD.Cli` global tool (`fsgg-sdd`) | `dotnet tool install --global FS.GG.SDD.Cli` |
 | **Rendering** | `FS.GG.UI.*` packages + `fs-gg-ui` template | `<PackageReference>` from nuget.org (pin via `FsGgUiVersion`), or scaffold from the `fs-gg-ui` template |
@@ -44,12 +44,12 @@ your dependency tooling).
 
 ## Pin, don't float
 
-Pin versions in a product you ship. Preview lines can move APIs and schemas
+Pin versions in a workspace you ship. Preview lines can move APIs and schemas
 before a stable line settles, so:
 
 - pin the `fsgg-sdd` tool version in your `dotnet-tools.json` manifest;
 - pin `FS.GG.UI.*` package versions;
-- read each product's **versioning policy** and **compatibility matrix** before a
+- read each component's **versioning policy** and **compatibility matrix** before a
   bump — for the lifecycle CLI, that's
   [versioning policy](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/release/versioning-policy.md)
   and the
@@ -69,7 +69,7 @@ provider descriptor, that single pin is the thing to bump.
 
 A scaffolded project has three moving pins, not two: the **template**, the
 **framework** (`FS.GG.UI.*`), and the **`fsgg-sdd` CLI itself** — because the CLI
-seeds artifacts a product on a given template pin is expected to contain (the
+seeds artifacts a workspace on a given template pin is expected to contain (the
 `fs-gg-sdd-*` process skills, `.fsgg/early-stage-guidance.md`). An old CLI on a new
 pin silently omits them, so the CLI is treated as a first-class member of the
 *coherent set* and **orchestrates** its own currency (ADR-0008 / ADR-0009):
@@ -94,5 +94,5 @@ fail-closed check *protects* that pin rather than fighting it.
 
 The lifecycle and governance config files carry a `schemaVersion`. The CLIs parse
 strictly and tell you when a file's schema is out of the supported range. When you
-bump a tool across a schema boundary, follow the product's migration notes
+bump a tool across a schema boundary, follow the component's migration notes
 (SDD: [`docs/release/migrations`](https://github.com/FS-GG/FS.GG.SDD/tree/main/docs/release/migrations)).

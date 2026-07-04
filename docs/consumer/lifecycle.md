@@ -3,7 +3,7 @@ title: The FS-GG development lifecycle
 category: FS.GG
 categoryindex: 6
 index: 13
-description: What each FS.GG.SDD lifecycle stage from charter to ship reads, writes, and reports — for consumers driving a product.
+description: What each FS.GG.SDD lifecycle stage from charter to ship reads, writes, and reports — for consumers driving a workspace.
 ---
 
 # The development lifecycle
@@ -36,7 +36,7 @@ The ordering is fixed; cross-cutting commands (below) never reorder it.
 
 | Stage | What it does |
 |---|---|
-| `charter` | Frame the product's intent and boundaries. |
+| `charter` | Frame the workspace's intent and boundaries. |
 | `specify` | Write the specification for a feature / work item. |
 | `clarify` | Surface and resolve underspecified points before planning. |
 | `checklist` | Generate a requirements checklist for the work. |
@@ -49,7 +49,7 @@ The ordering is fixed; cross-cutting commands (below) never reorder it.
 
 ## Where the artifacts live
 
-A scaffolded project carries:
+A scaffolded workspace carries:
 
 - **`.fsgg/`** — the configuration model (`project.yml`, `sdd.yml`, `agents.yml`,
   and, if you adopt it, the governance files).
@@ -66,7 +66,7 @@ A few authoring inputs are parsed by a **strict grammar** — get the shape subt
 wrong and a gate blocks with no obvious remedy. You don't have to reverse-engineer
 them: the exact accepted (and rejected) forms are published in SDD's
 [Authoring Contracts](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/reference/authoring-contracts.md)
-reference, and restated in a scaffolded product's `.fsgg/early-stage-guidance.md`.
+reference, and restated in a scaffolded workspace's `.fsgg/early-stage-guidance.md`.
 The two you'll meet first:
 
 - **Requirement→acceptance coverage line** (`checklist`). A functional requirement
@@ -80,13 +80,13 @@ The two you'll meet first:
   `synthetic` is `false`. A synthetic pass discloses a stand-in and does **not**
   satisfy; an unrecognized `kind` silently becomes `verification`. (This is the
   SDD lifecycle `evidence.yml` — not any same-named "evidence" doc a scaffolded
-  product ships of its own.)
+  workspace ships of its own.)
 
 ## Cross-cutting commands
 
 These are **not** lifecycle stages and never alter the `charter → ship` ordering:
 
-- **`fsgg-sdd scaffold`** — create a runnable, SDD-managed product from a template
+- **`fsgg-sdd scaffold`** — create a runnable, SDD-managed workspace from a template
   provider (see [Getting started](getting-started.md)).
 - **`fsgg-sdd doctor`** — read-only: report whether the project is coherent with its
   pinned set (CLI version, template pin, seeded artifacts). See

@@ -10,7 +10,7 @@
 
 Today the skill universe is a superset catalog with no recorded emission condition (ADR-0017 §C1–C3):
 
-- a scaffolded product ships a manifest declaring skills it does not materialize, with no per-entry
+- a scaffolded workspace ships a manifest declaring skills it does not materialize, with no per-entry
   reason — indistinguishable from corruption;
 - a **genuine** supply gap (`fs-gg-project`: declared `scope:product`, gated `spec-kit` in Rendering,
   excluded by SDD's `SeededSkills`) is invisible, because "declared ∧ absent" is unconditionally
