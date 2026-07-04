@@ -1,0 +1,50 @@
+# FS-GG org repo roster — the single authoritative list of the framework repos the org-level
+# fabrics iterate, and the capabilities each one participates in. Sibling of
+# registry/dependencies.yml (cross-repo contracts) and registry/skills.yml (skills). ADR-0019.
+#
+# WHY THIS EXISTS. The same set of framework repos was redeclared by hand in ~10 places
+# (scripts/apply-labels.sh, the dispatch/coherence/lockfile-sync/contract-coherence/skill-union
+# workflows, the NewSddFullstack scaffolder). Adding or retiring a repo meant editing all of them,
+# and they drifted. This roster is the ONE place that list lives; every fabric reads it, so growth
+# is a data change (one row + a changelog line + re-sync) gated by a coherence check — never a code
+# edit. It is the participant-side analog of skills.yml: where skills.yml gates skill EMISSION per
+# scaffold profile via `materializes-when`, this gates repo PARTICIPATION per fabric via `receives`.
+#
+# AUTHORITY. `.github` is the producer/authority — it holds the canonical fabrics and the
+# coordination kit and mirrors them out (it is the analog of `fsgg-sdd` for product skills). The
+# authority repo is therefore the SOURCE of the coordination kit, not a receiver of it.
+#
+# GOVERNANCE. Schema growth (a new field or a new `receives` capability) is a governed change:
+# bump `schemaVersion` when the SHAPE changes, always set `updated:` to match the newest change,
+# and prepend one dated entry to registry/repos.CHANGELOG.md. Validated by scripts/repos.sh
+# (shell + jq; kept self-contained in .github, deliberately not the SDD-owned typed validator).
+# Human projection: docs/registry/repos.md.
+#
+# `receives` VOCABULARY (the controlled set the validator admits):
+#   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [migrated: ADR-0019 slice 1]
+#   coordination-kit   — the cross-repo-coordination skill + the fsgg-coord client   [consumer: slice 2]
+#   build-config       — the org-shared .NET build config (scripts/sync-build-config.sh)  [migrate: later slice]
+#   lockfile-sync      — the reusable lockfile-sync workflow                          [migrate: later slice]
+#   contract-coherence — the reusable contract-coherence gate                         [migrate: later slice]
+# Only `labels` and `coordination-kit` are POPULATED in slice 1; the rest are reserved vocabulary,
+# added to the relevant rows when each fabric is migrated (verified against that workflow's list).
+
+schemaVersion: 1
+updated: 2026-07-04
+authority: FS-GG/.github
+
+repos:
+  - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }
+  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit] }
+  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit] }
+  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit] }
+  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit] }
+
+# The coordination kit every `coordination-kit` receiver must hold, content-addressed like a
+# skills.yml row. `sha256` is the canonical digest of `source` (for a skill dir: sha256 of its
+# SKILL.md, byte-equivalent to `sha256sum SKILL.md` — the same rule skill-union-assert uses; for a
+# file: sha256 of the file). Regenerate with `scripts/repos.sh digest <source>`. The slice-2 sync
+# (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
+kit:
+  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 460542a2c351b698980656e6e07a3450a21238bdbc935ec90fd58ec1dcbdf20c }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: df89f2b168f000045091cc80a3fe8ec0d67ecc4e04f98f426387cd9a0d6062e9 }

@@ -3,13 +3,13 @@
 # GitHub has no org-level labels, so they are created per-repo (idempotent via --force).
 set -euo pipefail
 
-REPOS=(
-  FS-GG/FS.GG.SDD
-  FS-GG/FS.GG.Rendering
-  FS-GG/FS.GG.Governance
-  FS-GG/FS.GG.Templates
-  FS-GG/.github
-)
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# The repo list is the org roster (registry/repos.yml) — every repo that `receives: labels`.
+# ADR-0019: this was a hardcoded array duplicated across ~10 fabrics; it now reads the single
+# authoritative roster, so adding/retiring a repo is one registry row, not a code edit here.
+mapfile -t REPOS < <("$HERE/repos.sh" list --receives labels)
+[ "${#REPOS[@]}" -ge 1 ] || { echo "apply-labels: roster returned no repos with 'labels'" >&2; exit 1; }
 
 # name|color|description
 LABELS=(
