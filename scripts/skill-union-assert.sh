@@ -32,13 +32,30 @@
 # A skill declared and present in SOME roots but not all still fails check 1 ([partitioned]).
 # See docs/coordination/skill-union-assertion.md.
 #
+# (4) condition-aware — only when BOTH --manifest and --params <scaffold-provenance.json> are given
+# (ADR-0017). The manifest entry may carry a `materializes-when` predicate over the scaffold
+# parameters (absent ⇒ `always`); --params supplies the scaffold's `effectiveParameters`. This
+# turns the superset catalog's "declared ∧ absent" from BLANKET-tolerated into JUSTIFIED —
+# absence is legitimate only when the condition is false. Two new classes close the manifest→disk
+# blind spot (the direction checks 1-3 never enforced):
+#   - declared ∧ condition TRUE ∧ absent-everywhere → [missing]   (FAIL — the dropped-skill case,
+#     e.g. fs-gg-project; was silently tolerated by the superset rule);
+#   - present ∧ condition FALSE                     → [unexpected] (FAIL — materialized off-profile);
+#   - declared ∧ condition FALSE ∧ absent           → legitimate (justified off-profile omission);
+#   - declared ∧ condition TRUE  ∧ present          → proceed to the digest check (3) as before.
+# Without --params the gate keeps today's superset semantics EXACTLY (opt-in per caller), so no
+# consumer is forced to change at once. The predicate grammar is deliberately tiny (==, !=,
+# `in [..]`, and, or, true/false, always) — evaluable without a real expression engine, so the
+# shell gate and the typed validator (Fsgg.Registry) never drift.
+#
 # Usage:
 #   skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
-#                         [--co-tenants "<glob> <glob> ..."]
+#                         [--co-tenants "<glob> <glob> ..."] [--params <scaffold-provenance.json>]
 #   skill-union-assert.sh --digest <skill-dir>   # print the canonical SKILL.md digest and exit
 # Roots default to AGENT_SKILL_ROOTS (env) or ADR-0011's three: ".claude/skills .codex/skills
-# .agents/skills". Roots are resolved relative to --product. Exit 0 = union coherent; 1 = at least
-# one violation (each printed with its class); 2 = misconfiguration. `-h`/`--help` prints usage.
+# .agents/skills". Roots are resolved relative to --product. --params requires --manifest. Exit
+# 0 = union coherent; 1 = at least one violation (each printed with its class); 2 = misconfiguration.
+# `-h`/`--help` prints usage.
 
 set -euo pipefail
 
@@ -46,6 +63,7 @@ PRODUCT="."
 ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .codex/skills .agents/skills}"
 MANIFEST=""
 CO_TENANTS=""
+PARAMS=""
 
 die() { echo "::error::skill-union-assert: $*" >&2; exit 2; }
 
@@ -56,7 +74,7 @@ union of process + product skills (ADR-0014 P3.G3.1, FS-GG/.github#111).
 
 Usage:
   skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
-                        [--co-tenants "<glob> <glob> ..."]
+                        [--co-tenants "<glob> <glob> ..."] [--params <scaffold-provenance.json>]
   skill-union-assert.sh --digest <skill-dir>
 
 Options:
@@ -65,6 +83,9 @@ Options:
                           (default: $AGENT_SKILL_ROOTS or ".claude/skills .codex/skills .agents/skills")
   --manifest <file.json>  producer skill-manifest; enables the digest cross-check (check 3)
   --co-tenants "<glob>…"  globs of undeclared co-tenant skill ids to admit (only with --manifest)
+  --params <file.json>    scaffold-provenance.json; enables the condition-aware check (check 4,
+                          ADR-0017) — evaluates each declared skill's materializes-when against
+                          .effectiveParameters, adding [missing] / [unexpected]. Requires --manifest.
   --digest <skill-dir>    reference generator: print the canonical-body sha256 of the dir's SKILL.md,
                           then exit (so producers and this assertion never drift)
   -h, --help              print this help
@@ -81,6 +102,7 @@ while [ $# -gt 0 ]; do
     --roots)      ROOTS="${2:?--roots needs a value}"; shift 2 ;;
     --manifest)   MANIFEST="${2:?--manifest needs a value}"; shift 2 ;;
     --co-tenants) CO_TENANTS="${2:?--co-tenants needs a value}"; shift 2 ;;
+    --params)     PARAMS="${2:?--params needs a value}"; shift 2 ;;
     --digest)     DIGEST_ONLY="${2:?--digest needs a skill dir}"; shift 2 ;;
     -h|--help)    usage; exit 0 ;;
     *)            die "unknown argument: $1" ;;
@@ -109,6 +131,71 @@ is_co_tenant() {
   return 1
 }
 
+# ---- materializes-when predicate evaluator (ADR-0017) ------------------------------------------
+# A deliberately TINY boolean language over the scaffold parameters, mirrored 1:1 by the typed
+# validator so shell and F# never drift:  always | <clause> [ (and|or) <clause> ]...  where a
+# clause is  <param> == <value> | <param> != <value> | <param> in [<v>, <v>, ...].  No parentheses;
+# `and` binds tighter than `or` (evaluated: OR of ANDs of clauses). Values and params are bare
+# tokens ([A-Za-z0-9_-], plus true/false); a param absent from --params reads as the empty string,
+# so `== <v>` is false and `!= <v>` is true. PARAM[] is populated from .effectiveParameters below.
+declare -A PARAM=()
+
+trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
+
+# Evaluate a single comparison clause. Returns 0 (true) / 1 (false); dies (2) on an unparseable clause.
+eval_clause() {
+  local c key rhs item; c="$(trim "$1")"
+  if [ "$c" = "always" ] || [ "$c" = "true" ]; then return 0; fi
+  if [ "$c" = "false" ]; then return 1; fi
+  if [[ "$c" == *" in ["* ]]; then
+    key="$(trim "${c%% in [*}")"
+    rhs="${c#*[}"; rhs="${rhs%]}"                    # contents between [ and ]
+    local IFS=',' item_t
+    for item in $rhs; do
+      item_t="$(trim "$item")"
+      [ -n "$item_t" ] || continue                   # skip empties (a trailing/doubled comma) — an
+                                                     # empty token must never match an unset param
+      [ "${PARAM[$key]-}" = "$item_t" ] && return 0
+    done
+    return 1
+  fi
+  if [[ "$c" == *"!="* ]]; then
+    key="$(trim "${c%%!=*}")"; rhs="$(trim "${c#*!=}")"
+    [ "${PARAM[$key]-}" != "$rhs" ]; return
+  fi
+  if [[ "$c" == *"=="* ]]; then
+    key="$(trim "${c%%==*}")"; rhs="$(trim "${c#*==}")"
+    [ "${PARAM[$key]-}" = "$rhs" ]; return
+  fi
+  die "unparseable materializes-when clause: '$c'"
+}
+
+# Evaluate a conjunction (clauses joined by ' and ' — all must hold).
+eval_and() {
+  local rest="$1" part
+  while :; do
+    if [[ "$rest" == *" and "* ]]; then part="${rest%% and *}"; rest="${rest#* and }"
+    else part="$rest"; rest=""; fi
+    eval_clause "$part" || return 1
+    [ -n "$rest" ] || break
+  done
+  return 0
+}
+
+# Evaluate a full predicate (conjunctions joined by ' or ' — any may hold). Returns 0=true/1=false.
+eval_condition() {
+  local rest; rest="$(trim "$1")"
+  [ -n "$rest" ] || return 0                          # empty ⇒ always (defensive; absent ⇒ "always" upstream)
+  local part
+  while :; do
+    if [[ "$rest" == *" or "* ]]; then part="${rest%% or *}"; rest="${rest#* or }"
+    else part="$rest"; rest=""; fi
+    eval_and "$part" && return 0
+    [ -n "$rest" ] || break
+  done
+  return 1
+}
+
 if [ -n "$DIGEST_ONLY" ]; then
   [ -d "$DIGEST_ONLY" ] || die "skill dir not found: $DIGEST_ONLY"
   skill_digest "$DIGEST_ONLY" || die "no SKILL.md under: $DIGEST_ONLY"
@@ -126,20 +213,40 @@ for r in "${ROOT_ARR[@]}"; do
   [ -d "$PRODUCT/$r" ] || die "configured root is absent: $PRODUCT/$r"
 done
 
-# Manifest ids + their declared digests (JSON: {skills:[{id,scope,sha256},...]}). Requires jq
-# only when --manifest is supplied.
+# --params is meaningless without a manifest to read materializes-when from — the conditions live
+# on the manifest entries (ADR-0017), --params only supplies the values to evaluate them against.
+[ -z "$PARAMS" ] || [ -n "$MANIFEST" ] || die "--params requires --manifest (materializes-when lives on the manifest entries)."
+
+# Manifest ids + their declared digests + materializes-when predicates
+# (JSON: {skills:[{id,scope,sha256,materializes-when?},...]}). Requires jq only when --manifest is
+# supplied. `materializes-when` defaults to `always` (ADR-0017: absent ⇒ always emitted).
 declare -A MANIFEST_SHA=()
+declare -A MANIFEST_WHEN=()
 MANIFEST_IDS=""
 if [ -n "$MANIFEST" ]; then
   [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
   command -v jq >/dev/null 2>&1 || die "jq not found (required to read --manifest)."
   jq -e '.skills | type == "array"' "$MANIFEST" >/dev/null 2>&1 \
     || die "manifest has no .skills array: $MANIFEST"
-  while IFS=$'\t' read -r id sha; do
+  while IFS=$'\t' read -r id sha when; do
     [ -n "$id" ] || continue
     MANIFEST_SHA["$id"]="$sha"
+    MANIFEST_WHEN["$id"]="$when"
     MANIFEST_IDS="$MANIFEST_IDS $id"
-  done < <(jq -r '.skills[] | [.id, (.sha256 // "")] | @tsv' "$MANIFEST")
+  done < <(jq -r '.skills[] | [.id, (.sha256 // ""), (.["materializes-when"] // "always")] | @tsv' "$MANIFEST")
+fi
+
+# Scaffold parameters (scaffold-provenance.json → .effectiveParameters), read only with --params.
+# Booleans/numbers are stringified so `feedback == true` compares against the literal token.
+if [ -n "$PARAMS" ]; then
+  [ -f "$PARAMS" ] || die "params (scaffold-provenance) not found: $PARAMS"
+  command -v jq >/dev/null 2>&1 || die "jq not found (required to read --params)."
+  jq -e '.effectiveParameters | type == "object"' "$PARAMS" >/dev/null 2>&1 \
+    || die "params has no .effectiveParameters object: $PARAMS"
+  while IFS=$'\t' read -r k v; do
+    [ -n "$k" ] || continue
+    PARAM["$k"]="$v"
+  done < <(jq -r '.effectiveParameters | to_entries[] | [.key, (.value | tostring)] | @tsv' "$PARAMS")
 fi
 
 # Union of skill ids = every subdirectory across all roots. Manifest ids are NOT unioned in:
@@ -149,6 +256,16 @@ union_ids() {
   for r in "${ROOT_ARR[@]}"; do
     find "$PRODUCT/$r" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null
   done | LC_ALL=C sort -u
+}
+
+# Is <id> absent from EVERY root? (Present-in-some is handled by the main loop as [partitioned];
+# only absent-everywhere is a candidate for [missing] / the legitimate declared-absent count.)
+absent_everywhere() {
+  local id="$1" r
+  for r in "${ROOT_ARR[@]}"; do
+    [ -d "$PRODUCT/$r/$id" ] && return 1
+  done
+  return 0
 }
 
 fail=0
@@ -199,6 +316,13 @@ while IFS= read -r id; do
       fail=1
       continue
     fi
+    # (4) condition-aware — declared ∧ PRESENT ∧ materializes-when FALSE ⇒ [unexpected]
+    # (materialized off-profile). Only with --params; else fall through to the digest check.
+    if [ -n "$PARAMS" ] && ! eval_condition "${MANIFEST_WHEN[$id]}"; then
+      echo "::error::[unexpected] skill '$id' is materialized but its materializes-when ('${MANIFEST_WHEN[$id]}') is false for the scaffold parameters"
+      fail=1
+      continue
+    fi
     want="${MANIFEST_SHA[$id]}"
     if [ -n "$want" ]; then
       if ! got="$(skill_digest "$PRODUCT/$ref/$id")"; then
@@ -216,19 +340,33 @@ while IFS= read -r id; do
   fi
 done < <(union_ids)
 
-# Declared-but-absent-everywhere ids are fine (superset catalog) — surface the count for signal.
+# Manifest→disk direction (the blind spot check 1-3 never enforced). A declared id absent from
+# EVERY root is either legitimate (no --params ⇒ superset catalog; or --params ∧ condition FALSE ⇒
+# justified off-profile omission) or a [missing] failure (--params ∧ condition TRUE — the dropped-
+# skill case, e.g. fs-gg-project). Present-in-some ids were already handled by the main loop.
 declared_absent_ct=0
+missing_ct=0
 if [ -n "$MANIFEST" ]; then
   for id in $MANIFEST_IDS; do
-    [ -d "$PRODUCT/${ROOT_ARR[0]}/$id" ] || declared_absent_ct=$((declared_absent_ct + 1))
+    absent_everywhere "$id" || continue
+    if [ -n "$PARAMS" ] && eval_condition "${MANIFEST_WHEN[$id]-always}"; then
+      echo "::error::[missing] skill '$id' is declared with a true materializes-when ('${MANIFEST_WHEN[$id]-always}') but is absent from every root"
+      fail=1
+      missing_ct=$((missing_ct + 1))
+    else
+      declared_absent_ct=$((declared_absent_ct + 1))
+    fi
   done
 fi
 
-if [ "$skill_ct" -eq 0 ]; then
+# An empty union is a misconfiguration (exit 2) — UNLESS check 4 already found real [missing]
+# violations (every declared, required skill dropped): those are a genuine coherence failure and
+# must exit 1, not be masked by the misconfig die below.
+if [ "$skill_ct" -eq 0 ] && [ "$fail" -eq 0 ]; then
   die "no skills found under any root — expected at least one skill in the union."
 fi
 
-echo "skill-union-assert: $skill_ct skill(s) — present=$present_ct byte-identical=$identical_ct${MANIFEST:+ manifest-matched=$manifest_ct co-tenant=$cotenant_ct declared-absent=$declared_absent_ct}"
+echo "skill-union-assert: $skill_ct skill(s) — present=$present_ct byte-identical=$identical_ct${MANIFEST:+ manifest-matched=$manifest_ct co-tenant=$cotenant_ct declared-absent=$declared_absent_ct${PARAMS:+ (justified) missing=$missing_ct}}"
 if [ "$fail" -ne 0 ]; then
   echo "::error::skill-union-assert: FAILED — the roots are not the byte-identical union (see above)."
   exit 1

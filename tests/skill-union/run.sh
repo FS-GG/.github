@@ -9,6 +9,11 @@
 # canonical-body sha256 of SKILL.md only; manifest = superset catalog (declared∧absent is fine);
 # undeclared co-tenant process skills are admitted via --co-tenants globs.
 #
+# Check 4 (ADR-0017, --params): with a scaffold-provenance.json the assertion evaluates each
+# declared skill's materializes-when and adds [missing] (declared∧condition-true∧absent — the
+# blind spot that shipped a dropped fs-gg-project) and [unexpected] (present∧condition-false).
+# Without --params it degrades to the superset semantics above exactly — proven here too.
+#
 # Self-contained: builds throwaway product trees under a temp dir, no network, no other repos.
 
 set -euo pipefail
@@ -52,6 +57,22 @@ expect_fail() {
   else
     echo "PASS  (expected [$class] fail) $name — $(grep -m1 "::error::\[$class\]" "$WORK/out" | sed 's/::error:://' || true)"
     pass=$((pass+1))
+  fi
+}
+
+# expect_die <name> <product-dir> [extra assertion args...]
+# A MISCONFIGURATION must exit 2 (the `die` path — a bad flag combination, a missing file), NOT 1
+# (a real violation) or 0. Used for `--params` without `--manifest` (the conditions live on the
+# manifest, so there is nothing to evaluate against).
+expect_die() {
+  local name="$1" prod="$2"; shift 2
+  local args=(--product "$prod" --roots "$ROOTS" "$@")
+  local rc=0
+  bash "$ASSERT" "${args[@]}" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    echo "PASS  (expected misconfiguration exit 2) $name"; pass=$((pass+1))
+  else
+    echo "FAIL  (expected misconfiguration exit 2, got $rc) $name"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
   fi
 }
 
@@ -142,6 +163,72 @@ expect_fail "dangling skill still fails alongside admitted co-tenants" dangling 
 DRIFT="$WORK/drift"; build_good "$DRIFT"
 for r in $ROOTS; do printf '# alpha skill v2\n' > "$DRIFT/$r/alpha/SKILL.md"; done  # identical across roots, but no longer matches manifest
 expect_fail "manifest drift (identical across roots, != declared digest)" drifted "$DRIFT" --manifest "$MANIFEST"
+
+# --- 7. condition-aware classes (ADR-0017, --params) -------------------------------------------
+# A scaffold provenance carrying effectiveParameters. profile=game / lifecycle=spec-kit /
+# feedback=true — chosen so `profile == game`, `feedback == true and lifecycle == spec-kit` are
+# TRUE and `profile == app`, `profile == sample-pack …` are FALSE, exercising both directions.
+PROV="$WORK/prov-game.json"
+cat > "$PROV" <<'EOF'
+{ "effectiveParameters": { "profile": "game", "lifecycle": "spec-kit", "feedback": true } }
+EOF
+
+# 7a. [missing]: a declared skill whose materializes-when is TRUE for these params but which is
+#     materialized in NO root — the exact fs-gg-project defect ADR-0017 §C2 exists to catch.
+MISS="$WORK/cond-missing"; build_good "$MISS"           # alpha + beta present in all roots
+MAN_MISS="$WORK/man-missing.json"
+cat > "$MAN_MISS" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$MISS/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$MISS/.claude/skills/beta")",  "materializes-when": "profile in [app, game]" },
+  { "id": "fs-gg-project", "scope": "product", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "materializes-when": "profile == game" }
+] }
+EOF
+expect_fail "condition-aware [missing] (declared∧true∧absent — the fs-gg-project case)" missing "$MISS" --manifest "$MAN_MISS" --params "$PROV"
+
+# 7b. …and the SAME manifest WITHOUT --params keeps today's superset semantics exactly: the
+#     absence is blanket-tolerated → PASS. This is the "opt-in, no caller forced to change" line.
+expect_pass "no --params keeps superset semantics (declared∧absent tolerated)" "$MISS" --manifest "$MAN_MISS"
+
+# 7c. [unexpected]: a skill present + identical in every root but whose materializes-when is FALSE
+#     for these params (declared for profile==app; we are profile==game) → materialized off-profile.
+UNEXP="$WORK/cond-unexpected"; build_good "$UNEXP"
+for r in $ROOTS; do mk_skill "$UNEXP/$r" off-profile "# off-profile skill"; done
+MAN_UNEXP="$WORK/man-unexpected.json"
+cat > "$MAN_UNEXP" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$UNEXP/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$UNEXP/.claude/skills/beta")",  "materializes-when": "profile in [app, game]" },
+  { "id": "off-profile", "scope": "product", "sha256": "$(digest "$UNEXP/.claude/skills/off-profile")", "materializes-when": "profile == app" }
+] }
+EOF
+expect_fail "condition-aware [unexpected] (present∧false — materialized off-profile)" unexpected "$UNEXP" --manifest "$MAN_UNEXP" --params "$PROV"
+
+# 7d. JUSTIFIED absence + compound-true present: with --params a declared∧condition-FALSE∧absent
+#     skill is legitimate (not blanket-tolerated — justified), and a present skill whose compound
+#     `feedback == true and lifecycle == spec-kit` predicate is TRUE passes the digest check → PASS.
+JUST="$WORK/cond-justified"; build_good "$JUST"
+for r in $ROOTS; do mk_skill "$JUST/$r" feedback-capture "# feedback capture skill"; done
+MAN_JUST="$WORK/man-justified.json"
+cat > "$MAN_JUST" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$JUST/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$JUST/.claude/skills/beta")",  "materializes-when": "profile in [app, game]" },
+  { "id": "feedback-capture", "scope": "product", "sha256": "$(digest "$JUST/.claude/skills/feedback-capture")", "materializes-when": "feedback == true and lifecycle == spec-kit" },
+  { "id": "fs-gg-samples", "scope": "product", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "materializes-when": "profile == sample-pack and lifecycle == spec-kit" }
+] }
+EOF
+expect_pass "condition-aware justified absence + compound-true present (feedback∧spec-kit)" "$JUST" --manifest "$MAN_JUST" --params "$PROV"
+
+# 7e. --params without --manifest is a misconfiguration (nothing declares the conditions) → exit 2.
+expect_die "--params without --manifest is a misconfiguration (exit 2)" "$MISS" --params "$PROV"
+
+# 7f. EVERY declared-required skill dropped (roots exist but are empty) is a genuine coherence
+#     failure [missing]/exit 1 — it must NOT be masked by the empty-union misconfiguration die
+#     (exit 2). Guards the check-4-vs-skill_ct==0 ordering.
+EMPTY="$WORK/cond-empty"
+for r in $ROOTS; do mkdir -p "$EMPTY/$r"; done          # roots present but hold no skills
+expect_fail "condition-aware [missing] survives an empty union (not masked by the misconfig die)" missing "$EMPTY" --manifest "$MAN_MISS" --params "$PROV"
 
 echo "--------------------------------------------"
 echo "skill-union fixture: $pass passed, $failcount failed"
