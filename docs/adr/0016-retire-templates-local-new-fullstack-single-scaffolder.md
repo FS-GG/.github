@@ -102,4 +102,4 @@ lifecycle, agent skills, and optional governance). The name now matches the voca
   with `publish=true`).
 - **Cross-repo sweep:** any sibling-repo docs that still say `new-sdd-fullstack` (e.g.
   FS.GG.Templates README/design, repointed here per the 2026-07-03 consequences) need the same
-  rename — filed as a `cross-repo` heads-up in the affected repos.
+  rename — filed as a `cross-repo` heads-up: [FS.GG.Templates#95](https://github.com/FS-GG/FS.GG.Templates/issues/95).
