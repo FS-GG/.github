@@ -38,6 +38,16 @@ It orchestrates the commands that already exist, and reports each step's outcome
 4. **`fsgg-sdd doctor`** — read-only coherence check — *non-blocking*
 5. **`fsgg-sdd upgrade`** (only with `--upgrade`) — *fatal on failure*
 
+### Governance overlay & feeds
+
+`FS.GG.Templates` (which carries the `fs-gg-governance` template) is published anonymously on
+[nuget.org](https://www.nuget.org/packages/FS.GG.Templates), so the overlay needs **no token** —
+the install runs from an isolated `nuget.config` exposing only nuget.org, so an
+anonymous-401-on-read org feed in your global config can't poison the restore. If
+`FSGG_PACKAGES_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN` (a `read:packages` token) is set, the org feed
+is tried first (it may carry a newer build) with nuget.org as the fallback. The step only skips
+when **both** feeds fail, and the product is fine without it.
+
 ## Develop
 
 From an `FS-GG/.github` checkout:

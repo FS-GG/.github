@@ -85,9 +85,13 @@ let private runProcess (echo: bool) (exe: string) (args: string list) : int * st
     runProcessIn None echo exe args
 
 /// The org GitHub Packages feed. It authenticates ALL reads, including PUBLIC packages
-/// (FS-GG/FS.GG.Templates#82), so a bare `dotnet new install FS.GG.Templates` is anonymous
-/// and fails with exit 103 — that is why the governance overlay used to always skip.
+/// (FS-GG/FS.GG.Templates#82), so a bare `dotnet new install FS.GG.Templates` against a config
+/// that carries this source fails with a 401 on every anonymous read.
 let private orgFeed = "https://nuget.pkg.github.com/FS-GG/index.json"
+
+/// nuget.org, which serves FS.GG.Templates anonymously (the `light` governance overlay only
+/// needs whatever version is public here).
+let private nugetOrg = "https://api.nuget.org/v3/index.json"
 
 /// A feed read token from the environment, if any — a dedicated var first, then the ones CI
 /// and the `gh` CLI already export. `read:packages` scope is enough (the package is public).
@@ -98,38 +102,67 @@ let private feedToken () =
         | null | "" -> None
         | v -> Some v)
 
+/// Run `dotnet new install FS.GG.Templates` from a temp dir carrying `configXml` as its
+/// nuget.config, then delete the temp dir. `dotnet new install` has no --configfile; it
+/// discovers config from CWD upward, so the isolated dir gives us a config with a `<clear />`
+/// that no ambient source can widen — a 401-on-read org feed in the caller's global config then
+/// can't poison the restore (one source hard-failing fails the whole restore).
+let private installFromTempConfig (configXml: string) : int * string =
+    let dir = Path.Combine(Path.GetTempPath(), "new-sdd-fullstack-" + Guid.NewGuid().ToString "N")
+    Directory.CreateDirectory dir |> ignore
+    try
+        File.WriteAllText(Path.Combine(dir, "nuget.config"), configXml)
+        runProcessIn (Some dir) false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
+    finally
+        try Directory.Delete(dir, true) with _ -> ()
+
+/// An isolated nuget.config exposing only nuget.org (anonymous).
+let private nugetOrgConfig () =
+    String.concat "\n"
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+          "<configuration>"
+          "  <packageSources>"
+          "    <clear />"
+          sprintf "    <add key=\"nuget.org\" value=\"%s\" />" nugetOrg
+          "  </packageSources>"
+          "</configuration>" ]
+
+/// An isolated nuget.config exposing the credentialed org feed (may carry a newer build) with
+/// nuget.org as a same-restore fallback.
+let private orgFeedConfig (token: string) =
+    String.concat "\n"
+        [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+          "<configuration>"
+          "  <packageSources>"
+          "    <clear />"
+          sprintf "    <add key=\"fs-gg-github\" value=\"%s\" />" orgFeed
+          sprintf "    <add key=\"nuget.org\" value=\"%s\" />" nugetOrg
+          "  </packageSources>"
+          "  <packageSourceCredentials>"
+          "    <fs-gg-github>"
+          "      <add key=\"Username\" value=\"fs-gg\" />"
+          sprintf "      <add key=\"ClearTextPassword\" value=\"%s\" />" (System.Security.SecurityElement.Escape token)
+          "    </fs-gg-github>"
+          "  </packageSourceCredentials>"
+          "</configuration>" ]
+
 /// Install the FS.GG.Templates template package (which carries the `fs-gg-governance` template).
-/// If a feed token is present, run the install from a temp dir carrying a credentialed
-/// nuget.config (`dotnet new install` has no --configfile; it discovers config from CWD upward),
-/// then delete it. With no token, fall back to the ambient/global config — which works when the
-/// caller already has an authenticated org-feed source (the common consumer case).
+/// FS.GG.Templates is published anonymously on nuget.org AND (possibly a newer build) on the
+/// org feed, whose reads are all authenticated (FS-GG/FS.GG.Templates#82). Best-effort ladder:
+/// with a token, try the org feed first (may carry a newer version); with no token — or if the
+/// org-feed install fails — fall back to nuget.org anonymously. Only when BOTH paths fail is the
+/// skip surfaced. Each install runs from an isolated temp config so the org feed's anonymous 401
+/// can't poison the restore.
 let private installGovernanceTemplate () : int * string =
     match feedToken () with
-    | None -> runProcess false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
+    | None -> installFromTempConfig (nugetOrgConfig ())
     | Some token ->
-        let dir = Path.Combine(Path.GetTempPath(), "new-sdd-fullstack-" + Guid.NewGuid().ToString "N")
-        Directory.CreateDirectory dir |> ignore
-        try
-            let cfg =
-                String.concat "\n"
-                    [ "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                      "<configuration>"
-                      "  <packageSources>"
-                      "    <clear />"
-                      sprintf "    <add key=\"fs-gg-github\" value=\"%s\" />" orgFeed
-                      "    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" />"
-                      "  </packageSources>"
-                      "  <packageSourceCredentials>"
-                      "    <fs-gg-github>"
-                      "      <add key=\"Username\" value=\"fs-gg\" />"
-                      sprintf "      <add key=\"ClearTextPassword\" value=\"%s\" />" (System.Security.SecurityElement.Escape token)
-                      "    </fs-gg-github>"
-                      "  </packageSourceCredentials>"
-                      "</configuration>" ]
-            File.WriteAllText(Path.Combine(dir, "nuget.config"), cfg)
-            runProcessIn (Some dir) false "dotnet" [ "new"; "install"; "FS.GG.Templates" ]
-        finally
-            try Directory.Delete(dir, true) with _ -> ()
+        let code, log = installFromTempConfig (orgFeedConfig token)
+        if code = 0 then
+            code, log
+        else
+            let code2, log2 = installFromTempConfig (nugetOrgConfig ())
+            code2, log + "\n" + log2
 
 /// `command -v <cmd>` — is the executable resolvable on PATH? (dotnet global tools install
 /// to a directory that is itself on PATH, so this finds `fsgg-sdd`.)
@@ -337,17 +370,18 @@ let private run (opts: Options) : int =
             else
                 let reason =
                     match feedToken () with
-                    | Some _ -> "could not install the FS.GG.Templates template from the org feed"
+                    | Some _ ->
+                        "could not install the FS.GG.Templates template from the org feed or nuget.org"
                     | None ->
-                        "could not install the FS.GG.Templates template — the org feed authenticates every read, "
-                        + "so set FSGG_PACKAGES_TOKEN (or GH_TOKEN) to a read:packages token, or configure an "
-                        + "authenticated nuget.pkg.github.com/FS-GG source"
+                        "could not install the FS.GG.Templates template from nuget.org (network?) — "
+                        + "set FSGG_PACKAGES_TOKEN (or GH_TOKEN) to a read:packages token to try the org feed too"
                 AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s — skipped" reason)
                 installLog.Replace("\r\n", "\n").Split('\n')
                 |> Array.iter (fun l -> if not (String.IsNullOrWhiteSpace l) then dim l)
                 AnsiConsole.MarkupLine(
                     sprintf
-                        "  add later: [grey]dotnet new install FS.GG.Templates && dotnet new fs-gg-governance -o %s --appName %s[/]"
+                        "  add later: [grey]dotnet new install FS.GG.Templates --nuget-source %s && dotnet new fs-gg-governance -o %s --appName %s[/]"
+                        nugetOrg
                         (Markup.Escape opts.Target)
                         (Markup.Escape opts.Product)
                 )
