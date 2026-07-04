@@ -16,6 +16,10 @@
 # Check 3 (matches a producer's skill-manifest digests) activates when `manifest` is supplied,
 # in the PRODUCERS' shipped semantics (.github#120): SKILL.md canonical-body sha256, superset
 # catalog, undeclared co-tenant ids admitted via `co-tenants` globs.
+# Check 4 (condition-aware, ADR-0017) activates when `params` (a scaffold-provenance.json) is also
+# supplied: it evaluates each declared skill's materializes-when against .effectiveParameters and
+# adds [missing] (declared∧true∧absent) / [unexpected] (present∧false). Without `params` the gate
+# keeps the superset semantics of check 3 exactly, so adoption is opt-in per caller.
 name: skill-union-assert
 
 on:
@@ -35,6 +39,10 @@ on:
         default: ""
       co-tenants:
         description: "Space-separated globs of co-tenant skill ids (e.g. 'fs-gg-sdd-* speckit-*') the manifest legitimately does not declare; only used with manifest."
+        type: string
+        default: ""
+      params:
+        description: "Optional path (in the caller's checkout) to a scaffold-provenance.json; enables the condition-aware check (ADR-0017) — [missing]/[unexpected] from materializes-when. Requires manifest."
         type: string
         default: ""
       github-ref:
@@ -72,6 +80,7 @@ jobs:
           ROOTS: ${{ inputs.roots }}
           MANIFEST: ${{ inputs.manifest }}
           CO_TENANTS: ${{ inputs.co-tenants }}
+          PARAMS: ${{ inputs.params }}
         run: |
           set -euo pipefail
           args=(--product "caller/${PRODUCT_PATH}" --roots "${ROOTS}")
@@ -80,5 +89,8 @@ jobs:
           fi
           if [ -n "${CO_TENANTS}" ]; then
             args+=(--co-tenants "${CO_TENANTS}")
+          fi
+          if [ -n "${PARAMS}" ]; then
+            args+=(--params "caller/${PARAMS}")
           fi
           bash dotgithub/scripts/skill-union-assert.sh "${args[@]}"

@@ -33,13 +33,18 @@ Over the configured `AGENT_SKILL_ROOTS` (default ADR-0011's three: `.claude/skil
    [skill-manifest](#the-manifest-and-the-canonical-digest) declares it, its `SKILL.md` digest
    equals the declared digest (*drifted*); if the manifest does **not** declare it, it must match
    a `--co-tenants` glob (*dangling* otherwise).
+4. **condition-aware** *(only with `--manifest` **and** `--params`)* — evaluates each declared
+   skill's `materializes-when` against the scaffold's `effectiveParameters`
+   ([the condition-aware manifest](#condition-aware-check-4----params-adr-0017), ADR-0017), adding
+   *missing* (declared ∧ condition true ∧ absent everywhere) and *unexpected* (present ∧ condition
+   false). Without `--params` the gate keeps the check-3 superset semantics exactly.
 
 Checks 1–2 are **self-contained** — they need nothing but the product tree. Check 3 cross-checks
 the manifests the producers actually ship ([FS.GG.SDD#61](https://github.com/FS-GG/FS.GG.SDD/issues/61) /
 [FS.GG.Rendering#43](https://github.com/FS-GG/FS.GG.Rendering/issues/43), ADR-0014 P0–P2), in
 **their** semantics — aligned by [.github#120](https://github.com/FS-GG/.github/issues/120):
 `Fsgg.SkillMirror` (FS.GG.Contracts 1.4.0) is ADR-0014's "one implementation", so the assertion
-follows it, not vice versa.
+follows it, not vice versa. Check 4 is the ADR-0017 tightening — see below.
 
 ## The manifest and the canonical digest
 
@@ -74,6 +79,52 @@ Producers declare every skill they can emit, but emission is lifecycle/profile-c
   the roots legitimately hold process skills from co-tenant producers the product manifest
   doesn't own (e.g. `--co-tenants "fs-gg-sdd-* speckit-*"` for the sdd / spec-kit lanes).
 
+The one gap this leaves: **declared ∧ absent from every root is *blanket*-tolerated** — the manifest
+records no reason a skill was skipped, so a genuinely-dropped skill is indistinguishable from an
+intentional off-profile omission. That is exactly how a supply failure (`fs-gg-project`) shipped
+unnoticed. Check 4 closes it.
+
+## Condition-aware (check 4) — `--params` (ADR-0017)
+
+[ADR-0017](../adr/0017-skill-registry-condition-aware-materialization.md) makes absence *checkable*
+by recording the **emission condition** on each manifest entry — an optional `materializes-when`
+predicate (absent ⇒ `always`):
+
+```json
+{ "skills": [
+    { "id": "fs-gg-scene",   "scope": "product", "sha256": "…", "materializes-when": "profile in [app, headless-scene, governed, sample-pack, game]" },
+    { "id": "fs-gg-project", "scope": "product", "sha256": "…", "materializes-when": "lifecycle == spec-kit" }
+  ] }
+```
+
+Pass the scaffold's own parameters with **`--params <scaffold-provenance.json>`** (read from
+`.effectiveParameters`) and the assertion evaluates each declared skill's predicate, turning
+"declared ∧ absent" from blanket-tolerated into **justified**. Two classes are added to the four
+above:
+
+| declared? | condition | materialized? | verdict |
+|---|---|---|---|
+| yes | true  | yes | check `sha256` → `[drifted]` if mismatch, else **ok** |
+| yes | true  | **no**  | **`[missing]`** — FAIL (new; catches the dropped `fs-gg-project`) |
+| yes | false | **yes** | **`[unexpected]`** — FAIL (new; materialized off-profile) |
+| yes | false | no  | legitimate — *justified* off-profile absence (was: blanket-tolerated) |
+| no  | —     | yes | `[dangling]` unless `--co-tenants` admits it (unchanged) |
+
+`[partitioned]` / `[divergent]` (the cross-root checks 1–2) are independent of conditions and
+unchanged. **Without `--params` the gate keeps today's superset semantics exactly**, so adoption is
+opt-in per caller — no consumer is forced to change at once. `--params` **requires** `--manifest`
+(the conditions live on the manifest entries; `--params` only supplies the values). The
+[FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49) is the first
+caller to pass provenance, enforcing `[missing]`/`[unexpected]` in both lanes.
+
+**The predicate language** is deliberately tiny — evaluable in both the shell gate and the typed
+validator (`Fsgg.Registry`) without a real expression engine, so the two never drift:
+`always` · `<param> == <value>` · `<param> != <value>` · `<param> in [<v>, <v>, …]` · clauses joined
+by `and` / `or` (`and` binds tighter; no parentheses). Values and params are bare tokens
+(`[A-Za-z0-9_-]`, plus `true`/`false`); a param absent from the provenance reads as empty. The
+authoritative catalog of ids + conditions is the org skill registry `registry/skills.yml` (ADR-0017),
+generated from the producer manifests.
+
 ## Usage
 
 Directly:
@@ -82,13 +133,14 @@ Directly:
 scripts/skill-union-assert.sh --product <product-dir> \
   [--roots ".claude/skills .codex/skills .agents/skills"] \
   [--manifest <manifest.json>] \
-  [--co-tenants "fs-gg-sdd-* speckit-*"]
+  [--co-tenants "fs-gg-sdd-* speckit-*"] \
+  [--params <scaffold-provenance.json>]        # enables the condition-aware check 4 (needs --manifest)
 ```
 
 `AGENT_SKILL_ROOTS` (env) overrides the default root set — ADR-0014's "one declared constant":
 adding a runtime root is a one-line change, no per-repo source edits. Exit `0` = the roots are the
 byte-identical union; non-zero = at least one violation, each printed with its class
-(`[partitioned]` / `[divergent]` / `[dangling]` / `[drifted]`).
+(`[partitioned]` / `[divergent]` / `[dangling]` / `[drifted]` / `[missing]` / `[unexpected]`).
 
 ## Adoption — wiring it into a consumer repo's CI
 
@@ -103,6 +155,7 @@ jobs:
       # roots: ".claude/skills .codex/skills .agents/skills"   # AGENT_SKILL_ROOTS, if non-default
       # manifest: "path/to/skill-manifest.json"                # enables the digest cross-check
       # co-tenants: "fs-gg-sdd-* speckit-*"                    # undeclared co-tenant ids to admit
+      # params: ".fsgg/scaffold-provenance.json"               # enables [missing]/[unexpected] (needs manifest)
 ```
 
 The [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49)
@@ -116,8 +169,13 @@ lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2
 product trees and proves the assertion **passes** on a coherent union (including a
 superset-catalog manifest with declared-but-absent ids and `--co-tenants`-admitted process
 skills) and **fails** on a divergent (`SKILL.md` *and* `references/**`), partitioned, dangling,
-and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md`. This
-is the acceptance evidence for #111 (semantics aligned by #120).
+and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md`. For the
+condition-aware check (ADR-0017) it additionally proves — with a `--params` provenance — a
+`[missing]` (declared ∧ true ∧ absent, the `fs-gg-project` case), an `[unexpected]` (present ∧
+false), a **justified** absence + compound-true present that **pass**, that the *same* manifest
+**without** `--params` keeps the superset semantics (declared-absent tolerated), and that
+`--params` without `--manifest` is a misconfiguration (exit 2). This is the acceptance evidence for
+#111 (semantics aligned by #120) and #164 (ADR-0017 check 4).
 
 ## Where this sits
 
