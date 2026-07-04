@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-02"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-04"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -824,8 +824,9 @@ coherence:
       Packages feed — the org feed stays the coherence source of truth (Renovate, the contract-coherence
       gate, and registry `package-version` keep reading it), nuget.org is an ADDITIVE public
       distribution target. Scope = everything: the two global tools (FS.GG.SDD.Cli, FS.GG.Governance.Cli),
-      FS.GG.Contracts, the FS.GG.UI.* coherent set + the FS.GG.UI BOM + FS.GG.UI.Template, and the
-      content-only FS.GG.Governance.ReferenceGateSet; the -preview channel is preserved. Each producer's
+      FS.GG.Contracts, the FS.GG.UI.* coherent set + the FS.GG.UI BOM + FS.GG.UI.Template, the
+      content-only FS.GG.Governance.ReferenceGateSet, and FS.GG.Templates (the governance-overlay
+      template package); the -preview channel is preserved. Each producer's
       release job pushes the BYTE-IDENTICAL .nupkg (the one that passed ApiCompat / the G1–G7 guard) to
       nuget.org with `--skip-duplicate` ONLY AFTER the org-feed push + gates are green; a failed
       nuget.org push fails the release loud but never corrupts coherence (org feed authoritative, retry
@@ -833,7 +834,7 @@ coherence:
       one-time per-repo packaging add. NB: a nuget.org ID is claimed PERMANENTLY (unlist != delete),
       so this freezes the current FS.GG.* IDs as the public identities (no rename — ADR-0003 discipline).
     note: >
-      COHERENT since 2026-07-01: all 22 in-scope packages resolve on nuget.org. Because each producer
+      COHERENT since 2026-07-01 (FS.GG.Templates added 2026-07-04): all 23 in-scope packages resolve on nuget.org. Because each producer
       release pushes to nuget.org only AFTER the org-feed push (below), nuget.org TRACKS the org feed —
       the current authoritative versions live in the contract entries above (fsgg-contracts,
       fs-gg-ui-template, …), NOT in this note. At the 2026-07-01 flip the resolving set was FS.GG.Contracts
@@ -841,10 +842,11 @@ coherence:
       and the FS.GG.UI.* coherent set (17 libs) + FS.GG.UI BOM + FS.GG.UI.Template @ 0.1.58-preview.1 (all
       since advanced) — dual-published via Trusted Publishing (OIDC), byte-identical
       to the org-feed artifacts. Delivered end-to-end: the ADMIN gate (.github#103) is satisfied (packages
-      owned by nuget.org account Paradigma11; three Active per-producer Trusted Publishing policies
-      fs-gg-sdd-release / fs-gg-rendering-release / fs-gg-governance-publish) and all three producer
+      owned by nuget.org account Paradigma11; four Active per-producer Trusted Publishing policies
+      fs-gg-sdd-release / fs-gg-rendering-release / fs-gg-governance-publish / fs-gg-Templates-publishing)
+      and all four producer
       release workflows wire `id-token: write` + NuGet/login@v1 + `dotnet nuget push` to
-      https://api.nuget.org/v3/index.json AFTER the org-feed push (SDD#58, Rendering#41, Governance#42,
+      https://api.nuget.org/v3/index.json AFTER the org-feed push (SDD#58, Rendering#41, Governance#42, Templates#84,
       merged; SDD v0.4.0 + Governance v1.2.0 releases and a Rendering 0.1.58-preview.1 dispatch all pushed
       green). Consumer docs dropped the `--add-source` requirement (docs/consumer/*). The FS.GG. prefix
       reservation remains an optional anti-squat follow-on (the IDs are now claimed under Paradigma11).
@@ -853,18 +855,19 @@ coherence:
       FS-GG nuget.org account, reserve the ID prefix `FS.GG.`
       (anti-squat — STILL required; trusted publishing replaces the key, not the prefix), and create ONE
       Trusted Publishing POLICY PER PRODUCER repo (Repository Owner FS-GG; Repository FS.GG.SDD /
-      FS.GG.Rendering / FS.GG.Governance; Workflow File = that repo's release workflow filename only,
+      FS.GG.Rendering / FS.GG.Governance / FS.GG.Templates; Workflow File = that repo's release workflow filename only,
       e.g. release.yml), optionally set the non-sensitive NUGET_USER (nuget.org profile name) — until a
       matching policy exists NuGet/login returns 401 and the release FAILS CLOSED/loud (never a silent
-      no-op, never a half-published set); (SDD/Rendering/Governance) each release.yml adds, IN ITS OWN
+      no-op, never a half-published set); (SDD/Rendering/Governance/Templates) each release.yml adds, IN ITS OWN
       WORKFLOW (a cross-repo reusable workflow trips the OIDC policy match — NuGet/login#6, so the
       .github#104 reusable nuget-org-push.yml was RETIRED), `id-token: write` + NuGet/login@v1 (short-
       lived key) + `dotnet nuget push … --skip-duplicate` to https://api.nuget.org/v3/index.json AFTER
       the org-feed push + gates are green (ADR-0012 §4), pushing the BYTE-IDENTICAL gate-verified .nupkg
       (§3) + listing metadata (§5): SDD = FS.GG.SDD.Cli + FS.GG.Contracts; Rendering = the FS.GG.UI.* set
-      + BOM + Template (one coherent set); Governance = FS.GG.Governance.Cli + FS.GG.Governance.ReferenceGateSet.
+      + BOM + Template (one coherent set); Governance = FS.GG.Governance.Cli + FS.GG.Governance.ReferenceGateSet;
+      Templates = FS.GG.Templates (the governance-overlay template package, added 2026-07-04 — Templates#83/#84).
       Flipped coherent:true 2026-07-01 — every in-scope package resolves on nuget.org at its current version. No
       contract surface/version change (auth-mechanism swap on an already-registered additive distribution target).
     resolved_by: "FS-GG/.github ADR-0013 (trusted publishing; supersedes ADR-0012 §6) — decision layer; ADR-0012 registers the dual-publish coherence id"
     impact: "Public consumers install FS-GG with no --add-source (dotnet tool install -g FS.GG.SDD.Cli / dotnet add package FS.GG.Contracts) and discover the packages on nuget.org; the org feed remains the -preview coherence feed and the auto-update fabric is unchanged. Producers publish keylessly (OIDC) — no long-lived push secret to store or rotate."
-    tracking: "RESOLVED — FS-GG/.github#103 (admin: policies Active) + FS.GG.SDD#56 (PR SDD#58) + FS.GG.Rendering#40 (PR Rendering#41) + FS.GG.Governance#41 (PR Governance#42), all merged; all 22 packages live on nuget.org. Optional follow-on: reserve the FS.GG. prefix + ADR-0012 §5 listing metadata."
+    tracking: "RESOLVED — FS-GG/.github#103 (admin: policies Active) + FS.GG.SDD#56 (PR SDD#58) + FS.GG.Rendering#40 (PR Rendering#41) + FS.GG.Governance#41 (PR Governance#42) + FS.GG.Templates#83 (PR Templates#84), all merged; all 23 packages live on nuget.org. Optional follow-on: reserve the FS.GG. prefix + ADR-0012 §5 listing metadata."
