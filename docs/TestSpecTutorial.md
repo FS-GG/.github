@@ -174,13 +174,6 @@ What you get:
 - a `.fsgg/scaffold-provenance.json` recording the externally owned files written,
   plus the `fsgg-sdd` version used (the orchestrator axis).
 
-> **Prefer to compose the steps yourself** — or skip governance? Use the plain
-> `fsgg-sdd scaffold --provider rendering` path (register the descriptor, then
-> scaffold) documented in [Getting started](consumer/getting-started.md) §2, or
-> `fsgg-sdd init` for the lifecycle skeleton only. `new-sdd-workspace` just chains
-> those steps — fetch descriptor → scaffold → governance → `doctor` — through
-> existing machinery ([source](https://github.com/FS-GG/.github/tree/main/scripts/NewSddWorkspace)).
-
 ### 3. Build and run the stock app
 
 First **confirm the fs-gg-ui version the scaffold actually pinned** — the generated
@@ -495,9 +488,7 @@ To pick a posture — `light` is the non-blocking inner-loop default; `strict` /
 gates check, see [Adopting governance](consumer/governance.md). Choosing a posture
 never changes how you build and run.
 
-> **Didn't want governance?** Run `new-sdd-workspace … --no-governance`, or scaffold
-> with the plain `fsgg-sdd scaffold` path in
-> [Getting started](consumer/getting-started.md) §2 — either adds no
+> **Didn't want governance?** Run `new-sdd-workspace … --no-governance` — it adds no
 > `.fsgg/policy.yml` / `capabilities.yml` / `tooling.yml`.
 
 ---
@@ -526,8 +517,7 @@ through `charter → ship` → turn acceptance criteria into tests. To go furthe
   **nuget.org** (anonymous `dotnet new install FS.GG.Templates` needs no auth or
   `--add-source`), so if the template can't be installed it's a transient nuget.org /
   network issue, not missing credentials; the step is skipped with a message and the
-  product still builds. Composing the steps by hand? See
-  [Getting started](consumer/getting-started.md) §2.
+  product still builds.
 - The window won't open → you likely have no GL/X11 session; the build and tests
   still run headless.
 - A lifecycle command surprised you → [FAQ & troubleshooting](consumer/faq.md)
