@@ -100,6 +100,19 @@ lifecycle, agent skills, and optional governance). The name now matches the voca
 - **Publish is a separate, deliberate step:** no `new-sdd-workspace/v*` tag is cut by this rename.
   The first release under the new id happens when an owner pushes that tag (or runs the workflow
   with `publish=true`).
+- **Published 2026-07-04:** tag `new-sdd-workspace/v0.3.0-preview.1` cut → `FS.GG.NewSddWorkspace
+  0.3.0-preview.1` is **live on the org GitHub Packages feed**.
+- **⚠ nuget.org dual-publish (ADR-0012/0013) breaks on the rename until an owner acts.** The nuget.org
+  **Trusted Publishing** policy is bound to the release workflow's *filename* **and** the target
+  package id, so the renamed `release-new-sdd-workspace.yml` publishing `FS.GG.NewSddWorkspace`
+  fails OIDC token exchange with `401 "Workflow mismatch … expected 'release-new-sdd-fullstack.yml'"`.
+  Since `vars.NUGET_ORG_PUBLISH=true`, the release job goes red on that step (the org-feed push
+  already succeeded — it uses the run-scoped `GITHUB_TOKEN`, not OIDC). **Owner action:** update /
+  recreate the nuget.org Trusted Publishing policy to `release-new-sdd-workspace.yml` + package
+  `FS.GG.NewSddWorkspace` (a package-pattern policy, since the id is new to nuget.org), then re-run
+  the failed workflow (`--skip-duplicate` makes the org-feed push idempotent). **General lesson:
+  renaming a release workflow file or a published package id requires re-pointing its nuget.org
+  Trusted Publishing policy in lockstep.**
 - **Cross-repo sweep:** any sibling-repo docs that still say `new-sdd-fullstack` (e.g.
   FS.GG.Templates README/design, repointed here per the 2026-07-03 consequences) need the same
   rename — filed as a `cross-repo` heads-up: [FS.GG.Templates#95](https://github.com/FS-GG/FS.GG.Templates/issues/95).
