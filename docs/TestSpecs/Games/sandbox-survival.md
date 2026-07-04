@@ -562,25 +562,41 @@ Drag to move/split stacks; trash slot bottom-right.
 restore), and required station.
 
 ## 10. Audio
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
 
-Checklist (audio optional in v1):
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
 
-| Event | SFX |
-|---|---|
-| Mining hit (per tile material) | dull/clink/metallic by group |
-| Tile breaks | crumble pop |
-| Place tile | soft thud |
-| Pick up item | light chime |
-| Craft success | tool-clatter |
-| Player hurt | grunt |
-| Enemy hurt / die | squish / shatter |
-| Jump / land | whoosh / thud |
-| Eat food | crunch |
-| Open/close inventory | leather flap |
-| Low health (HP<20) | heartbeat loop |
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Mining hit, per tile material (§4.3) | `Audio.playSfx (SoundId "mine-hit") 0.5` | `mine-hit` | dull/clink/metallic by group |
+| Tile breaks (§4.3) | `Audio.playSfx (SoundId "tile-break") 0.7` | `tile-break` | crumble pop |
+| Place tile (§4.5) | `Audio.playSfx (SoundId "tile-place") 0.6` | `tile-place` | soft thud |
+| Pick up item (§4.4) | `Audio.playSfx (SoundId "item-pickup") 0.4` | `item-pickup` | light chime |
+| Craft success (§12) | `Audio.playSfx (SoundId "craft-success") 0.7` | `craft-success` | tool-clatter |
+| Player hurt (§4.6) | `Audio.playSfx (SoundId "player-hurt") 0.8` | `player-hurt` | grunt |
+| Enemy hurt / die (§4.7) | `Audio.playSfx (SoundId "enemy-hit") 0.7` | `enemy-hit` | squish / shatter |
+| Jump / land (§4.1) | `Audio.playSfx (SoundId "jump-land") 0.5` | `jump-land` | whoosh / thud |
+| Eat food (§4.6) | `Audio.playSfx (SoundId "eat-food") 0.6` | `eat-food` | crunch |
+| Open/close inventory (§9) | `Audio.playSfx (SoundId "inventory-flap") 0.5` | `inventory-flap` | leather flap |
+| Low health, HP<20 (§4.6) | `Audio.playMusic (TrackId "heartbeat") true` | `heartbeat` | heartbeat loop |
 
-Music cues: calm **Day** loop, tense **Night** loop, ambient **Cave** loop (deep band),
-short **Death** sting. Cross-fade on phase/band change over 2 s.
+**Music** runs through `Audio.playMusic (… true)`: a calm **Day** loop and a tense **Night**
+loop switch on the day/night phase transition (§4.8), while an ambient **Cave** loop takes
+over when the player descends into the deep band (§6). The active track is swapped with a
+fresh `Audio.playMusic` on each phase/band change (cross-fade over 2 s at the backend), and
+`Audio.stopMusic` clears it on death, which also fires a short **Death** sting via
+`Audio.playSfx (SoundId "death-sting") 0.8`; the low-health heartbeat loop above is likewise
+stopped with `Audio.stopMusic` once HP recovers to ≥ 20. The settings **mute** toggle maps to
+`Audio.setMasterVolume` (`0.0` to mute, `1.0` at full). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. breaking a Stone tile requests exactly `PlaySfx (SoundId "tile-break", _)`).
 
 ## 11. Win / Loss / Scoring
 

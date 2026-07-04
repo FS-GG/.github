@@ -564,22 +564,46 @@ transform handles the room-transition camera slide.
 Formatting: counts are right-aligned 2 digits (`07`, `99`). Time as `M:SS`.
 
 ## 10. Audio
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
 
-SFX checklist (event → cue):
-- Player shot fire → soft "blip" (pitch varies ±5% per shot).
-- Shot hits enemy → wet "thunk"; enemy death → "pop"/"squelch".
-- Player hit → sharp "ow"/thud + low sting; player death → descending sting.
-- Dodge roll → whoosh.
-- Pickup: coin "ching", key "clink", bomb "thud", heart "chime".
-- Item pickup (passive) → triumphant "power-up" jingle.
-- Bomb explosion → boom + screen-shake.
-- Door lock (room seal) → stone "grind"; door unlock → "clack".
-- Boss intro roar; boss phase transition sting; boss death → big boom + slow-mo (0.4 s).
-- Trapdoor / floor descend → "fwoomp".
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
 
-Music cues: title theme; per-floor theme loops (5 themes); shop theme; boss theme
-(shared, intensifies); game-over/victory stingers. Audio is **optional in v1** (mutable;
-ships silent-capable).
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Player fires a shot (§4.3) | `Audio.playSfx (SoundId "shot-fire") 0.55` | `shot-fire` | soft "blip" (pitch varies ±5% per shot) |
+| Shot hits enemy (§4.4) | `Audio.playSfx (SoundId "shot-hit") 0.7` | `shot-hit` | wet "thunk" |
+| Enemy death (§5.2) | `Audio.playSfx (SoundId "enemy-death") 0.75` | `enemy-death` | "pop"/"squelch" |
+| Player takes a hit (§4.6) | `Audio.playSfx (SoundId "player-hit") 0.9` | `player-hit` | sharp "ow"/thud + low sting |
+| Player dies (§4.10) | `Audio.playSfx (SoundId "player-death") 1.0` | `player-death` | descending sting |
+| Dodge roll (§4.2) | `Audio.playSfx (SoundId "dodge-roll") 0.6` | `dodge-roll` | whoosh |
+| Coin pickup (§4.7) | `Audio.playSfx (SoundId "pickup-coin") 0.7` | `pickup-coin` | coin "ching" |
+| Key pickup (§4.7) | `Audio.playSfx (SoundId "pickup-key") 0.7` | `pickup-key` | key "clink" |
+| Bomb pickup (§4.7) | `Audio.playSfx (SoundId "pickup-bomb") 0.7` | `pickup-bomb` | bomb "thud" |
+| Heart pickup (§4.6) | `Audio.playSfx (SoundId "pickup-heart") 0.7` | `pickup-heart` | heart "chime" |
+| Passive item pickup (§4.9) | `Audio.playSfx (SoundId "item-pickup") 0.85` | `item-pickup` | triumphant "power-up" jingle |
+| Bomb explosion (§4.4) | `Audio.playSfx (SoundId "bomb-explosion") 0.95` | `bomb-explosion` | boom + screen-shake |
+| Door lock / room seal (§7.3) | `Audio.playSfx (SoundId "door-lock") 0.7` | `door-lock` | stone "grind" |
+| Door unlock / room clear (§7.3) | `Audio.playSfx (SoundId "door-unlock") 0.7` | `door-unlock` | "clack" |
+| Boss intro (§5.3) | `Audio.playSfx (SoundId "boss-intro") 1.0` | `boss-intro` | boss intro roar |
+| Boss phase transition (§5.3) | `Audio.playSfx (SoundId "boss-phase") 0.9` | `boss-phase` | boss phase transition sting |
+| Boss death (§5.3) | `Audio.playSfx (SoundId "boss-death") 1.0` | `boss-death` | big boom + slow-mo (0.4 s) |
+| Trapdoor / floor descend (§4.8) | `Audio.playSfx (SoundId "floor-descend") 0.8` | `floor-descend` | "fwoomp" |
+
+Background **music** loops per context: each floor's themed track starts on floor entry
+(`Audio.playMusic (TrackId "floor-1-theme") true`), and every transition — descending to
+the next floor, entering the shop or boss room, or ending the run — issues `Audio.stopMusic`
+before requesting the next loop (title, shop, boss, per-floor, game-over/victory stingers),
+so exactly one track plays at a time. A mute/settings toggle maps to `Audio.setMasterVolume`
+(muting requests `Audio.setMasterVolume 0.0`). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. firing a shot requests exactly `PlaySfx (SoundId "shot-fire", _)`).
 
 ## 11. Win / Loss / Scoring
 

@@ -62,7 +62,7 @@ the whole tutorial:
 | §7 State Model (Elmish/MVU) | `plan` (the F# `Model`/`Msg`/`update`/`view`) |
 | §8 Rendering (Skia 2D) | `plan` |
 | §9 UI / HUD / Screens | `specify`, `plan` |
-| §10 Audio | `tasks` (often deferred in v1) |
+| §10 Audio | `plan`, `tasks` (first-class via the `fs-gg-audio` capability) |
 | §11 Win / Loss / Scoring | `specify`, `checklist` |
 | §12 Difficulty & Balancing | `plan` (data-driven `Config`) |
 | §13 Technical Notes | `plan`, `analyze` |
@@ -345,8 +345,12 @@ Decompose the plan into dependency-ordered tasks. A natural Pong breakdown:
 7. Subscriptions: 60 FPS `Tick`, keyboard input (§3, §7).
 8. Tests for each §14 scenario (see Part C).
 
-§10 Audio is usually a **deferred** task in v1 — record it as deferred rather
-than dropping it.
+§10 Audio is a **first-class** task in v1, built on the FS.GG.UI `fs-gg-audio`
+capability: `update` returns pure `AudioEffect` values (`Audio.playSfx` /
+`playMusic` / `stopMusic` / `setMasterVolume`) and a record-only interpreter
+(`Audio.interpret`) folds them into `AudioEvidence` you assert on — no sound
+hardware required. Turn each cue in the spec's §10 table into an `AudioEffect`
+request and cover it with an evidence assertion.
 
 ### 7. `analyze` — cross-artifact consistency
 

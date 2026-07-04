@@ -302,16 +302,36 @@ y-down on screen.
   "Press Space to Restart". If a new best, show "New Best!" badge.
 
 ## 10. Audio
-Checklist (optional in v1):
-- [ ] Normal bounce — short "boing" (pitch slightly randomized ±5%).
-- [ ] Spring bounce — higher "spring" twang.
-- [ ] Jetpack — looping thrust whoosh for its duration.
-- [ ] Breakable platform — crumble/snap.
-- [ ] Enemy stomp — squish; enemy hit (death) — thud/zap.
-- [ ] Pickup grab — chime.
-- [ ] Game over — descending tone.
-- [ ] New best — fanfare.
-- [ ] Music — light loopable background track; mute toggle `M`.
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Auto-bounce off a platform (§4.3) | `Audio.playSfx (SoundId "bounce") 0.8` | `bounce` | Normal bounce — short "boing" (pitch slightly randomized ±5%). |
+| Spring super-bounce (§4.7) | `Audio.playSfx (SoundId "spring-bounce") 0.9` | `spring-bounce` | Spring bounce — higher "spring" twang. |
+| Jetpack thrust active (§5) | `Audio.playSfx (SoundId "jetpack-thrust") 0.7` | `jetpack-thrust` | Jetpack — looping thrust whoosh for its duration. |
+| Breakable platform contact (§4.7) | `Audio.playSfx (SoundId "platform-break") 0.8` | `platform-break` | Breakable platform — crumble/snap. |
+| Enemy stomp (§4.9) | `Audio.playSfx (SoundId "enemy-stomp") 0.8` | `enemy-stomp` | Enemy stomp — squish. |
+| Lethal enemy contact (§4.9, §11) | `Audio.playSfx (SoundId "enemy-hit") 0.9` | `enemy-hit` | Enemy hit (death) — thud/zap. |
+| Jetpack pickup grabbed (§5) | `Audio.playSfx (SoundId "pickup-grab") 0.8` | `pickup-grab` | Pickup grab — chime. |
+| Game Over (§11) | `Audio.playSfx (SoundId "game-over") 0.9` | `game-over` | Game over — descending tone. |
+| New best score (§9) | `Audio.playSfx (SoundId "new-best") 1.0` | `new-best` | New best — fanfare. |
+
+This game has a light loopable background track, so `update` requests
+`Audio.playMusic (TrackId "bg-loop") true` when a run starts (§7) and `Audio.stopMusic` when
+music stops at Game Over (§11); the mute toggle (`M`) maps to `Audio.setMasterVolume` (`0.0`
+to mute, `1.0` to restore). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. an auto-bounce on a Static platform requests exactly
+`PlaySfx (SoundId "bounce", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Scoring:** `Score = floor(altitude) = floor(-MaxClimb)` in px of climb. Score **only ever

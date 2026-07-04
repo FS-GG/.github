@@ -341,18 +341,33 @@ every tick (immediate mode); no dirty-rect optimization needed at these entity c
   `PRESS ENTER TO RESTART`.
 
 ## 10. Audio
-Checklist (optional in v1; classic Asteroids feel):
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
 
-| Event | Sound |
-|-------|-------|
-| Fire bullet | short "pew" |
-| Asteroid destroyed (Large/Med/Small) | three explosion pitches (low→high) |
-| Ship thrust | looping low rumble while held |
-| Ship destroyed | big explosion |
-| UFO present | looping warble (Large = low, Small = high) |
-| UFO destroyed | explosion |
-| Extra life | chime |
-| Background "heartbeat" | two-note beat that speeds up as a wave is cleared down |
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Fire bullet (§4.2) | `Audio.playSfx` | `SoundId "fire"` | short "pew" |
+| Asteroid destroyed (§4.3) | `Audio.playSfx` | `SoundId "asteroid-explosion"` | three explosion pitches (low→high) for Large/Med/Small |
+| Ship thrust (§4.1) | `Audio.playSfx` | `SoundId "thrust"` | looping low rumble while held |
+| Ship destroyed (§4.5) | `Audio.playSfx` | `SoundId "ship-explosion"` | big explosion |
+| UFO present (§4.8) | `Audio.playSfx` | `SoundId "ufo-warble"` | looping warble (Large = low, Small = high) |
+| UFO destroyed (§4.8) | `Audio.playSfx` | `SoundId "ufo-explosion"` | explosion |
+| Extra life (§11) | `Audio.playSfx` | `SoundId "extra-life"` | chime |
+| Wave heartbeat | `Audio.playMusic` | `TrackId "heartbeat"` | two-note beat that speeds up as a wave is cleared down |
+
+The classic background "heartbeat" is looping music: request `Audio.playMusic (TrackId "heartbeat") true`
+while a wave is in progress, and `Audio.stopMusic` when the field pauses or the game ends. A
+mute/settings toggle maps to `Audio.setMasterVolume` (e.g. `Audio.setMasterVolume 0.0` to silence). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. firing a bullet requests exactly `PlaySfx (SoundId "fire", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Scoring:** Large asteroid 20, Medium 50, Small 100; Large UFO 200, Small UFO 1000.

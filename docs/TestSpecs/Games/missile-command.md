@@ -328,16 +328,39 @@ Blast flicker via two-color alternation. No camera (fixed view). Redraw strategy
 - **Game Over:** "GAME OVER", final score, NEW HIGH SCORE banner if beaten,
   "Click / Enter to restart".
 
-## 10. Audio (checklist, optional v1)
-- Counter-missile launch → short "thunk/whoosh".
-- Blast detonation → boom (pitch slightly randomized).
-- Incoming impact on city/battery → heavy explosion + low rumble.
-- Enemy killed by blast → light "pop".
-- MIRV split → "crackle".
-- Plane on screen → faint engine drone (loop while present).
-- Dry click (no ammo) → soft "click" / negative cue.
-- Wave start → ascending chime; wave bonus tally → per-line ticks; game over → descending tone.
-- Music: optional low ambient pad during play; tension rises with wave (out of scope v1).
+## 10. Audio
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Counter-missile launch (§4.3) | `Audio.playSfx` | `counter-launch` | short "thunk/whoosh" |
+| Blast detonation (§4.4) | `Audio.playSfx` | `blast-boom` | boom (pitch slightly randomized) |
+| Incoming impact on city/battery (§4.5) | `Audio.playSfx` | `impact-explosion` | heavy explosion + low rumble |
+| Enemy killed by blast (§4.4) | `Audio.playSfx` | `enemy-pop` | light "pop" |
+| MIRV split (§4.6) | `Audio.playSfx` | `mirv-crackle` | "crackle" |
+| Plane on screen (§4.7) | `Audio.playSfx` | `plane-drone` | faint engine drone (loop while present) |
+| Dry click, no ammo (§3) | `Audio.playSfx` | `dry-click` | soft "click" / negative cue |
+| Wave start (§6) | `Audio.playSfx` | `wave-start-chime` | ascending chime |
+| Wave bonus tally per line (§9) | `Audio.playSfx` | `bonus-tick` | per-line ticks |
+| Game over (§9) | `Audio.playSfx` | `game-over-tone` | descending tone |
+| Play begins (Playing phase) | `Audio.playMusic … true` | `ambient-pad` | low ambient pad during play; tension rises with wave |
+| Game over / music stops (§9) | `Audio.stopMusic` | — | halt the ambient pad on game over |
+
+The game carries a background soundtrack: an `Audio.playMusic (TrackId "ambient-pad") true`
+loop starts with play and `Audio.stopMusic` ends it on game over. A mute/settings toggle
+maps to `Audio.setMasterVolume` (e.g. `Audio.setMasterVolume 0.0` to silence, `1.0` to
+restore). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a blast detonation requests exactly `PlaySfx (SoundId "blast-boom", _)`).
 
 ## 11. Win / Loss / Scoring
 

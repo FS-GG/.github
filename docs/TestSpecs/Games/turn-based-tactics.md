@@ -620,26 +620,41 @@ overlay accessible from Play.
 letter grade (§11), with `Next`/`Retry`.
 
 ## 10. Audio
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
 
-Checklist (audio optional in v1):
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
 
-| Event | SFX |
-|---|---|
-| Select unit | soft tick |
-| Move confirm | mechanical step/whoosh |
-| Attack (melee) | heavy thud |
-| Attack (ranged/mortar) | launch + impact |
-| Knockback impact (collision) | metallic clang |
-| Drown / fall (hazard kill) | splash / fading fall |
-| Lava burn tick | sizzle |
-| Building hit / Grid Power drop | alarm blip |
-| Enemy telegraph appears | low ominous sting (once per round) |
-| Enemy phase begin | drum hit |
-| Unit death (player) | sharp negative |
-| Mission win / lose | victory chord / failure drone |
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| `SelectUnit` (§3) resolves | `Audio.playSfx` | `select-unit` | soft tick |
+| `ConfirmAction` of a move (§4.8) | `Audio.playSfx` | `move-confirm` | mechanical step/whoosh |
+| `ConfirmAction` of a melee attack (§4.5) | `Audio.playSfx` | `attack-melee` | heavy thud |
+| `ConfirmAction` of a ranged/mortar attack (§4.5) | `Audio.playSfx` | `attack-ranged` | launch + impact |
+| Knockback collision resolves (§4.6) | `Audio.playSfx` | `knockback-impact` | metallic clang |
+| Push into water/chasm kills a unit (§4.6) | `Audio.playSfx` | `hazard-kill` | splash / fading fall |
+| Lava burn tick at end of round (§4.3) | `Audio.playSfx` | `lava-burn` | sizzle |
+| Building hit / Grid Power drop (§4.7) | `Audio.playSfx` | `building-hit` | alarm blip |
+| Telegraphs generated at `StartRound` (§4.9) | `Audio.playSfx` | `telegraph-appear` | low ominous sting (once per round) |
+| Enemy phase begins (§4.3) | `Audio.playSfx` | `enemy-phase-begin` | drum hit |
+| Player unit death resolves (§4.5) | `Audio.playSfx` | `unit-death` | sharp negative |
+| `MissionResult` reached (§11) | `Audio.playSfx` | `mission-end` | victory chord / failure drone |
 
-Music: a low-tension ambient bed during Player Phase, a faster percussive cue during
-Enemy Phase, a calm Title/Deploy loop.
+Ambient music follows the phase: `StartRound`/`EndTurn` transitions request
+`Audio.playMusic (TrackId "player-phase-bed") true` for the low-tension Player-Phase bed,
+`Audio.playMusic (TrackId "enemy-phase") true` for the faster percussive Enemy-Phase cue,
+and a calm `Audio.playMusic (TrackId "title-loop") true` on Title/Deploy — each preceded by
+`Audio.stopMusic` on the phase change. A mute/settings toggle maps to
+`Audio.setMasterVolume` (`0.0` mutes). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. confirming a Vanguard *Ram* that shoves a Bruiser into water
+requests exactly `PlaySfx (SoundId "hazard-kill", _)`).
 
 ## 11. Win / Loss / Scoring
 

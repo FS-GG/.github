@@ -361,20 +361,38 @@ optimization needed for v1.
   ENTER" to return to title.
 
 ## 10. Audio
-Audio is optional in v1; provide hooks. SFX checklist (event → sound):
-- [ ] Ball ↔ wall bounce → short low blip.
-- [ ] Ball ↔ paddle → mid blip (pitch varies with offset).
-- [ ] Ball ↔ brick → pitched click; pitch rises with row color (yellow→red).
-- [ ] Brick destroyed (multi-HP) → heavier crunch on final hit.
-- [ ] Power-up capsule collected → ascending chime (distinct per kind).
-- [ ] Laser fire → pew; laser hit → zap.
-- [ ] Life lost → descending tone.
-- [ ] Level clear → short fanfare.
-- [ ] Game over → longer descending jingle.
-- [ ] Bonus life → sparkle.
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
 
-Music: optional looping ambient/chiptune at low volume during Play; muted on Pause. `M`
-toggles all audio.
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Ball ↔ wall bounce (§4.3) | `Audio.playSfx` | `wall-bounce` | short low blip |
+| Ball ↔ paddle (§4.4) | `Audio.playSfx` | `paddle-bounce` | mid blip (pitch varies with offset) |
+| Ball ↔ brick (§4.5) | `Audio.playSfx` | `brick-hit` | pitched click; pitch rises with row color (yellow→red) |
+| Brick destroyed, multi-HP (§4.5) | `Audio.playSfx` | `brick-break` | heavier crunch on final hit |
+| Power-up capsule collected (§4.6) | `Audio.playSfx` | `powerup-collect` | ascending chime (distinct per kind) |
+| Laser fire (§4.6) | `Audio.playSfx` | `laser-fire` | pew |
+| Laser hit (§4.6) | `Audio.playSfx` | `laser-hit` | zap |
+| Life lost (§4.7) | `Audio.playSfx` | `life-lost` | descending tone |
+| Level clear | `Audio.playSfx` | `level-clear` | short fanfare |
+| Game over | `Audio.playSfx` | `game-over` | longer descending jingle |
+| Bonus life (§4.7) | `Audio.playSfx` | `bonus-life` | sparkle |
+
+Play has a looping soundtrack: entering `Playing` requests `Audio.playMusic (TrackId "bgm")
+true` (looping ambient/chiptune at low volume during Play), and `Audio.stopMusic` fires
+where the music stops — on Pause, and on `GameOver`/return to Title. The `M` mute toggle
+(§3) maps to `Audio.setMasterVolume` (`0.0` to silence all audio, back to `1.0` to restore).
+**Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a ball–paddle deflection requests exactly `PlaySfx (SoundId "paddle-bounce", _)`).
 
 ## 11. Win / Loss / Scoring
 

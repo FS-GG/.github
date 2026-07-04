@@ -332,18 +332,38 @@ animation timer) before collapsing — optional in v1 but specified for polish.
 - **Hold** label above the hold panel; **Next** label above the queue panel.
 
 ## 10. Audio
-Checklist (audio optional in v1):
-- [ ] Piece move (left/right shift) — short tick.
-- [ ] Rotate — soft click.
-- [ ] Soft drop — subtle tick per cell.
-- [ ] Hard drop — thud.
-- [ ] Lock — light clack.
-- [ ] Line clear (1–3) — chime.
-- [ ] Tetris (4 lines) — bigger fanfare.
-- [ ] Level up — ascending cue.
-- [ ] Hold — swap whoosh.
-- [ ] Game over — descending tone.
-- [ ] Music — looping "Korobeiniki"-style theme; tempo optionally rises with level.
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Piece move — left/right shift (§3, §7.3 `MoveLeftDown`/`MoveRightDown`) | `Audio.playSfx (SoundId "move") 0.4` | `move` | short tick |
+| Rotate CW/CCW (§4.4, §7.3 `RotateCW`/`RotateCCW`) | `Audio.playSfx (SoundId "rotate") 0.4` | `rotate` | soft click |
+| Soft drop, per cell (§4.3, §7.3 `SoftDropDown`) | `Audio.playSfx (SoundId "soft-drop") 0.3` | `soft-drop` | subtle tick per cell |
+| Hard drop (§4.3, §7.3 `HardDrop`) | `Audio.playSfx (SoundId "hard-drop") 0.7` | `hard-drop` | thud |
+| Lock (§4.5) | `Audio.playSfx (SoundId "lock") 0.5` | `lock` | light clack |
+| Line clear, 1–3 (§4.6, §11) | `Audio.playSfx (SoundId "line-clear") 0.7` | `line-clear` | chime |
+| Tetris — 4 lines (§4.6, §11) | `Audio.playSfx (SoundId "tetris") 0.9` | `tetris` | bigger fanfare |
+| Level up (§6.2) | `Audio.playSfx (SoundId "level-up") 0.7` | `level-up` | ascending cue |
+| Hold — swap (§4.8, §7.3 `HoldPiece`) | `Audio.playSfx (SoundId "hold") 0.5` | `hold` | swap whoosh |
+| Game over — top-out (§11, §7.3) | `Audio.playSfx (SoundId "game-over") 0.8` | `game-over` | descending tone |
+
+Tetris classically has looping background **music** — a "Korobeiniki"-style theme whose tempo
+rises with level — modeled as `Audio.playMusic (TrackId "korobeiniki") true` on `StartGame`
+and `Audio.stopMusic` on game over (§11). A mute/settings toggle maps to
+`Audio.setMasterVolume` (e.g. `Audio.setMasterVolume 0.0` to mute, `1.0` to restore).
+**Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a hard drop that locks and clears four rows requests exactly
+`PlaySfx (SoundId "hard-drop", _)` then `PlaySfx (SoundId "tetris", _)`).
 
 ## 11. Win / Loss / Scoring
 **No win condition** — Tetris is endless; the goal is the highest score before topping out.

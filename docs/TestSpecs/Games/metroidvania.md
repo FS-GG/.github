@@ -437,19 +437,51 @@ tile layers batched via `drawAtlas`. No dirty-rect in v1 (full clear is cheap at
 - **Mini-map (corner, optional toggle):** 180×120 px room minimap.
 
 ## 10. Audio
-SFX checklist (event → sound):
-- Jump → "jump_soft"; Double jump → "jump_air"; Land → "land_dust".
-- Dash → "dash_whoosh"; Wall slide → "slide_loop"; Grapple fire/hit → "grapple".
-- Melee swing → "swing"; Melee hit → "hit_flesh" (+ hitstop); Pogo → "pogo_ping".
-- Bolt fire → "bolt"; Bolt impact → "bolt_hit".
-- Player hurt → "hurt"; Player death → "death_sting".
-- Enemy death → "enemy_pop"; Sentinel block → "clang".
-- Pickup ember → "coin"; Ability acquired → "acquire_fanfare".
-- Save Vein → "save_chime"; Focus heal → "heal".
-- Boss phase change → "boss_roar".
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
 
-Music cues: per-zone ambient loop (6 tracks); boss theme (2); title theme; victory
-sting. Music optional in v1; ducking on boss intro.
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Jump (§4.2) | `Audio.playSfx` | `jump-soft` | Soft ground-jump launch. |
+| Double jump (§4.11) | `Audio.playSfx` | `jump-air` | Airy second-jump lift, distinct from ground jump. |
+| Land (§4.2) | `Audio.playSfx` | `land-dust` | Dust puff on landing. |
+| Dash (§4.4) | `Audio.playSfx` | `dash-whoosh` | Whoosh on the flat i-frame dash. |
+| Wall slide (§4.3) | `Audio.playSfx` | `slide-loop` | Looping friction hiss while wall-sliding. |
+| Grapple fire/hit (§4.5) | `Audio.playSfx` | `grapple` | Hook fire and node-hit reel cue. |
+| Melee swing (§4.6) | `Audio.playSfx` | `swing` | Blade swing whoosh. |
+| Melee hit (§4.6) | `Audio.playSfx` | `hit-flesh` | Connect thud, paired with the §4.6 hitstop (+ hitstop). |
+| Pogo (§4.6) | `Audio.playSfx` | `pogo-ping` | Bright ping on a down-melee bounce. |
+| Bolt fire (§4.7) | `Audio.playSfx` | `bolt` | Ranged Bolt release. |
+| Bolt impact (§4.7) | `Audio.playSfx` | `bolt-hit` | Bolt collision on terrain/enemy. |
+| Player hurt (§4.8) | `Audio.playSfx` | `hurt` | Player takes damage. |
+| Player death (§11) | `Audio.playSfx` | `death-sting` | Death sting on `PlayerDied`. |
+| Enemy death (§5.2) | `Audio.playSfx` | `enemy-pop` | Enemy defeat pop. |
+| Sentinel block (§5.2) | `Audio.playSfx` | `clang` | Metallic clang when a hit is blocked by the Sentinel's shielded front. |
+| Pickup ember (§4.10) | `Audio.playSfx` | `coin` | Ember pickup chime. |
+| Ability acquired (§4.11) | `Audio.playSfx` | `acquire-fanfare` | Fanfare on `AbilityAcquired`. |
+| Save Vein (§5.3) | `Audio.playSfx` | `save-chime` | Chime when resting/saving at a Save Vein. |
+| Focus heal (§4.9) | `Audio.playSfx` | `heal` | Focus-heal completion (one mask restored). |
+| Boss phase change (§11) | `Audio.playSfx` | `boss-roar` | Roar on `BossPhaseChanged` threshold. |
+
+Music is per-area: each zone has an ambient background loop (6 tracks) requested with
+`Audio.playMusic (TrackId "zone-z1-ambient") true` (loop `true`) on `EnterRoom`/zone
+change, and boss encounters switch to a boss theme (2 tracks) — e.g.
+`Audio.playMusic (TrackId "boss-warden") true` on the arena transition, with
+`Audio.stopMusic` on boss defeat/exit before the next zone loop resumes; the title theme
+and victory sting are likewise `playMusic`/one-shot cues at those transitions, and the boss
+intro ducks the ambient loop. A mute/settings toggle maps to `Audio.setMasterVolume` (e.g.
+`Audio.setMasterVolume 0.0` to mute). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. landing a melee hit requests exactly
+`PlaySfx (SoundId "hit-flesh", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Win condition:** defeat **Boss B (Veil Echo)** in Z6 and touch the core relic →

@@ -275,13 +275,32 @@ Draw order (back to front):
   Restart". If a new best was set, show "NEW BEST!" above the score in `#E5484D`.
 
 ## 10. Audio
-Checklist (optional in v1):
-- [ ] Eat pellet → short blip (rising).
-- [ ] Turn committed → soft tick (very quiet; optional).
-- [ ] Death/collision → descending buzz/thud.
-- [ ] New high score → 3-note jingle on Game Over.
-- [ ] Menu confirm (Start/Restart) → UI click.
-- [ ] Music: optional low ambient loop during Play; silence on menus.
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Eat pellet (§4.4) | `Audio.playSfx (SoundId "eat") 0.8` | `eat` | short blip (rising) |
+| Turn committed (§4.3) | `Audio.playSfx (SoundId "turn") 0.3` | `turn` | soft tick (very quiet; optional) |
+| Death / collision (§4.7) | `Audio.playSfx (SoundId "death") 0.9` | `death` | descending buzz/thud |
+| New high score (§11) | `Audio.playSfx (SoundId "high-score") 0.9` | `high-score` | 3-note jingle on Game Over |
+| Menu confirm — Start/Restart (§9) | `Audio.playSfx (SoundId "menu-confirm") 0.7` | `menu-confirm` | UI click |
+
+Background music is a low ambient loop during Play, requested via
+`Audio.playMusic (TrackId "ambient") true` (loop `true`) when a run starts and
+`Audio.stopMusic` when the run ends or returns to a menu — silence on menus. A mute/settings
+toggle maps to `Audio.setMasterVolume` (e.g. `Audio.setMasterVolume 0.0` to mute). **Testing:**
+collect the frame's `AudioEffect`s, `Audio.interpret` them, and assert the
+`AudioEvidence.Requested` sequence for representative events (e.g. eating a pellet requests
+exactly `PlaySfx (SoundId "eat", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Scoring:** +10 points per pellet eaten. `Score = FoodEaten * 10`. No combo/time bonus

@@ -272,17 +272,32 @@ fading over 150 ms) on collision; small feather/dust particles on flap (≤ 6 pa
 - All text horizontally centered on its anchor unless noted.
 
 ## 10. Audio
-Audio is optional in v1 (a silent build must still pass acceptance).
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
 
-| Event | SFX |
-|-------|-----|
-| Flap | short "wing" whoosh |
-| Pass pipe / score | bright "point" blip |
-| Collision (pipe) | "hit" thud |
-| Ground impact | "die" splat (after hit) |
-| New best on game-over | "fanfare" sting |
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
 
-Music: none during play (classic). Optional low ambient on title screen.
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Flap (§4.2) | `Audio.playSfx` | `SoundId "flap"` | short "wing" whoosh |
+| Pass pipe / score (§4.6) | `Audio.playSfx` | `SoundId "point"` | bright "point" blip |
+| Collision — pipe (§4.7) | `Audio.playSfx` | `SoundId "hit"` | "hit" thud |
+| Ground impact (§4.7) | `Audio.playSfx` | `SoundId "die"` | "die" splat (after hit) |
+| New best on game-over (§11) | `Audio.playSfx` | `SoundId "new-best"` | "fanfare" sting |
+
+There is no soundtrack during play — the run is **silent between these events** (classic
+feel). The optional low title-screen ambient maps to `Audio.playMusic (TrackId "title-ambient") true`
+(loop true) on `Ready`, stopped with `Audio.stopMusic` on the first flap into `Playing`. A
+mute/settings toggle maps to `Audio.setMasterVolume` (e.g. `0.0` to silence, clamped to
+`[0.0, 1.0]`). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a `Flap` while `Playing` requests exactly `PlaySfx (SoundId "flap", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Scoring:** +1 per pipe pair passed (see 4.6). No multipliers, no time bonus, no combo.

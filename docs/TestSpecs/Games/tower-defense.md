@@ -555,13 +555,51 @@ range circle + footprint highlight, hover tooltips (enemy: hp/armor/resists; tow
 Formatting: gold/score thousands-separated; timers `M:SS`; DPS to 1 decimal.
 
 ## 10. Audio
-Checklist (v1 optional):
-- **SFX:** tower placed (thunk), invalid placement (low buzz), Arrow shot (twang), Cannon fire
-  (boom) + splash (crunch), Frost bolt (shimmer), Tesla zap (crackle), enemy death (pop), boss death
-  (roar), leak/life lost (alarm thud), wave start (horn), wave cleared (chime), gold/interest
-  (coins), upgrade (power-up), sell (cash register), game over (descending sting), victory (fanfare).
-- **Music:** calm loop during Build; tense percussive loop during Combat; boss-wave variant;
-  victory/defeat stingers. Ducking: combat music dips 30% on boss roar.
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Valid tower placement (§4.7) | `Audio.playSfx` | `sfx-tower-placed` | tower placed (thunk) |
+| Invalid placement (§4.7) | `Audio.playSfx` | `sfx-invalid-placement` | invalid placement (low buzz) |
+| Arrow fires (§4.4) | `Audio.playSfx` | `sfx-arrow-shot` | Arrow shot (twang) |
+| Cannon fires (§4.4) | `Audio.playSfx` | `sfx-cannon-fire` | Cannon fire (boom) |
+| Cannon shell impact (§4.10) | `Audio.playSfx` | `sfx-cannon-splash` | splash (crunch) |
+| Frost fires (§4.4) | `Audio.playSfx` | `sfx-frost-bolt` | Frost bolt (shimmer) |
+| Tesla fires (§4.4) | `Audio.playSfx` | `sfx-tesla-zap` | Tesla zap (crackle) |
+| Enemy killed | `Audio.playSfx` | `sfx-enemy-death` | enemy death (pop) |
+| Boss/Juggernaut killed | `Audio.playSfx` | `sfx-boss-death` | boss death (roar) |
+| Enemy leaks (§4.6) | `Audio.playSfx` | `sfx-life-lost` | leak/life lost (alarm thud) |
+| `StartWave` (§4.9) | `Audio.playSfx` | `sfx-wave-start` | wave start (horn) |
+| `WaveCleared` (§4.2) | `Audio.playSfx` | `sfx-wave-cleared` | wave cleared (chime) |
+| Interest/bounty paid (§4.9) | `Audio.playSfx` | `sfx-coins` | gold/interest (coins) |
+| `UpgradeSelected` (§5.1) | `Audio.playSfx` | `sfx-upgrade` | upgrade (power-up) |
+| `SellSelected` (§4.9) | `Audio.playSfx` | `sfx-sell` | sell (cash register) |
+| `GameOver` (§11) | `Audio.playSfx` | `sfx-game-over` | game over (descending sting) |
+| `Victory` (§11) | `Audio.playSfx` | `sfx-victory` | victory (fanfare) |
+| Enter `Building` phase (§4.2) | `Audio.playMusic … true` | `music-build` | calm loop during Build |
+| `StartWave` → `Combat` (§4.2) | `Audio.playMusic … true` | `music-combat` | tense percussive loop during Combat |
+| Boss wave enter (w10/w20, §6) | `Audio.playMusic … true` | `music-boss` | boss-wave variant |
+| Enter `Victory`/`GameOver` (§11) | `Audio.stopMusic` | — | stop combat loop for the victory/defeat stinger |
+
+Background **music loops** and switches on phase transitions: `Audio.playMusic (TrackId
+"music-build") true` on entering `Building`, swapping to `music-combat` (loop `true`) on
+`StartWave`, and to the `music-boss` variant on the mini-boss/boss waves; `Audio.stopMusic`
+runs on entering `Victory`/`GameOver` so the defeat/victory stinger plays clean (design intent:
+combat music dips 30% on boss roar via a transient duck). A **mute/settings toggle** maps to
+`Audio.setMasterVolume` (e.g. `Audio.setMasterVolume 0.0` to mute, `1.0` to restore; the level
+clamps to `[0.0, 1.0]`). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a valid tower placement requests exactly `PlaySfx (SoundId
+"sfx-tower-placed", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Win:** complete **Wave 20** (Wyrm killed and board cleared) with `lives > 0` → Victory.

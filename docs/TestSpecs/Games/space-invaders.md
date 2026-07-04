@@ -332,15 +332,36 @@ Dying glyph) and a 0.12 s white flash sprite on cannon hit. No camera/scrolling.
   `#FFD23F`.
 
 ## 10. Audio
-Checklist (audio optional in v1):
-- [ ] **March heartbeat**: 4-note descending loop whose tempo tracks the step interval
-      (the iconic accelerating thump).
-- [ ] **Player fire**: short pew on shot.
-- [ ] **Alien explosion**: noise burst on kill.
-- [ ] **Player death**: descending tone on cannon hit.
-- [ ] **UFO**: looping warble while UFO on screen; jingle on UFO hit.
-- [ ] **Bunker hit**: soft tick (optional).
-- [ ] **Wave clear / Game over**: short stings.
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Wave start; tempo tracks step interval (§4.4) | `Audio.playMusic (TrackId "march") true` | `march` | 4-note descending loop whose tempo tracks the step interval (the iconic accelerating thump). |
+| Player fires a shot (§4.2) | `Audio.playSfx (SoundId "player-fire") 0.8` | `player-fire` | short pew on shot. |
+| Alien enters `Dying` on kill (§4.3) | `Audio.playSfx (SoundId "alien-explosion") 0.8` | `alien-explosion` | noise burst on kill. |
+| Bomb/alien hits the cannon (§4.6, §11) | `Audio.playSfx (SoundId "player-death") 0.9` | `player-death` | descending tone on cannon hit. |
+| UFO on screen (§4.8) | `Audio.playSfx (SoundId "ufo-warble") 0.6` | `ufo-warble` | looping warble while UFO on screen. |
+| Player bullet hits the UFO (§4.8) | `Audio.playSfx (SoundId "ufo-hit") 0.8` | `ufo-hit` | jingle on UFO hit. |
+| Bullet erodes a bunker cell (§4.7) | `Audio.playSfx (SoundId "bunker-hit") 0.4` | `bunker-hit` | soft tick (optional). |
+| Last alien destroyed → `WaveCleared` (§6) | `Audio.playSfx (SoundId "wave-clear") 0.8` | `wave-clear` | short stings. |
+| Game over (§11) | `Audio.stopMusic` + `Audio.playSfx (SoundId "game-over") 0.8` | `game-over` | short stings. |
+
+The iconic 4-note descending marching bass **loop** that speeds up is the game's music track:
+request it with `Audio.playMusic (TrackId "march") true` on wave start, and `Audio.stopMusic`
+on wave end / game over (its tempo tracking is a host concern; the request is what tests
+observe). A mute/settings toggle maps to `Audio.setMasterVolume` (e.g. `Audio.setMasterVolume 0.0`
+to silence). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a `KeyDown Space` that fires a shot requests exactly `PlaySfx (SoundId "player-fire", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Scoring**: Squid 30, Crab 20, Octopus 10 per kill (4.3). UFO awards a value from the

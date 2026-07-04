@@ -328,16 +328,34 @@ car death. Font: a clean monospace/bitmap font, white `#FFFFFF`, sizes 16–48 p
   LifeTime`, ~300 px wide.
 
 ## 10. Audio
-Checklist (optional in v1):
-- Hop: short "boop".
-- Plunk (water death): low splash.
-- Squash (vehicle death): thud.
-- Home reached: chime/jingle.
-- Fly/lady bonus: sparkle.
-- Timer low (<5 s): ticking.
-- Level clear: fanfare.
-- Game over: descending tone.
-- Music: light looping arcade theme on title/play (toggleable).
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired event fires:
+
+| Event | Request | Id | Design intent |
+|---|---|---|---|
+| Hop resolves (§4.1) | `Audio.playSfx` | `hop` | short "boop" |
+| Drown on water (§4.4) | `Audio.playSfx` | `plunk` | Plunk (water death): low splash |
+| Vehicle kills (§4.2) | `Audio.playSfx` | `squash` | Squash (vehicle death): thud |
+| Reach home slot (§4.6) | `Audio.playSfx` | `home` | Home reached: chime/jingle |
+| Fly/lady bonus (§4.7) | `Audio.playSfx` | `bonus` | Fly/lady bonus: sparkle |
+| Timer low, `LifeTimer` < 5 s (§4.8) | `Audio.playSfx` | `timer-low` | Timer low (<5 s): ticking |
+| Level clear, all 5 slots (§11) | `Audio.playSfx` | `level-clear` | Level clear: fanfare |
+| Game over | `Audio.playSfx` | `game-over` | Game over: descending tone |
+
+A light looping arcade theme plays under the title and board: `Audio.playMusic (TrackId
+"arcade-theme") true` (loop true) on entering `Title`/`Playing`, and `Audio.stopMusic` when
+the run ends at `GameOver`. A mute/settings toggle maps to `Audio.setMasterVolume` (e.g.
+`Audio.setMasterVolume 0.0` to silence, `1.0` to restore). **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a resolved `Hop Up` requests exactly `PlaySfx (SoundId "hop", _)`).
 
 ## 11. Win / Loss / Scoring
 

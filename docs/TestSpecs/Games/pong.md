@@ -277,13 +277,29 @@ to render (title overlay, HUD, pause dim, game-over panel).
 - Hint: "SPACE — Rematch   ESC — Title" at 24 px.
 
 ## 10. Audio
-Audio is optional in v1. Checklist of cues:
-- [ ] Paddle hit — short blip (~120 Hz square, 60 ms).
-- [ ] Wall bounce — slightly higher blip (~240 Hz, 50 ms).
-- [ ] Point scored — descending two-tone (~200→100 Hz, 250 ms).
-- [ ] Serve launch — soft tick.
-- [ ] Match win — short victory jingle (3 ascending notes).
-- [ ] No background music (classic Pong is silent between events).
+Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
+Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
+model change and never touches an audio device. A record-only interpreter
+(`Audio.interpret`) folds the frame's requests into `AudioEvidence` — the requested effects
+in dispatch order, volumes clamped to `[0.0, 1.0]` — so cues are **deterministic and testable
+with no sound hardware**. `SoundId`/`TrackId` are opaque names this game owns; the host
+resolves them to real assets (a real playback backend is deferred, so tests assert on
+`AudioEvidence.Requested`, not on audio output).
+
+**Cues** — each is an `AudioEffect` requested from `update` when the paired transition fires:
+
+| Event (Tick transition) | Request | Id | Design intent |
+|---|---|---|---|
+| Paddle hit (§4.6) | `Audio.playSfx` | `SoundId "paddle-hit"` | short blip (~120 Hz square, 60 ms) |
+| Wall bounce (§4.5) | `Audio.playSfx` | `SoundId "wall-bounce"` | higher blip (~240 Hz, 50 ms) |
+| Point scored (§4.7) | `Audio.playSfx` | `SoundId "score"` | descending two-tone (~200→100 Hz, 250 ms) |
+| Serve launch (§4.4) | `Audio.playSfx` | `SoundId "serve"` | soft tick |
+| Match win (`GameOver`) | `Audio.playSfx` | `SoundId "win"` | victory jingle (3 ascending notes) |
+
+No background music (classic Pong is silent between events); a mute/settings toggle maps to
+`Audio.setMasterVolume`, clamped at the boundary. **Testing:** collect the frame's
+`AudioEffect`s, `Audio.interpret` them, and assert the `AudioEvidence.Requested` sequence for
+representative events (e.g. a paddle hit requests exactly `PlaySfx (SoundId "paddle-hit", _)`).
 
 ## 11. Win / Loss / Scoring
 - **Point:** the player whose goal line is NOT crossed scores 1 point when the ball exits
