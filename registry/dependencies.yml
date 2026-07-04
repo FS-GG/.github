@@ -159,9 +159,9 @@ contracts:
     consumers: [templates]   # Templates#14 overlay drift gate (git diff --exit-code)
     bundles: [governance-policy, governance-capabilities, governance-tooling, governance-descriptor]
   - id: fs-gg-ui-template
-    version: "0.1.58-preview.1"   # template FsGgUiVersion FRAMEWORK pin — UNCHANGED (no src/ change; tag fs-gg-ui/v0.1.58-preview.1). Template package advanced 0.1.58→0.1.60 (see package-version) WITHOUT a framework bump: the generated product still pins FS.GG.UI.* @ 0.1.58 (live on the feed + nuget.org). No fs-gg-ui/v0.1.60 tag exists — pushing one would trip the Feature 209 pin-lags-tag guard.
-    package-version: "0.1.61-preview.1"   # PUBLISHED FS.GG.UI.Template package (0.1.61-preview.1 carries Feature 231 / ADR-0014 P2, closes Rendering#43: product skill-manifest at .agents/skills/skill-manifest.json in every lifecycle; ONE standalone materialize step — vendored Fsgg.SkillMirror + FsGgMaterializeSkillRoots build target — replaces Feature 230's 24 per-skill .claude/.codex twins; dev-surface vendoring dropped (zero dangling wrappers); skill bodies verbatim + name-neutral (F5). Content/config only. Was 0.1.60-preview.1)
-    package-tag: "fs-gg-ui-template/v0.1.61-preview.1"   # template-scoped coherent-set tag (Feature 206/215/218/222/223/224/225/226/227/229/230/231)
+    version: "0.1.62-preview.1"   # template FsGgUiVersion FRAMEWORK pin — ADVANCED 0.1.58→0.1.62 (Feature 239, FS.GG.Rendering#72): a genuine src/ change adds the simulation primitives (Geometry/AABB, value-PRNG Rng, FixedStep.drain). The 0.1.60/0.1.61 steps were content-only (pin held at 0.1.58); this one moves the framework, so the generated product now pins FS.GG.UI.* @ 0.1.62 (17-lib set live on the org feed + nuget.org). Snapshot tag fs-gg-ui/v0.1.62-preview.1 exists (pin==tag; Feature 209 pin-lags-tag guard satisfied).
+    package-version: "0.1.62-preview.1"   # PUBLISHED FS.GG.UI.Template package (0.1.62-preview.1 carries Feature 239 / FS.GG.Rendering#72: FS.GG.UI simulation primitives — Geometry (AABB), Rng (value PRNG), FixedStep.drain — the §3 "every game consumer re-rolls collision/PRNG/accumulator" friction from the Space Invaders feedback epic .github#165. Framework + template released as one coherent set. Was 0.1.61-preview.1)
+    package-tag: "fs-gg-ui-template/v0.1.62-preview.1"   # template-scoped coherent-set tag (Feature 206/215/218/222/223/224/225/226/227/229/230/231/239)
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -359,7 +359,7 @@ contracts:
 # Hard dependency edges (downstream -> upstream).
 dependencies:
   # ADR-0002: vendoring retired. Templates composes the rendering app via scaffold, not a fork.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.1.61-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.1.62-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }
