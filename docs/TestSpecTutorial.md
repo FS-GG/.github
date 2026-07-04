@@ -522,10 +522,12 @@ through `charter → ship` → turn acceptance criteria into tests. To go furthe
   `new-sdd-fullstack` tool is on PATH (`dotnet tool list --global`). The tool
   fetches + registers the provider for you, so a `providerUnknown` error usually
   means the descriptor fetch couldn't reach FS.GG.Templates (check network / the `--ref`).
-  The governance step is best-effort — if the `FS.GG.Templates` template can't be installed
-  (the org feed needs an **authenticated** source — set `FSGG_PACKAGES_TOKEN`/`GH_TOKEN`, or
-  configure the feed credentials) it's skipped with a message, and the product still builds.
-  Composing the steps by hand? See [Getting started](consumer/getting-started.md) §2.
+  The governance step is best-effort — `FS.GG.Templates` publishes to public
+  **nuget.org** (anonymous `dotnet new install FS.GG.Templates` needs no auth or
+  `--add-source`), so if the template can't be installed it's a transient nuget.org /
+  network issue, not missing credentials; the step is skipped with a message and the
+  product still builds. Composing the steps by hand? See
+  [Getting started](consumer/getting-started.md) §2.
 - The window won't open → you likely have no GL/X11 session; the build and tests
   still run headless.
 - A lifecycle command surprised you → [FAQ & troubleshooting](consumer/faq.md)
