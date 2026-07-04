@@ -418,7 +418,8 @@ the union gate's `--params` mode then evaluates each condition against a scaffol
 provenance and adds `[missing]` (declared ∧ true ∧ absent) and `[unexpected]`
 (present ∧ false) — closing the blind spot. Rollout is board-sequenced (`skill-registry-published`
 coherence row): the catalog + contract land product-complete now; the enforcing flip waits on
-SDD's process manifest (spec-057) and Rendering's predicate-grammar alignment.
+SDD emitting a process manifest (the `SkillManifest` types are done via SDD#60/spec-057; the
+emitting step is a separate, not-yet-authored SDD deliverable) and Rendering's predicate-grammar alignment.
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency

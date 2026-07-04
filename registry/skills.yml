@@ -20,16 +20,19 @@
 #     NOTE (cross-repo): Rendering's shipped manifest grammar is NOT the grammar the ADR-0017 gate
 #     evaluator parses, so the gate reads those predicates as false. Tracked as a grammar-alignment
 #     request to Rendering; the enforcing flip (coherence `skill-registry-published`) is gated on it.
-#   * PROCESS skills (15) — PROVISIONAL. SDD does not yet EMIT a producer skill-manifest (spec
-#     `057-skill-manifest-contract` is Draft; the FS.GG.Contracts types landed in SDD#60). The
-#     `sha256`s below are computed from SDD's CANONICAL `.claude/skills/fs-gg-sdd-*/SKILL.md`
-#     bodies (the exact bytes `SeededSkills.fs` seeds) and MUST be re-reconciled against SDD's
-#     published manifest when spec-057 ships. Until then the process rows are declared but the
-#     typed validator cannot assert registry = manifest = bytes for them (see BLOCKED-ON below).
+#   * PROCESS skills (15) — PROVISIONAL. SDD does not yet EMIT a producer skill-manifest for its
+#     process skills. (The `SkillManifest` CONTRACT TYPES landed via SDD#60 / spec
+#     `057-skill-manifest-contract` — types only, no emission; the emission is a separate,
+#     not-yet-authored SDD deliverable following P1.) The `sha256`s below are computed from SDD's
+#     CANONICAL `.claude/skills/fs-gg-sdd-*/SKILL.md` bodies (the exact bytes `SeededSkills.fs`
+#     seeds) and MUST be re-reconciled against SDD's process manifest once it emits one. Until then
+#     the process rows are declared but the typed validator cannot assert registry = manifest =
+#     bytes for them (see BLOCKED-ON below).
 #
-# BLOCKED-ON (final flip only): the typed validator (`Fsgg.Registry`, SDD CLI) + flipping
-# coherence `skill-registry-published` → true are blocked on P2 (SDD spec-057 process manifest)
-# and the Rendering predicate-grammar alignment. The catalog + `skill-registry` contract land now.
+# BLOCKED-ON (final flip only): the typed validator (`Fsgg.Registry`, SDD CLI) + flipping coherence
+# `skill-registry-published` → true are blocked on P2 (SDD EMITTING a process skill-manifest — the
+# types are in place via SDD#60/spec-057, the emitting step is not) and the Rendering
+# predicate-grammar alignment. The catalog + `skill-registry` contract land now.
 
 schemaVersion: 1
 updated: "2026-07-04"
@@ -41,8 +44,9 @@ parameters: [profile, lifecycle, feedback, designSystem]
 skills:
   # ------------------------------------------------------------------------------------------------
   # PROCESS skills — SDD's fs-gg-sdd-* lifecycle skills. Always emitted (materializes-when: always).
-  # owner: fs-gg-sdd. `sha256` PROVISIONAL (from SDD canonical .claude/skills bodies) pending the
-  # spec-057 producer manifest. `SeededSkills.fs` seeds exactly these 15 (it deliberately EXCLUDES
+  # owner: fs-gg-sdd. `sha256` PROVISIONAL (from SDD canonical .claude/skills bodies) pending SDD
+  # emitting a process producer manifest (types via SDD#60/spec-057; emission not yet authored).
+  # `SeededSkills.fs` seeds exactly these 15 (it deliberately EXCLUDES
   # fs-gg-sdd-project — the product-internal project skill; see the fs-gg-project seam below).
   # ------------------------------------------------------------------------------------------------
   - { id: fs-gg-sdd-analyze,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-analyze/SKILL.md,             sha256: 5e9e90ca2ac254d9e8028c015b86053fcf6d23534cb9688a72de7e2355217312, materializes-when: always }

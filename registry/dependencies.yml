@@ -342,15 +342,17 @@ contracts:
       registry/skills.yml — the authoritative catalog of every process + product skill ({id, scope,
       owner, source, canonical-body sha256, materializes-when predicate}). GENERATED/RECONCILED from the
       producer skill-manifests (Rendering's template/skill-manifest/skill-manifest.json; SDD's process
-      manifest once spec-057 ships), never hand-authored bytes. `materializes-when` is the ADR-0017
+      manifest once SDD emits one — the SkillManifest types are in place via SDD#60/spec-057, the
+      process-manifest emission is a separate SDD deliverable), never hand-authored bytes. `materializes-when` is the ADR-0017
       predicate grammar the union gate (scripts/skill-union-assert.sh --params) evaluates against a
       scaffold's scaffold-provenance.json effectiveParameters. Projected to docs/registry/compatibility.md
       (§Skill registry); changelog registry/skills.CHANGELOG.md.
     consumers: [github]     # .github's union gate + registry validation; Templates (P4, Templates#49) via provenance.
     validator: >
       Typed Fsgg.Registry validator (fsgg-sdd) — asserts registry = producer manifest = materialized bytes,
-      condition-aware — is P2-BLOCKED (needs SDD's spec-057 process manifest for producer-emitted process
-      sha256s). Landed product-complete (.github#168): the 12 PRODUCT rows are producer-reconciled from
+      condition-aware — is P2-BLOCKED (needs SDD to EMIT a process manifest for producer-emitted process
+      sha256s; the SkillManifest types landed via SDD#60/spec-057, the emitting step has not). Landed
+      product-complete (.github#168): the 12 PRODUCT rows are producer-reconciled from
       Rendering's published manifest (Feature 238 / Rendering#76), the 15 PROCESS rows are PROVISIONAL
       (sha256 from SDD's canonical .claude/skills bodies). See coherence id `skill-registry-published`.
 
@@ -366,7 +368,7 @@ dependencies:
   - { from: github,    to: sdd,        via: "registry-schema@1 (Fsgg.Registry / fsgg-sdd validates registry/dependencies.yml; gate pins FS.GG.SDD.Cli — ADR-0015)" }
   # ADR-0017 (.github#163/#168): registry/skills.yml is reconciled FROM the producer skill-manifests.
   - { from: github,    to: rendering,  via: "skill-registry@1 <- rendering product skill-manifest (12 skills, sha256 + materializes-when; Feature 238 / Rendering#76). Grammar-alignment pending Rendering#77." }
-  - { from: github,    to: sdd,        via: "skill-registry@1 <- sdd process skill-manifest (15 fs-gg-sdd-* skills, always). PROVISIONAL: digests from SDD canonical .claude/skills bodies pending spec-057 emission." }
+  - { from: github,    to: sdd,        via: "skill-registry@1 <- sdd process skill-manifest (15 fs-gg-sdd-* skills, always). PROVISIONAL: digests from SDD canonical .claude/skills bodies pending SDD emitting a process manifest (types via SDD#60/spec-057; emission not yet authored)." }
   # rendering depends on no other FS-GG product (it never depends on Governance).
 
 # Known coherence state. `coherent: false` is a standing cross-repo request.
@@ -912,9 +914,11 @@ coherence:
       the 12 PRODUCT rows are reconciled from Rendering's published manifest (Feature 238 / Rendering#76,
       closes Rendering#71); the 15 PROCESS rows are PROVISIONAL, digested from SDD's canonical
       .claude/skills/fs-gg-sdd-* bodies. TWO producer-side conditions gate the flip to coherent:true:
-        (1) P2 — SDD EMITS its process skill-manifest (spec 057-skill-manifest-contract, currently Draft;
-            the FS.GG.Contracts types landed via SDD#60) so process sha256s are producer-emitted and the
-            typed Fsgg.Registry validator can assert registry = manifest = bytes for the process half.
+        (1) P2 — SDD EMITS a process skill-manifest so process sha256s are producer-emitted and the typed
+            Fsgg.Registry validator can assert registry = manifest = bytes for the process half. The
+            SkillManifest CONTRACT TYPES are in place (SDD#60 / spec 057-skill-manifest-contract — types
+            only, no emission); the process-manifest EMITTING step is a separate SDD deliverable following
+            P1 and is not yet authored, so no SDD process manifest exists today.
         (2) Rendering ALIGNS its shipped manifest `materializes-when` grammar with the ADR-0017 gate
             grammar (FS.GG.Rendering#77). Rendering#76 ships C-style predicates (`(profile == "app" || …)`)
             that the gate evaluator (bare-token `==`/`in [..]`/`and`/`or`, no parens/quotes) reads as
@@ -924,6 +928,6 @@ coherence:
       On both: publish the typed skills.yml validator, re-reconcile the process digests against SDD's
       manifest, flip this row, and update the epic's `skill-mirror-verified` / `fsgg-sdd-orchestrator-axis`
       cross-refs. Contract touched: skill-registry (new), skill-manifest/scaffold-provider (grammar).
-    resolved_by: "PENDING — (1) P2 SDD spec-057 process manifest + (2) FS.GG.Rendering#77 predicate-grammar alignment. Catalog + `skill-registry` contract: FS-GG/.github#168 (epic #163, ADR-0017)."
+    resolved_by: "PENDING — (1) P2 SDD emits a process skill-manifest (types via SDD#60/spec-057; emission not yet authored) + (2) FS.GG.Rendering#77 predicate-grammar alignment. Catalog + `skill-registry` contract: FS-GG/.github#168 (epic #163, ADR-0017)."
     impact: "A single authoritative skill catalog exists and skill absence is condition-checkable; the enforcing union gate can be turned on across both lanes (P4, FS.GG.Templates#49) once the two producer-side conditions clear."
-    tracking: "Epic FS-GG/.github#163 (ADR-0017) + .github#168 (this catalog/contract). P2: FS-GG/FS.GG.SDD spec 057-skill-manifest-contract (process manifest, Draft; types SDD#60). Grammar alignment: FS-GG/FS.GG.Rendering#77."
+    tracking: "Epic FS-GG/.github#163 (ADR-0017) + .github#168 (this catalog/contract). P2: FS-GG/FS.GG.SDD process-manifest EMISSION (not yet authored; the SkillManifest types are done — SDD#60 / spec 057-skill-manifest-contract, types-only). Grammar alignment: FS-GG/FS.GG.Rendering#77."
