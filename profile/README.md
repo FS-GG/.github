@@ -96,31 +96,52 @@ operating model. If governance ever feels heavy, you drop it and keep building.
 
 ## Get started
 
-```sh
-# 1. Install the lifecycle CLI (a dotnet global tool).
-dotnet tool install --global FS.GG.SDD.Cli
+The fastest path is the one-command workspace scaffolder,
+**[`new-sdd-workspace`](https://github.com/FS-GG/.github/blob/main/scripts/NewSddWorkspace/README.md)**
+([ADR-0016](https://github.com/FS-GG/.github/blob/main/docs/adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md)) —
+it fetches the provider descriptor, scaffolds a runnable app, and lays down the
+`.fsgg/` lifecycle skeleton in a single step.
 
-# 2. Register the reference `rendering` provider. It ships in FS.GG.Templates,
-#    not in the CLI, so scaffold can't resolve `--provider rendering` until its
-#    descriptor is in your project's .fsgg/providers.yml. The descriptor's
-#    `source:` pin (not `fsgg-sdd --version`) sets your fs-gg-ui version; `main`
-#    tracks the newest set.
+```sh
+# 1. Install the scaffolder + the lifecycle CLI (dotnet global tools, on public nuget.org).
+dotnet tool install --global FS.GG.SDD.Cli
+dotnet tool install --global FS.GG.NewSddWorkspace --prerelease
+
+# 2. Scaffold a runnable workspace in ONE command (default profile = a minimal
+#    Pong-style game; pass --profile app|headless-scene|governed|sample-pack for another shape).
+new-sdd-workspace ./Pong Pong              # <target-dir> <product-name>
+#    …or run it with NO arguments on a terminal for an interactive wizard
+#    (product → target → profile → governance) with a live scaffold preview
+#    and a final go/no-go confirmation.
+
+# 3. Build and run.
+cd ./Pong && dotnet build && dotnet run
+```
+
+That gives you a real, windowed F# UI app plus the `.fsgg/` lifecycle skeleton
+(`FS.GG.UI.*` are preview packages on public nuget.org — restore needs no extra feed).
+Continue with `fsgg-sdd charter` to drive the work lifecycle, and add governance
+later if you want gates.
+
+<details>
+<summary><b>Under the hood</b> — the primitive <code>fsgg-sdd scaffold</code> path (CI, or no wrapper)</summary>
+
+`new-sdd-workspace` wraps the primitive path: register the reference `rendering`
+provider (it ships in FS.GG.Templates, not the CLI, so `scaffold` can't resolve
+`--provider rendering` until its descriptor is in your project's `.fsgg/providers.yml`;
+the descriptor's `source:` pin — not `fsgg-sdd --version` — sets your fs-gg-ui version,
+`main` tracks the newest set), then scaffold under an SDD-managed lifecycle.
+
+```sh
 mkdir -p ./MyApp/.fsgg
 curl -fsSL https://raw.githubusercontent.com/FS-GG/FS.GG.Templates/main/providers/rendering.providers.yml \
   -o ./MyApp/.fsgg/providers.yml
-
-# 3. Scaffold a runnable Skia/Elmish app under an SDD-managed lifecycle.
 fsgg-sdd scaffold --root ./MyApp --provider rendering --param productName=MyApp
-
-# 4. Build and run it. (FS.GG.UI.* are preview packages on public nuget.org — restore
-#    needs no extra feed. `grep FsGgUiVersion ./MyApp/Directory.Packages.props` shows your
-#    fs-gg-ui version; feeds & pinning → docs/consumer/versioning-and-updates.md.)
 cd ./MyApp && dotnet build && dotnet run
 ```
+</details>
 
-That gives you a real, windowed F# UI app plus the `.fsgg/` lifecycle skeleton.
-Continue with `fsgg-sdd charter` to drive the work lifecycle, and add governance
-later if you want gates. Full walkthrough →
+Full walkthrough →
 **[Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md)**.
 Or create a ready specced sample game: https://github.com/FS-GG/.github/blob/main/docs/TestSpecTutorial.md
 
@@ -204,7 +225,7 @@ fsgg-sdd --version                            # the CLI's OWN version — not yo
 |---|---|---|
 | Just render an F# UI | **FS.GG.Rendering** packages / `fs-gg-ui` template | [Rendering usage](https://github.com/FS-GG/FS.GG.Rendering/blob/main/docs/usage.md) |
 | Run a managed dev lifecycle | **FS.GG.SDD** (`fsgg-sdd`) | [SDD quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md) |
-| Scaffold a full-stack workspace | **FS.GG.Templates** (`rendering` provider) | [Templates](https://github.com/FS-GG/FS.GG.Templates#create-a-full-stack-workspace-composition-primary-path) |
+| Scaffold a full-stack workspace (one command) | **`new-sdd-workspace`** (wraps the FS.GG.Templates `rendering` provider) | [Scaffolder README](https://github.com/FS-GG/.github/blob/main/scripts/NewSddWorkspace/README.md) |
 | Add rules / gates to a workspace | **FS.GG.Governance** overlay | [Adopting governance](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/adopting-governance.md) |
 
 Not sure? See **[Which components do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md)**
