@@ -42,7 +42,7 @@ skills:
     owner: fs-gg-sdd
     source: FS.GG.SDD/src/FS.GG.SDD.Commands/.../SeededSkill.fs-gg-sdd-charter
     materializes-when: always
-  # … the 15 fs-gg-sdd-* skills, all `always` …
+  # … the 16 fs-gg-sdd-* skills, all `always` …
 
   # ---- product skills (Rendering; profile/lifecycle/feedback-gated) ----
   - id: fs-gg-scene

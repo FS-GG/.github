@@ -417,9 +417,10 @@ entry (`materializes-when`) and lifts it into a single authoritative catalog
 the union gate's `--params` mode then evaluates each condition against a scaffold's
 provenance and adds `[missing]` (declared ∧ true ∧ absent) and `[unexpected]`
 (present ∧ false) — closing the blind spot. Rollout is board-sequenced (`skill-registry-published`
-coherence row): the catalog + contract land product-complete now; the enforcing flip waits on
-SDD emitting a process manifest (the `SkillManifest` types are done via SDD#60/spec-057; the
-emitting step is a separate, not-yet-authored SDD deliverable) and Rendering's predicate-grammar alignment.
+coherence row): the catalog + contract landed, and both producer halves are now emitted — Rendering's
+product manifest (Feature 238) and SDD's process manifest (`.agents/skills/skill-manifest.json`,
+SDD#111 closing #109). The enforcing flip now waits **only** on Rendering's predicate-grammar
+alignment (Rendering#77).
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
