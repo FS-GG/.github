@@ -4,7 +4,7 @@
 #
 # WHY THIS EXISTS. The same set of framework repos was redeclared by hand in ~10 places
 # (scripts/apply-labels.sh, the dispatch/coherence/lockfile-sync/contract-coherence/skill-union
-# workflows, the NewSddFullstack scaffolder). Adding or retiring a repo meant editing all of them,
+# workflows, the NewSddWorkspace scaffolder). Adding or retiring a repo meant editing all of them,
 # and they drifted. This roster is the ONE place that list lives; every fabric reads it, so growth
 # is a data change (one row + a changelog line + re-sync) gated by a coherence check — never a code
 # edit. It is the participant-side analog of skills.yml: where skills.yml gates skill EMISSION per

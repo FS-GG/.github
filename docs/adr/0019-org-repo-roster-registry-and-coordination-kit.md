@@ -8,7 +8,7 @@
 
 The FS-GG org fabrics — the shared labels, `sync-build-config`, `lockfile-sync`, the
 `contract-coherence` gate, the `dispatch-sender`, `skill-union-assert`, and the
-`NewSddFullstack` scaffolder — all iterate the *same* set of framework repos. That set was
+`NewSddWorkspace` scaffolder — all iterate the *same* set of framework repos. That set was
 **redeclared by hand in ~10 places** (`scripts/apply-labels.sh`, the workflows above, the
 scaffolder sources). Adding or retiring a repo meant editing all of them, and they drifted.
 

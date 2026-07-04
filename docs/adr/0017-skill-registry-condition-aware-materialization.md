@@ -20,7 +20,7 @@ from every root as legitimate** (skipped, surfaced only as a count — see
 the producer's build inputs (Rendering's `.template.config/template.json` `sources[].condition`;
 SDD's in-code `skillNames`) — it is **not recorded in any machine-readable, cross-repo surface**.
 Three consequences follow, all observed on the shipped `SpaceInvaders`/`SpaceInvaders1` products
-(`new-sdd-fullstack`, effective params `profile=game, lifecycle=sdd, feedback=false`):
+(`new-sdd-workspace`, effective params `profile=game, lifecycle=sdd, feedback=false`):
 
 - **C1 — the shipped manifest is indistinguishable from corruption.** Each product ships a
   manifest declaring **12** product skills while materializing **8**. A consumer (a human, a
@@ -101,7 +101,7 @@ skill catalog — mirroring the [registry-schema governance][ADR-0015] precedent
   arranged for it to be supplied on every lane by widening the condition to the profile-scoped,
   lifecycle-independent `profile in [app, headless-scene, governed, sample-pack, game]` (see §C2
   RESOLVED above), rather than the narrower "record `lifecycle == spec-kit` and stop
-  `new-sdd-fullstack` implying it" alternative.
+  `new-sdd-workspace` implying it" alternative.
 - **SDD** — the process manifest carries `materializes-when: always` for the 15 `fs-gg-sdd-*`
   skills; SDD owns the other half of the `fs-gg-project` seam (`SeededSkills` exclusion) and its
   `doctor`/provenance path (which today derives "expected" from `ProducedPaths`, not the manifest —
