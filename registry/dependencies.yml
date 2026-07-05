@@ -48,7 +48,7 @@ repos:
 #                   date-stamp or past-tense historical claims (report §6.6) so present-tense text does not rot.
 contracts:
   - id: scaffold-provider
-    version: "1.0.0"
+    version: "1.1.0"   # 1.1.0 (2026-07-05, additive): optional identifierParameter sink (SDD feature 080; Fsgg.Provider.ProviderDescriptor.IdentifierParameter). Backward-compatible — a descriptor that omits it parses to None and behaves as 1.0.0. PRIOR 1.0.0.
     owner: sdd
     surface: ".fsgg/providers.yml + provider invocation protocol (dotnet new wrapper)"
     consumers: [templates, rendering]   # rendering authors a provider descriptor; templates registers one
@@ -57,6 +57,16 @@ contracts:
       name:
         type: "string (product name)"
         notes: "Canonical scaffold product-name param. Supersedes the drifted `productName` spelling (ADR-0005)."
+      identifierParameter:
+        type: "string (optional; the forwarded param key that receives the SDD-derived valid-F# identifier)"
+        notes: >
+          1.1.0 (SDD feature 080, FS.GG.Rendering#142). Optional descriptor field: names the parameter
+          into which `fsgg-sdd scaffold` forwards a name already derived into a legal F# namespace, so a
+          product whose name is a legal product name but an illegal F# identifier (e.g. hyphenated
+          `Roquelike-DungeonCrawler`) compiles. `None` ⇒ no derivation, identical to 1.0.0. Rendering
+          declares `identifierParameter: rootNamespace` (FS.GG.Templates rendering.providers.yml). The
+          derived value fills namespace/module/open positions; nameParameter keeps the raw name in
+          string/path/.fsproj/.slnx. See coherence id `scaffold-provider-identifier`.
   - id: fsgg-contracts
     version: "1.4.0"            # FS.GG.Contracts contract/source SemVer — the authority is FS.GG.SDD (fsproj <Version> == Fsgg.ContractVersion.value). 1.4.0: minor/additive — ADR-0014 P1 (SDD#61, merged b9f946c/impl a99625d): the pure BCL-only `Fsgg.SkillMirror` library (`mirror`/`verify` + helpers, all destinations derived from the single `agentSkillRoots` constant) — the one materialize-and-verify code path routing scaffold/refresh/doctor/upgrade. Non-breaking (additive types; .fsi additive → apicompat cannot trip → no major). Tracks source; the contract-coherence gate asserts this `version` == SDD's actual source version (== 1.4.0). PRIOR — 1.3.0: ADR-0014 P0.D0.2 (SDD#60, FS.GG.SDD#62): additive `skill-manifest` schema + `agentSkillRoots` constant + per-path `sha256` on ScaffoldProducedPathEntry (scaffold-provenance 1.1.0). 1.2.0: SDD Feature 052 (commit 3be5513, ADR-0008/0009 orchestrator axis).
     package-version: "1.4.0"    # PUBLISHED package on the org feed (nuget.pkg.github.com/FS-GG) — newest is 1.4.0 (feed serves 1.4.0 + 1.2.0 + 1.1.1 + 1.1.0 + 1.0.1). ADVANCED 1.2.0→1.4.0 (SDD#63, the ADR-0014 P1 publish-before-flip step 2): SDD cut the coherent release fsgg-sdd v0.5.0 (2026-07-02) carrying FS.GG.Contracts 1.4.0 + FS.GG.SDD.Cli 0.5.0 (release.yml runs 28578885762/28578886260, both jobs "Push to the org feed" green; dual-published to nuget.org via ADR-0012/0013 OIDC). `package-version` == `version` == source == feed(newest) == 1.4.0 (publish-before-flip satisfied, FR-007). PRIOR: stayed 1.2.0 while 1.3.0/1.4.0 were source-only. The contract-coherence gate reads `version` and stays green. Unblocks Rendering#43 (P2 — pin FS.GG.Contracts >= 1.4.0).
@@ -932,3 +942,27 @@ coherence:
     resolved_by: "PENDING — only FS.GG.Rendering#77 predicate-grammar alignment remains; the P2 SDD process-manifest emission is DONE (SDD#111 closing #109, process rows reconciled in this change). Catalog + `skill-registry` contract: FS-GG/.github#168 (epic #163, ADR-0017)."
     impact: "A single authoritative skill catalog exists (both producer halves emitted) and skill absence is condition-checkable; the enforcing union gate can be turned on across both lanes (P4, FS.GG.Templates#49) once the last producer-side condition (Rendering#77) clears."
     tracking: "Epic FS-GG/.github#163 (ADR-0017) + .github#168 (this catalog/contract). P2 process-manifest EMISSION: DONE — FS-GG/FS.GG.SDD#111 (closing cross-repo #109). Remaining grammar alignment: FS-GG/FS.GG.Rendering#77."
+  - id: scaffold-provider-identifier
+    coherent: true
+    owner: rendering
+    summary: >
+      Resolved 2026-07-05: FS.GG.Rendering adopted the scaffold-provider identifierParameter split
+      (contract 1.1.0; SDD feature 080, cross-repo FS.GG.Rendering#142). The fs-gg-ui template splits
+      the single product-name token into a RAW name (string/path/.fsproj/.slnx) and an SDD-DERIVED
+      valid-F# identifier (namespace/module/open via rootNamespace), so a product whose name is a legal
+      product name but an illegal F# identifier (hyphenated Roquelike-DungeonCrawler) compiles. Verified:
+      byte-identical for valid names; the hyphenated scaffold builds + tests green (33/33), fragments 135/135.
+    resolved_by: >
+      FS.GG.Rendering#144 (template change, merged 584f137) released as FS.GG.UI.Template
+      0.1.66-preview.1 (release run 28749394980 — org feed + nuget.org; the release-only
+      "Generated product" gate scaffolded + built + tested a product against the shipped template).
+      Provider re-pin: FS.GG.Templates rendering.providers.yml source 0.1.64→0.1.66-preview.1 +
+      identifierParameter: rootNamespace (FS.GG.Templates#113). Publish-before-flip (FR-007) satisfied:
+      package LIVE before this flip.
+    note: >
+      Template-only release — framework FsGgUiVersion held at 0.1.64-preview.1 (no src/ change; the 16
+      FS.GG.UI.* libs re-publish as --skip-duplicate no-ops). Older SDD ignores identifierParameter (no
+      derivation, identical to before); the template is byte-identical for names already valid as F#
+      identifiers. End-to-end delivery is confirmed by the SDD composition-acceptance smoke (FS.GG.SDD#150).
+    impact: "A scaffolded product whose name is an illegal F# identifier now compiles (dotnet build + test green) — unblocks FS.GG.SDD#150."
+    tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/142 (Rendering#144 merged/released 0.1.66-preview.1, Templates#113 re-pin, SDD#150; SDD feature 080)"
