@@ -44,8 +44,9 @@
 #                                             # list issues over REST with ETag revalidation
 #   fsgg-coord ready [--repo R] [--status S] [--phase P] [--all] [--json|--jq EXPR]
 #                                             # list actionable board items (not Done by default);
-#                                             # thrifty full-board scan (2 fields/item). --repo
-#                                             # matches the issue's own repo, e.g. --repo .github
+#                                             # thrifty full-board scan (2 fields/item). --repo takes
+#                                             # a registry short-id (sdd/rendering/governance/
+#                                             # templates/.github), owner/repo, or a literal repo name
 #   fsgg-coord next  [--repo R]               # print the one most-startable item (Ready, else Backlog)
 #   fsgg-coord budget                         # print GraphQL + REST rate-limit meters (free)
 #
@@ -326,6 +327,21 @@ board_items() {
   jq -s '.' "$tmp"; rm -f "$tmp"
 }
 
+# Resolve a --repo value to the actual GitHub repo name the board items carry. Accepts the registry
+# short-id used everywhere else in the roster (sdd/rendering/governance/templates/.github — see
+# registry/repos.yml), an `owner/repo`, or the literal repo name. Without this, `--repo templates`
+# would silently match nothing (the repo is `FS.GG.Templates`, not `templates`) — a quiet footgun.
+resolve_repo() {
+  case "$1" in
+    */*)        printf '%s' "${1#*/}" ;;      # owner/repo -> repo part
+    sdd)        printf '%s' "FS.GG.SDD" ;;
+    rendering)  printf '%s' "FS.GG.Rendering" ;;
+    governance) printf '%s' "FS.GG.Governance" ;;
+    templates)  printf '%s' "FS.GG.Templates" ;;
+    *)          printf '%s' "$1" ;;           # .github or an already-literal repo name
+  esac
+}
+
 # Filter the normalized board array by repo/status/phase. Repo matches the issue's OWN repository:
 # a value with '/' is matched against `owner/repo` exactly; a bare value against the repo part
 # (both case-insensitive), so `--repo .github` selects `FS-GG/.github`.
@@ -367,6 +383,7 @@ ready() {
       *)         die "ready: unexpected argument '$1'." ;;
     esac
   done
+  [ -n "$repo" ] && repo="$(resolve_repo "$repo")"
   local xd="1"; { [ -n "$all" ] || [ -n "$status" ]; } && xd="0"   # --all / --status widen past 'not Done'
   local items; items="$(board_items | board_filter "$repo" "$status" "$phase" "$xd")"
   if   [ -n "$jqexpr" ]; then jq -r "$jqexpr" <<<"$items"
@@ -385,6 +402,7 @@ next() {
       *)      die "next: unexpected argument '$1'." ;;
     esac
   done
+  [ -n "$repo" ] && repo="$(resolve_repo "$repo")"
   local items; items="$(board_items)"
   local pick="" s
   for s in Ready Backlog; do
@@ -409,7 +427,7 @@ budget() {
 }
 
 usage() {
-  sed -n '2,61p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
+  sed -n '2,62p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
 }
 
 # ---- dispatch -----------------------------------------------------------------------------------
