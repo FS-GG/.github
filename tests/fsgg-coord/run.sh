@@ -225,6 +225,10 @@ assert_eq "ready --phase 'P2': substring-matches the phase" \
 assert_contains "next: picks the Ready item first" "FS.GG.Templates#99" "$(run next 2>/dev/null)"
 assert_contains "next --repo FS.GG.SDD: no Ready -> falls back to Backlog #127" \
   "FS.GG.SDD#127" "$(run next --repo FS.GG.SDD 2>/dev/null)"
+assert_eq "ready --repo templates: registry short-id resolves to FS.GG.Templates (#99)" \
+  "99" "$(run ready --repo templates --all --json 2>/dev/null | jq -r '.[0].number')"
+assert_contains "next --repo sdd: short-id resolves to FS.GG.SDD (Backlog #127)" \
+  "FS.GG.SDD#127" "$(run next --repo sdd 2>/dev/null)"
 assert_contains "next: unknown repo reports no startable item (stderr)" \
   "no startable item" "$(run next --repo nope 2>&1 >/dev/null)"
 
