@@ -274,6 +274,127 @@ Draw order (back to front):
 - Dim panel + centered "GAME OVER", "Score: NNNN", "Best: NNNN", and "Press Enter to
   Restart". If a new best was set, show "NEW BEST!" above the score in `#E5484D`.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
+Over). Each menu is a vertical list of rows with a cursor, so one small update handler
+serves them all and navigation is identical everywhere.
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start a run (current Walls mode & Difficulty)
+       ├─ Stats ─────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Casual · Classic · Frenzy ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Grid overlay   ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart run
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ Retry ──────── new run, same Walls mode & Difficulty (single life)
+           ├─ View Stats ── Stats & Charts (§9.2)
+           └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Grid overlay):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- Rendering reuses the §9 overlay style: the selected row is inverted (bright box, dark
+  text); non-selected rows are `#E6EDF3` on the dimmed field at 24 px.
+
+**Msg additions** (extend §7 Msg):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 (←/→) on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12
+preset (Casual = no accel `stepDecrement 0`, Classic = defaults, Frenzy = faster caps —
+lower `baseStepSeconds`/`minStepSeconds`, cf. §15 stretch 6); **Master volume**/**Sound**
+route to `Audio.setMasterVolume` (§10, clamped `[0,1]`); **Grid overlay** toggles the §8
+optional grid layer. The Walls **Death**/**Wrap** mode stays a Title-screen toggle (`M`,
+§9) and continues to key the per-mode save file (§13).
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
+snapshot (never live simulation), so it is a pure, deterministic render reachable from
+Title, Game Over, and Pause. Chart-design choices below follow the project dataviz
+conventions (form-first, validated colorblind-safe categorical palette, single axis,
+identity by entity).
+
+**Tracked per run** — `RunStats`, accumulated in `Tick`/`step`, snapshotted on `GameOver`:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `applesEaten` | `int` | +1 on each eat (§4.4) |
+| `maxLength` | `int` | max snake body length reached |
+| `survivalSeconds` | `float` | accumulated live-play time |
+| `deathCause` | `Wall \| Self` | set once, on the fatal `step` (§4.7) |
+| `turnsMade` | `int` | +1 per committed (dequeued) turn (§4.3) |
+| `topSpeed` | `float` (tiles/s) | max `1.0 / StepSeconds` observed |
+| `boardCoveragePercent` | `float` | `maxLength / 576 · 100` at run end |
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `highScore`, `gamesPlayed`,
+`longestSnake`, `avgLength`, `deathsByWall`, `deathsBySelf`.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌HIGH SCORE┐ ┌ LONGEST ┐ ┌  GAMES  ┐ ┌ AVG LENGTH┐           │  ← KPI stat tiles
+│  │   340    │ │ 47 cells│ │   128   │ │ 18.6 cells│           │
+│  └──────────┘ └─────────┘ └─────────┘ └───────────┘           │
+│                                                                │
+│  Final-score distribution           Snake length — last run    │
+│         ▇▇                       47 ┤             ╭────         │
+│  ▇▇     ▇▇                          │        ╭───╯             │
+│  ▇▇  ▇▇ ▇▇  ▇▇                      │    ╭──╯                  │
+│  ▇▇  ▇▇ ▇▇  ▇▇  ▇▇                3 ┼───────────────► seconds  │
+│  0-4 5-9 ·· ··  35+ (apples)        0                          │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Final-score distribution** — *form: a distribution → bars.* x = a finished game's
+   apples-eaten score bucketed (`0–4, 5–9, 10–19, 20–34, 35+`), y = number of games that
+   landed in each bucket, drawn from lifetime finished-run scores. **Single series**, so
+   one hue and no legend. Bars are 4 px-rounded at the data end with a 2 px surface gap
+   between them. Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1.
+2. **Snake length — last run** — *form: change over an ordered index → line.* x = elapsed
+   seconds, y = snake length, for the most recent run; a **single series** climbing then
+   plateauing as the board fills, so one hue and no legend. Line `#2a78d6` (light) /
+   `#3987e5` (dark); 2 px stroke, an ≥ 8 px marker at the final (death) point, recessive
+   1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (both charts sit on categorical slot 1
+and are never repainted by the scope toggle); **one axis only** (no dual-scale); chart
+**text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue;
+layout is **fixed and deterministic**, so a fixed-seed run (§13) renders byte-identical for
+snapshot tests. The `↑/↓` **scope** toggle swaps the KPI tiles and the distribution's data
+source This-Run ↔ Lifetime without changing colors (the length line always shows the last
+run).
+
+**Model/Msg hooks:** add `Run: RunStats` and `Lifetime: LifetimeStats` to the §7 Model;
+accumulate them in the `Tick`/`step` cases (bump `applesEaten` on an eat, `turnsMade` on
+each dequeued turn, track `maxLength` and `topSpeed = 1/StepSeconds`, bank `survivalSeconds`
+from live time). On the fatal `step`, record `deathCause` (Wall vs. Self, §4.7), compute
+`boardCoveragePercent`, fold `RunStats` into `Lifetime` (update `highScore`, `gamesPlayed`,
+`longestSnake`, recompute `avgLength`, bump `deathsByWall`/`deathsBySelf`) and persist
+(§13, alongside the per-mode high score). Add a `Stats` value to the §7 `Screen` type;
+`OpenStats`/`CloseStats` switch into and out of it and the render is a no-op on the sim.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

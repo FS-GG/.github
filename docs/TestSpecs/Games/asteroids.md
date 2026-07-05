@@ -340,6 +340,135 @@ every tick (immediate mode); no dirty-rect optimization needed at these entity c
 - **Game Over screen:** centered `GAME OVER` (48 px), final score, high score,
   `PRESS ENTER TO RESTART`.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause,
+Game Over). Each menu is a vertical list of rows with a cursor, so one small update
+handler serves them all and navigation is identical everywhere. Rows render in the §8
+vector/monospace HUD font; the selected row is inverted (bright box, black text).
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start a new run (lives=3, wave 1, RNG reseeded — §7 StartGame)
+       ├─ Stats ─────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ CRT glow       ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart Run
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ New Run ────── reset to 3 lives, wave 1, score 0 (§7 StartGame)
+           ├─ View Stats ── Stats & Charts (§9.2)
+           └─ Title
+```
+
+Asteroids has **no continues** (§11), so a lost run cannot be resumed: the run-end menu
+offers a fresh **New Run** (the arcade "insert-coin" restart) rather than a Continue, and
+the surviving-lives count only ever matters mid-run in the HUD (§9).
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, CRT glow):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- The Title-screen `Enter`-to-start of §9 is preserved as a shortcut for the **Play** row.
+
+**Msg additions** (extend §7 `Msg`):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects a §12 tunable
+preset (Easy `startLives 5 / ufoFireInterval 2.0 / astSpeedScalePerWave 0.04`; Normal
+`3 / 1.2 / 0.06`; Hard `2 / 0.8 / 0.10`); **Master volume**/**Sound** route to
+`Audio.setMasterVolume` (§10, clamped `[0,1]`, `0.0` = mute); **CRT glow** toggles the
+optional vector-glow post-pass (§8 draw order / §15 stretch).
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
+snapshot (never live physics), so it is a pure, deterministic render reachable from Title,
+Game Over, and Pause. Chart-design choices below follow the project dataviz conventions
+(form-first, validated colorblind-safe palette, single axis, identity by entity).
+
+**Tracked per run** — `MatchStats`, accumulated in the §7 `Tick` step, snapshotted on the
+`Lives = 0 → GameOver` transition (§7 update, step 7):
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `shotsFired` | `int` | +1 whenever a Fire edge spawns a player bullet (§4.2) |
+| `shotsHit` | `int` | +1 on each Player-bullet ↔ asteroid/UFO hit (§4.4) |
+| `accuracy` | `float` | derived: `shotsHit / shotsFired` (0 when unfired) |
+| `killsLarge` / `killsMedium` / `killsSmall` | `int` | per asteroid destroyed, by size (§4.3) |
+| `ufosDestroyed` | `int` | +1 per UFO killed (§4.8) |
+| `wavesCleared` | `int` | +1 each wave-clear (§6) |
+| `topScoreMultiplier` | `float` | peak `waveScore / parScore` over any wave (efficient small-rock/UFO kills) |
+| `survivalSeconds` | `float` | accumulated live-play time (`Time` delta while `Ship.Alive`) |
+| `thrustSeconds` | `float` | accumulated seconds Thrust was held (§4.1) |
+| `deaths` | `int` | lives lost this run (§4.5) |
+
+**Lifetime** — `LifetimeStats`, persisted (§13, `highscore.json`): `highScore`, `gamesPlayed`,
+`bestAccuracy`, `mostWavesCleared`, `longestSurvival`.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌HIGH SCORE┐ ┌ACCURACY┐ ┌ WAVES  ┐ ┌LONGEST LIFE┐            │  ← KPI stat tiles
+│  │  48 250  │ │  37 %  │ │   14   │ │   72.4 s   │            │
+│  └──────────┘ └────────┘ └────────┘ └────────────┘            │
+│                                                                │
+│  Kills by size                      Shots fired vs hit         │
+│  ▇▇                             120 ┤         ╭── fired        │
+│  ▇▇  ▇▇                             │      ╭─╯                 │
+│  ▇▇  ▇▇  ▇▇                         │   ╭─╯╭──── hit           │
+│  ▇▇  ▇▇  ▇▇  ▇▇                   0 ┼───────────────► wave #   │
+│  Lg  Md  Sm  UFO  (kills)                                      │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+KPI tiles read **HIGH SCORE**, **ACCURACY %**, **WAVES** (cleared), and **LONGEST LIFE**
+(the run's `longestSurvival` streak between deaths); each swaps to its lifetime counterpart
+under the scope toggle.
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Kills by size** — *form: per-category magnitude → bars.* x = size bucket
+   (`Large`, `Medium`, `Small`, `UFO`), y = kill count. **Single series**, so one hue and
+   no legend. Bars are 4 px-rounded at the data end with a 2 px surface gap between them.
+   Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1. Comparing four
+   magnitudes in one hue (not four colors) keeps the eye on relative counts.
+2. **Shots fired vs hit** — *form: change over an ordered index → line.* x = wave number,
+   y = cumulative shots; **two series** (Fired, Hit) → a legend is present and both lines are
+   direct-labeled at their right end ("fired"/"hit"). Fired `#2a78d6`, Hit `#1baf7a`
+   (slots 1–2, adjacent-pair CVD-validated). 2 px lines, ≥ 8 px end markers, recessive 1 px
+   gridlines in `#3C3C3C`. The widening gap between the two lines is the accumulated misses —
+   the visual read of accuracy over the run.
+
+Conventions honored: **color follows the entity** (Fired is always slot 1, Hit always slot 2
+— never repainted by the scope toggle); **one axis only** (no dual y-scale); chart **text uses
+ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue; layout is **fixed and
+deterministic**, so a fixed-seed run (§13) renders byte-identical for snapshot tests. The
+`↑/↓` **scope** toggle swaps the data source This-Run ↔ Lifetime without changing colors.
+
+**Model/Msg hooks:** add `Stats: MatchStats` and `Lifetime: LifetimeStats` to the §7 Model,
+and a `Stats of scope:StatScope` case to `Phase`. Accumulate `MatchStats` in the §7 `Tick`
+step — bump `shotsFired` where Fire spawns a bullet (`KeyDown`), `shotsHit`/`killsLarge|Medium|
+Small`/`ufosDestroyed` in the collision pass (step 4), `wavesCleared` at wave-clear (step 5),
+`survivalSeconds`/`thrustSeconds` each tick, and `deaths` on ship death (step 7). On the
+`GameOver` transition (step 7) fold `MatchStats` into `Lifetime` and persist to `highscore.json`
+(§13). `OpenStats`/`CloseStats` switch `Phase` to/from `Stats`; the render is a no-op on physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

@@ -276,6 +276,115 @@ to render (title overlay, HUD, pause dim, game-over panel).
   1P) at 64 px, final score "11 – 7" at 48 px below.
 - Hint: "SPACE — Rematch   ESC — Title" at 24 px.
 
+### 9.5 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
+Over). Each menu is a vertical list of rows with a cursor, so one small update handler
+serves them all and navigation is identical everywhere.
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start match in the selected mode (1P/2P)
+       ├─ Stats ─────────── Stats & Charts screen (§9.6)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ CRT effect     ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ Rematch
+           ├─ View Stats ── Stats & Charts (§9.6)
+           └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, CRT): `←`/`→`
+  change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- Rendering reuses the §9.1 selector style: the selected row is inverted (white box, black
+  text); non-selected rows are `#FFFFFF` on black at 28 px.
+
+**Msg additions** (extend §7.2):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.6)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12 AI
+preset (Easy `420/90`, Normal `520/45`, Hard `640/15`); **Master volume**/**Sound** route to
+`Audio.setMasterVolume` (§10, clamped `[0,1]`); **CRT** toggles the §8 optional post-effect.
+
+### 9.6 Stats & charts screen
+The Stats screen visualizes **the last match** and **lifetime** play. It reads a `Stats`
+snapshot (never live physics), so it is a pure, deterministic render reachable from Title,
+Game Over, and Pause. Chart-design choices below follow the project dataviz conventions
+(form-first, validated colorblind-safe categorical palette, single axis, identity by entity).
+
+**Tracked per match** — `MatchStats`, accumulated in `Tick`, snapshotted on `GameOver`:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `rallyHits` | `int list` | one entry per completed rally (paddle-hit count) |
+| `longestRally` | `int` | max over `rallyHits` |
+| `topBallSpeed` | `float` (px/s) | max ball speed observed |
+| `scoreTimeline` | `(pt:int * l:int * r:int) list` | appended on each point |
+| `matchSeconds` | `float` | accumulated live-play time |
+| `acesLeft` / `acesRight` | `int` | points won on an unreturned serve |
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `matchesPlayed`, `wins` (1P), `longestWinStreak`,
+`longestRallyEver`, `fastestBall`.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌ MATCHES ┐ ┌ WIN %  ┐ ┌ LONGEST  ┐ ┌ TOP SPEED ┐            │  ← KPI stat tiles
+│  │   42    │ │  61 %  │ │ 23 hits  │ │ 1094 px/s │            │
+│  └─────────┘ └────────┘ └──────────┘ └───────────┘            │
+│                                                                │
+│  Rally length distribution          Score progression         │
+│  ▇▇                              11 ┤          ╭── L           │
+│  ▇▇  ▇▇                             │      ╭─╯╭─╯              │
+│  ▇▇  ▇▇  ▇▇  ▇▇                     │   ╭─╯ ╭─╯ R              │
+│  1   3   5   7   9+  (hits)       0 ┼───────────────► point #  │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Match · Lifetime           ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Rally-length histogram** — *form: a distribution → bars.* x = rally length bucketed by
+   paddle-hit count (`1,2,3,…,9+`), y = number of rallies. **Single series**, so one hue and
+   no legend. Bars are 4 px-rounded at the data end with a 2 px surface gap between them.
+   Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1.
+2. **Score progression** — *form: change over an ordered index → line.* x = point number,
+   y = cumulative score; **two series** (Left, Right) → a legend is present and both lines are
+   direct-labeled at their right end ("L"/"R"). Left `#2a78d6`, Right `#1baf7a` (slots 1–2,
+   adjacent-pair CVD-validated). 2 px lines, ≥ 8 px end markers, recessive 1 px gridlines
+   in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (Left is always slot 1, Right always slot 2
+— never repainted by the scope toggle); **one axis only** (no dual-scale); chart **text uses
+ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue; layout is **fixed
+and deterministic**, so a fixed-seed match (§13) renders byte-identical for snapshot tests.
+The `↑/↓` **scope** toggle swaps the data source This-Match ↔ Lifetime without changing colors.
+
+**Model/Msg hooks:** add `Stats: MatchStats` and `Lifetime: LifetimeStats` to §7.1 Model;
+accumulate them in the `Tick` cases (append `rallyHits` and a `scoreTimeline` point on each
+score, track `topBallSpeed`); on `GameOver`, fold `MatchStats` into `Lifetime` and persist
+(§13). `OpenStats`/`CloseStats` switch a `Screen = Stats of scope:StatScope` state; the render
+is a no-op on physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

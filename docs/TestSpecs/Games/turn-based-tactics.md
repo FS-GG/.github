@@ -619,6 +619,137 @@ overlay accessible from Play.
 **Mission Result:** win/lose, turns taken, Grid Power remaining, units lost, and a
 letter grade (§11), with `Next`/`Retry`.
 
+### 9.1 Menu system (detailed)
+Every non-play screen (Title, Settings, Stats, Pause, Mission Result) is driven by a single
+**menu stack** of vertical rows with a cursor, so one small update handler serves them all
+and navigation is identical everywhere. The board's mouse-first input (§3) is unchanged;
+the menu overlay is keyboard-driven.
+
+**Menu tree**
+```
+Title ─┬─ Continue Campaign ─ resume at the highest unlocked mission (§6/§13)
+       ├─ New Campaign ────── fresh 4-mission run from Mission 1 (`NewGame`)
+       ├─ Load ────────────── pick a saved campaign slot (§13)
+       ├─ Stats ───────────── Stats & Charts screen (§9.2)
+       ├─ Settings ────────┬─ Difficulty        ◄ Recruit · Veteran · Commander ►
+       │                   ├─ Master volume     ◄ 0 – 100 ►
+       │                   ├─ Sound             ◄ On · Off ►
+       │                   ├─ Window scale      ◄ 1× · 2× · Fit ►
+       │                   ├─ Grid coordinates  ◄ On · Off ►   (→ §3 `ToggleGridLabels`)
+       │                   └─ Back
+       └─ Quit
+
+Pause (from Play, §3 `OpenPause`) ─┬─ Resume
+                                   ├─ Restart Mission ─ (`RestartMission`, §7)
+                                   ├─ Threat overlay   ◄ On · Off ►  (→ §3 `ToggleThreatOverlay`)
+                                   ├─ Settings ──────── (same submenu; returns to Pause)
+                                   └─ Quit to Title
+
+Mission Result ─┬─ Next Mission ── on Victory (`NextMission`); becomes Retry Mission on Defeat
+                ├─ Restart Mission ─ (`RestartMission`; re-seeds the board, §2/§13)
+                ├─ View Stats ──── Stats & Charts (§9.2)
+                └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`↓` move it and **wrap** top↔bottom.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**) — in
+  Play, `Esc` still opens Pause (§3), and inside a menu it steps back one level.
+- **Cycler rows** (Difficulty, Master volume, Sound, Window scale, Grid coordinates, Threat
+  overlay): `←`/`→` change the value **in place**; the row shows a right-aligned `◄ value ►`
+  widget. The top-of-stack menu is the only one that receives input.
+- Rendering reuses the §9 HUD style (panels + inverted selected row); the danger/telegraph
+  overlays underneath are frozen while a menu is open.
+
+**Msg additions** (extend the §7 `Msg` DU):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler row (←/→)
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings **apply live and persist** to local config (§13). **Difficulty** selects the §12
+tunable preset — *Recruit* eases `gridPowerStart` / `enemiesPerWave` / the AI weights
+(`aiBuildingWeight`, `aiKillBonus`), *Veteran* is the §12 defaults, *Commander* tightens
+them; **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped `[0,1]`,
+`0` mutes); **Grid coordinates** and **Threat overlay** drive the §3/§7 `ToggleGridLabels`
+and `ToggleThreatOverlay` flags directly.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last mission** and **lifetime/campaign** play. It reads a
+`Stats` snapshot — never the live board — so it is a pure, deterministic render reachable
+from Title, Pause, and Mission Result. Chart-design choices follow the project dataviz
+conventions (form-first, single axis, identity by entity, a validated colorblind-safe hue).
+
+**Tracked per mission** — `MissionStats`, accumulated in `ConfirmAction` /
+`ResolveNextEnemy` / `StartRound`, snapshotted when `Phase = MissionResult` (§7):
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `won` | `bool` | set at `MissionResult` (§11) |
+| `roundsTaken` | `int` | `Model.Round` at mission end (via `StartRound`) |
+| `unitsLost` | `int` | ++ when a player `Unit` is removed (§4.5) |
+| `enemyKills` | `Map<string,int>` | ++ by enemy `Kind` (Crawler…Behemoth, §5.2) on each death |
+| `pushKills` | `int` | ++ on a knockback / hazard kill (§4.6) — the signature verb |
+| `damageDealt` | `int` | += declared + collision damage inflicted on enemies (§4.5/§4.6) |
+| `damageTaken` | `int` | += damage suffered by player units (declared + collision + env) |
+| `gridPowerRemaining` | `int` | `Model.GridPower` at mission end (§4.7) |
+| `grade` | `char` | S/A/B/C from the §11 score |
+
+**Lifetime / campaign** — `LifetimeStats`, persisted (§13) alongside the highest-mission /
+best-grade save: `missionsWon`, `missionsPlayed` (→ `winRate`), `unitsLostTotal`,
+`pushKillsTotal`, `avgRoundsPerWin`.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌────────────────────────── COMBAT RECORD ──────────────────────────┐
+│  ┌ MISSIONS ┐ ┌ WIN %  ┐ ┌ UNITS LOST ┐ ┌ AVG ROUNDS ┐            │  ← KPI stat tiles
+│  │   WON    │ │        │ │            │ │            │            │
+│  │    18    │ │  72 %  │ │     11     │ │    4.6     │            │
+│  └──────────┘ └────────┘ └────────────┘ └────────────┘            │
+│                                                                    │
+│  Kills by enemy type               Damage dealt vs taken           │
+│  ▇▇                            60 ┤             ╭── Dealt          │
+│  ▇▇      ▇▇                       │         ╭─╯╭─╯                 │
+│  ▇▇  ▇▇  ▇▇  ▇▇                   │     ╭─╯╭─╯───── Taken          │
+│  ▇▇  ▇▇  ▇▇  ▇▇  ▇▇             0 ┼───────────────────► mission #  │
+│  Crw Spt Brs Bmb Lpr              1    2    3    4                 │
+└────────────────────────────────────────────────────────────────────┘
+      ↑/↓ scope:  ▸ This Mission · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Kills by enemy type** — *form: per-category magnitude → bars.* x = enemy archetype
+   (one bar per `Kind` in the §5.2 roster: Crawler, Spitter, Bruiser, Bomber, Leaper,
+   Behemoth), y = kills. **Single series**, so one hue and no legend. Bars are 4 px-rounded
+   at the data end with a 2 px surface gap between them. Fill `#2a78d6` (light) / `#3987e5`
+   (dark) — validated categorical slot 1. Comparing magnitudes across categories stays one
+   hue (never a rainbow).
+2. **Damage dealt vs taken** — *form: change over an ordered index → line.* x = mission
+   number (Missions 1–4 of the current campaign in *This Mission* scope; the most-recent
+   missions in *Lifetime*), y = damage. **Two series** (Dealt, Taken) → a legend is present
+   and both lines are direct-labeled at their right end ("Dealt"/"Taken"). Dealt `#2a78d6`,
+   Taken `#1baf7a` (slots 1–2, adjacent-pair CVD-validated). 2 px lines, ≥ 8 px end markers,
+   recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (Dealt is always slot 1, Taken always
+slot 2 — never repainted by the scope toggle); **one axis only** (no dual-scale — damage
+dealt and taken share the single y); chart **text uses ink tokens** (`#FFFFFF` primary /
+`#C3C2B7` muted), never a series hue; layout is **fixed and deterministic**, so a fixed-seed
+campaign (§12/§13 has no combat RNG) renders byte-identical for snapshot tests. The `↑/↓`
+**scope** toggle swaps the data source This-Mission ↔ Lifetime without changing colors.
+
+**Model/Msg hooks:** add `Stats: MissionStats` and `Lifetime: LifetimeStats` to the §7
+`Model`; accumulate them in `ConfirmAction`/`ResolveNextEnemy` (`damageDealt`/`damageTaken`,
+`enemyKills`, `pushKills`) and in `StartRound` (`roundsTaken` from `Round`); when the mission
+resolves to `MissionResult`, fold `MissionStats` into `Lifetime` and persist (§13). Add a
+`StatsScreen of scope:StatScope * return:Phase` case to the §7 `Phase` DU; `OpenStats`/
+`CloseStats` push/pop it (the render is a no-op on board state).
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

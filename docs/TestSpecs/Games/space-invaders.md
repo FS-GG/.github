@@ -331,6 +331,134 @@ Dying glyph) and a 0.12 s white flash sprite on cannon hit. No camera/scrolling.
   `HI nnnnnn` below, `PRESS ENTER` prompt. If new high score, show `NEW HIGH SCORE!` in
   `#FFD23F`.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
+Over). Each menu is a vertical list of rows with a cursor, so one small update handler
+serves them all and navigation is identical everywhere. Rows reuse the §9 phosphor look:
+the selected row is inverted (green box, black text), non-selected rows are `#FFFFFF` on
+black at 24 px.
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start a fresh run at wave 1 with 3 lives (§7 StartGame)
+       ├─ Stats ─────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Classic · Insane ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ CRT scanlines  ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart Run ───── new run from wave 1
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ Continue ───── insert coin: resume from the current wave with 3 fresh
+           │                 lives (bunkers reset), score kept — arcade continue
+           ├─ New Game ───── fresh run from wave 1, score reset
+           ├─ View Stats ─── Stats & Charts (§9.2)
+           └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`P`/`Back` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, CRT scanlines):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- The cursor wraps top↔bottom so every menu is fully reachable with one axis of input.
+
+**Msg additions** (extend §7 `Msg`; all carry through the same `Key` mapping as
+`KeyDown`/`KeyUp`):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row (←/→)
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc/P — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12
+tunable preset (Easy/Classic/Insane — the same table that drives `cannonSpeed`,
+`waveSpeedup`, `bombBaseFireP`, `startLives`); **Master volume**/**Sound** route to
+`Audio.setMasterVolume` (§10, clamped `[0,1]`, `0.0` = silence); **CRT scanlines** toggles
+the retro post-effect (§15 stretch #4). Changing a value re-applies it on the next frame
+and writes the config so it survives across sessions alongside the high score.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
+snapshot (never live physics), so it is a pure, deterministic render reachable from Title,
+Game Over, and Pause. Chart-design choices below follow the project dataviz conventions
+(form-first, validated colorblind-safe categorical palette, single axis, identity by entity).
+
+**Tracked per run** — `MatchStats`, accumulated in the §7 `Tick` step, snapshotted on the
+`GameOver` transition (§11):
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `killsTop` | `int` | +1 when a top-row **Squid** enters `Dying` (§4.3, step 3) |
+| `killsMid` | `int` | +1 when a middle-row **Crab** enters `Dying` |
+| `killsBottom` | `int` | +1 when a bottom-row **Octopus** enters `Dying` |
+| `ufoHits` | `int` | +1 per **UFO** destroyed by the player bullet (§4.8) |
+| `shotsFired` | `int` | +1 per player shot spawned (mirrors §7 `ShotCount`) |
+| `shotsHit` | `int` | +1 per bullet that strikes an alien or the UFO |
+| `firedByWave` / `hitByWave` | `int list` | per-wave `shotsFired`/`shotsHit`, appended on `WaveCleared` |
+| `wavesCleared` | `int` | +1 on each `WaveCleared` transition (§6) |
+| `shieldsRemaining` | `int` | solid bunker cells left across the 4 bunkers at snapshot |
+| `livesLost` | `int` | +1 per cannon hit → `PlayerDying` (§4.6, §11) |
+
+`accuracy% = 100 · shotsHit / max(1, shotsFired)` is derived (not stored). **Lifetime** —
+`LifetimeStats`, persisted (§13): `highScore`, `gamesPlayed`, `bestAccuracy`, `mostWaves`,
+`ufosHitTotal`.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│ ┌ HIGH SCORE ┐ ┌ ACCURACY ┐ ┌  WAVES  ┐ ┌ UFOS HIT ┐          │  ← KPI stat tiles
+│ │  012450    │ │   38 %   │ │   07    │ │    11    │          │
+│ └────────────┘ └──────────┘ └─────────┘ └──────────┘          │
+│                                                                │
+│  Kills by alien type                Shots fired vs hit         │
+│  ▇▇                             40 ┤        ╭── fired          │
+│  ▇▇        ▇▇                       │    ╭─╯╭─╯                │
+│  ▇▇  ▇▇    ▇▇    ▇▇                 │ ╭─╯╭─╯── hit              │
+│  Top Mid  Bot   UFO              0 ┼──────────────► wave #     │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Kills by alien type** — *form: per-category magnitude → bars.* x = alien category
+   (`Top`/Squid, `Middle`/Crab, `Bottom`/Octopus, `UFO`), y = kill count. **Single series**,
+   so one hue and no legend — comparing magnitudes across categories is one color. Bars are
+   4 px-rounded at the data end with a 2 px surface gap between them. Fill `#2a78d6` (light)
+   / `#3987e5` (dark) — validated categorical slot 1.
+2. **Shots fired vs hit** — *form: change over an ordered index → line.* x = wave number,
+   y = cumulative shots; **two series** (Fired, Hit) → a legend is present and both lines are
+   direct-labeled at their right end ("fired"/"hit"), the gap between them reading as
+   accuracy. Fired `#2a78d6`, Hit `#1baf7a` (slots 1–2, adjacent-pair CVD-validated). 2 px
+   lines, ≥ 8 px end markers, recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (Fired is always slot 1, Hit always slot 2
+— never repainted by the scope toggle); **one axis only** (no dual-scale — both series share
+the shot-count axis); chart **text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted),
+never the series hue; layout is **fixed and deterministic**, so a fixed-seed run (§13)
+renders byte-identical for snapshot tests. The `↑/↓` **scope** toggle swaps the data source
+This-Run ↔ Lifetime without changing colors.
+
+**Model/Msg hooks:** add `Stats: MatchStats` and `Lifetime: LifetimeStats` to the §7 Model,
+and a `Stats of scope:StatScope` case to `Phase`. Accumulate in the `Tick` simulation:
+bump `shotsFired` when a bullet spawns (alongside `ShotCount`, §7 step 3 KeyDown Space),
+`shotsHit` and the matching `killsTop/Mid/Bottom`/`ufoHits` on bullet-collision resolution
+(step 3), `livesLost` on a cannon hit (step 6), and `wavesCleared` plus a `firedByWave`/
+`hitByWave` entry on the `WaveCleared` transition (step 8). Snapshot `shieldsRemaining` by
+counting solid `Bunkers` cells on `GameOver`, then fold `MatchStats` into `Lifetime` and
+persist (§13, beside the existing high score). `OpenStats`/`CloseStats` switch the `Phase =
+Stats scope` state; the render is a no-op on physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

@@ -328,6 +328,128 @@ Blast flicker via two-color alternation. No camera (fixed view). Redraw strategy
 - **Game Over:** "GAME OVER", final score, NEW HIGH SCORE banner if beaten,
   "Click / Enter to restart".
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause,
+Game Over). Each menu is a vertical list of rows with a cursor, so one small update
+handler serves them all and navigation is identical everywhere.
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start a fresh run at Wave 1 (StartGame)
+       ├─ Stats ─────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Rookie · Veteran · Elite ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Screen shake   ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart Run
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ Play Again ──── insert-coin restart; high score carried over (§13)
+           ├─ View Stats ─── Stats & Charts (§9.2)
+           └─ Title
+```
+
+The run always ends the same way — when all six cities are `Rubble` (§4.9). There are
+no true continues (§11), so **Play Again** is the arcade "insert coin" framing: it
+re-runs `init` from Wave 1 rather than resuming the lost run.
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑` decrements, `↓` increments, both **wrap**.
+- `Enter`/`Space`/left-click activates the current row; `Esc`/`P` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- Rendering reuses the §9 overlay style: the selected row is highlighted (inverted), and
+  non-selected rows draw `#ECEFF1` on the dim overlay at 28 px mono.
+
+**Msg additions** (extend §7 Msg):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space/click on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12
+`Config` preset (Rookie/Veteran/Elite preload different tunable records — a larger
+`blastMaxRadius` and slower `baseIncomingSpeed` for Rookie, tighter for Elite);
+**Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped `[0,1]`);
+**Screen shake** toggles the §15 impact-juice effect.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
+snapshot (never live simulation), so it is a pure, deterministic render reachable from
+Title, Game Over, and Pause. Chart-design choices below follow the project dataviz
+conventions (form-first, validated colorblind-safe palette, single axis, identity by entity).
+
+**Tracked per run** — `RunStats`, accumulated in `Tick`, snapshotted on `GameOver`:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `missilesFired` | `int` | +1 per counter-missile launched (`Fire`/`FireFrom`, §4.3) |
+| `missilesIntercepted` | `int` | +1 per incoming/plane/smart-bomb killed by a blast (§4.4) |
+| `interceptAccuracy` | `float` % | `missilesIntercepted / max 1 missilesFired · 100`, recomputed |
+| `citiesSaved` / `citiesLost` | `int` | cities `Alive` vs `Rubble` at run end (sums to 6) |
+| `wavesSurvived` | `int` | highest `Wave` reached before Game Over |
+| `peakMultiplier` | `int` | max `Multiplier` seen this run (§6) |
+| `ammoUsed` | `int` | total battery ammo spent across the run |
+| `bombersDowned` | `int` | +1 per plane / smart bomb destroyed (§4.7) |
+| `interceptsPerWave` | `int list` | kills tallied per completed wave (drives Chart 1) |
+| `citiesPerWave` | `int list` | cities `Alive` snapshot at each wave clear (drives Chart 2) |
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `highScore`, `gamesPlayed`, `bestAccuracy`,
+`mostWaves`, `citiesSavedTotal`.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌HIGH SCORE┐ ┌ACCURACY┐ ┌ WAVES  ┐ ┌CITIES SAVED┐            │  ← KPI stat tiles
+│  │  128450  │ │  62 %  │ │   11   │ │    4 / 6   │            │
+│  └──────────┘ └────────┘ └────────┘ └────────────┘            │
+│                                                                │
+│  Interceptions per wave           Cities remaining            │
+│  ▇▇                            6 ┤──╮                          │
+│  ▇▇  ▇▇     ▇▇                   │  ╰──╮                       │
+│  ▇▇  ▇▇  ▇▇ ▇▇  ▇▇             3 │     ╰────╮                  │
+│  ▇▇  ▇▇  ▇▇ ▇▇  ▇▇             0 ┼───────────╰──► wave #       │
+│  1   2   3  4   5   (wave)                                     │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Interceptions-per-wave** — *form: per-category magnitude → bars.* x = wave number,
+   y = number of threats intercepted in that wave. **Single series**, so one hue and no
+   legend. Bars are 4 px-rounded at the data end with a 2 px surface gap between them.
+   Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1.
+2. **Cities remaining** — *form: change over an ordered index → line.* x = wave number,
+   y = cities still standing at each wave clear, drawn as a monotonic **step-down** line
+   that traces attrition. **One series**, so one hue and no legend: line `#2a78d6`, 2 px,
+   with a ≥ 8 px end marker and recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (interceptions and the cities line each
+keep their hue — never repainted by the scope toggle); **one axis only** (no dual-scale);
+chart **text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue;
+layout is **fixed and deterministic**, so a fixed-seed run (§13) renders byte-identical for
+snapshot tests. The `↑/↓` **scope** toggle swaps the data source This-Run ↔ Lifetime without
+changing colors.
+
+**Model/Msg hooks:** add `Stats: RunStats` and `Lifetime: LifetimeStats` to the §7 Model;
+accumulate them in the `Tick` collision pass (bump `missilesIntercepted`/`bombersDowned` on
+kills, `missilesFired`/`ammoUsed` on each `Fire`/`FireFrom`, track `peakMultiplier`); on each
+wave clear (the `WaveBonus` transition) append `interceptsPerWave` and `citiesPerWave`; on
+`GameOver`, set `citiesSaved`/`citiesLost`/`wavesSurvived`, fold `RunStats` into `Lifetime`,
+and persist (§13). `OpenStats`/`CloseStats` switch a `Phase = Stats of scope:StatScope` state
+(reachable from Title/Pause/GameOver); the render is a no-op on the simulation.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
