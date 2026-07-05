@@ -46,5 +46,5 @@ repos:
 # file: sha256 of the file). Regenerate with `scripts/repos.sh digest <source>`. The slice-2 sync
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
 kit:
-  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 30946d2032cdf2498d56447d5f70c7bc60635d38541332548a0def816aa7efa8 }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 3ac2eb42ca686371a944227d7292b9a41092752075e29d53d9eba6b75288a225 }
+  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: dcb8dfd36d6a613f42ed71f9efb1be537d70a0e0e85074ee41a632f0576ad521 }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: b49eebc5523c40b7e682064bd88afa725fd31cd98b40a0e5f5d89b2469e81699 }

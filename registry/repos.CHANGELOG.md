@@ -17,6 +17,7 @@ single-authority invariant, the `receives` vocabulary, and content-addressed kit
 
 ## Entries
 
+- **2026-07-05** — Coordination-kit `cross-repo-coordination` + `fsgg-coord` sha256 bumped (@.github; ADR-0019): added an **earned done-stamp** — a `fsgg-coord done <issue> [--pr N] [--flip]` subcommand that verifies an item is finished (closing PR merged **and** board `Status: Done`) in one thrifty query and prints a greppable green `FSGG-DONE` / red `FSGG-NOT-DONE` two-line stamp. `--flip` sets `Status: Done` after re-confirming the merge and **rolls the completion up the parent-epic chain**, flipping+stamping each epic whose children are now all `Done` (transitive, bounded). Plus a *Signal an item is finished* skill section wiring it into the release dance's "Land + record" step. Re-digested skill `30946d20…` → `dcb8dfd3…` and client `3ac2eb42…` → `b49eebc5…`. Propagates to `coordination-kit` receivers.
 - **2026-07-04** — Coordination-kit `cross-repo-coordination` sha256 bumped (@.github; ADR-0003, ADR-0019): the kit `SKILL.md` carried the pre-rename contract id `fs-skia-ui-version`; corrected to `fs-gg-ui-version` (ADR-0003) in both skill roots, re-digesting the kit `460542a2…` → `9ff9ed86…`. Propagates to `coordination-kit` receivers; unblocks Governance's ADR-0003 rename guard (Governance#90).
 - **2026-07-04** — Roster registry established (@.github; ADR-0019, slice 1): seed `repos.yml` with
   the five framework repos (`.github` authority + `sdd`/`rendering`/`governance`/`templates`), the
