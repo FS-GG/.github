@@ -37,6 +37,8 @@ beyond a JSON cache of **ids only** (never field *values*), so the worst a stale
 | `item-id <issue>` | (2) | Resolve an issue's board item via `issue -> projectItems`, pick the matching board, cache it. One narrow call, then free. |
 | `set-field <issue> <Field> <Value>` | (1)+(2) | Resolve project/field/item/option ids from cache and run **one** mutation, auto-routing by the field's `dataType` (single-select / date / number / text / iteration). No per-write introspection. |
 | `issues <repo> [--label L] [--jq E]` | (3) | List issues over **REST** with a stored **ETag**; an unchanged repeat 304s to cache. `--jq` projects the payload to trim what you read back. |
+| `ready [--repo R] [--status S] [--phase P] [--all]` | (4) | List the **actionable** board items (not `Done` by default). Projects v2 has no server-side item filter, so this is a full scan — but it selects only two fields per item via `fieldValueByName` (a single-node accessor), not the `fieldValues(first:N){ …fragments }` expansion `gh project item-list` pays, so a page of 100 costs ~1 point. `--repo` matches the issue's **own** repo (e.g. `--repo .github`). |
+| `next [--repo R]` | (4) | Print the one most-startable item — the first `Ready`, else the first `Backlog` — optionally scoped to a repo. The "what do I pick up next" query, made cheap. |
 | `budget` | — | Print the GraphQL **and** REST meters (`gh api rate_limit` does not itself consume the core budget). |
 
 Every GraphQL call also selects `rateLimit { cost remaining }`; run with `FSGG_COORD_DEBUG=1` to log
@@ -47,6 +49,8 @@ each call's cost, so you can **verify** the drop rather than guess. Start any in
 
 ```sh
 fsgg-coord bootstrap                                  # once per ~day (or after a schema change)
+fsgg-coord next --repo .github                         # what should I pick up next on the board?
+fsgg-coord ready --status Ready                         # everything actionable, all repos
 fsgg-coord set-field FS.GG.SDD#84 Phase  "P2 SDD"     # cache-resolved ids, one mutation
 fsgg-coord set-field FS.GG.SDD#84 Status "In progress"
 fsgg-coord set-field FS.GG.SDD#84 Target "2026-08-01"
@@ -54,10 +58,15 @@ fsgg-coord issues rendering --label cross-repo \
   --jq '.[] | "\(.number)\t\(.title)"'                # REST + ETag; 304 on repeat
 ```
 
+> **Don't reach for raw `gh project item-list` to find the next item.** It fetches every field
+> value per item (a multi-point node scan that scales with the board) and can exhaust the primary
+> budget in a few calls. `ready`/`next` answer the same question at ~1 point per 100 items.
+
 ## Guardrail
 
 [`tests/fsgg-coord/run.sh`](../../tests/fsgg-coord/run.sh) drives the client against a `gh` stub that
 **counts calls** and asserts the levers actually fire (bootstrap-then-cache adds zero GraphQL calls;
 item lookup is one narrow call then cached; `set-field` routes by `dataType`; `issues` 304s to
-cache). It runs in CI via `.github/workflows/fsgg-coord-selftest.yml` — the same "a fixture proves
+cache; `ready`/`next` paginate a two-page board in exactly two calls and filter client-side). It
+runs in CI via `.github/workflows/fsgg-coord-selftest.yml` — the same "a fixture proves
 it" discipline as the [skill-union assertion](skill-union-assertion.md).

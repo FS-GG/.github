@@ -12,6 +12,8 @@
 #      TEXT->--text, resolving every id from cache (no per-write introspection).
 #   4. issues fetches over REST with an ETag; an unchanged repeat gets 304 and is served from cache.
 #   5. bad field / option names fail loudly (non-zero) with the available names.
+#   6. ready/next scan the whole board in a paginated loop (2 pages -> 2 calls), filter client-side
+#      (repo / status / phase; Done excluded by default), and `next` prefers Ready over Backlog.
 #
 # Self-contained: a throwaway cache + stub under a temp dir, no network, no other repos. Mirrors
 # tests/skill-union/run.sh (FS-GG/.github#111) in shape so the two fixtures read the same way.
@@ -78,6 +80,26 @@ cat >"$FIXTURES/issues.json" <<'JSON'
 [{"number":42,"title":"[cross-repo] demo","labels":[{"name":"cross-repo"}]}]
 JSON
 
+# Board items for ready/next, in TWO pages so the pagination loop is exercised. Page 1 says
+# hasNextPage:true + an endCursor; the second GraphQL call (carrying cursor=CUR1) serves page 2.
+# Per item only status/phase (via fieldValueByName) + the issue's own content — the thrifty shape.
+cat >"$FIXTURES/board-items-p1.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":true,"endCursor":"CUR1"},
+  "nodes":[
+    {"status":{"name":"Ready"},"phase":{"name":"P4 Templates"},"content":{"__typename":"Issue","number":99,"title":"Re-mirror minimumFsggSdd","url":"https://github.com/FS-GG/FS.GG.Templates/issues/99","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"}}},
+    {"status":{"name":"Done"},"phase":null,"content":{"__typename":"Issue","number":54,"title":"Dependency Dashboard","url":"https://github.com/FS-GG/.github/issues/54","state":"OPEN","repository":{"nameWithOwner":"FS-GG/.github"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4990}}
+JSON
+cat >"$FIXTURES/board-items-p2.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"Backlog"},"phase":{"name":"P2 SDD"},"content":{"__typename":"Issue","number":127,"title":"TD1 SDD epic","url":"https://github.com/FS-GG/FS.GG.SDD/issues/127","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Backlog"},"phase":null,"content":{"__typename":"DraftIssue","title":"a draft idea"}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4989}}
+JSON
+
 # ---- gh stub ------------------------------------------------------------------------------------
 cat >"$STUB/gh" <<STUB
 #!/usr/bin/env bash
@@ -89,6 +111,9 @@ if [ "\$sub" = "api" ] && [ "\$sub2" = "graphql" ]; then
   echo g >>"\$GH_GRAPHQL_COUNT"
   q=""; for a in "\$@"; do case "\$a" in query=*) q="\${a#query=}";; esac; done
   if   printf '%s' "\$q" | grep -q 'projectsV2';       then cat "$FIXTURES/projects.json"
+  elif printf '%s' "\$q" | grep -q 'items(first';      then
+    hascur=""; for a in "\$@"; do case "\$a" in cursor=*) hascur=1;; esac; done
+    if [ -n "\$hascur" ]; then cat "$FIXTURES/board-items-p2.json"; else cat "$FIXTURES/board-items-p1.json"; fi
   elif printf '%s' "\$q" | grep -q 'projectV2(number'; then cat "$FIXTURES/fields.json"
   elif printf '%s' "\$q" | grep -q 'projectItems';     then cat "$FIXTURES/item.json"
   else echo '{"data":{},"rateLimit":{"cost":1,"remaining":4999}}'; fi
@@ -181,6 +206,27 @@ assert_eq "issues: the 304 path used the cached body" '42' "$(run issues FS.GG.S
 # (5) bad names fail loudly.
 assert_fails "field-id on an unknown field fails"  run field-id Bogus
 assert_fails "option-id on an unknown option fails" run option-id Phase 'P9 Nope'
+
+# (6) ready/next: thrifty whole-board read, paginated, client-side filtered.
+before_ready="$(gcount)"
+ready_all="$(run ready --json 2>/dev/null)"
+assert_eq "ready: paginates in exactly 2 GraphQL calls" "$((before_ready + 2))" "$(gcount)"
+assert_eq "ready: excludes Done by default (3 of 4 items)" "3" "$(jq 'length' <<<"$ready_all")"
+assert_contains "ready: keeps the Ready item"   '99'  "$(jq -c '[.[].number]' <<<"$ready_all")"
+assert_contains "ready: keeps a Backlog item"   '127' "$(jq -c '[.[].number]' <<<"$ready_all")"
+assert_eq "ready: drops the Done item (#54)"    "false" "$(jq 'any(.[]; .number==54)' <<<"$ready_all")"
+assert_eq "ready --repo .github: only #54 exists there and it is Done -> empty" \
+  "0" "$(run ready --repo .github --json 2>/dev/null | jq 'length')"
+assert_eq "ready --status Done: widens past 'not Done' -> #54" \
+  "54" "$(run ready --status Done --json 2>/dev/null | jq -r '.[0].number')"
+assert_eq "ready --phase 'P2': substring-matches the phase" \
+  "127" "$(run ready --phase P2 --json 2>/dev/null | jq -r '.[0].number')"
+
+assert_contains "next: picks the Ready item first" "FS.GG.Templates#99" "$(run next 2>/dev/null)"
+assert_contains "next --repo FS.GG.SDD: no Ready -> falls back to Backlog #127" \
+  "FS.GG.SDD#127" "$(run next --repo FS.GG.SDD 2>/dev/null)"
+assert_contains "next: unknown repo reports no startable item (stderr)" \
+  "no startable item" "$(run next --repo nope 2>&1 >/dev/null)"
 
 # budget reads both meters.
 bud="$(run budget)"
