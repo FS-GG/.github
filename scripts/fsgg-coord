@@ -19,8 +19,9 @@
 #      unchanged list returns 304 at zero cost and never touches the GraphQL budget at all.
 #   4. THRIFTY WHOLE-BOARD READ. Picking "the next item to start" needs the WHOLE board, which is a
 #      GraphQL-only full scan (Projects v2 has no server-side item filter). `ready`/`next` keep it
-#      cheap by selecting only two fields per item via `fieldValueByName` (a single-node accessor)
-#      instead of the `fieldValues(first:8){ ...fragments }` expansion `gh project item-list` pays.
+#      cheap by selecting only two fields per item via `fieldValueByName` (a RESOLVER field, no node
+#      multiplication) — vs. `gh project item-list`, which nests `fieldValues(first:100)` inside
+#      `items(first:N)` for O(items × 100) ≈ 2,500 points. A 100-item page costs ~1 point (~3 total).
 #
 # Every GraphQL call also asks for `rateLimit { cost remaining }`; set FSGG_COORD_DEBUG=1 to log it
 # (and use `budget` to read the meters directly) so you can VERIFY the drop instead of guessing.
@@ -277,11 +278,13 @@ emit_issues() {
 
 # ---- board_items: paginate the board, emit a normalized JSON array (thrifty per-item selection) --
 # Projects v2 has NO server-side filter on the items connection, so "list the board" is inherently
-# a full scan — but the node COST is set by what we select PER ITEM. `gh project item-list` pays
-# `fieldValues(first:8){ ...fragments }` on every item (≈ items×8 nodes). We instead read only the
-# two fields a "what's next" decision needs via `fieldValueByName` (a single-node accessor, not a
-# connection), plus the issue's own repository/number/title — a small constant per item. One page
-# of 100 costs ~1 point vs. the multi-point fragment scan, and the result is normalized once here.
+# a full scan — but the node COST is set by what we select PER ITEM. `gh project item-list` nests
+# `fieldValues(first:100){ ...fragments }` INSIDE `items(first:N)`, so its cost is O(items × 100)
+# (≈ 2,500 points for a ~100-item board) — a few of those exhaust the 5,000-pt/hr primary budget.
+# `fieldValueByName` is a RESOLVER field, not a connection: it returns ONE value with no node
+# multiplication. We read just the two fields a "what's next" decision needs (Status, Phase) that
+# way, plus the issue's own repository/number/title — a small constant per item. A 100-item page
+# costs ~1 point (a full board ~3), and the result is normalized once here.
 board_items() {
   ensure_board >/dev/null
   local num; num="$(board_get '.number')"
@@ -406,7 +409,7 @@ budget() {
 }
 
 usage() {
-  sed -n '2,60p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
+  sed -n '2,61p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
 }
 
 # ---- dispatch -----------------------------------------------------------------------------------
