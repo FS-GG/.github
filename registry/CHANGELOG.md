@@ -18,6 +18,7 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-07-05** — coherence `scaffold-provider-identifier` FLIP `false→true` (rendering; refs FS.GG.Rendering#142/#144, FS.GG.Templates#113, FS.GG.SDD#150): `FS.GG.UI.Template 0.1.66-preview.1` published (release run 28749394980; org feed + nuget.org — the release-only Generated-product gate scaffolded+built+tested against the shipped template), and FS.GG.Templates re-pinned `rendering.providers.yml` `source: 0.1.64→0.1.66-preview.1` + `identifierParameter: rootNamespace`. Publish-before-flip (FR-007) satisfied: package LIVE before the flip. A scaffolded product whose name is an illegal F# identifier (hyphenated) now compiles.
 - **2026-07-05** — scaffold-provider 1.0.0→1.1.0 (additive: optional `identifierParameter`) + coherence `scaffold-provider-identifier` opened (rendering; SDD feature 080, refs FS.GG.Rendering#142/#144, FS.GG.Templates#113, FS.GG.SDD#150): the `fs-gg-ui` template splits the product-name token into a RAW name (string/path/.fsproj/.slnx) and an SDD-DERIVED valid-F# identifier (namespace/module/open via `rootNamespace`), so a product whose name is an illegal F# identifier (hyphenated `Roquelike-DungeonCrawler`) compiles. Backward-compatible (omit ⇒ None ⇒ identical to 1.0.0; byte-identical for valid names). In-flight — coherence stays `false` (publish-before-flip, FR-007) until the FS.GG.UI.Template release carries #142 and Templates re-pins `source:`.
 <!-- Prepend new entries here, newest first:
 - **YYYY-MM-DD** — HEADER (owner; refs): body

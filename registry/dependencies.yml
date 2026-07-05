@@ -943,21 +943,26 @@ coherence:
     impact: "A single authoritative skill catalog exists (both producer halves emitted) and skill absence is condition-checkable; the enforcing union gate can be turned on across both lanes (P4, FS.GG.Templates#49) once the last producer-side condition (Rendering#77) clears."
     tracking: "Epic FS-GG/.github#163 (ADR-0017) + .github#168 (this catalog/contract). P2 process-manifest EMISSION: DONE — FS-GG/FS.GG.SDD#111 (closing cross-repo #109). Remaining grammar alignment: FS-GG/FS.GG.Rendering#77."
   - id: scaffold-provider-identifier
-    coherent: false
+    coherent: true
     owner: rendering
     summary: >
-      In-flight (2026-07-05): FS.GG.Rendering adopts the scaffold-provider identifierParameter split
+      Resolved 2026-07-05: FS.GG.Rendering adopted the scaffold-provider identifierParameter split
       (contract 1.1.0; SDD feature 080, cross-repo FS.GG.Rendering#142). The fs-gg-ui template splits
       the single product-name token into a RAW name (string/path/.fsproj/.slnx) and an SDD-DERIVED
-      valid-F# identifier (namespace/module/open), so a product whose name is a legal product name but
-      an illegal F# identifier (hyphenated Roquelike-DungeonCrawler) compiles. Verified in-repo:
+      valid-F# identifier (namespace/module/open via rootNamespace), so a product whose name is a legal
+      product name but an illegal F# identifier (hyphenated Roquelike-DungeonCrawler) compiles. Verified:
       byte-identical for valid names; the hyphenated scaffold builds + tests green (33/33), fragments 135/135.
+    resolved_by: >
+      FS.GG.Rendering#144 (template change, merged 584f137) released as FS.GG.UI.Template
+      0.1.66-preview.1 (release run 28749394980 — org feed + nuget.org; the release-only
+      "Generated product" gate scaffolded + built + tested a product against the shipped template).
+      Provider re-pin: FS.GG.Templates rendering.providers.yml source 0.1.64→0.1.66-preview.1 +
+      identifierParameter: rootNamespace (FS.GG.Templates#113). Publish-before-flip (FR-007) satisfied:
+      package LIVE before this flip.
     note: >
-      Publish-before-flip (FR-007): NOT yet effective. The rendering template change is FS.GG.Rendering#144
-      (unmerged); the Templates descriptor declaration (identifierParameter: rootNamespace) is
-      FS.GG.Templates#113. Flips to coherent:true when the FS.GG.UI.Template package carrying #142 is
-      published, the Templates rendering.providers.yml source: pin is bumped to it, and the SDD
-      composition-acceptance smoke (FS.GG.SDD#150) goes green. Until then the published template's
-      rootNamespace param is inert, so a descriptor declaring identifierParameter has no effect.
-    impact: "A scaffolded product whose name is an illegal F# identifier compiles (dotnet build + test green) once released — unblocks FS.GG.SDD#150."
-    tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/142 (Rendering#144, Templates#113, SDD#150; SDD feature 080)"
+      Template-only release — framework FsGgUiVersion held at 0.1.64-preview.1 (no src/ change; the 16
+      FS.GG.UI.* libs re-publish as --skip-duplicate no-ops). Older SDD ignores identifierParameter (no
+      derivation, identical to before); the template is byte-identical for names already valid as F#
+      identifiers. End-to-end delivery is confirmed by the SDD composition-acceptance smoke (FS.GG.SDD#150).
+    impact: "A scaffolded product whose name is an illegal F# identifier now compiles (dotnet build + test green) — unblocks FS.GG.SDD#150."
+    tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/142 (Rendering#144 merged/released 0.1.66-preview.1, Templates#113 re-pin, SDD#150; SDD feature 080)"
