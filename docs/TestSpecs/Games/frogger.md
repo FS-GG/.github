@@ -327,6 +327,130 @@ car death. Font: a clean monospace/bitmap font, white `#FFFFFF`, sizes 16–48 p
 - **Timer bar:** bottom-right, draining green→yellow→red bar representing `LifeTimer /
   LifeTime`, ~300 px wide.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
+Over). Each menu is a vertical list of rows with a cursor, so one small update handler
+serves them all and navigation is identical everywhere — the frog's in-play hop keys (§3)
+are edge-triggered and unaffected; menus reuse the same arrow keys purely to move a cursor.
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start a new run (level 1, 3 lives, selected difficulty)
+       ├─ Stats ─────────── Stats & charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Grid overlay   ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart run
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ Continue ──── insert-coin restart: a fresh run at level 1, lives back to 3
+           ├─ View Stats ── Stats & charts (§9.2)
+           └─ Title
+```
+
+The Game Over panel keeps the classic arcade framing: it shows the run's final score, the
+high score, and the depleted lives row (§9 bottom strip), then offers **Continue** — the
+insert-coin gesture that starts a fresh run — over View Stats and Title.
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
+- **Cycler rows** (Difficulty, Master volume, Sound, Window scale, Grid overlay): `←`/`→`
+  change the value **in place**; the row shows a right-aligned `◄ value ►` widget.
+- Rendering reuses the §8 HUD font: the selected row is highlighted (inverted box, dark
+  text); non-selected rows are `#FFFFFF` at 28 px over the title/pause/game-over scrim.
+
+**Msg additions** (extend §7 `Msg`):
+```fsharp
+    | MenuUp | MenuDown              // move cursor on the active menu (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 : cycle a settings value in place
+    | MenuActivate                   // Enter/Space — activate the current row
+    | MenuBack                       // Esc — pop the menu stack (Back)
+    | OpenStats | CloseStats         // enter / leave the Stats & charts screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12
+preset (Easy `Lives 5 / LifeTime 45 / mult +0.08`, Normal `3 / 30 / +0.12`, Hard
+`2 / 20 / +0.18`); **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10,
+clamped `[0,1]`); **Grid overlay** toggles the §8 cell-gridline draw that helps read hops.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `RunStats`
+snapshot (never live physics), so it is a pure, deterministic render reachable from Title,
+Game Over, and Pause. Chart-design choices below follow the project dataviz conventions
+(form-first, validated colorblind-safe categorical palette, single axis, identity by entity).
+
+**Tracked per run** — `RunStats`, accumulated in `Tick`/`Hop`, snapshotted on `GameOver`:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `crossingsCompleted` | `int` | +1 each time the frog reaches a home slot (§4.6), all levels |
+| `homesFilled` | `int` | slots filled on the current (in-progress) level, 0–5 |
+| `deaths` | `{ road:int; water:int; timer:int; creature:int }` | +1 by cause on each death (§11) |
+| `timeBonusTotal` | `int` | sum of every time bonus banked on reaching home (§4.8, §11) |
+| `levelsReached` | `int` | highest `Level` reached this run |
+| `scoreByLevel` | `(lvl:int * cum:int) list` | appended on each level clear (+ the live level) |
+| `playSeconds` | `float` | accumulated live-play time (excludes Paused/menus) |
+
+`deaths` splits by cause: **road** (car/truck, §4.2), **water** (drown or submerged turtle,
+§4.4/§4.5), **timer** (`LifeTimer` reached 0, §4.8), **creature** (gator/snake, the §15
+stretch hazards — 0 until those ship).
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `highScore`, `gamesPlayed`, `crossingsTotal`,
+`bestLevel`, `mostDeathsCause` (the modal death cause across all runs).
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌HIGH SCORE┐ ┌CROSSINGS┐ ┌BEST LEVEL┐ ┌ DEATHS ┐             │  ← KPI stat tiles
+│  │  24 850  │ │   37    │ │    6     │ │   14   │             │
+│  └──────────┘ └─────────┘ └──────────┘ └────────┘             │
+│                                                                │
+│  Deaths by cause                    Score by level             │
+│  ▇▇                          24k ┤               ╭── score     │
+│  ▇▇        ▇▇                     │          ╭──╯              │
+│  ▇▇   ▇▇   ▇▇                     │      ╭──╯                  │
+│  ▇▇   ▇▇   ▇▇   ▇▇                │  ╭──╯                      │
+│  Road Watr Timr Crea           0 ┼──────────────────► level #  │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Deaths by cause** — *form: per-category magnitude → bars.* x = death cause
+   (`Road, Water, Timer, Creature`), y = number of deaths. **Single series**, so one hue and
+   no legend. Bars are 4 px-rounded at the data end with a 2 px surface gap between them.
+   Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1. The four causes
+   are compared magnitudes of one measure, so they stay one hue (never rainbowed).
+2. **Score by level** — *form: change over an ordered index → line.* x = level number
+   (`1…levelsReached`), y = cumulative score at that level's clear (from `scoreByLevel`).
+   **Single series** (one climbing run), so one hue and no legend; the line is direct-labeled
+   ("score") at its right end. Line `#2a78d6`. 2 px line, ≥ 8 px end marker, recessive 1 px
+   gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (the death-bar hue and the score line are
+each a fixed slot, never repainted by the scope toggle); **one axis only** (no dual-scale);
+chart **text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue;
+layout is **fixed and deterministic**, so a fixed-seed run (§13) renders byte-identical for
+snapshot tests. The `↑/↓` **scope** toggle swaps the data source This-Run ↔ Lifetime without
+changing colors (lifetime deaths pool by cause; lifetime score-by-level uses the best run).
+
+**Model/Msg hooks:** add `Stats: RunStats` and `Lifetime: LifetimeStats` to §7 Model;
+accumulate them in the `Tick`/`Hop` cases (bump `deaths` by cause in the death handler,
+`crossingsCompleted`/`homesFilled` and `timeBonusTotal` on reaching home, `levelsReached`
+and a `scoreByLevel` point on each level clear, `playSeconds` from clamped `dt`); on
+`GameOver`, fold `RunStats` into `Lifetime` and persist (§13). `OpenStats`/`CloseStats`
+switch a `Phase = Stats of scope:StatScope`-style state; the render is a no-op on physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

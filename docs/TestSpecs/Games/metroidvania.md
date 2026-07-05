@@ -436,6 +436,137 @@ tile layers batched via `drawAtlas`. No dirty-rect in v1 (full clear is cheap at
 - **Bottom-center (contextual):** "Press E" prompts at Save Veins/levers.
 - **Mini-map (corner, optional toggle):** 180×120 px room minimap.
 
+### 9.4 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Load, Settings, Stats, Pause,
+Death, Win). Each menu is a vertical list of rows with a cursor, so one small update handler
+serves them all and navigation is identical everywhere. Because this game is save-file based
+(3 slots, §13), the Title menu leads with **Continue / Load / New Game**, and the in-run
+Pause menu exposes **Map / Inventory** (the §9.1 Tab overlay) alongside **Stats**.
+
+**Menu tree**
+```
+Title ─┬─ Continue ────────── resume the most-recent save slot
+       ├─ Load ────────────── pick a save slot (3 slots, §13) ► SelectSlot
+       ├─ New Game ────────── start a fresh save (seeded Rng, §13)
+       ├─ Stats ───────────── Stats & Charts screen (§9.5)
+       ├─ Settings ──────┬─ Difficulty     ◄ Story · Normal · Veteran ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Screen shake   ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Map / Inventory ── world map + owned abilities (the §9.1 Tab overlay)
+       ├─ Stats ──────────── Stats & Charts (§9.5)
+       ├─ Settings ───────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Death ─┬─ Respawn ────────── reload at last Save Vein (Shade dropped, §4.10)
+       ├─ Load ──────────── revert to a save slot
+       └─ Quit to Title
+
+Win ───┬─ View Stats ─────── Stats & Charts (§9.5)
+       ├─ Continue ───────── free-roam the cleared save
+       └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Backspace` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- **Load** rows are the three save slots (`SelectSlot`), each previewing that slot's
+  completion %, playtime, and best clear time; `Enter` loads the highlighted slot.
+- Rendering reuses the §9.1 selector style: the selected row is inverted; non-selected rows
+  render at 28 px over the dimmed (§8) world/title background.
+
+**Msg additions** (extend §7.2):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.5)
+    | SelectSlot of slot:int         // choose a save slot on the Load menu
+```
+These compose with the existing `NewGame`/`LoadGame`/`QuitToTitle`/`TogglePause`/`ToggleMap`
+(§7.2). Settings apply live and persist to local config (§13, stored separately from the save
+slot): **Difficulty** selects the §12 mode preset (Story `0.5 / 90`, Normal `1.0 / 60`,
+Veteran `1.5 / 40` — `enemyDamageMult / hitIFrames`); **Master volume**/**Sound** route to
+`Audio.setMasterVolume` (§10, clamped `[0,1]`); **Screen shake** toggles the §8 shake offset.
+
+### 9.5 Stats & charts screen
+The Stats screen visualizes **the current run** and **lifetime** play across all slots. It
+reads a `RunStats` snapshot (never live physics), so it is a pure, deterministic render
+reachable from Title, Pause, and the Win card. Chart-design choices below follow the project
+dataviz conventions (form-first, validated colorblind-safe palette, single axis, identity by
+entity).
+
+**Tracked this run** — `RunStats`, accumulated in `Tick` (and its event cases), snapshotted
+on `Win` (run-end); it lives inside `Save` (§7.1) so it round-trips with the slot:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `mapExploredPercent` | `float` | `visitedRooms / totalRooms`, recomputed on `EnterRoom` |
+| `itemsCollected` | `int` | incremented on each pickup (Vessel Shard / Ember cache) |
+| `abilitiesUnlocked` | `int` | `Save.Abilities` count, on `AbilityAcquired` |
+| `bossesDefeated` | `int` | incremented when a boss FSM reaches defeat |
+| `deaths` | `int` | incremented on `PlayerDied` |
+| `saveCount` | `int` | incremented on `SaveAtVein` |
+| `playSeconds` | `float` | accumulated live-play time in `Tick` |
+| `secretsFound` | `int` | hidden-room / secret pickups discovered |
+| `itemsPerZone` | `Map<Zone,int>` | pickup count bucketed by owning zone (chart 1) |
+| `exploreTimeline` | `(min:float * pct:float) list` | explored-% sampled on `EnterRoom` |
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `completionPercent`, `fastestClear` (time),
+`hundredPercentClear` (bool flag), `totalDeaths`.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────── STATS ── Hollowveil ───────────────────────┐
+│  ┌ COMPLETION ┐ ┌ ITEMS ┐ ┌ BOSSES ┐ ┌ PLAYTIME ┐                  │  ← KPI stat tiles
+│  │    73 %    │ │  28   │ │  1 / 2 │ │  4h 12m  │                  │
+│  └────────────┘ └───────┘ └────────┘ └──────────┘                  │
+│                                                                     │
+│  Items collected per zone           Map explored over time          │
+│  ▇▇                            100 ┤                 ╭─────          │
+│  ▇▇  ▇▇      ▇▇                     │            ╭────╯              │
+│  ▇▇  ▇▇  ▇▇  ▇▇  ▇▇                 │      ╭─────╯                   │
+│  Z1  Z2  Z3  Z4  Z5  Z6          0 ┼───────────────────► min        │
+└─────────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Items-per-zone histogram** — *form: per-category magnitude → bars.* x = zone
+   (`Z1`…`Z6`, §6), y = items collected in that zone (`itemsPerZone`). **Single series**, so
+   one hue and no legend. Bars are 4 px-rounded at the data end with a 2 px surface gap
+   between them. Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1.
+2. **Map exploration over time** — *form: change over an ordered index → line.* x = minutes
+   played, y = `mapExploredPercent` (0–100), read from `exploreTimeline`; **one series**, so
+   one hue and no legend — a single climbing curve that approaches 100 %. 2 px line, ≥ 8 px
+   end marker, recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (the exploration series and each zone bar
+keep their hue — never repainted by the scope toggle); **one axis only** (no dual-scale);
+chart **text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue;
+layout is **fixed and deterministic**, so a fixed-seed run (§13) renders byte-identical for
+snapshot tests. The `↑/↓` **scope** toggle swaps the data source This-Run ↔ Lifetime without
+changing colors.
+
+**Model/Msg hooks:** add `Run: RunStats` (inside `Save`) and `Lifetime: LifetimeStats` to
+§7.1; accumulate in the `Tick` cases (advance `playSeconds`, recompute `mapExploredPercent`
+and append an `exploreTimeline` sample on `EnterRoom`, bump `itemsPerZone` on pickup);
+increment `deaths` on `PlayerDied`, `saveCount` on `SaveAtVein`, `bossesDefeated` on a boss
+FSM defeat. On `Win`, fold `RunStats` into `Lifetime` (keep the faster `fastestClear`, set
+`hundredPercentClear` when `completionPercent = 100`) and persist (§13). `OpenStats`/
+`CloseStats` switch a `Stats of scope:StatScope` overlay state; the render is a no-op on
+physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

@@ -271,6 +271,132 @@ fading over 150 ms) on collision; small feather/dust particles on flap (≤ 6 pa
 - **Best score:** small, top-right `(1180, 24)`, format `BEST 000` (right-aligned).
 - All text horizontally centered on its anchor unless noted.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play surface (the Ready/title screen, Settings,
+Stats, Pause, and the run-end panel). Each menu is a vertical list of rows with a cursor, so
+one small update handler serves them all and navigation is identical everywhere. Because the
+game is one-button in play (§3), the menus add cursor keys that are only live while a menu is
+open — they never interfere with the edge-triggered `Flap`.
+
+**Menu tree**
+```
+Ready ─┬─ Play ──────────── begin a run (first flap launches the bird)
+       ├─ Stats ─────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Screen shake   ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Retry ─────────── abandon this run, return to Ready
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ Retry ─────── start a fresh run (endless — no lives, no continues)
+           ├─ View Stats ── Stats & Charts (§9.2)
+           └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑` decrements, `↓` increments, and both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- The run-end panel uses **Retry framing** (§11): there are no lives, so the primary row is
+  **Retry**, which spins up a brand-new run rather than resuming; it stays greyed until the
+  `restartLockoutMs` window (§12) elapses, matching the anti-misclick lockout in §3.
+- Rendering reuses the §9 overlay style: the selected row is highlighted (inverted panel,
+  dark text); non-selected rows are `#FFFFFF` on the dimmed playfield.
+
+**Msg additions** (extend §7 `Msg`):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12
+tunable preset (Easy `gapHeight 240 / scrollSpeed 150`, Normal `200 / 180`, Hard `170 / 210`
+with the optional `*Ramp` enabled); **Master volume**/**Sound** route to
+`Audio.setMasterVolume` (§10, clamped `[0,1]`, `0` = silence); **Screen shake** toggles the
+§8 optional collision-flash/shake effect.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a stats snapshot
+(never live physics), so it is a pure, deterministic render reachable from Ready, the run-end
+panel, and Pause. Chart-design choices below follow the project dataviz conventions
+(form-first, validated colorblind-safe categorical palette, single axis, identity by entity).
+
+**Tracked per run** — `RunStats`, accumulated in the `Tick` step (§7), snapshotted on
+`GameOver`:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `pipesPassed` | `int` | +1 each time a pair is scored (§4.6); mirrors `Score` at death |
+| `deathCause` | `Pipe \| Ground \| Ceiling` | set once on the lethal collision (§4.7) |
+| `nearMisses` | `int` | +1 when the bird clears a gap within `nearMissPx` of a pipe edge |
+| `flapsCount` | `int` | +1 per accepted `Flap` impulse (§4.2) during `Playing` |
+| `runSeconds` | `float` | accumulated live-play time (sum of `dt` while `Playing`) |
+
+`deathCause` is normally `Pipe` or `Ground` — the ceiling is clamped, not lethal in v1 (§4.2),
+so `Ceiling` is only produced by the optional lethal-ceiling variant.
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `bestScore`, `attempts`, `avgPipes`,
+`deathsByPipe`, `deathsByGround`, and `medalTier` (bronze/silver/gold/platinum, derived from
+`bestScore` at the §15 thresholds 10/20/30/40).
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌  BEST  ┐ ┌ATTEMPTS┐ ┌AVG PIPES ┐ ┌  MEDAL   ┐              │  ← KPI stat tiles
+│  │   27   │ │  138   │ │   4.6    │ │  GOLD    │              │
+│  └────────┘ └────────┘ └──────────┘ └──────────┘              │
+│                                                                │
+│  Score distribution                 Best score so far          │
+│  ▇▇                             27 ┤            ╭───────        │
+│  ▇▇  ▇▇                            │        ╭───╯               │
+│  ▇▇  ▇▇  ▇▇                        │    ╭───╯                   │
+│  ▇▇  ▇▇  ▇▇  ▇▇  ▇▇                │ ╭──╯                       │
+│  0  1-2 3-5 6-9 10+ (pipes)      0 ┼──────────────► attempt #   │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Score distribution** — *form: a distribution → bars.* x = pipes-passed bucketed as
+   `0, 1-2, 3-5, 6-9, 10+`, y = number of attempts that ended in that bucket. **Single
+   series**, so one hue and no legend. Bars are 4 px-rounded at the data end with a 2 px
+   surface gap between them. Fill `#2a78d6` (light) / `#3987e5` (dark) — validated
+   categorical slot 1.
+2. **Best score so far** — *form: change over an ordered index → line.* x = attempt number,
+   y = the personal-best pipes-passed as of that attempt — a **monotonic step line** that
+   only ever rises. **Single series**, so one hue and no legend; drawn in slot 1
+   (`#2a78d6` light / `#3987e5` dark), 2 px line with ≥ 8 px end marker at the current best,
+   over recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (the best-score series keeps slot 1 in both
+scopes — never repainted by the scope toggle); **one axis only** (no dual-scale); chart
+**text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue; layout
+is **fixed and deterministic**, so a fixed-seed session (§13) renders byte-identical for
+snapshot tests. The `↑/↓` **scope** toggle swaps the data source This-Run ↔ Lifetime — in
+This-Run scope the distribution highlights the just-finished attempt's bucket and the line
+marks its point — without changing the hue.
+
+**Model/Msg hooks:** add `Run: RunStats` and `Lifetime: LifetimeStats` to the §7 `Model`;
+accumulate `Run` in the `Tick dt` `Playing` step (bump `pipesPassed`/`flapsCount`/`nearMisses`,
+add `dt` to `runSeconds`) and set `deathCause` when the collision transitions to `GameOver`;
+on `GameOver`, fold `RunStats` into `Lifetime` (increment `attempts`, roll `avgPipes`, bump
+`deathsByPipe`/`deathsByGround`, refresh `bestScore`/`medalTier`) and persist alongside `Best`
+(§13, the `flappy.best` store). `OpenStats`/`CloseStats` switch a `Stats of scope:StatScope`
+overlay; the render is a no-op on physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

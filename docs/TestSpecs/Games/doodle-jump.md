@@ -301,6 +301,125 @@ y-down on screen.
 - **Game Over:** dim overlay, "Game Over" 64 px centered, final **Score** and **Best** below,
   "Press Space to Restart". If a new best, show "New Best!" badge.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Run
+Over). Each menu is a vertical list of rows with a cursor, so one small update handler serves
+them all and navigation is identical everywhere. The game is endless with no lives, so the
+death screen is framed as **Run Over** and its primary action is **New Run**, not a life-loss
+continue.
+
+**Menu tree**
+```
+Title ─┬─ New Run ─────────── seed a fresh run and start climbing (§7 StartGame)
+       ├─ Stats ──────────── Stats & Charts screen (§9.2)
+       ├─ Settings ───────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                  ├─ Master volume  ◄ 0 – 100 ►
+       │                  ├─ Sound          ◄ On · Off ►
+       │                  ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                  ├─ Screen shake   ◄ On · Off ►
+       │                  └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart Run
+       ├─ Settings ───────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Run Over ─┬─ New Run ──────── seed and start a fresh climb
+          ├─ View Stats ───── Stats & Charts (§9.2)
+          └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- Rendering reuses the §9 Title style: the selected row is inverted/highlighted; non-selected
+  rows are drawn plain over the dimmed scene.
+
+**Msg additions** (extend the §7 `Msg` type):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12 preset
+(Easy `g 2000 / enemyStartAlt 6000`, Normal `g 2400 / enemyStartAlt 3000`, Hard
+`g 2800 / enemyStartAlt 1500`, with `gapGrowth`/spring weight scaled to match);
+**Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped `[0,1]`, mirroring
+the `M` mute toggle); **Screen shake** toggles the §8 spring/jetpack camera-kick effect.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `Stats`
+snapshot (never live physics), so it is a pure, deterministic render reachable from Title, Run
+Over, and Pause. Chart-design choices below follow the project dataviz conventions (form-first,
+validated colorblind-safe categorical palette, single axis, identity by entity).
+
+**Tracked per run** — `RunStats`, accumulated in `Tick`, snapshotted on `GameOver`:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `maxHeight` | `float` (px) | max altitude reached (`-MaxClimb`, §4.6) |
+| `platformsHit` | `int` by `PlatformKind` (Normal/Moving/Breakable/Spring) | ++ the landed kind on each bounce/contact (§4.3, §4.7) |
+| `springsUsed` | `int` | ++ on each Spring super-bounce (§4.7) |
+| `monstersDodged` | `int` | ++ when an enemy is culled below camera with no contact (§4.9) |
+| `monstersKilled` | `int` | ++ on each stomp kill (§4.9) |
+| `fallCause` | `FallCause` (`OffBottom` \| `Monster`) | set once at death (§11) |
+| `runSeconds` | `float` | accumulated live-play seconds |
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `bestHeight`, `runsPlayed`, `avgHeight`
+(rolling mean of `maxHeight`), `mostMonstersDodged`.
+
+**Layout** (logical 720×1280 portrait): a KPI tile row across the top, two charts below.
+
+```
+┌───────────────────────── STATS ─────────────────────────┐
+│ ┌ BEST HEIGHT ┐ ┌ RUNS ┐ ┌ AVG HEIGHT ┐ ┌ DODGED ┐      │  ← KPI stat tiles
+│ │  18,240 px  │ │  57  │ │  6,120 px  │ │   214  │      │
+│ └─────────────┘ └──────┘ └────────────┘ └────────┘      │
+│                                                          │
+│  Platforms hit by type          Height over time         │
+│  ▇▇                        18k ┤              ╭──         │
+│  ▇▇                            │          ╭──╯            │
+│  ▇▇   ▇▇                       │     ╭───╯                │
+│  ▇▇   ▇▇   ▇▇   ▇▇          0k ┼────────────────► sec     │
+│  Nrm  Mov  Brk  Spr                                       │
+└──────────────────────────────────────────────────────────┘
+   ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Platforms hit by type** — *form: per-category magnitude → bars.* x = platform type
+   (`Normal`, `Moving`, `Breakable`, `Spring`), y = number landed on this run. **Single
+   series**, so one hue and no legend. Bars are 4 px-rounded at the data end with a 2 px
+   surface gap between them. Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical
+   slot 1. Comparing magnitudes across the four types is one hue, never a rainbow.
+2. **Height over time** — *form: change over an ordered index → line.* x = elapsed seconds of
+   the last run, y = altitude climbed; **one series** (the doodle's climb), so one hue and no
+   legend. Draw a single climbing line in `#2a78d6` (light) / `#3987e5` (dark), 2 px stroke
+   with an ≥ 8 px end marker at the final height, over recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (the climb series and the type bars are
+always slot 1 — never repainted by the scope toggle); **one axis only** (height is a single
+y-scale; no dual axis); chart **text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted),
+never the series hue; layout is **fixed and deterministic**, so a fixed-seed run (§13) renders
+byte-identical for snapshot tests. The `↑/↓` **scope** toggle swaps the data source This-Run ↔
+Lifetime without changing colors (Lifetime shows aggregate type-counts and the best run's
+height curve).
+
+**Model/Msg hooks:** add `Stats: RunStats` and `Lifetime: LifetimeStats` to the §7 `Model`;
+accumulate them in the `Tick` case (bump `platformsHit`/`springsUsed` on land, `monstersKilled`
+on stomp, `monstersDodged` on off-camera cull, sample `maxHeight` from `MaxClimb`, advance
+`runSeconds`). On the `GameOver` transition set `fallCause`, fold `RunStats` into `Lifetime`
+(update `bestHeight`, `runsPlayed`, `avgHeight`, `mostMonstersDodged`), and persist (§13).
+`OpenStats`/`CloseStats` switch a Stats overlay carrying a `scope:StatScope`; the render is a
+no-op on physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

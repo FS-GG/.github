@@ -563,6 +563,135 @@ transform handles the room-transition camera slide.
 
 Formatting: counts are right-aligned 2 digits (`07`, `99`). Time as `M:SS`.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Meta-progression, Settings,
+Pause, Game Over, Victory). Each menu is a vertical list of rows with a cursor, so one small
+update handler serves them all and navigation is identical everywhere.
+
+**Menu tree**
+```
+Title ─┬─ New Run ─────────── StartRun (fresh seed) → Playing (§7.3)
+       ├─ Continue ────────── only shown while a run is in progress (Run = Some)
+       ├─ Daily Seed ──────── StartRun (Some dailySeed) — shared/ranked seed (§4.10)
+       ├─ Meta-progression ── Hub / unlock progress (§4.10)
+       ├─ Stats ───────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Screen shake   ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Abandon Run ────── discard the run (permadeath, §4.10) → Title
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over / Victory ─┬─ New Run ──────── fresh seed, back to Floor 1
+                     ├─ Retry Seed ───── re-launch the same runSeed (§4.10)
+                     ├─ View Stats ───── Stats & Charts (§9.2)
+                     └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Screen shake):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- Rendering reuses the §9 Title selector style: the selected row is inverted (white box,
+  black text); non-selected rows are `#FFFFFF` on the dim overlay.
+
+**Msg additions** (extend §7.2):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to the `MetaProfile` config file (§13): **Difficulty**
+selects the §12 mode (Easy/Normal/Hard scaling `enemyHpScale`, `postHitInvuln`, and
+`dropNothingWeight`); **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10,
+clamped `[0,1]`, muting requests `0.0`); **Screen shake** toggles the §8 optional
+bomb/boss-hit shake.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a snapshot
+(the run's `RunStats` and the persisted `MetaProfile`), never live sim, so it is a pure,
+deterministic render reachable from Title, Game Over/Victory, and Pause. Chart-design
+choices below follow the project dataviz conventions (form-first, validated colorblind-safe
+categorical palette, single axis, identity by entity).
+
+**Tracked per run** — extends the `Stats: RunStats` already on §7.1 `RunState`, accumulated
+in `stepSim` (the `Tick` path, §7.3), snapshotted into `RunSummary` at run end
+(`PlayerDied`/`RunCompleted`):
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `depthReached` | `int` | max `FloorIndex` reached; set on `DescendFloor` (§7.3) |
+| `killsByType` | `Map<EnemyKind, int>` | incremented on each enemy death (§5.2) |
+| `itemsFound` | `int` | passive items picked up (§4.9) |
+| `coinsCollected` | `int` | coins gathered this run (§4.7 — this game's gold) |
+| `runSeconds` | `float` | accumulated `SimTime` of live play (§7.1) |
+| `damageDealt` / `damageTaken` | `float` | run totals (HP dealt / half-hearts lost) |
+| `damageByFloor` | `(dealt:float * taken:float) list` | one running pair per floor (Chart 2) |
+| `deathCause` | `DeathCause` | `Enemy of EnemyKind \| Trap \| Bomb`, set at death (§4.6) |
+| `character` | `CharId` | the starting character/class for this run (§4.10) |
+
+**Lifetime** — `LifetimeStats`, persisted inside `MetaProfile` (§4.10, §13): `runsPlayed`,
+`deepestFloor` (the existing `bestFloor`), `wins`, `winRatePct` (derived `wins/runsPlayed`),
+`totalKills`, `deathsByCause: Map<DeathCause, int>`, alongside the existing `unlockedItems`/
+`unlockedCharacters` unlocks.
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌───────────────────────────── STATS ─────────────────────────────┐
+│  ┌ DEEPEST ┐ ┌ RUNS  ┐ ┌ WIN %  ┐ ┌ KILLS  ┐                    │  ← KPI stat tiles
+│  │  Fl 9   │ │  128  │ │  14 %  │ │ 3,204  │                    │
+│  └─────────┘ └───────┘ └────────┘ └────────┘                    │
+│                                                                  │
+│  Run-depth distribution           Damage per floor (last run)    │
+│  ▇▇                            420 ┤          ╭── Dealt          │
+│  ▇▇  ▇▇                            │      ╭─╯╭─╯                 │
+│  ▇▇  ▇▇  ▇▇                        │   ╭─╯ ╭─╯                   │
+│  ▇▇  ▇▇  ▇▇  ▇▇  ▇▇                │  ╭╯ ╭─╯ ── Taken            │
+│  1-3 4-6 7-9 …  13+ (floors)     0 ┼──────────────► floor #      │
+└──────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime              ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Run-depth histogram** — *form: a distribution → bars.* x = deepest floor reached,
+   bucketed (`1-3, 4-6, 7-9, 10-12, 13+`), y = number of past runs. **Single series**, so
+   one hue and no legend. Bars are 4 px-rounded at the data end with a 2 px surface gap
+   between them. Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1.
+2. **Damage per floor** — *form: change over an ordered index → line.* x = floor number of
+   the last run, y = damage; **two series** (Dealt, Taken) → a legend is present and both
+   lines are direct-labeled at their right end ("Dealt"/"Taken"). Dealt `#2a78d6`, Taken
+   `#1baf7a` (slots 1–2, adjacent-pair CVD-validated), reading the survival margin per
+   floor. 2 px lines, ≥ 8 px end markers, recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (Dealt is always slot 1, Taken always
+slot 2 — never repainted by the scope toggle); **one axis only** (no dual-scale); chart
+**text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue; layout
+is **fixed and deterministic**, so a fixed-seed run (§13, §14.1) renders byte-identical for
+snapshot tests. The `↑/↓` **scope** toggle swaps the data source This-Run ↔ Lifetime without
+changing colors.
+
+**Model/Msg hooks:** extend the existing `RunStats` (§7.1 `RunState.Stats`) with the fields
+above and accumulate them in `stepSim` (§7.3 `Tick` path): bump `killsByType`/`damageDealt`
+on shot→enemy resolution (§4.4), `damageTaken`/`damageByFloor` on player hits (§4.6),
+`coinsCollected`/`itemsFound` on pickups (§4.7, §4.9), set `depthReached` on `DescendFloor`,
+and set `deathCause`/`character` at death. On `PlayerDied`/`RunCompleted`, fold `RunStats`
+into `MetaProfile` (increment `runsPlayed`, update `deepestFloor`, `wins`, `totalKills`,
+`deathsByCause`) and persist via `SaveProfile` (§13). `OpenStats`/`CloseStats` switch a
+`Screen`-adjacent Stats overlay carrying `scope: StatScope` (`ThisRun | Lifetime`); the
+render reads the snapshot only and is a no-op on physics (§7.4).
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

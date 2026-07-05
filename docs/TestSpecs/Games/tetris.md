@@ -331,6 +331,123 @@ animation timer) before collapsing — optional in v1 but specified for polish.
 - `HIGH` — session/persisted high score.
 - **Hold** label above the hold panel; **Next** label above the queue panel.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Game
+Over). Each menu is a vertical list of rows with a cursor, so one small update handler
+serves them all and navigation is identical everywhere. The §7.1 `Phase` still selects the
+active screen; the cursor and submenu stack live alongside it.
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start a new descent at the selected difficulty's start level
+       ├─ Stats ─────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Ghost piece    ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart ───────── new descent, fresh 7-bag (§4.7)
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Game Over ─┬─ Retry ─────── new descent with reset board + a freshly shuffled bag
+           ├─ View Stats ── Stats & Charts (§9.2)
+           └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑` decrement, `↓` increment, both **wrap** around
+  the ends of the list.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Ghost piece):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- Rendering reuses the §9 title style: the selected row is inverted (white box, black text);
+  non-selected rows are `#FFFFFF` on the `#101018` background, monospace.
+
+**Msg additions** (extend §7.2):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12
+`startLevel` preset (Easy `0` · Normal `5` · Hard `9`), which sets the initial gravity from
+the §6.2 curve; **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped
+`[0,1]`); **Ghost piece** toggles the §8 landing-projection outline (stretch §15.1).
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `MatchStats`
+snapshot (never live gravity or timers), so it is a pure, deterministic render reachable
+from Title, Game Over, and Pause. Chart-design choices below follow the project dataviz
+conventions (form-first, validated colorblind-safe palette, single axis, identity by entity).
+
+**Tracked per run** — `MatchStats`, accumulated in the `Tick` lock/clear cases (§7.3),
+snapshotted on the `GameOver` transition:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `clears` | `int * int * int * int` | `(single,double,triple,tetris)`; bump the slot for the rows cleared on each lock (§4.6) |
+| `levelReached` | `int` | max `Level` reached this run (§6.2) |
+| `piecesPlaced` | `int` | incremented on each piece lock (§4.5) |
+| `tSpins` | `int` | incremented on a kicked-in T clear (stretch §15.3) |
+| `maxCombo` | `int` | longest streak of consecutive line-clearing locks |
+| `pps` | `float` | pieces per second = `piecesPlaced / playSeconds` |
+| `apm` | `float` | actions per minute = input actions `× 60 / playSeconds` |
+| `playSeconds` | `float` | accumulated live-play time (excludes Paused) |
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `highScore`, `gamesPlayed`, `mostLines`,
+`topLevel`, `bestPPS`, `tetrisRate` (Tetrises ÷ total clears, %).
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌HIGH SCORE┐ ┌ LINES ┐ ┌TOP LEVEL ┐ ┌ BEST PPS ┐             │  ← KPI stat tiles
+│  │  128400  │ │  187  │ │    12    │ │   2.4    │             │
+│  └──────────┘ └───────┘ └──────────┘ └──────────┘             │
+│                                                                │
+│  Line clears by type                Score progression          │
+│  ▇▇                          128400 ┤              ╭──         │
+│  ▇▇                                 │          ╭──╯            │
+│  ▇▇  ▇▇                             │      ╭──╯                │
+│  ▇▇  ▇▇  ▇▇  ▇▇                   0 ┼───────────────► lines    │
+│  Sgl Dbl Tpl Tet                    0                    187   │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime               ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Line clears by type** — *form: per-category magnitude → bars.* x = clear type
+   (`Single, Double, Triple, Tetris`), y = number of clears of that type this run. **Single
+   series**, so one hue and no legend. Bars are 4 px-rounded at the data end with a 2 px
+   surface gap between them. Fill `#2a78d6` (light) / `#3987e5` (dark) — validated
+   categorical slot 1; the four bars share the one hue (comparing magnitudes, not identities).
+2. **Score progression** — *form: change over an ordered index → line.* x = cumulative lines
+   cleared, y = `Score`; **one climbing series** → one hue and no legend. Colour `#2a78d6`
+   (light) / `#3987e5` (dark). 2 px line, an ≥ 8 px end marker at the latest point, recessive
+   1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (the score line keeps slot 1 in either
+scope — never repainted by the toggle); **one axis only** (no dual-scale); chart **text uses
+ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never the series hue; layout is **fixed
+and deterministic**, so a fixed-seed run (§13) renders byte-identical for snapshot tests. The
+`↑/↓` **scope** toggle swaps the data source This-Run ↔ Lifetime without changing colors.
+
+**Model/Msg hooks:** add `Stats: MatchStats` and `Lifetime: LifetimeStats` to §7.1 Model;
+accumulate them in the `Tick` lock/clear cases (bump the `clears` slot and `maxCombo` on each
+clear, `piecesPlaced` on each lock, `playSeconds`/`pps`/`apm` continuously); on `GameOver`,
+fold `MatchStats` into `Lifetime` (raise `highScore`/`mostLines`/`topLevel`/`bestPPS`,
+recompute `tetrisRate`) and persist (§13). `OpenStats`/`CloseStats` switch a `Stats` screen
+state carrying the `StatScope`; the render is a no-op on gravity and timers.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

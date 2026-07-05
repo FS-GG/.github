@@ -561,6 +561,128 @@ Drag to move/split stacks; trash slot bottom-right.
 **Tooltips:** hovering a slot/recipe shows name, stats (tool power, damage, hunger
 restore), and required station.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Settings, Stats, Pause, Death).
+Each menu is a vertical list of rows with a cursor, so one small update handler serves them
+all and navigation is identical everywhere; the underlying world sim is paused while any
+menu is on top.
+
+**Menu tree**
+```
+Title ─┬─ Continue ────────── resume the most recent saved world (§13)
+       ├─ Load World ──────── slot list; loads a saved world (§13)
+       ├─ New World ───────── seed field → StartNewWorld (§7.3)
+       ├─ Stats ──────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty       ◄ Peaceful · Normal · Hard ►
+       │                 ├─ Master volume    ◄ 0 – 100 ►
+       │                 ├─ Sound            ◄ On · Off ►
+       │                 ├─ Window scale     ◄ 1× · 2× · Fit ►
+       │                 ├─ Colorblind assist ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Save World ─────── flush chunk deltas (§13), stay in world
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Save & Quit to Title
+
+Death ─┬─ Respawn ────────── softcore: at bed/spawn with item-loss rules (§4.6)
+       ├─ View Stats ─────── Stats & Charts (§9.2)
+       ├─ New World ──────── abandon this run, seed a fresh world
+       └─ Quit to Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**).
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Colorblind assist):
+  `←`/`→` change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- Rows reuse the §9 panel style: the selected row is inverted (white box, black text);
+  non-selected rows are `#FFFFFF` on the dimmed world at 28 px.
+
+**Msg additions** (extend §7.3):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12
+tunables preset (Peaceful `baseSpawnCap 0`/`hungerDrain 0`, Normal `6`/`0.5`, Hard
+`12`/`1.0`); **Master volume**/**Sound** route to `Audio.setMasterVolume` (§10, clamped
+`[0,1]`); **Colorblind assist** swaps the §8.4 ore/tier palette for a CVD-safe variant.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `RunStats`
+snapshot (never live physics), so it is a pure, deterministic render reachable from Title,
+Death, and Pause. Chart-design choices below follow the project dataviz conventions
+(form-first, validated colorblind-safe categorical palette, single axis, identity by entity).
+
+**Tracked per run** — `RunStats`, accumulated in the `Tick` sim step (§7.5), snapshotted at
+death/run-end:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `daysSurvived` | `int` | mirrors `DaysSurvived`; bumped on each day wrap (§7.5) |
+| `itemsCrafted` | `int` | +1 per successful craft (§12) |
+| `resourcesGathered` | `Map<ResGroup,int>` | +count on pickup/mine, keyed Wood/Stone/Ore/Food |
+| `structuresBuilt` | `int` | +1 on placing a station/door/chest/wall run (§4.5) |
+| `enemiesKilled` | `int` | +1 on each enemy death (§4.7) |
+| `deathCause` | `DeathCause option` | set once at death — `Starvation`/`Enemy`/`Fall`/`Environment` |
+| `distanceExplored` | `float32` (tiles) | += horizontal distance travelled per tick |
+
+`ResGroup = Wood | Stone | Ore | Food` buckets the raw items of §12 (all metal ores fold
+into `Ore`; Apple/Mushroom/Cooked Meat fold into `Food`).
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `longestSurvivalDays`, `worldsPlayed`,
+`totalItemsCrafted`, `deathsByCause` (`Map<DeathCause,int>`).
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│ ┌ LONGEST  ┐ ┌ ITEMS    ┐ ┌ STRUCTURES ┐ ┌ DEATHS ┐           │  ← KPI stat tiles
+│ │ SURVIVAL │ │ CRAFTED  │ │            │ │        │           │
+│ │  18 days │ │   341    │ │     27     │ │   9    │           │
+│ └──────────┘ └──────────┘ └────────────┘ └────────┘           │
+│                                                                │
+│  Resources gathered by type       Health vs Hunger (last run)  │
+│  ▇▇                           100 ┤╮        ╭─╮      Health     │
+│  ▇▇  ▇▇                           │ ╰──╮╭──╯  ╰╮ Hunger         │
+│  ▇▇  ▇▇  ▇▇  ▇▇                   │    ╰╯      ╰──               │
+│  Wood Stone Ore Food            0 ┼───────────────► day         │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Resources-by-type histogram** — *form: per-category magnitude → bars.* x = resource
+   group (`Wood, Stone, Ore, Food`), y = count gathered this run. **Single series**, so one
+   hue and no legend. Bars are 4 px-rounded at the data end with a 2 px surface gap between
+   them. Fill `#2a78d6` (light) / `#3987e5` (dark) — validated categorical slot 1.
+2. **Health vs Hunger** — *form: change over an ordered index → line.* x = in-game day, y =
+   level `0–100` sampled once per day for the last run; **two series** (Health, Hunger) → a
+   legend is present and both lines are direct-labeled at their right end. Health `#2a78d6`,
+   Hunger `#1baf7a` (slots 1–2, adjacent-pair CVD-validated). 2 px lines, ≥ 8 px end markers,
+   recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (Health is always slot 1, Hunger always
+slot 2 — never repainted by the scope toggle); **one axis only** (both series share the same
+`0–100` scale, no dual-scale); chart **text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7`
+muted), never the series hue; layout is **fixed and deterministic**, so a fixed-seed run
+(§13) renders byte-identical for snapshot tests. The `↑/↓` **scope** toggle swaps the data
+source This-Run ↔ Lifetime without changing colors.
+
+**Model/Msg hooks:** add `RunStats: RunStats` and `Lifetime: LifetimeStats` to the §7.2
+`Model` record; accumulate them in the `Tick` sim step (§7.5) — bump `itemsCrafted` on craft,
+`resourcesGathered` on pickup/mine, `structuresBuilt` on placement, `enemiesKilled` on enemy
+death, and append the per-day Health/Hunger sample for chart 2 on each day wrap. On death,
+set `deathCause`, fold `RunStats` into `Lifetime`, and persist (§13). `OpenStats`/`CloseStats`
+switch `Ui: UiState` to a `Stats` screen; the render is a no-op on physics.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the

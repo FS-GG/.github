@@ -554,6 +554,133 @@ range circle + footprint highlight, hover tooltips (enemy: hp/armor/resists; tow
 
 Formatting: gold/score thousands-separated; timers `M:SS`; DPS to 1 decimal.
 
+### 9.1 Menu system (detailed)
+A single **menu stack** drives every non-play screen (Title, Map Select, Settings, Stats,
+Pause, run-end). Each menu is a vertical list of rows with a cursor, so one small update
+handler serves them all and navigation is identical everywhere; the board/HUD (§9) render
+only under the Play screen.
+
+**Menu tree**
+```
+Title ─┬─ Play ──────────── start a run on the selected map + difficulty
+       ├─ Map Select ────── choose Serpentine · Crossroads · The Labyrinth (§6)
+       ├─ Stats ─────────── Stats & Charts screen (§9.2)
+       ├─ Settings ──────┬─ Difficulty     ◄ Easy · Normal · Hard ►
+       │                 ├─ Master volume  ◄ 0 – 100 ►
+       │                 ├─ Sound          ◄ On · Off ►
+       │                 ├─ Window scale   ◄ 1× · 2× · Fit ►
+       │                 ├─ Build grid     ◄ On · Off ►
+       │                 └─ Back
+       └─ Quit
+
+Pause ─┬─ Resume
+       ├─ Restart Run
+       ├─ Settings ──────── (same submenu; returns to Pause)
+       └─ Quit to Title
+
+Run end ─┬─ Victory  (Wave 20 cleared, lives > 0 — §11)
+         │     ├─ Next Map ────── advance to the next campaign map (§6)
+         │     ├─ Replay Map
+         │     ├─ View Stats ──── Stats & Charts (§9.2)
+         │     └─ Title
+         └─ Defeat   (lives reach 0 — §4.6)
+               ├─ Retry ───────── restart this map, same difficulty
+               ├─ View Stats ──── Stats & Charts (§9.2)
+               └─ Title
+```
+
+**Navigation model**
+- `MenuCursor: int` on the active menu; `↑`/`W` decrement, `↓`/`S` increment, both **wrap**.
+- `Enter`/`Space` activates the current row; `Esc`/`Back` pops the stack (**Back**); on the
+  Play screen `Esc` opens Pause (§3) rather than popping.
+- **Cycler/slider rows** (Difficulty, Master volume, Sound, Window scale, Build grid): `←`/`→`
+  change the value in place; the row shows a right-aligned `◄ value ►` widget.
+- The run-end menu presents the **Victory** or **Defeat** branch per the §11 outcome; both
+  share the cursor/nav handler and only their row list differs.
+
+**Msg additions** (extend §7 Msg):
+```fsharp
+    | MenuUp | MenuDown              // move cursor (wraps)
+    | MenuAdjust of dir:int          // -1 / +1 on a cycler/slider row
+    | MenuActivate                   // Enter/Space on the current row
+    | MenuBack                       // Esc — pop the menu stack
+    | OpenStats | CloseStats         // enter / leave the Stats screen (§9.2)
+```
+
+Settings apply live and persist to local config (§13): **Difficulty** selects the §12 preset
+(Easy `350/30/…`, Normal `250/20/…`, Hard `180/12/…`); **Master volume**/**Sound** route to
+`Audio.setMasterVolume` (§10, clamped `[0,1]`); **Build grid** toggles the §3 grid overlay.
+
+### 9.2 Stats & charts screen
+The Stats screen visualizes **the last run** and **lifetime** play. It reads a `RunStats`
+snapshot (never live sim), so it is a pure, deterministic render reachable from Title, the
+run-end menu, and Pause. Chart-design choices below follow the project dataviz conventions
+(form-first, validated colorblind-safe categorical palette, single axis, identity by entity).
+
+**Tracked per run** — `RunStats` (§7 Model `Stats`), accumulated in `Tick`, snapshotted on
+`Victory`/`GameOver`:
+
+| Field | Type | Updated |
+|-------|------|---------|
+| `wavesSurvived` | `int` | incremented on each `WaveCleared` (§4.2) |
+| `enemiesLeaked` | `(wave:int * count:int) list` | +1 for the current wave on each leak (§4.6) |
+| `enemiesKilled` | `int` | +1 on each enemy death (§4.5) |
+| `towersBuilt` | `Map<TowerKind,int>` | +1 for the kind on each valid placement (§4.7) |
+| `goldEarned` | `(wave:int * amount:int) list` | bounty + interest + clear bonus per wave (§4.9) |
+| `goldSpent` | `(wave:int * amount:int) list` | placement + upgrade cost per wave (§4.9/§5.1) |
+| `damageByTowerType` | `Map<TowerKind,float>` | += applied damage credited to the firing tower (§4.5) |
+| `livesRemaining` | `int` | mirrors `Econ.Lives` at snapshot (§4.6) |
+
+**Lifetime** — `LifetimeStats`, persisted (§13): `bestWave`, `mapsPlayed`, `winRate` (% of
+runs ending in Victory), `totalLeaks`, `favoriteTower` (most-built `TowerKind` across runs).
+
+**Layout** (logical 1280×720): a KPI tile row across the top, two charts below.
+
+```
+┌──────────────────────────── STATS ────────────────────────────┐
+│  ┌ WAVES ┐ ┌ LEAKS ┐ ┌ GOLD EARNED ┐ ┌ BEST TOWER ┐          │  ← KPI stat tiles
+│  │  14   │ │  11   │ │   3,240     │ │   Tesla    │          │
+│  └───────┘ └───────┘ └─────────────┘ └────────────┘          │
+│                                                                │
+│  Leaks per wave                     Economy: earned vs spent   │
+│  ▇                             3200 ┤            ╭── Earned    │
+│  ▇        ▇                          │       ╭─╯╭╯             │
+│  ▇  ▇  ▇  ▇     ▇                     │   ╭─╯╭─╯ Spent          │
+│  1  3  5  7  9  11 (wave)          0 ┼───────────────► wave #  │
+└────────────────────────────────────────────────────────────────┘
+     ↑/↓ scope:  ▸ This Run · Lifetime            ESC — Back
+```
+
+The **WAVES SURVIVED**, **LEAKS** (total this run), and **GOLD EARNED** tiles read straight
+off `RunStats`; **BEST TOWER** names the `TowerKind` with the highest `damageByTowerType`
+(the Lifetime scope shows `favoriteTower` instead).
+
+**Charts** (rendered in Skia with the same draw-list discipline as §8):
+
+1. **Leaks-per-wave** — *form: per-category magnitude → bars.* x = wave number (`1…N`), y =
+   enemies leaked that wave (from `enemiesLeaked`). **Single series**, so one hue and no
+   legend — it shows where the defense broke. Bars are 4 px-rounded at the data end with a
+   2 px surface gap between them. Fill `#2a78d6` (light) / `#3987e5` (dark) — categorical slot 1.
+2. **Economy: earned vs spent** — *form: change over an ordered index → line.* x = wave
+   number, y = **cumulative** gold; **two series** (Earned, Spent, from `goldEarned`/`goldSpent`)
+   → a legend is present and both lines are direct-labeled at their right end ("Earned"/"Spent"),
+   surfacing economy management. Earned `#2a78d6`, Spent `#1baf7a` (slots 1–2, adjacent-pair
+   CVD-validated). 2 px lines, ≥ 8 px end markers, recessive 1 px gridlines in `#3C3C3C`.
+
+Conventions honored: **color follows the entity** (Earned is always slot 1, Spent always slot 2
+— never repainted by the scope toggle); **one axis only** (no dual-scale, though the two series
+share a gold axis); chart **text uses ink tokens** (`#FFFFFF` primary / `#C3C2B7` muted), never
+the series hue; layout is **fixed and deterministic**, so a fixed-seed run (§13) renders
+byte-identical for snapshot tests. The `↑/↓` **scope** toggle swaps the data source This-Run ↔
+Lifetime without changing colors.
+
+**Model/Msg hooks:** the §7 Model already carries `Stats: RunStats`; extend `RunStats` with
+the fields tabled above and add `Lifetime: LifetimeStats` alongside it. Accumulate in the
+`Tick` cases (append an `enemiesLeaked` entry on each leak, `goldEarned`/`goldSpent` on bounty/
+interest/clear and on placement/upgrade, credit `damageByTowerType` when a hit resolves); on
+`Victory`/`GameOver`, fold `RunStats` into `Lifetime` and persist (§13). `OpenStats`/`CloseStats`
+switch a `Screen = Stats of scope:StatScope` state; the render is a no-op on the sim.
+
 ## 10. Audio
 Audio ships in v1 via the FS.GG.UI **`fs-gg-audio`** capability (`open FS.GG.UI.Canvas`).
 Sound is **requested as pure values**: `update` returns `AudioEffect` values alongside the
