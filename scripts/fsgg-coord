@@ -52,7 +52,9 @@
 #                                             # verify an item is finished (PR merged AND board
 #                                             # Status=Done) and print an EARNED green DONE stamp;
 #                                             # red stamp + non-zero exit if a check fails (--flip
-#                                             # also sets Status=Done once the PR is merged).
+#                                             # also sets Status=Done once the PR is merged, and rolls
+#                                             # the completion up to any parent epic whose children
+#                                             # are now all Done).
 #   fsgg-coord budget                         # print GraphQL + REST rate-limit meters (free)
 #
 #   <issue> is a full URL, `owner/repo#n`, or `repo#n` (owner defaults to FS-GG).
@@ -453,6 +455,66 @@ banner() {   # $1=done|fail  $2=line1  $3=line2  — two full-width rows
   printf '%s%-*s%s\n' "$on" "$cols" "  $l2" "$off"
 }
 
+# ---- epic_rollup: after a child flips to Done, walk parents UPWARD and flip each epic whose children
+# are now ALL board-Done, stamping each one that rolls up. One thrifty query per level (subIssues +
+# a Status resolver each); runs only from `done --flip`. Bounded to 10 levels as a cycle backstop.
+# An already-Done epic is walked THROUGH silently (no re-stamp); a not-yet-complete epic prints a
+# one-line progress note and stops the climb.
+epic_rollup() {
+  local child="$1" boardnum depth=0 cur="$1"
+  boardnum="$(board_get '.number')"
+  local q='query($owner:String!, $repo:String!, $num:Int!){
+    repository(owner:$owner, name:$repo){ issue(number:$num){
+      parent{
+        number url repository{ nameWithOwner }
+        projectItems(first:20){ nodes{ project{ number }
+          status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } } } }
+        subIssues(first:100){ nodes{ number
+          projectItems(first:20){ nodes{ project{ number }
+            status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } } } } } }
+      }
+    } }
+    rateLimit{ cost remaining }
+  }'
+  while [ "$depth" -lt 10 ]; do
+    depth=$((depth + 1))
+    parse_ref "$cur"
+    local out; out="$(gql "$q" -f owner="$R_OWNER" -f repo="$R_REPO" -F num="$R_NUM")"
+    jq -e '.data.repository.issue.parent != null' <<<"$out" >/dev/null 2>&1 || break
+
+    local p_or p_num p_lbl
+    p_or="$(jq -r '.data.repository.issue.parent.repository.nameWithOwner' <<<"$out")"
+    p_num="$(jq -r '.data.repository.issue.parent.number' <<<"$out")"
+    p_lbl="${p_or#*/}#$p_num"
+
+    local p_onboard p_status total done
+    p_onboard="$(jq -r --argjson pn "$boardnum" \
+      '[.data.repository.issue.parent.projectItems.nodes[]? | select(.project.number==$pn)] | length' <<<"$out")"
+    if [ "$p_onboard" = "0" ]; then
+      printf '  epic %s: not on board — cannot roll up\n' "$p_lbl"; break
+    fi
+    p_status="$(jq -r --argjson pn "$boardnum" \
+      '[.data.repository.issue.parent.projectItems.nodes[]? | select(.project.number==$pn) | .status.name] | first // ""' <<<"$out")"
+    total="$(jq -r '[.data.repository.issue.parent.subIssues.nodes[]?] | length' <<<"$out")"
+    done="$(jq -r --argjson pn "$boardnum" \
+      '[.data.repository.issue.parent.subIssues.nodes[]?
+        | ([.projectItems.nodes[]? | select(.project.number==$pn) | .status.name] | first // "")
+        | select(. == "Done")] | length' <<<"$out")"
+    [ "$total" = "0" ] && break
+
+    if [ "$done" != "$total" ]; then
+      printf '  epic %s: %s/%s children Done — holding (not rolling up)\n' "$p_lbl" "$done" "$total"; break
+    fi
+    if [ "$p_status" = "Done" ]; then
+      dbg "epic_rollup: $p_lbl already Done — walking up"
+    else
+      set_field "$p_or#$p_num" Status Done >/dev/null
+      banner done "✓✓ FSGG-DONE   $p_lbl (epic)" "all $total children Done  ·  board: Done"
+    fi
+    cur="$p_or#$p_num"
+  done
+}
+
 done_cmd() {
   local ref="" pr="" flip=""
   while [ $# -gt 0 ]; do
@@ -480,6 +542,7 @@ done_cmd() {
         project{ number title }
         status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } }
       } }
+      parent{ number }
     } }
     rateLimit{ cost remaining }
   }'
@@ -531,10 +594,16 @@ done_cmd() {
   fi
   banner done "✓✓ FSGG-DONE   $item_lbl" \
               "merged PR #$prnum @ ${prsha:-?}${prday:+ ($prday)}  ·  board: Done"
+  # Roll the completion up: if this item is a sub-issue and --flip is in play, flip any parent epic
+  # whose children are now ALL board-Done (and its parent, transitively). Only bother when a parent
+  # exists (cheap probe above) so non-epic items pay nothing.
+  local has_parent; has_parent="$(jq -r '.data.repository.issue.parent.number // ""' <<<"$out")"
+  [ -n "$flip" ] && [ -n "$has_parent" ] && epic_rollup "$ref"
+  return 0
 }
 
 usage() {
-  sed -n '2,67p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
+  sed -n '2,69p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'
 }
 
 # ---- dispatch -----------------------------------------------------------------------------------
