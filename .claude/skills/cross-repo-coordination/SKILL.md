@@ -126,9 +126,11 @@ scripts/fsgg-coord ready --repo .github            # all actionable items (not D
 > cache and auto-routes by the field's dataType (one mutation, no introspection); `item-id` resolves
 > via `issue → projectItems` (not a whole-board scan); `issues <repo> --label …` reads over REST with
 > an ETag (304s cost nothing); and `next`/`ready` answer "**what do I pick up next?**" by scanning the
-> board with only two fields per item (via `fieldValueByName`), so it costs ~1 point per 100 items
-> instead of the multi-point node scan raw `gh project item-list` pays — **use `next`/`ready` for
-> that, never `item-list`.** Watch the meters with `fsgg-coord budget` (and `FSGG_COORD_DEBUG=1`
+> board reading Status/Phase through the `fieldValueByName` **resolver** field (no node
+> multiplication), ~1 point per 100-item page — whereas raw `gh project item-list` nests
+> `fieldValues(first:100)` inside `items(first:N)` for **O(items × 100) ≈ 2,500 pts**, so a few calls
+> exhaust the budget. **Use `next`/`ready` for that, never `item-list`.** Watch the meters with
+> `fsgg-coord budget` (and `FSGG_COORD_DEBUG=1`
 > logs each call's cost). Full cost model: `docs/coordination/graphql-budget.md`.
 
 **Manual steps (need org-admin in the UI, not the `project` scope):**
