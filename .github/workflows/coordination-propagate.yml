@@ -50,6 +50,11 @@ jobs:
     needs: plan
     if: ${{ needs.plan.outputs.repos != '[]' && needs.plan.outputs.repos != '' }}
     runs-on: ubuntu-latest
+    # Serialize per receiver: the rolling sync branch is force-updated, so two concurrent runs
+    # (rapid successive kit merges) must not race the same branch. Don't cancel — let each finish.
+    concurrency:
+      group: coordination-propagate-${{ matrix.repo.full }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false          # one receiver's failure must not block the others
       matrix:
@@ -93,16 +98,20 @@ jobs:
             exit 0
           fi
           short="${SOURCE_SHA:0:12}"
-          branch="coordination-kit/sync-${short}"
+          # ONE rolling branch per receiver (not per source SHA): force-update it to the latest kit
+          # and reuse its open PR, so successive kit changes update a single PR instead of stacking a
+          # new one each time. The commit message still records the source SHA it last synced from.
+          branch="coordination-kit/sync"
           git config user.name  'fsgg-dispatch[bot]'
           git config user.email "${APP_ID}+fsgg-dispatch[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
+          git checkout -B "$branch"          # (re)create the rolling branch at main + the synced kit
           git add -A
           git commit -m "chore: sync coordination kit from FS-GG/.github@${short}"
-          git push -u origin "$branch" --force-with-lease
-          # Reuse an open sync PR if one exists (idempotent across repeated runs).
-          if ! gh pr view "$branch" --repo "$TARGET" >/dev/null 2>&1; then
+          git push origin "$branch" --force   # dedicated bot branch; concurrency guard serializes runs
+          # Open a PR only if this rolling branch has no OPEN PR yet; otherwise the force-push above
+          # already updated the existing one (and re-triggered its checks).
+          if [ -z "$(gh pr list --repo "$TARGET" --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)" ]; then
             gh pr create --repo "$TARGET" --base main --head "$branch" \
               --title "chore: sync coordination kit (cross-repo-coordination + fsgg-coord)" \
-              --body "Automated sync of the coordination kit from FS-GG/.github@\`${short}\` (ADR-0019). Brings this repo's \`cross-repo-coordination\` skill + \`scripts/fsgg-coord\` back in line with canonical; the \`coordination-coherence\` gate goes green once merged. Opened by the \`coordination-propagate\` workflow."
+              --body "Automated, self-updating sync of the coordination kit from FS-GG/.github (ADR-0019, last from \`${short}\`). Brings this repo's \`cross-repo-coordination\` skill + \`scripts/fsgg-coord\` back in line with canonical; the \`coordination-coherence\` gate goes green once merged. This is a **rolling** PR — later kit changes update it in place rather than opening a new one. Opened by the \`coordination-propagate\` workflow."
           fi
