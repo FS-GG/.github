@@ -2,7 +2,8 @@
 
 - **Date:** 2026-07-06
 - **Owner:** `.github` (cross-repo coordination); **implementation home:** new `FS-GG/FS.GG.Game` + `FS.GG.Rendering` (the donor).
-- **Status:** Implementation plan (pre-ADR). The decision of record is **ADR-0022** (to be authored from §10); this document is the executable plan behind it.
+- **Status:** In execution. The decision of record is **[ADR-0022](../adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md)** (Proposed; merged to `main` via [#220](https://github.com/FS-GG/.github/pull/220), 2026-07-06); this document is the executable plan behind it.
+- **Progress (2026-07-06):** **P0 ✅ · P1 ✅ · P2 → next.** Epic **[#213](https://github.com/FS-GG/.github/issues/213)** on the Coordination board; phases P0–P5 = children [#214–#219](https://github.com/FS-GG/.github/issues/213). P0/P1 stamped Done (earned done-stamp, PR #220 merged). **Next gated action: create `FS-GG/FS.GG.Game`** (P2 [#216](https://github.com/FS-GG/.github/issues/216), runbook in the issue).
 - **Scope decisions locked (2026-07-06):**
   1. **Full component** — both the render-independent sim primitives *and* the game starter/skills leave Rendering for a new `FS.GG.Game` repo.
   2. **SDD as the new repo's own dev lifecycle** (the dogfood) — `fsgg-sdd` drives `FS.GG.Game`'s `charter → ship` process, **coexisting** with Spec Kit's `specs/NNN-*` history, not replacing it.
@@ -141,7 +142,7 @@ Everything a "new component" costs in this org's machinery:
 - **`registry/dependencies.yml`** — new repo entry + contract rows for `FS.GG.Game.Core` / `.Render` (owner, surface = the package, consumers), the **Canvas major-bump edge**, the `Game.Render → FS.GG.UI.Scene` dependency edge, and a `coherence:` row for the extraction (`coherent: false` until published-and-flipped). Human-project into `docs/registry/compatibility.md` in the same PR (the review of 2026-07-02 found the projection is convention-maintained — do not skip it). Version derivation for the new packages follows ADR-0007.
 - **`registry/skills.yml`** — migrate `fs-gg-game-core` / `-audio` / `-persistence` / `-model-swap` ownership `fs-gg-rendering → fs-gg-game`, keep/adjust `materializes-when` (they are `profile in [game, sample-pack]` today), and re-point the skill-union gate + canonical `sha256`s to the new source paths.
 - **Labels & CI fabric** — the roster row grants `labels`; the reusable gates (`contract-coherence`, lockfile-sync, dispatch-sender, skill-union-assert) apply once the repo is created and the org-shared build config is synced from `dist/dotnet/` via `sync-build-config.sh`.
-- **Coordination epic** — open via the `cross-repo-coordination` protocol; sequence every item below on the board, publish-before-flip.
+- **Coordination epic** — ✅ **open (2026-07-06):** epic [#213](https://github.com/FS-GG/.github/issues/213) with phase children [#214–#219](https://github.com/FS-GG/.github/issues/213) as sub-issues on the Coordination board (Projects v2 #1), fields + `Blocked by` chain set, publish-before-flip.
 
 ---
 
@@ -152,11 +153,11 @@ Publish-before-flip throughout (FR-007): publish the artifact, verify it live on
 | Phase | Deliverable | Repos touched | Exit condition |
 |---|---|---|---|
 | **P0 — Decide** ✅ | §4 usage audit of `Scene.Geometry`; settle the cut line. | Rendering (read) | **DONE 2026-07-06:** Option D — `Rect`/`Point` stay in Scene, `Geometry` module moves to `Game.Core`; Scene takes a major; **no `FS.GG.Math` leaf**. Record: `2026-07-06-p0-scene-geometry-cut-line-audit.md`. |
-| **P1 — Record** | ADR-0022 + Coordination epic + `architecture.md` reconcile (5→6). | `.github` | ADR merged; epic open; roster row landed (`repos.sh` green). |
-| **P2 — Stand up** | Create `FS-GG/FS.GG.Game`; sync build config; `FS.GG.Game.Core` = the clean-move primitives (+ optional `FS.GG.Math` leaf). Canvas major bump prepared in Rendering (not yet released). | `.github`, Rendering, Game | `Game.Core` builds/tests headless; surface baseline committed. |
+| **P1 — Record** ✅ | ADR-0022 + Coordination epic + `architecture.md` reconcile (5→6) + roster row. | `.github` | **DONE 2026-07-06 (PR #220, epic #213):** ADR-0022 merged to `main`; epic #213 + children #214–#219 open; `game` roster row landed (`repos.sh` green, contract-coherence + projection gates green). |
+| **P2 — Stand up** ⏳ next | Create `FS-GG/FS.GG.Game`; sync build config; `FS.GG.Game.Core` = the clean-move primitives (`Rng`/`FixedStep`/`Pathfinding` are Scene-independent; `SpatialGrid` + the ported `Geometry` need Game.Core's own `Point`/`Rect` vocabulary — decided in P3). Canvas **and Scene** major bumps prepared in Rendering (not yet released). **No `FS.GG.Math` leaf** (P0). Runbook: #216. | `.github`, Rendering, Game | `Game.Core` builds/tests headless; surface baseline committed; `game` added to board `Repo Scope`. |
 | **P3 — Dogfood** | `fsgg-sdd init` the repo; run first feature (`charter→ship`) through `.fsgg/`; surface & close the no-template provenance shape in SDD. | Game, SDD | One feature shipped via SDD; provenance gap has a defined dev-repo shape. |
 | **P4 — Adapter + content** | `FS.GG.Game.Render` (Scene adapter); move starter fragments + game skills into `FS.GG.Game.Template`; migrate `skills.yml` ownership. Freeze Rendering `--profile game`. | Game, Rendering, `.github` | Render adapter emits Scene; skill-union gate green with new owner. |
-| **P5 — Publish** | Release `Game.Core`/`.Render` to org feed (+ nuget.org dual-publish per ADR-0012/0013); flip the extraction `coherent:` row; release Rendering's Canvas major; update registry ranges. | Game, Rendering, `.github` | Packages live on both feeds; `coherent: true`; ApiCompat gate green on the new majors. |
+| **P5 — Publish** | Release `Game.Core`/`.Render` to org feed (+ nuget.org dual-publish per ADR-0012/0013); flip the extraction `coherent:` row; release Rendering's Canvas **and Scene** majors; update registry ranges + `compatibility.md`. | Game, Rendering, `.github` | Packages live on both feeds; `coherent: true`; ApiCompat gate green on the new majors. |
 | **P6 — Sequel (out of scope here)** | `game` scaffold provider (Templates descriptor + `FS.GG.Game.Template` provider + composition lane); retire the frozen `--profile game`. | Templates, Game, Rendering | *Named future epic — not this plan.* |
 
 ---
@@ -233,4 +234,6 @@ Proposed (2026-07-06)
 
 ## 12. Where to start
 
-**P0 first, today:** audit `FS.GG.UI.Scene.Geometry` consumers in the live Rendering source to settle the cut line (§4.2) — it gates the ADR and determines whether this touches one package or two. Then author **ADR-0022** from §11 and open the Coordination epic covering §8. The primitive move (P2) and the SDD dogfood (P3) are the two milestones that prove the design; the consumer provider (P6) is deliberately a separate future epic.
+**P0 ✅ and P1 ✅ are done** (2026-07-06): the `Scene.Geometry` cut line is settled (Option D — touches *two* packages, Canvas + Scene; no `FS.GG.Math` leaf), ADR-0022 is merged, and the Coordination epic (#213) is open with all phases sequenced.
+
+**P2 is the live front (#216).** Its one gated action is creating the `FS-GG/FS.GG.Game` org repo — everything upstream (audit, ADR, roster, epic) is complete, and the extraction is turnkey (~640 LOC, three Scene-independent primitives move clean; the runbook is on #216). The primitive move (P2) and the SDD dogfood (P3) are the two milestones that prove the design; the consumer provider (P6) is deliberately a separate future epic.
