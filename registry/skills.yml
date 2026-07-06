@@ -12,16 +12,23 @@
 # scaffold's `scaffold-provenance.json` effectiveParameters. Absent ⇒ `always`.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
-#   * PRODUCT skills (16) — reconciled verbatim from FS.GG.Rendering's published producer manifest
-#     `template/skill-manifest/skill-manifest.json` (Feature 238, merged FS.GG.Rendering#76, closes
-#     Rendering#71). `sha256` + emission condition are authoritative. (`fs-gg-game-core`, the
-#     `profile in [game, sample-pack]` simulation-core skill, was dropped from the .github#168
-#     provisional snapshot's product count of 12 — the manifest has always declared 13; reconciled here.)
+#   * PRODUCT skills (16) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
+#     (2026-07-06, epic #213/#218): 12 rows owned by `fs-gg-rendering` (reconciled from
+#     FS.GG.Rendering's `template/skill-manifest/skill-manifest.json`) + 4 GAME rows now owned by
+#     `fs-gg-game` (reconciled from FS.GG.Game's `template/skill-manifest/skill-manifest.json`,
+#     merged FS.GG.Game#4). The four migrated rows — `fs-gg-game-core`/`fs-gg-audio`/
+#     `fs-gg-persistence`/`fs-gg-model-swap` (all `profile in [game, sample-pack]`) — moved
+#     BYTE-IDENTICALLY; FS.GG.Rendering STILL ships frozen copies from `--profile game` (two-copies
+#     cost, ADR-0022 §6, retired at P6). The migration also corrected two digests that had drifted from
+#     Rendering's live manifest (Feature 250 / 0.1.67 body changes): `fs-gg-game-core` 87b9c55c…→16fd32b7…
+#     and `fs-gg-model-swap` 68edbe46…→a48df195…. registry = manifest = bytes for all 16 rows.
+#     HISTORY of the 12 Rendering rows: reconciled verbatim from FS.GG.Rendering's published manifest
+#     (Feature 238, merged FS.GG.Rendering#76, closes Rendering#71); `sha256` + emission condition are
+#     authoritative. (`fs-gg-game-core` was dropped from the .github#168 provisional product count of
+#     12 — the manifest has always declared 13; reconciled .github registry changelog 2026-07-04.)
 #     2026-07-05 catch-up (Rendering#113): the manifest grew 13→16 — `fs-gg-audio` and
-#     `fs-gg-persistence` (Rendering Features 243/244, both `profile in [game, sample-pack]`) shipped
-#     but were never flipped here, and `fs-gg-model-swap` (Rendering#113, same gate) was added —
-#     all three reconciled verbatim from the published manifest; registry = manifest = bytes for all
-#     16 product rows. The predicates below are the
+#     `fs-gg-persistence` (Rendering Features 243/244) shipped but were never flipped here, and
+#     `fs-gg-model-swap` (Rendering#113, same gate) was added. The predicates below are the
 #     ADR-0017 CANONICAL grammar (`==`/`!=`/`in [..]`/`and`/`or`/`always`), NORMALIZED from the
 #     C-style form Rendering currently ships (`(profile == "app" || ...)`) — semantically identical.
 #     NOTE (cross-repo): Rendering's shipped manifest grammar is NOT the grammar the ADR-0017 gate
@@ -44,7 +51,7 @@
 # catalog + `skill-registry` contract already landed (.github#168).
 
 schemaVersion: 1
-updated: "2026-07-05"
+updated: "2026-07-06"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -89,10 +96,22 @@ skills:
   - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: 09eab05c5ec59661632a70035f3b5f8b434a37301d660e81706ad5cd494942f1, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-styling,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-styling/SKILL.md,   sha256: 24754ec5cb931deb6fcaf7d4b9e5926c42f4325dc4f67cb4852295de8b405ac9, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-ui-widgets,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-ui-widgets/SKILL.md, sha256: a0c0ce7acafdb1b99b574616fe2940108524bdd11b4eb93b664a8b41dd56650f, materializes-when: "profile in [app, game]" }
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-game-core/SKILL.md,  sha256: 87b9c55cc67bb0a25bc0fba6e7eb08d851a703ac253d6b99c6b517ebb9e5c866, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-audio,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-audio/SKILL.md,      sha256: 64cbe6efbfb75af430906832e918d1bb07279a6ffbcb7f3096eafb2b0998803c, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-persistence/SKILL.md, sha256: af107dec4e0a3464bb39d2dadd3101872bdf47351945151854d52f17234d1619, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-model-swap/SKILL.md,  sha256: 68edbe4684224bdbbe10ad71d6004adb0153b950b34dc7b8bae6118be6ab38fd, materializes-when: "profile in [game, sample-pack]" }
+  # GAME product skills — MIGRATED owner fs-gg-rendering → fs-gg-game (ADR-0022 P4, epic #213/#218).
+  # Reconciled from FS.GG.Game's producer manifest FS.GG.Game/template/skill-manifest/skill-manifest.json
+  # (schema skill-manifest v1; regenerable via `dotnet fsi scripts/generate-skill-manifest.fsx --check`,
+  # CI-drift-guarded in FS.GG.Game gate.yml) — registry = manifest = bytes. `source` is the in-Game
+  # canonical path; `sha256` is byte-equal to `sha256sum FS.GG.Game/template/product-skills/<id>/SKILL.md`.
+  # The bodies are BYTE-IDENTICAL to the copies FS.GG.Rendering STILL ships from its FROZEN
+  # `dotnet new fs-gg-ui --profile game` (the accepted two-copies cost during the extraction, ADR-0022
+  # §6; retired by the P6 provider epic). This reconcile also CORRECTS two digests that had drifted from
+  # Rendering's live manifest since the 2026-07-05 snapshot (bodies changed in Rendering Feature 250 /
+  # 0.1.67, never reconciled): fs-gg-game-core 87b9c55c…→16fd32b7… and fs-gg-model-swap 68edbe46…→a48df195….
+  # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 12 rows
+  # still owned by fs-gg-rendering, these four do NOT depend on the Rendering#77 grammar alignment.
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 16fd32b71ecb0f43937158a9b359654af9ecc28f7793b5489e42ea7ba4a76169, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: 64cbe6efbfb75af430906832e918d1bb07279a6ffbcb7f3096eafb2b0998803c, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: af107dec4e0a3464bb39d2dadd3101872bdf47351945151854d52f17234d1619, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: a48df195559c4f8e6499246e85261aca30182c1138eb9374df292dd4b9ec61d5, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: b7661998e340c06c7d2fb3d44214e780de7c4cff7720fc730f7a39860cb6a01d, materializes-when: "profile == governed" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack and lifecycle == spec-kit" }
   - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: e6c16f33a3f9b06995378952ba07408cee8a9f4eb4a9ce18bf2142602c40f499, materializes-when: "feedback == true and lifecycle == spec-kit" }
