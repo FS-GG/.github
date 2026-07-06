@@ -20,8 +20,8 @@
   skill registry rows `fs-gg-symbology` / `fs-gg-scene` / `fs-gg-skiaviewer`
   ([`registry/skills.yml`](../../registry/skills.yml)) ·
   [`architecture.md`](../architecture.md) §4.1 (`FS.GG.UI.Symbology` + `Symbology.Render`) ·
-  the [game-audio library design](2026-07-05-game-audio-library-architecture.md) and
-  [game-logic overview](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/design/2026-07-05-game-logic-skills-design-overview.md) (relocated to FS.GG.Game, ADR-0022; sibling
+  the [game-audio library design](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/reports/2026-07-05-game-audio-library-architecture.md) and
+  [game-logic overview](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/reports/2026-07-05-game-logic-skills-design-overview.md) (relocated to FS.GG.Game, ADR-0022; sibling
   "library + skill + gates" proposals) · source data:
   [Liquipedia — Unit Statistics (LotV)](https://liquipedia.net/starcraft2/Unit_Statistics_(Legacy_of_the_Void)).
 
@@ -469,5 +469,5 @@ Framework — [`architecture.md`](../architecture.md) §4.1 (`FS.GG.UI.Symbology
 §4.4 (the `fs-gg-governance` overlay applied after scaffold), §66/§103–110 (the framework-only no-Governance-dependency boundary this product deliberately opts out of) ·
 [`rendering-project.md`](../rendering-project.md) (governance boundary; release identity belongs to the repo).
 Sibling designs (same "library + skill + gates" shape) —
-[game-audio library architecture](2026-07-05-game-audio-library-architecture.md) (the `LICENSES.yml` sha256 gate pattern reused as G4) ·
-[game-logic skills overview](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/design/2026-07-05-game-logic-skills-design-overview.md) (relocated to FS.GG.Game, ADR-0022; determinism-as-tested-property, pure-function discipline).
+[game-audio library architecture](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/reports/2026-07-05-game-audio-library-architecture.md) (the `LICENSES.yml` sha256 gate pattern reused as G4) ·
+[game-logic skills overview](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/reports/2026-07-05-game-logic-skills-design-overview.md) (relocated to FS.GG.Game, ADR-0022; determinism-as-tested-property, pure-function discipline).
