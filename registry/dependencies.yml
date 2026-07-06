@@ -1000,19 +1000,50 @@ coherence:
       BCL-only Point/Rect. Builds + tests HEADLESS (71/71 Expecto, zero Skia / zero Scene); public
       surface baseline committed (11 types). The coordination kit + shared labels are distributed
       into the repo (ADR-0019). No FS.GG.Math leaf (P0 open-decision #2 closed).
+      P4 in progress 2026-07-06: (a) the render edge landed — FS.GG.Game.Render, a pure Scene adapter
+      projecting Game.Core primitives onto FS.GG.UI.Scene (consumed from nuget.org @0.1.64-preview.1;
+      Game.Render → FS.GG.UI.Scene edge established), FS.GG.Game#3; (b) the skill-ownership migration
+      landed — the 4 game product skills moved owner rendering → game byte-identically
+      (FS.GG.Game#4 producer manifest + .github#225 registry reconcile).
     impact: >
       Until publish-and-flip this is a standing cross-repo request: FS.GG.Game.Core / .Render are NOT
-      yet on the org feed, so no external repo may pin them, and FS.GG.Rendering STILL owns the
-      primitives + the game skills + the frozen `dotnet new fs-gg-ui --profile game` starter. The
-      forced SemVer majors on FS.GG.UI.Canvas AND FS.GG.UI.Scene (removing the moved surfaces) are
-      PREPARED, NOT released — the physical removal is deliberately deferred to P4 (skill-ownership
-      migration + freeze) / P5 (publish), because the frozen collision fragment still
-      `open FS.GG.UI.Scene`s Geometry and Package.Tests still assert those surfaces. Per-package
-      `contracts:` rows (game-sim-core, game-scene-adapter) and the Game.Render → FS.GG.UI.Scene
-      dependency edge are finalized against live versions when the packages publish (P4/P5, ADR-0007).
+      yet on the org feed, so no external repo may pin them. After the P4 skill migration FS.GG.Rendering
+      still owns the primitives, and keeps FROZEN byte-identical copies of the game skills + the
+      `dotnet new fs-gg-ui --profile game` starter (the two-copies cost is tracked separately as
+      game-starter-two-copies, retired at P6). The forced SemVer majors on FS.GG.UI.Canvas AND
+      FS.GG.UI.Scene (removing the moved surfaces) are PREPARED, NOT released — the physical removal is
+      deferred to P5 (publish), because the frozen collision fragment still `open FS.GG.UI.Scene`s
+      Geometry and Package.Tests still assert those surfaces. Per-package `contracts:` rows
+      (game-sim-core, game-scene-adapter) and the Game.Render → FS.GG.UI.Scene dependency edge are
+      finalized against live versions when the packages publish (P5, ADR-0007).
     resolved_by: >
       Flips coherent:true at P5: FS.GG.Game.Core (+ .Render) published to the org feed (and nuget.org
       per ADR-0012/0013), the Canvas + Scene majors released, the skill-ownership migration
       (fs-gg-game-core/-audio/-persistence/-model-swap: rendering → game) landed, and the registry
       ranges + this projection updated. Publish-before-flip (FR-007) throughout.
-    tracking: "https://github.com/FS-GG/.github/issues/213 (epic); https://github.com/FS-GG/.github/issues/216 (P2 stand-up, this landing); ADR-0022"
+    tracking: "https://github.com/FS-GG/.github/issues/213 (epic); https://github.com/FS-GG/.github/issues/216 (P2); https://github.com/FS-GG/.github/issues/218 (P4); FS.GG.Game#3 (adapter), FS.GG.Game#4 + .github#225 (skill migration); ADR-0022"
+
+  - id: game-starter-two-copies
+    coherent: false
+    owner: game
+    summary: >
+      Accepted transitional N-copies cost of the ADR-0022 extraction (§6). The consumer game scaffold
+      provider is OUT OF SCOPE for the extraction epic, so `dotnet new fs-gg-ui --profile game` in
+      FS.GG.Rendering is FROZEN as-is (pinned) rather than re-sourced from FS.GG.Game. Consequently the
+      game starter + the 4 game product skills exist in TWO places during the epic: Rendering's frozen
+      `--profile game` (its template.json sources + product-skills + collision/grids/line-drawing/
+      visibility fragments, all still `open`ing FS.GG.UI.Scene/Canvas) AND FS.GG.Game's nascent
+      producer content (template/product-skills + skill-manifest; the skill bytes are byte-identical,
+      P4 / FS.GG.Game#4). Distinct from game-extraction: that flips at P5 (packages published, majors
+      released); THIS persists past P5 until the sequel provider epic exists.
+    impact: >
+      No consumer contract changes between the two copies — the skill bodies are byte-identical (equal
+      sha256) and Rendering's `--profile game` behaviour is unchanged (frozen). The only cost is the
+      duplicated maintenance surface: a game-skill body edit must land in both repos until the freeze is
+      retired. Tracked so it can't be silently forgotten (ADR-0022 §6).
+    resolved_by: >
+      Flips coherent:true when the sequel provider epic (P6, named future work — NOT this plan) ships
+      the consumer `game` scaffold provider (Templates descriptor + FS.GG.Game.Template provider +
+      composition lane) and RETIRES Rendering's frozen `--profile game`, leaving a single source of the
+      game starter + skills in FS.GG.Game.
+    tracking: "https://github.com/FS-GG/.github/issues/213 (epic); https://github.com/FS-GG/.github/issues/218 (P4 freeze); ADR-0022 §6 (freeze) / §2.1 (provider deferred to P6)"

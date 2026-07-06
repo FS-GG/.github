@@ -372,6 +372,14 @@ The consumer `game` scaffold provider is deferred and `dotnet new fs-gg-ui --pro
 **frozen** for the epic's duration — a named sequel epic retires the freeze. Phased plan:
 [`docs/reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md`](reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md).
 
+**Status (P4, 2026-07-06):** the render edge landed — `FS.GG.Game.Render` projects `Game.Core`
+onto `FS.GG.UI.Scene` (consumed from nuget.org) — and the four game product skills migrated
+`owner: fs-gg-rendering → fs-gg-game` byte-identically (reconciled from FS.GG.Game's own producer
+skill-manifest; registry = manifest = bytes). Rendering keeps **frozen** byte-identical copies of
+the game starter + skills — an accepted two-copies cost tracked as the `game-starter-two-copies`
+coherence row, retired by the P6 provider epic. Still ahead: the physical `Canvas`/`Scene` major
+removal + the package publish (P5).
+
 ---
 
 ## 5. The contract registry — the single source of truth
