@@ -21,10 +21,12 @@ name: coordination-propagate
 on:
   push:
     branches: [main]
-    paths:
+    paths:                                    # the content-addressed kit sources (repos.yml `kit:`)
       - "scripts/fsgg-coord"
       - ".claude/skills/cross-repo-coordination/**"
       - ".agents/skills/cross-repo-coordination/**"
+      - ".claude/skills/intra-repo-parallel-work/**"
+      - ".agents/skills/intra-repo-parallel-work/**"
   workflow_dispatch:
 
 permissions:
