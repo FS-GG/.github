@@ -985,3 +985,34 @@ coherence:
       turning green on the 0.1.70 re-pin.
     impact: "A scaffolded product whose name is an illegal F# identifier now compiles (dotnet build + test green) end-to-end — the #142 split + the #149 (src binding) + #152 (test binding) fixes, with a leak gate that now covers src/ AND tests/ and embedded tokens — unblocking FS.GG.SDD#150."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/142 (Rendering#144 released 0.1.66-preview.1, Templates#113 re-pin); https://github.com/FS-GG/FS.GG.Rendering/issues/149 (Rendering#150 released 0.1.69-preview.1, Templates re-pin); https://github.com/FS-GG/FS.GG.Rendering/issues/152 (Rendering#153 released 0.1.70-preview.1, Templates re-pin, SDD#150; SDD feature 080/083)"
+
+  - id: game-extraction
+    coherent: false
+    owner: game
+    summary: >
+      Extract the render-independent game-simulation subsystem out of FS.GG.Rendering into the
+      platform's new sixth component and bottom layer, FS-GG/FS.GG.Game (decision of record
+      ADR-0022; plan docs/reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md; epic #213).
+      P2 landed 2026-07-06: the FS.GG.Game repo was created (public) and stood up with FS.GG.Game.Core
+      — a BCL-only (FSharp.Core-only) deterministic sim core that reaches up to nothing, holding the
+      moved primitives Rng/FixedStep/Pathfinding/SpatialGrid (from FS.GG.UI.Canvas) and the Geometry
+      collision module (from FS.GG.UI.Scene, P0 Option D), reimplemented over Game.Core's own
+      BCL-only Point/Rect. Builds + tests HEADLESS (71/71 Expecto, zero Skia / zero Scene); public
+      surface baseline committed (11 types). The coordination kit + shared labels are distributed
+      into the repo (ADR-0019). No FS.GG.Math leaf (P0 open-decision #2 closed).
+    impact: >
+      Until publish-and-flip this is a standing cross-repo request: FS.GG.Game.Core / .Render are NOT
+      yet on the org feed, so no external repo may pin them, and FS.GG.Rendering STILL owns the
+      primitives + the game skills + the frozen `dotnet new fs-gg-ui --profile game` starter. The
+      forced SemVer majors on FS.GG.UI.Canvas AND FS.GG.UI.Scene (removing the moved surfaces) are
+      PREPARED, NOT released — the physical removal is deliberately deferred to P4 (skill-ownership
+      migration + freeze) / P5 (publish), because the frozen collision fragment still
+      `open FS.GG.UI.Scene`s Geometry and Package.Tests still assert those surfaces. Per-package
+      `contracts:` rows (game-sim-core, game-scene-adapter) and the Game.Render → FS.GG.UI.Scene
+      dependency edge are finalized against live versions when the packages publish (P4/P5, ADR-0007).
+    resolved_by: >
+      Flips coherent:true at P5: FS.GG.Game.Core (+ .Render) published to the org feed (and nuget.org
+      per ADR-0012/0013), the Canvas + Scene majors released, the skill-ownership migration
+      (fs-gg-game-core/-audio/-persistence/-model-swap: rendering → game) landed, and the registry
+      ranges + this projection updated. Publish-before-flip (FR-007) throughout.
+    tracking: "https://github.com/FS-GG/.github/issues/213 (epic); https://github.com/FS-GG/.github/issues/216 (P2 stand-up, this landing); ADR-0022"

@@ -67,8 +67,9 @@ the decision records linked throughout.
 ```
 
 Six repositories under [github.com/FS-GG](https://github.com/FS-GG) (five framework
-components + `.github`; **FS.GG.Game** is mid-extraction under ADR-0022 — its repo and
-packages land through the extraction epic, `coherent: false` until published):
+components + `.github`; **FS.GG.Game** is mid-extraction under ADR-0022 — its repo is
+created and `FS.GG.Game.Core` builds/tests headless (P2, 2026-07-06); the packages publish
+through the rest of the extraction epic, `coherent: false` until then):
 
 | Repository | Role | Ships |
 |---|---|---|
