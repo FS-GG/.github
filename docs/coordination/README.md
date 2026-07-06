@@ -13,6 +13,12 @@ The repos are deliberately decoupled (see
 through **GitHub-native primitives** — not a shared mutable folder — so requests are
 notified, threaded, assignable, searchable, and scriptable via `gh`.
 
+> **Inner-repo sibling.** For running multiple workers **in parallel on different items
+> inside one repo** (rather than *between* repos), see the
+> [intra-repo parallel-work protocol](parallel-work.md) ([ADR-0021](../adr/0021-parallel-intra-repo-work-claim-worktree-touchset.md)) —
+> it reuses this board and `fsgg-coord`, adding a claim lock, per-item git worktrees, and a
+> declared `Paths:` touch-set with an overlap check.
+
 ## Requests and responses → cross-repo issues
 
 A "mailbox message" is a **GitHub issue in the target repo**.

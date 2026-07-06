@@ -30,7 +30,7 @@
 # added to the relevant rows when each fabric is migrated (verified against that workflow's list).
 
 schemaVersion: 1
-updated: 2026-07-05
+updated: 2026-07-06
 authority: FS-GG/.github
 
 repos:
@@ -47,4 +47,5 @@ repos:
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
 kit:
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: dcb8dfd36d6a613f42ed71f9efb1be537d70a0e0e85074ee41a632f0576ad521 }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: b49eebc5523c40b7e682064bd88afa725fd31cd98b40a0e5f5d89b2469e81699 }
+  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: a952f74ad32fbed6ea029d9a6a8f8642df1c2d70bddeaf79f6df6409f6654a69 }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: a0c44984f66429458fe1e79ddb016fae718bf01a36532ae459ca914a45f99cbb }
