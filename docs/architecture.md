@@ -3,7 +3,7 @@ title: Architecture
 category: FS.GG
 categoryindex: 6
 index: 0
-description: A newcomer's guide to the FS-GG architecture — the four-component split, the one-way dependency rule, the contract registry, and how the repositories compose into one runnable workspace.
+description: A newcomer's guide to the FS-GG architecture — the component split, the one-way dependency rule, the contract registry, and how the repositories compose into one runnable workspace.
 ---
 
 # FS-GG architecture
@@ -15,19 +15,22 @@ description: A newcomer's guide to the FS-GG architecture — the four-component
 
 FS-GG is **F# tooling for building desktop UI apps on `net10.0`**: a
 SkiaSharp/OpenGL UI framework, a spec-driven development (SDD) lifecycle CLI, and
-optional governance tooling, that compose into one runnable workspace. It is the
+optional governance tooling, that compose into one runnable workspace. It began as the
 split of the archived [`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI)
 monolith into four focused, independently shippable components plus an
-organization-level coordination repository.
+organization-level coordination repository, and is now growing a fifth framework
+component — **FS.GG.Game**, the render-independent simulation core — extracted from
+Rendering under [ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md).
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
 
-> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the five
-> repositories below. Each repository is a **component**. What a consumer
-> *scaffolds* with the platform is a **workspace** — the generated repo with a
-> runnable **app**, the `.fsgg/` lifecycle, skills, and optional governance. This
-> page uses those words precisely; see
+> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the six
+> repositories below (five framework components + `.github`; the sixth,
+> **FS.GG.Game**, is mid-extraction under ADR-0022). Each repository is a
+> **component**. What a consumer *scaffolds* with the platform is a **workspace** —
+> the generated repo with a runnable **app**, the `.fsgg/` lifecycle, skills, and
+> optional governance. This page uses those words precisely; see
 > [ADR-0020](adr/0020-platform-workspace-component-vocabulary.md).
 
 ---
@@ -50,14 +53,22 @@ the decision records linked throughout.
 │ UI framework     │   │ lifecycle CLI +      │   │ optional rule /  │   │ scaffold-time   │
 │ FS.GG.UI.* +     │   │ FS.GG.Contracts      │   │ evidence kernel  │   │ composition     │
 │ fs-gg-ui template│   │ (fsgg-sdd)           │   │ (fsgg-governance)│   │ (overlay+provider)│
-└──────────────────┘   └──────────────────────┘   └──────────────────┘   └─────────────────┘
-        ▲                        ▲                         ▲                      │
-        │                        │                         │                      │
-        └── fs-gg-ui-template ───┴── scaffold-provider ────┴── governance-* ──────┘
-              (consumed by Templates at scaffold time; see §6)
+└───┬─────────▲────┘   └──────────┬───────────┘   └────────┬─────────┘   └────────┬────────┘
+    │         │                   │                        │                      │
+    │         │ Game.Render▲      └── scaffold-provider ────┴── governance-* ──────┤
+    │         └──────────┐ │  (Templates consumes fs-gg-ui-template + the two above)│
+┌───┴──────────────────┐│ │                                                        │
+│ FS.GG.Game  (NEW —   ││ └────── fs-gg-ui-template ───────────────────────────────┘
+│ mid-extraction,      ││          (all three consumed by Templates at scaffold time; see §6)
+│ ADR-0022)            │└─ Game.Render ─▶ FS.GG.UI.Scene  (adapter reaches UP — allowed)
+│ Game.Core (BCL sim)  │
+│ + Game.Render        │   Game.Core → nothing (BCL-only new BOTTOM layer, sibling to Rendering).
+└──────────────────────┘   Rendering still reaches up to nothing (one-way rule preserved).
 ```
 
-Five repositories under [github.com/FS-GG](https://github.com/FS-GG):
+Six repositories under [github.com/FS-GG](https://github.com/FS-GG) (five framework
+components + `.github`; **FS.GG.Game** is mid-extraction under ADR-0022 — its repo and
+packages land through the extraction epic, `coherent: false` until published):
 
 | Repository | Role | Ships |
 |---|---|---|
@@ -65,6 +76,7 @@ Five repositories under [github.com/FS-GG](https://github.com/FS-GG):
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(mid-extraction, ADR-0022)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter) |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. | — |
 
 ---
@@ -114,7 +126,7 @@ and keep building. This rule is restated on the
 
 ---
 
-## 3. House style (shared across all four component repos)
+## 3. House style (shared across all component repos)
 
 Reading one repo teaches you all of them. The conventions are consistent:
 
@@ -327,6 +339,38 @@ README must name the same version), and proves the governance matrix end-to-end 
 **strict + failing → exit 2, strict + satisfied → exit 0, light + failing → exit
 0** — with independent SKIP probes so it never passes by omission.
 
+### 4.5 FS.GG.Game — the simulation core *(mid-extraction, ADR-0022)*
+
+The platform's newest component, being extracted from Rendering under
+[ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md). Game logic is
+render-independent but has lived *inside* the render core — the `FS.GG.UI.Canvas.*` sim
+primitives, the `Scene.Geometry` collision module, the `game` template profile, and four
+`game`-gated skills. FS.GG.Game gives that subsystem its own home:
+
+- `FS.GG.Game.Core` — a packable, **FSharp.Core-only** simulation core (RNG, fixed-step,
+  collision, pathfinding, grids/spatial partitioning, FOV/LOS, ECS/state model). It becomes
+  the **new bottom layer**: it reaches up to *nothing*, sibling to Rendering. A headless
+  game sim builds and tests with zero Skia.
+- `FS.GG.Game.Render` — a thin adapter (depends on `Game.Core` + `FS.GG.UI.Scene`) that maps
+  sim state onto `Scene`. It reaches **up** to Rendering — allowed under the one-way rule,
+  which the split preserves (Rendering still reaches up to nothing).
+
+The cut line was settled by a pre-ADR usage audit
+([`docs/reports/2026-07-06-p0-scene-geometry-cut-line-audit.md`](reports/2026-07-06-p0-scene-geometry-cut-line-audit.md)):
+`Rect`/`Point` stay render-core in Scene, the game-only `Geometry` module moves to
+`Game.Core` (Option D), and **no `FS.GG.Math` leaf is born**. The extraction forces a SemVer
+major on **both** `FS.GG.UI.Canvas` (loses the four primitives) and `FS.GG.UI.Scene` (loses
+the `Geometry` module) — a coordinated `contract-change`, not `[<Obsolete>]` aliases.
+
+**FS.GG.Game is the platform's SDD dogfood.** It is developed with `fsgg-sdd` as its own dev
+lifecycle (the `.fsgg/` `charter → ship` process), **coexisting** with a standard Spec Kit
+`specs/NNN-*` history rather than replacing it — because SDD *brackets* implementation (§4.2)
+rather than authoring it. As the first repo `init`'d by hand (no `fs-gg-ui-template` pin), it
+is the forcing workload that makes SDD define a provider-less **"dev-repo" provenance shape**.
+The consumer `game` scaffold provider is deferred and `dotnet new fs-gg-ui --profile game` is
+**frozen** for the epic's duration — a named sequel epic retires the freeze. Phased plan:
+[`docs/reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md`](reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md).
+
 ---
 
 ## 5. The contract registry — the single source of truth
@@ -336,7 +380,8 @@ machine-readable source of truth is
 [`registry/dependencies.yml`](../registry/dependencies.yml) in this repo (human
 projection: `docs/registry/compatibility.md`). It declares:
 
-- **the four repos** and their roles;
+- **the component repos** and their roles (FS.GG.Game's contract rows land as it
+  publishes — `coherent: false` until then, ADR-0022);
 - **versioned `contracts:`** — each with an owner, a surface (the on-disk file or
   package that *is* the contract), and its consumers;
 - **hard dependency `dependencies:`** edges (downstream → upstream);
@@ -369,7 +414,7 @@ The contracts that hold the system together:
 | `governance-policy` / `-capabilities` / `-tooling` / `-descriptor` | Governance | the four `.fsgg/*.yml` slots | Templates |
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
-| `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` | all four |
+| `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` | all component repos |
 | `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
 | `skill-registry` | **.github** | [`registry/skills.yml`](../registry/skills.yml) — the org's authoritative skill catalog (process + product; `id`, `scope`, `owner`, canonical-body `sha256`, `materializes-when`), reconciled from the producer skill-manifests (ADR-0017) | **.github** (the union gate + registry validation) |
 
@@ -468,7 +513,7 @@ Composition happens **at scaffold time**, not by vendoring:
                                                                applied via         (FS.GG.Templates)
 
  FS.GG.Contracts ── validates ──▶ registry/dependencies.yml   (FS-GG/.github)
- dist/dotnet/*  ── sync-build-config.sh ──▶ Directory.Build.props in all four repos
+ dist/dotnet/*  ── sync-build-config.sh ──▶ Directory.Build.props in all component repos
 ```
 
 The result is a real, windowed F# UI app plus a `.fsgg/` lifecycle skeleton you

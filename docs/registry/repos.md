@@ -18,6 +18,7 @@ it via `repos.sh list --receives <cap>` instead of hardcoding the repo list.
 | `FS-GG/FS.GG.Rendering` | framework | `labels`, `coordination-kit` |
 | `FS-GG/FS.GG.Governance` | framework | `labels`, `coordination-kit` |
 | `FS-GG/FS.GG.Templates` | framework | `labels`, `coordination-kit` |
+| `FS-GG/FS.GG.Game` | framework | `labels`, `coordination-kit` |
 
 **Authority.** `.github` holds the canonical fabrics and the coordination kit and mirrors them out
 (the analog of `fsgg-sdd` for product skills). It is the SOURCE of the coordination kit, so it never
