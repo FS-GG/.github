@@ -180,7 +180,7 @@ Publish-before-flip throughout (FR-007): publish the artifact, verify it live on
 
 1. ~~**`Scene.Geometry` home**~~ — **CLOSED (P0, 2026-07-06): Option D.** `Rect`/`Point` stay in Scene; the `Geometry` module moves to `Game.Core` (reimplemented BCL-only). Scene takes an ApiCompat major.
 2. ~~**`FS.GG.Math` leaf**~~ — **CLOSED (P0, 2026-07-06): NO.** Nothing is shared beneath both Scene and `Game.Core`.
-3. **Design-corpus location** — do the 15 game TestSpecs + 6 game-logic design reports stay in `.github/docs/` (coordination-owned) or relocate to `FS.GG.Game/docs/`? Recommend: **relocate the game-logic library designs to `FS.GG.Game`**, keep the TestSpecs where cross-repo tests reference them.
+3. ~~**Design-corpus location**~~ — **CLOSED (2026-07-06, post-P5): relocated.** The 6 game-logic library design reports moved `.github/docs/reports/` → `FS.GG.Game/docs/design/` (each with a provenance banner + surface refs updated to `FS.GG.Game.Core`; [FS.GG.Game#8](https://github.com/FS-GG/FS.GG.Game/pull/8)). The game TestSpecs stay in `.github` (cross-repo tests reference them there), as recommended.
 4. **Governance dogfood** — does `FS.GG.Game` adopt the light governance overlay in P3, or SDD-only first? Recommend SDD-only in P3, governance as a fast-follow.
 5. **BOM** — ship the `FS.GG.Game` metapackage now or defer until there are ≥3 members.
 
