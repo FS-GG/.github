@@ -27,7 +27,7 @@ the decision records linked throughout.
 
 > **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the six
 > repositories below (five framework components + `.github`; the sixth,
-> **FS.GG.Game**, is mid-extraction under ADR-0022). Each repository is a
+> **FS.GG.Game**, was extracted under ADR-0022 and published at P5). Each repository is a
 > **component**. What a consumer *scaffolds* with the platform is a **workspace** —
 > the generated repo with a runnable **app**, the `.fsgg/` lifecycle, skills, and
 > optional governance. This page uses those words precisely; see
@@ -67,9 +67,10 @@ the decision records linked throughout.
 ```
 
 Six repositories under [github.com/FS-GG](https://github.com/FS-GG) (five framework
-components + `.github`; **FS.GG.Game** is mid-extraction under ADR-0022 — its repo is
-created and `FS.GG.Game.Core` builds/tests headless (P2, 2026-07-06); the packages publish
-through the rest of the extraction epic, `coherent: false` until then):
+components + `.github`; **FS.GG.Game** was extracted under ADR-0022 — its packages
+`FS.GG.Game.Core` + `.Render` 0.1.0-preview.1 are **published** to the org feed + nuget.org
+and the Canvas+Scene majors shipped as `FS.GG.UI` 0.2.0-preview.1; `game-extraction`
+**`coherent: true`** since P5, 2026-07-06):
 
 | Repository | Role | Ships |
 |---|---|---|
@@ -77,7 +78,7 @@ through the rest of the extraction epic, `coherent: false` until then):
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
-| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(mid-extraction, ADR-0022)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter) |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), 0.1.0-preview.1 on the org feed + nuget.org |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. | — |
 
 ---
@@ -340,7 +341,7 @@ README must name the same version), and proves the governance matrix end-to-end 
 **strict + failing → exit 2, strict + satisfied → exit 0, light + failing → exit
 0** — with independent SKIP probes so it never passes by omission.
 
-### 4.5 FS.GG.Game — the simulation core *(mid-extraction, ADR-0022)*
+### 4.5 FS.GG.Game — the simulation core *(extracted + published P5, ADR-0022)*
 
 The platform's newest component, being extracted from Rendering under
 [ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md). Game logic is

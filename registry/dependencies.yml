@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-06"   # (2nd flip today: fs-gg-ui-template 0.1.70) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-06"   # (game-extraction P5 flip: FS.GG.Game.Core/.Render 0.1.0 published + FS.GG.UI 0.2.0 majors + game-extraction coherent:true) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -11,6 +11,7 @@ repos:
   governance: { name: FS.GG.Governance, role: "optional rule/evidence/gate tooling" }
   templates:  { name: FS.GG.Templates,  role: "downstream composition (fs-gg-fullstack, providers, overlays)" }
   github:     { name: FS-GG/.github,    role: "cross-repo contract registry, org-shared build config, coordination + decision docs" }   # .github#135: now a first-class consumer/edge node (registry-schema) — not just a contract owner (shared-build-config).
+  game:       { name: FS.GG.Game,       role: "render-independent game-simulation component + new BCL-only bottom layer (FS.GG.Game.Core / .Render); ADR-0022" }   # the platform's sixth repo (P2 stand-up, .github#216); registered here at P5 as a contract owner + edge node.
 
 # Versioned contracts and where they are owned/consumed.
 #
@@ -169,9 +170,9 @@ contracts:
     consumers: [templates]   # Templates#14 overlay drift gate (git diff --exit-code)
     bundles: [governance-policy, governance-capabilities, governance-tooling, governance-descriptor]
   - id: fs-gg-ui-template
-    version: "0.1.64-preview.1"   # template FsGgUiVersion FRAMEWORK pin — HELD at 0.1.64 across the 0.1.65-preview.1 template-only release (Rendering #125/#127/#128/#130/#132: new opt-in fragments collision/grids/line-drawing/visibility + product-skills; NO src/ change, so the 16 FS.GG.UI.* libs are byte-identical and NOT republished — FS.GG.UI.Scene etc. newest on the feed stays 0.1.64). Library snapshot tag fs-gg-ui/v0.1.64-preview.1; the 16 FS.GG.UI.* libs @ 0.1.64 are live on the org feed + nuget.org. PRIOR: ADVANCED 0.1.63→0.1.64 (Rendering #110, a real src/ change: Canvas.Pathfinding + Canvas.SpatialGrid grid-sim primitives).
-    package-version: "0.1.70-preview.1"   # PUBLISHED FS.GG.UI.Template package — ADVANCED 0.1.69→0.1.70-preview.1 (Rendering release run 28775303484, all gates + org-feed + nuget.org publish green; publish-before-flip FR-007). TEMPLATE-ONLY: the package version DECOUPLES from the framework pin (0.1.64) — only template/ content moved (FS.GG.Rendering#153 / cross-repo #152 from FS.GG.SDD: a SECOND instance of the #142/#149 raw-slug identifier-leak class — the game/sample-pack TEST project's `let readProductFile` helper in BehaviorTests.fs, this time with `Product` EMBEDDED in the binding identifier and in tests/, both blind spots of #149's src-only/start-anchored gate — routed through `approot`/`AppRoot` (effectiveIdentifier) so a legal-but-hyphenated name compiles (FS0010 gone); + the ScaffoldIdentifierLeakGuardTests gate widened to scan tests/ + fragments/*/tests and match the token embedded anywhere in a declaration identifier), the FS.GG.UI.* libs stayed 0.1.64 (packed @pin, --skip-duplicate no-op). Feature-209 coherence: the template package fsproj <Version> == the v* release tag == 0.1.70. Was 0.1.69-preview.1.
-    package-tag: "fs-gg-ui-template/v0.1.70-preview.1"   # template-scoped coherent-set tag (Feature 206/215/218/222/223/224/225/226/227/229/230/231/239/240/241/110/132/144/250/251/149/152; template-only bump over framework pin 0.1.64)
+    version: "0.2.0-preview.1"   # template FsGgUiVersion FRAMEWORK pin — ADVANCED 0.1.64→0.2.0-preview.1: the FRAMEWORK MAJOR (ADR-0022 P5, FS.GG.Rendering#155). A real src/ change — the render-independent game-sim primitives (Rng/FixedStep/Pathfinding/SpatialGrid from FS.GG.UI.Canvas; the Geometry collision module from FS.GG.UI.Scene) were REMOVED from Rendering and now live in FS.GG.Game.Core 0.1.0-preview.1 (new game-sim-core contract). Canvas + Scene each take a SemVer major (0.x preview channel); the ApiCompat gate passed the removals against the 0.1.64 baseline. Library snapshot tag fs-gg-ui/v0.2.0-preview.1; the 16 FS.GG.UI.* libs @ 0.2.0 are live on the org feed + nuget.org. PRIOR: HELD at 0.1.64 across the 0.1.65→0.1.70 template-only releases.
+    package-version: "0.2.0-preview.1"   # PUBLISHED FS.GG.UI.Template package — ADVANCED 0.1.70→0.2.0-preview.1 (Rendering release run 28807190647, all gates + org-feed + nuget.org publish green; publish-before-flip FR-007). FRAMEWORK RELEASE: package version RE-COUPLES to the framework pin (both 0.2.0) — unlike the 0.1.65→0.1.70 template-only bumps, this cut moved src/ (the sim extraction), so the whole coherent set (16 FS.GG.UI.* libs + template) republished at 0.2.0. Feature-209 coherence: template package fsproj <Version> == the v* release tag == the framework pin == 0.2.0. Was 0.1.70-preview.1.
+    package-tag: "fs-gg-ui-template/v0.2.0-preview.1"   # template-scoped coherent-set tag (framework MAJOR, ADR-0022 P5; sim primitives extracted to FS.GG.Game.Core — pin == package == 0.2.0)
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -364,11 +365,38 @@ contracts:
       process manifest (.agents/skills/skill-manifest.json; SDD#111 closing #109) — registry = manifest =
       bytes for both. The enforcing flip remains gated ONLY on Rendering's predicate-grammar alignment
       (Rendering#77). See coherence id `skill-registry-published`.
+  - id: game-sim-core
+    version: "0.1.0-preview.1"          # FS.GG.Game.Core source/package SemVer — first release (ADR-0022 P5, FS.GG.Game v0.1.0-preview.1)
+    package-version: "0.1.0-preview.1"  # PUBLISHED FS.GG.Game.Core on the org feed (nuget.pkg.github.com/FS-GG) + nuget.org (release run 28803118900, both "Your package was pushed"; publish-before-flip FR-007). package-version == version == feed(newest) == 0.1.0-preview.1.
+    owner: game
+    # ADR-0022: the platform's new BOTTOM layer. A BCL-only (FSharp.Core-only) deterministic simulation
+    # core that reaches up to nothing — holds the primitives extracted from FS.GG.UI.Canvas (Rng /
+    # FixedStep / Pathfinding / SpatialGrid) and the Geometry collision module extracted from
+    # FS.GG.UI.Scene (P0 Option D, reimplemented over Game.Core's own BCL-only Point/Rect). Builds +
+    # tests headless (zero Skia / zero Scene). Public surface baseline committed (11 types).
+    surface: "FS.GG.Game.Core package — Rng / FixedStep / Pathfinding / SpatialGrid / Geometry / Primitives (Point/Rect/Cell), BCL-only"
+    consumers: [rendering]   # Rendering's template game/sample-pack profiles + Canvas.Tests re-homed to it (ADR-0022 P5, Rendering#155)
+  - id: game-scene-adapter
+    version: "0.1.0-preview.1"          # FS.GG.Game.Render source/package SemVer — first release (ADR-0022 P5)
+    package-version: "0.1.0-preview.1"  # PUBLISHED FS.GG.Game.Render on the org feed + nuget.org (same release run 28803118900). package-version == version == feed(newest) == 0.1.0-preview.1.
+    owner: game
+    # ADR-0022 §2: the render edge. A pure Scene adapter projecting FS.GG.Game.Core primitives
+    # (Point/Rect/Cell, pathfinding routes) onto FS.GG.UI.Scene drawables. The ONE place in FS.GG.Game
+    # that reaches UP to Rendering (Game.Core reaches up to nothing); FSharp.Core-only, Skia-free.
+    # Establishes the game -> rendering dependency edge (see dependencies:).
+    surface: "FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables)"
+    consumers: [game]        # consumed within the game component (Game.Render.Tests / game products) today; the P6 game scaffold provider adds the cross-repo consumer
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
   # ADR-0002: vendoring retired. Templates composes the rendering app via scaffold, not a fork.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.1.64-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.2.0-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
+  # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
+  # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
+  # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
+  - { from: rendering, to: game,       via: "game-sim-core@0.1.0-preview.1 (FS.GG.Game.Core — template game/sample-pack sim primitives, on the $(FsGgGameVersion) axis)" }
+  # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
+  - { from: game,      to: rendering,  via: "game-scene-adapter@0.1.0-preview.1 -> FS.GG.UI.Scene@0.2.0-preview.1 (adapter projects sim state onto Scene drawables; the one Game -> Rendering edge)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }
@@ -987,7 +1015,7 @@ coherence:
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/142 (Rendering#144 released 0.1.66-preview.1, Templates#113 re-pin); https://github.com/FS-GG/FS.GG.Rendering/issues/149 (Rendering#150 released 0.1.69-preview.1, Templates re-pin); https://github.com/FS-GG/FS.GG.Rendering/issues/152 (Rendering#153 released 0.1.70-preview.1, Templates re-pin, SDD#150; SDD feature 080/083)"
 
   - id: game-extraction
-    coherent: false
+    coherent: true
     owner: game
     summary: >
       Extract the render-independent game-simulation subsystem out of FS.GG.Rendering into the
@@ -1017,11 +1045,17 @@ coherence:
       (game-sim-core, game-scene-adapter) and the Game.Render → FS.GG.UI.Scene dependency edge are
       finalized against live versions when the packages publish (P5, ADR-0007).
     resolved_by: >
-      Flips coherent:true at P5: FS.GG.Game.Core (+ .Render) published to the org feed (and nuget.org
-      per ADR-0012/0013), the Canvas + Scene majors released, the skill-ownership migration
-      (fs-gg-game-core/-audio/-persistence/-model-swap: rendering → game) landed, and the registry
-      ranges + this projection updated. Publish-before-flip (FR-007) throughout.
-    tracking: "https://github.com/FS-GG/.github/issues/213 (epic); https://github.com/FS-GG/.github/issues/216 (P2); https://github.com/FS-GG/.github/issues/218 (P4); FS.GG.Game#3 (adapter), FS.GG.Game#4 + .github#225 (skill migration); ADR-0022"
+      RESOLVED at P5 (2026-07-06), publish-before-flip (FR-007) throughout: (1) FS.GG.Game.Core +
+      FS.GG.Game.Render 0.1.0-preview.1 published to the org feed AND nuget.org (FS.GG.Game v0.1.0-preview.1,
+      release run 28803118900) — new contracts game-sim-core / game-scene-adapter; (2) the Canvas + Scene
+      SemVer majors released as the FS.GG.UI coherent set 0.2.0-preview.1 (FS.GG.Rendering#155, release run
+      28807190647; ApiCompat gate green on the removals; the frozen --profile game fragments re-homed to
+      consume FS.GG.Game.Core, generated-product test green); (3) the skill-ownership migration
+      (fs-gg-game-core/-audio/-persistence/-model-swap: rendering → game) landed at P4 (.github#225); (4) the
+      registry contracts + the rendering→game (game-sim-core) and game→rendering (game-scene-adapter) edges +
+      the fs-gg-ui-template 0.2.0 bump + this projection updated. FS.GG.Game.Core is the platform's live
+      bottom layer; the two-copies game-starter cost (game-starter-two-copies) is retired at P6.
+    tracking: "https://github.com/FS-GG/.github/issues/213 (epic); #216 (P2); #217 (P3); #218 (P4); #219 (P5); FS.GG.Game#5 (release wf) + v0.1.0-preview.1; FS.GG.Rendering#155 (majors) + v0.2.0-preview.1; ADR-0022"
 
   - id: game-starter-two-copies
     coherent: false
