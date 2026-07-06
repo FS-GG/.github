@@ -18,9 +18,10 @@
 #
 # Managed kit files (source here -> path in the receiver):
 #   scripts/fsgg-coord                                          -> scripts/fsgg-coord              (chmod +x)
-#   .claude/skills/cross-repo-coordination/SKILL.md             -> <root>/cross-repo-coordination/SKILL.md
-#     ...for each root in AGENT_SKILL_ROOTS (default: ".claude/skills .agents/skills")
-# The skill's SKILL.md is the content-addressed unit (its sha256 is the repos.yml kit digest); a
+#   .claude/skills/<skill>/SKILL.md                             -> <root>/<skill>/SKILL.md
+#     ...for each skill in KIT_SKILLS and each root in AGENT_SKILL_ROOTS (default roots:
+#        ".claude/skills .agents/skills"). KIT_SKILLS mirrors the `kind: skill` rows in repos.yml.
+# Each skill's SKILL.md is the content-addressed unit (its sha256 is the repos.yml kit digest); a
 # multi-file skill's remainder would be added here alongside it.
 #
 # Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default ".claude/skills .agents/skills").
@@ -32,7 +33,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
 REG="$SRC_ROOT/registry/repos.yml"
 ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .agents/skills}"
-SKILL_SRC=".claude/skills/cross-repo-coordination/SKILL.md"   # canonical SKILL.md for every target root
+# The kit's skills (the `kind: skill` rows in registry/repos.yml). Each is materialized, byte-identical,
+# into every root in ROOTS. Keep in sync with repos.yml's kit: block.
+KIT_SKILLS="cross-repo-coordination intra-repo-parallel-work"
 
 die()   { echo "coordination-sync: $*" >&2; exit 2; }
 usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
@@ -65,9 +68,11 @@ fi
 # Build the managed source::dest list (dest is relative to the receiver root).
 managed() {
   printf '%s::%s\n' "scripts/fsgg-coord" "scripts/fsgg-coord"
-  local r
-  for r in $ROOTS; do
-    printf '%s::%s\n' "$SKILL_SRC" "$r/cross-repo-coordination/SKILL.md"
+  local r s
+  for s in $KIT_SKILLS; do
+    for r in $ROOTS; do
+      printf '%s::%s\n' ".claude/skills/$s/SKILL.md" "$r/$s/SKILL.md"
+    done
   done
 }
 

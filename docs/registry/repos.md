@@ -49,6 +49,7 @@ The content-addressed bundle every `coordination-kit` receiver must hold (`sha25
 | Kit id | Kind | Source |
 |---|---|---|
 | `cross-repo-coordination` | skill | `.claude/skills/cross-repo-coordination` |
+| `intra-repo-parallel-work` | skill | `.claude/skills/intra-repo-parallel-work` |
 | `fsgg-coord` | client | `scripts/fsgg-coord` |
 
 **Distribution & coherence (slice 2).** [`scripts/coordination-sync`](../../scripts/coordination-sync)
