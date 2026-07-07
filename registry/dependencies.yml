@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-07"   # (fsgg-sdd-orchestrator-axis re-cohered coherent:false->true — both halves in lockstep at minimum-fsgg-sdd 0.6.0; FS.GG.Templates#99 closed via PR#100, composition gate green on main) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-07"   # (.github#238 / ADR-0024: first consumer edge of the fs-gg-audio PACKAGE contract — rendering(template game/sample-pack) -> audio @0.1.0-preview.1 on the $(FsGgAudioVersion) axis; edge + audio.consumers += rendering. Lands WITH the Rendering coherent-set release, publish-before-flip FR-007.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -395,9 +395,10 @@ contracts:
     # Bus / AudioEvidence, BCL-only), a Host device seam (IAudioBackend — Null/record default +
     # OpenAL/Silk.NET, degrade-to-Null; optional IMixingBackend), an Engine (named buses, linear +
     # equal-power fades, ducking, 3D listener/emitters — a pure deterministic step), and an Elmish Cmd
-    # bridge. Depends on no FS-GG component (public packages only); nothing consumes it yet.
+    # bridge. Depends on no FS-GG component (public packages only). First consumed cross-repo by the
+    # Rendering template game/sample-pack profiles (ADR-0024, .github#238 — lands with the Rendering release).
     surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge"
-    consumers: [audio]       # consumed WITHIN the audio component today (sample app + test suites); a product/provider that adopts audio adds the cross-repo edge
+    consumers: [audio, rendering]   # + rendering (ADR-0024, .github#238, Rendering#156): the game/sample-pack template profiles realize the audio packages; this flip lands WITH the Rendering coherent-set release that ships the template edit (publish-before-flip FR-007). Still consumed WITHIN the audio component too (sample app + test suites).
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
@@ -409,6 +410,12 @@ dependencies:
   - { from: rendering, to: game,       via: "game-sim-core@0.1.0-preview.1 (FS.GG.Game.Core — template game/sample-pack sim primitives, on the $(FsGgGameVersion) axis)" }
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
   - { from: game,      to: rendering,  via: "game-scene-adapter@0.1.0-preview.1 -> FS.GG.UI.Scene@0.2.0-preview.1 (adapter projects sim state onto Scene drawables; the one Game -> Rendering edge)" }
+  # ADR-0024 (.github#234/#238, Rendering#156): the game/sample-pack template profiles materialize the REAL
+  # FS.GG.Audio realization (buses/fades/ducking/3D, device backend degrading to Null/record), replacing the
+  # record-only fs-gg-audio skill. First consumer edge of the fs-gg-audio PACKAGE contract, on its own
+  # $(FsGgAudioVersion) axis — mirroring the Game.Core precedent above. Publish-before-flip (FR-007): this
+  # edge lands WITH the Rendering coherent-set release (FS.GG.UI.Template) that ships the template edit.
+  - { from: rendering, to: audio,      via: "fs-gg-audio@0.1.0-preview.1 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; ADR-0024)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }
