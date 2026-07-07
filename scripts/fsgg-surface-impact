@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Enumerate the consumers a shipped-surface mutation must flag (ADR-0025, .github#236).
+
+When an already-shipped public surface changes, the shipped-surface-mutation event
+(docs/coordination/shipped-surface-mutation.md) obliges a consumer-impact flag: file/notify
+every repo that depends on the mutated contract. "Who consumes this?" used to be prose the
+operator wrote by hand; this makes it a query over the registry.
+
+Given a contract id, it reads registry/dependencies.yml and prints the exact set to flag:
+  1. the contract's declared `consumers` (repo keys, resolved to names via `repos:`), and
+  2. every `dependencies[].via` edge whose text names the contract (the carrying edges).
+
+Read-only — it takes NO board action, so it is safe to run inside a detection hook. Acting on
+the result (breaking -> file a consumer-impact issue per consumer repo, Blocked by the producer
+release; additive -> record the impact set in the registry entry) is the operator's step.
+
+Pure-stdlib (PyYAML only, already a coherence-gate dependency); no network.
+
+Usage:
+  scripts/fsgg-surface-impact <contract-id>            # human table of consumers + carrying edges
+  scripts/fsgg-surface-impact <contract-id> --json     # machine list (for a detection hook)
+  scripts/fsgg-surface-impact --list                   # every contract id in the registry
+  scripts/fsgg-surface-impact <contract-id> [registry/dependencies.yml]   # explicit registry path
+
+Exit: 0 = found (or --list); 2 = unknown/missing contract id; 1 = usage/load error.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+
+import yaml
+
+DEFAULT_REGISTRY = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "registry", "dependencies.yml",
+)
+
+
+def _die(msg: str, code: int = 1) -> None:
+    print(f"fsgg-surface-impact: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def _load(path: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = yaml.safe_load(fh)
+    except FileNotFoundError:
+        _die(f"registry not found: {path}")
+    except yaml.YAMLError as exc:
+        _die(f"could not parse {path}: {exc}")
+    if not isinstance(doc, dict):
+        _die(f"{path}: expected a mapping at the top level")
+    return doc
+
+
+def _names_effect_of(contract_id: str, via: str) -> bool:
+    """True iff `via` names `contract_id` as a token (not a mere prefix).
+
+    Contract ids are [a-z0-9-]; a bare substring test would let `fs-gg-ui` match inside
+    `fs-gg-ui-template`. Require the id to be bounded by a non-id character (or string edge)
+    on both sides so `fs-gg-ui@...` matches but `fs-gg-ui-template@...` does not.
+    """
+    pattern = r"(?<![a-z0-9-])" + re.escape(contract_id) + r"(?![a-z0-9-])"
+    return re.search(pattern, via or "") is not None
+
+
+def _repo_name(repos: dict, key: str) -> str:
+    entry = repos.get(key) if isinstance(repos, dict) else None
+    if isinstance(entry, dict):
+        return entry.get("name", key)
+    return key
+
+
+def _collect(doc: dict, contract_id: str) -> dict:
+    contracts = doc.get("contracts") or []
+    repos = doc.get("repos") or {}
+    deps = doc.get("dependencies") or []
+
+    contract = next((c for c in contracts
+                     if isinstance(c, dict) and c.get("id") == contract_id), None)
+    if contract is None:
+        ids = sorted(c.get("id", "?") for c in contracts if isinstance(c, dict))
+        _die("unknown contract id '%s'. Known ids:\n  %s"
+             % (contract_id, "\n  ".join(ids)), code=2)
+
+    consumers = []
+    for key in (contract.get("consumers") or []):
+        consumers.append({"key": key, "name": _repo_name(repos, key)})
+
+    edges = []
+    for edge in deps:
+        if not isinstance(edge, dict):
+            continue
+        if _names_effect_of(contract_id, edge.get("via", "")):
+            edges.append({"from": edge.get("from"), "to": edge.get("to"),
+                          "via": edge.get("via")})
+
+    return {
+        "contract": contract_id,
+        "owner": contract.get("owner"),
+        "version": contract.get("version"),
+        "surface": contract.get("surface"),
+        "consumers": consumers,
+        "edges": edges,
+    }
+
+
+def _print_human(r: dict) -> None:
+    print("Contract: %s  (owner: %s, version: %s)"
+          % (r["contract"], r.get("owner", "?"), r.get("version", "?")))
+    if r.get("surface"):
+        print("Surface:  %s" % r["surface"])
+    print()
+
+    print("Declared consumers (contracts[].consumers):")
+    if r["consumers"]:
+        for c in r["consumers"]:
+            print("  - %-12s (%s)" % (c["key"], c["name"]))
+    else:
+        print("  (none declared)")
+    print()
+
+    print("Carrying dependency edges (dependencies[].via names the contract):")
+    if r["edges"]:
+        for e in r["edges"]:
+            print('  - %s -> %s' % (e["from"], e["to"]))
+            print('      via "%s"' % e["via"])
+    else:
+        print("  (no edge names this contract)")
+    print()
+
+    print("To flag (shipped-surface-mutation, ADR-0025):")
+    print("  breaking -> file a consumer-impact issue in EACH consumer repo,")
+    print("              Blocked by the producer release (ADR-0001 boundary-crossing).")
+    print("  additive -> record the impact set in the registry entry; consumers opt in.")
+
+
+def main(argv: list[str]) -> int:
+    args = [a for a in argv if a not in ("-h", "--help")]
+    if len(args) != len(argv) and not args:
+        print(__doc__)
+        return 0
+
+    as_json = "--json" in args
+    args = [a for a in args if a != "--json"]
+
+    registry = DEFAULT_REGISTRY
+    if "--list" in args:
+        args = [a for a in args if a != "--list"]
+        if args:  # optional explicit registry path
+            registry = args[0]
+        doc = _load(registry)
+        for c in (doc.get("contracts") or []):
+            if isinstance(c, dict) and c.get("id"):
+                print(c["id"])
+        return 0
+
+    if not args:
+        _die("need a contract id (or --list). Try --help.", code=1)
+    contract_id = args[0]
+    if len(args) > 1:
+        registry = args[1]
+
+    doc = _load(registry)
+    result = _collect(doc, contract_id)
+
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        _print_human(result)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

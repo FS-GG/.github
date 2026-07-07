@@ -1,0 +1,33 @@
+# Self-test for scripts/fsgg-surface-impact — the consumer-impact enumerator for the
+# shipped-surface-mutation event (ADR-0025, .github#236). Runs tests/surface-impact/run.sh, which
+# proves the tool lists declared consumers, finds carrying edges by a token match (no prefix bleed),
+# emits stable --json, lists ids, and fails loudly on an unknown id — off a temp registry, no
+# network. Mirrors repos-audit-selftest.yml; needs PyYAML like the coherence gate.
+name: surface-impact-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/fsgg-surface-impact"
+      - "tests/surface-impact/**"
+      - ".github/workflows/surface-impact-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/fsgg-surface-impact"
+      - "tests/surface-impact/**"
+      - ".github/workflows/surface-impact-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the surface-impact fixture
+        run: bash tests/surface-impact/run.sh

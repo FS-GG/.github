@@ -94,6 +94,16 @@ issue must update the registry as part of its resolution. Every registry change 
 keeps PR diffs reviewable (this replaced the former ~42 KB single-line `updated:` comment;
 see .github#129). Larger cross-repo decisions are recorded as [ADRs](../adr/README.md).
 
+## Surface change → the shipped-surface-mutation event
+
+A change to an *already-shipped* public surface is the one event a contract-first platform
+exists to govern. The [shipped-surface-mutation protocol](shipped-surface-mutation.md)
+([ADR-0025](../adr/0025-first-class-shipped-surface-mutation-event.md)) makes it first-class:
+a changed committed `.fsi` baseline (detected by `fsgg-sdd surface --check`) is **classified**
+additive/breaking, then reconciled through the registry/projection/ADR checklist above and a
+**consumer-impact flag** — `scripts/fsgg-surface-impact <contract-id>` enumerates exactly which
+consumers a mutation must notify, turning the hand-written "who consumes this" note into a query.
+
 ## System overview → the architecture map
 
 The registry and the ADRs are **point artifacts** — the registry records *what is
