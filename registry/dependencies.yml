@@ -12,6 +12,7 @@ repos:
   templates:  { name: FS.GG.Templates,  role: "downstream composition (fs-gg-fullstack, providers, overlays)" }
   github:     { name: FS-GG/.github,    role: "cross-repo contract registry, org-shared build config, coordination + decision docs" }   # .github#135: now a first-class consumer/edge node (registry-schema) — not just a contract owner (shared-build-config).
   game:       { name: FS.GG.Game,       role: "render-independent game-simulation component + new BCL-only bottom layer (FS.GG.Game.Core / .Render); ADR-0022" }   # the platform's sixth repo (P2 stand-up, .github#216); registered here at P5 as a contract owner + edge node.
+  audio:      { name: FS.GG.Audio,      role: "render-independent game-audio component — Core vocabulary / Host backend seam / Engine (buses/fades/ducking/3D) / Elmish Cmd bridge; ADR-0023" }   # the platform's seventh repo; standalone SDD-driven component, transferred into the org + first release 0.1.0-preview.1.
 
 # Versioned contracts and where they are owned/consumed.
 #
@@ -386,6 +387,17 @@ contracts:
     # Establishes the game -> rendering dependency edge (see dependencies:).
     surface: "FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables)"
     consumers: [game]        # consumed within the game component (Game.Render.Tests / game products) today; the P6 game scaffold provider adds the cross-repo consumer
+  - id: fs-gg-audio
+    version: "0.1.0-preview.1"          # FS.GG.Audio.* source/package SemVer — first release (ADR-0023, FS.GG.Audio v0.1.0-preview.1). The coherent set (Core/Host/Engine/Elmish) shares one version (<FsGgAudioVersion>).
+    package-version: "0.1.0-preview.1"  # PUBLISHED FS.GG.Audio.Core/.Host/.Engine/.Elmish on the org feed (nuget.pkg.github.com/FS-GG; release run/tag v0.1.0-preview.1). package-version == version == feed(newest) == 0.1.0-preview.1 (publish-before-flip FR-007). Dual-published to nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-audio-publishing).
+    owner: audio
+    # ADR-0023: a standalone render-independent audio component. A pure Core vocabulary (AudioEffect /
+    # Bus / AudioEvidence, BCL-only), a Host device seam (IAudioBackend — Null/record default +
+    # OpenAL/Silk.NET, degrade-to-Null; optional IMixingBackend), an Engine (named buses, linear +
+    # equal-power fades, ducking, 3D listener/emitters — a pure deterministic step), and an Elmish Cmd
+    # bridge. Depends on no FS-GG component (public packages only); nothing consumes it yet.
+    surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge"
+    consumers: [audio]       # consumed WITHIN the audio component today (sample app + test suites); a product/provider that adopts audio adds the cross-repo edge
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
