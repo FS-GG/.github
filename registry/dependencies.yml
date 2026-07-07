@@ -389,7 +389,7 @@ contracts:
     consumers: [game]        # consumed within the game component (Game.Render.Tests / game products) today; the P6 game scaffold provider adds the cross-repo consumer
   - id: fs-gg-audio
     version: "0.1.0-preview.1"          # FS.GG.Audio.* source/package SemVer — first release (ADR-0023, FS.GG.Audio v0.1.0-preview.1). The coherent set (Core/Host/Engine/Elmish) shares one version (<FsGgAudioVersion>).
-    package-version: "0.1.0-preview.1"  # PUBLISHED FS.GG.Audio.Core/.Host/.Engine/.Elmish on the org feed (nuget.pkg.github.com/FS-GG; release run/tag v0.1.0-preview.1). package-version == version == feed(newest) == 0.1.0-preview.1 (publish-before-flip FR-007). nuget.org dual-publish pending the org Trusted Publishing policy (release.yml skips it until NUGET_USER is set).
+    package-version: "0.1.0-preview.1"  # PUBLISHED FS.GG.Audio.Core/.Host/.Engine/.Elmish on the org feed (nuget.pkg.github.com/FS-GG; release run/tag v0.1.0-preview.1). package-version == version == feed(newest) == 0.1.0-preview.1 (publish-before-flip FR-007). Dual-published to nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-audio-publishing).
     owner: audio
     # ADR-0023: a standalone render-independent audio component. A pure Core vocabulary (AudioEffect /
     # Bus / AudioEvidence, BCL-only), a Host device seam (IAudioBackend — Null/record default +

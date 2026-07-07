@@ -61,9 +61,9 @@ Onboard **FS.GG.Audio** as the platform's **seventh** repo and a contract owner.
   243) with behavior parity, but that donor severance already happened upstream.
 - **Deferred, recorded.** The native EFX effect graph + managed DSP micro-layer, Doppler /
   full-3D, the `miniaudio` backend, decoders beyond WAV, and an `Audio.Sub` events surface
-  are deferred to follow-up work items (`004-audio-engine` DEC-004). The nuget.org
-  dual-publish is pending the org Trusted Publishing policy + `NUGET_USER` secret; the
-  org-feed publish is live.
+  are deferred to follow-up work items (`004-audio-engine` DEC-004). Both the org feed and
+  nuget.org publishes are live (nuget.org via the `fs-gg-audio-publishing` Trusted
+  Publishing policy, OIDC).
 - **Future consumer edge.** When a product or scaffold provider adopts audio, it adds a
   `{ from: <consumer>, to: audio, via: "fs-gg-audio@<V>" }` edge — an additive
   contract-change at that time.
