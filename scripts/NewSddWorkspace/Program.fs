@@ -284,6 +284,12 @@ let private profiles =
 let private hasGameCore (profile: string) =
     profile = "game" || profile = "sample-pack"
 
+/// Profiles that ship the standalone FS.GG.Audio component — its own repo/release axis, wired in
+/// as the first consumer edge of the `fs-gg-audio` package contract (ADR-0024). Same
+/// `materializes-when: profile in [game, sample-pack]` as the audio skill in the render manifest.
+let private hasAudio (profile: string) =
+    profile = "game" || profile = "sample-pack"
+
 let private usage () =
     AnsiConsole.MarkupLine
         "[bold]new-sdd-workspace[/] — scaffold an FS.GG workspace (SDD + Rendering + optional Governance)"
@@ -376,6 +382,11 @@ let private previewPanel (d: Draft) =
     // The simulation core materializes only for the game-family profiles (game, sample-pack).
     match d.Profile with
     | Some p when hasGameCore p -> app.AddNode "[grey37]+ fs-gg-game-core (fixed-step · seeded RNG · AABB)[/]" |> ignore
+    | _ -> ()
+    // The standalone FS.GG.Audio component ships on the same simulation profiles (own repo/axis;
+    // the real host-side realization behind the pure AudioEffect edge). See ADR-0024.
+    match d.Profile with
+    | Some p when hasAudio p -> app.AddNode "[grey37]+ fs-gg-audio (buses · fades/ducking · 3D · device backend)[/]" |> ignore
     | _ -> ()
 
     (match d.Governance with
