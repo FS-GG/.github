@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-07"   # (fsgg-sdd-orchestrator-axis re-cohered coherent:false->true — both halves in lockstep at minimum-fsgg-sdd 0.6.0; FS.GG.Templates#99 closed via PR#100, composition gate green on main) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-08"   # (fs-gg-ui-template flipped 0.2.0->0.3.0-preview.1 — the ADR-0024 step-2 Canvas-major release published 2026-07-07 but its registry flip was missed; .github#250. The templates->rendering edge intentionally stays at 0.2.0: it records what Templates PINS, and the re-pin is deferred to .github#238.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -171,9 +171,9 @@ contracts:
     consumers: [templates]   # Templates#14 overlay drift gate (git diff --exit-code)
     bundles: [governance-policy, governance-capabilities, governance-tooling, governance-descriptor]
   - id: fs-gg-ui-template
-    version: "0.2.0-preview.1"   # template FsGgUiVersion FRAMEWORK pin — ADVANCED 0.1.64→0.2.0-preview.1: the FRAMEWORK MAJOR (ADR-0022 P5, FS.GG.Rendering#155). A real src/ change — the render-independent game-sim primitives (Rng/FixedStep/Pathfinding/SpatialGrid from FS.GG.UI.Canvas; the Geometry collision module from FS.GG.UI.Scene) were REMOVED from Rendering and now live in FS.GG.Game.Core 0.1.0-preview.1 (new game-sim-core contract). Canvas + Scene each take a SemVer major (0.x preview channel); the ApiCompat gate passed the removals against the 0.1.64 baseline. Library snapshot tag fs-gg-ui/v0.2.0-preview.1; the 16 FS.GG.UI.* libs @ 0.2.0 are live on the org feed + nuget.org. PRIOR: HELD at 0.1.64 across the 0.1.65→0.1.70 template-only releases.
-    package-version: "0.2.0-preview.1"   # PUBLISHED FS.GG.UI.Template package — ADVANCED 0.1.70→0.2.0-preview.1 (Rendering release run 28807190647, all gates + org-feed + nuget.org publish green; publish-before-flip FR-007). FRAMEWORK RELEASE: package version RE-COUPLES to the framework pin (both 0.2.0) — unlike the 0.1.65→0.1.70 template-only bumps, this cut moved src/ (the sim extraction), so the whole coherent set (16 FS.GG.UI.* libs + template) republished at 0.2.0. Feature-209 coherence: template package fsproj <Version> == the v* release tag == the framework pin == 0.2.0. Was 0.1.70-preview.1.
-    package-tag: "fs-gg-ui-template/v0.2.0-preview.1"   # template-scoped coherent-set tag (framework MAJOR, ADR-0022 P5; sim primitives extracted to FS.GG.Game.Core — pin == package == 0.2.0)
+    version: "0.3.0-preview.1"   # template FsGgUiVersion FRAMEWORK pin — ADVANCED 0.2.0→0.3.0-preview.1: the FRAMEWORK MAJOR (ADR-0024 step 2, FS.GG.Rendering#158). A real src/ change — the Audio REQUEST surface (AudioEffect / SoundId / TrackId / the Audio.* module) was REMOVED from FS.GG.UI.Canvas; that vocabulary now lives only in the standalone FS.GG.Audio.Core (fs-gg-audio 0.1.0-preview.1, ADR-0023). Canvas takes a SemVer major (0.x preview channel); the ApiCompat gate passed the removal against the 0.2.0 baseline. Canvas.Audio was a MODULE inside FS.GG.UI.Canvas, never its own package — nothing to unlist. Library snapshot tag fs-gg-ui/v0.3.0-preview.1; the 16 FS.GG.UI.* libs @ 0.3.0 are live on the org feed + nuget.org. PRIOR: ADVANCED 0.1.64→0.2.0 (ADR-0022 P5, FS.GG.Rendering#155 — the game-sim primitives extracted to FS.GG.Game.Core); before that HELD at 0.1.64 across the 0.1.65→0.1.70 template-only releases.
+    package-version: "0.3.0-preview.1"   # PUBLISHED FS.GG.UI.Template package — ADVANCED 0.2.0→0.3.0-preview.1 (Rendering release run 28882426507, tag v0.3.0-preview.1, all gates + org-feed + nuget.org publish green; publish-before-flip FR-007). FRAMEWORK RELEASE: package version stays RE-COUPLED to the framework pin (both 0.3.0) — this cut moved src/ (the Canvas.Audio retirement), so the whole coherent set (16 FS.GG.UI.* libs + template) republished at 0.3.0. Feature-209 coherence: template package fsproj <Version> == the v* release tag == the framework pin == 0.3.0. FLIPPED LATE: published 2026-07-07T16:38Z, recorded here 2026-07-08 (.github#250) — the step-2 flip was missed; two registry PRs (.github#246, #248) landed on top of the stale row before it was caught. Was 0.2.0-preview.1.
+    package-tag: "fs-gg-ui-template/v0.3.0-preview.1"   # template-scoped coherent-set tag (framework MAJOR, ADR-0024 step 2; the Canvas Audio request surface retired to FS.GG.Audio.Core — pin == package == 0.3.0)
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -402,6 +402,12 @@ contracts:
 # Hard dependency edges (downstream -> upstream).
 dependencies:
   # ADR-0002: vendoring retired. Templates composes the rendering app via scaffold, not a fork.
+  # NOTE (.github#250): this edge INTENTIONALLY LAGS the fs-gg-ui-template contract (0.3.0-preview.1).
+  # An edge records what the CONSUMER ACTUALLY PINS, not the newest published version — and
+  # FS.GG.Templates providers/rendering.providers.yml still pins `FS.GG.UI.Template::0.2.0-preview.1`.
+  # Both scalars are therefore true. The re-pin (publish-before-flip step 3) is deferred to .github#238,
+  # which moves this edge and the pin together to 0.3.1-preview.1 once FS.GG.Rendering#162 ships the
+  # audio template edit. Do NOT "fix" this to match the contract without a Templates re-pin PR.
   - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.2.0-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
@@ -559,7 +565,19 @@ coherence:
       built+tested+ran the generated product green. No coherence flag flips true→false — a coherent advance.
       Consumers receive it via the FS.GG.Templates providers pin bump 0.1.55→0.1.56-preview.1. Closes
       FS.GG.Rendering#36 (+ #37).
-    resolved_by: "FS-GG/FS.GG.Rendering — tag fs-gg-ui-template/v0.1.56-preview.1 (consumer skill-catalog currency + vocabulary de-leak, Features 224/225); fs-gg-ui-template/v0.1.55-preview.1 (symbology product skill delivered, Feature 223); fs-gg-ui-template/v0.1.54-preview.1 (game profile released, Feature 222); prior fs-gg-ui-template/v0.1.53-preview.1 (productName released + org-public, Feature 218); fs-gg-ui-template/v0.1.52-preview.1 (root-buildable, Feature 212/215); 2862caf at 0.1.50-preview.1"
+      Advanced 2026-07-07, recorded 2026-07-08 (.github#250): the coherent set now stands at
+      0.3.0-preview.1 (tags v0.3.0-preview.1 + fs-gg-ui-template/v0.3.0-preview.1 + fs-gg-ui/v0.3.0-preview.1,
+      release run 28882426507). This narrative log stops enumerating each cut at 0.1.56 — since .github#129
+      the per-release record is registry/CHANGELOG.md, not this field. The two FRAMEWORK MAJORS since:
+      0.2.0-preview.1 (ADR-0022 P5, FS.GG.Rendering#155 — game-sim primitives extracted to FS.GG.Game.Core)
+      and 0.3.0-preview.1 (ADR-0024 step 2, FS.GG.Rendering#158 — the Audio request surface retired from
+      FS.GG.UI.Canvas to the standalone FS.GG.Audio.Core); between them the 0.1.57→0.1.70 cuts were
+      template-only (framework pin HELD at 0.1.64). Still coherent, on the same FR-007 evidence: the org
+      feed and nuget.org both serve 0.3.0-preview.1 for the template AND its 16 FS.GG.UI.* siblings
+      (FR-001); pin == package == release tag == 0.3.0 (Feature-209). Coherent: true is UNCHANGED — the
+      defect this entry closes was a MISSING FLIP, not a broken set: the registry sat at 0.2.0 for a day
+      while the feed served 0.3.0. No gate compares registry package-version to the live feed.
+    resolved_by: "FS-GG/FS.GG.Rendering — tag fs-gg-ui-template/v0.3.0-preview.1 (Canvas Audio request surface retired to FS.GG.Audio.Core, ADR-0024 step 2, FS.GG.Rendering#158, release run 28882426507); fs-gg-ui-template/v0.2.0-preview.1 (game-sim primitives extracted to FS.GG.Game.Core, ADR-0022 P5, FS.GG.Rendering#155); fs-gg-ui-template/v0.1.56-preview.1 (consumer skill-catalog currency + vocabulary de-leak, Features 224/225); fs-gg-ui-template/v0.1.55-preview.1 (symbology product skill delivered, Feature 223); fs-gg-ui-template/v0.1.54-preview.1 (game profile released, Feature 222); prior fs-gg-ui-template/v0.1.53-preview.1 (productName released + org-public, Feature 218); fs-gg-ui-template/v0.1.52-preview.1 (root-buildable, Feature 212/215); 2862caf at 0.1.50-preview.1"
     impact: "Consumers (Templates, SDD) can install the lifecycle + side-effect-free + root-buildable template surface by id and pin the coherent template↔framework snapshot; SDD composition-acceptance probes run the stock root commands."
     tracking: "https://github.com/FS-GG/FS.GG.Rendering/issues/9 (root-buildable guarantee, Feature 212/215); https://github.com/FS-GG/FS.GG.SDD/issues/1 (dependent scaffold-path request — responded)"
   - id: fsgg-sdd-orchestrator-axis
