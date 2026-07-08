@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""Verify registry/skills.yml against the producer bodies it claims (.github#247, ADR-0017).
+
+`skills.yml` declares, per row, a `source:` (the owning repo's canonical SKILL.md) and the
+`sha256:` it was reconciled from. Its header says the rows are "GENERATED / RECONCILED FROM THE
+PRODUCER MANIFESTS -- never hand-authored bytes", and every changelog entry restates the invariant
+**registry = manifest = bytes**.
+
+Nothing enforced it. Each producer repo drift-guards its OWN manifest against its OWN bodies
+(FS.GG.SDD `registry skill-manifest --check`, FS.GG.Rendering / FS.GG.Game
+`generate-skill-manifest.fsx --check`), but no check tied a registry row to the remote body it
+names. A producer could merge a body change and this registry silently went stale -- which is
+exactly what happened to `fs-gg-audio` (ADR-0024 step 4), to `fs-gg-game-core` and
+`fs-gg-model-swap` before it (registry changelog 2026-07-06), and to 14 of 32 rows by the time
+this check was written.
+
+Three checks, all over local checkouts (no network -- CI checks out the producer repos):
+
+  1. SOURCE EXISTS   every row's `source:` resolves to a file in its owning repo. A renamed or
+                     relocated skill currently goes unnoticed.
+  2. DIGEST MATCHES  sha256(canonical body) == the declared `sha256:`.
+  3. FROZEN MIRROR   for a row owned by `fs-gg-game`, FS.GG.Rendering's frozen copy at
+                     `template/product-skills/<id>/SKILL.md` -- the accepted two-copies cost
+                     (ADR-0022 §6, retired at P6) -- is byte-identical to the canonical body.
+                     Derived, not hardcoded: skipped when Rendering has no such copy.
+
+Digest semantics match `scripts/repos.sh digest`, `Fsgg.SkillMirror.sha256`, and both producer
+generators: lowercase hex over the UTF-8 bytes of the body TEXT, with a leading BOM stripped so a
+BOM can never enter the digest on either the producing or the verifying side.
+
+Pure-stdlib + PyYAML (already a coherence-gate dependency); no network, no tokens.
+
+Usage:
+  scripts/fsgg-skill-registry-check                       # check (default); exit 1 on any finding
+  scripts/fsgg-skill-registry-check --write               # reconcile stale sha256 in place, exit 0
+  scripts/fsgg-skill-registry-check --json                # machine findings
+  scripts/fsgg-skill-registry-check --repos-root DIR      # where the producer checkouts live
+  scripts/fsgg-skill-registry-check --registry PATH       # explicit skills.yml
+
+Exit: 0 = coherent (or --write applied); 1 = findings / usage error.
+
+Note `--write` rewrites ONLY the `sha256:` value of a stale row, in place, leaving byte-for-byte
+everything else (the file is hand-formatted, aligned YAML flow maps -- a full yaml.dump would
+destroy it). It does NOT touch `updated:` or prepend a changelog entry: per the registry protocol
+those are the operator's, and a reconcile must be explained, not just applied.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import sys
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - environment guard
+    sys.exit("fsgg-skill-registry-check: PyYAML is required (python -m pip install pyyaml)")
+
+# Rendering keeps frozen copies of the skills FS.GG.Game owns (ADR-0022 §6, retired at P6).
+FROZEN_MIRROR_OWNER = "fs-gg-game"
+FROZEN_MIRROR_REPO = "FS.GG.Rendering"
+FROZEN_MIRROR_PATH = "template/product-skills/{id}/SKILL.md"
+
+# A canonical-body digest: 64 lowercase hex chars. Anything else is a registry-shape defect.
+DIGEST_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def canonical_digest(raw: bytes) -> str:
+    """sha256 over the body text's UTF-8 bytes, BOM-free (Fsgg.SkillMirror.sha256)."""
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    return hashlib.sha256(raw).hexdigest()
+
+
+def read_bytes(path: str) -> bytes | None:
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
+def check(registry_path: str, repos_root: str) -> list[dict]:
+    with open(registry_path) as handle:
+        registry = yaml.safe_load(handle)
+
+    findings: list[dict] = []
+
+    for row in registry["skills"]:
+        skill_id, source = row["id"], row["source"]
+        # An unquoted all-digit digest parses as an int, and a truncated one is silently wrong.
+        # Both are registry-shape defects, so report rather than crash on them.
+        declared = str(row["sha256"])
+        if not DIGEST_RE.fullmatch(declared):
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "digest-shape",
+                    "detail": f"sha256 is not 64 lowercase hex chars: {declared!r} (quote it in YAML?)",
+                }
+            )
+            continue
+
+        source_path = os.path.join(repos_root, source)
+
+        raw = read_bytes(source_path)
+        if raw is None:
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "source-exists",
+                    "detail": f"source not found: {source}",
+                }
+            )
+            continue
+
+        actual = canonical_digest(raw)
+        if actual != declared:
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "digest-matches",
+                    "detail": f"declared {declared[:8]}… but source hashes to {actual[:8]}…",
+                    "declared": declared,
+                    "actual": actual,
+                }
+            )
+
+        if row["owner"] == FROZEN_MIRROR_OWNER:
+            mirror = os.path.join(
+                repos_root, FROZEN_MIRROR_REPO, FROZEN_MIRROR_PATH.format(id=skill_id)
+            )
+            mirrored = read_bytes(mirror)
+            # Derived, not declared: a row whose frozen copy has been retired simply has none.
+            if mirrored is not None and mirrored != raw:
+                findings.append(
+                    {
+                        "id": skill_id,
+                        "check": "frozen-mirror",
+                        "detail": (
+                            f"{FROZEN_MIRROR_REPO}'s frozen copy is not byte-identical to "
+                            f"the canonical body ({canonical_digest(mirrored)[:8]}… vs {actual[:8]}…)"
+                        ),
+                    }
+                )
+
+    return findings
+
+
+def reconcile(registry_path: str, findings: list[dict]) -> int:
+    """Rewrite only the sha256 of each digest-mismatched row, preserving the hand-aligned YAML."""
+    stale = {f["id"]: f["actual"] for f in findings if f["check"] == "digest-matches"}
+    if not stale:
+        return 0
+
+    with open(registry_path) as handle:
+        text = handle.read()
+
+    written = 0
+    for skill_id, actual in stale.items():
+        # Anchor on the row's own `id:` so we can never rewrite a neighbour's digest.
+        pattern = re.compile(
+            rf"(\{{\s*id:\s*{re.escape(skill_id)}\s*,[^}}]*?sha256:\s*)([0-9a-f]{{64}})"
+        )
+        text, count = pattern.subn(rf"\g<1>{actual}", text, count=1)
+        if count != 1:
+            sys.exit(f"fsgg-skill-registry-check: could not locate the sha256 of row {skill_id}")
+        written += 1
+
+    with open(registry_path, "w") as handle:
+        handle.write(text)
+    return written
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(add_help=True, description=__doc__.splitlines()[0])
+    parser.add_argument("--registry", default="registry/skills.yml")
+    parser.add_argument(
+        "--repos-root",
+        default=".repos",
+        help="directory holding the producer checkouts (FS.GG.SDD/, FS.GG.Rendering/, FS.GG.Game/)",
+    )
+    parser.add_argument("--json", action="store_true", help="emit findings as JSON")
+    parser.add_argument("--write", action="store_true", help="reconcile stale sha256 in place")
+    args = parser.parse_args()
+
+    if not os.path.isdir(args.repos_root):
+        sys.exit(
+            f"fsgg-skill-registry-check: --repos-root '{args.repos_root}' is not a directory. "
+            "Check out the producer repos there (see .github/workflows/skill-registry-coherence.yml)."
+        )
+
+    findings = check(args.registry, args.repos_root)
+
+    if args.write:
+        written = reconcile(args.registry, findings)
+        blocked = [f for f in findings if f["check"] != "digest-matches"]
+        print(f"skill-registry: reconciled {written} sha256 row(s) in {args.registry}")
+        if blocked:
+            # --write cannot invent a missing source or resolve a mirror divergence.
+            for finding in blocked:
+                print(f"  still unresolved [{finding['check']}] {finding['id']}: {finding['detail']}")
+            return 1
+        print("  remember: set `updated:` and prepend a registry/skills.CHANGELOG.md entry")
+        return 0
+
+    if args.json:
+        print(json.dumps({"findings": findings}, indent=2, sort_keys=True))
+    elif findings:
+        print(f"skill-registry: {len(findings)} finding(s) — registry ≠ manifest ≠ bytes")
+        for finding in findings:
+            print(f"  [{finding['check']}] {finding['id']}: {finding['detail']}")
+        print(
+            "\nskills.yml is reconciled FROM the producer manifests (ADR-0017), never hand-authored.\n"
+            "Fix: scripts/fsgg-skill-registry-check --write --repos-root <dir>, then set `updated:`\n"
+            "and prepend a dated registry/skills.CHANGELOG.md entry naming the producer PR."
+        )
+    else:
+        print(f"skill-registry: coherent — registry = manifest = bytes")
+
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

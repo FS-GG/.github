@@ -1,0 +1,73 @@
+# Cross-repo guard on `registry = manifest = bytes` (.github#247, ADR-0017).
+#
+# `registry/skills.yml` declares, per row, the `source:` SKILL.md it was reconciled from and that
+# body's `sha256:`. Every changelog entry restates the invariant; NOTHING enforced it. Each producer
+# repo drift-guards its own manifest against its own bodies, which is internally consistent while
+# being wrong — so a producer could merge a body change and this registry silently went stale. It had,
+# for 14 of 32 rows, before this gate existed (see the 2026-07-08 changelog entry).
+#
+# The check needs the producer BODIES, which live in other repos, so it checks them out (public, no
+# token) into a throwaway `.repos/` and runs `scripts/fsgg-skill-registry-check` over it. That is why
+# this is a separate workflow rather than a step in coherence.yml.
+#
+# Triggers matter here more than usual: a producer merge staleness this registry WITHOUT any .github
+# PR, so PR-only would never fire. Hence `schedule` — the same reasoning as `fsgg-sdd validate`'s
+# scheduled deep check. `push: main` catches a bad reconcile immediately.
+name: skill-registry-coherence
+
+on:
+  pull_request:
+    paths:
+      - "registry/skills.yml"
+      - "scripts/fsgg-skill-registry-check"
+      - "tests/skill-registry/**"
+      - ".github/workflows/skill-registry-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "registry/skills.yml"
+      - "scripts/fsgg-skill-registry-check"
+      - ".github/workflows/skill-registry-coherence.yml"
+  # A producer body change stales the registry with no .github commit — only the schedule catches it.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coherence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      # The producer repos, at `main` — the bodies whose digests the registry declares. Public, so
+      # the default GITHUB_TOKEN suffices. Paths mirror the `source:` prefixes in skills.yml.
+      - name: Check out the producer repos
+        run: |
+          set -euo pipefail
+          mkdir -p .repos
+          for repo in FS.GG.SDD FS.GG.Rendering FS.GG.Game; do
+            git clone --depth 1 --filter=blob:none \
+              "https://github.com/FS-GG/$repo.git" ".repos/$repo"
+            echo "cloned $repo @ $(git -C ".repos/$repo" rev-parse --short HEAD)"
+          done
+
+      - name: Assert registry = manifest = bytes
+        run: python scripts/fsgg-skill-registry-check --repos-root .repos
+
+  # The tool's own fixture — offline, temp registry + temp producer trees. Proves it catches a stale
+  # digest, a missing source, a diverged frozen mirror, and a malformed digest, and that `--write`
+  # rewrites only the stale sha256. Mirrors surface-impact-selftest.yml.
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the skill-registry fixture
+        run: bash tests/skill-registry/run.sh
