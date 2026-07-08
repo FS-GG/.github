@@ -124,12 +124,15 @@ echo "   ok"
 echo "== 8. --json is machine-readable =="
 printf 'owned body\n' > "$ROOT/Producer.Two/skills/owned/SKILL.md"
 write_registry
-run --registry "$REG" --repos-root "$ROOT" --json | python3 -c "
+# `run --json` exits 1 because there ARE findings — that is the point of the check. Capture it
+# rather than piping, so `set -o pipefail` does not abort the fixture on a correct non-zero exit.
+json="$(run --registry "$REG" --repos-root "$ROOT" --json || true)"
+python3 -c "
 import json,sys
-d=json.load(sys.stdin)
+d=json.loads(sys.argv[1])
 ids=sorted(f['id'] for f in d['findings'])
 assert ids==['stale'], ids
 print('   ok')
-"
+" "$json"
 
 echo "skill-registry fixture: all checks passed"
