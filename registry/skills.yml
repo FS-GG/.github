@@ -51,7 +51,7 @@
 # catalog + `skill-registry` contract already landed (.github#168).
 
 schemaVersion: 1
-updated: "2026-07-06"
+updated: "2026-07-08"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -109,7 +109,7 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 12 rows
   # still owned by fs-gg-rendering, these four do NOT depend on the Rendering#77 grammar alignment.
   - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 16fd32b71ecb0f43937158a9b359654af9ecc28f7793b5489e42ea7ba4a76169, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: 64cbe6efbfb75af430906832e918d1bb07279a6ffbcb7f3096eafb2b0998803c, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: 4a4695836e3f50642cc9055f50ed74ac9a8be5bf81128e3857a3406785dda6ee, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: af107dec4e0a3464bb39d2dadd3101872bdf47351945151854d52f17234d1619, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: a48df195559c4f8e6499246e85261aca30182c1138eb9374df292dd4b9ec61d5, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: b7661998e340c06c7d2fb3d44214e780de7c4cff7720fc730f7a39860cb6a01d, materializes-when: "profile == governed" }
