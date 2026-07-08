@@ -571,8 +571,11 @@ coherence:
       the per-release record is registry/CHANGELOG.md, not this field. The two FRAMEWORK MAJORS since:
       0.2.0-preview.1 (ADR-0022 P5, FS.GG.Rendering#155 — game-sim primitives extracted to FS.GG.Game.Core)
       and 0.3.0-preview.1 (ADR-0024 step 2, FS.GG.Rendering#158 — the Audio request surface retired from
-      FS.GG.UI.Canvas to the standalone FS.GG.Audio.Core); between them the 0.1.57→0.1.70 cuts were
-      template-only (framework pin HELD at 0.1.64). Still coherent, on the same FR-007 evidence: the org
+      FS.GG.UI.Canvas to the standalone FS.GG.Audio.Core); across 0.1.57→0.1.70 the framework pin was
+      NOT static — it advanced 0.1.56→0.1.58 (libs republished), HELD at 0.1.58 across the template-only
+      0.1.60/0.1.61 cuts, advanced again through 0.1.62/0.1.63/0.1.64 (real src/ releases: sim primitives,
+      runtime ergonomics, grid-sim primitives), then HELD at 0.1.64 across the template-only
+      0.1.65→0.1.70 cuts. Still coherent, on the same FR-007 evidence: the org
       feed and nuget.org both serve 0.3.0-preview.1 for the template AND its 16 FS.GG.UI.* siblings
       (FR-001); pin == package == release tag == 0.3.0 (Feature-209). Coherent: true is UNCHANGED — the
       defect this entry closes was a MISSING FLIP, not a broken set: the registry sat at 0.2.0 for a day
