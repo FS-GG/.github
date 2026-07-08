@@ -140,6 +140,14 @@ proves a scaffolded workspace's agent-skill roots are the **byte-identical union
 product skills — content, not presence (ADR-0014's consumer-side check; the composition gate is its
 first caller).
 
+Where that gate checks a *consumer's* tree, `skill-registry-coherence` checks this repo's *catalog*:
+`scripts/fsgg-skill-registry-check` asserts every `registry/skills.yml` row against the producer body
+it names — `source:` exists, `sha256:` equals that body's canonical digest, and a `fs-gg-game`-owned
+row still byte-matches Rendering's frozen copy (ADR-0022 §6). The invariant **registry = manifest =
+bytes** was asserted in every changelog entry and enforced nowhere; 14 of 32 rows had gone stale
+(.github#247). It runs on a **schedule** as well as on PR, because a producer body change stales this
+registry with no `.github` commit to trigger on.
+
 ## Propagation → the cross-repo auto-update fabric
 
 The coherence gate goes *red* on stale pins; the [auto-update fabric](auto-update-fabric.md)
