@@ -37,7 +37,9 @@ permissions:
   contents: read
 
 jobs:
-  coherence:
+  # Named distinctly: `coherence.yml` already contributes a check called `contract-coherence /
+  # coherence`, and a bare `coherence` next to it is unreadable in the PR checks list.
+  registry-coherence:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
