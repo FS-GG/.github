@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-08"   # (fs-gg-ui-template flipped 0.2.0->0.3.0-preview.1 — the ADR-0024 step-2 Canvas-major release published 2026-07-07 but its registry flip was missed; .github#250. The templates->rendering edge intentionally stays at 0.2.0: it records what Templates PINS, and the re-pin is deferred to .github#238.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-08"   # (.github#238 / ADR-0024 step 3: FIRST CONSUMER EDGE of the fs-gg-audio package contract — rendering(template game/sample-pack) -> audio @0.1.0-preview.1; fs-gg-ui-template package 0.3.0->0.3.1-preview.1 over a HELD 0.3.0 framework pin (template-only); the templates->rendering edge catches up to 0.3.1 now that FS.GG.Templates#119 re-pinned it, closing the lag .github#250 recorded.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -171,9 +171,9 @@ contracts:
     consumers: [templates]   # Templates#14 overlay drift gate (git diff --exit-code)
     bundles: [governance-policy, governance-capabilities, governance-tooling, governance-descriptor]
   - id: fs-gg-ui-template
-    version: "0.3.0-preview.1"   # template FsGgUiVersion FRAMEWORK pin — ADVANCED 0.2.0→0.3.0-preview.1: the FRAMEWORK MAJOR (ADR-0024 step 2, FS.GG.Rendering#158). A real src/ change — the Audio REQUEST surface (AudioEffect / SoundId / TrackId / the Audio.* module) was REMOVED from FS.GG.UI.Canvas; that vocabulary now lives only in the standalone FS.GG.Audio.Core (fs-gg-audio 0.1.0-preview.1, ADR-0023). Canvas takes a SemVer major (0.x preview channel); the ApiCompat gate passed the removal against the 0.2.0 baseline. Canvas.Audio was a MODULE inside FS.GG.UI.Canvas, never its own package — nothing to unlist. Library snapshot tag fs-gg-ui/v0.3.0-preview.1; the 16 FS.GG.UI.* libs @ 0.3.0 are live on the org feed + nuget.org. PRIOR: ADVANCED 0.1.64→0.2.0 (ADR-0022 P5, FS.GG.Rendering#155 — the game-sim primitives extracted to FS.GG.Game.Core); before that HELD at 0.1.64 across the 0.1.65→0.1.70 template-only releases.
-    package-version: "0.3.0-preview.1"   # PUBLISHED FS.GG.UI.Template package — ADVANCED 0.2.0→0.3.0-preview.1 (Rendering release run 28882426507, tag v0.3.0-preview.1, all gates + org-feed + nuget.org publish green; publish-before-flip FR-007). FRAMEWORK RELEASE: package version stays RE-COUPLED to the framework pin (both 0.3.0) — this cut moved src/ (the Canvas.Audio retirement), so the whole coherent set (16 FS.GG.UI.* libs + template) republished at 0.3.0. Feature-209 coherence: template package fsproj <Version> == the v* release tag == the framework pin == 0.3.0. FLIPPED LATE: published 2026-07-07T16:38Z, recorded here 2026-07-08 (.github#250) — the step-2 flip was missed; two registry PRs (.github#246, #248) landed on top of the stale row before it was caught. Was 0.2.0-preview.1.
-    package-tag: "fs-gg-ui-template/v0.3.0-preview.1"   # template-scoped coherent-set tag (framework MAJOR, ADR-0024 step 2; the Canvas Audio request surface retired to FS.GG.Audio.Core — pin == package == 0.3.0)
+    version: "0.3.0-preview.1"   # template FsGgUiVersion FRAMEWORK pin — HELD at 0.3.0-preview.1 across the 0.3.1-preview.1 template-only release (ADR-0024 step 3, FS.GG.Rendering#162/#163: the FS.GG.Audio wire-in touched template/ only, so the 16 FS.GG.UI.* libs are byte-identical and NOT republished — no fs-gg-ui/v0.3.1 tag exists and FS.GG.UI.Canvas newest on the feed stays 0.3.0). The package DECOUPLES from this pin here, exactly as it did across 0.1.65→0.1.70. PRIOR: ADVANCED 0.2.0→0.3.0-preview.1: the FRAMEWORK MAJOR (ADR-0024 step 2, FS.GG.Rendering#158). A real src/ change — the Audio REQUEST surface (AudioEffect / SoundId / TrackId / the Audio.* module) was REMOVED from FS.GG.UI.Canvas; that vocabulary now lives only in the standalone FS.GG.Audio.Core (fs-gg-audio 0.1.0-preview.1, ADR-0023). Canvas takes a SemVer major (0.x preview channel); the ApiCompat gate passed the removal against the 0.2.0 baseline. Canvas.Audio was a MODULE inside FS.GG.UI.Canvas, never its own package — nothing to unlist. Library snapshot tag fs-gg-ui/v0.3.0-preview.1; the 16 FS.GG.UI.* libs @ 0.3.0 are live on the org feed + nuget.org. PRIOR: ADVANCED 0.1.64→0.2.0 (ADR-0022 P5, FS.GG.Rendering#155 — the game-sim primitives extracted to FS.GG.Game.Core); before that HELD at 0.1.64 across the 0.1.65→0.1.70 template-only releases.
+    package-version: "0.3.1-preview.1"   # PUBLISHED FS.GG.UI.Template package — ADVANCED 0.3.0→0.3.1-preview.1 (Rendering release run 28937999798, tag v0.3.1-preview.1, all gates + org-feed publish green; publish-before-flip FR-007). TEMPLATE-ONLY: the package version DECOUPLES from the framework pin (which HOLDS at 0.3.0) — only template/ content moved (ADR-0024 step 3, FS.GG.Rendering#162/#163: the game/sample-pack profiles declare $(FsGgAudioVersion) 0.1.0-preview.1 and reference FS.GG.Audio.Core/.Host/.Engine/.Elmish under the `game || sample-pack` gate); the 16 FS.GG.UI.* libs stayed 0.3.0 (packed @pin, --skip-duplicate no-op). Feature-209 coherence: template package fsproj <Version> == the v* release tag == 0.3.1. PRIOR 0.3.0-preview.1 (framework MAJOR, run 28882426507 — flipped LATE by .github#250: published 2026-07-07T16:38Z, recorded 2026-07-08, after two registry PRs had landed on the stale row).
+    package-tag: "fs-gg-ui-template/v0.3.1-preview.1"   # template-scoped coherent-set tag (TEMPLATE-ONLY, ADR-0024 step 3; the FS.GG.Audio wire-in — package 0.3.1 over an unchanged framework pin 0.3.0, so NO fs-gg-ui/v0.3.1 library snapshot tag exists)
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
@@ -395,24 +395,35 @@ contracts:
     # Bus / AudioEvidence, BCL-only), a Host device seam (IAudioBackend — Null/record default +
     # OpenAL/Silk.NET, degrade-to-Null; optional IMixingBackend), an Engine (named buses, linear +
     # equal-power fades, ducking, 3D listener/emitters — a pure deterministic step), and an Elmish Cmd
-    # bridge. Depends on no FS-GG component (public packages only); nothing consumes it yet.
+    # bridge. Depends on no FS-GG component (public packages only) — a BOTTOM layer, sibling to Rendering
+    # and FS.GG.Game.Core. FIRST CONSUMED cross-repo at 0.3.1-preview.1 of the fs-gg-ui-template contract
+    # (ADR-0024 step 3, .github#238): the Rendering template's game/sample-pack profiles pin it on their own
+    # $(FsGgAudioVersion) axis. This replaces the record-only `fs-gg-audio` SKILL vocabulary (which taught
+    # AudioEffect from the retired FS.GG.UI.Canvas surface) with the real playback realization.
     surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge"
-    consumers: [audio]       # consumed WITHIN the audio component today (sample app + test suites); a product/provider that adopts audio adds the cross-repo edge
+    consumers: [audio, rendering]   # audio: WITHIN the component (sample app + test suites). rendering: the template game/sample-pack profiles (ADR-0024 step 3, .github#238, FS.GG.Rendering#156 wired / #162 released). A scaffolded product receives the packages through the template, so Templates consumes them TRANSITIVELY via fs-gg-ui-template — no direct templates→audio edge.
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
   # ADR-0002: vendoring retired. Templates composes the rendering app via scaffold, not a fork.
-  # NOTE (.github#250): this edge INTENTIONALLY LAGS the fs-gg-ui-template contract (0.3.0-preview.1).
-  # An edge records what the CONSUMER ACTUALLY PINS, not the newest published version — and
-  # FS.GG.Templates providers/rendering.providers.yml still pins `FS.GG.UI.Template::0.2.0-preview.1`.
-  # Both scalars are therefore true. The re-pin (publish-before-flip step 3) is deferred to .github#238,
-  # which moves this edge and the pin together to 0.3.1-preview.1 once FS.GG.Rendering#162 ships the
-  # audio template edit. Do NOT "fix" this to match the contract without a Templates re-pin PR.
-  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.2.0-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
+  # An edge records what the CONSUMER ACTUALLY PINS. .github#250 deliberately left this at 0.2.0 while
+  # FS.GG.Templates still pinned 0.2.0; the re-pin landed in FS.GG.Templates#119 (providers/
+  # rendering.providers.yml → FS.GG.UI.Template::0.3.1-preview.1), so the edge moves with it here
+  # (publish-before-flip step 3, .github#238). 0.3.0 was never pinned by Templates — 0.3.1 superseded it.
+  - { from: templates, to: rendering,  via: "fs-gg-ui-template@0.3.1-preview.1 composed via scaffold-provider (lifecycle=sdd); no vendored payload" }
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
   # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
   - { from: rendering, to: game,       via: "game-sim-core@0.1.0-preview.1 (FS.GG.Game.Core — template game/sample-pack sim primitives, on the $(FsGgGameVersion) axis)" }
+  # ADR-0024 step 3 (.github#234/#238, FS.GG.Rendering#156 wired / #162+#163 released at template 0.3.1):
+  # the game/sample-pack template profiles materialize the REAL FS.GG.Audio realization (buses/fades/
+  # ducking/3D; device backend degrading to Null/record), replacing the record-only fs-gg-audio SKILL
+  # vocabulary that ADR-0024 step 2 retired from FS.GG.UI.Canvas. First consumer edge of the fs-gg-audio
+  # PACKAGE contract, on its own $(FsGgAudioVersion) axis — mirroring the FS.GG.Game.Core precedent above:
+  # Rendering (upstream) reaching further UP to a sibling BOTTOM layer that itself reaches up to nothing.
+  # Publish-before-flip (FR-007): the packages are live on the org feed + nuget.org, and the template that
+  # references them shipped as fs-gg-ui-template/v0.3.1-preview.1, BEFORE this edge was written.
+  - { from: rendering, to: audio,      via: "fs-gg-audio@0.1.0-preview.1 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
   - { from: game,      to: rendering,  via: "game-scene-adapter@0.1.0-preview.1 -> FS.GG.UI.Scene@0.2.0-preview.1 (adapter projects sim state onto Scene drawables; the one Game -> Rendering edge)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }

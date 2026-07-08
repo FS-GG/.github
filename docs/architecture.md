@@ -63,8 +63,10 @@ the decision records linked throughout.
 │ mid-extraction,      ││          (all three consumed by Templates at scaffold time; see §6)
 │ ADR-0022)            │└─ Game.Render ─▶ FS.GG.UI.Scene  (adapter reaches UP — allowed)
 │ Game.Core (BCL sim)  │
-│ + Game.Render        │   Game.Core → nothing (BCL-only new BOTTOM layer, sibling to Rendering).
-└──────────────────────┘   Rendering still reaches up to nothing (one-way rule preserved).
+│ + Game.Render        │   Game.Core → nothing (BCL-only BOTTOM layer, sibling to Rendering).
+└──────────────────────┘   FS.GG.Audio.* → nothing either (the second such bottom layer, ADR-0023).
+                           Rendering's template reaches UP to both bottom layers (game-sim-core,
+                           fs-gg-audio) and to nothing else; neither reaches back. One-way preserved.
 ```
 
 Seven repositories under [github.com/FS-GG](https://github.com/FS-GG) (six framework
@@ -82,7 +84,7 @@ render-independent component under ADR-0023, its `FS.GG.Audio.*` set published a
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), 0.1.0-preview.1 on the org feed + nuget.org |
-| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, 0.1.0-preview.1 on the org feed |
+| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, 0.1.0-preview.1 on the org feed |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. | — |
 
 ---
@@ -359,7 +361,9 @@ primitives, the `Scene.Geometry` collision module, the `game` template profile, 
   game sim builds and tests with zero Skia.
 - `FS.GG.Game.Render` — a thin adapter (depends on `Game.Core` + `FS.GG.UI.Scene`) that maps
   sim state onto `Scene`. It reaches **up** to Rendering — allowed under the one-way rule,
-  which the split preserves (Rendering still reaches up to nothing).
+  which the split preserves. (Rendering itself reaches up only to the BCL-only bottom layers
+  `FS.GG.Game.Core` and, since [ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md)
+  step 3, `FS.GG.Audio.*` — both of which reach up to nothing.)
 
 The cut line was settled by a pre-ADR usage audit
 ([`docs/reports/2026-07-06-p0-scene-geometry-cut-line-audit.md`](reports/2026-07-06-p0-scene-geometry-cut-line-audit.md)):
@@ -428,6 +432,9 @@ The contracts that hold the system together:
 | `governance-policy` / `-capabilities` / `-tooling` / `-descriptor` | Governance | the four `.fsgg/*.yml` slots | Templates |
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
+| `game-sim-core` | Game | the `FS.GG.Game.Core` package (BCL-only sim bottom layer, `$(FsGgGameVersion)` axis) | Rendering (template `game`/`sample-pack`) |
+| `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
+| `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |
 | `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` | all component repos |
 | `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
 | `skill-registry` | **.github** | [`registry/skills.yml`](../registry/skills.yml) — the org's authoritative skill catalog (process + product; `id`, `scope`, `owner`, canonical-body `sha256`, `materializes-when`), reconciled from the producer skill-manifests (ADR-0017) | **.github** (the union gate + registry validation) |
@@ -437,7 +444,16 @@ Templates → SDD (scaffold-provider), Templates → Governance (policy/overlay)
 SDD → Governance (handoff, **optional**), **.github → SDD** (`registry-schema` —
 the coherence gate validates this registry with SDD's typed `Fsgg.Registry`), and
 **.github → Rendering + SDD** (`skill-registry` — `skills.yml` is reconciled from the two
-producers' skill-manifests). Rendering points at nothing.
+producers' skill-manifests).
+
+**Rendering → Game** (`game-sim-core`, [ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md) P5) and
+**Rendering → Audio** (`fs-gg-audio`, [ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3,
+[.github#238](https://github.com/FS-GG/.github/issues/238)): Rendering's template `game`/`sample-pack`
+profiles reach *up* to two BCL-only bottom layers that are siblings of Rendering and themselves reach
+up to nothing (`FS.GG.Game.Core` on the `$(FsGgGameVersion)` axis; `FS.GG.Audio.*` on
+`$(FsGgAudioVersion)`). **Game → Rendering** (`game-scene-adapter`) is the one edge back down. A
+scaffolded product receives all of these through the template, so Templates consumes them
+transitively — there is no `templates → game` or `templates → audio` edge.
 
 **The registry's own schema is a governed contract too (ADR-0015).** It was the one
 contract in the system that wasn't: the typed validator (the `registry-validator-typed`
