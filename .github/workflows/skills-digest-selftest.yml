@@ -1,0 +1,34 @@
+# Self-test for scripts/skills-digest-assert.sh — the cross-repo skill-registry digest gate
+# (.github#247). Runs tests/skills-digest/run.sh, which drives the audit against a temp registry and a
+# PATH-shim `gh`: it proves a coherent registry passes, and that each way the "registry = manifest =
+# bytes" invariant can rot goes red — a stale sha256, a renamed/deleted source, an owner that
+# disagrees with its source root, and a drifted FS.GG.Rendering frozen copy (ADR-0022 §6). It also
+# pins the two deliberate non-failures: a missing frozen copy is the P6 end-state (self-retiring, not
+# drift), and an empty/unparseable registry fails CLOSED (exit 2) rather than passing vacuously.
+# No network. Mirrors repos-audit-selftest.yml; yq on the runner covers yaml2json, so no pip step.
+name: skills-digest-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/skills-digest-assert.sh"
+      - "tests/skills-digest/**"
+      - ".github/workflows/skills-digest-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/skills-digest-assert.sh"
+      - "tests/skills-digest/**"
+      - ".github/workflows/skills-digest-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the skills-digest fixture
+        run: bash tests/skills-digest/run.sh

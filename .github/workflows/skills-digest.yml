@@ -1,0 +1,50 @@
+# Cross-repo skill-registry digest gate (.github#247) — enforces "registry = manifest = bytes".
+#
+# registry/skills.yml declares, per row, a `source` (the owning repo's canonical SKILL.md) and the
+# `sha256` it was reconciled from. Every producer drift-guards its OWN manifest against its OWN
+# bodies; nothing verified that .github's registry still agrees with those bodies. So a producer
+# could merge a body change and the registry silently went stale (15 of 32 rows were stale when this
+# gate first ran — registry/skills.CHANGELOG.md 2026-07-08). This is the authority-side half.
+#
+# WHY THE SCHEDULE, not just PRs: the staling event happens in ANOTHER repo. A producer merge that
+# changes a SKILL.md never touches this repo, so a `paths:`-scoped PR trigger can never observe it —
+# by construction the registry rots between .github PRs. The cron is what actually closes the loop;
+# the PR/push triggers only catch a bad reconcile at authoring time. (Same reasoning as the
+# scheduled repos-audit.yml roster audit and the scheduled `fsgg-sdd validate`.)
+#
+# Reads the (public) producer repos with the run-scoped GITHUB_TOKEN, exactly as repos-audit.yml and
+# contract-coherence.yml do. yq is preinstalled on the runners (scripts/repos.sh's yaml2json prefers
+# it), so there is no pip step.
+name: skills-digest
+
+on:
+  pull_request:
+    paths:
+      - "registry/skills.yml"
+      - "scripts/skills-digest-assert.sh"
+      - ".github/workflows/skills-digest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "registry/skills.yml"
+      - "scripts/skills-digest-assert.sh"
+      - ".github/workflows/skills-digest.yml"
+  schedule:
+    - cron: "41 7 * * *"   # daily, 07:41 UTC — catches a producer merge that staled the registry
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The registry is read from THIS checkout (the commit under test) while sources are read at the
+      # producers' `main`. A PR that re-digests a row before the producer merged the matching body
+      # therefore fails — the publish-before-flip ordering, applied to skill bodies.
+      - name: Assert registry = manifest = bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/skills-digest-assert.sh
