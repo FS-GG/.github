@@ -11,6 +11,8 @@
 #   repos.sh validate [--registry <file>] [--root <dir>]   # schema + invariants + kit digests
 #   repos.sh list --receives <cap> [--field id|full] [--registry <file>]
 #                                                           # roster query for consumers (apply-labels …)
+#   repos.sh kit [--field id|kind|source] [--registry <file>]
+#                                                           # the kit item list, in roster order
 #   repos.sh digest <path>                                  # reference digest: skill dir -> sha256 of its
 #                                                           # SKILL.md; file -> sha256 of the file
 #   repos.sh -h | --help
@@ -28,7 +30,9 @@ KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contrac
 
 die() { echo "::error::repos-registry: $*" >&2; exit 2; }
 
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
+# Anchored on the `# Exit:` line, not a line count: adding a usage line must not spill the script's
+# own code into --help (a fixed range did, printing `set -euo pipefail`).
+usage() { sed -n '2,/^# Exit:/p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq not found (required)."
 
@@ -74,6 +78,23 @@ cmd_list() {
   [ -f "$reg" ] || die "registry not found: $reg"
   yaml2json "$reg" | jq -r --arg cap "$cap" --arg f "$field" \
     '.repos[] | select((.receives // []) | index($cap)) | .[$f]'
+}
+
+# The kit item list, in roster order. Consumers that name the kit's contents (the propagate PR
+# title) read it from here rather than hardcoding — the roster is the one place the kit is defined,
+# and a kit item added there must not need an edit in every fabric that mentions it.
+cmd_kit() {
+  local field="id" reg="$REG_DEFAULT"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --field)    field="${2:?--field needs a value}"; shift 2 ;;
+      --registry) reg="${2:?--registry needs a value}"; shift 2 ;;
+      *)          die "kit: unknown arg '$1'." ;;
+    esac
+  done
+  case "$field" in id|kind|source) ;; *) die "kit: --field must be id, kind or source." ;; esac
+  [ -f "$reg" ] || die "registry not found: $reg"
+  yaml2json "$reg" | jq -r --arg f "$field" '(.kit // [])[] | .[$f]'
 }
 
 cmd_validate() {
@@ -152,6 +173,9 @@ cmd_validate() {
   local kid kind ksrc ksha got
   while IFS=$'\t' read -r kid kind ksrc ksha; do
     [ -n "$kid" ] || continue
+    # Same rule as repo ids. `repos.sh kit` feeds these straight into the propagate PR's title, so a
+    # stray quote or control character in an id would surface there — validate at the source.
+    [[ "$kid" =~ ^[a-z0-9.][a-z0-9._-]*$ ]] || err "kit id '$kid' must be lowercase kebab/dotted."
     case "$kind" in skill|client) ;; *) err "kit '$kid' kind '$kind' invalid (skill|client)." ;; esac
     if [ ! -e "$root/$ksrc" ]; then err "kit '$kid' source missing: $ksrc"; continue; fi
     got="$(digest "$root/$ksrc")" || { err "kit '$kid' cannot digest $ksrc."; continue; }
@@ -168,6 +192,7 @@ cmd_validate() {
 case "${1:-}" in
   validate) shift; cmd_validate "$@" ;;
   list)     shift; cmd_list "$@" ;;
+  kit)      shift; cmd_kit "$@" ;;
   digest)   shift; [ $# -ge 1 ] || die "digest: <path> required."; digest "$1" ;;
   -h|--help|help|"") usage ;;
   *)        die "unknown command '${1:-}' (try: repos.sh --help)." ;;
