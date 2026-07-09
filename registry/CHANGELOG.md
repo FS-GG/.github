@@ -18,6 +18,19 @@ no gate behaviour changes — this is purely how humans record the log.
 
 ## Entries
 
+- **2026-07-09** — **CONSUMER EDGES `rendering → audio` 0.1.0-preview.1 → 0.1.0 and `rendering → game` 0.1.0-preview.1 → 0.2.0: publish-before-flip step 3** (owner rendering; refs [FS.GG.Rendering#238](https://github.com/FS-GG/FS.GG.Rendering/pull/238), [FS.GG.Rendering#235](https://github.com/FS-GG/FS.GG.Rendering/issues/235), [FS.GG.Audio#4](https://github.com/FS-GG/FS.GG.Audio/issues/4)). No contract row moved — this entry records **consumer pins**, not producer versions.
+
+  **What moved.** Rendering's `template/base/Directory.Packages.props` re-pinned both payload axes onto stable: `<FsGgGameVersion>` `0.1.0-preview.1` → `0.2.0` and `<FsGgAudioVersion>` `0.1.0-preview.1` → `0.1.0`. An edge records what the consumer **actually pins**, so both edges move now and not before.
+
+  **Why the edges lagged their contract rows.** `game-sim-core` has read `0.2.0` since the FS.GG.Game release, and `fs-gg-audio` flipped to `0.1.0` in the PR immediately prior ([.github#279](https://github.com/FS-GG/.github/pull/279)). Publish-before-flip deliberately produces this window: producer row first, consumer edge after the re-pin lands. `.github#250` set the precedent, holding `templates → rendering` at `0.2.0` until FS.GG.Templates#119 moved the pin. A contract row and its consuming edge naming different versions **inside that window is correct, not drift** — and #279 said so inline so this edge would not be "corrected" early.
+
+  **What it fixes.** A **stable** `fs-gg-ui` template (`0.4.0`) was scaffolding products that restored **prerelease** `FS.GG.Game.*` and `FS.GG.Audio.*`. Template payload is *content*, not a nuspec dependency, so NU5104 cannot see it and **no gate was ever red** — the fails-open class of epic [#266](https://github.com/FS-GG/.github/issues/266). The Game pin was additionally two minors stale on its own axis.
+
+  **Verified by restore, not by inspection.** Rendering's `Package.Tests` read the payload as **text** (they assert axis *structure* and explicitly disclaim the pin's value), so its green CI does **not** prove the new pins resolve. A direct `dotnet restore` of the six pinned packages against nuget.org resolves the full transitive graph to **seven `FS.GG.*` packages with zero prereleases** — including `FS.GG.Game.Render 0.2.0 → FS.GG.UI.Scene 0.4.0`. That is the acceptance of FS.GG.Rendering#235 at the payload level.
+
+  **FS.GG.Rendering#235 stays OPEN.** Its acceptance speaks of a *scaffolded* product, and the payload only reaches consumers when a new `FS.GG.UI.Template` package is published. That needs a template-only `0.4.1` cut (the `0.3.1-preview.1` precedent: package version decouples from a held framework pin), then an `fs-gg-ui-template` `package-version` flip and a `FS.GG.Templates` provider re-pin. Left as an explicit decision — a `main` pin is not a shipped payload.
+
+
 - **2026-07-09** — **`fs-gg-audio` 0.1.0-preview.1 → 0.1.0 (source + published): the CHANNEL PROMOTION that retires the org's last `-preview` producer** (owner audio; refs [FS.GG.Audio#4](https://github.com/FS-GG/FS.GG.Audio/issues/4), [FS.GG.Audio#5](https://github.com/FS-GG/FS.GG.Audio/pull/5), [ADR-0023](../docs/adr/0023-onboard-fs-gg-audio-as-an-sdd-driven-component.md)). Every `FS.GG.*` producer in the org is now on a stable channel.
 
   **What moved.** The `fs-gg-audio` contract's `version` and `package-version` both advance to `0.1.0`. All four packages — `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` — are live on the org feed and on nuget.org at `0.1.0` (release run [29043991855](https://github.com/FS-GG/FS.GG.Audio/actions/runs/29043991855), tag [`v0.1.0`](https://github.com/FS-GG/FS.GG.Audio/releases/tag/v0.1.0)). Publish-before-flip (FR-007) observed: the four `Created` responses landed at 19:22Z; this row flipped after.
