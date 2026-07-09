@@ -62,6 +62,6 @@ outside-fabric: []
 # file: sha256 of the file). Regenerate with `scripts/repos.sh digest <source>`. The slice-2 sync
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
 kit:
-  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 436357f7eaaf0713c1dc1af362ac8c5a2366cf0796fd50b6701ee7645a877986 }
+  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: d75b804c9072d9ac15a096e404f29525e61ea0b552a55341051480273907d936 }
   - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 5b4c1ca6767c4cb4e25c1acec022bd5e2f401c7d49579fcbad1d0ba39c7b41ca }
   - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: fefa888201f9184e79ccde128195f75333ec51a6e26df32a8da7950c74af594d }
