@@ -103,6 +103,18 @@ board `Status: In progress` flip is **best-effort** for the same reason: an item
 still claims. **The marker is the lock.** Anything asking "is this taken?" reads the marker, never
 the column.
 
+That rule binds the **readers** too, and for a while it did not. `who`, `reap`, `inbox`, `batch` and
+`overlap --active` all take their view of in-flight work from one place, and that place used to *ask
+the column* which items to look at — so a claim whose `Status` flip failed, or a claim on an item
+that is not on the board at all, was invisible to every one of them (FS-GG/.github#257). `reap` could
+not collect a dead worker off such an item, so its lease stopped self-healing; and because `batch`
+reserves the touch-set of everything in flight, an off-board claim's `Paths:` were never reserved —
+the scheduler would hand a second worker an item overlapping the subtree the first was editing.
+
+So the in-flight set is now the **union** of two things: the board's `In progress` column, and every
+open issue that **carries a live marker**, wherever the board thinks it sits. Only the column can
+report `UNCLAIMED` (a markerless item is otherwise just an issue); only the marker can report a lock.
+
 **Leases.** A marker's `updated_at` is its heartbeat. Past `FSGG_CLAIM_LEASE_MIN` (default 120m) the
 claim is *stale*: ignored by the lock, collected by the next claimant (who tells you), and reapable.
 
@@ -207,7 +219,8 @@ scripts/fsgg-coord who --repo <r> --local    # ...joined to the local git worktr
 ```
 
 `who` is the answer to "what is actually going on" — worker, age, lease health, declared paths,
-branch, worktree. It flags two states the board cannot show:
+branch, worktree. It reports every item holding a live marker, **including one the board never heard
+of**, and flags two states the board cannot show:
 
 - **`STALE`** — a claim past its lease. Its worker probably died; `reap` collects it.
 - **`UNCLAIMED`** — an item the board calls `In progress` that carries **no claim marker**. Someone is

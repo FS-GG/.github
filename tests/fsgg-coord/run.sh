@@ -373,6 +373,29 @@ if [ "\$sub" = "api" ]; then
     emit <"\$jf"; exit 0
   fi
 
+  # --- the issue LIST, served LIVE from the comment store -----------------------------------------
+  # GH_ISSUES_FROM_STORE=1: build the list from the seeded issues, stamping each one's REAL comment
+  # count. active_claims prunes arm-B candidates on "comments > 0", so a static fixture would report
+  # 0 comments for an issue a test had just claimed — and the blind spot under test would "pass" for
+  # the wrong reason. Headers are emitted (the client splits on them) but NO ETag is: this list must
+  # never be served from a 304 cache, exactly as the real client demands by passing --refresh.
+  if [ -n "\${GH_ISSUES_FROM_STORE:-}" ] && [[ "\$path" =~ ^repos/([^/]+)/([^/]+)/issues\? ]]; then
+    lo="\${BASH_REMATCH[1]}"; lr="\${BASH_REMATCH[2]}"
+    out='[]'
+    for jf in "$STORE"/issue-*.json; do
+      [ -f "\$jf" ] || continue
+      inum="\$(jq -r '.number' "\$jf")"; cf="$STORE/comments-\$inum.json"
+      cc=0; [ -f "\$cf" ] && cc="\$(jq 'length' "\$cf")"
+      out="\$(jq -c -n --argjson acc "\$out" --slurpfile it "\$jf" --argjson cc "\$cc" \
+                '\$acc + [ \$it[0] + {comments: \$cc} ]')"
+    done
+    [ -n "\$include" ] && { printf 'HTTP/2.0 200 OK\r\n'; printf '\r\n'; }
+    printf '%s' "\$out" \
+      | jq -c --arg nwo "\$lo/\$lr" 'map(select(.repo == \$nwo) | select(.state == "open"))' \
+      | emit
+    exit 0
+  fi
+
   # --- the issue LIST (the ETag-revalidated `issues` command) -----------------------------------
   etag='"issues-etag-v1"'
   if [ -n "\$inm" ] && [ "\$inm" = "\$etag" ]; then
@@ -676,13 +699,14 @@ cat >"$FIXTURES/board-pw.json" <<'JSON'
   ]}}}},"rateLimit":{"cost":1,"remaining":4980}}
 JSON
 
-seed_issue() {  # seed_issue <num> <title> <paths-or-empty>
-  local n="$1" t="$2" p="$3" body="Some description."
+seed_issue() {  # seed_issue <num> <title> <paths-or-empty> [owner/repo]
+  local n="$1" t="$2" p="$3" repo="${4:-FS-GG/FS.GG.SDD}" body="Some description."
   [ -n "$p" ] && body="$body
 
 Paths: $p"
-  jq -n --argjson n "$n" --arg t "$t" --arg b "$body" \
-    '{number:$n, title:$t, body:$b, assignees:[], state:"open"}' >"$STORE/issue-$n.json"
+  jq -n --argjson n "$n" --arg t "$t" --arg b "$body" --arg r "$repo" \
+    '{number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
+      html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
   : >"$STORE/comments-$n.json"; echo '[]' >"$STORE/comments-$n.json"
 }
 seed_issue 42 "Audio mixer"          "src/Audio/**, tests/Audio/**"
@@ -704,8 +728,11 @@ jq -n --arg ts "$stale_ts" '[{id:802, body:"<!-- fsgg:claim worker=ghost-000 lea
   user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-43.json"
 
 # Run against the parallel-work board, as a named worker (rule 1: --worker wins everything).
-pw() { PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" "$@"; }
-as() { local w="$1"; shift; PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" --worker "$w" "$@"; }
+# GH_ISSUES_FROM_STORE: `active_claims` finds claims by MARKER, so it lists open issues per repo —
+# that list has to reflect claims the tests post as they post them (see the stub's list route).
+pw() { PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
+as() { local w="$1"; shift
+       PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" --worker "$w" "$@"; }
 # Count markers exactly as the lock parses them — ANCHORED at the body start. An unanchored grep
 # would count a claim marker quoted inside a free-form message as a real lock, which is the forgery
 # the anchoring exists to prevent, and would make the forgery test pass for the wrong reason.
@@ -723,8 +750,15 @@ assert_eq "whoami: \$FSGG_WORKER is honoured" "wren-c22" \
 # ---- harness session ids (rule 4) ---------------------------------------------------------------
 # The CI runner exports no harness vars and the developer's shell may export several, so every case
 # below states its own environment explicitly. `env -u` strips whatever the outer harness set.
+#
+# It also runs from "$WORK", which is NOT a git checkout. Identity rule 3 (the worktree name) OUTRANKS
+# the session id, so a developer running this fixture from inside a linked worktree — which ADR-0021
+# tells them to work in — would otherwise see every rule-4/5 assertion below fail on correct code.
+# CI only passed because it happens to check out the primary worktree. The rule under test is
+# "no harness, no worktree", so the fixture must supply "no worktree" rather than inherit it.
 hless() { PATH="$STUB:$PATH" env -u CLAUDE_CODE_SESSION_ID -u OPENCODE_SESSION_ID \
-            -u FSGG_AGENT_SESSION_ID -u FSGG_WORKER "$@" bash "$COORD" whoami 2>&1; }
+            -u FSGG_AGENT_SESSION_ID -u FSGG_WORKER "$@" \
+            bash -c 'cd "$1" && exec bash "$2" whoami' _ "$WORK" "$COORD" 2>&1; }
 
 # A session id is NOT an identity where the harness shares it across subagents. Claude Code does
 # (anthropics/claude-code#7881) — so it names the worker only as a fallback, and it WARNS.
@@ -1092,9 +1126,12 @@ case "$cas92" in *"claimed FS.GG.SDD#92"*) bad "claim: must not announce a lock 
 #     Drive it through rule 4 (a shared claude-code session id), since that is the id that can collide.
 seed_issue 93 "Re-claim under a shared id" "src/J/**"
 sess93=309bd638-8a1c-42b7-952b-898efb8d1064
-shared93() { PATH="$STUB:$PATH" GH_BOARD_SET=pw \
+# Runs from "$WORK" (not a checkout) so the SHARED SESSION ID names the worker — rule 3 (the worktree
+# name) would otherwise win and this test would never exercise the shared-id path it exists for.
+shared93() { PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
   env -u FSGG_WORKER -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID \
-      CLAUDE_CODE_SESSION_ID="$sess93" bash "$COORD" "$@"; }
+      CLAUDE_CODE_SESSION_ID="$sess93" \
+      bash -c 'cd "$1" && shift && exec bash "$@"' _ "$WORK" "$COORD" "$@"; }
 wid93="$(shared93 whoami 2>/dev/null | awk '/^worker/{print $2}')"
 mk_claim 93 817 "$wid93" fresh | jq -s '.' >"$STORE/comments-93.json"
 reclaim93="$(shared93 claim 'FS.GG.SDD#93' 2>&1 || true)"
@@ -1168,6 +1205,100 @@ for c in whoami claim heartbeat release who reap take batch overlap widen say in
   case "$help" in *"fsgg-coord $c"*) : ;; *) bad "usage: documents '$c'" "missing from --help"; continue ;; esac
 done
 ok "usage: --help documents every parallel-work subcommand"
+
+# ================================================================================================
+# THE MARKER IS THE LOCK: active_claims may not be seeded from the board column (FS-GG/.github#257)
+# ================================================================================================
+# `claim` writes `Status: In progress` strictly best-effort — a Projects v2 5xx is swallowed, and an
+# item that was never added to the board has no column to write. Deriving "what is running" from the
+# column therefore LOST exactly the claims it most needed to see. Every state below is one the old
+# column-seeded code reported as "nothing is running":
+#   #211 — a board item whose Status flip failed: held, but the column still says Ready.
+#   #215 — a live claim on an item that is not on the board at all.
+#   #216 — a DEAD worker's claim on an off-board item: reap could never collect it, so the lease
+#          stopped being self-healing and the item stayed locked forever.
+# And the consequence the issue itself misjudged as "scheduling is nonetheless safe": because an
+# off-board claim never reached `active_claims`, its touch-set was never RESERVED, so `batch` would
+# hand out #213 — which overlaps the very subtree #215's holder is working. That is a scheduling
+# correctness bug, not merely an observability one.
+#
+# Fixtures live in FS.GG.Rendering so the arm-B scan (open issues, per repo) sees only these and not
+# the pile of FS.GG.SDD issues the earlier sub-sections left in the store.
+echo "--- .github#257: in-flight work is defined by the marker, not the column ---"
+
+cat >"$FIXTURES/board-blind.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":210,"title":"In progress, no marker","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/210","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":211,"title":"Held, but the Status flip failed","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/211","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":212,"title":"Free and disjoint","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/212","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":213,"title":"Overlaps an OFF-BOARD claim","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/213","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4978}}
+JSON
+
+RND=FS-GG/FS.GG.Rendering
+seed_issue 210 "In progress, no marker"            "src/Orphan2/**" "$RND"   # arm A only (0 comments)
+seed_issue 211 "Held, but the Status flip failed"  "src/Flip/**"    "$RND"
+seed_issue 212 "Free and disjoint"                 "src/Clean/**"   "$RND"
+seed_issue 213 "Overlaps an OFF-BOARD claim"       "src/Off/Sub/**" "$RND"
+seed_issue 215 "Off-board, held"                   "src/Off/**"     "$RND"   # never added to the board
+seed_issue 216 "Off-board, holder died"            "src/Dead/**"    "$RND"
+seed_issue 217 "Just a chatty issue"               "src/Chatty/**"  "$RND"
+
+mk_claim 211 830 wren-c22   fresh | jq -s '.' >"$STORE/comments-211.json"
+mk_claim 215 831 puffin-h11 fresh | jq -s '.' >"$STORE/comments-215.json"
+mk_claim 216 832 ghost-222  stale | jq -s '.' >"$STORE/comments-216.json"
+# #217 has comments but NO marker. It is arm-B's candidate prune under test: a chatty open issue is
+# NOT in-flight work, and only the board's own `In progress` may license an `unclaimed` verdict.
+jq -n --arg ts "$fresh_ts" '[{id:833, body:"just a normal comment, no marker here",
+  user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-217.json"
+
+bl()   { PATH="$STUB:$PATH" GH_BOARD_SET=blind GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
+blas() { local w="$1"; shift
+         PATH="$STUB:$PATH" GH_BOARD_SET=blind GH_ISSUES_FROM_STORE=1 bash "$COORD" --worker "$w" "$@"; }
+
+# ---- who: every live marker, wherever the board thinks the item is ------------------------------
+blind_json="$(bl who --repo rendering --json 2>/dev/null)"
+assert_eq "who: reports exactly the in-flight items — no more, no less" "[210,211,215,216]" \
+  "$(jq -c '[.[].number] | sort' <<<"$blind_json")"
+assert_eq "who: a claim whose board Status flip FAILED is held, not invisible" "held" \
+  "$(jq -r '.[] | select(.number==211) | .state' <<<"$blind_json")"
+assert_eq "who: ...and names its worker" "wren-c22" \
+  "$(jq -r '.[] | select(.number==211) | .worker' <<<"$blind_json")"
+assert_eq "who: a claim on an item that is NOT ON THE BOARD is held" "held" \
+  "$(jq -r '.[] | select(.number==215) | .state' <<<"$blind_json")"
+assert_eq "who: ...and carries its touch-set, read from the issue body" '["src/Off"]' \
+  "$(jq -c '.[] | select(.number==215) | .paths' <<<"$blind_json")"
+assert_eq "who: an off-board claim past its lease is STALE" "stale" \
+  "$(jq -r '.[] | select(.number==216) | .state' <<<"$blind_json")"
+assert_eq "who: In progress with no marker is still UNCLAIMED (only the column can say so)" "unclaimed" \
+  "$(jq -r '.[] | select(.number==210) | .state' <<<"$blind_json")"
+assert_eq "who: a markerless item's touch-set still resolves (arm-A body read)" '["src/Orphan2"]' \
+  "$(jq -c '.[] | select(.number==210) | .paths' <<<"$blind_json")"
+assert_eq "who: a chatty open issue with no marker is NOT in-flight work" "" \
+  "$(jq -r '.[] | select(.number==217) | .number // empty' <<<"$blind_json")"
+
+# ---- reap: a dead worker's off-board claim is collectable, so the lease self-heals --------------
+assert_contains "reap: finds an expired claim the board never knew about" \
+  "would reap  FS.GG.Rendering#216  worker ghost-222" "$(bl reap --repo rendering 2>/dev/null)"
+
+# ---- batch: an off-board claim RESERVES its touch-set ------------------------------------------
+# #211 is claimed (Status says Ready — the lock disagrees). #213 overlaps src/Off, which off-board
+# #215 is holding. Only #212 is genuinely free.
+blind_batch="$(bl batch --repo rendering --json 2>/dev/null)"
+assert_eq "batch: schedules only the item no live marker touches" '["FS.GG.Rendering#212"]' \
+  "$(jq -c '.' <<<"$blind_batch")"
+blind_err="$(bl batch --repo rendering 2>&1 >/dev/null)"
+assert_contains "batch: skips a Ready item that a marker actually holds" \
+  "#211 — already claimed by worker wren-c22" "$blind_err"
+assert_contains "batch: refuses to schedule over an OFF-BOARD claim's touch-set" \
+  "#213 — overlaps in-flight work" "$blind_err"
+
+# ---- inbox: messages ride off-board claims too --------------------------------------------------
+blas puffin-h11 say 'FS.GG.Rendering#215' --to hoopoe-i22 'I hold src/Off — stay out.' >/dev/null 2>&1
+assert_contains "inbox: delivers a message posted on an off-board claim" "I hold src/Off — stay out." \
+  "$(blas hoopoe-i22 inbox --repo rendering 2>/dev/null)"
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
