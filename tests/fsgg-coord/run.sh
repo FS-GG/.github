@@ -1338,6 +1338,117 @@ assert_contains "reap --apply: ...and does NOT claim a board reset it never perf
 assert_eq "reap --apply: the marker is gone — the lock released, board or no board" "" "$(workers_on 216)"
 
 # ================================================================================================
+# FS-GG/.github#273: an unmatchable touch-set token must never read as DISJOINT.
+#
+# The docs promised "globs"; the matcher implements exact paths + subtree containment. A token that
+# keeps a wildcard after normalization (`**/x`, `src/*/x`) therefore matches NO file — and a token
+# that matches nothing CONFLICTS WITH NOTHING. So the failure was OPEN: `overlap` printed DISJOINT,
+# `batch` handed two workers items whose real files overlapped completely, and `widen` reported the
+# cleanest possible answer for the worst possible reason. Every assertion below is one of the doors
+# that fail-open walked through.
+# ================================================================================================
+echo "--- .github#273: an unmatchable touch-set is refused, never cleared ---"
+
+seed_issue 300 "Leading globstar"  '**/packages.lock.json'
+seed_issue 301 "Real lockfiles"    'src/Engine/packages.lock.json'
+seed_issue 302 "Interior wildcard" 'src/*/lock.json'
+seed_issue 303 "Honest scene"      'src/Scene/**'
+seed_issue 304 "Honest audio"      'src/Audio/**'
+
+# (1) THE BUG. #300 declares every lockfile via `**/`; #301 names one of those very files. Under the
+#     old matcher `**/packages.lock.json` was a directory literally named `**`, so these two read as
+#     DISJOINT and both workers were told to go ahead. It must now refuse instead — and, above all,
+#     it must never say DISJOINT.
+ov300="$(pw overlap 'FS.GG.SDD#300' 'FS.GG.SDD#301' 2>&1 || true)"
+assert_contains "overlap: an unmatchable leading '**/' is named, not cleared" \
+  "unmatchable touch-set token(s): **/packages.lock.json" "$ov300"
+assert_contains "overlap: ...and the supported grammar is quoted" "There is no glob matcher" "$ov300"
+case "$ov300" in *"DISJOINT —"*) bad "overlap: #300 vs #301 is NEVER reported DISJOINT" "the #273 fail-open: $ov300" ;;
+                 *) ok "overlap: #300 vs #301 is NEVER reported DISJOINT" ;; esac
+rc300=0; pw overlap 'FS.GG.SDD#300' 'FS.GG.SDD#301' >/dev/null 2>&1 || rc300=$?
+assert_eq "overlap: an unmatchable token exits 2 (undeclared), not 0" "2" "$rc300"
+
+# An interior wildcard is the same defect wearing a different hat, and it is refused on EITHER side.
+ov302="$(pw overlap 'FS.GG.SDD#303' 'FS.GG.SDD#302' 2>&1 || true)"
+assert_contains "overlap: an interior '*' is refused from the right-hand side too" \
+  "unmatchable touch-set token(s): src/*/lock.json" "$ov302"
+
+# (2) The shapes the matcher DOES honour must keep working — a fail-closed gate that rejects the
+#     legal grammar is just a differently-broken scheduler.
+ov303="$(pw overlap 'FS.GG.SDD#303' 'FS.GG.SDD#304' 2>&1 || true)"
+assert_contains "overlap: a trailing '/**' pair is still DISJOINT" "DISJOINT —" "$ov303"
+assert_contains "overlap: an exact path still conflicts with its own subtree" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#301' 'FS.GG.SDD#301' 2>&1 || true)"
+
+# (3) `claim` refuses the lock on an item that declares nothing the matcher can reserve. Holding it
+#     would make our files invisible to every other worker's overlap check.
+cl300="$(as smew-f31 claim 'FS.GG.SDD#300' 2>&1 || true)"
+assert_contains "claim: refuses an item whose touch-set can never match a file" \
+  "can never match a file: **/packages.lock.json" "$cl300"
+assert_eq "claim: ...and takes no marker while refusing" "" "$(workers_on 300)"
+# An item with NO `Paths:` declares nothing and reserves nothing — it stays claimable, as before.
+as teal-e55 claim 'FS.GG.SDD#72' >/dev/null 2>&1 || true
+assert_eq "claim: an item with no 'Paths:' at all is still claimable (unchanged)" "teal-e55" "$(workers_on 72)"
+
+# (4) `widen` must reject BEFORE it PATCHes, so a refused widen leaves the old declaration — which is
+#     still reserving real files — intact on the issue body.
+body303_before="$(jq -r '.body' "$STORE/issue-303.json")"
+wd303="$(as brant-g07 widen 'FS.GG.SDD#303' --paths 'src/Scene/**, **/*.lock.json' 2>&1 || true)"
+assert_contains "widen: refuses to write an unmatchable touch-set" "can never match a file" "$wd303"
+assert_eq "widen: ...and the issue body is untouched (rejected before the PATCH)" \
+  "$body303_before" "$(jq -r '.body' "$STORE/issue-303.json")"
+case "$wd303" in *"DISJOINT —"*) bad "widen: an unmatchable widen never reports DISJOINT" "cleared: $wd303" ;;
+                 *) ok "widen: an unmatchable widen never reports DISJOINT" ;; esac
+
+# (5) The scheduler. A CANDIDATE with an unmatchable token is passed over with its reason (exactly as
+#     an undeclared one is) — it must never fall through to `conflicts_between`, which would clear it
+#     against every item on the board.
+cat >"$FIXTURES/board-pw4.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":300,"title":"Leading globstar","url":"https://github.com/FS-GG/FS.GG.SDD/issues/300","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":301,"title":"Real lockfiles","url":"https://github.com/FS-GG/FS.GG.SDD/issues/301","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4978}}
+JSON
+pw4() { PATH="$STUB:$PATH" GH_BOARD_SET=pw4 GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
+b4_out="$(pw4 batch --repo sdd --json 2>/dev/null)"
+b4_err="$(pw4 batch --repo sdd 2>&1 >/dev/null || true)"
+assert_eq "batch: schedules the honest item, and only it" '["FS.GG.SDD#301"]' "$(jq -c '.' <<<"$b4_out")"
+assert_contains "batch: says WHY it passed over the unmatchable candidate" \
+  "#300 — unmatchable 'Paths:' token(s): **/packages.lock.json" "$b4_err"
+
+# (6) …and an IN-FLIGHT claim with an unmatchable token reserves NOTHING, so every candidate would
+#     clear it. We cannot see that holder's real surface, so we schedule nothing at all — the same
+#     refusal `paths_of` makes when it cannot read a touch-set.
+mk_claim 300 840 ghost-666 fresh | jq -s '.' >"$STORE/comments-300.json"
+b4h="$(pw4 batch --repo sdd 2>&1 || true)"
+assert_contains "batch: REFUSES to schedule against a held item that reserves nothing" \
+  "refusing to schedule against an unknown touch-set" "$b4h"
+assert_contains "batch: ...and names the held item" "FS.GG.SDD#300" "$b4h"
+assert_fails "batch: ...and exits non-zero rather than handing out work" pw4 batch --repo sdd
+: >"$STORE/comments-300.json"; echo '[]' >"$STORE/comments-300.json"
+
+# (7) `verify-paths` gets a fourth verdict. Under a broken touch-set every changed file is "outside"
+#     it — technically true, and useless. Name the broken token instead of burying it under a file list.
+cat >"$FIXTURES/pr-30.json" <<'JSON'
+{"head":{"ref":"item/300-leading-globstar"},"number":30}
+JSON
+cat >"$FIXTURES/pr-files-30.json" <<'JSON'
+[{"filename":"src/Engine/packages.lock.json"}]
+JSON
+vp30="$(pw verify-paths --pr 30 --repo FS-GG/FS.GG.SDD 2>&1 || true)"
+assert_contains "verify-paths: an unmatchable touch-set is INVALID, not DRIFT" "FSGG-PATHS INVALID" "$vp30"
+assert_contains "verify-paths: ...and names the token that matches nothing" "**/packages.lock.json" "$vp30"
+case "$vp30" in *"FSGG-PATHS DRIFT"*) bad "verify-paths: INVALID is not dressed up as DRIFT" "$vp30" ;;
+                *) ok "verify-paths: INVALID is not dressed up as DRIFT" ;; esac
+assert_fails "verify-paths: an unmatchable touch-set exits non-zero" pw verify-paths --pr 30 --repo FS-GG/FS.GG.SDD
+assert_contains "verify-paths --warn: reports INVALID but exits 0 (the advisory CI gate)" "FSGG-PATHS INVALID" \
+  "$(pw verify-paths --pr 30 --repo FS-GG/FS.GG.SDD --warn 2>&1)"
+pw verify-paths --pr 30 --repo FS-GG/FS.GG.SDD --warn >/dev/null 2>&1 \
+  && ok "verify-paths --warn: INVALID exits 0" || bad "verify-paths --warn: INVALID exits 0" "non-zero exit under --warn"
+
+# ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::fsgg-coord fixture FAILED"; exit 1; }
 echo "fsgg-coord fixture — OK"
