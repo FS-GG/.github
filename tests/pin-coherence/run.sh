@@ -191,6 +191,31 @@ NOCFG="$(make_repo nocfg)"; rm "$NOCFG/renovate.json"; git -C "$NOCFG" add -A
 must_fail "a repo with pins and no Renovate config fails" "$NOCFG" "$FEED" "no Renovate configuration"
 
 echo
+echo "--- the config file read is the one Renovate would read (resolution order) ---"
+# Renovate resolves .github/renovate.json BEFORE .renovaterc. Reading the wrong one answers a
+# question about a config the bot never uses — and a token-bearing .renovaterc masking a token-less
+# .github/renovate.json would report green while the bot goes on 401'ing.
+DOTGH="$(make_repo dotgh)"
+rm "$DOTGH/renovate.json"
+cat > "$DOTGH/.github/renovate.json" <<'JSON'
+{ "extends": ["github>FS-GG/.github"],
+  "hostRules": [ { "matchHost": "nuget.pkg.github.com", "hostType": "nuget", "token": "{{ secrets.FSGG_PACKAGES_READ_TOKEN }}" } ] }
+JSON
+printf '{ "extends": ["github>FS-GG/.github"] }' > "$DOTGH/.renovaterc"
+git -C "$DOTGH" add -A
+must_pass "the token in .github/renovate.json is found (it outranks .renovaterc)" "$DOTGH"
+
+MASKED="$(make_repo masked)"
+rm "$MASKED/renovate.json"
+printf '{ "extends": ["github>FS-GG/.github"] }' > "$MASKED/.github/renovate.json"
+cat > "$MASKED/.renovaterc" <<'JSON'
+{ "hostRules": [ { "matchHost": "nuget.pkg.github.com", "hostType": "nuget", "token": "{{ secrets.FSGG_PACKAGES_READ_TOKEN }}" } ] }
+JSON
+git -C "$MASKED" add -A
+must_fail "a token in the LOWER-precedence .renovaterc cannot mask a token-less .github/renovate.json" \
+  "$MASKED" "$FEED" "declares no \`hostRules\` token"
+
+echo
 echo "--- a pin the manager can no longer SEE is a failure, not a shrunken gate ---"
 # Cause (1) of #263: the manager's regex stops matching. A gate that scans with that same regex sees
 # nothing and would report green on nothing — REQUIRED_PINS is what turns that silence into red.

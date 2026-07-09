@@ -87,16 +87,23 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
 # Renovate needs a `hostRules` token for the same host or every lookup 401s.
 FEED_HOST = "nuget.pkg.github.com"
 
-# Renovate reads the first config file it finds, in this order. `.github` keeps its config at the
-# repo root; the product repos keep theirs under `.github/`. Both are valid, so look for both —
-# and finding NONE is an error, not a skip (a repo with pins and no config cannot bump them).
+# Renovate reads the FIRST config file it finds, and this tuple reproduces its documented resolution
+# order exactly. `.github` keeps its config at the repo root; the product repos keep theirs under
+# `.github/`. Both are valid, and finding NONE is an error, not a skip (a repo with pins and no
+# config cannot bump them).
+#
+# The order is load-bearing, not decorative. Read the wrong file and this gate answers a question
+# about a config Renovate never uses: a token-bearing `.renovaterc` alongside a token-less
+# `.github/renovate.json` would report green while the bot goes on 401'ing — the exact fails-open
+# shape of epic #266, rebuilt inside the gate meant to close it.
 RENOVATE_CONFIG_NAMES = (
     "renovate.json",
     "renovate.json5",
-    ".renovaterc",
-    ".renovaterc.json",
     ".github/renovate.json",
     ".github/renovate.json5",
+    ".renovaterc",
+    ".renovaterc.json",
+    ".renovaterc.json5",
 )
 
 # Pins this repo is KNOWN to carry. Scanning alone cannot detect cause (1) of .github#263 — that the

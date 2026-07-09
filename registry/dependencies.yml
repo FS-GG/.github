@@ -1246,7 +1246,11 @@ coherence:
       "must fail" defect the epic also names (SDD#299) — and is mutation-tested against 7 deliberate
       fails-open regressions (mechanism check never raises; freshness always OK; required-pin assert
       no-op; substring compare instead of order; zero-pins tripwire removed; a non-FS.GG package
-      silently skipped; the ignorePaths guard disabled), all caught.
+      silently skipped; the ignorePaths guard disabled; Renovate's config-resolution order reversed),
+      all caught. The config it reads is the one Renovate WOULD read (documented resolution order):
+      a token-bearing `.renovaterc` masking a token-less `.github/renovate.json` would otherwise
+      report green while the bot went on 401'ing — this epic's defect class rebuilt inside the gate
+      meant to close it.
     impact: >
       The .github#127 / .github#263 freeze cannot recur undetected: a CLI publish that leaves the pin
       behind turns .github@main red within a day, and a PR that drops the feed token fails CI. The
