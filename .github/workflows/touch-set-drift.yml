@@ -46,10 +46,15 @@ jobs:
             --repo "${{ github.repository }}" \
             --warn > drift.txt 2>&1 || true
           cat drift.txt
-          # Three verdicts. SKIP (no linked issue, or no declaration) must NOT read as a clean pass.
-          if   grep -q 'FSGG-PATHS DRIFT' drift.txt; then verdict=drift
-          elif grep -q 'FSGG-PATHS OK'    drift.txt; then verdict=ok
-          else                                            verdict=skip
+          # Four verdicts. SKIP (no linked issue, or no declaration) must NOT read as a clean pass —
+          # and neither must INVALID (.github#273: the issue declared a `Paths:` token that can never
+          # match a file). INVALID is matched BEFORE the `else`, or it would land in `skip`, which
+          # DELETES the sticky comment and passes green — burying the one verdict that says the
+          # scheduler was reasoning about a touch-set reserving nothing.
+          if   grep -q 'FSGG-PATHS DRIFT'   drift.txt; then verdict=drift
+          elif grep -q 'FSGG-PATHS INVALID' drift.txt; then verdict=invalid
+          elif grep -q 'FSGG-PATHS OK'      drift.txt; then verdict=ok
+          else                                              verdict=skip
           fi
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
           { echo '### Touch-set drift'; echo; echo '```'; cat drift.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -93,7 +98,22 @@ jobs:
               printf 'in parallel with others. Files outside it were never checked for overlap.\n\n'
               printf '```\n'; cat drift.txt; printf '```\n\n'
               printf 'Re-declare and re-check against everything in flight (this also notifies any worker it\n'
-              printf 'now collides with):\n\n```sh\nfsgg-coord widen <issue> --paths "<globs>"\n```\n\n'
+              printf 'now collides with):\n\n```sh\nfsgg-coord widen <issue> --paths "<paths>"\n```\n\n'
+              printf '_Advisory — this check never blocks a merge (ADR-0021: the touch-set is a declaration,\n'
+              printf 'not an enforced boundary)._\n'
+            } > comment.md
+          elif [ "$VERDICT" = "invalid" ]; then
+            # An unmatchable declaration is WORSE than drift: drift means the touch-set was checked and
+            # exceeded, INVALID means it never reserved anything, so `batch` cleared this item against
+            # every other. Never render it with the ✅ branch below.
+            {
+              printf '%s\n' "$MARKER"
+              printf '⛔ **This PR'"'"'s issue declares a `Paths:` touch-set that can never match a file.**\n\n'
+              printf 'A token that matches nothing conflicts with nothing, so the scheduler\n'
+              printf '(`fsgg-coord batch`) read this item as **disjoint from everything** and may have run it\n'
+              printf 'in parallel with work touching the very same files (.github#273).\n\n'
+              printf '```\n'; cat drift.txt; printf '```\n\n'
+              printf 'Re-declare with exact paths / directory prefixes:\n\n```sh\nfsgg-coord widen <issue> --paths "<paths>"\n```\n\n'
               printf '_Advisory — this check never blocks a merge (ADR-0021: the touch-set is a declaration,\n'
               printf 'not an enforced boundary)._\n'
             } > comment.md

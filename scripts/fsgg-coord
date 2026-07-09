@@ -1269,7 +1269,15 @@ claim_cmd() {
   # make our own files invisible to every other worker's overlap check — the collision this protocol
   # exists to prevent, entered voluntarily. An item with NO `Paths:` stays claimable (it declares
   # nothing and claims nothing); one that declares an unmatchable token is claiming to have declared.
-  die_on_invalid_paths "$(paths_of "$R_OWNER" "$R_REPO" "$R_NUM")" "claim: $R_REPO#$R_NUM"
+  #
+  # ASSIGN FIRST, then validate. `paths_of` fails closed by calling `die` when the body read fails —
+  # but `die` is an `exit`, and an `exit` inside `$( )` kills only the substitution subshell. Passing
+  # `"$(paths_of …)"` straight as an argument would print "refusing to schedule against an unknown
+  # touch-set" on stderr and then claim the item anyway, exit 0 — reintroducing, in the guard itself,
+  # the fail-open this guard exists to close. The assignment form propagates the exit under `set -e`,
+  # which is how `overlap` (`pa="$(paths_for_ref …)"`) already gets it right.
+  local declared_paths; declared_paths="$(paths_of "$R_OWNER" "$R_REPO" "$R_NUM")"
+  die_on_invalid_paths "$declared_paths" "claim: $R_REPO#$R_NUM"
 
   local claims live stale mine others
   claims="$(claims_of "$R_OWNER" "$R_REPO" "$R_NUM")"
@@ -2189,6 +2197,21 @@ widen_cmd() {
   pa="$(paths_of "$so" "$sr" "$sn")"
   claims="$(active_claims)"
   n="$(jq 'length' <<<"$claims")"
+  # The widen itself has landed (that is `widen`'s job, and it is how a bad declaration gets FIXED —
+  # including on an item that is itself held). But the re-check against in-flight work is only as
+  # trustworthy as the touch-sets it compares against: a legacy holder whose own tokens are
+  # unmatchable reserves nothing, clears everything, and would hand us a `DISJOINT` that means only
+  # "we cannot see their files". Screen the OTHER claims (never `self`) and refuse to answer instead.
+  local obad
+  obad="$(jq -r --arg self "$self" \
+    '[.[] | select("\(.repo)#\(.number)" != $self) | select(any(.paths[]?; test("[*?\\[]")))
+        | "\(.repo | sub("^[^/]+/"; ""))#\(.number)"] | join(", ")' <<<"$claims")"
+  if [ -n "$obad" ]; then
+    echo "fsgg-coord: widen: in-flight claim(s) declare unmatchable touch-set token(s): $obad" >&2
+    echo "  they reserve nothing, so this widen cannot be re-checked against them — refusing to report DISJOINT." >&2
+    echo "  fix theirs first: fsgg-coord widen <issue> --paths '<paths>'" >&2
+    return 2
+  fi
   while [ "$i" -lt "$n" ]; do
     local c cr cn cw co crp hits
     c="$(jq -c ".[$i]" <<<"$claims")"; i=$((i + 1))

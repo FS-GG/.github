@@ -1448,6 +1448,46 @@ assert_contains "verify-paths --warn: reports INVALID but exits 0 (the advisory 
 pw verify-paths --pr 30 --repo FS-GG/FS.GG.SDD --warn >/dev/null 2>&1 \
   && ok "verify-paths --warn: INVALID exits 0" || bad "verify-paths --warn: INVALID exits 0" "non-zero exit under --warn"
 
+# (8) The guard must not reintroduce the fail-open INSIDE ITSELF. `paths_of` fails closed by calling
+#     `die` when the body read fails — but `die` is an `exit`, and an `exit` inside `$( )` kills only
+#     the substitution subshell. Had `claim` passed `"$(paths_of …)"` as an ARGUMENT, it would print
+#     "refusing to schedule against an unknown touch-set" and then claim the item anyway, exit 0.
+seed_issue 305 "Body read explodes" 'src/Fine/**'
+rc305=0
+PATH="$STUB:$PATH" GH_ISSUES_FROM_STORE=1 GH_FAIL_ISSUE_GET=305 \
+  bash "$COORD" --worker smew-f31 claim 'FS.GG.SDD#305' >/dev/null 2>&1 || rc305=$?
+assert_eq "claim: a failed touch-set read FAILS CLOSED (the die is not swallowed by \$( ))" "1" "$rc305"
+assert_eq "claim: ...and no marker was taken on the item it could not read" "" "$(workers_on 305)"
+
+# (9) `widen` re-checks against in-flight claims. A LEGACY holder whose own tokens are unmatchable
+#     reserves nothing and clears everything — so widen must refuse to answer rather than report the
+#     cleanest possible DISJOINT. (`overlap --active` and `batch` guard this; widen did not.)
+seed_issue 306 "Widener"        'src/Widen/**'
+seed_issue 307 "Legacy holder"  '**/packages.lock.json'
+mk_claim 307 841 ghost-777 fresh | jq -s '.' >"$STORE/comments-307.json"
+wd306="$(as brant-g07 widen 'FS.GG.SDD#306' --paths 'src/Widen/**, src/More/**' 2>&1 || true)"
+assert_contains "widen: refuses to re-check against a holder whose touch-set reserves nothing" \
+  "in-flight claim(s) declare unmatchable touch-set token(s): FS.GG.SDD#307" "$wd306"
+case "$wd306" in *"DISJOINT —"*) bad "widen: never clears against an unmatchable in-flight claim" "cleared: $wd306" ;;
+                 *) ok "widen: never clears against an unmatchable in-flight claim" ;; esac
+# The widen itself still LANDED — that is how a bad declaration gets fixed, including on a held item.
+assert_contains "widen: ...but the re-declaration itself still landed" "Paths: src/Widen/**, src/More/**" \
+  "$(jq -r '.body' "$STORE/issue-306.json")"
+: >"$STORE/comments-307.json"; echo '[]' >"$STORE/comments-307.json"
+
+# (10) The CI gate must classify INVALID before its `else`, or the verdict lands in `skip` — which
+#      DELETES the sticky comment and passes green, burying the finding. Assert the workflow's own
+#      branch order, the one thing the fixture can check about it offline.
+wf="$HERE/../../.github/workflows/touch-set-drift.yml"
+assert_contains "touch-set-drift.yml: INVALID is classified, not absorbed by the else" \
+  "verdict=invalid" "$(cat "$wf")"
+assert_contains "touch-set-drift.yml: ...and rendered by its own comment branch, never the ✅ one" \
+  'elif [ "$VERDICT" = "invalid" ]' "$(cat "$wf")"
+inv_line="$(grep -n 'FSGG-PATHS INVALID' "$wf" | head -1 | cut -d: -f1)"
+else_line="$(grep -n 'verdict=skip' "$wf" | head -1 | cut -d: -f1)"
+if [ "$inv_line" -lt "$else_line" ]; then ok "touch-set-drift.yml: INVALID is tested BEFORE the skip fallback"
+else bad "touch-set-drift.yml: INVALID is tested BEFORE the skip fallback" "INVALID at $inv_line, skip at $else_line"; fi
+
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::fsgg-coord fixture FAILED"; exit 1; }
