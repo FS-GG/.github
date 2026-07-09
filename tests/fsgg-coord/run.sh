@@ -14,6 +14,11 @@
 #   5. bad field / option names fail loudly (non-zero) with the available names.
 #   6. ready/next scan the whole board in a paginated loop (2 pages -> 2 calls), filter client-side
 #      (repo / status / phase; Done excluded by default), and `next` prefers Ready over Backlog.
+#   7. `Blocked by` is canonicalised to issue refs on write (prose refused, zero GraphQL spent) and
+#      honoured on read: `next` skips an item whose blockers are open / unverifiable.
+#   8. lint asserts the epic invariants — no childless `[epic]`, none Done over an open child, none
+#      with more children than the scan can see — and exits non-zero.
+#   9. epic_rollup flips a parent only when every child is board-Done AND issue-CLOSED.
 #
 # Self-contained: a throwaway cache + stub under a temp dir, no network, no other repos. Mirrors
 # tests/skill-union/run.sh (FS-GG/.github#111) in shape so the two fixtures read the same way.
@@ -114,6 +119,78 @@ cat >"$FIXTURES/board-items-p2.json" <<'JSON'
   ]}}}},"rateLimit":{"cost":1,"remaining":4989}}
 JSON
 
+# Board pages for `lint` — same items connection, but carrying each epic's sub-issues. Covers every
+# invariant plus two negatives (a clean epic, a childless NON-epic) so the checks cannot pass by
+# firing on everything.
+#   #400 [epic], zero children                          -> EPIC-NO-CHILDREN
+#   #401 [epic], board Done, child #403 still OPEN      -> EPIC-DONE-OPEN-CHILD
+#   #404 [epic], totalCount 150 but 2 nodes visible     -> EPIC-CHILDREN-TRUNCATED
+#   #405 non-epic, Status Done but issue OPEN           -> DONE-STATUS-OPEN-ISSUE (note, not an error)
+#   #406 [epic], board Done, every child CLOSED         -> clean
+#   #407 non-epic, zero children                        -> clean (the check is epic-scoped)
+cat >"$FIXTURES/lint-p1.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":true,"endCursor":"LCUR1"},
+  "nodes":[
+    {"status":{"name":"Backlog"},"content":{"__typename":"Issue","number":400,"title":"[sdd] [epic] Gap A: orphan","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/400","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":401,"title":"[epic] Done over an open child","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/401","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":2,"nodes":[
+      {"number":402,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}},
+      {"number":403,"state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}},
+    {"status":{"name":"Backlog"},"content":{"__typename":"DraftIssue","title":"a draft idea"}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4970}}
+JSON
+cat >"$FIXTURES/lint-p2.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":404,"title":"[epic] Too many children to see","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/404","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"},"subIssues":{"totalCount":150,"nodes":[
+      {"number":410,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}},
+      {"number":411,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}]}}},
+    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":405,"title":"A merged PR that left its issue open","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Templates/issues/405","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":406,"title":"[epic] Properly finished","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/406","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":1,"nodes":[
+      {"number":412,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}},
+    {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":407,"title":"An ordinary card, no children","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/407","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4969}}
+JSON
+
+# `done --flip` + epic_rollup. Two chains:
+#   #42 -> epic #300: children #42 (CLOSED, board Done) and #43 (OPEN, board Done).  Must HOLD.
+#          Board Status alone would say 2/2 Done — the bug that flipped FS-GG/.github#235.
+#   #44 -> epic #301: children #44 and #45, both CLOSED and board Done.              Must FLIP.
+cat >"$FIXTURES/done-42.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":42,"title":"child of an unfinished epic","url":"https://github.com/FS-GG/FS.GG.SDD/issues/42","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[{"number":7,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/7","merged":true,"mergedAt":"2026-07-01T10:00:00Z","mergeCommit":{"abbreviatedOid":"abc1234"}}]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":{"number":300}}}},"rateLimit":{"cost":1,"remaining":4968}}
+JSON
+cat >"$FIXTURES/rollup-42.json" <<'JSON'
+{"data":{"repository":{"issue":{"parent":{
+  "number":300,"url":"https://github.com/FS-GG/FS.GG.SDD/issues/300","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},
+  "projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},
+  "subIssues":{"totalCount":2,"nodes":[
+    {"number":42,"state":"CLOSED","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}},
+    {"number":43,"state":"OPEN","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
+  ]}}}}},"rateLimit":{"cost":1,"remaining":4967}}
+JSON
+cat >"$FIXTURES/done-44.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":44,"title":"last child of a finished epic","url":"https://github.com/FS-GG/FS.GG.SDD/issues/44","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[{"number":9,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/9","merged":true,"mergedAt":"2026-07-02T10:00:00Z","mergeCommit":{"abbreviatedOid":"def5678"}}]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":{"number":301}}}},"rateLimit":{"cost":1,"remaining":4966}}
+JSON
+cat >"$FIXTURES/rollup-44.json" <<'JSON'
+{"data":{"repository":{"issue":{"parent":{
+  "number":301,"url":"https://github.com/FS-GG/FS.GG.SDD/issues/301","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},
+  "projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},
+  "subIssues":{"totalCount":2,"nodes":[
+    {"number":44,"state":"CLOSED","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}},
+    {"number":45,"state":"CLOSED","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
+  ]}}}}},"rateLimit":{"cost":1,"remaining":4965}}
+JSON
+cat >"$FIXTURES/rollup-none.json" <<'JSON'
+{"data":{"repository":{"issue":{"parent":null}}},"rateLimit":{"cost":1,"remaining":4964}}
+JSON
+
 # ---- gh stub ------------------------------------------------------------------------------------
 cat >"$STUB/gh" <<STUB
 #!/usr/bin/env bash
@@ -123,11 +200,20 @@ args=("\$@")
 
 if [ "\$sub" = "api" ] && [ "\$sub2" = "graphql" ]; then
   echo g >>"\$GH_GRAPHQL_COUNT"
-  q=""; for a in "\$@"; do case "\$a" in query=*) q="\${a#query=}";; esac; done
-  if   printf '%s' "\$q" | grep -q 'projectsV2';       then cat "$FIXTURES/projects.json"
+  q=""; num=""
+  for a in "\$@"; do case "\$a" in query=*) q="\${a#query=}";; num=*) num="\${a#num=}";; esac; done
+  hascur=""; for a in "\$@"; do case "\$a" in cursor=*) hascur=1;; esac; done
+  # Order matters: the done + rollup queries both select projectItems, and lint shares the
+  # items(first:...) connection with the ready/next scan. Discriminate on the narrower marker first.
+  if   printf '%s' "\$q" | grep -q 'projectsV2';                      then cat "$FIXTURES/projects.json"
+  elif printf '%s' "\$q" | grep -q 'closedByPullRequestsReferences';  then cat "$FIXTURES/done-\$num.json"
+  elif printf '%s' "\$q" | grep -q 'items(first' && printf '%s' "\$q" | grep -q 'subIssues'; then
+    if [ -n "\$hascur" ]; then cat "$FIXTURES/lint-p2.json"; else cat "$FIXTURES/lint-p1.json"; fi
   elif printf '%s' "\$q" | grep -q 'items(first';      then
-    hascur=""; for a in "\$@"; do case "\$a" in cursor=*) hascur=1;; esac; done
     if [ -n "\$hascur" ]; then cat "$FIXTURES/board-items-p2.json"; else cat "$FIXTURES/board-items-p1.json"; fi
+  elif printf '%s' "\$q" | grep -q 'subIssues';        then
+    if [ -f "$FIXTURES/rollup-\$num.json" ]; then cat "$FIXTURES/rollup-\$num.json"
+    else cat "$FIXTURES/rollup-none.json"; fi
   elif printf '%s' "\$q" | grep -q 'projectV2(number'; then cat "$FIXTURES/fields.json"
   elif printf '%s' "\$q" | grep -q 'projectItems';     then cat "$FIXTURES/item.json"
   else echo '{"data":{},"rateLimit":{"cost":1,"remaining":4999}}'; fi
@@ -361,6 +447,56 @@ assert_eq "Blocked by: a refused write spends no GraphQL" "$before_reject" "$(gc
 run set-field 'FS.GG.SDD#42' Contract 'fs-gg-ui-template (0.3.1, preview)' >/dev/null
 assert_contains "Contract: still accepts free-form text" \
   "--text fs-gg-ui-template (0.3.1, preview)" "$(cat "$GH_LOG")"
+
+# (8) lint: the board's epic invariants. An `[epic]` (title convention — Projects v2 issue types are
+#     unset on this board) must have children, must not be Done over an open child, and must not have
+#     more children than the scan can see.
+before_lint="$(gcount)"
+lint_json="$(run lint --json 2>/dev/null || true)"
+assert_eq "lint: paginates the board in exactly 2 GraphQL calls" "$((before_lint + 2))" "$(gcount)"
+codes() { jq -r --arg id "$1" '.[] | select(.id|endswith($id)) | .code' <<<"$lint_json" | sort | tr '\n' ' '; }
+assert_eq "lint: a childless [epic] is EPIC-NO-CHILDREN (#400)"        "EPIC-NO-CHILDREN "     "$(codes '#400')"
+assert_eq "lint: Done over an open child (#401)"                       "EPIC-DONE-OPEN-CHILD " "$(codes '#401')"
+assert_eq "lint: >100 children is EPIC-CHILDREN-TRUNCATED (#404)"      "EPIC-CHILDREN-TRUNCATED " "$(codes '#404')"
+assert_eq "lint: Done status on an open issue is a NOTE (#405)"        "DONE-STATUS-OPEN-ISSUE " "$(codes '#405')"
+assert_eq "lint: a properly finished epic is clean (#406)"             ""                      "$(codes '#406')"
+assert_eq "lint: a childless NON-epic is clean — the check is epic-scoped (#407)" "" "$(codes '#407')"
+assert_contains "lint: EPIC-DONE-OPEN-CHILD names the open child" "#403" \
+  "$(jq -r '.[] | select(.code=="EPIC-DONE-OPEN-CHILD") | .detail' <<<"$lint_json")"
+assert_eq "lint: severities — 3 errors, 1 note" "3 1" \
+  "$(jq -r '"\([.[]|select(.severity=="error")]|length) \([.[]|select(.severity=="note")]|length)"' <<<"$lint_json")"
+
+assert_fails "lint: exits non-zero when an invariant is broken" run lint
+assert_contains "lint: text output is greppable" "FSGG-LINT ERROR  EPIC-NO-CHILDREN" "$(run lint 2>/dev/null || true)"
+assert_contains "lint: prints an error/note tally on stderr" "3 error(s), 1 note(s)" \
+  "$(run lint 2>&1 >/dev/null || true)"
+
+# --repo scopes the scan. FS.GG.Templates holds only #405 — a NOTE — so lint passes, and --strict fails.
+assert_eq "lint --repo templates: notes alone do not fail" "0" \
+  "$(run lint --repo templates >/dev/null 2>&1; echo $?)"
+assert_eq "lint --repo templates --strict: a note becomes fatal" "1" \
+  "$(run lint --repo templates --strict >/dev/null 2>&1; echo $?)"
+assert_eq "lint --repo rendering: only #404's finding is in scope" "EPIC-CHILDREN-TRUNCATED" \
+  "$(run lint --repo rendering --json 2>/dev/null | jq -r '.[].code' | sort -u | tr '\n' ' ' | sed 's/ $//')"
+
+# (9) epic_rollup counts a child finished only when the board says Done AND the issue is CLOSED.
+#     Board-Done alone flipped an epic over a still-open child on the live board (FS-GG/.github#235).
+: >"$GH_LOG"
+hold="$(run done 'FS.GG.SDD#42' --pr 7 --flip 2>/dev/null)"
+assert_contains "done --flip: the child itself stamps DONE"      "FSGG-DONE   FS.GG.SDD#42" "$hold"
+assert_contains "rollup: HOLDS when a child is board-Done but still OPEN" \
+  "1/2 children Done+closed — holding" "$hold"
+# Exactly one Status write: the child. The epic must NOT be flipped.
+assert_eq "rollup: holding writes Status once (the child), never the epic" "1" \
+  "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
+
+: >"$GH_LOG"
+flip="$(run done 'FS.GG.SDD#44' --pr 9 --flip 2>/dev/null)"
+assert_contains "rollup: FLIPS when every child is Done AND closed" "FSGG-DONE   FS.GG.SDD#301 (epic)" "$flip"
+assert_contains "rollup: the stamp says Done + closed" "all 2 children Done + closed" "$flip"
+# Two Status writes: the child, then the epic it completed.
+assert_eq "rollup: flipping writes Status twice (child, then epic)" "2" \
+  "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
 
 # budget reads both meters.
 bud="$(run budget)"
