@@ -61,6 +61,12 @@
 #                                             # also sets Status=Done once the PR is merged, and rolls
 #                                             # the completion up to any parent epic whose children
 #                                             # are now all Done).
+#   fsgg-coord lint  [--repo R] [--json] [--strict]
+#                                             # assert the board's EPIC invariants: no `[epic]` with
+#                                             # zero sub-issues (the orphaned epic), none the board
+#                                             # calls Done over an open child, none with children the
+#                                             # scan cannot see. Exit 1 on any error. `Status: Done`
+#                                             # on a still-open issue is a NOTE (fatal under --strict).
 #   fsgg-coord budget                         # print GraphQL + REST rate-limit meters (free)
 #   fsgg-coord claim <issue> [--force]        # claim an item for parallel intra-repo work
 #                                             # (ADR-0021): assign @me as the advisory lock +
@@ -583,6 +589,122 @@ next() {
     + (.title // "") + (if .url then "\n  "+.url else "" end)' <<<"$pick"
 }
 
+# ---- lint_items: a board scan carrying each epic's CHILDREN, for the epic invariants -------------
+# Separate from `board_items` on purpose: `ready`/`next` must stay as thin as possible, and only the
+# lint needs sub-issue state. Cost is still 1 point per 100-item page — `subIssues` inside `items` does
+# raise nodeCount (200 -> ~10,100 per page), but it buys every child's state in the SAME pagination,
+# where the alternative is one follow-up query per epic. `first:100` on the children can truncate, so
+# `totalCount` rides along and EPIC-CHILDREN-TRUNCATED fires rather than silently under-counting.
+lint_items() {
+  ensure_board >/dev/null
+  local num; num="$(board_get '.number')"
+  local q='query($owner:String!, $number:Int!, $cursor:String){
+    organization(login:$owner){ projectV2(number:$number){
+      items(first:100, after:$cursor){
+        pageInfo{ hasNextPage endCursor }
+        nodes{
+          status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } }
+          content{
+            __typename
+            ... on Issue{ number title state url repository{ nameWithOwner }
+              subIssues(first:100){ totalCount nodes{ number state repository{ nameWithOwner } } } }
+          }
+        }
+      }
+    } }
+    rateLimit{ cost remaining }
+  }'
+  local cursor="" hasNext="true" out tmp
+  tmp="$(mktemp "$CACHE/.lint.XXXXXX")"; : > "$tmp"
+  while [ "$hasNext" = "true" ]; do
+    if [ -n "$cursor" ]; then
+      out="$(gql "$q" -f owner="$OWNER" -F number="$num" -f cursor="$cursor")"
+    else
+      out="$(gql "$q" -f owner="$OWNER" -F number="$num")"
+    fi
+    jq -c '.data.organization.projectV2.items.nodes[]?
+      | select(.content.__typename == "Issue")
+      | { repo:.content.repository.nameWithOwner, number:.content.number,
+          title:(.content.title // ""), url:(.content.url // null),
+          state:(.content.state // null), status:(.status.name // null),
+          childTotal:(.content.subIssues.totalCount // 0),
+          children:[ .content.subIssues.nodes[]?
+                     | { ref:"\(.repository.nameWithOwner)#\(.number)", state:.state } ] }' <<<"$out" >> "$tmp"
+    hasNext="$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage' <<<"$out")"
+    cursor="$(jq -r '.data.organization.projectV2.items.pageInfo.endCursor // empty' <<<"$out")"
+    [ "$hasNext" = "true" ] && [ -z "$cursor" ] && break
+  done
+  jq -s '.' "$tmp"; rm -f "$tmp"
+}
+
+# ---- lint: assert the board's epic invariants ----------------------------------------------------
+# An "epic" is a card whose TITLE carries `[epic]` — Projects v2 issue types are unset across this
+# board, so the title is the only marker the convention actually uses (docs/coordination README, the
+# cross-repo-coordination skill: "Epics are the Phase parents; use sub-issues so progress rolls up").
+#
+#   EPIC-NO-CHILDREN        an `[epic]` with zero sub-issues. Nothing rolls up, and `next` will hand
+#                           the epic itself out as work. This is the orphaned epic.
+#   EPIC-DONE-OPEN-CHILD    an epic the board calls Done while a child issue is still OPEN. The board
+#                           claims finished work that is not finished.
+#   EPIC-CHILDREN-TRUNCATED an epic with more than 100 children — the scan cannot see them all, so
+#                           EPIC-DONE-OPEN-CHILD cannot be trusted for it. Fail loudly, never guess.
+#
+# A NOTE (not a failure) is printed for `Status: Done` on an issue that is still open: it is how the
+# board legitimately looks between "the PR merged" and "someone closed the epic", so it fails only
+# under --strict. `epic_rollup` no longer manufactures it (it requires children CLOSED, not merely
+# board-Done), but a human flipping Status by hand still can.
+lint() {
+  local repo="" json="" strict=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --repo)   repo="${2:?--repo needs a value}"; shift 2 ;;
+      --json)   json=1; shift ;;
+      --strict) strict=1; shift ;;
+      -*)       die "lint: unknown flag '$1'." ;;
+      *)        die "lint: unexpected argument '$1'." ;;
+    esac
+  done
+  [ -n "$repo" ] && repo="$(resolve_repo "$repo")"
+
+  local items findings
+  items="$(lint_items)"
+  findings="$(jq --arg repo "$repo" '
+    def repo_match($f): ($f|ascii_downcase) as $q
+      | (.repo // "" | ascii_downcase) as $r
+      | ($q=="") or ($r==$q) or (($r|split("/")|last // "")==$q);
+    def short: sub("^[^/]+/";"");
+    def is_epic: (.title // "") | test("\\[epic\\]"; "i");
+
+    map(select($repo=="" or repo_match($repo)))
+    | map(. + {id:"\(.repo)#\(.number)"})
+    | [
+        ( .[] | select(is_epic and .childTotal == 0)
+          | { code:"EPIC-NO-CHILDREN", severity:"error", id:.id, status:.status, url:.url,
+              detail:"[epic] with zero sub-issues — nothing rolls up" } ),
+        ( .[] | select(is_epic and .childTotal > (.children|length))
+          | { code:"EPIC-CHILDREN-TRUNCATED", severity:"error", id:.id, status:.status, url:.url,
+              detail:"\(.childTotal) sub-issues, only \(.children|length) visible — cannot verify rollup" } ),
+        ( .[] | select(is_epic and .status == "Done" and (.children | any(.state == "OPEN")))
+          | { code:"EPIC-DONE-OPEN-CHILD", severity:"error", id:.id, status:.status, url:.url,
+              detail:"board says Done, but open child: \([.children[]|select(.state=="OPEN")|.ref|short]|join(", "))" } ),
+        ( .[] | select(.status == "Done" and .state == "OPEN")
+          | { code:"DONE-STATUS-OPEN-ISSUE", severity:"note", id:.id, status:.status, url:.url,
+              detail:"board Status is Done but the issue is still open" } )
+      ]' <<<"$items")"
+
+  if [ -n "$json" ]; then jq '.' <<<"$findings"; else
+    jq -r '.[] | "FSGG-LINT \(.severity|ascii_upcase)  \(.code)  \(.id|sub("^[^/]+/";""))  — \(.detail)"' <<<"$findings"
+  fi
+
+  local errors notes
+  errors="$(jq '[.[] | select(.severity=="error")] | length' <<<"$findings")"
+  notes="$(jq  '[.[] | select(.severity=="note")]  | length' <<<"$findings")"
+  [ -n "$json" ] || printf 'fsgg-coord: %s error(s), %s note(s)%s\n' \
+    "$errors" "$notes" "${repo:+ for repo '$repo'}" >&2
+  { [ "$errors" -gt 0 ] || { [ -n "$strict" ] && [ "$notes" -gt 0 ]; }; } && return 1
+  return 0
+}
+
 # ---- budget: read the GraphQL + REST meters. `gh api rate_limit` does not consume the core budget.
 budget() {
   gh api rate_limit --jq '{
@@ -614,7 +736,7 @@ banner() {   # $1=done|fail  $2=line1  $3=line2  — two full-width rows
 }
 
 # ---- epic_rollup: after a child flips to Done, walk parents UPWARD and flip each epic whose children
-# are now ALL board-Done, stamping each one that rolls up. One thrifty query per level (subIssues +
+# are now ALL board-Done AND CLOSED, stamping each one that rolls up. One thrifty query per level (subIssues +
 # a Status resolver each); runs only from `done --flip`. Bounded to 10 levels as a cycle backstop.
 # An already-Done epic is walked THROUGH silently (no re-stamp); a not-yet-complete epic prints a
 # one-line progress note and stops the climb.
@@ -627,7 +749,7 @@ epic_rollup() {
         number url repository{ nameWithOwner }
         projectItems(first:20){ nodes{ project{ number }
           status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } } } }
-        subIssues(first:100){ nodes{ number
+        subIssues(first:100){ totalCount nodes{ number state
           projectItems(first:20){ nodes{ project{ number }
             status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } } } } } }
       }
@@ -653,21 +775,31 @@ epic_rollup() {
     fi
     p_status="$(jq -r --argjson pn "$boardnum" \
       '[.data.repository.issue.parent.projectItems.nodes[]? | select(.project.number==$pn) | .status.name] | first // ""' <<<"$out")"
+    # A child counts as finished only when BOTH facts hold: the board says Done AND the issue is
+    # actually CLOSED. Board-Done alone is not enough — `done --flip` sets Status=Done as soon as the
+    # PR merges, and a merged PR does not necessarily close its issue. Trusting Status alone is what
+    # flipped an epic to Done over a still-open child (FS-GG/.github#235).
     total="$(jq -r '[.data.repository.issue.parent.subIssues.nodes[]?] | length' <<<"$out")"
+    local seen; seen="$(jq -r '.data.repository.issue.parent.subIssues.totalCount // 0' <<<"$out")"
     done="$(jq -r --argjson pn "$boardnum" \
       '[.data.repository.issue.parent.subIssues.nodes[]?
+        | select(.state == "CLOSED")
         | ([.projectItems.nodes[]? | select(.project.number==$pn) | .status.name] | first // "")
         | select(. == "Done")] | length' <<<"$out")"
     [ "$total" = "0" ] && break
+    if [ "$seen" != "$total" ]; then
+      printf '  epic %s: %s sub-issues, only %s visible — not rolling up (cannot verify)\n' \
+        "$p_lbl" "$seen" "$total"; break
+    fi
 
     if [ "$done" != "$total" ]; then
-      printf '  epic %s: %s/%s children Done — holding (not rolling up)\n' "$p_lbl" "$done" "$total"; break
+      printf '  epic %s: %s/%s children Done+closed — holding (not rolling up)\n' "$p_lbl" "$done" "$total"; break
     fi
     if [ "$p_status" = "Done" ]; then
       dbg "epic_rollup: $p_lbl already Done — walking up"
     else
       set_field "$p_or#$p_num" Status Done >/dev/null
-      banner done "✓✓ FSGG-DONE   $p_lbl (epic)" "all $total children Done  ·  board: Done"
+      banner done "✓✓ FSGG-DONE   $p_lbl (epic)" "all $total children Done + closed  ·  board: Done"
     fi
     cur="$p_or#$p_num"
   done
@@ -912,6 +1044,7 @@ case "$cmd" in
   issues)    issues "$@" ;;
   ready)     ready "$@" ;;
   next)      next "$@" ;;
+  lint)      lint "$@" ;;
   done)      done_cmd "$@" ;;
   claim)     claim_cmd "$@" ;;
   release)   release_cmd "$@" ;;
