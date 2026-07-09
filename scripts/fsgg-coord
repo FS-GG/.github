@@ -1513,6 +1513,29 @@ live_claim_worker() {  # $1=owner $2=repo $3=num
   claims_of "$1" "$2" "$3" | jq -r 'map(select(.stale | not)) | .[0].worker // empty'
 }
 
+# Every OPEN issue in a repo that could possibly hold a claim, with the body its touch-set is
+# declared in. A claim marker IS a comment, so `comments == 0` cannot hold a lock: that prune is
+# sound and free, straight off the list payload. Pull requests are excluded — a PR is neither
+# claimable nor schedulable.
+#
+# --paginate, NOT the ETag-revalidated `issues` command, for two reasons, both load-bearing:
+#   * `issues` asks for ONE page of 100. A repo's 101st open issue would silently never be a
+#     candidate, so a live claim on it would be invisible and — via `batch` — its touch-set would be
+#     handed to a second worker. The lock may not have a size limit.
+#   * A lock may never be read from a CACHE. A 304 serving a body captured before the claim was
+#     posted would report `comments: 0` and hide a live marker — the exact blind spot this exists to
+#     close. Going direct means there is no ETag to be stale.
+# A read we cannot complete DIES, exactly as `claims_of` and `paths_of` do: an unreadable repo may be
+# holding claims, and answering "nothing is running" for it is how the scheduler double-books work.
+open_claim_candidates() {  # $1=owner/repo -> JSON array of {number,title,url,body}
+  local o="${1%%/*}" r="${1#*/}" out
+  out="$(gh api --paginate "repos/$o/$r/issues?state=open&per_page=100" \
+           --jq '.[] | select(.pull_request == null) | select(.comments > 0)
+                 | {number, title, url: .html_url, body: (.body // "")}' 2>/dev/null)" \
+    || die "cannot list the open issues of $o/$r (rate limit? network? no access?) — refusing to guess which of its items are claimed."
+  printf '%s' "$out" | jq -s '.'
+}
+
 # ---- active_claims: the one view of "what is actually running right now" -------------------------
 # Everything that needs to reason about in-flight work — who, reap, batch, take, overlap --active,
 # widen, inbox — reads it from here.
@@ -1533,10 +1556,12 @@ live_claim_worker() {  # $1=owner $2=repo $3=num
 #      cannot hold a lock — a sound, free prune straight off the list payload. This arm is what sees
 #      a claim the board lost track of, wherever it sits (Ready, Backlog, or off-board entirely).
 #
-# Cost: the board scan is already paid for. Arm B adds ONE REST list per repo, which also carries
-# each issue's body — so a touch-set costs zero extra reads. Each surviving candidate then costs one
-# comments read. Arm B's list is fetched with --refresh (no ETag): a lock may not be read from a
-# cache, because a 304 serving a pre-claim `comments: 0` would resurrect the very blind spot above.
+# Cost: the board scan is already paid for. Arm B adds one REST issue-list per repo (PAGINATED, see
+# open_claim_candidates), which also carries each issue's body — so a touch-set costs zero extra
+# reads. Each surviving candidate then costs one comments read.
+#
+# KNOWN BOUND: with no --repo, the repos to scan are derived from the board. A claim in a repo with
+# ZERO board items is therefore invisible to an org-wide `who`/`reap`. Pass --repo to reach it.
 active_claims() {
   local repo="${1:-}"
   local board inprog repos offboard cand n=0 i=0 tmp
@@ -1553,15 +1578,9 @@ active_claims() {
 
   offboard='[]'
   local r lst
-  # A repo whose issue list we cannot read FAILS CLOSED (`issues` dies), exactly as `claims_of` does:
-  # an unreadable repo might be holding claims, and answering "nothing is running" for it would let
-  # the scheduler hand out work that overlaps them.
   while IFS= read -r r; do
     [ -n "$r" ] || continue
-    # `/issues` returns pull requests too; a PR can neither be claimed nor scheduled.
-    lst="$(issues "$r" --state open --refresh --jq '
-      [ .[] | select(.pull_request == null) | select(.comments > 0)
-        | { number, title, url: .html_url, body: (.body // "") } ]')"
+    lst="$(open_claim_candidates "$r")"
     offboard="$(jq -c -n --argjson acc "$offboard" --argjson lst "$lst" --arg repo "$r" \
                   '$acc + [ $lst[] | . + {repo: $repo} ]')"
   done <<<"$repos"
@@ -1803,8 +1822,16 @@ reap_cmd() {
       continue
     fi
     notify_reaped "$o" "$rp" "$num" "$cw" "$age" "$(worker)"
-    ( set_field "$r#$num" Status Ready ) >/dev/null 2>&1 || true
-    printf 'reaped  %s#%s  worker %s  (idle %sm)  ·  board: Ready\n' "$rp" "$num" "$cw" "$age"
+    # `reap` now collects claims on items the board never had (that is the point of finding them by
+    # marker), so the Status write can legitimately have nothing to write to. Report what actually
+    # happened rather than asserting a board mutation we may not have performed.
+    local rnote
+    if ( set_field "$r#$num" Status Ready ) >/dev/null 2>&1; then
+      rnote="board: Ready"
+    else
+      rnote="not on board (marker cleared; nothing to reset)"
+    fi
+    printf 'reaped  %s#%s  worker %s  (idle %sm)  ·  %s\n' "$rp" "$num" "$cw" "$age" "$rnote"
   done
   [ -z "$apply" ] && echo "fsgg-coord: dry run — pass --apply to release these." >&2
   return 0

@@ -240,12 +240,13 @@ fi
 
 if [ "\$sub" = "api" ]; then
   echo r >>"\$GH_REST_COUNT"
-  method=""; path=""; inm=""; jqexpr=""; body=""; include=""; hasfield=""
+  method=""; path=""; inm=""; jqexpr=""; body=""; include=""; hasfield=""; paginate=""
   n=\${#args[@]}
   for ((i=1;i<n;i++)); do
     case "\${args[i]}" in
       -X)        method="\${args[i+1]}" ;;
-      --include) include=1 ;;
+      --include)  include=1 ;;
+      --paginate) paginate=1 ;;
       --jq)      jqexpr="\${args[i+1]}" ;;
       -H)        h="\${args[i+1]}"; case "\$h" in "If-None-Match: "*) inm="\${h#If-None-Match: }";; esac ;;
       -f)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=*) body="\${kv#body=}";; esac ;;
@@ -375,12 +376,15 @@ if [ "\$sub" = "api" ]; then
 
   # --- the issue LIST, served LIVE from the comment store -----------------------------------------
   # GH_ISSUES_FROM_STORE=1: build the list from the seeded issues, stamping each one's REAL comment
-  # count. active_claims prunes arm-B candidates on "comments > 0", so a static fixture would report
-  # 0 comments for an issue a test had just claimed — and the blind spot under test would "pass" for
-  # the wrong reason. Headers are emitted (the client splits on them) but NO ETag is: this list must
-  # never be served from a 304 cache, exactly as the real client demands by passing --refresh.
+  # count. open_claim_candidates prunes on "comments > 0", so a static fixture would report 0
+  # comments for an issue a test had just claimed — and the blind spot under test would "pass" for
+  # the wrong reason. No ETag is served: the real client reads this list directly, via --paginate,
+  # precisely so that no cache can hide a live marker behind a stale "comments: 0".
   if [ -n "\${GH_ISSUES_FROM_STORE:-}" ] && [[ "\$path" =~ ^repos/([^/]+)/([^/]+)/issues\? ]]; then
     lo="\${BASH_REMATCH[1]}"; lr="\${BASH_REMATCH[2]}"
+    # Record HOW the lock's candidate list was fetched: it must paginate (no 100-issue lock limit)
+    # and must not send a conditional request (no cache may hide a live marker).
+    printf 'issue-list %s paginate=%s inm=%s\n' "\$lo/\$lr" "\${paginate:-0}" "\${inm:-none}" >>"\$GH_LOG"
     out='[]'
     for jf in "$STORE"/issue-*.json; do
       [ -f "\$jf" ] || continue
@@ -404,11 +408,17 @@ if [ "\$sub" = "api" ]; then
   if [ -n "\$include" ]; then
     printf 'HTTP/2.0 200 OK\r\n'; printf 'ETag: %s\r\n' "\$etag"; printf '\r\n'
   fi
-  cat "$FIXTURES/issues.json"
+  # Through emit, so a --jq passed to \`gh api\` is honoured here as the real thing honours it.
+  # open_claim_candidates projects the list server-side; a raw cat would hand it a nested array.
+  emit <"$FIXTURES/issues.json"
   exit 0
 fi
 
 if [ "\$sub" = "project" ] && [ "\$sub2" = "item-edit" ]; then
+  # GH_FAIL_ITEM_EDIT=1: the board write fails — a Projects v2 5xx, or an item with no board entry
+  # to edit. The MARKER is the lock, so nothing that holds it may unwind on this; but nothing may
+  # report a board mutation it did not perform either.
+  [ -n "\${GH_FAIL_ITEM_EDIT:-}" ] && { echo "gh: HTTP 502 Bad Gateway" >&2; exit 1; }
   printf 'item-edit %s\n' "\$*" >>"\$GH_LOG"; exit 0
 fi
 
@@ -1299,6 +1309,26 @@ assert_contains "batch: refuses to schedule over an OFF-BOARD claim's touch-set"
 blas puffin-h11 say 'FS.GG.Rendering#215' --to hoopoe-i22 'I hold src/Off — stay out.' >/dev/null 2>&1
 assert_contains "inbox: delivers a message posted on an off-board claim" "I hold src/Off — stay out." \
   "$(blas hoopoe-i22 inbox --repo rendering 2>/dev/null)"
+
+# ---- HOW the candidate list is fetched: the lock may not be capped, nor read from a cache --------
+# `issues` (the ETag'd command) asks for ONE page of 100. Had the candidate scan reused it, a live
+# claim on a repo's 101st open issue would be invisible — and `batch` would hand its touch-set away.
+# A conditional request is equally forbidden: a 304 serving a pre-claim `comments: 0` hides a marker.
+: >"$GH_LOG"
+bl who --repo rendering >/dev/null 2>&1
+assert_contains "who: the open-issue scan PAGINATES (a lock has no 100-issue limit)" \
+  "issue-list FS-GG/FS.GG.Rendering paginate=1" "$(cat "$GH_LOG")"
+assert_contains "who: ...and is never a conditional request (no cache may hide a live marker)" \
+  "inm=none" "$(cat "$GH_LOG")"
+
+# ---- reap: an off-board claim has no board entry to reset, and reap must not pretend it did ------
+reap215="$(PATH="$STUB:$PATH" GH_BOARD_SET=blind GH_ISSUES_FROM_STORE=1 GH_FAIL_ITEM_EDIT=1 \
+  bash "$COORD" --worker wren-c22 reap --repo rendering --apply 2>/dev/null)"
+assert_contains "reap --apply: still collects the claim when the board write fails" \
+  "reaped  FS.GG.Rendering#216  worker ghost-222" "$reap215"
+assert_contains "reap --apply: ...and does NOT claim a board reset it never performed" \
+  "not on board (marker cleared; nothing to reset)" "$reap215"
+assert_eq "reap --apply: the marker is gone — the lock released, board or no board" "" "$(workers_on 216)"
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
