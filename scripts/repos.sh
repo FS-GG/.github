@@ -130,6 +130,24 @@ cmd_validate() {
     err "authority repo '$authority' must not RECEIVE coordination-kit — it is the source."
   fi
 
+  # --- outside-fabric: the reviewed opt-out list (.github#269) ---
+  # An exemption is a standing licence for every fabric to ignore a repo, so it must be shaped and
+  # justified here. Closure against the LIVE org (a row naming a repo that does not exist; a row
+  # that also appears in repos[]) is asserted by scripts/check-roster-closure.py, which can reach
+  # the API; this validator only enforces the shape it can see offline.
+  echo "$json" | jq -e '(."outside-fabric" // []) | type=="array"' >/dev/null \
+    || err "'outside-fabric' must be a list (use [] when empty)."
+  local ofull oreason
+  while IFS=$'\t' read -r ofull oreason; do
+    [ -n "$ofull" ] || continue
+    [[ "$ofull" =~ ^FS-GG/.+ ]] || err "outside-fabric '$ofull' must be 'FS-GG/<repo>'."
+    [ -n "$oreason" ] || err "outside-fabric '$ofull' needs a 'reason' — an unexplained exemption is a mute button."
+    echo "$json" | jq -e --arg f "$ofull" '[.repos[].full] | index($f)' >/dev/null \
+      && err "outside-fabric '$ofull' is also rostered in repos[]; it cannot be both inside and outside the fabric."
+  done < <(echo "$json" | jq -r '(."outside-fabric" // [])[] | [.full, (.reason // "")] | @tsv')
+  local odups; odups="$(echo "$json" | jq -r '[(."outside-fabric" // [])[].full] | group_by(.)[] | select(length>1)[0]')"
+  [ -z "$odups" ] || err "duplicate outside-fabric entr(ies): $(echo "$odups" | tr '\n' ' ')"
+
   # --- content-addressed kit: source exists and digest matches ---
   local kid kind ksrc ksha got
   while IFS=$'\t' read -r kid kind ksrc ksha; do

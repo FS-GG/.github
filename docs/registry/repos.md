@@ -32,6 +32,23 @@ for each capability that maps to a reusable workflow (today `coordination-kit` �
 `coordination-coherence.yml`), it verifies every declared receiver actually calls it. A
 declared-but-unwired repo fails the audit, so `receives` has teeth.
 
+**Closed-world gate.** The audit above iterates repos that are *in* this roster, so a repo missing
+from it is missing from the audit too. The roster is a closed-world assumption, and
+[`scripts/check-roster-closure.py`](../../scripts/check-roster-closure.py) (#269) is what asserts the
+world is actually closed — from both sides. **(A)** every `repos:` participant in
+[`dependencies.yml`](../../registry/dependencies.yml) has a row here; **(B)** every repo that really
+exists in the GitHub org is either rostered or carries an explicit `outside-fabric:` row. It runs on
+every PR and every push to `main` (`coherence.yml`) and **fails closed**: an errored, empty, or
+too-narrow org listing is an error rather than a skip, because "nothing to check" and "checked, and
+it's fine" must not share an exit code. `FS.GG.Audio` — registered as a contract owner, live on the
+feed, rostered nowhere for weeks — is the defect this closes.
+
+**`outside-fabric:` — the reviewed opt-out.** A repo genuinely outside every fabric says so in one
+row (`{ full, reason }`). Without it, "deliberately outside" and "accidentally outside" look the same
+to every gate. It is not a mute button: `reason` is required, a repo may not be both rostered and
+exempt, an exemption naming a repo that no longer exists in the org fails as *stale*, and archived or
+forked repos are **not** auto-exempt — archiving must never be a way out of the gate. Empty today.
+
 ## Capabilities (`receives` vocabulary)
 
 | Capability | What the repo participates in | Consumer | Status |
@@ -60,4 +77,6 @@ writes the kit into a receiver (`coordination-sync <target>`) and drift-checks i
 [`coordination-coherence.yml`](../../.github/workflows/coordination-coherence.yml) (`workflow_call`),
 which checks out `.github` (the authority) and the caller and runs `coordination-sync --check --repo
 <caller>` — so a receiver fails CI if its kit copy drifts from canonical, and a non-receiver passes
-trivially. `.github` remains the source (never a receiver), enforced by the roster validator.
+trivially. That trivial pass is *only* safe because the closed-world gate above independently proves
+no repo is a non-receiver by accident. `.github` remains the source (never a receiver), enforced by
+the roster validator.
