@@ -1473,6 +1473,18 @@ case "$wd306" in *"DISJOINT —"*) bad "widen: never clears against an unmatchab
 # The widen itself still LANDED — that is how a bad declaration gets fixed, including on a held item.
 assert_contains "widen: ...but the re-declaration itself still landed" "Paths: src/Widen/**, src/More/**" \
   "$(jq -r '.body' "$STORE/issue-306.json")"
+
+# Widening is precisely how a bad declaration gets repaired — including on an item you already hold.
+# The screen must never leave a worker stuck: `#307` is claimed AND declares the unmatchable token,
+# and it must still be able to widen out of it. (This passes for a reason independent of the `$self`
+# exclusion — widen PATCHes before it re-checks, so by then #307's own paths are already the new,
+# valid ones. The exclusion guards the read-after-write case where the re-read still serves the old
+# body; that lag is not reproducible against this stub, so it is defence, not a tested path.)
+wd307="$(as ghost-777 widen 'FS.GG.SDD#307' --paths 'src/Engine/packages.lock.json' 2>&1 || true)"
+assert_contains "widen: an item held with a bad touch-set can widen out of it (the PATCH lands)" \
+  "widened FS.GG.SDD#307 → Paths: src/Engine/packages.lock.json" "$wd307"
+assert_contains "widen: ...and the repaired declaration persisted" "Paths: src/Engine/packages.lock.json" \
+  "$(jq -r '.body' "$STORE/issue-307.json")"
 : >"$STORE/comments-307.json"; echo '[]' >"$STORE/comments-307.json"
 
 # (10) The CI gate must classify INVALID before its `else`, or the verdict lands in `skip` — which
@@ -1487,6 +1499,29 @@ inv_line="$(grep -n 'FSGG-PATHS INVALID' "$wf" | head -1 | cut -d: -f1)"
 else_line="$(grep -n 'verdict=skip' "$wf" | head -1 | cut -d: -f1)"
 if [ "$inv_line" -lt "$else_line" ]; then ok "touch-set-drift.yml: INVALID is tested BEFORE the skip fallback"
 else bad "touch-set-drift.yml: INVALID is tested BEFORE the skip fallback" "INVALID at $inv_line, skip at $else_line"; fi
+
+# (11) The IN-FLIGHT-claim guards, on the two commands that consult `active_claims`. These are the
+#      `claims_with_unmatchable_paths` (jq) path, NOT the per-candidate `invalid_paths` (grep) path
+#      exercised in (5)/(6) — a mutation that neuters the shared jq filter must turn these red, or the
+#      two guards standing between a legacy holder and a double-booking are untested.
+#      #308 is a legacy holder: claimed, in flight, declaring a token that reserves nothing.
+seed_issue 308 "Legacy in-flight" '**/*.lock.json'
+mk_claim 308 842 ghost-888 fresh | jq -s '.' >"$STORE/comments-308.json"
+
+ov_act="$(pw overlap 'FS.GG.SDD#303' --active 2>&1 || true)"
+assert_contains "overlap --active: refuses against an in-flight claim that reserves nothing" \
+  "in-flight claim(s) declare unmatchable touch-set token(s): FS.GG.SDD#308" "$ov_act"
+case "$ov_act" in *"DISJOINT —"*) bad "overlap --active: never clears against an unmatchable claim" "cleared: $ov_act" ;;
+                  *) ok "overlap --active: never clears against an unmatchable claim" ;; esac
+rc_act=0; pw overlap 'FS.GG.SDD#303' --active >/dev/null 2>&1 || rc_act=$?
+assert_eq "overlap --active: ...and exits 2, not 0" "2" "$rc_act"
+
+b_act="$(pw batch --repo sdd 2>&1 || true)"
+assert_contains "batch: refuses when an IN-FLIGHT claim (not a candidate) reserves nothing" \
+  "refusing to schedule against an unknown touch-set" "$b_act"
+assert_contains "batch: ...and names that in-flight claim" "FS.GG.SDD#308" "$b_act"
+assert_fails "batch: ...and hands out nothing" pw batch --repo sdd
+: >"$STORE/comments-308.json"; echo '[]' >"$STORE/comments-308.json"
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
