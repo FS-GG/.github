@@ -40,6 +40,7 @@ repos:
   - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit] }
   - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit] }
   - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit] }
+  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit] }   # the org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.
 
 # The coordination kit every `coordination-kit` receiver must hold, content-addressed like a
 # skills.yml row. `sha256` is the canonical digest of `source` (for a skill dir: sha256 of its
