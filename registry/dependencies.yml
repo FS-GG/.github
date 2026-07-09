@@ -34,8 +34,13 @@ repos:
 #     surface       (required) prose/one-line description of the on-disk or package surface.
 #     consumers     (required) repo keys that depend on the contract.
 #     package-version  present ONLY where the contract ships as a NuGet package (fsgg-contracts,
-#                   governance-reference-gate-set, fs-gg-ui-template) — the NEWEST version LIVE on the org
-#                   feed (publish-before-flip FR-007: it never leads `version`).
+#                   governance-reference-gate-set, fs-gg-ui-template, game-sim-core, game-scene-adapter,
+#                   fs-gg-audio) — the NEWEST version LIVE on the org feed (publish-before-flip FR-007:
+#                   it never leads `version`). Since .github#267 this is ENFORCED against the live feed
+#                   by scripts/check-feed-coherence.py (coherence id registry-feed-coherence), which also
+#                   maps each of these ids to its package id(s). Adding a `package-version` to a contract
+#                   means adding it to that gate's CONTRACT_PACKAGES table — the gate fails until you do.
+#                   MUST be a QUOTED string: unquoted, YAML coerces `1.10` to the float 1.1.
 #     package-tag   present ONLY for fs-gg-ui-template — the immutable coherent-set release tag.
 #     range         accepted SemVer range for consumers (scaffold-provenance, governance-handoff).
 #     bundles       contract ids a meta/content package subsumes (governance-reference-gate-set).
@@ -1127,3 +1132,52 @@ coherence:
       composition lane) and RETIRES Rendering's frozen `--profile game`, leaving a single source of the
       game starter + skills in FS.GG.Game.
     tracking: "https://github.com/FS-GG/.github/issues/213 (epic); https://github.com/FS-GG/.github/issues/218 (P4 freeze); ADR-0022 §6 (freeze) / §2.1 (provider deferred to P6)"
+  - id: registry-feed-coherence
+    coherent: true
+    owner: github
+    summary: >
+      .github#267 (epic #266, fails-open coherence gates): every contract carrying a
+      `package-version` now has that literal compared against the newest version LIVE on the org
+      GitHub Packages feed (nuget.pkg.github.com/FS-GG). Before this, contract-coherence.yml
+      validated the registry against its SCHEMA and its PROJECTION but never against REALITY, so
+      publish-before-flip (FR-007) was a convention with no enforcement: step 1 (publish) was gated
+      hard, step 2 (flip) was gated by nobody noticing. It drifted three times — .github#250
+      (fs-gg-ui-template 0.3.0-preview.1 published 2026-07-07, registry advertised 0.2.0 for a day,
+      two registry PRs landing on the stale row); the 0.4.0-preview.1 flip that was never made at
+      all (reconciled in .github#265); and .github#263 (the same shape one layer up, the gate's own
+      FS.GG.SDD.Cli pin frozen at 0.5.0 across three published CLIs). Each drift was in the SAFE
+      direction (feed ahead of registry), which is luck, not design.
+    enforcement: >
+      2026-07-09 (.github#267): scripts/check-feed-coherence.py, run by
+      .github/workflows/feed-coherence.yml on every PR touching registry/dependencies.yml, on push
+      to main, and DAILY on a schedule — the schedule is the load-bearing trigger, because a release
+      that publishes without flipping the registry touches no file in this repo and so no
+      path-filtered trigger can see it. Both drift directions fail with distinct messages: BEHIND
+      the feed (a release published, the registry was never flipped — the observed failure) and
+      AHEAD of it (the registry advertises a version consumers cannot restore — the FR-007
+      inversion, never yet observed and equally undetected). Per the epic's rule the gate FAILS
+      CLOSED: an unreadable feed, a 404 package, a missing token, an unrecognised feed response, a
+      zero-version package, an unparsable literal, or a package-bearing contract with no mapped
+      package id is an ERROR, not a skip. Versions compare by NuGet ORDER, never by substring (the
+      .github#268 defect class, where `0.4.0` matches inside `0.4.0-preview.1`), admitting the
+      4-segment grammar (governance-reference-gate-set 1.2.1.1, ADR-0007). The gate reads the NuGet
+      v3 flat-container index — what a `dotnet restore` actually resolves against — rather than the
+      packages REST API, which does not accept the run-scoped GITHUB_TOKEN. Its own fixture
+      (tests/feed-coherence/) proves each failure leg fires for its stated reason, so the gate
+      cannot decay into the vacuous "must fail" test the epic also names (SDD#299); it is
+      mutation-tested against 17 deliberate fails-open regressions. Two further surfaces are closed
+      by construction: an UNQUOTED `package-version` fails (YAML coerces 1.10 -> the float 1.1), and
+      the `--fixture` flag that serves a canned feed refuses to run unless the test harness sets
+      FSGG_FEED_FIXTURE_OK=1, so a stray `--fixture` in CI fails instead of no-opping the gate.
+    impact: >
+      A PR that flips `package-version` to a version not on the feed fails CI, and a release that
+      publishes without flipping the registry turns .github@main red within a day. The six
+      package-bearing contracts (fsgg-contracts, governance-reference-gate-set, fs-gg-ui-template,
+      game-sim-core, game-scene-adapter, fs-gg-audio) are covered; fs-gg-audio's four packages are
+      each compared, so a partial coherent-set publish is reported rather than hidden behind .Core.
+      A NEW package-bearing contract must be mapped in the gate's CONTRACT_PACKAGES table, and
+      forgetting to fails the gate rather than silently narrowing its coverage. Verified live at
+      adoption: all six equal the feed's newest (1.4.0 / 1.2.1.1 / 0.4.0 / 0.2.0 / 0.2.0 /
+      0.1.0-preview.1).
+    resolved_by: FS-GG/.github#267 (gate + fixture + workflow; this registry PR registers the coherence id)
+    tracking: "https://github.com/FS-GG/.github/issues/267 (child of the fails-open epic https://github.com/FS-GG/.github/issues/266)"

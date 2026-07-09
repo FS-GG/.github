@@ -407,9 +407,24 @@ projection: `docs/registry/compatibility.md`). It declares:
   request* — a tracked promise not yet fully kept.
 
 The protocol: **a `contract-change` issue MUST update this file as part of its
-resolution.** The registry is validated in CI by the typed `Fsgg.Registry`
-validator (`fsgg-sdd registry validate`), and a coherence gate asserts the
-declared `fsgg-contracts` version equals the actual published package version.
+resolution.** The registry is validated in CI on three axes, and the third is the
+one that keeps it honest:
+
+- against its **schema** — the typed `Fsgg.Registry` validator (`fsgg-sdd registry
+  validate`), plus a gate asserting the declared `fsgg-contracts` version equals the
+  actual `FS.GG.Contracts` package version read from SDD source;
+- against its **projection** — `scripts/check-projection.py`, so `compatibility.md`
+  cannot drift from the registry it projects;
+- against **reality** — [`scripts/check-feed-coherence.py`](../scripts/check-feed-coherence.py)
+  (coherence id `registry-feed-coherence`, [.github#267](https://github.com/FS-GG/.github/issues/267))
+  asserts every `package-version` equals the newest version **live on the org feed**, in both
+  directions, on every registry PR *and daily* — because a release that publishes without
+  flipping the registry touches no file here, so nothing else can see it. Until this existed,
+  publish-before-flip (FR-007) step 2 was gated by nobody noticing, and drifted three times.
+
+A gate that passes when its subject is absent manufactures confidence, so each of these
+**fails closed**: "nothing to check" and "checked, and it's fine" must not share an exit code
+([.github#266](https://github.com/FS-GG/.github/issues/266)).
 
 **Sibling registries in this repo.** Two more `.github`-owned registries sit alongside
 `dependencies.yml`: [`registry/skills.yml`](../registry/skills.yml) (the skill catalog —
