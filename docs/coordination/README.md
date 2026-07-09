@@ -94,6 +94,14 @@ issue must update the registry as part of its resolution. Every registry change 
 keeps PR diffs reviewable (this replaced the former ~42 KB single-line `updated:` comment;
 see .github#129). Larger cross-repo decisions are recorded as [ADRs](../adr/README.md).
 
+So a registry PR touches **four** files, not two: `registry/dependencies.yml`, the changelog
+`registry/CHANGELOG.md`, the hand-maintained projection
+[`docs/registry/compatibility.md`](../registry/compatibility.md), and the architecture map
+[`docs/architecture.md`](../architecture.md) — because `registry/dependencies.yml` is itself
+an [architecture-map reconcile trigger](#system-overview--the-architecture-map) (a
+non-structural flip opts out; see that section). Note that `fsgg-sdd registry validate` and
+`check-feed-coherence` cover only the first file: **a green validator is not a green PR.**
+
 ## Surface change → the shipped-surface-mutation event
 
 A change to an *already-shipped* public surface is the one event a contract-first platform
