@@ -61,6 +61,9 @@ scripts/fsgg-coord overlap <a> <b>     # DISJOINT (exit 0) -> parallel; OVERLAP 
 - **OVERLAP** → **sequence** them with the board's `Blocked by` field (or a sub-issue chain),
   same as any dependency. Do **not** run overlapping items in parallel — that's the merge
   conflict you're trying to avoid.
+  `Blocked by` takes **issue refs only** — `fsgg-coord set-field <later> 'Blocked by' '<earlier>'`,
+  not a note about the overlap. Put "overlaps X on Program.fs, sequence" in an issue comment;
+  the field is what `fsgg-coord next` reads to refuse to hand out the later item.
 - `overlap` compares declared globs as **subtrees** (conservative, file-existence-independent);
   exit 2 means an item hasn't declared `Paths:` yet — add it.
 
