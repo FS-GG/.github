@@ -39,7 +39,9 @@
 #   fsgg-coord item-id   <issue> [--refresh]  # resolve an issue's board item id (narrow, cached)
 #   fsgg-coord set-field <issue> <Field> <Value> [--refresh]
 #                                             # set a board field, resolving all ids from cache,
-#                                             # auto-routing by the field's dataType
+#                                             # auto-routing by the field's dataType. `Blocked by`
+#                                             # additionally takes ONLY issue refs (comma-separated,
+#                                             # canonicalized to owner/repo#n); prose is refused.
 #   fsgg-coord issues <repo> [--label L] [--state open|closed|all] [--refresh] [--jq EXPR]
 #                                             # list issues over REST with ETag revalidation
 #   fsgg-coord ready [--repo R] [--status S] [--phase P] [--all] [--json|--jq EXPR]
@@ -47,7 +49,11 @@
 #                                             # thrifty full-board scan (2 fields/item). --repo takes
 #                                             # a registry short-id (sdd/rendering/governance/
 #                                             # templates/.github), owner/repo, or a literal repo name
-#   fsgg-coord next  [--repo R]               # print the one most-startable item (Ready, else Backlog)
+#   fsgg-coord next  [--repo R] [--ignore-blocked]
+#                                             # print the one most-startable item (Ready, else
+#                                             # Backlog), SKIPPING items whose `Blocked by` refs are
+#                                             # still open (or unverifiable), with the reason on
+#                                             # stderr. --ignore-blocked restores the old behaviour.
 #   fsgg-coord done  <issue> [--pr N] [--flip]
 #                                             # verify an item is finished (PR merged AND board
 #                                             # Status=Done) and print an EARNED green DONE stamp;
@@ -99,6 +105,7 @@ mkdir -p "$CACHE"
 
 # Filesystem-safe slug of the board identity, so multiple owners/boards don't collide in the cache.
 slug() { printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' | sed 's/-\{2,\}/-/g; s/^-//; s/-$//'; }
+trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; printf '%s' "${s%"${s##*[![:space:]]}"}"; }
 BOARD_FILE="$CACHE/board-$(slug "$OWNER")-$(slug "$TITLE").json"
 
 # ---- GraphQL wrapper: run a query, log its rateLimit cost when FSGG_COORD_DEBUG=1 ----------------
@@ -192,6 +199,61 @@ parse_ref() {
   fi
 }
 
+# ---- Blocked by: canonicalize a dependency edge into refs, or refuse the write --------------------
+# `Blocked by` is TEXT only because Projects v2 has no typed dependency field. Unvalidated it drifts
+# into a resolution log ("RESOLVED: #18 closed, shipped @sha") or an inverted edge ("blocks #14") —
+# both unreadable by any "what is blocking this?" query. Canonicalize every ref to `owner/repo#n` on
+# write so a consumer parses one form. Sets CANON_BLOCKED_BY; dies (in the CALLER's shell, so an
+# invalid value can never reach the mutation) on anything else. Prose belongs in an issue comment;
+# "this item is blocked" belongs in Status. An empty value clears the field — the blocker is gone.
+CANON_BLOCKED_BY=""
+canon_blocked_by() {
+  local raw="$1" self_owner="$2" self_repo="$3" ref="${4:-<issue>}"
+  local -a parts=() refs=()
+  local part o r n
+  raw="$(trim "$raw")"
+  CANON_BLOCKED_BY=""
+  [ -n "$raw" ] || return 0
+
+  local oldifs="$IFS"; IFS=','; read -r -a parts <<<"$raw"; IFS="$oldifs"
+  for part in "${parts[@]}"; do
+    part="$(trim "$part")"
+    [ -n "$part" ] || continue
+    if   [[ "$part" =~ ^https?://github\.com/([^/]+)/([^/]+)/issues/([0-9]+)$ ]]; then
+      o="${BASH_REMATCH[1]}"; r="${BASH_REMATCH[2]}"; n="${BASH_REMATCH[3]}"
+    elif [[ "$part" =~ ^([^/#[:space:]]+)/([^/#[:space:]]+)#([0-9]+)$ ]]; then
+      o="${BASH_REMATCH[1]}"; r="${BASH_REMATCH[2]}"; n="${BASH_REMATCH[3]}"
+    elif [[ "$part" =~ ^([^/#[:space:]]+)#([0-9]+)$ ]]; then
+      o="$OWNER"; r="${BASH_REMATCH[1]}"; n="${BASH_REMATCH[2]}"
+    elif [[ "$part" =~ ^#([0-9]+)$ ]]; then           # bare #n -> the blocked item's own repo
+      o="$self_owner"; r="$self_repo"; n="${BASH_REMATCH[1]}"
+    elif [[ "${part,,}" =~ ^(-+|—|–|none|n/?a|tbd|todo)$ ]]; then
+      # "-" and friends mean "nothing blocks this". Say it with an empty value, so a reader never has
+      # to guess whether a placeholder is a blocker it cannot parse.
+      echo "fsgg-coord: 'Blocked by' has no placeholder value — '$part' is not a ref." >&2
+      echo "  to record that nothing blocks this item, CLEAR the field:" >&2
+      echo "      fsgg-coord set-field $ref 'Blocked by' ''" >&2
+      exit 1
+    else
+      echo "fsgg-coord: 'Blocked by' takes issue refs, not prose — rejected: '$part'" >&2
+      echo "  want: a comma-separated list of owner/repo#n, repo#n, #n, or issue URLs" >&2
+      echo "        (e.g. 'FS-GG/FS.GG.SDD#8, #33')" >&2
+      echo "  note: the field records what blocks THIS item — 'blocks X' is the inverse edge," >&2
+      echo "        and it is not a delivery log. Put narrative in an issue comment; mark the" >&2
+      echo "        item blocked with: fsgg-coord set-field <issue> Status Blocked" >&2
+      exit 1
+    fi
+    refs+=("$o/$r#$n")
+  done
+
+  local joined="" ref
+  for ref in "${refs[@]}"; do
+    case ", $joined," in *", $ref,"*) continue ;; esac   # de-dupe, preserving first-seen order
+    joined="${joined:+$joined, }$ref"
+  done
+  CANON_BLOCKED_BY="$joined"
+}
+
 # ---- item-id: narrow issue -> projectItems resolution, cached per issue (item ids are stable) ---
 item_id() {
   local ref="$1" refresh="${2:-}"
@@ -226,17 +288,31 @@ set_field() {
   dtype="$(board_get ".fields[\"$field\"].dataType // empty")"
   [ -n "$dtype" ] || die "no field named '$field' on board '$TITLE' (fields: $(board_get '.fields | keys | join(\", \")'))."
   fid="$(field_id "$field")"
+
+  # Canonicalize BEFORE resolving the item: a rejected value must cost zero GraphQL.
+  if [ "$field" = "Blocked by" ]; then
+    parse_ref "$ref"                                   # the blocked item's repo, for bare `#n` refs
+    canon_blocked_by "$value" "$R_OWNER" "$R_REPO" "$ref"
+    value="$CANON_BLOCKED_BY"
+  fi
+
   item="$(item_id "$ref" "$refresh")"
 
+  # An empty value CLEARS the field. `gh project item-edit --text ''` is not a clear — it is a no-op
+  # ("no changes to make"), so an empty write would silently leave the old value in place.
   local -a vflag
-  case "$dtype" in
-    SINGLE_SELECT) vflag=(--single-select-option-id "$(option_id "$field" "$value")") ;;
-    TEXT)          vflag=(--text   "$value") ;;
-    NUMBER)        vflag=(--number "$value") ;;
-    DATE)          vflag=(--date   "$value") ;;
-    ITERATION)     vflag=(--iteration-id "$value") ;;
-    *)             die "field '$field' has unsupported dataType '$dtype'." ;;
-  esac
+  if [ -z "$value" ]; then
+    vflag=(--clear)
+  else
+    case "$dtype" in
+      SINGLE_SELECT) vflag=(--single-select-option-id "$(option_id "$field" "$value")") ;;
+      TEXT)          vflag=(--text   "$value") ;;
+      NUMBER)        vflag=(--number "$value") ;;
+      DATE)          vflag=(--date   "$value") ;;
+      ITERATION)     vflag=(--iteration-id "$value") ;;
+      *)             die "field '$field' has unsupported dataType '$dtype'." ;;
+    esac
+  fi
   dbg "set-field $ref $field='$value' -> item=$item field=$fid ($dtype)"
   gh project item-edit --id "$item" --project-id "$pid" --field-id "$fid" "${vflag[@]}"
 }
@@ -304,9 +380,13 @@ emit_issues() {
 # `fieldValues(first:100){ ...fragments }` INSIDE `items(first:N)`, so its cost is O(items × 100)
 # (≈ 2,500 points for a ~100-item board) — a few of those exhaust the 5,000-pt/hr primary budget.
 # `fieldValueByName` is a RESOLVER field, not a connection: it returns ONE value with no node
-# multiplication. We read just the two fields a "what's next" decision needs (Status, Phase) that
-# way, plus the issue's own repository/number/title — a small constant per item. A 100-item page
-# costs ~1 point (a full board ~3), and the result is normalized once here.
+# multiplication. We read just the three fields a "what's next" decision needs (Status, Phase,
+# Blocked by) that way, plus the issue's own repository/number/title/state — a small constant per
+# item. A 100-item page costs ~1 point (a full board ~3), and the result is normalized once here.
+#
+# `Blocked by` rides along for free: because the scan already carries every board item's `state`,
+# a blocker's open/closed status is resolved CLIENT-SIDE against the same page set (board_annotate)
+# — no per-blocker issue lookup, so blocked-awareness adds ZERO GraphQL calls.
 board_items() {
   ensure_board >/dev/null
   local num; num="$(board_get '.number')"
@@ -317,6 +397,7 @@ board_items() {
         nodes{
           status: fieldValueByName(name:"Status"){ ... on ProjectV2ItemFieldSingleSelectValue{ name } }
           phase:  fieldValueByName(name:"Phase"){  ... on ProjectV2ItemFieldSingleSelectValue{ name } }
+          blockedBy: fieldValueByName(name:"Blocked by"){ ... on ProjectV2ItemFieldTextValue{ text } }
           content{
             __typename
             ... on Issue{ number title url state repository{ nameWithOwner } }
@@ -340,12 +421,59 @@ board_items() {
       | { number:(.content.number // null), repo:(.content.repository.nameWithOwner // null),
           title:(.content.title // null),   url:(.content.url // null),
           state:(.content.state // null),   type:(.content.__typename // null),
-          status:(.status.name // null),    phase:(.phase.name // null) }' <<<"$out" >> "$tmp"
+          status:(.status.name // null),    phase:(.phase.name // null),
+          blockedBy:(.blockedBy.text // null) }' <<<"$out" >> "$tmp"
     hasNext="$(jq -r '.data.organization.projectV2.items.pageInfo.hasNextPage' <<<"$out")"
     cursor="$(jq -r '.data.organization.projectV2.items.pageInfo.endCursor // empty' <<<"$out")"
     [ "$hasNext" = "true" ] && [ -z "$cursor" ] && break   # defensive: stop if a page lies
   done
-  jq -s '.' "$tmp"; rm -f "$tmp"
+  jq -s '.' "$tmp" | board_annotate; rm -f "$tmp"
+}
+
+# ---- board_annotate: resolve each item's `Blocked by` refs against the scan itself ----------------
+# Adds `.blockers` ([{ref,state}]) and `.blocked` (bool) to every item, spending no extra GraphQL:
+# the scan already carries each board item's OPEN/CLOSED `state`, so a blocker that is itself a board
+# item resolves from an in-memory index. States:
+#   OPEN        -> still blocking.
+#   CLOSED      -> resolved; does not block.
+#   UNKNOWN     -> the ref is a real issue but is not ON the board, so we cannot see its state.
+#   UNPARSEABLE -> legacy prose (the pre-gate resolution logs on Done cards), or a hand-edited value.
+# UNKNOWN and UNPARSEABLE both count as blocking: refusing to hand out work whose prerequisite we
+# cannot verify is the safe failure, and `next` says which it hit rather than silently skipping.
+#
+# Placeholder values ("-", "none", "n/a", "TBD") are read as NO BLOCKER: people typed them to mean
+# "nothing blocks this" before the field meant anything, and reading them as UNPARSEABLE would make
+# `next` refuse work that is in fact startable. Only the READ side is forgiving — `set-field` still
+# refuses to write one (it tells you to clear the field instead), so they cannot spread.
+board_annotate() {
+  jq '
+    def placeholder: test("^(-+|—|–|none|n/?a|tbd|todo)$"; "i");
+    def canon($owner; $selfrepo):
+      if   test("^https?://github\\.com/[^/]+/[^/]+/issues/[0-9]+$")
+      then (capture("^https?://github\\.com/(?<o>[^/]+)/(?<r>[^/]+)/issues/(?<n>[0-9]+)$") | "\(.o)/\(.r)#\(.n)")
+      elif test("^[^/#[:space:]]+/[^/#[:space:]]+#[0-9]+$") then .
+      elif test("^[^/#[:space:]]+#[0-9]+$")                 then "\($owner)/\(.)"
+      elif test("^#[0-9]+$")                                then "\($selfrepo)\(.)"
+      else null end;
+
+    . as $all
+    | ( $all | map(select(.number != null and .repo != null))
+             | map({ key: "\(.repo)#\(.number)", value: (.state // "UNKNOWN") })
+             | from_entries ) as $idx
+    | $all
+    | map(
+        . as $it
+        | ($it.repo // "")                            as $selfrepo
+        | (($it.repo // "") | split("/") | first // "") as $owner
+        | ( [ ($it.blockedBy // "") | split(",")[] | sub("^\\s+";"") | sub("\\s+$";"")
+              | select(length > 0) | select(placeholder | not) ]
+            | map( canon($owner; $selfrepo) as $c
+                   | if $c == null then { ref: ., state: "UNPARSEABLE" }
+                     else { ref: $c, state: ($idx[$c] // "UNKNOWN") } end )
+            | unique_by(.ref) ) as $blockers
+        | $it + { blockers: $blockers,
+                  blocked: ($blockers | any(.state != "CLOSED")) }
+      )'
 }
 
 # Resolve a --repo value to the actual GitHub repo name the board items carry. Accepts the registry
@@ -380,13 +508,16 @@ board_filter() {
     )'
 }
 
-# Pretty TSV: STATUS | ITEM (repo#num, owner stripped) | PHASE | TITLE. Draft items show `draft`/`-`.
+# Pretty TSV: STATUS | ITEM (repo#num, owner stripped) | PHASE | BLOCKED BY | TITLE. Draft items show
+# `draft`/`-`. BLOCKED BY lists only the refs still holding the item (closed blockers are noise).
 board_table() {
   jq -r '.[]
     | ((.status // "—")) as $s
     | (if .number then ((.repo // "" | sub("^[^/]+/";"")) + "#" + (.number|tostring)) else "draft" end) as $item
-    | [ $s, $item, (.phase // "—"), (.title // "") ] | @tsv' \
-  | { printf "STATUS\tITEM\tPHASE\tTITLE\n"; cat; } | column -t -s $'\t'
+    | ( [ (.blockers // [])[] | select(.state != "CLOSED") | (.ref | sub("^[^/]+/";"")) ]
+        | if length == 0 then "—" else join(", ") end ) as $b
+    | [ $s, $item, (.phase // "—"), $b, (.title // "") ] | @tsv' \
+  | { printf "STATUS\tITEM\tPHASE\tBLOCKED BY\tTITLE\n"; cat; } | column -t -s $'\t'
 }
 
 # ---- ready: list board items that are actionable (not Done by default), thrifty full-board read --
@@ -415,23 +546,36 @@ ready() {
 
 # ---- next: print the single most-startable item (Ready, else Backlog), optionally repo-scoped ----
 next() {
-  local repo=""
+  local repo="" ignore_blocked=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --repo) repo="${2:?--repo needs a value}"; shift 2 ;;
+      --repo)            repo="${2:?--repo needs a value}"; shift 2 ;;
+      --ignore-blocked)  ignore_blocked=1; shift ;;
       -*)     die "next: unknown flag '$1'." ;;
       *)      die "next: unexpected argument '$1'." ;;
     esac
   done
   [ -n "$repo" ] && repo="$(resolve_repo "$repo")"
   local items; items="$(board_items)"
-  local pick="" s
+  local pick="" cand="" s skipped=""
   for s in Ready Backlog; do
-    pick="$(board_filter "$repo" "$s" "" "0" <<<"$items" | jq -c 'first(.[])? // empty')"
+    cand="$(board_filter "$repo" "$s" "" "0" <<<"$items")"
+    if [ -z "$ignore_blocked" ]; then
+      # Say WHY an otherwise-startable item was passed over — a silent skip reads as "nothing to do".
+      local notes
+      notes="$(jq -r '.[] | select(.blocked)
+        | "fsgg-coord: skipping " + ((.repo // "" | sub("^[^/]+/";"")) + "#" + (.number|tostring))
+          + " — blocked by " + ([.blockers[] | "\(.ref) (\(.state|ascii_downcase))"] | join(", "))' \
+        <<<"$cand")"
+      if [ -n "$notes" ]; then printf '%s\n' "$notes" >&2; skipped=1; fi
+      cand="$(jq -c 'map(select(.blocked | not))' <<<"$cand")"
+    fi
+    pick="$(jq -c 'first(.[])? // empty' <<<"$cand")"
     [ -n "$pick" ] && break
   done
   if [ -z "$pick" ]; then
     echo "fsgg-coord: no startable item (Ready/Backlog)${repo:+ for repo '$repo'} on board '$TITLE'." >&2
+    [ -n "$skipped" ] && echo "fsgg-coord: (every candidate was blocked — see above, or pass --ignore-blocked)" >&2
     return 0
   fi
   jq -r '"→ " + ((.repo // "" | sub("^[^/]+/";"")) + (if .number then "#"+(.number|tostring) else "" end))
