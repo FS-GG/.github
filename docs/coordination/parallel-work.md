@@ -160,11 +160,26 @@ git config extensions.worktreeConfig true
 
 ### 3. Touch-set → a declared `Paths:` line, and a scheduler that reads it
 
-Each item declares the file subtrees it will touch as a **`Paths:`** line in its issue body:
+Each item declares the file subtrees it will touch as a **`Paths:`** line in its issue body — a
+comma- or space-separated list of **exact paths and directory prefixes**:
 
 ```
-Paths: src/Scene/**, tests/Scene/**
+Paths: src/Scene/**, tests/Scene/**, Directory.Packages.props
 ```
+
+**This is not a glob language** (FS-GG/.github#273). Each token is matched by *exact equality* or
+*subtree containment*; the only wildcard recognised is a **trailing** `/**` or `/*`, which is
+stripped to leave the directory prefix. A leading `**/`, or a `*` anywhere in the middle, matches
+**nothing** — and a token that matches nothing would *conflict with nothing*, so an unmatchable
+declaration would read as `DISJOINT` against every item on the board. Rather than silently clear,
+the tool **refuses**: `claim`, `widen`, `batch`, `overlap`, and `verify-paths` all reject an
+unmatchable token and name it. Spell such paths out:
+
+| want | write |
+|---|---|
+| every lockfile | each one, exactly: `src/A/packages.lock.json, src/B/packages.lock.json` |
+| a subtree | `src/Scene/**` (or `src/Scene`) |
+| one file | `Directory.Packages.props` |
 
 Two items may run in parallel **iff their touch-sets are disjoint**. Do not check this by hand,
 pairwise — ask the scheduler, which also accounts for what is already **in flight**:
@@ -185,8 +200,11 @@ overlapping held work is never scheduled. Items with no `Paths:` are unschedulab
 - **OVERLAP** → **sequence** with the board's existing `Blocked by` field (or a sub-issue chain), or
   **talk** (§4) and split the touch-set. Overlapping items merge in dependency order and rebase;
   disjoint items merge in any order.
-- `overlap` compares declared globs as **subtrees** — conservative (errs toward reporting overlap)
+- `overlap` compares declared tokens as **subtrees** — conservative (errs toward reporting overlap)
   and file-existence-independent, so a new feature that adds files still has a checkable touch-set.
+- An **unmatchable** token (see above) is treated exactly as an *unknown* touch-set: `overlap` exits
+  2, `batch` passes the candidate over, and a **held** item that declares one reserves nothing, so
+  `batch` refuses to schedule anything against it rather than hand its files to a second worker.
 
 The touch-set is **transient** (per-item, gone at merge), so it lives in the issue body, not the
 registry — the registry is for *durable* cross-repo contracts only.
