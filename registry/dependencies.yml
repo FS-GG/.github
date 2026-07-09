@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-09"   # (STABLE-CHANNEL TRAIN: fs-gg-ui-template 0.3.1-preview.1 -> 0.4.0 (framework release + channel promotion; the 0.4.0-preview.1 flip had been MISSED) and game-sim-core / game-scene-adapter 0.1.0-preview.1 -> 0.2.0, unblocked by it via NU5104. Earlier same day: SDD v0.9.0 (FS.GG.SDD.Cli 0.9.0; FS.GG.Contracts HELD at 1.4.0) and the contract-coherence gate pin 0.5.0->0.9.0 after the H2 freeze recurred.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-09"   # (STABLE-CHANNEL TRAIN: fs-gg-audio 0.1.0-preview.1 -> 0.1.0 (channel promotion; the org's LAST -preview producer — every FS.GG.* producer is now stable), fs-gg-ui-template 0.3.1-preview.1 -> 0.4.0 (framework release + channel promotion; the 0.4.0-preview.1 flip had been MISSED) and game-sim-core / game-scene-adapter 0.1.0-preview.1 -> 0.2.0, unblocked by it via NU5104. Earlier same day: SDD v0.9.0 (FS.GG.SDD.Cli 0.9.0; FS.GG.Contracts HELD at 1.4.0) and the contract-coherence gate pin 0.5.0->0.9.0 after the H2 freeze recurred.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -393,8 +393,8 @@ contracts:
     surface: "FS.GG.Game.Render package — Adapter (sim-state -> FS.GG.UI.Scene drawables)"
     consumers: [game]        # consumed within the game component (Game.Render.Tests / game products) today; the P6 game scaffold provider adds the cross-repo consumer
   - id: fs-gg-audio
-    version: "0.1.0-preview.1"          # FS.GG.Audio.* source/package SemVer — first release (ADR-0023, FS.GG.Audio v0.1.0-preview.1). The coherent set (Core/Host/Engine/Elmish) shares one version (<FsGgAudioVersion>).
-    package-version: "0.1.0-preview.1"  # PUBLISHED FS.GG.Audio.Core/.Host/.Engine/.Elmish on the org feed (nuget.pkg.github.com/FS-GG; release run/tag v0.1.0-preview.1). package-version == version == feed(newest) == 0.1.0-preview.1 (publish-before-flip FR-007). Dual-published to nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-audio-publishing).
+    version: "0.1.0"          # FS.GG.Audio.* source/package SemVer — ADVANCED 0.1.0-preview.1 → 0.1.0: the CHANNEL PROMOTION off -preview (FS.GG.Audio#4). Audio was the org's LAST -preview producer. 0.1.0 carries byte-identical src/ to 0.1.0-preview.1 — the last src/ commit (1a708d5) predates the preview tag; the only commits between them were CI config and the coordination kit. So this promotes finished bits (work items 001-core/002-host/003-elmish/004-engine all complete) rather than inventing content. The coherent set (Core/Host/Engine/Elmish) shares one version (<FsGgAudioVersion>).
+    package-version: "0.1.0"  # PUBLISHED FS.GG.Audio.Core/.Host/.Engine/.Elmish on the org feed (nuget.pkg.github.com/FS-GG; release run 29043991855, tag v0.1.0). package-version == version == feed(newest) == 0.1.0 (publish-before-flip FR-007: all four "Your package was pushed" at 2026-07-09T19:22Z, this row flipped after). Dual-published to nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-audio-publishing) — the policy went live in cdb1604 and this was its first exercise; NuGet/login@v1 exchanged the OIDC token and all four returned Created. NU5104 does NOT bite: Audio is a bottom layer with no FS-GG dependency (confirmed by a real `dotnet pack -c Release` before tagging, not merely by inspection).
     owner: audio
     # ADR-0023: a standalone render-independent audio component. A pure Core vocabulary (AudioEffect /
     # Bus / AudioEvidence, BCL-only), a Host device seam (IAudioBackend — Null/record default +
@@ -428,6 +428,11 @@ dependencies:
   # Rendering (upstream) reaching further UP to a sibling BOTTOM layer that itself reaches up to nothing.
   # Publish-before-flip (FR-007): the packages are live on the org feed + nuget.org, and the template that
   # references them shipped as fs-gg-ui-template/v0.3.1-preview.1, BEFORE this edge was written.
+  # HOLDS at 0.1.0-preview.1 while the fs-gg-audio CONTRACT above reads 0.1.0 (FS.GG.Audio#4). This is NOT
+  # drift: an edge records what the CONSUMER ACTUALLY PINS, and Rendering's template/base/Directory.Packages.props
+  # still declares <FsGgAudioVersion>0.1.0-preview.1</FsGgAudioVersion>. Same discipline as .github#250, which
+  # left templates→rendering at 0.2.0 until FS.GG.Templates#119 moved the pin. The edge moves with the re-pin
+  # (publish-before-flip step 3) in FS.GG.Rendering#235 — do NOT "fix" this literal ahead of that PR.
   - { from: rendering, to: audio,      via: "fs-gg-audio@0.1.0-preview.1 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
   - { from: game,      to: rendering,  via: "game-scene-adapter@0.1.0-preview.1 -> FS.GG.UI.Scene@0.2.0-preview.1 (adapter projects sim state onto Scene drawables; the one Game -> Rendering edge)" }

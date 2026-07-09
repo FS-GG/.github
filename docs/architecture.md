@@ -75,7 +75,9 @@ components + `.github`; **FS.GG.Game** was extracted under ADR-0022 — its pack
 and the Canvas+Scene majors shipped as `FS.GG.UI` 0.2.0-preview.1; `game-extraction`
 **`coherent: true`** since P5, 2026-07-06; and **FS.GG.Audio** was onboarded as a standalone
 render-independent component under ADR-0023, its `FS.GG.Audio.*` set published at
-0.1.0-preview.1):
+0.1.0 — promoted off the `-preview` channel on 2026-07-09 (FS.GG.Audio#4), which made it the
+**last `FS.GG.*` producer to go stable**, so every producer in the org now ships on a stable
+channel):
 
 | Repository | Role | Ships |
 |---|---|---|
