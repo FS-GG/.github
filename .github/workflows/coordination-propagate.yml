@@ -38,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       repos: ${{ steps.roster.outputs.repos }}
+      kit: ${{ steps.roster.outputs.kit }}
     steps:
       - uses: actions/checkout@v7
       - id: roster
@@ -47,6 +48,13 @@ jobs:
             | jq -R -s -c 'split("\n") | map(select(length>0)) | map({full:., owner:(split("/")[0]), name:(split("/")[1])})')"
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
           echo "coordination-kit receivers: $repos"
+          # The PR title names what the kit contains; read it from the roster so adding a kit item
+          # doesn't leave the title describing a subset of the diff (it said "cross-repo-coordination
+          # + fsgg-coord" for months after intra-repo-parallel-work joined).
+          kit="$(bash scripts/repos.sh kit | paste -sd, - | sed 's/,/, /g')"
+          [ -n "$kit" ] || { echo "::error::roster declares no kit items."; exit 1; }
+          echo "kit=$kit" >> "$GITHUB_OUTPUT"
+          echo "coordination-kit items: $kit"
 
   propagate:
     needs: plan
@@ -90,6 +98,7 @@ jobs:
           APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
           TARGET: ${{ matrix.repo.full }}
           SOURCE_SHA: ${{ github.sha }}
+          KIT: ${{ needs.plan.outputs.kit }}
         run: |
           set -euo pipefail
           # coordination-sync derives its canonical source from its own location (dotgithub/).
@@ -110,10 +119,109 @@ jobs:
           git add -A
           git commit -m "chore: sync coordination kit from FS-GG/.github@${short}"
           git push origin "$branch" --force   # dedicated bot branch; concurrency guard serializes runs
+          title="chore: sync coordination kit (${KIT})"
+          body="Automated, self-updating sync of the coordination kit from FS-GG/.github (ADR-0019, last from \`${short}\`). Brings this repo's kit (\`${KIT}\`) back in line with canonical; the \`coordination-coherence\` gate goes green once merged. This is a **rolling** PR — later kit changes update it in place rather than opening a new one. Auto-merge is armed: this lands on its own once **this repo's** required checks pass. Opened by the \`coordination-propagate\` workflow."
           # Open a PR only if this rolling branch has no OPEN PR yet; otherwise the force-push above
           # already updated the existing one (and re-triggered its checks).
-          if [ -z "$(gh pr list --repo "$TARGET" --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null)" ]; then
-            gh pr create --repo "$TARGET" --base main --head "$branch" \
-              --title "chore: sync coordination kit (cross-repo-coordination + fsgg-coord)" \
-              --body "Automated, self-updating sync of the coordination kit from FS-GG/.github (ADR-0019, last from \`${short}\`). Brings this repo's \`cross-repo-coordination\` skill + \`scripts/fsgg-coord\` back in line with canonical; the \`coordination-coherence\` gate goes green once merged. This is a **rolling** PR — later kit changes update it in place rather than opening a new one. Opened by the \`coordination-propagate\` workflow."
+          #
+          # `--head` filters on the branch NAME only, and that also matches a pull request opened from
+          # a FORK whose branch happens to be called `coordination-kit/sync`. Adopting one would make
+          # this workflow a confused deputy: it would re-title a stranger's PR to look like an official
+          # kit sync and then arm auto-merge on it with the org App's credentials. Select only a PR
+          # whose head is THIS repo's own branch. `// empty` so an empty list yields "", not "null".
+          prs="$(gh pr list --repo "$TARGET" --head "$branch" --state open \
+            --json number,isCrossRepository,headRefName 2>/dev/null || echo '[]')"
+          pr="$(printf '%s' "$prs" | jq -r --arg b "$branch" \
+            '[ .[] | select(.isCrossRepository == false and .headRefName == $b) ] | .[0].number // empty')"
+          case "$pr" in ''|*[!0-9]*) pr="" ;; esac      # anything non-numeric is "no PR", never an arg
+          if [ -z "$pr" ]; then
+            # Take the number from create's own URL — re-listing can miss a just-created PR.
+            url="$(gh pr create --repo "$TARGET" --base main --head "$branch" --title "$title" --body "$body")"
+            pr="${url##*/}"
+            case "$pr" in ''|*[!0-9]*) echo "::error::could not parse PR number from '$url'." >&2; exit 1 ;; esac
+          else
+            # A rolling PR opened before this change carries a title naming a subset of the kit, and
+            # force-pushing does not refresh it. Re-state title/body so they track the diff.
+            gh pr edit "$pr" --repo "$TARGET" --title "$title" --body "$body"
           fi
+
+          # ARM AUTO-MERGE — the point of #270. Push + a red pull-gate is not enforcement: until the
+          # sync PR merges, the receiver stays drifted and its `coordination-kit` check stays red, and
+          # a permanently-red check trains everyone to ignore it. The receiver's OWN required checks
+          # still gate the merge; auto-merge only removes the human who has to press the button.
+          #
+          # Failing to land it is an ERROR, not a warning: the PR would sit exactly as before, and a
+          # green propagate run would report that the kit had been propagated when it had not. That is
+          # the fails-open shape #266 exists to kill. fail-fast:false keeps other receivers running.
+          #
+          # The rolling PR is REUSED across kit changes, so on the common path it is already armed.
+          # Check first rather than re-arming: if enabling auto-merge on an armed PR is not idempotent,
+          # the failure would fall through to the classifier below and `exit 1` on precisely the
+          # receivers that are behaving correctly — every kit change after the first.
+          if [ "$(gh pr view "$pr" --repo "$TARGET" --json autoMergeRequest \
+                    --jq '.autoMergeRequest != null' 2>/dev/null)" = "true" ]; then
+            echo "Auto-merge already armed on $TARGET#$pr — nothing to do."
+            exit 0
+          fi
+
+          if gh pr merge "$pr" --repo "$TARGET" --auto --squash; then
+            echo "Auto-merge armed on $TARGET#$pr — lands when $TARGET's required checks pass."
+            exit 0
+          fi
+
+          # Arming can fail for two very different reasons; only one is our fault. Ask the API which,
+          # rather than matching on an error string.
+          allowed="$(gh api graphql -f query='
+              query($o:String!,$n:String!){ repository(owner:$o,name:$n){ autoMergeAllowed } }' \
+            -f o="${TARGET%%/*}" -f n="${TARGET##*/}" --jq '.data.repository.autoMergeAllowed' 2>/dev/null || echo unknown)"
+          if [ "$allowed" != "true" ]; then
+            echo "::error::Cannot arm auto-merge on $TARGET#$pr (autoMergeAllowed=$allowed)." >&2
+            echo "::error::The kit will NOT land without a human. Enable 'Allow auto-merge' on $TARGET," >&2
+            echo "::error::and confirm the App has pull_requests:write there." >&2
+            exit 1
+          fi
+
+          # A third cause, before assuming the second: we arm with `--squash`, so a receiver that
+          # permits auto-merge but disallows squash merges also lands here. Name that cause rather
+          # than sending the operator to look at branch protection.
+          squash="$(gh api "/repos/$TARGET" --jq '.allow_squash_merge' 2>/dev/null || echo unknown)"
+          if [ "$squash" != "true" ]; then
+            echo "::error::$TARGET disallows squash merges (allow_squash_merge=$squash) but propagate arms" >&2
+            echo "::error::--squash. Enable squash merging on $TARGET, or change the merge method here." >&2
+            exit 1
+          fi
+
+          # Auto-merge IS allowed, so GitHub refused for the other reason: the PR is already mergeable
+          # with nothing to wait for (it rejects auto-merge on a clean PR). Before merging on that
+          # assumption, CHECK it — do not infer "no gate" from an error we did not read. `main` with
+          # required checks must never be merged blind: if any exist, arming should have succeeded, so
+          # a refusal here means something we do not understand. Fail closed.
+          # `gh api` prints a 404 body on STDOUT and exits non-zero, so `|| echo 0` would both corrupt
+          # the value and fail OPEN on a transient error. Read the body and classify it explicitly:
+          # contexts[] -> that count; "Branch not protected" -> genuinely zero; anything else -> stop.
+          prot="$(gh api "/repos/$TARGET/branches/main/protection/required_status_checks" 2>/dev/null || true)"
+          if printf '%s' "$prot" | jq -e 'has("contexts")' >/dev/null 2>&1; then
+            required="$(printf '%s' "$prot" | jq '(.contexts // []) | length')"
+          elif printf '%s' "$prot" | jq -e '.message == "Branch not protected"' >/dev/null 2>&1; then
+            required=0
+          else
+            echo "::error::Cannot read branch protection on $TARGET/main; refusing to guess whether a" >&2
+            echo "::error::required check exists. Response: ${prot:-<empty>}" >&2
+            exit 1
+          fi
+          if [ "$required" -gt 0 ]; then
+            echo "::error::Auto-merge refused on $TARGET#$pr although main has $required required check(s)." >&2
+            echo "::error::Refusing to merge past a gate we cannot explain. Merge by hand after review." >&2
+            exit 1
+          fi
+
+          # Genuinely no required check on this receiver, so nothing gates the merge — for us OR for
+          # the human who used to click the button. Say so out loud rather than implying CI passed:
+          # the kit is content-addressed and already passed the AUTHORITY's gates before this ran.
+          echo "::warning::$TARGET/main has no required status checks — merging $TARGET#$pr with no CI gate." >&2
+          echo "::warning::Protect $TARGET/main so the receiver's own CI gates the kit sync." >&2
+          if ! gh pr merge "$pr" --repo "$TARGET" --squash; then
+            echo "::error::$TARGET#$pr could not be merged. The kit will NOT land without a human." >&2
+            exit 1
+          fi
+          echo "Merged $TARGET#$pr (ungated)."

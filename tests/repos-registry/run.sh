@@ -73,6 +73,7 @@ expect_fail "not exactly one authority"       1 "exactly one"        "$(variant 
 expect_fail "authority receives the kit"      1 "must not RECEIVE"   "$(variant authkit     's/full: FS-GG\/.github,   role: authority, receives: \[labels\]/full: FS-GG\/.github,   role: authority, receives: [labels, coordination-kit]/')"
 expect_fail "kit digest drift"                1 "digest"             "$(variant digestdrift "s/$SKILL_SHA/0000000000000000000000000000000000000000000000000000000000000000/")"
 expect_fail "kit source missing"              1 "source missing"     "$(variant nosource    's/source: scripts\/democlient/source: scripts\/nope/')"
+expect_fail "kit id is not kebab/dotted"      1 "kit id"             "$(variant badkitid    's/id: demo-skill,/id: Demo Skill,/')"
 expect_fail "malformed repo full name"        1 "FS-GG"              "$(variant badfull     's/full: FS-GG\/FS.GG.SDD/full: GH\/FS.GG.SDD/')"
 
 # --- misconfiguration (exit 2) ---
@@ -89,6 +90,27 @@ list_labels="$(bash "$REPOS_SH" list --receives labels --field id --registry "$B
   && ok "digest skill dir -> sha256 of SKILL.md" || bad "digest skill dir"
 [ "$(bash "$REPOS_SH" digest "$ROOT/scripts/democlient")" = "$CLIENT_SHA" ] \
   && ok "digest file -> sha256 of file" || bad "digest file"
+
+# --- kit query (coordination-propagate builds its PR title from this) ---
+kit_ids="$(bash "$REPOS_SH" kit --registry "$BASE" | tr '\n' ',')"
+[ "$kit_ids" = "demo-skill,democlient," ] && ok "kit -> item ids, in roster order" \
+  || bad "kit ids" "got: $kit_ids"
+kit_kinds="$(bash "$REPOS_SH" kit --field kind --registry "$BASE" | tr '\n' ',')"
+[ "$kit_kinds" = "skill,client," ] && ok "kit --field kind" || bad "kit kinds" "got: $kit_kinds"
+kit_srcs="$(bash "$REPOS_SH" kit --field source --registry "$BASE" | tr '\n' ',')"
+[ "$kit_srcs" = ".claude/skills/demo-skill,scripts/democlient," ] && ok "kit --field source" \
+  || bad "kit sources" "got: $kit_srcs"
+rc=0; bash "$REPOS_SH" kit --field bogus --registry "$BASE" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] && ok "kit --field bogus -> misconfig (exit 2)" || bad "kit bad field" "got exit $rc"
+
+# The title the propagate workflow renders. Guards the `paste -sd` delimiter-cycling trap: a
+# multi-char delimiter list would yield "demo-skill,democlient" with a SPACE before the last item.
+kit_title="$(bash "$REPOS_SH" kit --registry "$BASE" | paste -sd, - | sed 's/,/, /g')"
+[ "$kit_title" = "demo-skill, democlient" ] && ok "kit -> comma-joined PR title" \
+  || bad "kit title join" "got: $kit_title"
+
+# The real roster must name a kit, or the propagate title would render empty.
+[ -n "$(bash "$REPOS_SH" kit)" ] && ok "the checked-in roster declares kit items" || bad "real roster kit empty"
 
 # --- CI guard on the real, checked-in roster ---
 if bash "$REPOS_SH" validate >/dev/null 2>&1; then ok "the checked-in registry/repos.yml validates"
