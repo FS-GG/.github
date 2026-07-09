@@ -181,6 +181,23 @@ unmatchable token and name it. Spell such paths out:
 | a subtree | `src/Scene/**` (or `src/Scene`) |
 | one file | `Directory.Packages.props` |
 
+**And a declaration is a line the author wrote as one** (FS-GG/.github#277). The reader skips fenced
+(` ``` `, `~~~`) and indented code blocks. Otherwise an issue that merely *quotes* a `Paths:` line —
+in a reproduction, in a suggested `widen` — adopts it as its own touch-set, reserving the wrong files
+while every token still looks well-formed, so the #273 guard clears it. A real declaration is indented
+**at most 3 spaces, never a tab**: markdown reads 4 spaces (or a tab) as a code block, and so does the
+reader, so a tab-indented `Paths:` line declares nothing and the item is refused as undeclared. An
+issue whose only `Paths:` line is fenced therefore declares **nothing**: unschedulable beats
+mis-scheduled.
+
+What survives the strip is **unioned**. A bare `Paths:` line at column 0 is a declaration wherever it
+sits, so a body carrying two of them is ambiguous — and the reader **over**-reserves rather than
+guess. Taking only the first would reserve a bare *quotation* and silently drop the real declaration
+beneath it: under-reserving, so two workers are told `DISJOINT` on a file they both edit, which is
+ADR-0021's own failure mode. Over-reserving costs a false `OVERLAP` — loud, investigable, and it
+spends only parallelism. `widen` rewrites the same lines the reader reads, collapsing duplicates to
+one, so it can never patch a quotation and leave the real declaration standing.
+
 Two items may run in parallel **iff their touch-sets are disjoint**. Do not check this by hand,
 pairwise — ask the scheduler, which also accounts for what is already **in flight**:
 

@@ -726,6 +726,15 @@ Paths: $p"
       html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
   : >"$STORE/comments-$n.json"; echo '[]' >"$STORE/comments-$n.json"
 }
+# A raw-body seeder. `seed_issue` can only produce a well-formed declaration; #277 is about bodies
+# that merely LOOK like they declare one, so those tests need to write the body verbatim.
+seed_issue_raw() {  # seed_issue_raw <num> <title> <body> [owner/repo]
+  local n="$1" t="$2" b="$3" repo="${4:-FS-GG/FS.GG.SDD}"
+  jq -n --argjson n "$n" --arg t "$t" --arg b "$b" --arg r "$repo" \
+    '{number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
+      html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
+  echo '[]' >"$STORE/comments-$n.json"
+}
 seed_issue 42 "Audio mixer"          "src/Audio/**, tests/Audio/**"
 seed_issue 43 "Legacy port"          "src/Legacy/**"
 seed_issue 60 "Nobody claimed me"    "src/Orphan/**"
@@ -1522,6 +1531,170 @@ assert_contains "batch: refuses when an IN-FLIGHT claim (not a candidate) reserv
 assert_contains "batch: ...and names that in-flight claim" "FS.GG.SDD#308" "$b_act"
 assert_fails "batch: ...and hands out nothing" pw batch --repo sdd
 : >"$STORE/comments-308.json"; echo '[]' >"$STORE/comments-308.json"
+
+# ================================================================================================
+# FS-GG/.github#277: a quoted `Paths:` line is not a declaration.
+#
+# #273's token was UNMATCHABLE — it reserved nothing, and once named it could be refused. This one is
+# FABRICATED: every token is well-formed, so `invalid_paths` sees nothing wrong, and the item reserves
+# the WRONG files with complete confidence. `paths_from_body` grepped the whole body, fences included,
+# so an issue that quoted a `Paths:` line — in a repro, in a suggested `widen` — acquired it; and
+# because every match was unioned, a real declaration plus a quoted one reserved both.
+# ================================================================================================
+echo "--- .github#277: a fenced or quoted 'Paths:' line is not a declaration ---"
+
+# The #261 shape: the ONLY `Paths:` line is fenced, quoting another repo. Every token is valid, so the
+# #273 guard clears it. It must now declare NOTHING — unschedulable beats mis-scheduled.
+seed_issue_raw 310 "Quotes another repo" 'Worker A declared, in FS.GG.Rendering#186:
+
+```
+Paths: nuget.config, Directory.Build.local.props
+```
+
+The fix here lives in `scripts/fsgg-coord`.'
+seed_issue 311 "Real coord work" 'scripts/fsgg-coord'
+
+ov310="$(pw overlap 'FS.GG.SDD#310' 'FS.GG.SDD#311' 2>&1 || true)"
+assert_contains "paths: an issue quoting a valid-token 'Paths:' line reserves nothing" \
+  "no 'Paths:' touch-set declared" "$ov310"
+case "$ov310" in *"DISJOINT —"*) bad "overlap: a fabricated touch-set is NEVER reported DISJOINT" "the #277 fail-open: $ov310" ;;
+                 *) ok "overlap: a fabricated touch-set is NEVER reported DISJOINT" ;; esac
+rc310=0; pw overlap 'FS.GG.SDD#310' 'FS.GG.SDD#311' >/dev/null 2>&1 || rc310=$?
+assert_eq "overlap: a fenced-only declaration exits 2 (undeclared), not 0" "2" "$rc310"
+
+# The union hazard: a real declaration must not be widened by a quoted one. #312 works on Scene only;
+# it quotes Audio. It must conflict with Scene and stay DISJOINT from Audio.
+seed_issue_raw 312 "Real + quoted" 'Paths: src/Scene/**
+
+Compare with the audio item, which declares:
+
+```
+Paths: src/Audio/**
+```'
+assert_contains "paths: a body with a real and a quoted declaration takes the real one" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#312' 'FS.GG.SDD#70' 2>&1 || true)"
+assert_contains "paths: ...and does NOT union in the quoted one" "DISJOINT —" \
+  "$(pw overlap 'FS.GG.SDD#312' 'FS.GG.SDD#42' 2>&1 || true)"
+
+# A quote that ESCAPES the strip (bare, at column 0) is where #277's suggested `head -1` and the
+# union part ways — and where `head -1` would have reintroduced ADR-0021's own bug. Taking the first
+# line reserves the QUOTE and DROPS the real declaration under it: two workers, told DISJOINT, both
+# editing src/Scene. The union over-reserves instead, which is loud and costs only parallelism.
+seed_issue_raw 313 "Bare quote above the real line" 'Paths: src/Audio/**   (quoting the other issue)
+
+Paths: src/Scene/**'
+assert_contains "paths: a bare quote ABOVE the declaration never drops it (no under-reserve)" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#313' 'FS.GG.SDD#70' 2>&1 || true)"
+assert_contains "paths: ...and the over-reserved quote is reported as a real OVERLAP, not hidden" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#313' 'FS.GG.SDD#42' 2>&1 || true)"
+
+# The other two block syntaxes markdown gives an author for quoting a line.
+seed_issue_raw 314 "Tilde fence" '~~~
+Paths: src/Audio/**
+~~~
+
+Paths: src/Scene/**'
+assert_contains "paths: a '~~~' fence hides a quoted declaration too" "DISJOINT —" \
+  "$(pw overlap 'FS.GG.SDD#314' 'FS.GG.SDD#42' 2>&1 || true)"
+seed_issue_raw 315 "Indented block" 'Reproduction:
+
+    Paths: src/Audio/**
+
+Paths: src/Scene/**'
+assert_contains "paths: a 4-space indented block is a code block, not a declaration" "DISJOINT —" \
+  "$(pw overlap 'FS.GG.SDD#315' 'FS.GG.SDD#42' 2>&1 || true)"
+# ...but the legal shapes keep working: a fenced block that quotes nothing, and a list-indented line.
+seed_issue_raw 316 "Indented <4" '  Paths: src/Scene/**'
+assert_contains "paths: a line indented 3 spaces or fewer is still a declaration" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#316' 'FS.GG.SDD#70' 2>&1 || true)"
+
+# `widen` WRITES the line `paths_from_body` READS. If the reader skips fenced lines and the writer
+# still patches the first `Paths:` anywhere, widen rewrites the quote inside the fence, the real
+# declaration stands, and the tool reports a widen that changed nothing it will ever read.
+as brant-g07 widen 'FS.GG.SDD#312' --paths 'src/Scene/**, src/Legacy/**' >/dev/null 2>&1 || true
+body312="$(jq -r '.body' "$STORE/issue-312.json")"
+assert_contains "widen: patches the REAL declaration, not the quoted one" \
+  "Paths: src/Scene/**, src/Legacy/**" "$body312"
+assert_contains "widen: ...and leaves the fenced quote untouched" "Paths: src/Audio/**" "$body312"
+assert_contains "widen: ...and the reader now sees the widened set" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#312' 'FS.GG.SDD#43' 2>&1 || true)"
+
+# The writer's other half: when the body's ONLY `Paths:` line is fenced, there is no declaration to
+# patch — widen must APPEND one. Before the fix it overwrote the quote and the item still declared
+# nothing, so a worker who "fixed" their touch-set stayed unschedulable with no idea why.
+as brant-g07 widen 'FS.GG.SDD#310' --paths 'scripts/fsgg-coord' >/dev/null 2>&1 || true
+body310="$(jq -r '.body' "$STORE/issue-310.json")"
+assert_contains "widen: appends a declaration when the only 'Paths:' line is fenced" \
+  "Paths: nuget.config, Directory.Build.local.props" "$body310"
+assert_contains "widen: ...and the appended line is what the reader picks up" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#310' 'FS.GG.SDD#311' 2>&1 || true)"
+
+# Because the reader UNIONS the surviving declarations, `widen` must replace the first and DROP the
+# rest — otherwise a leftover line keeps reserving its old tokens and widen did not widen to what it
+# printed. This is also how a body that accumulated a stray bare quotation gets repaired.
+seed_issue_raw 320 "Two bare declarations" 'Paths: src/Audio/**
+
+Paths: src/Scene/**'
+as brant-g07 widen 'FS.GG.SDD#320' --paths 'src/Legacy/**' >/dev/null 2>&1 || true
+body320="$(jq -r '.body' "$STORE/issue-320.json")"
+assert_eq "widen: collapses duplicate declarations to exactly one" "1" \
+  "$(printf '%s\n' "$body320" | grep -cE '^ {0,3}[Pp]aths:' || true)"
+assert_contains "widen: ...and the survivor is the widened set" "Paths: src/Legacy/**" "$body320"
+assert_contains "widen: ...so the reader no longer sees the dropped tokens" "DISJOINT —" \
+  "$(pw overlap 'FS.GG.SDD#320' 'FS.GG.SDD#42' 2>&1 || true)"
+assert_contains "widen: ...and does see the widened one" "OVERLAP" \
+  "$(pw overlap 'FS.GG.SDD#320' 'FS.GG.SDD#43' 2>&1 || true)"
+
+# An UNCLOSED fence swallows the rest of the body, so there is no declaration to patch and widen
+# APPENDS — straight into the still-open fence, where the reader will never see it. widen would then
+# print a confident `widened …` over an item that still declares nothing, on precisely the body a
+# worker runs widen to repair. The fence is closed before the declaration is appended.
+seed_issue_raw 318 "Unclosed fence" 'Here is the repro:
+
+```
+Paths: src/Audio/**'
+as brant-g07 widen 'FS.GG.SDD#318' --paths 'src/Scene/**' >/dev/null 2>&1 || true
+assert_contains "widen: closes an unterminated fence before appending the declaration" \
+  "OVERLAP" "$(pw overlap 'FS.GG.SDD#318' 'FS.GG.SDD#70' 2>&1 || true)"
+assert_contains "widen: ...and the appended declaration does not reserve the quoted set" "DISJOINT —" \
+  "$(pw overlap 'FS.GG.SDD#318' 'FS.GG.SDD#42' 2>&1 || true)"
+
+# `repl` reaches awk through the environment, not `-v`, which applies escape processing to its value.
+# Under `-v` a token holding a backslash was PATCHed as something other than the string
+# `die_on_invalid_paths` validated and widen echoed back — `src/a\tb` became a real tab, which the
+# reader's `tr` then split into two tokens. The body must store exactly what was announced.
+seed_issue_raw 319 "Backslash token" 'Paths: src/Old'
+as brant-g07 widen 'FS.GG.SDD#319' --paths 'src/a\tb' >/dev/null 2>&1 || true
+body319="$(jq -r '.body' "$STORE/issue-319.json")"
+assert_contains "widen: a backslash in a token is stored verbatim (no awk -v escape processing)" \
+  'Paths: src/a\tb' "$body319"
+assert_eq "widen: ...and the stored line holds no literal tab" "0" \
+  "$(printf '%s' "$body319" | grep -cP '\t' || true)"
+
+# The scheduler: a fenced-only body is passed over exactly as an undeclared one is — with its reason.
+cat >"$FIXTURES/board-pw5.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":317,"title":"Fenced only","url":"https://github.com/FS-GG/FS.GG.SDD/issues/317","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":311,"title":"Real coord work","url":"https://github.com/FS-GG/FS.GG.SDD/issues/311","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4977}}
+JSON
+seed_issue_raw 317 "Fenced only" 'Repro:
+
+```
+Paths: scripts/fsgg-coord
+```'
+pw5() { PATH="$STUB:$PATH" GH_BOARD_SET=pw5 GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
+b5_out="$(pw5 batch --repo sdd --json 2>/dev/null)"
+b5_err="$(pw5 batch --repo sdd 2>&1 >/dev/null || true)"
+assert_eq "batch: schedules the honestly-declared item, and only it" '["FS.GG.SDD#311"]' "$(jq -c '.' <<<"$b5_out")"
+assert_contains "batch: says WHY it passed over the fenced-only candidate" \
+  "#317 — no 'Paths:' declared (cannot schedule)" "$b5_err"
+# The fail-open in one line: #317's quote names the very file #311 declares. Had the quote been read,
+# batch would have seen an OVERLAP it could not schedule — instead it must see no declaration at all.
+case "$b5_out" in *317*) bad "batch: never schedules an item on a fabricated touch-set" "$b5_out" ;;
+                  *) ok "batch: never schedules an item on a fabricated touch-set" ;; esac
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
