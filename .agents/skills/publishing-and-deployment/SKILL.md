@@ -26,9 +26,11 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 - **Feed:** the org **GitHub Packages** NuGet feed —
   `https://nuget.pkg.github.com/FS-GG/index.json`. **Not nuget.org.** Consumers who
   can't restore add it to their `NuGet.config` (or `--add-source` on a tool install).
-- **Channel:** FS-GG packages ship on a **`-preview`** channel (e.g.
-  `0.1.58-preview.1`). There is no stable line yet — tooling must track prereleases
-  (`ignoreUnstable: false`, `respectLatest: false` in the Renovate preset).
+- **Channel:** FS-GG packages ship on a **stable** channel. `FS.GG.Audio` `0.1.0`
+  (2026-07-09, FS.GG.Audio#4) promoted the **last `-preview` producer**, so every
+  `FS.GG.*` producer is now stable and the Renovate preset pins to stable
+  (`ignoreUnstable: true`, `respectLatest: true`). The org stays on the **0.x** line;
+  "stable" here means *no `-preview` suffix*, not 1.0.
 - **Feed provisioning** (`.github#21`) is **done + verified**: ~19 `FS.GG.*` packages
   resolve on the feed, `read:packages` auth works. (Older text in `default.json` /
   ADR-0007 that calls the feed "dormant/deferred" predates provisioning — trust the

@@ -28,11 +28,11 @@
       "groupName": "Expecto/FsCheck test stack"
     },
     {
-      "description": "FS-GG packages ship on a -preview channel; track prereleases instead of pinning to a non-existent stable.",
+      "description": "FS-GG packages now all ship on a STABLE channel (FS.GG.Audio 0.1.0 was the last -preview producer, FS.GG.Audio#4). Prefer stable releases; do not propose prereleases over them.",
       "matchDatasources": ["nuget"],
       "matchPackageNames": ["/^FS\\.GG\\./"],
-      "ignoreUnstable": false,
-      "respectLatest": false
+      "ignoreUnstable": true,
+      "respectLatest": true
     }
   ],
   "customManagers": [
