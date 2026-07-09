@@ -54,18 +54,40 @@ jobs:
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
           { echo '### Touch-set drift'; echo; echo '```'; cat drift.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
-      # One sticky comment, edited in place: a clean run heals a previous drift comment rather than
-      # leaving a stale warning on the PR.
+      # One sticky comment, addressed by its MARKER. `gh pr comment --edit-last` picks the actor's most
+      # recent comment regardless of what it says, so in a repo where another GITHUB_TOKEN workflow also
+      # comments (coverage, build) it would overwrite that bot's comment — and be overwritten in turn.
+      # We find our own comment by the `fsgg:touch-set-drift` marker and PATCH exactly that one.
+      #
+      # This step runs on EVERY verdict, including `skip`: a PR that drifted and then had its `Paths:`
+      # declaration removed must not keep a stale ⚠️ asserting a violation of a declaration that no
+      # longer exists. `skip` deletes the comment rather than leaving it to rot.
       - name: Comment the verdict
-        if: steps.check.outputs.verdict != 'skip'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERDICT: ${{ steps.check.outputs.verdict }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.check.outputs.verdict }}" = "drift" ]; then
+          MARKER='<!-- fsgg:touch-set-drift -->'
+
+          # No `gh | head`: under `pipefail` a closed pipe would fail the step. Collect, then take the
+          # first line from a shell builtin instead.
+          matches="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                       --jq '.[] | select(.body | startswith("'"$MARKER"'")) | .id')"
+          existing="${matches%%$'\n'*}"
+
+          if [ "$VERDICT" = "skip" ]; then
+            [ -n "$existing" ] && gh api -X DELETE "repos/$REPO/issues/comments/$existing" >/dev/null \
+              && echo "healed: removed a stale touch-set comment (no declaration to check)."
+            exit 0
+          fi
+
+          if [ "$VERDICT" = "drift" ]; then
             {
-              printf '<!-- fsgg:touch-set-drift -->\n'
+              printf '%s\n' "$MARKER"
               printf '⚠️ **This PR changes files outside the touch-set its issue declared.**\n\n'
               printf 'The scheduler (`fsgg-coord batch`) used that declaration to decide this item could run\n'
               printf 'in parallel with others. Files outside it were never checked for overlap.\n\n'
@@ -76,9 +98,12 @@ jobs:
               printf 'not an enforced boundary)._\n'
             } > comment.md
           else
-            {
-              printf '<!-- fsgg:touch-set-drift -->\n'
-              printf '✅ This PR stays inside the touch-set its issue declared.\n'
-            } > comment.md
+            { printf '%s\n' "$MARKER"
+              printf '✅ This PR stays inside the touch-set its issue declared.\n'; } > comment.md
           fi
-          gh pr comment "${{ github.event.number }}" --body-file comment.md --edit-last --create-if-none
+
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@comment.md >/dev/null
+          fi

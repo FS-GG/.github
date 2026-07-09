@@ -92,6 +92,24 @@ read the lock rather than the board.
    The **assignee is still set** — it is what a human sees on the board — but it is no longer load-
    bearing. The board `Status` flip stays best-effort: the marker, not the column, is the lock.
 
+   Two corollaries of "lowest live id wins", both of which the implementation must honour or the CAS
+   fails open:
+
+   - **An unobservable marker is a lost race.** If the re-read shows *no* live marker, our own marker
+     is missing — a peer's `--force`/`reap` collected it, or the read lagged the write. We cannot
+     *demonstrate* we hold the lock, so we do not hold it. "We cannot tell" resolves to **loss**, not
+     to a win; the claimant removes any trace and retries. Treating the empty read as a win lets a
+     worker announce a lock while holding nothing, leaving the item free for the next claimant.
+   - **"Already gone" is success for a collector.** A `DELETE` that 404s means the marker is not
+     there, which is exactly what the caller wanted. Two workers collecting the same expired marker
+     must not turn the loser's benign 404 into a refusal to claim.
+
+   The CAS assumes the re-read observes every concurrently-posted marker. GitHub offers no formal
+   read-after-write guarantee across replicas, so a sufficiently unlucky pair of racers could each see
+   only its own marker. The lease bounds the damage (the loser's marker expires and is collected), and
+   `who` surfaces a double-hold, but this is the residual risk the git-ref CAS in *Alternatives* would
+   have removed outright.
+
 3. **Claims carry a lease, and an expired lease cannot be resurrected.** A marker's `updated_at` is
    its heartbeat; past `FSGG_CLAIM_LEASE_MIN` (default 120m) it is **stale**. Three rules keep a
    lease from becoming a second, silent lock:

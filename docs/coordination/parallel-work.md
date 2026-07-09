@@ -135,6 +135,17 @@ Integration is by PR into a green `main`. Agents should prefer the harness's bui
 isolation (`isolation: "worktree"`), which is the same discipline managed for them. The worktree also
 supplies the worker id (§0 rule 3), so this is not merely hygiene.
 
+`claim` stamps the worker into the worktree (`git config fsgg.worker`), which is what `who --local`
+reads back. Git only scopes those keys per-worktree when the repo enables the worktree-config
+extension — otherwise they land in the **shared** config and the last claim overwrites every earlier
+one, so `who --local` names one worker for every worktree. Enable it once per checkout:
+
+```sh
+git config extensions.worktreeConfig true
+```
+
+`claim` says so when it has to fall back; it does not enable the extension for you.
+
 ### 3. Touch-set → a declared `Paths:` line, and a scheduler that reads it
 
 Each item declares the file subtrees it will touch as a **`Paths:`** line in its issue body:

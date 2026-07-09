@@ -273,6 +273,12 @@ if [ "\$sub" = "api" ]; then
     if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_FAIL_READ_ISSUE:-}" ] && [ -f "$STORE/posted-\$cnum" ]; then
       echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
     fi
+    # GH_VANISH_ISSUE=<n>: our marker is GONE by the time the CAS re-reads (a peer's --force/reap
+    # collected it, or the read lagged the write). The re-read sees NO live marker at all, so the
+    # claimant cannot show it holds the lock. It must treat that as a loss, not a win.
+    if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_VANISH_ISSUE:-}" ] && [ -f "$STORE/posted-\$cnum" ]; then
+      jq 'map(select(.body | test("^<!--\\\\s*fsgg:claim") | not))' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
+    fi
     # GH_REAP_RACE=<n>: the holder heartbeats between reap's snapshot read and its delete. Every read
     # after the first returns a freshly-renewed marker.
     if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_REAP_RACE:-}" ]; then
@@ -303,11 +309,30 @@ if [ "\$sub" = "api" ]; then
   fi
 
   # --- a single comment by id: PATCH (heartbeat) / DELETE (release, back-off, reap) -------------
+  # GH_FAIL_DELETE=<id>: the DELETE of <id> fails with a 500 (transient). Models "the marker survives".
+  # A DELETE of an id that is NOT in the store 404s, exactly as GitHub does — the collector's benign
+  # "somebody already removed it" case, which must not read as a hard failure.
   if [[ "\$path" =~ ^repos/[^/]+/[^/]+/issues/comments/([0-9]+) ]]; then
     cid="\${BASH_REMATCH[1]}"
+    if [ "\$method" = "DELETE" ] && [ "\$cid" = "\${GH_FAIL_DELETE:-}" ]; then
+      printf 'comment-delete-failed %s\n' "\$cid" >>"\$GH_LOG"
+      echo "gh: HTTP 500 Internal Server Error" >&2; exit 1
+    fi
+    # GH_DELETE_404=<id>: a rival collector's DELETE of <id> landed first. Ours 404s, and the comment
+    # really is gone afterwards — "already collected", which is success for a garbage collector.
+    if [ "\$method" = "DELETE" ] && [ "\$cid" = "\${GH_DELETE_404:-}" ]; then
+      for cf in "$STORE"/comments-*.json; do
+        [ -f "\$cf" ] || continue
+        jq --argjson id "\$cid" 'map(select(.id != \$id))' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
+      done
+      printf 'comment-delete-404 %s\n' "\$cid" >>"\$GH_LOG"
+      echo "gh: Not Found (HTTP 404)" >&2; exit 1
+    fi
+    found=""
     for cf in "$STORE"/comments-*.json; do
       [ -f "\$cf" ] || continue
       jq -e --argjson id "\$cid" 'any(.[]; .id == \$id)' "\$cf" >/dev/null 2>&1 || continue
+      found=1
       if [ "\$method" = "DELETE" ]; then
         printf 'comment-delete %s\n' "\$cid" >>"\$GH_LOG"
         jq --argjson id "\$cid" 'map(select(.id != \$id))' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
@@ -318,6 +343,10 @@ if [ "\$sub" = "api" ]; then
       fi
       break
     done
+    if [ -z "\$found" ]; then
+      printf 'comment-%s-404 %s\n' "\$(printf '%s' "\$method" | tr 'A-Z' 'a-z')" "\$cid" >>"\$GH_LOG"
+      echo "gh: Not Found (HTTP 404)" >&2; exit 1
+    fi
     echo '{}' | emit; exit 0
   fi
 
@@ -329,8 +358,13 @@ if [ "\$sub" = "api" ]; then
   fi
 
   # --- a single issue: GET (title/body/Paths) or PATCH (widen rewrites the body) ----------------
+  # GH_FAIL_ISSUE_GET=<n>: the body read for <n> fails. `paths_of` reads the touch-set here, and an
+  # empty answer would read as "declared nothing" — i.e. disjoint from everything.
   if [[ "\$path" =~ ^repos/[^/]+/[^/]+/issues/([0-9]+)$ ]]; then
     inum="\${BASH_REMATCH[1]}"; jf="$STORE/issue-\$inum.json"
+    if [ "\$method" = "GET" ] && [ "\$inum" = "\${GH_FAIL_ISSUE_GET:-}" ]; then
+      echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
+    fi
     [ -f "\$jf" ] || { echo "gh stub: no issue fixture \$inum" >&2; exit 4; }
     if [ "\$method" = "PATCH" ]; then
       printf 'issue-patch %s\n' "\$inum" >>"\$GH_LOG"
@@ -1037,6 +1071,96 @@ reap91="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw2 GH_REAP_RACE=91 \
 assert_contains "reap: a claim renewed between the scan and the delete is SKIPPED" \
   "renewed since the scan" "$reap91"
 assert_eq "reap: ...and its marker survives" "finch-a3f" "$(workers_on 91)"
+
+# (i) THE FAIL-OPEN. If the CAS re-read shows NO live marker, our own marker is missing — a peer's
+#     --force/reap collected it, or the read lagged our write. We cannot demonstrate we hold the lock,
+#     so we must NOT announce that we do. "We cannot tell" is a loss. Guarding only the
+#     `winner != us` case (and skipping the empty case) let a worker claim while holding nothing,
+#     leaving the item free for the next claimant — two workers, one item.
+seed_issue 92 "Our marker vanishes mid-CAS" "src/I/**"
+echo '[]' >"$STORE/comments-92.json"
+cas92="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_VANISH_ISSUE=92 \
+  bash "$COORD" --worker teal-e55 claim 'FS.GG.SDD#92' 2>&1 || true)"
+assert_fails "claim: an empty CAS re-read is a LOSS, not a win" \
+  env PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_VANISH_ISSUE=92 bash "$COORD" --worker teal-e55 claim 'FS.GG.SDD#92'
+assert_contains "claim: it says the marker vanished" "marker vanished" "$cas92"
+case "$cas92" in *"claimed FS.GG.SDD#92"*) bad "claim: must not announce a lock it cannot show" "$cas92" ;;
+                 *) ok "claim: must not announce a lock it cannot show" ;; esac
+
+# (j) A marker bearing OUR id is not proof it is ours: rules 4/5 hand one id to several workers, and
+#     the re-claim path skips the CAS entirely. It must warn there, not only on the fresh-claim path.
+#     Drive it through rule 4 (a shared claude-code session id), since that is the id that can collide.
+seed_issue 93 "Re-claim under a shared id" "src/J/**"
+sess93=309bd638-8a1c-42b7-952b-898efb8d1064
+shared93() { PATH="$STUB:$PATH" GH_BOARD_SET=pw \
+  env -u FSGG_WORKER -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID \
+      CLAUDE_CODE_SESSION_ID="$sess93" bash "$COORD" "$@"; }
+wid93="$(shared93 whoami 2>/dev/null | awk '/^worker/{print $2}')"
+mk_claim 93 817 "$wid93" fresh | jq -s '.' >"$STORE/comments-93.json"
+reclaim93="$(shared93 claim 'FS.GG.SDD#93' 2>&1 || true)"
+assert_contains "claim: the re-claim path renews rather than duplicating" "lease renewed" "$reclaim93"
+assert_eq "claim: ...and still exactly one marker" "1" \
+  "$(jq '[.[] | select(.body | test("fsgg:claim"))] | length' "$STORE/comments-93.json")"
+assert_contains "claim: the re-claim path WARNS that it never ran the CAS" "adopted ITS lock" "$reclaim93"
+assert_contains "claim: ...and names the shared-id hazard" "may not be unique to this worker" "$reclaim93"
+
+# (k) `paths_of` must FAIL CLOSED. An empty touch-set reads as "disjoint from everything", so a failed
+#     body read would let the scheduler hand out work overlapping a held item. `claims_of` already
+#     refuses to guess the lock state; the touch-set is the other half of the same guarantee.
+#     The tell is WHICH diagnosis comes out: a failed read must not be reported as "declared nothing".
+seed_issue 94 "Touch-set read fails" "src/K/**"
+paths94="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_ISSUE_GET=94 \
+  bash "$COORD" overlap 'FS.GG.SDD#94' 'FS.GG.SDD#84' 2>&1 || true)"
+assert_contains "paths_of: a failed body read refuses to schedule against an unknown touch-set" \
+  "refusing to schedule" "$paths94"
+case "$paths94" in
+  *"no 'Paths:' touch-set declared"*)
+    bad "paths_of: a failed read must not be diagnosed as 'the issue declared nothing'" "$paths94" ;;
+  *) ok "paths_of: a failed read must not be diagnosed as 'the issue declared nothing'" ;;
+esac
+
+# (l) Two claimants collecting the SAME expired marker: the loser's DELETE 404s because the winner
+#     already removed it. "Already gone" is the goal state of a collector, so the loser must still
+#     claim — not die "refusing to claim over a marker that is still there" about a marker that is
+#     demonstrably not there. GH_DELETE_404 models the winner's delete landing first: the marker is
+#     present for our read and our re-verify, and gone by the time our DELETE arrives.
+seed_issue 95 "Concurrent GC of one stale marker" "src/L/**"
+mk_claim 95 818 ghost-444 stale | jq -s '.' >"$STORE/comments-95.json"
+gc95="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_DELETE_404=818 \
+  bash "$COORD" --worker heron-b71 claim 'FS.GG.SDD#95' 2>&1 || true)"
+assert_contains "claim: a 404 collecting an already-gone marker is not fatal" "claimed FS.GG.SDD#95" "$gc95"
+assert_eq "delete_comment: 'already gone' leaves exactly the new holder" "heron-b71" "$(workers_on 95)"
+
+# (m) `reap` must DELETE before it notifies. Notifying first means a failed delete tells the worker to
+#     stop while its marker still holds the item for a full lease — released to its owner, held
+#     against everyone else, and nothing clears it.
+cat >"$FIXTURES/board-pw3.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":96,"title":"Delete fails","url":"https://github.com/FS-GG/FS.GG.SDD/issues/96","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4979}}
+JSON
+seed_issue 96 "Delete fails during reap" "src/M/**"
+mk_claim 96 819 ghost-555 stale | jq -s '.' >"$STORE/comments-96.json"
+: >"$GH_LOG"
+reap96="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw3 GH_FAIL_DELETE=819 \
+  bash "$COORD" --worker wren-c22 reap --repo sdd --apply 2>&1 || true)"
+assert_contains "reap: a failed delete is reported, not swallowed" "FAILED" "$reap96"
+assert_eq "reap: a failed delete leaves the marker in place" "ghost-555" "$(workers_on 96)"
+assert_eq "reap: ...and does NOT tell the worker it was released" "0" \
+  "$(jq '[.[] | select(.body | test("fsgg:msg")) | select(.body | test("to=ghost-555"))] | length' "$STORE/comments-96.json")"
+
+# (n) `say --to` must normalize to a worker id. Ids are slug()'d at creation and `inbox` matches `.to`
+#     by exact string, so an unslugged target posts a message its recipient can never see.
+seed_issue 97 "Addressed message" "src/N/**"
+echo '[]' >"$STORE/comments-97.json"
+say97="$(as wren-c22 say 'FS.GG.SDD#97' --to 'Heron-B71' 'the impl is yours' 2>&1)"
+assert_contains "say: a mis-cased --to is normalized to the worker id" "normalized from 'Heron-B71'" "$say97"
+assert_eq "say: ...and the marker addresses the slug, so inbox can match it" "1" \
+  "$(jq '[.[] | select(.body | test("fsgg:msg")) | select(.body | test("to=heron-b71"))] | length' "$STORE/comments-97.json")"
+assert_eq "say: '*' stays the literal broadcast target" "1" \
+  "$(as wren-c22 say 'FS.GG.SDD#97' 'anyone home' >/dev/null 2>&1; jq '[.[] | select(.body | test("to=\\*"))] | length' "$STORE/comments-97.json")"
 
 # `--help` must not silently truncate when a subcommand is added (usage is marker-delimited now).
 help="$(pw --help 2>/dev/null)"

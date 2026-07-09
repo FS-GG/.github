@@ -301,11 +301,24 @@ warn_shared_identity() {
 
 # Stamp the worker into the worktree itself, so "who edited these files?" is a `git config` read
 # rather than mtime forensics. Best-effort: a claim made outside a checkout still holds.
+# `git config --worktree` only writes per-worktree when `extensions.worktreeConfig` is set, which is
+# NOT the default. Without it both keys land in the shared config that every linked worktree reads,
+# so the last claim overwrites all the others and `who --local` attributes every worktree to one
+# worker — the misattribution this stamp exists to prevent. We do not silently enable the extension
+# on someone's repo; we say what happened so it is fixable.
 stamp_worktree() {
   git rev-parse --git-dir >/dev/null 2>&1 || return 0
-  git config --worktree fsgg.worker "$1" 2>/dev/null \
-    || git config fsgg.worker "$1" 2>/dev/null || true
-  git config fsgg.item "$2" 2>/dev/null || true
+  local scoped=1
+  git config --worktree fsgg.worker "$1" 2>/dev/null && git config --worktree fsgg.item "$2" 2>/dev/null || scoped=0
+  if [ "$scoped" -eq 0 ]; then
+    git config fsgg.worker "$1" 2>/dev/null || true
+    git config fsgg.item   "$2" 2>/dev/null || true
+    if [ "$(git rev-parse --git-dir 2>/dev/null)" != "$(git rev-parse --git-common-dir 2>/dev/null)" ]; then
+      echo "fsgg-coord: NOTE — stamped worker '$1' into this repo's SHARED git config, not this worktree's." >&2
+      echo "  Linked worktrees share it, so 'who --local' will show the last claimer for all of them." >&2
+      echo "  Fix: git config extensions.worktreeConfig true" >&2
+    fi
+  fi
 }
 
 whoami_cmd() {
@@ -383,9 +396,17 @@ parse_msgs() {
 
 post_comment()   { gh api "repos/$1/$2/issues/$3/comments" -f body="$4" --jq '.id'; }
 patch_comment()  { gh api -X PATCH  "repos/$1/$2/issues/comments/$3" -f body="$4" >/dev/null; }
-# Returns non-zero when the delete did NOT happen. Callers must not claim they cleaned up otherwise:
-# a surviving marker by a worker that walked away blocks the item for a full lease.
-delete_comment() { gh api -X DELETE "repos/$1/$2/issues/comments/$3" >/dev/null 2>&1; }
+# Returns non-zero when the comment is still THERE afterwards. Callers must not claim they cleaned up
+# otherwise: a surviving marker by a worker that walked away blocks the item for a full lease.
+# A 404 is SUCCESS, not failure — "already gone" is the goal state of every caller, and two workers
+# collecting the same expired marker must not turn the loser's benign 404 into a hard error.
+delete_comment() {
+  local out rc=0
+  out="$(gh api -X DELETE "repos/$1/$2/issues/comments/$3" 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+  case "$out" in *404*|*"Not Found"*) return 0 ;; esac
+  return 1
+}
 
 # Tell a worker whose marker we removed. Both `reap` and `claim` collect dead claims; neither may do
 # it silently — a worker that is merely slow needs to learn its item was taken.
@@ -1246,9 +1267,21 @@ claim_cmd() {
   # worker re-claiming renews a single marker instead of minting a second.
   stale="$(jq -c 'map(select(.stale))' <<<"$claims")"
   if [ "$(jq 'length' <<<"$stale")" -gt 0 ]; then
-    local sid sw sage
+    local sid sw sage fresh
     while read -r sid sw sage; do
       [ -n "$sid" ] || continue
+      # RE-VERIFY against a fresh read, exactly as `reap` does. `claims` is a snapshot, and the holder
+      # may have heartbeated since. Deleting a marker because it USED TO BE stale evicts a worker that
+      # is alive and believes its lease was renewed — the double-hold this GC exists to prevent.
+      fresh="$(claims_of "$R_OWNER" "$R_REPO" "$R_NUM" \
+               | jq -c --argjson id "$sid" 'map(select(.id == $id)) | first // empty')"
+      if [ -z "$fresh" ]; then
+        echo "fsgg-coord: worker '$sw' expired marker on $R_REPO#$R_NUM was already collected." >&2
+        continue
+      fi
+      if [ "$(jq -r '.stale' <<<"$fresh")" != "true" ]; then
+        die "claim: worker '$sw' renewed its lease on $R_REPO#$R_NUM while we were collecting it ($(jq -r '.ageSec / 60 | floor' <<<"$fresh")m ago) — it is alive. Retry, or use --force to steal."
+      fi
       if delete_comment "$R_OWNER" "$R_REPO" "$sid"; then
         [ "$sw" = "$w" ] || notify_reaped "$R_OWNER" "$R_REPO" "$R_NUM" "$sw" "$sage" "$w"
         echo "fsgg-coord: collected worker '$sw' expired claim on $R_REPO#$R_NUM (idle ${sage}m)." >&2
@@ -1276,10 +1309,19 @@ claim_cmd() {
   fi
 
   # Re-claiming what we already hold is a heartbeat, not an error: `take` retries must be idempotent.
+  # CAREFUL: a marker bearing our id is not proof it is OURS. Identity rules 4/5 can hand one id to
+  # several workers, and this path bypasses the CAS entirely — so it is exactly where a same-id
+  # sibling silently adopts another worker's lock. Warn here too; the success path's warning at the
+  # bottom of this function is never reached from this early return.
   if [ -n "$mine" ]; then
     heartbeat_comment "$R_OWNER" "$R_REPO" "$R_NUM" "$(jq -r '.id' <<<"$mine")" "$w" "$ref"
     stamp_worktree "$w" "$R_REPO#$R_NUM"
     printf 'held %s by worker %s (lease renewed)\n' "$R_REPO#$R_NUM" "$w"
+    if [ -n "$WORKER_SHARED_WHY" ]; then
+      echo "fsgg-coord: NOTE — this renewed an EXISTING marker for worker '$w' without running the" >&2
+      echo "  claim CAS. If another worker shares this id, you have just adopted ITS lock." >&2
+    fi
+    warn_shared_identity
     return 0
   fi
   if [ "$(jq 'length' <<<"$others")" -gt 0 ]; then
@@ -1304,7 +1346,15 @@ claim_cmd() {
   winner="$(parse_claims <<<"$recheck" | jq -c 'map(select(.stale | not)) | first // empty')"
   wid="$(jq -r '.id // empty' <<<"$winner")"
   ww="$(jq -r '.worker // empty' <<<"$winner")"
-  if [ -n "$wid" ] && [ "$wid" != "$myid" ]; then
+  # NO live marker at all means our OWN marker is missing from the re-read: a peer's --force/reap/GC
+  # deleted it under us, or the read has not caught up with our POST. We cannot show we hold the lock,
+  # so we do not hold it. "We cannot tell" is a LOSS — treating it as a win is how two workers both
+  # proceed holding nothing.
+  if [ -z "$wid" ]; then
+    delete_comment "$R_OWNER" "$R_REPO" "$myid" || true
+    die "claim: our marker vanished from $R_REPO#$R_NUM between posting and re-reading it (a concurrent --force/reap, or a read that lagged the write) — nothing was claimed. Retry ('fsgg-coord take')."
+  fi
+  if [ "$wid" != "$myid" ]; then
     delete_comment "$R_OWNER" "$R_REPO" "$myid" \
       || die "lost the claim race on $R_REPO#$R_NUM to worker '$ww', but could NOT remove our own marker (comment $myid). Delete it by hand — it is blocking the item."
     die "lost the claim race on $R_REPO#$R_NUM to worker '$ww' — backed off cleanly. Try another item ('fsgg-coord take')."
@@ -1410,9 +1460,21 @@ release_cmd() {
 # NO declaration is a normal, expected answer ("this item cannot be scheduled yet"), not an error:
 # `grep` exits 1 on no match, and under `set -o pipefail` that would abort every caller at exactly the
 # item they need to report on. Return empty, exit 0, and let the caller decide what an empty set means.
+#
+# But an EMPTY answer must mean "this item declared no touch-set", never "the read failed". A failed
+# read that returns empty reads as `disjoint` to `conflicts_between`, so the scheduler would hand out
+# work that overlaps a held item — the same fail-open `claims_of` refuses for the lock itself. So the
+# body is read on its own line and a read failure DIES; only `grep`'s no-match is absorbed below.
+#
+# The detect and the strip must also agree on case, or a mis-cased `PATHS:` line survives grep and
+# keeps its prefix as a bogus `PATHS:` touch-set token. `widen` rewrites on `[Pp]aths:` too, so that
+# is the one spelling the whole tool recognizes.
 paths_of() {  # $1=owner $2=repo $3=num -> one normalized touch-set token per line (possibly none)
-  gh api "repos/$1/$2/issues/$3" --jq '.body // ""' 2>/dev/null \
-    | grep -iE '^[[:space:]]*Paths:' \
+  local body
+  body="$(gh api "repos/$1/$2/issues/$3" --jq '.body // ""' 2>/dev/null)" \
+    || die "cannot read the touch-set on $2#$3 (rate limit? network?) — refusing to schedule against an unknown touch-set."
+  printf '%s\n' "$body" \
+    | grep -E '^[[:space:]]*[Pp]aths:' \
     | sed -E 's/^[[:space:]]*[Pp]aths:[[:space:]]*//' \
     | tr ',' ' ' | tr '\t' ' ' | tr -s ' ' '\n' | sed '/^$/d' \
     | sed -E 's#^\./##; s#/\*\*$##; s#/\*$##; s#/+$##' \
@@ -1658,11 +1720,14 @@ reap_cmd() {
       printf 'skipped %s#%s  worker %s  — renewed since the scan (%sm), still alive\n' \
         "$rp" "$num" "$cw" "$(jq -r '.ageSec / 60 | floor' <<<"$now_state")"; continue
     fi
-    notify_reaped "$o" "$rp" "$num" "$cw" "$age" "$(worker)"
+    # DELETE FIRST, then tell the worker. Notifying before the delete lands means a failed delete
+    # leaves the worker told-to-stop while its marker still holds the item for a full lease — an
+    # item that is released to its owner and held against everyone else, which nothing clears.
     if ! delete_comment "$o" "$rp" "$cid"; then
-      printf 'FAILED  %s#%s  worker %s  — could not remove the marker; board left untouched\n' "$rp" "$num" "$cw" >&2
+      printf 'FAILED  %s#%s  worker %s  — could not remove the marker; board left untouched, worker not notified\n' "$rp" "$num" "$cw" >&2
       continue
     fi
+    notify_reaped "$o" "$rp" "$num" "$cw" "$age" "$(worker)"
     ( set_field "$r#$num" Status Ready ) >/dev/null 2>&1 || true
     printf 'reaped  %s#%s  worker %s  (idle %sm)  ·  board: Ready\n' "$rp" "$num" "$cw" "$age"
   done
@@ -1804,7 +1869,17 @@ say_cmd() {
   local ref="" to="*" msg=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --to) to="${2:?--to needs a value}"; shift 2 ;;
+      # SLUG the target. Worker ids are always slug()'d at creation, and `inbox` matches `.to` by exact
+      # string, so an unslugged `--to Finch-A3F` posts a message that its recipient can never see.
+      # `*` (anyone holding the item) is the one literal that is not a worker id.
+      --to) to="${2:?--to needs a value}"
+            if [ "$to" != '*' ]; then
+              local slugged; slugged="$(slug "$to")"
+              [ -n "$slugged" ] || die "say: --to '$to' is not a usable worker id."
+              [ "$slugged" = "$to" ] || echo "fsgg-coord: addressing worker '$slugged' (normalized from '$to')." >&2
+              to="$slugged"
+            fi
+            shift 2 ;;
       -*)   die "say: unknown flag '$1'." ;;
       *)    if [ -z "$ref" ]; then ref="$1"; else msg="${msg:+$msg }$1"; fi; shift ;;
     esac
