@@ -426,6 +426,18 @@ A gate that passes when its subject is absent manufactures confidence, so each o
 **fails closed**: "nothing to check" and "checked, and it's fine" must not share an exit code
 ([.github#266](https://github.com/FS-GG/.github/issues/266)).
 
+**A fourth axis, one layer up: the gates' own pins.** The schema axis above runs a *pinned*
+version of the typed validator, so that pin is a subject too — and a frozen one silently
+degrades the typed gate toward a "does the YAML parse" check, while the registry row asserting
+its coherence stays green. It froze twice ([.github#127](https://github.com/FS-GG/.github/issues/127),
+[.github#263](https://github.com/FS-GG/.github/issues/263)), each time found by eye during a
+release. [`scripts/check-pin-coherence.py`](../scripts/check-pin-coherence.py) (coherence id
+`pin-feed-coherence`) now compares every `# renovate:`-annotated literal in this repo against the
+newest version live on the org feed, *and* asserts the `hostRules` feed token without which
+Renovate cannot bump any of them — the mechanism the pin's coherence had always been assumed to
+rest on, and which `.github` alone never configured. It takes its notion of "what is a pin" from
+the org preset's own annotation regex, so the gate and the bot cannot disagree about the subject.
+
 **Sibling registries in this repo.** Two more `.github`-owned registries sit alongside
 `dependencies.yml`: [`registry/skills.yml`](../registry/skills.yml) (the skill catalog —
 also a versioned contract, `skill-registry`, in the table below) and

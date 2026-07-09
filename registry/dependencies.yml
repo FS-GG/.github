@@ -719,7 +719,7 @@ coherence:
       stand-in. The typed fsgg-contracts version-coupling assertion (registry's declared pin == actual
       package version) remains a dedicated gate step. Callers must grant `packages: read` so the gate
       restores the validator from the org feed (viable since the H4 provisioning blocker #21 closed).
-    impact: "CI schema validation is now the typed Fsgg.Registry validator; the Python stand-in is retired. The gate gains a feed dependency — every caller must grant `packages: read` (run-scoped GITHUB_TOKEN authenticates the NuGet restore). The four product-repo callers adopt the same `packages: read` grant as an .github#49 follow-up."
+    impact: "CI schema validation is now the typed Fsgg.Registry validator; the Python stand-in is retired. The gate gains a feed dependency — every caller must grant `packages: read` (run-scoped GITHUB_TOKEN authenticates the NuGet restore). The four product-repo callers adopt the same `packages: read` grant as an .github#49 follow-up. 2026-07-09 (.github#263): this row's coherent:true rests on the FS.GG.SDD.Cli pin tracking feed-newest — a frozen typed validator degrades toward a YAML-parses check under additive tolerance, and the pin DID freeze twice (.github#127, .github#263) while this row read green. That assumption is now ENFORCED, not assumed: pin-coherence.yml (coherence id pin-feed-coherence) compares the pin against the live feed daily and gates the Renovate mechanism that bumps it."
   - id: registry-schema-governed
     coherent: true
     owner: github
@@ -826,6 +826,16 @@ coherence:
       current. Stays coherent:false for ONE remaining reason: no Renovate sweep has yet resolved an
       FS.GG.* feed lookup green end-to-end and opened the auto-PR (only third-party Renovate PRs observed
       so far). Flips coherent:true on the first green FS.GG.* Renovate sweep.
+      2026-07-09 (.github#263): for THIS repo that symptom now has a cause. `.github`'s own
+      renovate.json carried no feed hostRules token — the token cannot live in the shared preset, and
+      every product repo has its own copy, but the preset's author never adopted its own requirement.
+      So every FS.GG.* lookup here 401'd and the annotation manager could never bump the
+      FS.GG.SDD.Cli pin it owns (the H2 freeze, twice). The token is now present and gated by
+      pin-coherence.yml (coherence id pin-feed-coherence). Note the scope: this explains .github's
+      silence, NOT necessarily the other repos' — "only third-party Renovate PRs observed" is an
+      org-wide observation, and no green FS.GG.* sweep has been observed ANYWHERE. This row therefore
+      stays coherent:false on the same condition as before; it is simply no longer blocked here by a
+      cause nobody had identified.
     tracking: "https://github.com/FS-GG/.github/issues/22"
   - id: governance-cli-handoff-consumer-published
     coherent: true
@@ -1181,3 +1191,78 @@ coherence:
       0.1.0-preview.1).
     resolved_by: FS-GG/.github#267 (gate + fixture + workflow; this registry PR registers the coherence id)
     tracking: "https://github.com/FS-GG/.github/issues/267 (child of the fails-open epic https://github.com/FS-GG/.github/issues/266)"
+  - id: pin-feed-coherence
+    coherent: true
+    owner: github
+    summary: >
+      .github#263 (epic #266, fails-open coherence gates): the EMBEDDED version pins in this repo —
+      the literals carrying a `# renovate: datasource=.. depName=..` annotation — are now compared
+      against the newest version LIVE on the org feed, and the Renovate mechanism that is supposed to
+      bump them is itself gated. registry-feed-coherence (.github#267) does this for the registry's
+      `package-version` rows; this is the same question one layer up, for the pins the gates
+      themselves run on. The subject: contract-coherence.yml installs the TYPED registry validator at
+      a pinned FS.GG.SDD.Cli version, and the registry row `registry-validator-typed` asserts
+      coherent:true on the strength of that pin tracking feed-newest — because under the registry's
+      additive tolerance a frozen typed validator silently degrades toward a "does the YAML parse"
+      check. Nothing enforced it. The pin froze at 0.2.1 while the org shipped 0.5.0 (.github#127,
+      "H2"), was advanced by hand, and froze AGAIN at 0.5.0 while the org shipped 0.6.0, 0.7.0 and
+      0.8.0 (.github#263) — found by eye during the v0.9.0 release, three minors late, both times.
+      ROOT CAUSE (found in .github#263, previously three unverified hypotheses): `.github`'s own
+      renovate.json carried NO feed `hostRules` token. FS.GG.* resolves only from the private org
+      GitHub Packages feed, and Renovate does not substitute `{{ secrets }}` inside a preset pulled
+      via `extends`, so the token must live in each repo's OWN config. All four product repos carry
+      it; `.github` — which AUTHORS the preset and dogfoods it — never adopted its own requirement,
+      on the recorded belief that "the FS.GG.* rules are inert here (no FS.GG.* PackageReferences)".
+      An annotated tool pin is an FS.GG.* dependency too. Every FS.GG.* lookup therefore 401'd, no
+      versions could be enumerated, and no bump PR could ever open. The symptom was recorded twice —
+      "only third-party Renovate PRs observed so far", in this registry and in the fabric guide — and
+      read as a pending milestone rather than as a fault.
+    enforcement: >
+      2026-07-09 (.github#263): scripts/check-pin-coherence.py, run by
+      .github/workflows/pin-coherence.yml on every PR touching the pins, the preset, the gate or its
+      fixture, on push to main, and DAILY on a schedule — the schedule is the load-bearing trigger,
+      exactly as for registry-feed-coherence: a CLI release that leaves the pin behind touches no file
+      in this repo, which is why three minors passed unseen. It asserts BOTH halves of "this pin can
+      move, and it has moved": FRESHNESS (every annotated pin equals feed-newest, failing in both
+      directions — behind = the freeze; ahead = a version no consumer can restore) and MECHANISM (this
+      repo's Renovate config carries a `hostRules` token for nuget.pkg.github.com, without which no
+      FS.GG.* pin can ever be bumped). The gate's SUBJECT is the org preset's own annotation regex,
+      read from default.json rather than re-specified, over the manager's own managerFilePatterns,
+      minus the paths Renovate's ignorePaths excludes (config:recommended -> :ignoreModulesAndTests):
+      gate and bot cannot disagree about what a pin is, so a reformat that blinds the manager also
+      reds the gate, and the gate never reds over a pin the bot was never going to bump. That last
+      clause is not theoretical — the gate's own fixture is a `.sh` file matching the manager's
+      patterns, and its heredoc test data reddened the first live run. Per the epic's rule it FAILS
+      CLOSED: a missing/empty/wrong-host token, no Renovate config, a preset with no annotation
+      manager, ZERO pins matched repo-wide, a pin named in REQUIRED_PINS gone invisible to that regex,
+      an unresolvable datasource or non-FS.GG package, an unreadable feed, a 404, zero versions, or an
+      unparsable literal is an ERROR, not a skip. Versions compare by NuGet ORDER, never by substring
+      (.github#268). REQUIRED_PINS is the fail-closed answer to the case a scan cannot see: a gate
+      that scans with the regex under suspicion sees exactly the nothing the bot sees, so the pins
+      this repo is known to carry are named explicitly and a DISAPPEARANCE is red. Feed reads and
+      NuGet ordering are shared with check-feed-coherence.py via scripts/fsgg_feed.py, so the two
+      gates cannot drift into disagreeing about version order. Its fixture (tests/pin-coherence/)
+      asserts every failure leg fires for its stated REASON, not merely non-zero — the vacuous
+      "must fail" defect the epic also names (SDD#299) — and is mutation-tested against 7 deliberate
+      fails-open regressions (mechanism check never raises; freshness always OK; required-pin assert
+      no-op; substring compare instead of order; zero-pins tripwire removed; a non-FS.GG package
+      silently skipped; the ignorePaths guard disabled; Renovate's config-resolution order reversed),
+      all caught. The config it reads is the one Renovate WOULD read (documented resolution order):
+      a token-bearing `.renovaterc` masking a token-less `.github/renovate.json` would otherwise
+      report green while the bot went on 401'ing — this epic's defect class rebuilt inside the gate
+      meant to close it.
+    impact: >
+      The .github#127 / .github#263 freeze cannot recur undetected: a CLI publish that leaves the pin
+      behind turns .github@main red within a day, and a PR that drops the feed token fails CI. The
+      pin is bot-managed again rather than a release-runbook chore, which is what .github#263's ask 2
+      proposed while the mechanism was still unproven — enforcement at the point of use, not prose in
+      a runbook. `registry-validator-typed`'s coherent:true is now EARNED rather than assumed: the
+      typed validator can no longer silently degrade toward a YAML-parses check. A NEW annotated pin
+      is discovered by the scan and checked like any other; naming it in REQUIRED_PINS additionally
+      buys detection of its disappearance. Verified live at adoption: the one annotated pin
+      (FS.GG.SDD.Cli 0.9.0 in contract-coherence.yml) equals the feed's newest, and renovate.json now
+      carries the token. NB this does NOT by itself flip cross-repo-auto-update, which awaits an
+      OBSERVED green FS.GG.* Renovate sweep; it removes the one blocker known to have prevented one
+      in this repo.
+    resolved_by: FS-GG/.github#263 (gate + fixture + workflow + the renovate.json hostRules fix; this registry PR registers the coherence id)
+    tracking: "https://github.com/FS-GG/.github/issues/263 (child of the fails-open epic https://github.com/FS-GG/.github/issues/266)"

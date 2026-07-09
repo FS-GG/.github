@@ -44,29 +44,29 @@ Exit 0 = the registry and the feed agree.
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
-import re
 import sys
-import urllib.error
-import urllib.request
 
 import yaml
 
-ORG = "FS-GG"
+# The feed reader and NuGet version ordering are SHARED with scripts/check-pin-coherence.py
+# (.github#263) — one implementation of "does this literal equal what the feed serves", so the two
+# gates cannot drift into disagreeing about version order. `scripts/` is not a package, so put this
+# file's own directory on the path: the test harnesses load this gate by path via importlib, which
+# sets sys.path[0] to the TEST's directory, not to scripts/.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# The NuGet v3 flat-container ("PackageBaseAddress") index, which is precisely what a
-# `dotnet restore` resolves a version against — so this reads REALITY as consumers see it.
-#
-# .github#267 proposed the packages REST API (GET /orgs/FS-GG/packages/nuget/<id>/versions).
-# This uses the feed instead, for two reasons: the REST endpoint wants a classic PAT with
-# `read:packages` and does not accept the run-scoped GITHUB_TOKEN, which would have forced a
-# stored secret onto every caller; and it answers "what does the packages API say" rather than
-# "what can a consumer restore". The feed answers the question the gate is actually asking.
-# Auth is HTTP Basic (any username + a token), the same scheme `dotnet nuget add source
-# --username --password` uses in contract-coherence.yml, so `packages: read` suffices.
-FEED = f"https://nuget.pkg.github.com/{ORG}"
+# Re-exported into this module's namespace on purpose: tests/feed-coherence/feed_reader_cases.py
+# reaches for `gate.feed_versions` / `gate.GateError` / `gate.newest` / `gate.parse_version`, and
+# stubs the transport by patching the shared `urllib.request.urlopen`, which still intercepts.
+from fsgg_feed import (  # noqa: E402  (path shim above must run first)
+    ORG,
+    GateError,
+    feed_versions,
+    newest,
+    parse_version,
+)
 
 # contract id -> the package id(s) whose newest feed version `package-version` names.
 #
@@ -95,86 +95,6 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     ],
 }
 
-_VERSION_RE = re.compile(
-    r"^(?P<nums>\d+(?:\.\d+){0,3})"      # 1 to 4 numeric segments (NuGet, not SemVer)
-    r"(?:-(?P<pre>[0-9A-Za-z.-]+))?"     # optional prerelease
-    r"(?:\+[0-9A-Za-z.-]+)?$"            # optional build metadata (ignored in ordering)
-)
-
-
-class GateError(Exception):
-    """A condition under which the gate must fail rather than skip."""
-
-
-def parse_version(text: str) -> tuple:
-    """Return a sort key ordering NuGet versions. Raises GateError on anything unparsable.
-
-    Numeric segments are padded to 4. A release outranks its own prereleases, so absence of a
-    prerelease sorts ABOVE presence (hence the 1/0 flag). Prerelease identifiers compare
-    dot-segment-wise: numeric segments numerically, numeric below alphanumeric, else
-    case-insensitively.
-    """
-    m = _VERSION_RE.match((text or "").strip())
-    if not m:
-        raise GateError(f"cannot parse version literal {text!r} as a NuGet version")
-    nums = [int(p) for p in m.group("nums").split(".")]
-    nums += [0] * (4 - len(nums))
-    pre = m.group("pre")
-    if pre is None:
-        return (tuple(nums), 1, ())
-    ids: list[tuple] = []
-    for seg in pre.split("."):
-        if seg.isdigit():
-            ids.append((0, int(seg), ""))
-        else:
-            ids.append((1, 0, seg.lower()))
-    return (tuple(nums), 0, tuple(ids))
-
-
-def feed_versions(package: str, token: str) -> list[str]:
-    """Every version of `package` live on the org feed. Any failure raises — never returns []."""
-    # Flat-container ids are lowercase (NuGet v3 §PackageBaseAddress).
-    url = f"{FEED}/download/{package.lower()}/index.json"
-    auth = base64.b64encode(f"x:{token}".encode()).decode()
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Authorization": f"Basic {auth}",
-            "Accept": "application/json",
-            "User-Agent": "fsgg-check-feed-coherence",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            raise GateError(
-                f"the feed rejected the token reading {package!r} (HTTP {e.code}). The gate "
-                f"needs `read:packages`. Refusing to report green on an unreadable feed."
-            ) from e
-        if e.code == 404:
-            raise GateError(
-                f"package {package!r} is not on the org feed (HTTP 404). The registry names a "
-                f"package the feed cannot serve — or the id mapping is wrong."
-            ) from e
-        raise GateError(f"feed read for {package!r} failed: HTTP {e.code} {e.reason}") from e
-    except urllib.error.URLError as e:
-        raise GateError(f"feed unreachable while reading {package!r}: {e.reason}") from e
-    except ValueError as e:
-        raise GateError(f"the feed returned unparsable JSON for {package!r}: {e}") from e
-
-    versions = payload.get("versions") if isinstance(payload, dict) else None
-    if not isinstance(versions, list):
-        raise GateError(
-            f"the feed's response for {package!r} has no `versions` list — the feed's shape "
-            f"changed, and an unrecognised response must not read as 'coherent'."
-        )
-    if not versions:
-        raise GateError(f"the feed served zero versions for {package!r}")
-    return [str(v) for v in versions]
-
-
 def _packages_for(contract_id: str) -> list[str]:
     pkgs = CONTRACT_PACKAGES.get(contract_id)
     if not pkgs:
@@ -184,11 +104,6 @@ def _packages_for(contract_id: str) -> list[str]:
             f"unchecked subject epic #266 is about."
         )
     return pkgs
-
-
-def newest(versions: list[str]) -> str:
-    """The greatest version by NuGet order. The feed returns creation order, not version order."""
-    return max(versions, key=parse_version)
 
 
 def check_contract(contract_id: str, declared: str, resolve) -> list[str]:
