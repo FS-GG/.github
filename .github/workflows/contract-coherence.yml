@@ -4,7 +4,7 @@
 #   1. The org registry (FS-GG/.github registry/dependencies.yml) is schema-valid — validated by
 #      the TYPED Fsgg.Registry validator (`fsgg-sdd registry validate`) shipped in FS.GG.Contracts
 #      via the FS.GG.SDD.Cli tool (SDD#26; 4-segment version grammar fixed in SDD#32 / CLI 0.2.1).
-#      The pin tracks the newest published CLI (0.5.0 as of .github#127/H2) — see the install step.
+#      The pin tracks the newest published CLI (0.9.0) — see the install step.
 #   2. The registry's declared `fsgg-contracts` pin equals the ACTUAL FS.GG.Contracts package
 #      version (read from FS-GG/FS.GG.SDD, the schema authority) — fails on drift.
 #   3. The calling repo's org-shared .NET build config matches the canonical source of truth
@@ -98,11 +98,15 @@ jobs:
             --store-password-in-clear-text
           # Pin == newest published FS.GG.SDD.Cli on the org feed. Coupled so it can't silently
           # freeze (the .github#127/H2 defect: pin sat at 0.2.1 while the org shipped 0.5.0, so
-          # additive-tolerance degraded the typed gate toward a YAML-parses check). The org
-          # Renovate preset's annotation manager (default.json) auto-bumps this literal when a
-          # newer CLI publishes; the registry `updated:` note asserts gate-pin == feed(newest).
+          # additive-tolerance degraded the typed gate toward a YAML-parses check).
+          #
+          # H2 RECURRED. The annotation manager below is supposed to auto-bump this literal on
+          # every CLI publish, and did not: the pin sat at 0.5.0 while the org shipped 0.6.0,
+          # 0.7.0 and 0.8.0. Caught by hand during the 0.9.0 release. Until someone establishes
+          # why the Renovate manager is not opening the bump PR, treat this literal as MANUAL —
+          # advancing it is part of cutting an SDD release, not something the bot does for you.
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli
-          dotnet tool install --global FS.GG.SDD.Cli --version 0.5.0
+          dotnet tool install --global FS.GG.SDD.Cli --version 0.9.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Resolve actual FS.GG.Contracts version

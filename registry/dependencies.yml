@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-08"   # (.github#238 / ADR-0024 step 3: FIRST CONSUMER EDGE of the fs-gg-audio package contract — rendering(template game/sample-pack) -> audio @0.1.0-preview.1; fs-gg-ui-template package 0.3.0->0.3.1-preview.1 over a HELD 0.3.0 framework pin (template-only); the templates->rendering edge catches up to 0.3.1 now that FS.GG.Templates#119 re-pinned it, closing the lag .github#250 recorded.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-09"   # (SDD v0.9.0: FS.GG.SDD.Cli 0.9.0 live on the org feed + nuget.org; FS.GG.Contracts HOLDS at 1.4.0, republished as a --skip-duplicate no-op. No contract field moves. The contract-coherence gate's FS.GG.SDD.Cli pin advances 0.5.0->0.9.0, re-establishing gate-pin == feed(newest) after the H2 freeze recurred across 0.6.0/0.7.0/0.8.0.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
