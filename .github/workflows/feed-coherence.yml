@@ -1,0 +1,82 @@
+# Gate the registry's `package-version` against the LIVE org feed (.github#267, epic #266).
+#
+# contract-coherence.yml validates registry/dependencies.yml against its SCHEMA and its PROJECTION.
+# Neither validates it against REALITY, so publish-before-flip (FR-007) was a convention nothing
+# enforced, and it drifted three times (.github#250; the missed fs-gg-ui-template 0.4.0-preview.1
+# flip; .github#263). scripts/check-feed-coherence.py closes that: for every contract carrying a
+# `package-version` it asserts the literal equals the newest version served by
+# nuget.pkg.github.com/FS-GG, failing on BOTH directions (behind = a release that never flipped the
+# registry; ahead = the registry advertising a version consumers cannot restore).
+#
+# The two triggers are the two halves of the acceptance criteria in #267:
+#   * pull_request — a PR that flips `package-version` to a version not on the feed fails CI.
+#   * push to main + schedule — a release that publishes WITHOUT flipping the registry turns
+#     .github@main red. The schedule is what catches it, since such a release touches no file here.
+#
+# The gate FAILS CLOSED (the point of epic #266): an unreadable feed, a 404 package, a missing
+# token, or a package-bearing contract nobody mapped is an ERROR, never a skip. So this workflow
+# must never gain a `continue-on-error` or a conditional that lets the live job be skipped into
+# green — "nothing to check" and "checked, and it's fine" must not share an exit code.
+name: feed-coherence
+
+on:
+  pull_request:
+    paths:
+      - "registry/dependencies.yml"
+      - "scripts/check-feed-coherence.py"
+      - "tests/feed-coherence/**"
+      - ".github/workflows/feed-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "registry/dependencies.yml"
+      - "scripts/check-feed-coherence.py"
+      - "tests/feed-coherence/**"
+      - ".github/workflows/feed-coherence.yml"
+  schedule:
+    # Daily. A publish that never flipped the registry touches no file in this repo, so no
+    # path-filtered trigger can see it — only a periodic read of the feed can.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read   # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
+
+concurrency:
+  group: feed-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate goes red on every drift/fails-open condition before we trust its green.
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the feed-coherence fixture (no network)
+        run: bash tests/feed-coherence/run.sh
+
+  # Online. The actual coherence signal.
+  feed:
+    runs-on: ubuntu-latest
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Assert every `package-version` == newest on the org feed
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern (cf. architecture-map.yml, contract-coherence.yml). The run-scoped token carries
+          # `packages: read`, which is what the feed's HTTP Basic auth wants; the same grant already
+          # authenticates the NuGet restore in contract-coherence.yml.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check-feed-coherence.py registry/dependencies.yml
