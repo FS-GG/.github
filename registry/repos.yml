@@ -30,7 +30,7 @@
 # added to the relevant rows when each fabric is migrated (verified against that workflow's list).
 
 schemaVersion: 1
-updated: 2026-07-06
+updated: 2026-07-09
 authority: FS-GG/.github
 
 repos:
@@ -49,4 +49,4 @@ repos:
 kit:
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 2da478719e72e8d358275e8d74b881f13cda94f16443189de9071e81a46a20c0 }
   - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 79c54b3d544e2c57907890b43736c96d10bd05f4478afc1d6377cb7d02f966f6 }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 4844a2cac27aa3c209c970c1fce48924a0dfbbc999cd020aacf66b6db02e3ef9 }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 220e8822ba32aa509fc1281f4a167d36181f41b82cae791f5bbd05c623d04d03 }
