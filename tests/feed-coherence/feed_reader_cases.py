@@ -151,5 +151,52 @@ finally:
     restore()
 
 print()
+print("--- NuGet version ORDER (the comparison the whole gate rests on) ---")
+
+# The registry's own literals only ever exercise `preview.N`, so the intra-prerelease precedence
+# rules would otherwise ship untested — and an ordering bug here is a silent wrong verdict, not a
+# crash. Each pair is (a, expected, b).
+ORDER_CASES = [
+    ("0.4.0", ">", "0.4.0-preview.1"),        # a release outranks its own prerelease (#268 class)
+    ("1.2.1.1", ">", "1.2.1"),                # 4-segment NuGet grammar (ADR-0007)
+    ("1.4.0", "==", "1.4.0.0"),               # a trailing zero segment is the same version
+    ("1.0.0+build", "==", "1.0.0"),           # build metadata is ignored in ordering
+    ("1.4.0", ">", "1.2.0"),
+    ("0.1.70-preview.1", ">", "0.1.69-preview.1"),
+    ("1.0.0-alpha", "<", "1.0.0-beta"),       # prerelease ids compare case-insensitively
+    ("1.0.0-alpha.1", "<", "1.0.0-alpha.beta"),  # numeric segment sorts below alphanumeric
+    ("1.0.0-alpha", "<", "1.0.0-alpha.1"),    # a shorter prerelease sorts below its extension
+    ("1.0.0-preview.9", "<", "1.0.0-preview.11"),  # numeric ids compare as ints, not strings
+]
+for a, expected, b in ORDER_CASES:
+    ka, kb = gate.parse_version(a), gate.parse_version(b)
+    got = ">" if ka > kb else ("<" if ka < kb else "==")
+    if got == expected:
+        ok(f"{a} {expected} {b}")
+    else:
+        bad(f"{a} {expected} {b}", f"got {a} {got} {b}")
+
+for junk in ["", "abc", "1.2.3.4.5", "1..2", "1.2.3-", "v1.2.3"]:
+    try:
+        gate.parse_version(junk)
+    except gate.GateError:
+        ok(f"rejects unparsable {junk!r}")
+    else:
+        bad(f"rejects unparsable {junk!r}", "parsed instead of raising")
+
+# newest() must pick by version order even when the feed lists otherwise.
+if gate.newest(["0.3.0-preview.1", "0.4.0", "0.4.0-preview.1"]) == "0.4.0":
+    ok("newest() picks the release over its prerelease")
+else:
+    bad("newest() picks the release over its prerelease")
+# ...and an unparsable version anywhere in the feed must raise, not be skipped over.
+try:
+    gate.newest(["1.0.0", "garbage"])
+except gate.GateError:
+    ok("newest() raises on an unparsable feed version rather than ignoring it")
+else:
+    bad("newest() raises on an unparsable feed version rather than ignoring it")
+
+print()
 print(f"{passed} passed, {failed} failed.")
 sys.exit(1 if failed else 0)

@@ -21,6 +21,10 @@ set -euo pipefail
 # into a repo that has no .gitignore.
 export PYTHONDONTWRITEBYTECODE=1
 
+# `--fixture` is locked to this harness: the gate refuses a canned feed unless this is set, so a
+# stray `--fixture` in CI fails rather than silently reporting green. See the gate's docstring.
+export FSGG_FEED_FIXTURE_OK=1
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
 GATE="$HERE/../../scripts/check-feed-coherence.py"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
@@ -213,6 +217,23 @@ must_fail "a CONTRACT_PACKAGES entry with no registry contract fails" \
 must_fail "an unparsable registry version literal fails" \
   "$(mutate junk game-sim-core 'not-a-version')" "$FEED" "cannot parse version"
 
+# An UNQUOTED version is YAML-coerced (1.10 -> the float 1.1) before the gate sees it, so the
+# literal compared would not be the one written. Require the quotes. Built from BASE (not a minimal
+# registry) so the orphan-mapping check does not fire first and mask what this case is testing.
+UNQUOTED="$WORK/unquoted.yml"
+sed 's/\(id: game-sim-core.*\)package-version: "0.2.0"/\1package-version: 1.10/' "$BASE" > "$UNQUOTED"
+python3 - "$UNQUOTED" <<'PY'
+import sys, yaml
+doc = yaml.safe_load(open(sys.argv[1]))
+got = next(c["package-version"] for c in doc["contracts"] if c["id"] == "game-sim-core")
+if isinstance(got, str):
+    sys.exit(f"vacuous fixture: the sed did not unquote the literal (YAML gave the str {got!r})")
+if str(got) != "1.1":
+    sys.exit(f"vacuous fixture: expected YAML to coerce 1.10 -> 1.1, got {got!r}")
+PY
+must_fail "an unquoted (YAML-coerced) package-version fails" \
+  "$UNQUOTED" "$FEED" "not a quoted string"
+
 # A registry with no package-version at all is malformed or the wrong file — not "coherent".
 EMPTY="$WORK/nosubjects.yml"
 printf 'schemaVersion: 1\ncontracts:\n  - { id: shared-build-config, version: "1.0.0" }\n' > "$EMPTY"
@@ -241,11 +262,19 @@ else
 fi
 
 echo
-echo "--- fixture mode announces itself (it must never be mistaken for a live-feed run) ---"
+echo "--- fixture mode announces itself, and is locked to this harness ---"
 if gate "$BASE" "$FEED" | grep -q "FIXTURE MODE"; then
   ok "fixture mode prints a banner"
 else
   bad "fixture mode prints a banner"
+fi
+# A --fixture that anyone could pass would be a supported way to make the gate report green
+# without reading the feed. Outside this harness it must refuse.
+out="$(env -u FSGG_FEED_FIXTURE_OK python3 "$GATE" --fixture "$FEED" "$BASE" 2>&1)" && rc=0 || rc=$?
+if [ "${rc:-0}" -ne 0 ] && grep -q "Refusing to run" <<<"$out"; then
+  ok "--fixture refuses to run without FSGG_FEED_FIXTURE_OK"
+else
+  bad "--fixture refuses to run without FSGG_FEED_FIXTURE_OK" "$out"
 fi
 
 echo

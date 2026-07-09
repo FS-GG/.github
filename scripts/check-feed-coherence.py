@@ -25,6 +25,7 @@ fine" must not share an exit code. Every one of these is an ERROR, not a skip:
   * the token is missing, or lacks `read:packages` (401/403);
   * the feed is unreachable, returns unparsable JSON, or an unrecognised shape;
   * the feed returns zero versions for a package;
+  * a `package-version` is not a quoted string (YAML coerces `1.10` to the float 1.1);
   * a version literal (registry or feed) does not parse.
 
 Comparison is by NuGet version ORDER, never by substring — the .github#268 defect class, where
@@ -33,7 +34,10 @@ Comparison is by NuGet version ORDER, never by substring — the .github#268 def
 above its own prereleases (`0.4.0` > `0.4.0-preview.1`).
 
 Usage:  scripts/check-feed-coherence.py [registry/dependencies.yml]
-        scripts/check-feed-coherence.py --fixture tests/…/feed.json [registry.yml]   # tests only
+
+`--fixture <feed.json>` serves a canned feed instead of the live one. It is NOT a coherence
+signal, and it refuses to run unless FSGG_FEED_FIXTURE_OK=1 — which only tests/feed-coherence/
+sets. A test hook that can silently turn the gate into a no-op is the very defect class above.
 
 Exit 0 = the registry and the feed agree.
 """
@@ -225,6 +229,19 @@ def main(argv: list[str]) -> int:
         return 1
 
     if args.fixture:
+        # A flag that makes the gate report green without reading the feed is precisely the
+        # fails-open shape epic #266 is about, so it is not merely documented as test-only — it is
+        # locked. The fixture harness opts in via the environment; a stray `--fixture` anywhere else
+        # (a copy-pasted CI step, a debugging line left behind) fails the gate instead of quietly
+        # turning it into a no-op.
+        if os.environ.get("FSGG_FEED_FIXTURE_OK") != "1":
+            print(
+                "::error::check-feed-coherence: --fixture reads a canned feed and is NOT a "
+                "coherence signal. It is available only to tests/feed-coherence/, which sets "
+                "FSGG_FEED_FIXTURE_OK=1. Refusing to run.",
+                file=sys.stderr,
+            )
+            return 1
         # Loud on purpose: a fixture run must never be mistaken for a live-feed run in a log.
         print(f"FIXTURE MODE — reading {args.fixture}, NOT the live feed. Not a coherence signal.")
         try:
@@ -280,8 +297,20 @@ def main(argv: list[str]) -> int:
     problems: list[str] = []
     for c in subjects:
         cid = str(c.get("id", "")).strip()
+        declared = c["package-version"]
+        # An UNQUOTED `package-version: 1.10` is YAML-coerced to the float 1.1 before this gate
+        # ever sees it, and `str()` would then compare the wrong literal — silently, and against a
+        # version that may well exist. The registry quotes every version; require it, so a dropped
+        # quote is a red gate rather than a comparison of a number nobody wrote.
+        if not isinstance(declared, str):
+            problems.append(
+                f"{cid}: `package-version` is {type(declared).__name__} {declared!r}, not a quoted "
+                f"string. YAML coerces an unquoted version (1.10 -> 1.1), so the literal the gate "
+                f"compares would not be the one written. Quote it."
+            )
+            continue
         try:
-            problems += check_contract(cid, str(c["package-version"]), resolve)
+            problems += check_contract(cid, declared, resolve)
         except GateError as e:
             problems.append(f"{cid}: {e}")
 

@@ -34,8 +34,13 @@ repos:
 #     surface       (required) prose/one-line description of the on-disk or package surface.
 #     consumers     (required) repo keys that depend on the contract.
 #     package-version  present ONLY where the contract ships as a NuGet package (fsgg-contracts,
-#                   governance-reference-gate-set, fs-gg-ui-template) — the NEWEST version LIVE on the org
-#                   feed (publish-before-flip FR-007: it never leads `version`).
+#                   governance-reference-gate-set, fs-gg-ui-template, game-sim-core, game-scene-adapter,
+#                   fs-gg-audio) — the NEWEST version LIVE on the org feed (publish-before-flip FR-007:
+#                   it never leads `version`). Since .github#267 this is ENFORCED against the live feed
+#                   by scripts/check-feed-coherence.py (coherence id registry-feed-coherence), which also
+#                   maps each of these ids to its package id(s). Adding a `package-version` to a contract
+#                   means adding it to that gate's CONTRACT_PACKAGES table — the gate fails until you do.
+#                   MUST be a QUOTED string: unquoted, YAML coerces `1.10` to the float 1.1.
 #     package-tag   present ONLY for fs-gg-ui-template — the immutable coherent-set release tag.
 #     range         accepted SemVer range for consumers (scaffold-provenance, governance-handoff).
 #     bundles       contract ids a meta/content package subsumes (governance-reference-gate-set).
@@ -1159,7 +1164,11 @@ coherence:
       v3 flat-container index — what a `dotnet restore` actually resolves against — rather than the
       packages REST API, which does not accept the run-scoped GITHUB_TOKEN. Its own fixture
       (tests/feed-coherence/) proves each failure leg fires for its stated reason, so the gate
-      cannot decay into the vacuous "must fail" test the epic also names (SDD#299).
+      cannot decay into the vacuous "must fail" test the epic also names (SDD#299); it is
+      mutation-tested against 17 deliberate fails-open regressions. Two further surfaces are closed
+      by construction: an UNQUOTED `package-version` fails (YAML coerces 1.10 -> the float 1.1), and
+      the `--fixture` flag that serves a canned feed refuses to run unless the test harness sets
+      FSGG_FEED_FIXTURE_OK=1, so a stray `--fixture` in CI fails instead of no-opping the gate.
     impact: >
       A PR that flips `package-version` to a version not on the feed fails CI, and a release that
       publishes without flipping the registry turns .github@main red within a day. The six
