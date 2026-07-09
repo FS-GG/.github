@@ -48,5 +48,5 @@ repos:
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
 kit:
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 2da478719e72e8d358275e8d74b881f13cda94f16443189de9071e81a46a20c0 }
-  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 01ba915eed8ab0d0a3c7dacc2e37861c9f392f4612506a7c1b2e074622a361b1 }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 312ed01f0743711f993b8df720a545b58aeab75d0321a4c43add48143de88cf8 }
+  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 79c54b3d544e2c57907890b43736c96d10bd05f4478afc1d6377cb7d02f966f6 }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: f964770d55e645ddfe408a96d837f5b406c25dcb72b65e76ade1cfabe22ae593 }

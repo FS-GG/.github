@@ -31,10 +31,13 @@ COORD="$HERE/../../scripts/fsgg-coord"      # always invoked as `bash "$COORD"`
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/fsgg-coord-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
-FIXTURES="$WORK/fixtures"; STUB="$WORK/bin"; export GH_LOG="$WORK/gh.log"
+FIXTURES="$WORK/fixtures"; STUB="$WORK/bin"; STORE="$WORK/store"; export GH_LOG="$WORK/gh.log"
 export GH_GRAPHQL_COUNT="$WORK/graphql.count" GH_REST_COUNT="$WORK/rest.count"
-mkdir -p "$FIXTURES" "$STUB"
+mkdir -p "$FIXTURES" "$STUB" "$STORE"
 : >"$GH_LOG"; : >"$GH_GRAPHQL_COUNT"; : >"$GH_REST_COUNT"
+# The comment store's id sequence. GitHub issues comment ids from ONE server-side sequence, and the
+# claim lock's correctness rests on exactly that: monotonic ids are the total order every racer sees.
+echo 900 >"$STORE/nextid"
 
 # Run fsgg-coord against the stub + an isolated cache. FSGG_COORD_DEBUG surfaces the 304/cache path.
 export FSGG_COORD_CACHE="$WORK/cache"
@@ -64,7 +67,7 @@ JSON
 
 cat >"$FIXTURES/fields.json" <<'JSON'
 {"data":{"organization":{"projectV2":{"fields":{"nodes":[
-  {"__typename":"ProjectV2SingleSelectField","id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_done","name":"Done"}]},
+  {"__typename":"ProjectV2SingleSelectField","id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},
   {"__typename":"ProjectV2SingleSelectField","id":"PVTSSF_phase","name":"Phase","dataType":"SINGLE_SELECT","options":[{"id":"opt_p1","name":"P1 Rendering"},{"id":"opt_p2","name":"P2 SDD"}]},
   {"__typename":"ProjectV2Field","id":"PVTF_target","name":"Target","dataType":"DATE"},
   {"__typename":"ProjectV2Field","id":"PVTF_contract","name":"Contract","dataType":"TEXT"},
@@ -210,7 +213,14 @@ if [ "\$sub" = "api" ] && [ "\$sub2" = "graphql" ]; then
   elif printf '%s' "\$q" | grep -q 'items(first' && printf '%s' "\$q" | grep -q 'subIssues'; then
     if [ -n "\$hascur" ]; then cat "$FIXTURES/lint-p2.json"; else cat "$FIXTURES/lint-p1.json"; fi
   elif printf '%s' "\$q" | grep -q 'items(first';      then
-    if [ -n "\$hascur" ]; then cat "$FIXTURES/board-items-p2.json"; else cat "$FIXTURES/board-items-p1.json"; fi
+    # GH_BOARD_SET=<name> serves fixtures/board-<name>.json instead of the default two-page board, so
+    # the ADR-0027 tests get their own board without perturbing the existing count assertions. An
+    # unknown name is a FIXTURE BUG, not a silent fallback to the default board.
+    if [ -n "\${GH_BOARD_SET:-}" ]; then
+      [ -f "$FIXTURES/board-\${GH_BOARD_SET}.json" ] \
+        || { echo "gh stub: no board fixture '\$GH_BOARD_SET'" >&2; exit 5; }
+      cat "$FIXTURES/board-\${GH_BOARD_SET}.json"
+    elif [ -n "\$hascur" ]; then cat "$FIXTURES/board-items-p2.json"; else cat "$FIXTURES/board-items-p1.json"; fi
   elif printf '%s' "\$q" | grep -q 'subIssues';        then
     if [ -f "$FIXTURES/rollup-\$num.json" ]; then cat "$FIXTURES/rollup-\$num.json"
     else cat "$FIXTURES/rollup-none.json"; fi
@@ -230,26 +240,127 @@ fi
 
 if [ "\$sub" = "api" ]; then
   echo r >>"\$GH_REST_COUNT"
-  inm=""; path=""; n=\${#args[@]}
+  method=""; path=""; inm=""; jqexpr=""; body=""; include=""; hasfield=""
+  n=\${#args[@]}
   for ((i=1;i<n;i++)); do
     case "\${args[i]}" in
-      -H) h="\${args[i+1]}"; case "\$h" in "If-None-Match: "*) inm="\${h#If-None-Match: }";; esac ;;
-      repos/*) path="\${args[i]}" ;;
+      -X)        method="\${args[i+1]}" ;;
+      --include) include=1 ;;
+      --jq)      jqexpr="\${args[i+1]}" ;;
+      -H)        h="\${args[i+1]}"; case "\$h" in "If-None-Match: "*) inm="\${h#If-None-Match: }";; esac ;;
+      -f)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=*) body="\${kv#body=}";; esac ;;
+      -F)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=@*) body="\$(cat "\${kv#body=@}")";; esac ;;
+      user)      [ -z "\$path" ] && path="user" ;;
+      repos/*)   path="\${args[i]}" ;;
     esac
   done
+  # Real \`gh api\` infers POST when fields are supplied and no method is given. A stub that defaults
+  # to GET would silently serve a comment LIST where the client expects the created comment's id.
+  [ -n "\$method" ] || { [ -n "\$hasfield" ] && method="POST" || method="GET"; }
+  emit() { if [ -n "\$jqexpr" ]; then jq -r "\$jqexpr"; else cat; fi; }
+  now="\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+  if [ "\$path" = "user" ]; then printf '{"login":"EHotwagner"}' | emit; exit 0; fi
+
+  # --- issue comments: a REAL mutable store, so the claim CAS can actually be raced -------------
+  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/issues/([0-9]+)/comments ]]; then
+    cnum="\${BASH_REMATCH[1]}"; cf="$STORE/comments-\$cnum.json"
+    [ -f "\$cf" ] || echo '[]' >"\$cf"
+
+    # GH_FAIL_READ_ISSUE=<n>: reads of <n>'s comments fail once a marker has been POSTed there.
+    # Models a transient gh failure (rate limit / 5xx) landing on the CAS re-read, i.e. after our
+    # marker exists but before we know whether we won it.
+    if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_FAIL_READ_ISSUE:-}" ] && [ -f "$STORE/posted-\$cnum" ]; then
+      echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
+    fi
+    # GH_REAP_RACE=<n>: the holder heartbeats between reap's snapshot read and its delete. Every read
+    # after the first returns a freshly-renewed marker.
+    if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_REAP_RACE:-}" ]; then
+      rc="\$(cat "$STORE/readcount-\$cnum" 2>/dev/null || echo 0)"
+      echo \$((rc + 1)) >"$STORE/readcount-\$cnum"
+      if [ "\$rc" -ge 1 ]; then
+        jq --arg ts "\$now" 'map(.updated_at = \$ts)' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
+      fi
+    fi
+
+    if [ "\$method" = "POST" ]; then
+      touch "$STORE/posted-\$cnum"
+      # GH_RACE_INJECT=<worker>: a rival worker's marker lands BETWEEN our read and our re-read,
+      # taking a LOWER comment id. This is the exact interleaving the CAS exists to resolve.
+      if [ -n "\${GH_RACE_INJECT:-}" ] && [ "\$cnum" = "\${GH_RACE_ISSUE:-}" ]; then
+        rid="\$(cat "$STORE/nextid")"; echo \$((rid + 1)) >"$STORE/nextid"
+        jq --argjson id "\$rid" --arg w "\$GH_RACE_INJECT" --arg ts "\$now" \
+          '. + [{id:\$id, body:("<!-- fsgg:claim worker=" + \$w + " lease=120 -->\nrival"),
+                 user:{login:"EHotwagner"}, created_at:\$ts, updated_at:\$ts}]' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
+      fi
+      id="\$(cat "$STORE/nextid")"; echo \$((id + 1)) >"$STORE/nextid"
+      jq --argjson id "\$id" --arg b "\$body" --arg ts "\$now" \
+        '. + [{id:\$id, body:\$b, user:{login:"EHotwagner"}, created_at:\$ts, updated_at:\$ts}]' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
+      printf 'comment-post %s %s\n' "\$cnum" "\$id" >>"\$GH_LOG"
+      jq -n --argjson id "\$id" '{id:\$id}' | emit; exit 0
+    fi
+    emit <"\$cf"; exit 0
+  fi
+
+  # --- a single comment by id: PATCH (heartbeat) / DELETE (release, back-off, reap) -------------
+  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/issues/comments/([0-9]+) ]]; then
+    cid="\${BASH_REMATCH[1]}"
+    for cf in "$STORE"/comments-*.json; do
+      [ -f "\$cf" ] || continue
+      jq -e --argjson id "\$cid" 'any(.[]; .id == \$id)' "\$cf" >/dev/null 2>&1 || continue
+      if [ "\$method" = "DELETE" ]; then
+        printf 'comment-delete %s\n' "\$cid" >>"\$GH_LOG"
+        jq --argjson id "\$cid" 'map(select(.id != \$id))' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
+      else
+        printf 'comment-patch %s\n' "\$cid" >>"\$GH_LOG"
+        jq --argjson id "\$cid" --arg b "\$body" --arg ts "\$now" \
+          'map(if .id == \$id then .body = \$b | .updated_at = \$ts else . end)' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
+      fi
+      break
+    done
+    echo '{}' | emit; exit 0
+  fi
+
+  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/pulls/([0-9]+)/files ]]; then
+    emit <"$FIXTURES/pr-files-\${BASH_REMATCH[1]}.json"; exit 0
+  fi
+  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/pulls/([0-9]+)$ ]]; then
+    emit <"$FIXTURES/pr-\${BASH_REMATCH[1]}.json"; exit 0
+  fi
+
+  # --- a single issue: GET (title/body/Paths) or PATCH (widen rewrites the body) ----------------
+  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/issues/([0-9]+)$ ]]; then
+    inum="\${BASH_REMATCH[1]}"; jf="$STORE/issue-\$inum.json"
+    [ -f "\$jf" ] || { echo "gh stub: no issue fixture \$inum" >&2; exit 4; }
+    if [ "\$method" = "PATCH" ]; then
+      printf 'issue-patch %s\n' "\$inum" >>"\$GH_LOG"
+      jq --arg b "\$body" '.body = \$b' "\$jf" >"\$jf.t" && mv "\$jf.t" "\$jf"
+    fi
+    emit <"\$jf"; exit 0
+  fi
+
+  # --- the issue LIST (the ETag-revalidated `issues` command) -----------------------------------
   etag='"issues-etag-v1"'
   if [ -n "\$inm" ] && [ "\$inm" = "\$etag" ]; then
     echo "gh: HTTP 304 Not Modified" >&2; exit 1
   fi
-  printf 'HTTP/2.0 200 OK\r\n'
-  printf 'ETag: %s\r\n' "\$etag"
-  printf '\r\n'
+  if [ -n "\$include" ]; then
+    printf 'HTTP/2.0 200 OK\r\n'; printf 'ETag: %s\r\n' "\$etag"; printf '\r\n'
+  fi
   cat "$FIXTURES/issues.json"
   exit 0
 fi
 
 if [ "\$sub" = "project" ] && [ "\$sub2" = "item-edit" ]; then
   printf 'item-edit %s\n' "\$*" >>"\$GH_LOG"; exit 0
+fi
+
+if [ "\$sub" = "issue" ] && [ "\$sub2" = "edit" ]; then
+  printf 'issue-edit %s\n' "\$*" >>"\$GH_LOG"; exit 0
+fi
+
+if [ "\$sub" = "repo" ] && [ "\$sub2" = "view" ]; then
+  printf 'FS-GG/FS.GG.SDD\n'; exit 0
 fi
 
 echo "gh stub: unhandled: \$*" >&2; exit 3
@@ -502,6 +613,437 @@ assert_eq "rollup: flipping writes Status twice (child, then epic)" "2" \
 bud="$(run budget)"
 assert_contains "budget: reports graphql meter" "graphql" "$bud"
 assert_contains "budget: reports remaining"     "remaining" "$bud"
+
+# ================================================================================================
+# ADR-0027 — parallel intra-repo work: worker identity, the comment-order claim lock, the
+# schedulable batch, the worker channel, and the touch-set drift check.
+#
+# The regression this whole section exists for: under ADR-0021 the lock was the issue ASSIGNEE, and
+# N agents authenticating as ONE GitHub account all resolve `@me` to the same login — so a second
+# worker's claim on a held item sailed through and both worked it. The lock is now keyed on a WORKER
+# ID and resolved by comment-order CAS. `claim: a second worker on the SAME account is refused`
+# below is the assertion that would have caught the original bug.
+# ================================================================================================
+echo "--- ADR-0027: parallel intra-repo work ---"
+
+# The parallel-work board: three items In progress (held / stale / unclaimed) and five Ready.
+cat >"$FIXTURES/board-pw.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":42,"title":"Audio mixer","url":"https://github.com/FS-GG/FS.GG.SDD/issues/42","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":43,"title":"Legacy port","url":"https://github.com/FS-GG/FS.GG.SDD/issues/43","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":60,"title":"Nobody claimed me","url":"https://github.com/FS-GG/FS.GG.SDD/issues/60","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":70,"title":"Scene graph","url":"https://github.com/FS-GG/FS.GG.SDD/issues/70","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":71,"title":"Mixer tweak","url":"https://github.com/FS-GG/FS.GG.SDD/issues/71","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":72,"title":"No touch-set declared","url":"https://github.com/FS-GG/FS.GG.SDD/issues/72","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":73,"title":"Scene subtree","url":"https://github.com/FS-GG/FS.GG.SDD/issues/73","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":74,"title":"ADR housekeeping","url":"https://github.com/FS-GG/FS.GG.SDD/issues/74","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4980}}
+JSON
+
+seed_issue() {  # seed_issue <num> <title> <paths-or-empty>
+  local n="$1" t="$2" p="$3" body="Some description."
+  [ -n "$p" ] && body="$body
+
+Paths: $p"
+  jq -n --argjson n "$n" --arg t "$t" --arg b "$body" \
+    '{number:$n, title:$t, body:$b, assignees:[], state:"open"}' >"$STORE/issue-$n.json"
+  : >"$STORE/comments-$n.json"; echo '[]' >"$STORE/comments-$n.json"
+}
+seed_issue 42 "Audio mixer"          "src/Audio/**, tests/Audio/**"
+seed_issue 43 "Legacy port"          "src/Legacy/**"
+seed_issue 60 "Nobody claimed me"    "src/Orphan/**"
+seed_issue 70 "Scene graph"          "src/Scene/**, tests/Scene/**"
+seed_issue 71 "Mixer tweak"          "src/Audio/Mixer/**"
+seed_issue 72 "No touch-set declared" ""
+seed_issue 73 "Scene subtree"        "src/Scene/Sub/**"
+seed_issue 74 "ADR housekeeping"     "docs/adr/**"
+
+# Pre-existing claims: #42 held by finch-a3f (fresh), #43 by ghost-000 (lease long expired),
+# #60 In progress with NO marker at all — the state the FS-GG/.github incident was found in.
+fresh_ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+stale_ts="$(date -u -d '-5 hours' +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -v-5H +%Y-%m-%dT%H:%M:%SZ)"
+jq -n --arg ts "$fresh_ts" '[{id:801, body:"<!-- fsgg:claim worker=finch-a3f lease=120 -->\nheld",
+  user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-42.json"
+jq -n --arg ts "$stale_ts" '[{id:802, body:"<!-- fsgg:claim worker=ghost-000 lease=120 -->\ndead",
+  user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-43.json"
+
+# Run against the parallel-work board, as a named worker (rule 1: --worker wins everything).
+pw() { PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" "$@"; }
+as() { local w="$1"; shift; PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" --worker "$w" "$@"; }
+# Count markers exactly as the lock parses them — ANCHORED at the body start. An unanchored grep
+# would count a claim marker quoted inside a free-form message as a real lock, which is the forgery
+# the anchoring exists to prevent, and would make the forgery test pass for the wrong reason.
+claims_on() { jq -r '[.[] | select(.body | test("^<!--\\s*fsgg:claim\\s")) | .id] | join(",")' "$STORE/comments-$1.json"; }
+workers_on() { jq -r '[.[] | select(.body | test("^<!--\\s*fsgg:claim\\s")) | (.body | capture("worker=(?<w>[^ ]+)") | .w)] | sort | join(",")' "$STORE/comments-$1.json"; }
+
+# ---- worker identity ---------------------------------------------------------------------------
+assert_eq "whoami: --worker wins everything" "heron-b71" \
+  "$(as heron-b71 whoami | awk '/^worker/{print $2}')"
+assert_eq "whoami: reports which rule derived the id" "--worker flag" \
+  "$(as heron-b71 whoami | sed -n 's/^source  //p')"
+assert_eq "whoami: \$FSGG_WORKER is honoured" "wren-c22" \
+  "$(PATH="$STUB:$PATH" FSGG_WORKER=wren-c22 bash "$COORD" whoami | awk '/^worker/{print $2}')"
+
+# ---- harness session ids (rule 4) ---------------------------------------------------------------
+# The CI runner exports no harness vars and the developer's shell may export several, so every case
+# below states its own environment explicitly. `env -u` strips whatever the outer harness set.
+hless() { PATH="$STUB:$PATH" env -u CLAUDE_CODE_SESSION_ID -u OPENCODE_SESSION_ID \
+            -u FSGG_AGENT_SESSION_ID -u FSGG_WORKER "$@" bash "$COORD" whoami 2>&1; }
+
+# A session id is NOT an identity where the harness shares it across subagents. Claude Code does
+# (anthropics/claude-code#7881) — so it names the worker only as a fallback, and it WARNS.
+cc="$(hless CLAUDE_CODE_SESSION_ID=309bd638-8a1c-42b7-952b-898efb8d1064)"
+assert_contains "whoami: a claude-code session id names the worker (rule 4)" \
+  "source  claude-code session id (309bd638-8a1c-42b7-952b-898efb8d1064)" "$cc"
+assert_contains "whoami: ...and reports the harness"          "harness claude-code" "$cc"
+assert_contains "whoami: ...flagging that subagents share it" "(shared by subagents)" "$cc"
+assert_contains "whoami: ...and WARNS, because a shared id cannot lock" \
+  "every subagent of this claude-code session shares this session id" "$cc"
+
+# Deterministic: the same session must always name the same worker (no persistence, no drift).
+cc2="$(hless CLAUDE_CODE_SESSION_ID=309bd638-8a1c-42b7-952b-898efb8d1064)"
+assert_eq "whoami: the session-derived name is deterministic" \
+  "$(awk '/^worker/{print $2}' <<<"$cc")" "$(awk '/^worker/{print $2}' <<<"$cc2")"
+assert_eq "whoami: a DIFFERENT session gets a different name" "false" \
+  "$([ "$(hless CLAUDE_CODE_SESSION_ID=aaaa | awk '/^worker/{print $2}')" \
+     = "$(hless CLAUDE_CODE_SESSION_ID=bbbb | awk '/^worker/{print $2}')" ] && echo true || echo false)"
+assert_contains "whoami: the derived name is memorable, not a UUID" "-" \
+  "$(hless CLAUDE_CODE_SESSION_ID=aaaa | awk '/^worker/{print $2}')"
+
+# OpenCode spawns subagents as CHILD sessions with their own ids, so there its session id IS
+# per-worker — and must not warn. The cardinality is a property of the harness, not of the name.
+oc="$(hless OPENCODE_SESSION_ID=ses_abc123)"
+assert_contains "whoami: an opencode session id is per-worker"  "(per-worker)" "$oc"
+assert_eq "whoami: ...so it does NOT warn" "0" "$(grep -c 'WARNING' <<<"$oc" || true)"
+
+# An unknown harness may declare itself; absent that, we assume its session is shared (fail safe).
+unk="$(hless FSGG_AGENT_SESSION_ID=zz-99)"
+assert_contains "whoami: an unknown harness's session id still works" "session zz-99" "$unk"
+assert_contains "whoami: ...but is assumed shared until proven otherwise" "shared by subagents" "$unk"
+
+# Rule 5, the last resort: no harness, no worktree -> a per-checkout name, and a different warning.
+none="$(hless)"
+assert_contains "whoami: with no harness, falls back to a per-checkout name" \
+  "generated, persisted per-checkout" "$none"
+assert_contains "whoami: ...and says why THAT id may not be unique" \
+  "every worker sharing this checkout gets this same id" "$none"
+
+# Precedence: an explicit id always beats a session id, and never warns.
+expl="$(PATH="$STUB:$PATH" CLAUDE_CODE_SESSION_ID=309bd638 FSGG_WORKER=wren-c22 bash "$COORD" whoami 2>&1)"
+assert_contains "whoami: \$FSGG_WORKER beats a harness session id" "source  \$FSGG_WORKER" "$expl"
+assert_eq "whoami: an explicit id never warns" "0" "$(grep -c 'WARNING' <<<"$expl" || true)"
+assert_contains "whoami: ...but the session is still recorded as provenance" "harness claude-code" "$expl"
+
+# ---- the lock: THE regression. Same account, different worker -> refused. -----------------------
+: >"$GH_LOG"
+if as heron-b71 claim 'FS.GG.SDD#42' >/dev/null 2>&1; then
+  bad "claim: a second worker on the SAME account is refused (ADR-0021 regression)" \
+      "heron-b71 claimed an item already held by finch-a3f"
+else
+  ok "claim: a second worker on the SAME account is refused (ADR-0021 regression)"
+fi
+assert_contains "claim: refusal names the holding WORKER, not the login" "held by worker 'finch-a3f'" \
+  "$(as heron-b71 claim 'FS.GG.SDD#42' 2>&1 || true)"
+assert_eq "claim: a refused claim leaves exactly one marker" "finch-a3f" "$(workers_on 42)"
+
+# The holder re-claiming is a heartbeat, not a second marker (so `take` retries stay idempotent).
+assert_contains "claim: the holder re-claiming renews its lease" "lease renewed" \
+  "$(as finch-a3f claim 'FS.GG.SDD#42' 2>/dev/null)"
+assert_eq "claim: re-claiming does not add a second marker" "801" "$(claims_on 42)"
+
+# An uncontended claim on a free item: marker posted, assignee set, Status flipped, branch printed.
+: >"$GH_LOG"
+out70="$(as heron-b71 claim 'FS.GG.SDD#70' 2>/dev/null)"
+assert_contains "claim: uncontended claim succeeds"       "claimed FS.GG.SDD#70 by worker heron-b71" "$out70"
+assert_contains "claim: prints the isolation worktree"    "git worktree add ../FS.GG.SDD-70 -b item/70-scene-graph" "$out70"
+assert_contains "claim: prints the attribution trailer"   'FSGG-Worker: heron-b71' "$out70"
+assert_contains "claim: flips the board to In progress"   "board: In progress" "$out70"
+assert_contains "claim: still assigns @me for the humans" "issue edit 70 --repo FS-GG/FS.GG.SDD --add-assignee @me" "$(cat "$GH_LOG")"
+assert_eq "claim: exactly one marker on the item" "heron-b71" "$(workers_on 70)"
+
+# PROVENANCE. The marker records WHICH agent transcript claimed the item — the question #255 could
+# only answer with mtimes and `ps`. `worker=` must stay the first key, or parse_claims stops matching.
+: >"$STORE/comments-71.json"; echo '[]' >"$STORE/comments-71.json"
+PATH="$STUB:$PATH" GH_BOARD_SET=pw CLAUDE_CODE_SESSION_ID=sess-1234 \
+  bash "$COORD" --worker heron-b71 claim 'FS.GG.SDD#71' >/dev/null 2>&1
+marker71="$(jq -r '.[] | select(.body | test("^<!--\\s*fsgg:claim")) | .body' "$STORE/comments-71.json")"
+assert_contains "claim: the marker records the harness"  "harness=claude-code" "$marker71"
+assert_contains "claim: the marker records the session"  "session=sess-1234"   "$marker71"
+assert_contains "claim: the human line names the agent"  "session \`sess-1234\`" "$marker71"
+assert_eq "claim: provenance keys do NOT break the worker= capture the lock parses" "heron-b71" \
+  "$(workers_on 71)"
+assert_contains "claim: worker= is still the FIRST key after the marker" \
+  "fsgg:claim worker=heron-b71 lease=120 harness=claude-code" "$marker71"
+# ...and a marker carrying provenance is still a lock: a second worker is refused.
+assert_fails "claim: a provenance-carrying marker still excludes another worker" \
+  as wren-c22 claim 'FS.GG.SDD#71'
+# Leave #71 free for the scheduler assertions further down.
+PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" --worker heron-b71 release 'FS.GG.SDD#71' >/dev/null 2>&1
+
+# ---- the CAS: a rival marker lands with a LOWER id between our post and our re-read -------------
+# The loser must delete its own marker and exit non-zero, leaving the winner's marker alone.
+: >"$GH_LOG"
+race_out="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_RACE_INJECT=rook-d19 GH_RACE_ISSUE=74 \
+  bash "$COORD" --worker teal-e55 claim 'FS.GG.SDD#74' 2>&1 || true)"
+assert_contains "claim CAS: the loser knows it lost, and to whom" "lost the claim race on FS.GG.SDD#74 to worker 'rook-d19'" "$race_out"
+assert_contains "claim CAS: the loser backs off cleanly"          "backed off cleanly" "$race_out"
+assert_eq "claim CAS: exactly ONE marker survives the race"       "rook-d19" "$(workers_on 74)"
+assert_contains "claim CAS: the loser deleted its OWN marker"     "comment-delete" "$(cat "$GH_LOG")"
+# The race winner really holds #74 — hand it back, or every scheduler assertion below inherits it.
+as rook-d19 release 'FS.GG.SDD#74' >/dev/null 2>&1
+assert_eq "claim CAS: the winner's claim is a real lock it must release" "" "$(workers_on 74)"
+
+# ---- heartbeat / release -----------------------------------------------------------------------
+: >"$GH_LOG"
+assert_contains "heartbeat: renews the holder's lease" "renewed FS.GG.SDD#70" "$(as heron-b71 heartbeat 'FS.GG.SDD#70' 2>/dev/null)"
+assert_contains "heartbeat: patches the marker in place" "comment-patch" "$(cat "$GH_LOG")"
+assert_fails "heartbeat: a non-holder cannot renew" as wren-c22 heartbeat 'FS.GG.SDD#70'
+
+assert_fails "release: a non-holder cannot release another worker's claim" as wren-c22 release 'FS.GG.SDD#70'
+assert_eq "release: the refused release left the marker intact" "heron-b71" "$(workers_on 70)"
+assert_contains "release: --force releases another worker's claim" "released FS.GG.SDD#70" \
+  "$(as wren-c22 release 'FS.GG.SDD#70' --force 2>/dev/null)"
+assert_eq "release: the marker is gone" "" "$(workers_on 70)"
+
+# ---- who: what is actually running, without spelunking through worktrees ------------------------
+who="$(pw who --repo sdd 2>/dev/null)"
+assert_contains "who: names the worker holding each item" "finch-a3f" "$who"
+assert_contains "who: flags a claim past its lease as STALE" "STALE" "$who"
+assert_contains "who: flags In-progress work with NO marker as UNCLAIMED" "UNCLAIMED" "$who"
+whoerr="$(pw who --repo sdd 2>&1 >/dev/null)"
+assert_contains "who: warns that someone is working outside the protocol" \
+  "In progress with NO claim marker" "$whoerr"
+assert_eq "who --json: the unclaimed item has a null worker" "null" \
+  "$(pw who --repo sdd --json 2>/dev/null | jq -r '.[] | select(.number==60) | .worker')"
+
+# ---- reap: collect a dead worker's claim -------------------------------------------------------
+assert_contains "reap: dry-run reports, does not release" "would reap  FS.GG.SDD#43  worker ghost-000" \
+  "$(pw reap --repo sdd 2>/dev/null)"
+assert_eq "reap: dry-run left the marker in place" "ghost-000" "$(workers_on 43)"
+: >"$GH_LOG"
+reaped="$(as wren-c22 reap --repo sdd --apply 2>/dev/null)"
+assert_contains "reap --apply: releases the expired claim" "reaped  FS.GG.SDD#43  worker ghost-000" "$reaped"
+assert_contains "reap --apply: returns the item to the pool" "board: Ready" "$reaped"
+assert_eq "reap --apply: the stale marker is gone" "" "$(workers_on 43)"
+assert_eq "reap --apply: it TELLS the reaped worker (a message, not a silent steal)" "1" \
+  "$(jq '[.[] | select(.body | test("fsgg:msg")) | select(.body | test("to=ghost-000"))] | length' "$STORE/comments-43.json")"
+
+# ---- overlap --active: a candidate against everything in flight --------------------------------
+assert_contains "overlap --active: disjoint candidate clears every live claim" "DISJOINT" \
+  "$(pw overlap 'FS.GG.SDD#73' --active 2>/dev/null || true)"
+ov="$(pw overlap 'FS.GG.SDD#71' --active 2>&1 || true)"
+assert_contains "overlap --active: names the colliding item AND its worker" "OVERLAP — FS.GG.SDD#71 ⇄ FS.GG.SDD#42 (worker finch-a3f" "$ov"
+assert_contains "overlap --active: shows the conflicting subtrees" "src/Audio/Mixer  ⇄  src/Audio" "$ov"
+assert_fails "overlap --active: exits non-zero on a collision" pw overlap 'FS.GG.SDD#71' --active
+
+# ---- batch: the scheduler ----------------------------------------------------------------------
+# #42 (in flight) owns src/Audio, so #71 is unschedulable. #72 declares nothing. #73 overlaps #70,
+# which was chosen first. That leaves #70 and #74 — a disjoint pair, safe to hand to two workers.
+batch_json="$(pw batch --repo sdd --json 2>/dev/null)"
+assert_eq "batch: picks a maximal DISJOINT set" '["FS.GG.SDD#70","FS.GG.SDD#74"]' "$(jq -c '.' <<<"$batch_json")"
+batch_err="$(pw batch --repo sdd 2>&1 >/dev/null)"
+assert_contains "batch: says why it skipped in-flight overlap"   "#71 — overlaps in-flight work" "$batch_err"
+assert_contains "batch: says why it skipped an undeclared item"  "#72 — no 'Paths:' declared" "$batch_err"
+assert_contains "batch: says why it skipped a batch-mate clash"  "#73 — overlaps batch member FS.GG.SDD#70" "$batch_err"
+assert_eq "batch -n 1: honours the requested width" '["FS.GG.SDD#70"]' \
+  "$(pw batch --repo sdd -n 1 --json 2>/dev/null | jq -c '.')"
+
+# ---- take: pick + claim in one step -------------------------------------------------------------
+took="$(as smew-f31 take --repo sdd 2>/dev/null)"
+assert_contains "take: claims the first schedulable item" "claimed FS.GG.SDD#70 by worker smew-f31" "$took"
+assert_eq "take: the claim marker is really there" "smew-f31" "$(workers_on 70)"
+# With #70 now held by smew, a second worker takes the next disjoint item rather than idling.
+took2="$(as brant-g07 take --repo sdd 2>/dev/null)"
+assert_contains "take: a second worker gets a DIFFERENT, disjoint item" "claimed FS.GG.SDD#74 by worker brant-g07" "$took2"
+
+# ---- say / inbox: the channel -------------------------------------------------------------------
+as finch-a3f say 'FS.GG.SDD#42' --to smew-f31 'I own src/Audio until Friday.' >/dev/null 2>&1
+as finch-a3f say 'FS.GG.SDD#42' 'Broadcast to whoever is here.' >/dev/null 2>&1
+inbox="$(as smew-f31 inbox --repo sdd 2>/dev/null)"
+assert_contains "inbox: delivers a message addressed to this worker" "I own src/Audio until Friday." "$inbox"
+assert_contains "inbox: delivers a broadcast (to=*)"                 "Broadcast to whoever is here." "$inbox"
+assert_contains "inbox: says which item the message rode in on"      "FS.GG.SDD#42" "$inbox"
+assert_eq "inbox: the cursor advanced -> nothing new on a second read" "no new messages for worker smew-f31." \
+  "$(as smew-f31 inbox --repo sdd 2>/dev/null)"
+assert_eq "inbox: a worker does not see its OWN messages" "no new messages for worker finch-a3f." \
+  "$(as finch-a3f inbox --repo sdd 2>/dev/null)"
+as finch-a3f say 'FS.GG.SDD#42' --to smew-f31 'One more.' >/dev/null 2>&1
+assert_contains "inbox --peek: shows new mail" "One more." "$(as smew-f31 inbox --repo sdd --peek 2>/dev/null)"
+assert_contains "inbox --peek: does NOT advance the cursor" "One more." "$(as smew-f31 inbox --repo sdd 2>/dev/null)"
+
+# ---- widen: re-declare mid-flight, and TELL whoever it now collides with ------------------------
+widen="$(as brant-g07 widen 'FS.GG.SDD#74' --paths 'docs/adr/**, src/Audio/**' 2>&1 || true)"
+assert_contains "widen: rewrites the declared touch-set"          "widened FS.GG.SDD#74 → Paths: docs/adr/**, src/Audio/**" "$widen"
+assert_contains "widen: re-checks against in-flight claims"        "now collides with FS.GG.SDD#42 (worker finch-a3f)" "$widen"
+assert_contains "widen: notifies the worker it collided with"      "notified worker finch-a3f on FS.GG.SDD#42" "$widen"
+assert_eq "widen: the notification is a real message on THEIR item" "1" \
+  "$(jq '[.[] | select(.body | test("fsgg:msg")) | select(.body | test("to=finch-a3f"))] | length' "$STORE/comments-42.json")"
+assert_contains "widen: the new touch-set persisted to the issue body" "Paths: docs/adr/**, src/Audio/**" \
+  "$(jq -r '.body' "$STORE/issue-74.json")"
+assert_eq "widen: it replaced the Paths line, it did not append a second one" "1" \
+  "$(jq -r '.body' "$STORE/issue-74.json" | grep -c '^Paths:')"
+# On a DIFFERENT item, so the assertions above are not perturbed by a second notification.
+assert_fails "widen: a collision exits non-zero" as brant-g07 widen 'FS.GG.SDD#73' --paths 'src/Audio/**'
+
+# ---- verify-paths: did the PR stay inside the declared touch-set? ------------------------------
+cat >"$FIXTURES/pr-7.json" <<'JSON'
+{"head":{"ref":"item/70-scene-graph"},"number":7}
+JSON
+cat >"$FIXTURES/pr-files-7.json" <<'JSON'
+[{"filename":"src/Scene/Graph.fs"},{"filename":"tests/Scene/GraphTests.fs"}]
+JSON
+cat >"$FIXTURES/pr-8.json" <<'JSON'
+{"head":{"ref":"item/70-scene-graph"},"number":8}
+JSON
+cat >"$FIXTURES/pr-files-8.json" <<'JSON'
+[{"filename":"src/Scene/Graph.fs"},{"filename":"src/Audio/Mixer.fs"},{"filename":"README.md"}]
+JSON
+assert_contains "verify-paths: a PR inside its touch-set is OK" "FSGG-PATHS OK" \
+  "$(pw verify-paths --pr 7 --repo FS-GG/FS.GG.SDD 2>/dev/null)"
+drift="$(pw verify-paths --pr 8 --repo FS-GG/FS.GG.SDD 2>&1 || true)"
+assert_contains "verify-paths: drift is reported with a count" "FSGG-PATHS DRIFT — PR #8 touches 2 file(s) outside" "$drift"
+assert_contains "verify-paths: names the offending files"      "src/Audio/Mixer.fs" "$drift"
+assert_contains "verify-paths: does not flag files inside the touch-set" "src/Scene/Graph.fs" \
+  "$(pw verify-paths --pr 7 --repo FS-GG/FS.GG.SDD 2>/dev/null; echo 'src/Scene/Graph.fs')"
+assert_contains "verify-paths: points at the remedy" "fsgg-coord widen" "$drift"
+assert_fails "verify-paths: drift exits non-zero by default" pw verify-paths --pr 8 --repo FS-GG/FS.GG.SDD
+assert_contains "verify-paths --warn: reports drift but exits 0 (the advisory CI gate)" "FSGG-PATHS DRIFT" \
+  "$(pw verify-paths --pr 8 --repo FS-GG/FS.GG.SDD --warn 2>&1)"
+pw verify-paths --pr 8 --repo FS-GG/FS.GG.SDD --warn >/dev/null 2>&1 \
+  && ok "verify-paths --warn: exit 0" || bad "verify-paths --warn: exit 0" "non-zero exit under --warn"
+
+# A PR with nothing to verify against is SKIP, never a silent OK — CI must not stamp "stays inside
+# its touch-set" on a PR that never declared one.
+cat >"$FIXTURES/pr-9.json" <<'JSON'
+{"head":{"ref":"chore/no-linked-issue"},"number":9}
+JSON
+cat >"$FIXTURES/pr-files-9.json" <<'JSON'
+[{"filename":"README.md"}]
+JSON
+cat >"$FIXTURES/pr-10.json" <<'JSON'
+{"head":{"ref":"item/72-no-touch-set-declared"},"number":10}
+JSON
+cat >"$FIXTURES/pr-files-10.json" <<'JSON'
+[{"filename":"src/Whatever.fs"}]
+JSON
+skip9="$(pw verify-paths --pr 9 --repo FS-GG/FS.GG.SDD --warn 2>&1)"
+assert_contains "verify-paths --warn: an unlinked PR is SKIP, not OK" "FSGG-PATHS SKIP" "$skip9"
+case "$skip9" in *"FSGG-PATHS OK"*) bad "verify-paths --warn: SKIP is not mistaken for OK" "OK leaked into a SKIP verdict" ;; *) ok "verify-paths --warn: SKIP is not mistaken for OK" ;; esac
+assert_contains "verify-paths --warn: an undeclared touch-set is SKIP" "declares no 'Paths:' touch-set" \
+  "$(pw verify-paths --pr 10 --repo FS-GG/FS.GG.SDD --warn 2>&1)"
+assert_fails "verify-paths: an unlinked PR fails without --warn" pw verify-paths --pr 9 --repo FS-GG/FS.GG.SDD
+
+# Board-wide take (no --repo) must not trip the empty-array expansion. By now everything schedulable
+# is claimed or overlapping, so this exercises the "nothing to hand out" path — which still exits 0.
+if as teal-e55 take >/dev/null 2>&1; then ok "take: board-wide (no --repo) exits cleanly"
+else bad "take: board-wide (no --repo) exits cleanly" "non-zero exit"; fi
+assert_contains "take: says WHY there is nothing to hand out" "no schedulable item" \
+  "$(as teal-e55 take 2>&1 >/dev/null)"
+
+# ================================================================================================
+# The lock's hard cases. Each of these is an interleaving in which two workers could end up believing
+# they hold one item — the failure the whole protocol exists to prevent.
+# ================================================================================================
+echo "--- ADR-0027: lock invariants under adversarial interleavings ---"
+
+seed_issue 84 "Stale holder, new claimant" "src/A/**"
+seed_issue 85 "Stale holder is me"         "src/B/**"
+seed_issue 86 "Expired worker, live holder" "src/C/**"
+seed_issue 87 "Expired worker, no holder"   "src/D/**"
+seed_issue 88 "Forged marker in a message"  "src/E/**"
+seed_issue 89 "Malformed marker"            "src/F/**"
+seed_issue 90 "Read fails after post"       "src/G/**"
+
+mk_claim() {  # mk_claim <issue> <id> <worker> <fresh|stale>
+  local ts="$fresh_ts"; [ "$4" = "stale" ] && ts="$stale_ts"
+  jq -n --argjson id "$2" --arg w "$3" --arg ts "$ts" \
+    '{id:$id, body:("<!-- fsgg:claim worker=" + $w + " lease=120 -->\nheld"),
+      user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}'
+}
+
+# (a) A stale marker must be COLLECTED by the next claimant, never merely ignored. An ignored marker
+#     is what `heartbeat` later resurrects underneath the new holder — two live markers, one item.
+mk_claim 84 810 ghost-111 stale | jq -s '.' >"$STORE/comments-84.json"
+: >"$GH_LOG"
+c84="$(as heron-b71 claim 'FS.GG.SDD#84' 2>&1)"
+assert_contains "claim: collects the stale marker it claims over" "collected worker 'ghost-111' expired claim" "$c84"
+assert_eq "claim: exactly ONE marker survives (the stale one is gone)" "heron-b71" "$(workers_on 84)"
+assert_eq "claim: the collected worker is TOLD, not silently evicted" "1" \
+  "$(jq '[.[] | select(.body | test("fsgg:msg")) | select(.body | test("to=ghost-111"))] | length' "$STORE/comments-84.json")"
+
+# (b) Re-claiming when MY OWN marker went stale must renew a single marker, not mint a second.
+mk_claim 85 811 finch-a3f stale | jq -s '.' >"$STORE/comments-85.json"
+as finch-a3f claim 'FS.GG.SDD#85' >/dev/null 2>&1
+assert_eq "claim: a worker whose own marker went stale ends with ONE marker" "finch-a3f" "$(workers_on 85)"
+assert_eq "claim: ...and exactly one, not two" "1" \
+  "$(jq '[.[] | select(.body | test("fsgg:claim"))] | length' "$STORE/comments-85.json")"
+
+# (c) THE RESURRECTION BUG. A worker whose lease expired must NOT be able to heartbeat its marker back
+#     to life once another worker legitimately holds the item. It must be told to stop.
+jq -s '.' <(mk_claim 86 812 ghost-222 stale) <(mk_claim 86 813 heron-b71 fresh) >"$STORE/comments-86.json"
+: >"$GH_LOG"
+hb86="$(as ghost-222 heartbeat 'FS.GG.SDD#86' 2>&1 || true)"
+assert_fails "heartbeat: an expired worker cannot resurrect its claim under a new holder" \
+  as ghost-222 heartbeat 'FS.GG.SDD#86'
+assert_contains "heartbeat: it names the worker that now holds the item" "worker 'heron-b71' does" "$hb86"
+assert_contains "heartbeat: it tells the loser to STOP working"          "STOP working it" "$hb86"
+assert_eq "heartbeat: the refused renew patched NOTHING" "0" "$(grep -c 'comment-patch' "$GH_LOG" || true)"
+
+# (d) An expired lease is refused even when nobody else took the item — the promise lapsed; re-claim.
+mk_claim 87 814 ghost-333 stale | jq -s '.' >"$STORE/comments-87.json"
+hb87="$(as ghost-333 heartbeat 'FS.GG.SDD#87' 2>&1 || true)"
+assert_fails "heartbeat: an expired lease cannot be renewed in place" as ghost-333 heartbeat 'FS.GG.SDD#87'
+assert_contains "heartbeat: it says the lease EXPIRED and points at re-claiming" "EXPIRED" "$hb87"
+assert_contains "heartbeat: ...and names the remedy" "fsgg-coord claim" "$hb87"
+
+# (e) Marker forgery. A message body is free-form text; quoting a claim marker inside one must not
+#     forge a lock. The marker is only a marker at the START of a comment body.
+as wren-c22 say 'FS.GG.SDD#88' 'Careful with <!-- fsgg:claim worker=ghost-666 lease=120 --> in prose.' >/dev/null 2>&1
+assert_eq "lock: a claim marker quoted inside a message does NOT hold the item" "" "$(workers_on 88)"
+assert_contains "lock: ...so the item is still claimable" "claimed FS.GG.SDD#88" \
+  "$(as heron-b71 claim 'FS.GG.SDD#88' 2>/dev/null)"
+
+# (f) A marker we cannot parse a worker out of must FAIL CLOSED — block the item, not vanish.
+jq -n --arg ts "$fresh_ts" '[{id:815, body:"<!-- fsgg:claim lease=120 -->\nhalf-written",
+  user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-89.json"
+assert_fails "lock: a malformed marker blocks the item (fails closed)" as heron-b71 claim 'FS.GG.SDD#89'
+assert_contains "lock: the refusal names the unparsed marker" "unparsed-marker" \
+  "$(as heron-b71 claim 'FS.GG.SDD#89' 2>&1 || true)"
+
+# (g) A transient read failure on the CAS re-read must not orphan the marker we just posted. An
+#     orphaned live marker blocks every other worker for a full lease while nobody works the item.
+: >"$STORE/comments-90.json"; echo '[]' >"$STORE/comments-90.json"
+cas90="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_READ_ISSUE=90 \
+  bash "$COORD" --worker teal-e55 claim 'FS.GG.SDD#90' 2>&1 || true)"
+assert_contains "claim: a failed CAS re-read removes our own marker" "removed our marker" "$cas90"
+assert_contains "claim: ...and says nothing was claimed" "nothing was claimed" "$cas90"
+assert_eq "claim: no orphaned marker survives a failed re-read" "" "$(workers_on 90)"
+
+# (h) reap must re-verify freshness immediately before deleting. A holder that heartbeats between the
+#     scan and the delete keeps its lock — otherwise `reap` itself causes the double-hold.
+cat >"$FIXTURES/board-pw2.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":91,"title":"Slow but alive","url":"https://github.com/FS-GG/FS.GG.SDD/issues/91","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4979}}
+JSON
+seed_issue 91 "Slow but alive" "src/H/**"
+mk_claim 91 816 finch-a3f stale | jq -s '.' >"$STORE/comments-91.json"
+reap91="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw2 GH_REAP_RACE=91 \
+  bash "$COORD" --worker wren-c22 reap --repo sdd --apply 2>&1 || true)"
+assert_contains "reap: a claim renewed between the scan and the delete is SKIPPED" \
+  "renewed since the scan" "$reap91"
+assert_eq "reap: ...and its marker survives" "finch-a3f" "$(workers_on 91)"
+
+# `--help` must not silently truncate when a subcommand is added (usage is marker-delimited now).
+help="$(pw --help 2>/dev/null)"
+for c in whoami claim heartbeat release who reap take batch overlap widen say inbox verify-paths; do
+  case "$help" in *"fsgg-coord $c"*) : ;; *) bad "usage: documents '$c'" "missing from --help"; continue ;; esac
+done
+ok "usage: --help documents every parallel-work subcommand"
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"

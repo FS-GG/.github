@@ -1,8 +1,19 @@
 # ADR-0021: Parallel intra-repo work via claim + worktree + declared touch-set
 
-- **Status:** Accepted
+- **Status:** Accepted — **§1 (the assignee lock) is superseded by
+  [ADR-0027](0027-worker-keyed-claim-lock-and-worker-channel.md)**; §2 (worktree isolation) and
+  §3–4 (touch-set, disjointness) stand.
 - **Date:** 2026-07-06
 - **Affects:** all FS-GG repos (the protocol is org-wide; `.github` owns it)
+
+> **Amendment (2026-07-09, [ADR-0027](0027-worker-keyed-claim-lock-and-worker-channel.md),
+> [#255](https://github.com/FS-GG/.github/issues/255)).** §1's claim lock — "the issue assignee is the
+> advisory lock (first assignee wins)" — does not hold for the case it was written for. When N workers
+> fan out under **one GitHub account**, `@me` names the same principal for all of them: an item a
+> sibling already holds reads back as "assigned to me", the "is anyone *else* holding this?" test
+> passes, and **both workers proceed**. The assignee names an
+> *account*; the thing that must be excluded is a *worker*. ADR-0027 keys the lock on a **worker id**
+> and resolves races by comment-order compare-and-swap. Read §1 below as history.
 
 ## Context
 
