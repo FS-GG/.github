@@ -125,12 +125,13 @@ JSON
 # Board pages for `lint` — same items connection, but carrying each epic's sub-issues. Covers every
 # invariant plus two negatives (a clean epic, a childless NON-epic) so the checks cannot pass by
 # firing on everything.
-#   #400 [epic], zero children                          -> EPIC-NO-CHILDREN
+#   #400 [epic], OPEN, zero children                    -> EPIC-NO-CHILDREN
 #   #401 [epic], board Done, child #403 still OPEN      -> EPIC-DONE-OPEN-CHILD
 #   #404 [epic], totalCount 150 but 2 nodes visible     -> EPIC-CHILDREN-TRUNCATED
 #   #405 non-epic, Status Done but issue OPEN           -> DONE-STATUS-OPEN-ISSUE (note, not an error)
 #   #406 [epic], board Done, every child CLOSED         -> clean
 #   #407 non-epic, zero children                        -> clean (the check is epic-scoped)
+#   #408 [epic], CLOSED, zero children                  -> clean (the check is live-work-scoped)
 cat >"$FIXTURES/lint-p1.json" <<'JSON'
 {"data":{"organization":{"projectV2":{"items":{
   "pageInfo":{"hasNextPage":true,"endCursor":"LCUR1"},
@@ -152,7 +153,8 @@ cat >"$FIXTURES/lint-p2.json" <<'JSON'
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":405,"title":"A merged PR that left its issue open","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Templates/issues/405","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"},"subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":406,"title":"[epic] Properly finished","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/406","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":1,"nodes":[
       {"number":412,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}},
-    {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":407,"title":"An ordinary card, no children","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/407","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}}
+    {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":407,"title":"An ordinary card, no children","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/407","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":408,"title":"[epic] Finished, and it never grew children","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/408","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}}
   ]}}}},"rateLimit":{"cost":1,"remaining":4969}}
 JSON
 
@@ -633,12 +635,17 @@ before_lint="$(gcount)"
 lint_json="$(run lint --json 2>/dev/null || true)"
 assert_eq "lint: paginates the board in exactly 2 GraphQL calls" "$((before_lint + 2))" "$(gcount)"
 codes() { jq -r --arg id "$1" '.[] | select(.id|endswith($id)) | .code' <<<"$lint_json" | sort | tr '\n' ' '; }
-assert_eq "lint: a childless [epic] is EPIC-NO-CHILDREN (#400)"        "EPIC-NO-CHILDREN "     "$(codes '#400')"
-assert_eq "lint: Done over an open child (#401)"                       "EPIC-DONE-OPEN-CHILD " "$(codes '#401')"
+assert_eq "lint: a childless OPEN [epic] is EPIC-NO-CHILDREN (#400)"   "EPIC-NO-CHILDREN "     "$(codes '#400')"
+# #401 is itself CLOSED. Liveness scopes EPIC-NO-CHILDREN only — a closed epic over an open child is
+# the sharpest form of THIS bug (the .github#235 case), so it must still be reported.
+assert_eq "lint: Done over an open child, on a CLOSED epic (#401)"     "EPIC-DONE-OPEN-CHILD " "$(codes '#401')"
 assert_eq "lint: >100 children is EPIC-CHILDREN-TRUNCATED (#404)"      "EPIC-CHILDREN-TRUNCATED " "$(codes '#404')"
 assert_eq "lint: Done status on an open issue is a NOTE (#405)"        "DONE-STATUS-OPEN-ISSUE " "$(codes '#405')"
 assert_eq "lint: a properly finished epic is clean (#406)"             ""                      "$(codes '#406')"
 assert_eq "lint: a childless NON-epic is clean — the check is epic-scoped (#407)" "" "$(codes '#407')"
+# A CLOSED childless epic is finished work, not an orphan: rollup is how an epic reaches Done, and
+# `next` hands out only open Ready/Backlog cards. Linting it can never be acted on.
+assert_eq "lint: a childless CLOSED [epic] is clean — the check is live-work-scoped (#408)" "" "$(codes '#408')"
 assert_contains "lint: EPIC-DONE-OPEN-CHILD names the open child" "#403" \
   "$(jq -r '.[] | select(.code=="EPIC-DONE-OPEN-CHILD") | .detail' <<<"$lint_json")"
 assert_eq "lint: severities — 3 errors, 1 note" "3 1" \
