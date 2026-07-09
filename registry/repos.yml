@@ -29,7 +29,7 @@
 # Only `labels` and `coordination-kit` are POPULATED in slice 1; the rest are reserved vocabulary,
 # added to the relevant rows when each fabric is migrated (verified against that workflow's list).
 
-schemaVersion: 1
+schemaVersion: 2
 updated: 2026-07-09
 authority: FS-GG/.github
 
@@ -41,6 +41,20 @@ repos:
   - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit] }
   - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit] }
   - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit] }   # the org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.
+
+# Repos that exist in the GitHub org and are DELIBERATELY outside every fabric. The roster is a
+# closed-world assumption, and `scripts/check-roster-closure.py` (.github#269) is what asserts the
+# world is actually closed: any repo live in the org but absent from BOTH `repos:` and this list
+# fails CI. That is the FS.GG.Audio defect — the org's 7th repo sat outside the roster for weeks
+# because "deliberately outside" and "accidentally outside" were indistinguishable to every gate.
+#
+# This list is what makes the distinction sayable. An entry is a REVIEWED claim, not a mute button:
+# `reason` is required, a repo may not be both rostered and exempt, and an exemption naming a repo
+# that no longer exists in the org fails as a stale exemption. Nothing is auto-exempt — an archived
+# or forked repo still needs a row here, because "archive it" must never be a way to leave the gate.
+#
+# Empty today: the org's seven live repos are all rostered above.
+outside-fabric: []
 
 # The coordination kit every `coordination-kit` receiver must hold, content-addressed like a
 # skills.yml row. `sha256` is the canonical digest of `source` (for a skill dir: sha256 of its

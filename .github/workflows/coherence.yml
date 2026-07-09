@@ -45,3 +45,38 @@ jobs:
         run: python -m pip install --disable-pip-version-check pyyaml
       - name: Assert compatibility.md projects the registry
         run: python scripts/check-projection.py registry/dependencies.yml docs/registry/compatibility.md
+
+  # Closed-world gate (#269 / epic #266 instance (c)). Every org fabric iterates registry/repos.yml,
+  # so a repo absent from it silently receives nothing — and no other gate can report the absence:
+  # coordination-coherence exits 0 for a non-receiver, and repos-audit only iterates repos that are
+  # already rostered. FS.GG.Audio sat outside the roster for weeks on exactly that blind spot.
+  #
+  # Lives in this self-gate (not the reusable contract-coherence.yml the product repos call) for the
+  # same reason `projection` does: both registries live HERE, so this is a .github-internal invariant.
+  # It runs on every PR and every push to main, which is what makes "add a repo to dependencies.yml
+  # without rostering it" a red check. Pure-stdlib + PyYAML; one REST call.
+  roster-closure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      # The fixture first: it proves the gate still FAILS on each fails-open trap (empty listing,
+      # narrow listing, unreachable listing, stale exemption). A gate whose own tests have gone
+      # vacuous is this epic's defect class, one level up — cf. SDD's C6 smoke, whose "malformed
+      # registry ⇒ exit 1" leg had stopped testing its own claim.
+      - name: Run the roster-closure fixture
+        run: bash tests/roster-closure/run.sh
+
+      # Then the real thing, against the live org. The org's repos are public, so the run-scoped
+      # GITHUB_TOKEN is sufficient and a fork PR (which gets a read-only token) still resolves the
+      # listing. If the token could NOT see the whole org, the gate notices — a rostered repo missing
+      # from the listing fails rather than reporting a vacuously-closed world.
+      - name: Assert the org roster is closed (dependencies.yml + live org)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check-roster-closure.py --org FS-GG
