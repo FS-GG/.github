@@ -476,7 +476,8 @@ the coherence gate validates this registry with SDD's typed `Fsgg.Registry`), an
 producers' skill-manifests).
 
 **Rendering → Game** (`game-sim-core`, [ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md) P5) and
-**Rendering → Audio** (`fs-gg-audio`, [ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3,
+**Rendering → Audio** (`fs-gg-audio`@`0.1.0` — the template payload re-pinned onto the stable
+channel in FS.GG.Rendering#238, alongside `game-sim-core`@`0.2.0`; [ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3,
 [.github#238](https://github.com/FS-GG/.github/issues/238)): Rendering's template `game`/`sample-pack`
 profiles reach *up* to two BCL-only bottom layers that are siblings of Rendering and themselves reach
 up to nothing (`FS.GG.Game.Core` on the `$(FsGgGameVersion)` axis; `FS.GG.Audio.*` on

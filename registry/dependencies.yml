@@ -419,7 +419,12 @@ dependencies:
   # ADR-0022 P5 (Rendering#155): Rendering's template game/sample-pack profiles + Canvas.Tests consume the
   # extracted bottom layer. Rendering (upstream) reaching further UP to the new sibling bottom layer is
   # allowed — Game.Core reaches up to nothing; this is the template's game-sim primitive source.
-  - { from: rendering, to: game,       via: "game-sim-core@0.1.0-preview.1 (FS.GG.Game.Core — template game/sample-pack sim primitives, on the $(FsGgGameVersion) axis)" }
+  # ADVANCED 0.1.0-preview.1 → 0.2.0 with the consumer re-pin (FS.GG.Rendering#238, closing half (1) of
+  # FS.GG.Rendering#235): template/base/Directory.Packages.props now declares <FsGgGameVersion>0.2.0.
+  # The pin was TWO MINORS stale independent of any channel question — game-sim-core has read 0.2.0 since
+  # the FS.GG.Game 0.2.0 release, and nothing was red, because template payload is CONTENT, not a nuspec
+  # dependency: NU5104 cannot see it and no gate covers it (the .github#266 fails-open class).
+  - { from: rendering, to: game,       via: "game-sim-core@0.2.0 (FS.GG.Game.Core — template game/sample-pack sim primitives, on the $(FsGgGameVersion) axis)" }
   # ADR-0024 step 3 (.github#234/#238, FS.GG.Rendering#156 wired / #162+#163 released at template 0.3.1):
   # the game/sample-pack template profiles materialize the REAL FS.GG.Audio realization (buses/fades/
   # ducking/3D; device backend degrading to Null/record), replacing the record-only fs-gg-audio SKILL
@@ -428,12 +433,12 @@ dependencies:
   # Rendering (upstream) reaching further UP to a sibling BOTTOM layer that itself reaches up to nothing.
   # Publish-before-flip (FR-007): the packages are live on the org feed + nuget.org, and the template that
   # references them shipped as fs-gg-ui-template/v0.3.1-preview.1, BEFORE this edge was written.
-  # HOLDS at 0.1.0-preview.1 while the fs-gg-audio CONTRACT above reads 0.1.0 (FS.GG.Audio#4). This is NOT
-  # drift: an edge records what the CONSUMER ACTUALLY PINS, and Rendering's template/base/Directory.Packages.props
-  # still declares <FsGgAudioVersion>0.1.0-preview.1</FsGgAudioVersion>. Same discipline as .github#250, which
-  # left templates→rendering at 0.2.0 until FS.GG.Templates#119 moved the pin. The edge moves with the re-pin
-  # (publish-before-flip step 3) in FS.GG.Rendering#235 — do NOT "fix" this literal ahead of that PR.
-  - { from: rendering, to: audio,      via: "fs-gg-audio@0.1.0-preview.1 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
+  # ADVANCED 0.1.0-preview.1 → 0.1.0 with the consumer re-pin (FS.GG.Rendering#238, closing half (2) of
+  # FS.GG.Rendering#235), completing publish-before-flip step 3 for FS.GG.Audio#4. The edge lagged the
+  # fs-gg-audio CONTRACT row by one PR ON PURPOSE — an edge records what the CONSUMER ACTUALLY PINS, and
+  # the flip (.github#279) preceded the re-pin. Same discipline as .github#250, which left templates→rendering
+  # at 0.2.0 until FS.GG.Templates#119 moved the pin.
+  - { from: rendering, to: audio,      via: "fs-gg-audio@0.1.0 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
   - { from: game,      to: rendering,  via: "game-scene-adapter@0.1.0-preview.1 -> FS.GG.UI.Scene@0.2.0-preview.1 (adapter projects sim state onto Scene drawables; the one Game -> Rendering edge)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
