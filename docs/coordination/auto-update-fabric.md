@@ -37,11 +37,31 @@ Both halves are authored, committed, **and provisioned**. The H4 admin step
   an `extends` preset, so the feed `hostRules` token lives in each repo's own `renovate.json`, not in
   [`default.json`](../../default.json).
 
+  **This requirement applies to `.github` itself, and for a long time it did not meet it**
+  ([#263](https://github.com/FS-GG/.github/issues/263)). Every product repo carried the `hostRules`
+  block; the repo that *authors* the preset did not, on the recorded belief that its `FS.GG.*` rules
+  were "inert here (no `FS.GG.*` PackageReferences)". But an **annotated tool pin is an `FS.GG.*`
+  dependency too** — `contract-coherence.yml` pins `FS.GG.SDD.Cli` through the annotation manager —
+  so every `FS.GG.*` lookup in this repo 401'd, Renovate could enumerate no versions, and no bump PR
+  could ever open. The validator pin duly froze across three published minors, twice
+  ([#127](https://github.com/FS-GG/.github/issues/127), then #263). Adding a repo to this fabric
+  means adding the `hostRules` block to **that repo's own** config, whatever kind of `FS.GG.*` pin it
+  carries. [`pin-coherence.yml`](../../.github/workflows/pin-coherence.yml) now gates both the token's
+  presence and the freshness of the pins it enables (coherence id `pin-feed-coherence`).
+
 The registry coherence id [`cross-repo-auto-update`](../../registry/dependencies.yml)
 ([projection](../registry/compatibility.md)) stays **`coherent: false` for one remaining reason**:
 no scheduled Renovate sweep has yet resolved an `FS.GG.*` feed lookup green end-to-end and opened the
 auto-PR (only third-party Renovate PRs observed so far). It flips **`coherent: true` on the first
 green `FS.GG.*` Renovate sweep** — not on any further admin step.
+
+> **Read "only third-party Renovate PRs observed" as a symptom, not a milestone.** Third-party
+> packages resolve from `nuget.org`, which needs no token; `FS.GG.*` needs the feed `hostRules` token.
+> "The bot opens PRs, but never for `FS.GG.*`" is therefore exactly the signature of missing feed
+> auth. That sentence sat in this guide and in the registry for weeks while the `.github` validator
+> pin froze twice, because it was filed as *waiting* rather than *failing* ([#263](https://github.com/FS-GG/.github/issues/263)).
+> The missing token is fixed **here**; whether the product repos' sweeps resolve green is still
+> unobserved, which is why this row has not flipped.
 
 ## The dispatch sender
 

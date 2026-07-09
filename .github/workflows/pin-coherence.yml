@@ -1,0 +1,96 @@
+# Gate every Renovate-annotated version pin against the LIVE org feed (.github#263, epic #266).
+#
+# contract-coherence.yml installs the typed registry validator at a pinned version, and the registry
+# row `registry-validator-typed` asserts `coherent: true` on the strength of that pin tracking
+# feed-newest — because under the registry's additive tolerance a frozen typed validator degrades
+# toward a "does the YAML parse" check. Nothing enforced it. The literal froze at 0.2.1 across three
+# minors (#127), was fixed by hand, then froze again at 0.5.0 across three more (#263). Both times a
+# human found it, during a release, by eye.
+#
+# scripts/check-pin-coherence.py closes that, and asserts BOTH halves of "this pin can move, and it
+# has moved":
+#   * FRESHNESS — every annotated pin equals the newest version live on nuget.pkg.github.com/FS-GG.
+#   * MECHANISM — this repo's own renovate.json carries the feed `hostRules` token. Without it
+#     Renovate cannot enumerate FS.GG.* versions, so it can never bump ANY of these pins. That
+#     omission was the #263 root cause: the token must live in each repo's own config (Renovate does
+#     not substitute `{{ secrets }}` inside a preset pulled via `extends`), every product repo had
+#     it, and `.github` — which authors the preset — never did.
+#
+# The triggers are the two halves of the acceptance criteria in #263:
+#   * pull_request — a PR that freezes a pin, or drops the feed token, fails CI.
+#   * push to main + schedule — a CLI release that publishes a newer version turns .github@main red.
+#     The schedule is what catches it, since such a release touches no file in this repo. This is the
+#     whole defect: three minors shipped and nothing here changed, so no path-filtered trigger could
+#     ever have fired.
+#
+# The gate FAILS CLOSED (the point of epic #266): an unreadable feed, a missing token, a pin the
+# manager's regex no longer sees, or a datasource the gate cannot resolve is an ERROR, never a skip.
+# So this workflow must never gain a `continue-on-error` or a conditional that lets the live job be
+# skipped into green — "nothing to check" and "checked, and it's fine" must not share an exit code.
+name: pin-coherence
+
+on:
+  pull_request:
+    paths:
+      - "renovate.json"
+      - "default.json"
+      - "scripts/check-pin-coherence.py"
+      - "scripts/fsgg_feed.py"
+      - "tests/pin-coherence/**"
+      - ".github/workflows/pin-coherence.yml"
+      - ".github/workflows/contract-coherence.yml"   # carries the pin under test
+  push:
+    branches: [main]
+    paths:
+      - "renovate.json"
+      - "default.json"
+      - "scripts/check-pin-coherence.py"
+      - "scripts/fsgg_feed.py"
+      - "tests/pin-coherence/**"
+      - ".github/workflows/pin-coherence.yml"
+      - ".github/workflows/contract-coherence.yml"
+  schedule:
+    # Daily, offset from feed-coherence.yml's 06:17 so a feed outage does not red both at once.
+    # A CLI release that leaves this pin behind touches no file here, so no path-filtered trigger can
+    # see it — only a periodic read of the feed can. This is the trigger that would have caught #263
+    # on the day 0.6.0 published, instead of three minors later.
+    - cron: "43 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read   # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
+
+concurrency:
+  group: pin-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate goes red on every freeze/fails-open condition before we trust its green.
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Run the pin-coherence fixture (no network)
+        run: bash tests/pin-coherence/run.sh
+
+  # Online. The actual coherence signal.
+  pins:
+    runs-on: ubuntu-latest
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Assert every annotated pin == newest on the org feed
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern (cf. architecture-map.yml, contract-coherence.yml). The run-scoped token carries
+          # `packages: read`, which is what the feed's HTTP Basic auth wants; the same grant already
+          # authenticates the NuGet restore in contract-coherence.yml.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check-pin-coherence.py --root .

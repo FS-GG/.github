@@ -100,11 +100,15 @@ jobs:
           # freeze (the .github#127/H2 defect: pin sat at 0.2.1 while the org shipped 0.5.0, so
           # additive-tolerance degraded the typed gate toward a YAML-parses check).
           #
-          # H2 RECURRED. The annotation manager below is supposed to auto-bump this literal on
-          # every CLI publish, and did not: the pin sat at 0.5.0 while the org shipped 0.6.0,
-          # 0.7.0 and 0.8.0. Caught by hand during the 0.9.0 release. Until someone establishes
-          # why the Renovate manager is not opening the bump PR, treat this literal as MANUAL —
-          # advancing it is part of cutting an SDD release, not something the bot does for you.
+          # H2 RECURRED, and .github#263 found why: `.github`'s own renovate.json carried no feed
+          # `hostRules` token, so Renovate could not enumerate FS.GG.* versions here and never
+          # opened a bump PR — the pin sat at 0.5.0 while the org shipped 0.6.0, 0.7.0 and 0.8.0.
+          # The token is now in place, and pin-coherence.yml gates BOTH halves daily: that this
+          # literal equals feed-newest, and that the bot is still configured to keep it there.
+          #
+          # So this literal is bot-managed again, and no longer a release-runbook chore. If the
+          # annotation below is reworded or moved, or the pin is deleted, pin-coherence.yml fails —
+          # it is named in that gate's REQUIRED_PINS. Do not "fix" a red pin gate by deleting it.
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli
           dotnet tool install --global FS.GG.SDD.Cli --version 0.9.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"

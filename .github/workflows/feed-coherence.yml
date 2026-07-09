@@ -24,6 +24,7 @@ on:
     paths:
       - "registry/dependencies.yml"
       - "scripts/check-feed-coherence.py"
+      - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
       - "tests/feed-coherence/**"
       - ".github/workflows/feed-coherence.yml"
   push:
@@ -31,6 +32,7 @@ on:
     paths:
       - "registry/dependencies.yml"
       - "scripts/check-feed-coherence.py"
+      - "scripts/fsgg_feed.py"
       - "tests/feed-coherence/**"
       - ".github/workflows/feed-coherence.yml"
   schedule:
