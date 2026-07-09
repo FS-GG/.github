@@ -1,0 +1,109 @@
+# Advisory touch-set drift check (ADR-0027 §8, over ADR-0021's `Paths:` declaration).
+#
+# A parallelizable item declares the file subtrees it intends to touch as a `Paths:` line in its issue
+# body, and `fsgg-coord batch` schedules items whose declarations are DISJOINT. That guarantee is only
+# as good as the declaration: a PR that quietly edits outside its touch-set is exactly how two items
+# the scheduler called "safe to run in parallel" end up as a merge conflict.
+#
+# This reports that drift. It does NOT block. ADR-0021 is explicit that the touch-set is "a
+# declaration, not an enforced boundary", and ADR-0027 keeps it that way — late-discovered work is
+# legitimate; silently *unannounced* late-discovered work is the problem. The remedy the comment points
+# at is `fsgg-coord widen`, which re-declares, re-checks against every live claim, and notifies the
+# workers it now collides with.
+#
+# Scope: PRs whose head branch is `item/<n>-…` (the ADR-0021 isolation branch) or which close an issue.
+# Anything else has no touch-set to verify and exits clean.
+#
+# Fork PRs: `pull_request` grants a read-only token to forks, so the comment step is best-effort and
+# `continue-on-error`. We deliberately do NOT use `pull_request_target` — running against the base with
+# a write token on untrusted head code is not worth an advisory comment.
+name: touch-set-drift
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the PR against its issue's declared touch-set
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # --warn: report drift, exit 0. The gate is advisory by decision, not by accident.
+          bash scripts/fsgg-coord verify-paths \
+            --pr "${{ github.event.number }}" \
+            --repo "${{ github.repository }}" \
+            --warn > drift.txt 2>&1 || true
+          cat drift.txt
+          # Three verdicts. SKIP (no linked issue, or no declaration) must NOT read as a clean pass.
+          if   grep -q 'FSGG-PATHS DRIFT' drift.txt; then verdict=drift
+          elif grep -q 'FSGG-PATHS OK'    drift.txt; then verdict=ok
+          else                                            verdict=skip
+          fi
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          { echo '### Touch-set drift'; echo; echo '```'; cat drift.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # One sticky comment, addressed by its MARKER. `gh pr comment --edit-last` picks the actor's most
+      # recent comment regardless of what it says, so in a repo where another GITHUB_TOKEN workflow also
+      # comments (coverage, build) it would overwrite that bot's comment — and be overwritten in turn.
+      # We find our own comment by the `fsgg:touch-set-drift` marker and PATCH exactly that one.
+      #
+      # This step runs on EVERY verdict, including `skip`: a PR that drifted and then had its `Paths:`
+      # declaration removed must not keep a stale ⚠️ asserting a violation of a declaration that no
+      # longer exists. `skip` deletes the comment rather than leaving it to rot.
+      - name: Comment the verdict
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERDICT: ${{ steps.check.outputs.verdict }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.number }}
+        run: |
+          set -euo pipefail
+          MARKER='<!-- fsgg:touch-set-drift -->'
+
+          # No `gh | head`: under `pipefail` a closed pipe would fail the step. Collect, then take the
+          # first line from a shell builtin instead.
+          matches="$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+                       --jq '.[] | select(.body | startswith("'"$MARKER"'")) | .id')"
+          existing="${matches%%$'\n'*}"
+
+          if [ "$VERDICT" = "skip" ]; then
+            [ -n "$existing" ] && gh api -X DELETE "repos/$REPO/issues/comments/$existing" >/dev/null \
+              && echo "healed: removed a stale touch-set comment (no declaration to check)."
+            exit 0
+          fi
+
+          if [ "$VERDICT" = "drift" ]; then
+            {
+              printf '%s\n' "$MARKER"
+              printf '⚠️ **This PR changes files outside the touch-set its issue declared.**\n\n'
+              printf 'The scheduler (`fsgg-coord batch`) used that declaration to decide this item could run\n'
+              printf 'in parallel with others. Files outside it were never checked for overlap.\n\n'
+              printf '```\n'; cat drift.txt; printf '```\n\n'
+              printf 'Re-declare and re-check against everything in flight (this also notifies any worker it\n'
+              printf 'now collides with):\n\n```sh\nfsgg-coord widen <issue> --paths "<globs>"\n```\n\n'
+              printf '_Advisory — this check never blocks a merge (ADR-0021: the touch-set is a declaration,\n'
+              printf 'not an enforced boundary)._\n'
+            } > comment.md
+          else
+            { printf '%s\n' "$MARKER"
+              printf '✅ This PR stays inside the touch-set its issue declared.\n'; } > comment.md
+          fi
+
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@comment.md >/dev/null
+          fi
