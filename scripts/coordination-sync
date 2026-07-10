@@ -35,13 +35,21 @@ REG="$SRC_ROOT/registry/repos.yml"
 ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .agents/skills}"
 
 die()   { echo "coordination-sync: $*" >&2; exit 2; }
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
+# A flag with no value is a misconfiguration, not a verdict. `${2:?…}` would exit 1 — the code this
+# script reserves for "the kit has drifted" — reporting INCOHERENT without reading a single file.
+need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
+# Print the header block itself — every comment line after the shebang, up to the first line that is
+# not one. A hardcoded `sed -n '2,20p'` used to do this, and it had already rotted: the range stopped
+# eight lines short, so `--help` documented everything EXCEPT the `Env:` and `Exit:` lines — the exit
+# codes being the one thing a caller must know, and the very contract this script was just fixed to
+# honour. Same rot, same fix, as repos-audit.sh (#335).
+usage() { awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; }
 
 mode="apply"; repo=""; target=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --check) mode="check"; shift ;;
-    --repo)  repo="${2:?--repo needs a value}"; shift 2 ;;
+    --repo)  need_val "$@"; repo="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     -*)      die "unknown flag '$1'." ;;
     *)       [ -z "$target" ] && target="$1" || die "unexpected argument '$1'."; shift ;;

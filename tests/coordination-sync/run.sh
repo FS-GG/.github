@@ -184,6 +184,32 @@ printf '%s' "$track_out" | grep -q 'phantom-skill' \
   && bad "registry: source path rebuilt from the id, not read from the row" "$track_out" \
   || ok "registry: the skill's path is its declared 'source', not '.claude/skills/<id>'"
 
+# --- a usage error is a misconfiguration (exit 2), never a drift verdict (exit 1) (#350) ---
+# `--repo` with no value used to hit bash's `${2:?…}`, which exits 1 — the code this script reserves
+# for "the kit has drifted". A caller with a typo'd or unset short-id was told the kit was INCOHERENT
+# before the script read a single file. Assert both the absent and the empty-but-present forms, since
+# `${2:?…}` fired on each. Nothing asserted the exit code of a usage error here, which is how the
+# defect survived three passes over #266.
+expect_rc "usage: --repo with no value exits 2 (misconfig), not 1 (drift)" 2 \
+  bash "$SYNC" --check --repo
+expect_rc "usage: --repo with an empty value exits 2, not 1" 2 \
+  bash "$SYNC" --check --repo "" "$RECV"
+expect_rc "usage: an unknown flag still exits 2" 2 bash "$SYNC" --bogus-flag
+expect_rc "usage: --help still exits 0" 0 bash "$SYNC" --help
+# --help must reach the header's Exit: line. A hardcoded `sed` range silently truncated it, hiding
+# the very exit-code contract asserted above; a fixture that only checks --help's rc would not notice.
+help_out="$(bash "$SYNC" --help)"
+printf '%s' "$help_out" | grep -q '^Exit: .*2 = misconfiguration' \
+  && ok "usage: --help documents the exit-code contract it is asserted against" \
+  || bad "usage: --help truncates before the Exit: block" "$help_out"
+printf '%s' "$help_out" | grep -q '^Env: ' \
+  && ok "usage: --help documents AGENT_SKILL_ROOTS" \
+  || bad "usage: --help truncates before the Env: block" "$help_out"
+usage_out="$(bash "$SYNC" --check --repo 2>&1 || true)"
+printf '%s' "$usage_out" | grep -q '^coordination-sync: ' \
+  && ok "usage: the diagnostic carries the script's prefix, not bash's raw 'line N:'" \
+  || bad "usage: raw bash diagnostic — will not annotate in Actions" "$usage_out"
+
 echo "coordination-sync fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coordination-sync fixture FAILED"; exit 1; }
 echo "coordination-sync fixture — OK"
