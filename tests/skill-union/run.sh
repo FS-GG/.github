@@ -132,6 +132,20 @@ else
   echo "FAIL  --digest ($got_gen) != sha256sum SKILL.md ($want_raw)"; failcount=$((failcount+1))
 fi
 
+# A leading UTF-8 BOM must NEVER enter the digest — the byte-for-byte invariant fsgg-skill-registry-check's
+# canonical_digest (Fsgg.SkillMirror.sha256) holds. The registry check has a BOM case (tests/skill-registry);
+# this is the SHELL-side arm of the same invariant (.github#384). A BOM'd SKILL.md and a BOM-free SKILL.md
+# with identical body must produce the SAME digest, equal to sha256sum of the BOM-free bytes.
+BOMDIR="$WORK/bom/skill"; mkdir -p "$BOMDIR"
+printf '\xef\xbb\xbf# alpha skill\n' > "$BOMDIR/SKILL.md"       # same body as GOOD/alpha, prefixed with a BOM
+got_bom="$(digest "$BOMDIR")"
+raw_bom="$(sha256sum "$BOMDIR/SKILL.md" | cut -d' ' -f1)"        # hash WITH the BOM — what a naive digest would give
+if [ "$got_bom" = "$want_raw" ] && [ "$got_bom" != "$raw_bom" ]; then
+  echo "PASS  (expected pass) --digest strips a leading BOM (== BOM-free body, != raw BOM'd bytes)"; pass=$((pass+1))
+else
+  echo "FAIL  --digest BOM handling: got $got_bom, want BOM-free $want_raw (raw-with-BOM $raw_bom)"; failcount=$((failcount+1))
+fi
+
 # --- 1. coherent union, no manifest → PASS ---
 expect_pass "coherent union (content-equality only)" "$GOOD"
 

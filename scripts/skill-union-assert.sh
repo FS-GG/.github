@@ -22,8 +22,9 @@
 # the PRODUCERS' manifest semantics (aligned with the shipped manifests per .github#120 —
 # `Fsgg.SkillMirror` in FS.GG.Contracts 1.4.0 / SDD#61 and fs-gg-ui-template 0.1.61-preview.1 /
 # Rendering#43 are ADR-0014's "one implementation"; the assertion follows them):
-#   - digest: canonical-body sha256 of the skill's SKILL.md ONLY (byte-equivalent to
-#     `sha256sum SKILL.md`). Multi-file skills (SKILL.md + references/**) are covered by the
+#   - digest: canonical-body sha256 of the skill's SKILL.md ONLY (equal to `sha256sum SKILL.md`
+#     for a BOM-free body; a leading UTF-8 BOM is stripped first, matching the producer algorithm).
+#     Multi-file skills (SKILL.md + references/**) are covered by the
 #     cross-root identity of checks 1-2, not by the digest.
 #   - set: the manifest is a superset CATALOG, an upper bound — emission is lifecycle/profile-
 #     conditioned, so declared∧present ⇒ digest must match; declared∧absent-everywhere ⇒ fine
@@ -116,13 +117,21 @@ done
 command -v sha256sum >/dev/null 2>&1 || die "sha256sum not found (required for content hashing)."
 
 # Per-skill digest (see header): canonical-body sha256 of SKILL.md only — the producers' shipped
-# algorithm (`Fsgg.SkillMirror`, FS.GG.Contracts 1.4.0; byte-equivalent to `sha256sum SKILL.md`,
-# verified in .github#120). `--digest <skill-dir>` exposes it as a reference generator so
-# producers and this assertion never drift. Multi-file remainder is covered by checks 1-2.
+# algorithm (`Fsgg.SkillMirror`, FS.GG.Contracts 1.4.0; equal to `sha256sum SKILL.md` for a
+# BOM-free body, verified in .github#120). A leading UTF-8 BOM is stripped before hashing so it can
+# never enter the digest on the verifying side either — the exact invariant fsgg-skill-registry-check's
+# canonical_digest holds; without it a BOM'd SKILL.md would hash BOM-free in the Python registry check
+# but WITH the BOM here, a spurious [drifted] (.github#384). `--digest <skill-dir>` exposes it as a
+# reference generator so producers and this assertion never drift. Multi-file remainder is covered by
+# checks 1-2.
 skill_digest() {
   local dir="$1"
   [ -f "$dir/SKILL.md" ] || return 1
-  sha256sum "$dir/SKILL.md" | cut -d' ' -f1
+  if [ "$(head -c 3 "$dir/SKILL.md" | od -An -tx1 | tr -d ' \n')" = efbbbf ]; then
+    tail -c +4 "$dir/SKILL.md" | sha256sum | cut -d' ' -f1
+  else
+    sha256sum "$dir/SKILL.md" | cut -d' ' -f1
+  fi
 }
 
 # Does <id> match any --co-tenants glob?
