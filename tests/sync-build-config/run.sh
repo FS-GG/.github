@@ -33,9 +33,10 @@ done
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/sync-build-config-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
-# fresh_target -> prints a new empty consumer dir under $WORK
-n=0
-fresh_target() { n=$((n+1)); local t="$WORK/repo-$n"; mkdir -p "$t"; printf '%s' "$t"; }
+# fresh_target -> prints a brand-new empty consumer dir under $WORK. Uses mktemp rather than a
+# counter: the callers capture it via `$(fresh_target)`, whose subshell would swallow any counter
+# increment and hand every test the SAME directory, leaking state between assertions.
+fresh_target() { mktemp -d "$WORK/repo-XXXXXX"; }
 
 # run <mode-flag-or-empty> <target> -> rc; captures combined output in $OUT
 run() {
