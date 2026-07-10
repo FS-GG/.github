@@ -102,19 +102,26 @@ jobs:
           exit 1
 
       # Split from exit 2 (#335). Same "nothing was proven" verdict, opposite remedy: re-running this
-      # cannot help, because the roster is a file in the checkout and it reads the same every time.
+      # cannot help, because every cause is a deterministic property of this checkout or this runner.
       # Naming them alike would send an operator to the re-run button for a defect only a commit fixes.
-      - name: 'INCONCLUSIVE: the roster itself is unusable (permanent — fix the file)'
+      #
+      # Do NOT name a single cause here. Exit 3 is every `die()`: an unparseable roster, a roster that
+      # names no receiver, a missing `gh`, a missing repos.sh, a bad flag. Announcing "fix the roster"
+      # for a missing binary is this item's own defect — a red step that names the wrong subject —
+      # relocated into the step that reports it. The annotation from `die()` names the actual cause;
+      # this step's job is to say the class, and to say it is not a wiring gap.
+      - name: 'INCONCLUSIVE: the audit could not run (permanent — a re-run will not help)'
         if: steps.audit.outputs.rc == '3'
         run: |
           {
-            echo "### ⚠️ repos-audit: inconclusive — the roster is unusable"
-            echo "\`registry/repos.yml\` will not parse, or it names no receiver of any audited"
-            echo "capability. The audit examined nothing, so **no wiring gap was found, and none was"
-            echo "ruled out.** Re-running will not help: this is a deterministic read of a file in"
-            echo "the checkout. Fix the roster."
+            echo "### ⚠️ repos-audit: inconclusive — the audit could not run"
+            echo "The audit never examined a receiver, so **no wiring gap was found, and none was"
+            echo "ruled out.** The cause is deterministic — an unparseable \`registry/repos.yml\`, a"
+            echo "roster naming no receiver of any audited capability, a missing \`gh\`, or a bad"
+            echo "invocation — so re-running this workflow will reproduce it exactly. **The"
+            echo "\`::error::repos-audit:\` annotation on the audit step names the actual cause.**"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=repos-audit: INCONCLUSIVE — unusable roster::The audit never reached a verdict, so its result means nothing. The roster will not parse or names no receiver. This is NOT a wiring gap, and NOT transient — fix registry/repos.yml."
+          echo "::error title=repos-audit: INCONCLUSIVE — the audit could not run::The audit never reached a verdict, so its result means nothing. This is NOT a wiring gap, and NOT transient: a re-run reproduces it. See the ::error::repos-audit: annotation above for the cause."
           exit 1
 
       # The `if:` conditions above are a scoping predicate, and an ungated one fails open: an exit code

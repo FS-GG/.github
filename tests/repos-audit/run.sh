@@ -174,11 +174,27 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$EMPTYREG" --repos-sh "$REPO
 #      "a declared receiver is unwired", so a typo'd flag reported itself as the finding this gate
 #      exists to produce. Nothing asserted the exit code of a usage error, so nothing noticed.
 for badarg in "--registry" "--nonesuch"; do
-  out="$(PATH="$STUB:$PATH" bash "$AUDIT" $badarg 2>&1)" && rc=0 || rc=$?
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" "$badarg" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 3 ] && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
     && ok "usage error ('$badarg') -> exit 3, never 1 (a wiring gap)" \
     || bad "usage error must not masquerade as a wiring gap" "arg=$badarg rc=$rc: $out"
 done
+
+# (2c) `--help` must document the exit contract it actually implements. The old `--help` printed a
+#      hardcoded line range that stopped one line short of the `Exit:` block, so it described
+#      everything about this script except the codes a caller keys on — and nothing noticed, because
+#      no test read it. A usage block that silently omits its own contract is the epic's rule applied
+#      to documentation: the record of the behaviour stood in for the behaviour.
+help_out="$(bash "$AUDIT" --help 2>&1)" && hrc=0 || hrc=$?
+help_missing=""
+for spec in "0 = every declared receiver is wired" "1 = at least one gap" \
+            "2 = no verdict, RETRYABLE" "3 = no verdict, PERMANENT"; do
+  printf '%s' "$help_out" | grep -qF "$spec" || help_missing="$help_missing
+  missing: $spec"
+done
+{ [ "$hrc" -eq 0 ] && [ -z "$help_missing" ]; } \
+  && ok "--help exits 0 and documents all four exit codes" \
+  || bad "--help does not document the exit contract it implements" "rc=$hrc$help_missing"
 
 # (3) the guards did not break the healthy path: a real audit still reports what it examined
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
@@ -343,7 +359,10 @@ else:
         bad.append("the catch-all's `if:` does not enumerate rc values via fromJSON([...]); its scope cannot be checked")
     else:
         listed = set(re.findall(r'"(\d+)"', m.group(1)))
-        classified = {str(rc) for rc in range(256) if classifier(rc)}
+        # Derived from the steps, not probed over a numeric range: a bound would silently stop
+        # checking above itself, which is the very thing being asserted against.
+        classified = set(re.findall(r"steps\.audit\.outputs\.rc == '(\d+)'",
+                                    "\n".join(str(s.get("if", "")) for s in steps)))
         for rc in sorted(listed - classified):
             bad.append(f"the catch-all enumerates exit {rc}, but no step classifies it: rc={rc} matches nothing and the job goes GREEN")
         for rc in sorted(classified - listed):

@@ -50,7 +50,12 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --registry) need_val "$@"; REGISTRY="$2"; shift 2 ;;
     --repos-sh) need_val "$@"; REPOS_SH="$2"; shift 2 ;;
-    -h|--help)  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; exit 0 ;;
+    # Print the header block itself — every comment line after the shebang, up to the first line that
+    # is not one. A hardcoded `sed -n '2,20p'` used to do this, and it had already rotted: the range
+    # stopped one line short of the `Exit:` block, so `--help` documented everything about this script
+    # EXCEPT its exit codes — the one thing a caller must know, and the thing #335 is about. A line
+    # number coupled by hand to a comment block is the same fail-open this script is fixing.
+    -h|--help)  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;;
     *)          die "unknown arg '$1'." ;;
   esac
 done
