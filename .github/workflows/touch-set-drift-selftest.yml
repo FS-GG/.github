@@ -1,0 +1,37 @@
+# Self-test for .github/workflows/touch-set-drift.yml — the advisory touch-set drift gate
+# (ADR-0027 §8). Runs tests/touch-set-drift/run.sh, which extracts the gate's own classifier from the
+# workflow YAML and drives it against a stubbed `verify-paths`: the four verdicts classify as
+# themselves, and a run that dies or prints no `FSGG-PATHS *` marker fails closed instead of reporting
+# `skip` (.github#318). Mirrors coordination-sync-selftest.yml / repos-registry-selftest.yml.
+#
+# `scripts/fsgg-coord` is a trigger path: the fixture stubs verify-paths, so it pins the MARKER
+# STRINGS the gate greps for. Rename a marker in the client and this fixture is how you find out,
+# rather than a silently-`skip`ping gate in production.
+name: touch-set-drift-selftest
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/touch-set-drift.yml"
+      - ".github/workflows/touch-set-drift-selftest.yml"
+      - "scripts/fsgg-coord"
+      - "tests/touch-set-drift/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/touch-set-drift.yml"
+      - ".github/workflows/touch-set-drift-selftest.yml"
+      - "scripts/fsgg-coord"
+      - "tests/touch-set-drift/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the touch-set-drift fixture
+        run: bash tests/touch-set-drift/run.sh
