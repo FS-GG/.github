@@ -27,6 +27,20 @@ trap 'rm -rf "$WORK"' EXIT
 ROOTS=".claude/skills .codex/skills .agents/skills"
 pass=0; failcount=0
 
+# expect_rc <name> <want-rc> [raw assertion args...]
+# Invokes the assertion with EXACTLY the args given — no --product/--roots injected — so a usage
+# error can be exercised on its own terms. expect_pass/expect_fail cannot express this.
+expect_rc() {
+  local name="$1" want="$2"; shift 2
+  local rc=0
+  bash "$ASSERT" "$@" >"$WORK/out" 2>&1 || rc=$?
+  if [ "$rc" -eq "$want" ]; then
+    echo "PASS  $name"; pass=$((pass+1))
+  else
+    echo "FAIL  (want rc=$want, got $rc) $name"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+  fi
+}
+
 # expect_pass <name> <product-dir> [extra assertion args...]
 expect_pass() {
   local name="$1" prod="$2"; shift 2
@@ -229,6 +243,18 @@ expect_die "--params without --manifest is a misconfiguration (exit 2)" "$MISS" 
 EMPTY="$WORK/cond-empty"
 for r in $ROOTS; do mkdir -p "$EMPTY/$r"; done          # roots present but hold no skills
 expect_fail "condition-aware [missing] survives an empty union (not masked by the misconfig die)" missing "$EMPTY" --manifest "$MAN_MISS" --params "$PROV"
+
+# --- a usage error is a misconfiguration (exit 2), never a union violation (exit 1) (#350) ---
+# Every flag used to take its value through bash's `${2:?…}`, which exits 1 — the code this script
+# reserves for "the union is violated". A typo'd command line reported itself as the very finding the
+# script exists to produce. Both forms `${2:?…}` fired on are asserted, for every flag that takes a
+# value: absent, and empty-but-present.
+for flag in --product --roots --manifest --co-tenants --params --digest; do
+  expect_rc "usage: $flag with no value exits 2 (misconfig), not 1 (violation)"    2 "$flag"
+  expect_rc "usage: $flag with an empty value exits 2, not 1"                      2 "$flag" ""
+done
+expect_rc "usage: an unknown flag still exits 2" 2 --bogus-flag
+expect_rc "usage: --help still exits 0"          0 --help
 
 echo "--------------------------------------------"
 echo "skill-union fixture: $pass passed, $failcount failed"

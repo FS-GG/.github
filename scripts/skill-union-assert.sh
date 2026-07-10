@@ -66,6 +66,9 @@ CO_TENANTS=""
 PARAMS=""
 
 die() { echo "::error::skill-union-assert: $*" >&2; exit 2; }
+# A flag with no value is a misconfiguration, not a verdict. `${2:?…}` would exit 1 — the code this
+# script reserves for "the union is violated" — reporting a violation it never checked for.
+need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
 
 usage() {
   cat <<'EOF'
@@ -98,12 +101,12 @@ DIGEST_ONLY=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --product)    PRODUCT="${2:?--product needs a value}"; shift 2 ;;
-    --roots)      ROOTS="${2:?--roots needs a value}"; shift 2 ;;
-    --manifest)   MANIFEST="${2:?--manifest needs a value}"; shift 2 ;;
-    --co-tenants) CO_TENANTS="${2:?--co-tenants needs a value}"; shift 2 ;;
-    --params)     PARAMS="${2:?--params needs a value}"; shift 2 ;;
-    --digest)     DIGEST_ONLY="${2:?--digest needs a skill dir}"; shift 2 ;;
+    --product)    need_val "$@"; PRODUCT="$2"; shift 2 ;;
+    --roots)      need_val "$@"; ROOTS="$2"; shift 2 ;;
+    --manifest)   need_val "$@"; MANIFEST="$2"; shift 2 ;;
+    --co-tenants) need_val "$@"; CO_TENANTS="$2"; shift 2 ;;
+    --params)     need_val "$@"; PARAMS="$2"; shift 2 ;;
+    --digest)     need_val "$@"; DIGEST_ONLY="$2"; shift 2 ;;
     -h|--help)    usage; exit 0 ;;
     *)            die "unknown argument: $1" ;;
   esac
