@@ -72,6 +72,17 @@ def parse_version(text: str) -> tuple:
     return (tuple(nums), 0, tuple(ids))
 
 
+def is_prerelease(text: str) -> bool:
+    """True if `text` is a NuGet prerelease (carries a `-suffix`). Raises GateError on unparsable.
+
+    Reuses parse_version's ordering key so "is this stable" has ONE definition, shared by every
+    caller: element [1] is the release/prerelease rank (1 = release, 0 = prerelease), the same flag
+    that makes a release sort above its own prereleases. A channel-aware gate (mirroring Renovate's
+    `ignoreUnstable`) asks exactly this question, so it belongs beside the ordering it derives from.
+    """
+    return parse_version(text)[1] == 0
+
+
 def feed_versions(package: str, token: str) -> list[str]:
     """Every version of `package` live on the org feed. Any failure raises — never returns []."""
     # Flat-container ids are lowercase (NuGet v3 §PackageBaseAddress).
