@@ -63,5 +63,5 @@ outside-fabric: []
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
 kit:
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 00adaed77fa7d01d51f853d62bb06b3f9eef936bbb051f871fdac01d60220ce6 }
-  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 31f6cbb7252761c3d8788930e9b7877a7dcc92ae2fbf3ab7a398e990c8da7c6e }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 15eaa986b20ec740d866c3b9294482a2b4112883b89f15e51ef1bf2d60441fc1 }
+  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 840ae4ba02c4bc6e1fb5dde38826c35b6ce5ca56983aa2dd36ad76be24901f7b }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 59959d781bd35d6e4cfec4edca20263027122ce32f0a8838c3a36c0474403f07 }

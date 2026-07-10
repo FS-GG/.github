@@ -70,7 +70,7 @@ JSON
 
 cat >"$FIXTURES/fields.json" <<'JSON'
 {"data":{"organization":{"projectV2":{"fields":{"nodes":[
-  {"__typename":"ProjectV2SingleSelectField","id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_done","name":"Done"}]},
+  {"__typename":"ProjectV2SingleSelectField","id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_backlog","name":"Backlog"},{"id":"opt_ready","name":"Ready"},{"id":"opt_wip","name":"In progress"},{"id":"opt_blocked","name":"Blocked"},{"id":"opt_done","name":"Done"}]},
   {"__typename":"ProjectV2SingleSelectField","id":"PVTSSF_phase","name":"Phase","dataType":"SINGLE_SELECT","options":[{"id":"opt_p1","name":"P1 Rendering"},{"id":"opt_p2","name":"P2 SDD"}]},
   {"__typename":"ProjectV2Field","id":"PVTF_target","name":"Target","dataType":"DATE"},
   {"__typename":"ProjectV2Field","id":"PVTF_contract","name":"Contract","dataType":"TEXT"},
@@ -277,7 +277,32 @@ if [ "\$sub" = "api" ] && [ "\$sub2" = "graphql" ]; then
     if [ -f "$FIXTURES/rollup-\$num.json" ]; then cat "$FIXTURES/rollup-\$num.json"
     else cat "$FIXTURES/rollup-none.json"; fi
   elif printf '%s' "\$q" | grep -q 'projectV2(number'; then cat "$FIXTURES/fields.json"
-  elif printf '%s' "\$q" | grep -q 'projectItems';     then cat "$FIXTURES/item.json"
+  elif printf '%s' "\$q" | grep -q 'projectItems' && printf '%s' "\$q" | grep -q 'fieldValueByName'; then
+    # \`release\` reads the item's CURRENT Status before deciding whether to reset it (#331). Keyed on
+    # the issue number, so one fixture serves items sitting in different columns:
+    #   \$STORE/itemstatus-<num>   the Status name; an EMPTY file means on-board with no Status set
+    #   GH_FAIL_ITEM_STATUS=<num>  the read fails (a 502) — release must not guess a Status
+    #   GH_OFFBOARD_ITEM=<num>     the issue is on no board at all
+    # Default \`In progress\`: that is what \`claim\` leaves behind, so the pre-existing release tests
+    # keep exercising the reset path.
+    if [ "\$num" = "\${GH_FAIL_ITEM_STATUS:-}" ]; then echo "gh: HTTP 502 Bad Gateway" >&2; exit 1; fi
+    if [ "\$num" = "\${GH_OFFBOARD_ITEM:-}" ]; then
+      jq -cn '{data:{repository:{issue:{projectItems:{nodes:[]}}}},rateLimit:{cost:1,remaining:4996}}'
+      exit 0
+    fi
+    if [ -f "$STORE/itemstatus-\$num" ]; then st="\$(cat "$STORE/itemstatus-\$num")"; else st="In progress"; fi
+    # A wrong-board node rides along, so the client is seen to select by project number, not by luck.
+    jq -cn --arg st "\$st" '{data:{repository:{issue:{projectItems:{nodes:[
+        {project:{number:7},  status:{name:"Wrong board"}},
+        {project:{number:12}, status:(if \$st == "" then null else {name:\$st} end)}
+      ]}}}},rateLimit:{cost:1,remaining:4996}}'
+    exit 0
+  elif printf '%s' "\$q" | grep -q 'projectItems';     then
+    # GH_OFFBOARD_ITEM=<num> must answer the SAME way here as it does for the Status read above, or
+    # the fixture would have item-id and item-status disagreeing about whether <num> is on the board.
+    if [ "\$num" = "\${GH_OFFBOARD_ITEM:-}" ]; then
+      jq -cn '{data:{repository:{issue:{id:"I_offboard",title:"offboard",projectItems:{nodes:[]}}}},rateLimit:{cost:1,remaining:4997}}'
+    else cat "$FIXTURES/item.json"; fi
   else echo '{"data":{},"rateLimit":{"cost":1,"remaining":4999}}'; fi
   exit 0
 fi
@@ -1088,6 +1113,75 @@ assert_contains "release: --force releases another worker's claim" "released FS.
   "$(as wren-c22 release 'FS.GG.SDD#70' --force 2>/dev/null)"
 assert_eq "release: the marker is gone" "" "$(workers_on 70)"
 
+# ---- release: "drop the lease" is not "this item is startable" (#331) ---------------------------
+# `release` used to force Status=Ready unconditionally, so the documented blocked-item sequence
+# (`set-field Status Blocked` then `release`) had its Blocked silently reverted on the very next
+# line — leaving a board row whose Status contradicted its own `Blocked by`. It must now reset the
+# `In progress` that `claim` set, and ONLY that.
+#
+# Every case below clears GH_LOG *after* the claim: `claim` writes Status=In progress itself, so a
+# log still holding that write would let a "release wrote no Status" assertion pass for free.
+for n in 340 341 342 343 344 346 347; do seed_issue "$n" "release case $n" "src/Rel$n/**"; done
+edits_to_status() { grep -c 'PVTSSF_status' "$GH_LOG" 2>/dev/null || true; }
+# rel <VAR=value> <args...> — `as pika-r01`, plus one stub knob for the Status read.
+rel() { local e="$1"; shift
+        PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+          env "$e" bash "$COORD" --worker pika-r01 "$@"; }
+
+# (a) the ordinary path is unchanged: the lease drops and the item returns to the pool.
+as pika-r01 claim 'FS.GG.SDD#340' >/dev/null 2>&1
+printf 'In progress' >"$STORE/itemstatus-340"; : >"$GH_LOG"
+assert_contains "release: resets the 'In progress' that claim set" "board: Ready" \
+  "$(as pika-r01 release 'FS.GG.SDD#340' 2>/dev/null)"
+assert_contains "release: ...with a real board write" "opt_ready" "$(cat "$GH_LOG")"
+assert_eq "release: ...and the marker is gone" "" "$(workers_on 340)"
+
+# (b) THE REGRESSION. A deliberately-set Blocked survives its own release.
+as pika-r01 claim 'FS.GG.SDD#341' >/dev/null 2>&1
+printf 'Blocked' >"$STORE/itemstatus-341"; : >"$GH_LOG"
+rel341="$(as pika-r01 release 'FS.GG.SDD#341' 2>/dev/null)"
+assert_contains "release: PRESERVES a deliberately-set Blocked" "board: Blocked (preserved" "$rel341"
+assert_eq "release: ...writing no Status at all, rather than a matching one" "0" "$(edits_to_status)"
+assert_eq "release: ...and the lease is still dropped" "" "$(workers_on 341)"
+
+# (c) `--status S` is the caller stating the end state, and still wins over the preserve rule.
+as pika-r01 claim 'FS.GG.SDD#342' >/dev/null 2>&1
+printf 'Blocked' >"$STORE/itemstatus-342"; : >"$GH_LOG"
+assert_contains "release --status: an explicit end state overrides preserve" "board: Ready" \
+  "$(as pika-r01 release 'FS.GG.SDD#342' --status Ready 2>/dev/null)"
+assert_contains "release --status: ...and is actually written" "opt_ready" "$(cat "$GH_LOG")"
+
+# (d) preserve is not Blocked-specific: release never downgrades a terminal column either.
+as pika-r01 claim 'FS.GG.SDD#343' >/dev/null 2>&1
+printf 'Done' >"$STORE/itemstatus-343"; : >"$GH_LOG"
+assert_contains "release: never downgrades a Done item to Ready" "board: Done (preserved" \
+  "$(as pika-r01 release 'FS.GG.SDD#343' 2>/dev/null)"
+assert_eq "release: ...Done is left untouched" "0" "$(edits_to_status)"
+
+# (e) A Status we could not READ is not a Status we may overwrite — forcing Ready over an unknown
+#     column is the same fail-open, one turn in. The lease still drops: the marker is the lock.
+as pika-r01 claim 'FS.GG.SDD#344' >/dev/null 2>&1
+: >"$GH_LOG"
+rel344="$(rel GH_FAIL_ITEM_STATUS=344 release 'FS.GG.SDD#344' 2>&1)"
+assert_contains "release: an unreadable Status is not overwritten" "Status unchanged" "$rel344"
+assert_contains "release: ...and says so, naming the repair" "set-field" "$rel344"
+assert_eq "release: ...no Status write on an unreadable column" "0" "$(edits_to_status)"
+assert_eq "release: ...but the lease IS dropped" "" "$(workers_on 344)"
+
+# (f) On the board, but no Status set: nothing was chosen, so there is nothing to preserve.
+as pika-r01 claim 'FS.GG.SDD#346' >/dev/null 2>&1
+: >"$STORE/itemstatus-346"; : >"$GH_LOG"
+assert_contains "release: an item with no Status set returns to the pool" "board: Ready" \
+  "$(as pika-r01 release 'FS.GG.SDD#346' 2>/dev/null)"
+
+# (g) An off-board item has no column to reset, and release must not pretend it did.
+as pika-r01 claim 'FS.GG.SDD#347' >/dev/null 2>&1
+: >"$GH_LOG"
+rel347="$(rel GH_OFFBOARD_ITEM=347 release 'FS.GG.SDD#347' 2>/dev/null)"
+assert_contains "release: an off-board item reports no board, not a phantom write" "not on board" "$rel347"
+assert_eq "release: ...and writes no Status" "0" "$(edits_to_status)"
+assert_eq "release: ...and the lock is released, board or no board" "" "$(workers_on 347)"
+
 # ---- who: what is actually running, without spelunking through worktrees ------------------------
 who="$(pw who --repo sdd 2>/dev/null)"
 assert_contains "who: names the worker holding each item" "finch-a3f" "$who"
@@ -1110,6 +1204,21 @@ assert_contains "reap --apply: returns the item to the pool" "board: Ready" "$re
 assert_eq "reap --apply: the stale marker is gone" "" "$(workers_on 43)"
 assert_eq "reap --apply: it TELLS the reaped worker (a message, not a silent steal)" "1" \
   "$(jq '[.[] | select(.body | test("fsgg:msg")) | select(.body | test("to=ghost-000"))] | length' "$STORE/comments-43.json")"
+
+# `reap` is the OTHER way a claim goes away, so it owes the board the same answer as `release` and
+# used to force Ready just as hard (#331). A worker whose lease expires on an item it had marked
+# Blocked must not have that column reset on its way out — the reaper is collecting a LEASE, and it
+# knows nothing about whether the item became startable. Seeded after the block above so the stale
+# marker cannot perturb the reap tests that precede it.
+seed_issue 348 "reaped while blocked" "src/Rel348/**"
+jq -n --arg ts "$stale_ts" '[{id:848, body:"<!-- fsgg:claim worker=ghost-348 lease=120 -->\ndead",
+  user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-348.json"
+printf 'Blocked' >"$STORE/itemstatus-348"; : >"$GH_LOG"
+reaped348="$(as wren-c22 reap --repo sdd --apply 2>/dev/null)"
+assert_contains "reap --apply: collects the expired claim" "reaped  FS.GG.SDD#348" "$reaped348"
+assert_contains "reap --apply: PRESERVES a deliberately-set Blocked" "board: Blocked (preserved)" "$reaped348"
+assert_eq "reap --apply: ...writing no Status at all" "0" "$(edits_to_status)"
+assert_eq "reap --apply: ...but the lease IS collected" "" "$(workers_on 348)"
 
 # ---- overlap --active: a candidate against everything in flight --------------------------------
 assert_contains "overlap --active: disjoint candidate clears every live claim" "DISJOINT" \
