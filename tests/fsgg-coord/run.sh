@@ -356,7 +356,13 @@ if [ "\$sub" = "api" ]; then
   if [[ "\$path" =~ ^repos/[^/]+/[^/]+/pulls/([0-9]+)/files ]]; then
     emit <"$FIXTURES/pr-files-\${BASH_REMATCH[1]}.json"; exit 0
   fi
+  # GH_FAIL_PR_GET=<n>: the head-ref read for PR <n> fails. `verify-paths` resolves which issue a PR
+  # implements from its branch name here, and an empty answer would read as "the branch is not
+  # item/<n>-…" — i.e. a SKIP verdict invented from an unanswered query (.github#322).
   if [[ "\$path" =~ ^repos/[^/]+/[^/]+/pulls/([0-9]+)$ ]]; then
+    if [ "\${BASH_REMATCH[1]}" = "\${GH_FAIL_PR_GET:-}" ]; then
+      echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
+    fi
     emit <"$FIXTURES/pr-\${BASH_REMATCH[1]}.json"; exit 0
   fi
 
@@ -1042,6 +1048,36 @@ case "$skip9" in *"FSGG-PATHS OK"*) bad "verify-paths --warn: SKIP is not mistak
 assert_contains "verify-paths --warn: an undeclared touch-set is SKIP" "declares no 'Paths:' touch-set" \
   "$(pw verify-paths --pr 10 --repo FS-GG/FS.GG.SDD --warn 2>&1)"
 assert_fails "verify-paths: an unlinked PR fails without --warn" pw verify-paths --pr 9 --repo FS-GG/FS.GG.SDD
+
+# `SKIP` must mean "I asked, and there is nothing to check" — never "I could not ask" (.github#322,
+# child (j) of #266). When the head-ref read 502s and the GraphQL fallback then answers healthily
+# that the PR closes no issue — the normal case, since ADR-0021's convention is the branch name, not
+# a `Closes:` line — an unreachable subject used to be indistinguishable from an unlinked PR: SKIP,
+# rc=0, gate green, sticky comment deleted. The touch-set went unchecked and nothing said so.
+#
+# `--warn` downgrades the *drift verdict* to advisory. It does not license inventing a verdict from
+# an unanswered query, so this fails closed under `--warn` too — which is exactly the rc the
+# touch-set-drift gate keeps rather than `|| true`-ing away.
+vp502() { PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_PR_GET=7 bash "$COORD" \
+            verify-paths --pr 7 --repo FS-GG/FS.GG.SDD "$@" 2>&1; }
+out502="$(vp502 --warn || true)"
+case "$out502" in
+  *"FSGG-PATHS"*) bad "verify-paths: an unreachable head ref reaches NO verdict" "invented a verdict: $out502" ;;
+  *) ok "verify-paths: an unreachable head ref reaches NO verdict" ;;
+esac
+assert_contains "verify-paths: ...and says the head ref could not be read" "cannot read PR #7's head ref" "$out502"
+assert_contains "verify-paths: ...and refuses to guess rather than skipping" "refusing to guess" "$out502"
+assert_fails "verify-paths: an unreachable head ref fails closed under --warn" \
+  env PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_PR_GET=7 bash "$COORD" \
+    verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --warn
+assert_fails "verify-paths: an unreachable head ref fails closed by default" \
+  env PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_PR_GET=7 bash "$COORD" \
+    verify-paths --pr 7 --repo FS-GG/FS.GG.SDD
+# An explicit --issue needs no head ref, so it must not be dragged down by the failing lookup: the
+# fix must guard the CALL, not the whole resolution step.
+assert_contains "verify-paths: --issue bypasses the head-ref read entirely" "FSGG-PATHS OK" \
+  "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_PR_GET=7 bash "$COORD" \
+       verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS-GG/FS.GG.SDD#70' 2>&1)"
 
 # Board-wide take (no --repo) must not trip the empty-array expansion. By now everything schedulable
 # is claimed or overlapping, so this exercises the "nothing to hand out" path — which still exits 0.
