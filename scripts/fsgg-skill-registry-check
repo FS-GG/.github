@@ -43,6 +43,33 @@ COMPLETENESS OF THE LIST.
                      alone (the registry's key), so Rendering's frozen re-declaration of a
                      Game-owned skill is satisfied by the `fs-gg-game` row.
 
+And over the CONTENT of a row the manifest also declares (.github#292, epic #266). Checks 1-3 are
+predicates over a row's BYTES; check 5 over its PRESENCE. Nothing compared the one field that is
+neither -- the emission condition:
+
+  6. PREDICATE MATCHES
+                     a row's `materializes-when` equals the declaring manifest's. This is what
+                     `skill-union-assert.sh --params` evaluates to decide whether a skill's ABSENCE
+                     from a scaffold is legitimate (ADR-0017's `[missing]`/`[unexpected]` classes),
+                     so a stale predicate makes the union gate wrong in a direction it cannot
+                     detect -- and the digests stay green throughout. It hid `fs-gg-testing` at
+                     `profile == governed` for six days after Rendering deliberately widened it to
+                     all five profiles (Rendering#90, 2026-07-04), which is exactly the scaffold
+                     the registry then claimed should NOT carry a testing skill.
+
+                     Compared on a WHITESPACE-NORMALIZED form (list spacing is not semantics), never
+                     on grammar: `profile in [a,b]` == `profile in [a, b]`. It deliberately does NOT
+                     normalize the C-style grammar (`(profile == "app" || ...)`) Rendering shipped
+                     before Rendering#77. Absorbing that here would make a producer's regression to a
+                     grammar the ADR-0017 evaluator CANNOT PARSE -- and therefore reads as false --
+                     compare equal and report green: the fails-open shape this epic exists to close.
+                     A grammar regression must surface as a divergence. Whether the gate should also
+                     reject non-canonical grammar outright is .github#290, not this check.
+
+                     A frozen mirror declares an id twice (ADR-0022 §6); the row's `owner:` picks
+                     which manifest is authoritative. If two declarers disagree with EACH OTHER, the
+                     row is reported and `--write` refuses to guess.
+
 Producers are DERIVED, never hardcoded: the repos named by `source:` prefixes (which MUST carry a
 manifest), plus any other checkout under `--repos-root` that carries one -- so a brand-new producer
 whose rows are ALL missing is still read, rather than being invisible for want of a row to name it.
@@ -73,9 +100,12 @@ Usage:
 
 Exit: 0 = coherent (or --write left it coherent); 1 = findings / usage error.
 
-`--write` rewrites ONLY the `sha256:` value of a stale row and APPENDS a row for a skill a manifest
-declares that the registry lacks, in place, leaving byte-for-byte everything else (the file is
-hand-formatted, aligned YAML flow maps -- a full yaml.dump would destroy it). An appended row is
+`--write` rewrites ONLY the `sha256:` and `materializes-when:` values of a stale row and APPENDS a
+row for a skill a manifest declares that the registry lacks, in place, leaving byte-for-byte
+everything else (the file is hand-formatted, aligned YAML flow maps -- a full yaml.dump would
+destroy it). Both rewrites take the value FROM the manifest -- the digest verbatim, the predicate in
+the whitespace-normalized form it is compared in -- which is what "reconciled from the producer
+manifests" means; neither invents one. An appended row is
 reconciled FROM the manifest entry: `scope`/`sha256`/`materializes-when` verbatim, `source` from the
 entry's `supplied-by`, `owner` from the producer repo. A manifest that omits `supplied-by` (SDD's
 process manifest does) gives no `source:` to derive, so the row is REPORTED and not appended --
@@ -183,13 +213,51 @@ def read_manifest(path: str) -> tuple[list[dict] | None, str]:
     return entries, ""
 
 
-def completeness(rows: list[dict], repos_root: str) -> list[dict]:
-    """Every skill a producer manifest declares must have a row here (.github#289)."""
-    declared = {row["id"] for row in rows}
+def normalize_when(value: object) -> str:
+    """A `materializes-when` in comparable form: whitespace collapsed, list spacing regular.
+
+    Whitespace is not semantics — `profile in [a,b]` and `profile in [a, b]` are the same predicate,
+    and a producer reformatting its manifest must not read as drift. GRAMMAR is semantics, and is
+    deliberately left alone: see check 6 in the module docstring.
+
+    A double-quoted STRING LITERAL is bytes, not layout: `name == "a,b"` must not become
+    `name == "a, b"`. `--write` persists this exact text into the registry, where the union gate
+    parses it, so normalizing inside a literal would rewrite the value the gate compares against.
+    Literals are stashed behind NUL-delimited placeholders (which carry no space, comma or bracket
+    of their own) and restored afterwards.
+    """
+    literals: list[str] = []
+
+    def stash(match: re.Match) -> str:
+        literals.append(match.group(0))
+        return f"\x00{len(literals) - 1}\x00"
+
+    text = re.sub(r'"(?:[^"\\]|\\.)*"', stash, str(value))
+    text = " ".join(text.split())
+    text = re.sub(r"\s*,\s*", ", ", text)
+    text = re.sub(r"\[\s*", "[", text)
+    text = re.sub(r"\s*\]", "]", text)
+    return re.sub(r"\x00(\d+)\x00", lambda m: literals[int(m.group(1))], text)
+
+
+def when_of(entry: dict) -> str:
+    """A manifest entry's predicate, normalized. Absent ⇒ `always` (ADR-0017)."""
+    return normalize_when(entry.get("materializes-when", DEFAULT_WHEN))
+
+
+def manifest_index(repos_root: str, rows: list[dict]) -> tuple[dict[str, list[dict]], list[dict]]:
+    """({skill_id: [{repo, entry}, ...]}, manifest-found findings) over every producer.
+
+    Read ONCE and shared by checks 5 and 6: `declared-completeness` wants the ids this index has
+    that the registry lacks, `predicate-matches` the ids they have in common. Records EVERY
+    declarer of an id — taking the first would attribute by repo sort order, and the one id two
+    producers legitimately share is a frozen mirror (ADR-0022 §6), where the alphabetically-first
+    repo is the COPY, not the owner.
+    """
     named, unnamed = producers(repos_root, rows)
 
     findings: list[dict] = []
-    missing: dict[str, dict] = {}
+    declarers: dict[str, list[dict]] = {}
 
     for repo in named + unnamed:
         manifest_path = find_manifest(repos_root, repo)
@@ -215,22 +283,97 @@ def completeness(rows: list[dict], repos_root: str) -> list[dict]:
 
         for entry in entries:
             skill_id = entry.get("id")
-            if not skill_id or skill_id in declared:
+            if not skill_id:
                 continue
-            # Record EVERY declarer. Taking the first would attribute `owner:`/`source:` by repo
-            # sort order — and the one id two producers legitimately share is a frozen mirror
-            # (ADR-0022 §6), where the alphabetically-first repo is the COPY, not the owner.
-            missing.setdefault(skill_id, []).append({"repo": repo, "entry": entry})
+            declarers.setdefault(skill_id, []).append({"repo": repo, "entry": entry})
 
-    for skill_id, declarers in sorted(missing.items()):
-        if len(declarers) > 1:
-            repos = ", ".join(d["repo"] for d in declarers)
+    return declarers, findings
+
+
+def predicates(rows: list[dict], declarers: dict[str, list[dict]]) -> list[dict]:
+    """A row's `materializes-when` must equal its declaring manifest's (.github#292).
+
+    A row NO manifest declares is not this check's business: either its producer's manifest is
+    unreadable (check 4 already failed closed on it) or the row names a producer that declares
+    nothing — both louder findings than a predicate mismatch would be.
+    """
+    findings: list[dict] = []
+
+    for row in rows:
+        skill_id = row["id"]
+        declared_by = declarers.get(skill_id)
+        if not declared_by:
+            continue
+
+        # The frozen mirror re-declares an id it does not own; `owner:` says whose word is law.
+        owned = [d for d in declared_by if owner_of(d["repo"]) == row.get("owner")]
+        authoritative = owned or declared_by
+        manifest_whens = {when_of(d["entry"]) for d in authoritative}
+
+        if len(manifest_whens) > 1:
+            repos = ", ".join(sorted(d["repo"] for d in authoritative))
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "predicate-matches",
+                    "detail": (
+                        f"its {len(authoritative)} declaring manifests ({repos}) disagree on "
+                        f"`materializes-when` ({' vs '.join(sorted(repr(w) for w in manifest_whens))}) "
+                        "— --write cannot reconcile a row against producers that contradict each "
+                        "other; fix the producers first"
+                    ),
+                }
+            )
+            continue
+
+        manifest_when = next(iter(manifest_whens))
+        row_when = normalize_when(row.get("materializes-when", DEFAULT_WHEN))
+        if row_when == manifest_when:
+            continue
+
+        repo = authoritative[0]["repo"]
+        finding = {
+            "id": skill_id,
+            "check": "predicate-matches",
+            "detail": (
+                f"registry says `{row_when}` but {repo}'s manifest declares "
+                f"`{manifest_when}` — the union gate evaluates this to decide whether the "
+                "skill's absence from a scaffold is legitimate"
+            ),
+            "declared": row_when,
+        }
+        # `--write` rewrites a VALUE in place; a row that omits the field has none to rewrite, and
+        # inserting one would re-align the hand-formatted flow map. Report it instead — `actual` is
+        # what marks a finding reconcilable (an absent field reads as `always`, ADR-0017, so this is
+        # only reachable when the manifest declares something else).
+        if "materializes-when" in row:
+            finding["actual"] = manifest_when
+        else:
+            finding["detail"] += (
+                "; --write cannot rewrite it (the row declares no `materializes-when:` field) "
+                "— add it by hand"
+            )
+        findings.append(finding)
+
+    return findings
+
+
+def completeness(rows: list[dict], declarers: dict[str, list[dict]]) -> list[dict]:
+    """Every skill a producer manifest declares must have a row here (.github#289)."""
+    declared = {row["id"] for row in rows}
+
+    findings: list[dict] = []
+    missing = {i: d for i, d in declarers.items() if i not in declared}
+
+    for skill_id, declared_by in sorted(missing.items()):
+        if len(declared_by) > 1:
+            repos = ", ".join(d["repo"] for d in declared_by)
             findings.append(
                 {
                     "id": skill_id,
                     "check": "declared-completeness",
                     "detail": (
-                        f"declared by {len(declarers)} producer manifests ({repos}) but absent from "
+                        f"declared by {len(declared_by)} producer manifests ({repos}) but absent from "
                         "the registry; --write cannot append it (which repo is the owner and which "
                         "the frozen mirror is not derivable from the manifests) — add the row by hand"
                     ),
@@ -238,7 +381,7 @@ def completeness(rows: list[dict], repos_root: str) -> list[dict]:
             )
             continue
 
-        repo, entry = declarers[0]["repo"], declarers[0]["entry"]
+        repo, entry = declared_by[0]["repo"], declared_by[0]["entry"]
         supplied_by = entry.get("supplied-by")
         when = str(entry.get("materializes-when", DEFAULT_WHEN))
         finding = {
@@ -273,6 +416,7 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
         registry = yaml.safe_load(handle)
 
     findings: list[dict] = []
+    declarers, manifest_findings = manifest_index(repos_root, registry["skills"])
 
     for row in registry["skills"]:
         skill_id, source = row["id"], row["source"]
@@ -332,7 +476,9 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
                     }
                 )
 
-    findings.extend(completeness(registry["skills"], repos_root))
+    findings.extend(predicates(registry["skills"], declarers))
+    findings.extend(manifest_findings)
+    findings.extend(completeness(registry["skills"], declarers))
     return findings
 
 
@@ -341,19 +487,24 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
 ROW_TEMPLATE = "  - {{ id: {id}scope: {scope}owner: {owner}source: {source} sha256: {sha256}, materializes-when: {when} }}"
 
 
+def format_when(when: str) -> str:
+    """A `materializes-when` as YAML: `always` is a bare token, every real predicate is quoted.
+
+    json.dumps, not f'"{when}"' — a YAML double-quoted scalar escapes exactly as JSON does, so a
+    predicate containing a `"` round-trips instead of terminating the scalar early.
+    """
+    return when if when == DEFAULT_WHEN else json.dumps(when)
+
+
 def format_row(row: dict) -> str:
     """One hand-aligned YAML flow map, in the shape the surrounding rows are written in."""
-    when = row["materializes-when"]
     return ROW_TEMPLATE.format(
         id=f"{row['id']},".ljust(24),
         scope=f"{row['scope']},".ljust(9),
         owner=f"{row['owner']},".ljust(17),
         source=f"{row['source']},",
         sha256=row["sha256"],
-        # `always` is a bare token; every real predicate has spaces/brackets and must be quoted.
-        # json.dumps, not f'"{when}"' — a YAML double-quoted scalar escapes exactly as JSON does,
-        # so a predicate containing a `"` round-trips instead of terminating the scalar early.
-        when=when if when == DEFAULT_WHEN else json.dumps(when),
+        when=format_when(row["materializes-when"]),
     )
 
 
@@ -413,6 +564,45 @@ def reconcile(registry_path: str, findings: list[dict]) -> int:
     return written
 
 
+def reconcile_predicates(registry_path: str, findings: list[dict]) -> int:
+    """Rewrite only the `materializes-when` of each diverged row, preserving the hand-aligned YAML.
+
+    A row whose declarers contradict each other carries no `actual` and is skipped — `--write`'s
+    re-check then leaves it as the finding it is, rather than picking a producer to believe.
+    """
+    stale = {f["id"]: f["actual"] for f in findings if f["check"] == "predicate-matches" and "actual" in f}
+    if not stale:
+        return 0
+
+    with open(registry_path) as handle:
+        text = handle.read()
+
+    written = 0
+    for skill_id, actual in stale.items():
+        # Anchor on the row's own `id:`, as reconcile() does. `[^}]` cannot cross the row's closing
+        # brace, so this can never rewrite a neighbour's predicate; and the `\s*,` after the id keeps
+        # `fs-gg-scene` from matching a `fs-gg-scene-extra` row.
+        # ASSUMES, as every row in this file holds: `materializes-when` is the row's LAST field, and
+        # no predicate contains a `}`. Both are true of the ADR-0017 grammar (bare tokens and
+        # bracketed lists); a predicate carrying `}` would slice the value group early, so a future
+        # grammar that admits one must anchor this on the field order instead.
+        pattern = re.compile(
+            rf"(\{{\s*id:\s*{re.escape(skill_id)}\s*,[^}}]*?materializes-when:\s*)([^}}]*?)(\s*\}})"
+        )
+        # A function replacement, not a template: `format_when` emits a JSON scalar, whose
+        # backslashes would otherwise be read as group references.
+        text, count = pattern.subn(
+            lambda m, value=actual: f"{m.group(1)}{format_when(value)}{m.group(3)}", text, count=1
+        )
+        if count != 1:
+            sys.exit(f"fsgg-skill-registry-check: could not locate the materializes-when of row {skill_id}")
+        written += 1
+
+    with open(registry_path, "w") as handle:
+        handle.write(text)
+    return written
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(add_help=True, description=__doc__.splitlines()[0])
     parser.add_argument("--registry", default="registry/skills.yml")
@@ -422,7 +612,9 @@ def main() -> int:
         help="directory holding the producer checkouts (FS.GG.SDD/, FS.GG.Rendering/, FS.GG.Game/)",
     )
     parser.add_argument("--json", action="store_true", help="emit findings as JSON")
-    parser.add_argument("--write", action="store_true", help="reconcile stale sha256 in place")
+    parser.add_argument(
+        "--write", action="store_true", help="reconcile stale sha256 / materializes-when in place"
+    )
     args = parser.parse_args()
 
     if not os.path.isdir(args.repos_root):
@@ -436,13 +628,15 @@ def main() -> int:
     if args.write:
         appended = append_rows(args.registry, findings)
         written = reconcile(args.registry, findings)
+        repredicated = reconcile_predicates(args.registry, findings)
         print(
-            f"skill-registry: reconciled {written} sha256 row(s), appended {appended} missing "
-            f"row(s) in {args.registry}"
+            f"skill-registry: reconciled {written} sha256 row(s) and {repredicated} "
+            f"materializes-when value(s), appended {appended} missing row(s) in {args.registry}"
         )
         # Re-check from disk. --write cannot invent a missing source, resolve a mirror divergence,
-        # or append a row the manifest gave no `supplied-by` for — and an appended row whose
-        # manifest digest disagrees with the body surfaces here rather than on someone else's CI.
+        # append a row the manifest gave no `supplied-by` for, or pick a side when two producers
+        # declare contradictory predicates — and an appended row whose manifest digest disagrees
+        # with the body surfaces here rather than on someone else's CI.
         blocked = check(args.registry, args.repos_root)
         if blocked:
             for finding in blocked:

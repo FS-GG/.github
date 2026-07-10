@@ -93,9 +93,13 @@ skills:
     supplied-by: { spec-kit: fs-gg-rendering, sdd: UNRESOLVED }   # ← the defect, made explicit
 ```
 
-`sha256` values above are the current canonical `SKILL.md` bodies (verified during the ADR-0017
-investigation); `materializes-when` predicates are the literal `template.json` `sources[].condition`
-expressions, normalized. Process-skill `sha256`s come from SDD's manifest once it publishes one.
+The block above is a **snapshot taken during the ADR-0017 investigation**, kept to show the shape —
+not a mirror of the live catalog. Its `sha256` values and `materializes-when` predicates have both
+moved since (`fs-gg-testing`, shown here as `profile == governed`, was widened to all five profiles
+by FS.GG.Rendering#90 on 2026-07-04). `registry/skills.yml` is authoritative, and
+`scripts/fsgg-skill-registry-check` is what holds it to the producer manifests — bytes
+(`digest-matches`), presence (`declared-completeness`, .github#289), and the predicate itself
+(`predicate-matches`, .github#292). Process-skill `sha256`s come from SDD's published manifest.
 
 ## The `materializes-when` predicate
 
