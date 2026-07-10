@@ -131,6 +131,37 @@ kit_title="$(bash "$REPOS_SH" kit --registry "$BASE" | paste -sd, - | sed 's/,/,
 # The real roster must name a kit, or the propagate title would render empty.
 [ -n "$(bash "$REPOS_SH" kit)" ] && ok "the checked-in roster declares kit items" || bad "real roster kit empty"
 
+# --- a missing flag value is misconfiguration (exit 2), never a finding (exit 1) — #341 ---
+# `${2:?…}` let bash exit 1, the code reserved for "I checked the roster, and it is invalid". A
+# caller reading the `# Exit:` contract could not tell a typo'd command line from a broken registry.
+# Every flag of every subcommand gets a leg: the value may be absent, or present-but-empty (an unset
+# variable upstream, which is how this reaches a caller in practice).
+expect_usage() {
+  local n="$1"; shift
+  local out rc=0
+  out="$(bash "$REPOS_SH" "$@" 2>&1)" || rc=$?
+  if [ "$rc" -eq 1 ]; then bad "$n" "exit 1 — a usage error reported itself as a roster finding"; return; fi
+  if [ "$rc" -ne 2 ]; then bad "$n" "expected exit 2 (misconfig), got $rc: $out"; return; fi
+  case "$out" in *"needs a value"*) ok "$n" ;;
+                 *) bad "$n" "exit 2 but no 'needs a value' diagnostic: $out" ;; esac
+}
+for flag in --receives --field --registry; do
+  expect_usage "list $flag (absent value) -> exit 2"          list "$flag"
+  expect_usage "list $flag '' (empty value) -> exit 2"        list "$flag" ""
+done
+for flag in --field --kind --registry; do
+  expect_usage "kit $flag (absent value) -> exit 2"           kit "$flag"
+  expect_usage "kit $flag '' (empty value) -> exit 2"         kit "$flag" ""
+done
+for flag in --registry --root; do
+  expect_usage "validate $flag (absent value) -> exit 2"      validate "$flag"
+  expect_usage "validate $flag '' (empty value) -> exit 2"    validate "$flag" ""
+done
+# `digest` takes a positional, not a flag; it already routes through die(). Guard it against a
+# regression that makes the same class of mistake.
+rc=0; bash "$REPOS_SH" digest >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] && ok "digest (no path) -> misconfig (exit 2)" || bad "digest no path" "got exit $rc"
+
 # --- CI guard on the real, checked-in roster ---
 if bash "$REPOS_SH" validate >/dev/null 2>&1; then ok "the checked-in registry/repos.yml validates"
 else bad "real registry/repos.yml validates" "$(bash "$REPOS_SH" validate 2>&1)"; fi
