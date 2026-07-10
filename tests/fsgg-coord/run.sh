@@ -2182,6 +2182,68 @@ assert_contains "overlap a b: a real same-repo overlap is STILL detected (#353)"
 assert_fails "overlap a b: a real same-repo overlap still exits non-zero (#353)" \
   px overlap 'FS.GG.SDD#401' 'FS.GG.SDD#403'
 
+# ---- #312: batch/take qualify their touch-set comparison by repo, even when scheduling ALL repos --
+# #353 fixed the single-item comparers (`widen`, `overlap --active`) by SCOPING their input to one
+# repo. `batch` cannot do that: with no `--repo` it schedules across the whole board, so its
+# reservation set legitimately mixes repos. It used to flatten every live claim's tokens into one bare
+# list and hand it to `conflicts_between` — which cannot see a repo — so `src/Physics/**` held in one
+# repo phantom-collided with `src/Physics/**` Ready in ANOTHER, and the scheduler passed over an item
+# nothing was actually holding (#312). The fix tags each reserved token with its owning repo and
+# compares only within a repo.
+#
+# The fixture is built on repos with EMPTY stores (Templates/Governance/Audio/Game) so unscoped
+# `active_claims` sees only these planted claims — not the polluted SDD/Rendering stores earlier tests
+# left behind. The token `src/Physics/**` is unique to this block for the same reason.
+#   #420 Templates  Ready        src/Physics/**          — candidate; only a CROSS-repo namesake holds it
+#   #421 Governance Ready        src/Physics/**          — candidate in a THIRD repo, SAME bare token
+#   #422 Audio      Ready        src/Physics/Solver.fs   — REAL same-repo overlap of the in-flight #424
+#   #425 Templates  Ready        src/Physics/Gun.fs      — REAL same-repo overlap of the batch-mate #420
+#   #423 Game       In progress  src/Physics/**          — cross-repo phantom (its own repo, no candidate)
+#   #424 Audio      In progress  src/Physics/**          — the genuine same-repo neighbour #422 clashes with
+cat >"$FIXTURES/board-xbatch.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":420,"title":"Templates A","url":"https://github.com/FS-GG/FS.GG.Templates/issues/420","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":421,"title":"Governance B","url":"https://github.com/FS-GG/FS.GG.Governance/issues/421","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Governance"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":422,"title":"Audio control","url":"https://github.com/FS-GG/FS.GG.Audio/issues/422","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Audio"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":425,"title":"Templates mate","url":"https://github.com/FS-GG/FS.GG.Templates/issues/425","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"}}},
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":423,"title":"Game phantom","url":"https://github.com/FS-GG/FS.GG.Game/issues/423","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Game"}}},
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":424,"title":"Audio neighbour","url":"https://github.com/FS-GG/FS.GG.Audio/issues/424","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Audio"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4970}}
+JSON
+seed_issue 420 "Templates A"      "src/Physics/**"        "FS-GG/FS.GG.Templates"
+seed_issue 421 "Governance B"     "src/Physics/**"        "FS-GG/FS.GG.Governance"
+seed_issue 422 "Audio control"    "src/Physics/Solver.fs" "FS-GG/FS.GG.Audio"
+seed_issue 425 "Templates mate"   "src/Physics/Gun.fs"    "FS-GG/FS.GG.Templates"
+seed_issue 423 "Game phantom"     "src/Physics/**"        "FS-GG/FS.GG.Game"
+seed_issue 424 "Audio neighbour"  "src/Physics/**"        "FS-GG/FS.GG.Audio"
+# Live markers on the two in-flight items (a claim marker IS a comment; the store is the source).
+jq -n --arg ts "$fresh_ts" '[{id:8423, body:"<!-- fsgg:claim worker=game-x1 lease=120 -->\nheld",
+  user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-423.json"
+jq -n --arg ts "$fresh_ts" '[{id:8424, body:"<!-- fsgg:claim worker=audio-n1 lease=120 -->\nheld",
+  user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-424.json"
+pb() { PATH="$STUB:$PATH" GH_BOARD_SET=xbatch GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
+
+# The whole board, no --repo: the cross-repo phantom (#423) and same-repo neighbour (#424) are BOTH
+# in flight, but only #422/#425 (real same-repo overlaps) may be dropped. #420 clears the phantom;
+# #421 rides alongside #420 though both declare the same bare token in different repos.
+xb_json="$(pb batch --json 2>/dev/null)"
+assert_eq "batch: schedules cross-repo candidates sharing only a repo-relative token (#312)" \
+  '["FS.GG.Templates#420","FS.GG.Governance#421"]' "$(jq -c '.' <<<"$xb_json")"
+xb_err="$(pb batch 2>&1 >/dev/null || true)"
+# The two REAL same-repo overlaps are still caught — scoping narrowed the comparison, not the check.
+assert_contains "batch: a genuine same-repo IN-FLIGHT overlap is still caught (#312)" \
+  "#422 — overlaps in-flight work" "$xb_err"
+assert_contains "batch: a genuine same-repo BATCH-MATE overlap is still caught (#312)" \
+  "#425 — overlaps batch member FS.GG.Templates#420" "$xb_err"
+# ...and neither cross-repo candidate is ever passed over for a phantom.
+case "$xb_err" in
+  *"#420 — overlaps"*|*"#421 — overlaps"*)
+    bad "batch: never drops a candidate for a cross-repo phantom (#312)" "$xb_err" ;;
+  *) ok "batch: never drops a candidate for a cross-repo phantom (#312)" ;;
+esac
+
 # ---- #344: an unreadable board must FAIL CLOSED, not render as a confident empty answer ----------
 # `gql` dies inside a `$( )`, and `exit` there only unwinds the subshell; `set -e` does not carry the
 # substitution's non-zero across a bare `out="$(...)"` assignment. So every scheduler read used to get
