@@ -64,4 +64,4 @@ outside-fabric: []
 kit:
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 00adaed77fa7d01d51f853d62bb06b3f9eef936bbb051f871fdac01d60220ce6 }
   - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 840ae4ba02c4bc6e1fb5dde38826c35b6ce5ca56983aa2dd36ad76be24901f7b }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 59959d781bd35d6e4cfec4edca20263027122ce32f0a8838c3a36c0474403f07 }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 9c5ca17bc92ee10ea78250b666df5b5e61489c8802d462b7244f73ea5b313c5e }

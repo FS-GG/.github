@@ -163,10 +163,22 @@ cat >"$FIXTURES/lint-p2.json" <<'JSON'
       {"number":412,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}},
     {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":407,"title":"An ordinary card, no children","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/407","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":408,"title":"[epic] Finished, and it never grew children","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/408","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
-    {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":409,"title":"[epic] A child was filed, and only mentioned","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/409","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"## Children\n\n- [x] (a) #413 — linked, landed\n- [ ] (b) #414 — filed while working (a); a comment on this epic is not a link\n\nSee also #415, which is prose and declares nothing.\n","subIssues":{"totalCount":1,"nodes":[
+    {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":409,"title":"[epic] A child was filed, and only mentioned","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/409","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"## Children\n\n- [x] (a) #413 — linked, landed\n- [ ] (b) #414 — filed while working (a); a comment on this epic is not a link\n- [x] (c) preview shipped — DONE (PR #418)\n\nSee also #415, which is prose and declares nothing.\n","subIssues":{"totalCount":1,"nodes":[
       {"number":413,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}
   ]}}}},"rateLimit":{"cost":1,"remaining":4969}}
 JSON
+# EPIC-UNLINKED-CHILD (and epic_rollup) re-resolve an otherwise-unlinked body ref over REST to skip
+# the ones that are PULL REQUESTS — a PR can never be a sub-issue, so citing it is not a missing
+# child (FS-GG/.github#346). These fixtures are the probe targets, and must exist before the FIRST
+# `run lint` since #409's body now cites PR #418 alongside genuine unlinked issue #414. A `.pull_request`
+# key is GitHub's own discriminator; state:"closed" keeps them out of the open-issue candidate lists.
+mkpr()    { jq -n --argjson n "$1" --arg r "${2:-FS-GG/FS.GG.SDD}" \
+  '{number:$n, state:"closed", repo:$r, pull_request:{url:("https://github.com/"+$r+"/pull/"+($n|tostring))},
+    html_url:("https://github.com/"+$r+"/pull/"+($n|tostring))}' >"$STORE/issue-$1.json"; }
+mkissue() { jq -n --argjson n "$1" --arg s "${3:-open}" --arg r "${2:-FS-GG/FS.GG.SDD}" \
+  '{number:$n, state:$s, repo:$r, html_url:("https://github.com/"+$r+"/issues/"+($n|tostring))}' >"$STORE/issue-$1.json"; }
+mkpr    418            # #409's (c): a PR the graph can never hold
+mkissue 414            # #409's (b): a genuine unlinked issue, and it must still fire
 
 # `done --flip` + epic_rollup. Two chains:
 #   #42 -> epic #300: children #42 (CLOSED, board Done) and #43 (OPEN, board Done).  Must HOLD.
@@ -241,6 +253,25 @@ cat >"$FIXTURES/rollup-48.json" <<'JSON'
   "subIssues":{"totalCount":1,"nodes":[
     {"number":48,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
   ]}}}}},"rateLimit":{"cost":1,"remaining":4960}}
+JSON
+# #52 -> epic #55: the graph's one child (#52) is CLOSED + board-Done, so the rollup would flip. The
+# body also cites `PR #920` on a task-list line — a PR, which can NEVER be a sub-issue. The old code
+# read that as an unlinked child and refused forever; the fix re-resolves it, sees a PR, drops it,
+# and the epic rolls up (FS-GG/.github#346). Contrast #302, whose unlinked ref is a real ISSUE.
+cat >"$FIXTURES/done-52.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":52,"title":"child of an epic that also cites the PR that closed it","url":"https://github.com/FS-GG/FS.GG.SDD/issues/52","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[{"number":19,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/19","merged":true,"mergedAt":"2026-07-05T10:00:00Z","mergeCommit":{"abbreviatedOid":"cafe123"}}]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":{"number":55}}}},"rateLimit":{"cost":1,"remaining":4959}}
+JSON
+cat >"$FIXTURES/rollup-52.json" <<'JSON'
+{"data":{"repository":{"issue":{"parent":{
+  "number":55,"url":"https://github.com/FS-GG/FS.GG.SDD/issues/55","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},
+  "body":"## Children\n\n- [x] #52 — landed\n- [x] preview shipped — DONE (PR #920)\n",
+  "projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},
+  "subIssues":{"totalCount":1,"nodes":[
+    {"number":52,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
+  ]}}}}},"rateLimit":{"cost":1,"remaining":4958}}
 JSON
 cat >"$FIXTURES/rollup-none.json" <<'JSON'
 {"data":{"repository":{"issue":{"parent":null}}},"rateLimit":{"cost":1,"remaining":4964}}
@@ -783,6 +814,22 @@ assert_eq "lint: a bare prose mention does not count as a declared child" "0" \
 # gate that guesses is the very defect this rule exists to prevent (FS-GG/.github#266).
 assert_eq "lint: a truncated epic yields no unlinked-child verdict" "0" \
   "$(run lint --json 2>/dev/null | jq -r '[.[] | select(.code=="EPIC-UNLINKED-CHILD" and .id=="FS-GG/FS.GG.Rendering#404")] | length')"
+# #409's body ALSO cites `PR #418` on a task-list line. A PR can never be a sub-issue, so it is not
+# an unlinked child — the fix re-resolves the ref, sees a pull request, and drops it (FS-GG/.github#346).
+# #414 (a real issue) survives, so the finding still fires and still names ONLY #414, never #418.
+assert_eq "lint: a body-declared PR ref is NOT reported as an unlinked child (#346)" "0" \
+  "$(run lint --json 2>/dev/null | jq -r '[.[] | select(.detail|test("#418"))] | length')"
+assert_eq "lint: a genuine unlinked ISSUE still fires alongside a skipped PR ref" "FS.GG.SDD#414" \
+  "$(run lint --json 2>/dev/null | jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .detail' \
+     | sed 's/.*graph, so rollup cannot see them: //')"
+# The internal scratch field used to carry the refs for the PR probe must not leak into the schema.
+assert_eq "lint: the PR-probe scratch field is not exposed in --json output" "0" \
+  "$(run lint --json 2>/dev/null | jq -r '[.[] | select(has("unlinked"))] | length')"
+# Fail closed (FS-GG/.github#266): a ref the probe cannot resolve is KEPT, never silently dropped —
+# "I could not check" is not "it is a PR". Force the #414 lookup to 502; the finding must survive.
+assert_eq "lint: an unresolvable unlinked ref is kept, not dropped (fail closed, #266)" "FS.GG.SDD#414" \
+  "$(GH_FAIL_ISSUE_GET=414 run lint --json 2>/dev/null | jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .detail' \
+     | sed 's/.*graph, so rollup cannot see them: //')"
 
 # --repo scopes the scan. FS.GG.Templates holds only #405 — a NOTE — so lint passes, and --strict fails.
 assert_eq "lint --repo templates: notes alone do not fail" "0" \
@@ -838,6 +885,23 @@ assert_contains "rollup: multiple unlinked children join on ', ' (no delimiter c
   "FS-GG/FS.GG.Rendering#51, FS-GG/FS.GG.SDD#49, FS-GG/FS.GG.SDD#50" "$bullets"
 assert_eq "rollup: a '+' epic is never flipped" "0" \
   "$(printf '%s' "$bullets" | grep -c 'FS.GG.SDD#303 (epic)' || true)"
+
+# The mirror image of #302: epic #55's graph is complete (its one child #52 is Done + closed), and
+# its body's only extra ref is `PR #920` on a task-list line. A PR can never be a sub-issue, so it is
+# not a missing child — the rollup re-resolves it, drops it, and FLIPS, where before it refused
+# forever (FS-GG/.github#346). `mkpr` seeds the probe target as a pull request.
+: >"$GH_LOG"
+mkpr 920
+flippr="$(run done 'FS.GG.SDD#52' --pr 19 --flip 2>/dev/null)"
+assert_contains "rollup: FLIPS over a body-cited PR ref (a PR is not an unlinked child, #346)" \
+  "FSGG-DONE   FS.GG.SDD#55 (epic)" "$flippr"
+case "$flippr" in
+  *"does not contain"*) bad "rollup: a body-cited PR must not read as an unlinked child" "$flippr" ;;
+  *) ok "rollup: a body-cited PR does not block the rollup" ;;
+esac
+# Two Status writes: the child, then the epic the PR-cite no longer wedges.
+assert_eq "rollup: flipping over a PR ref writes Status twice (child, then epic)" "2" \
+  "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
 
 # ---- `child`: the only thing that actually creates the edge rollup reads ------------------------
 # The epic #302 and the child #47 the rollup above just refused to roll up over — written here
