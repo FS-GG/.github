@@ -1,6 +1,6 @@
 # ADR-0017: Org skill registry — condition-aware materialization for the skill union
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-04
 - **Affects:** .github (registry + skill-union gate), Rendering (product manifest), SDD (process manifest + `fs-gg-project` seam), Templates (composition gate)
 

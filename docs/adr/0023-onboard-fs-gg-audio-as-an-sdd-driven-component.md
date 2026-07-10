@@ -1,6 +1,6 @@
 # ADR-0023: Onboard FS.GG.Audio as an SDD-driven component
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-07
 - **Affects:** **.github** (this ADR + roster row + `fs-gg-audio` registry contract + architecture map 6→7), **FS-GG/FS.GG.Audio** (new repo — transferred in + first release)
 
@@ -42,8 +42,9 @@ Onboard **FS.GG.Audio** as the platform's **seventh** repo and a contract owner.
    (`<FsGgAudioVersion>`); first release **0.1.0-preview.1**.
 3. **Publishing.** A tag-triggered `release.yml` verifies (locked restore + headless
    build/test), publishes the set to the org GitHub Packages feed
-   (`nuget.pkg.github.com/FS-GG`) and — once an org Trusted Publishing policy exists —
-   dual-publishes to nuget.org via OIDC (ADR-0012/0013, no stored key), and attaches the
+   (`nuget.pkg.github.com/FS-GG`) and — via the org Trusted Publishing policy
+   `fs-gg-audio-publishing` — dual-publishes to nuget.org via OIDC (ADR-0012/0013, no stored
+   key), and attaches the
    `.fsi` API surface, the SDD lifecycle artifacts, and the sample app to the GitHub
    Release. **publish-before-flip (FR-007):** the registry's `package-version` follows a
    real feed publish.

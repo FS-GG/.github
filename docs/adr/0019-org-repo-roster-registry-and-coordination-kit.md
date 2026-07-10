@@ -1,6 +1,6 @@
 # ADR-0019: Org repo roster registry + coordination-kit distribution
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-04
 - **Affects:** FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance, FS.GG.Templates, .github
 
