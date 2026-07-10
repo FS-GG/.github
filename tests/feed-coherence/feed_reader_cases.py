@@ -198,5 +198,71 @@ else:
     bad("newest() raises on an unparsable feed version rather than ignoring it")
 
 print()
+print("--- channel awareness: a stable registry ignores a newer prerelease (.github#386) ---")
+
+# is_prerelease is the primitive the channel policy rests on — one definition of "is this stable",
+# derived from the same ordering key. A wrong answer here is a wrong verdict, silently.
+for v, want_pre in [
+    ("0.5.0", False),
+    ("1.2.1.1", False),        # 4-segment stable is still stable (ADR-0007)
+    ("1.0.0+build", False),    # build metadata is not a prerelease
+    ("0.6.0-preview.1", True),
+    ("1.0.0-alpha", True),
+]:
+    if gate.is_prerelease(v) is want_pre:
+        ok(f"is_prerelease({v!r}) is {want_pre}")
+    else:
+        bad(f"is_prerelease({v!r}) is {want_pre}", f"got {gate.is_prerelease(v)!r}")
+try:
+    gate.is_prerelease("garbage")
+except gate.GateError:
+    ok("is_prerelease() raises on an unparsable literal rather than guessing")
+else:
+    bad("is_prerelease() raises on an unparsable literal rather than guessing")
+
+# newest() itself is UNCHANGED and stays prerelease-inclusive by default: the channel policy lives
+# in the feed-coherence caller, not the shared primitive that check-pin-coherence.py also uses.
+if gate.newest(["0.5.0", "0.6.0-preview.1"]) == "0.6.0-preview.1":
+    ok("newest() is prerelease-inclusive by default (the shared primitive is untouched)")
+else:
+    bad("newest() is prerelease-inclusive by default (the shared primitive is untouched)")
+
+
+def check(label: str, declared: str, feed: list[str], *, expect: str) -> None:
+    """Run check_contract with a stubbed resolver; assert the verdict.
+
+    `expect` is "" for coherent (no problems), else a needle the single problem must contain.
+    """
+    try:
+        problems = gate.check_contract("fsgg-contracts", declared, lambda pkg: list(feed))
+    except gate.GateError as e:  # noqa: BLE001 — check_contract collects; an escape is the bug
+        bad(label, f"raised {type(e).__name__} instead of returning a verdict: {e}")
+        return
+    if expect == "":
+        ok(label) if not problems else bad(label, f"expected coherent, got {problems!r}")
+    elif problems and expect.lower() in problems[0].lower():
+        ok(label)
+    else:
+        bad(label, f"expected /{expect}/, got {problems!r}")
+
+
+# The bug this issue fixes: a stray prerelease beside the matching stable must NOT read as BEHIND,
+# mirroring Renovate's ignoreUnstable.
+check("stable registry is coherent despite a newer prerelease on the feed",
+      "0.5.0", ["0.5.0", "0.6.0-preview.1"], expect="")
+# ...but the filter must not over-reach: a newer STABLE release is still a real BEHIND.
+check("stable registry is still BEHIND a newer stable release",
+      "0.5.0", ["0.5.0", "0.6.0"], expect="BEHIND the feed")
+# A prerelease registry is on the preview channel, so a newer preview IS a behind — no filtering.
+check("preview-channel registry still tracks a newer prerelease",
+      "0.6.0-preview.1", ["0.6.0-preview.1", "0.6.0-preview.2"], expect="BEHIND the feed")
+check("preview-channel registry is coherent at the newest prerelease",
+      "0.6.0-preview.2", ["0.6.0-preview.1", "0.6.0-preview.2"], expect="")
+# Fail CLOSED: a stable registry against a feed carrying ONLY prereleases names a version no
+# consumer can restore — an error, never a silent pass from an empty stable set.
+check("stable registry against a prerelease-only feed fails closed",
+      "0.5.0", ["0.6.0-preview.1"], expect="no stable version")
+
+print()
 print(f"{passed} passed, {failed} failed.")
 sys.exit(1 if failed else 0)

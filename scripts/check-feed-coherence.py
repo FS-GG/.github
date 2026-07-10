@@ -64,6 +64,7 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     ORG,
     GateError,
     feed_versions,
+    is_prerelease,
     newest,
     parse_version,
 )
@@ -110,8 +111,28 @@ def check_contract(contract_id: str, declared: str, resolve) -> list[str]:
     """Compare `declared` to the newest feed version of each mapped package. Returns problems."""
     problems: list[str] = []
     want = parse_version(declared)
+    # Channel policy, mirroring Renovate's `ignoreUnstable: true` (default.json, .github#386): a
+    # STABLE registry entry ignores prerelease feed versions when deciding "newest". Without it, a
+    # stray `0.6.0-preview.1` published beside stable `0.5.0` makes the feed's newest a prerelease
+    # and flags the (correct) stable registry as BEHIND — reddening the daily feed-coherence job
+    # while Renovate deliberately ignores that same preview. A registry entry that is ITSELF a
+    # prerelease is on the preview channel, so it keeps tracking prereleases (fs-gg-audio's shape).
+    # The filter lives here, not in newest(): "which channel to compare on" is this gate's policy,
+    # not a version-ordering fact — and check-pin-coherence.py shares newest() unchanged.
+    stable_channel = not is_prerelease(declared)
     for pkg in _packages_for(contract_id):
         live = resolve(pkg)
+        if stable_channel:
+            stable = [v for v in live if not is_prerelease(v)]
+            if not stable:
+                problems.append(
+                    f"{contract_id}: the feed serves no stable version of {pkg} — only prereleases "
+                    f"{sorted(live)}, while the registry declares the stable {declared!r}, which no "
+                    f"consumer can restore. Publish the stable package, or move the registry to a "
+                    f"prerelease channel."
+                )
+                continue
+            live = stable
         top = newest(live)
         got = parse_version(top)
         if got == want:
