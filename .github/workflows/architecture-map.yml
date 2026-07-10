@@ -38,7 +38,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          # Diff against the merge-base, not the base-branch tip: the changed set must be the
+          # PR's OWN commits, independent of how far main has moved since the branch forked.
+          # Using BASE_SHA (current tip of main) directly reports any file that main changed
+          # after the fork — e.g. registry/dependencies.yml — as "changed" by this PR, firing
+          # the gate on a file the author never touched (see #375). checkout uses fetch-depth: 0,
+          # so the merge-base is available.
+          base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          changed="$(git diff --name-only "$base" "$HEAD_SHA")"
 
           # A numbered ADR (docs/adr/NNNN-*.md — not README.md / template.md), or the registry.
           adr_touched="$(printf '%s\n' "$changed" | grep -E '^docs/adr/[0-9]{4}-.*\.md$' || true)"
