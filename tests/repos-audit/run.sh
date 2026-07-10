@@ -228,6 +228,75 @@ out="$(run 2>&1)" && rc=0 || rc=$?
   && ok "invisible repo -> exit 2 'not readable', not a fabricated gap" \
   || bad "invisible repo must not be reported as unwired" "rc=$rc: $out"
 
+# --- the SURFACE keeps the distinction the script draws (#327, i-followup of #266) ---
+# Every assertion above is about the script's exit code. The exit code is not what an operator reads:
+# they read the run's failing step. `run: bash scripts/repos-audit.sh` renders 1 and 2 as one
+# undifferentiated red X, so the script's careful "this result means nothing" is buried under a check
+# shaped exactly like a real finding — and a red that routinely lies stops being read (#270).
+#
+# So assert on the workflow: the two outcomes must reach a reader as different things, an inconclusive
+# run must not go green, and the `if:` predicates that classify rc must themselves be gated — an
+# unenumerated exit code is the same fail-open one layer up.
+shape="$(python3 - "$HERE/../.." <<'PY'
+import sys, pathlib, yaml
+
+root = pathlib.Path(sys.argv[1])
+wf = yaml.safe_load((root / ".github/workflows/repos-audit.yml").read_text())
+st = yaml.safe_load((root / ".github/workflows/repos-audit-selftest.yml").read_text())
+steps = wf["jobs"]["audit"]["steps"]
+bad = []
+
+# The audit step must capture the exit code rather than let it decide the job.
+audit = [s for s in steps if s.get("id") == "audit"]
+if not audit:
+    bad.append("no step with `id: audit` — nothing captures the audit's exit code")
+elif "GITHUB_OUTPUT" not in audit[0].get("run", ""):
+    bad.append("the audit step does not publish its rc to $GITHUB_OUTPUT; the raw exit code decides the job")
+
+# One classifying step per outcome the script can produce, each keyed on that rc.
+def classifier(rc):
+    return [s for s in steps if f"steps.audit.outputs.rc == '{rc}'" in str(s.get("if", ""))]
+
+for rc, must_fail in ((0, False), (1, True), (2, True)):
+    got = classifier(rc)
+    if len(got) != 1:
+        bad.append(f"exit {rc} is classified by {len(got)} step(s), want exactly 1")
+        continue
+    fails = "exit 1" in got[0].get("run", "")
+    if must_fail and not fails:
+        bad.append(f"exit {rc}'s step does not fail the job — 'could not check'/'is broken' must not go green")
+    if not must_fail and fails:
+        bad.append(f"exit {rc}'s step fails the job, but exit {rc} is a clean audit")
+
+# 1 and 2 must be *distinguishable at a glance*: different failing step names, different annotations.
+if classifier(1) and classifier(2):
+    n1, n2 = classifier(1)[0].get("name", ""), classifier(2)[0].get("name", "")
+    if n1 == n2:
+        bad.append("the wiring-gap and no-verdict steps share a name; the failing step is the glance signal")
+    if "INCONCLUSIVE" not in n2.upper():
+        bad.append(f"the no-verdict step's name does not say so: {n2!r}")
+    r1, r2 = classifier(1)[0].get("run", ""), classifier(2)[0].get("run", "")
+    if "title=" not in r1 or "title=" not in r2:
+        bad.append("both classifying steps must emit a titled ::error:: annotation")
+
+# The `if:` set is a scoping predicate. An rc it does not enumerate must still be caught, or a crashed
+# audit matches no classifier and the job goes green having audited nothing.
+if not any("cancelled()" in str(s.get("if", "")) and "audit.outputs.rc" in str(s.get("if", ""))
+           and "exit 1" in s.get("run", "") for s in steps):
+    bad.append("no catch-all step: an exit code no `if:` enumerates would leave the job green")
+
+# ...and this very assertion is only run when the selftest's paths: filter says so. If repos-audit.yml
+# is outside it, the workflow can be gutted and nothing re-checks its shape: the gate never runs.
+for trigger in ("pull_request", "push"):
+    if ".github/workflows/repos-audit.yml" not in st[True][trigger]["paths"]:
+        bad.append(f"repos-audit-selftest {trigger} paths: does not cover repos-audit.yml — this check would not run on an edit to it")
+
+print("\n".join(bad))
+PY
+)"
+[ -z "$shape" ] && ok "the workflow renders gap, no-verdict and crash as three distinguishable outcomes" \
+  || bad "repos-audit.yml collapses outcomes a reader must tell apart" "$shape"
+
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
 echo "repos-audit fixture — OK"
