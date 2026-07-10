@@ -5,11 +5,14 @@
 # as good as the declaration: a PR that quietly edits outside its touch-set is exactly how two items
 # the scheduler called "safe to run in parallel" end up as a merge conflict.
 #
-# This reports that drift. It does NOT block. ADR-0021 is explicit that the touch-set is "a
-# declaration, not an enforced boundary", and ADR-0027 keeps it that way — late-discovered work is
+# This reports that drift. The drift VERDICT does NOT block. ADR-0021 is explicit that the touch-set is
+# "a declaration, not an enforced boundary", and ADR-0027 keeps it that way — late-discovered work is
 # legitimate; silently *unannounced* late-discovered work is the problem. The remedy the comment points
 # at is `fsgg-coord widen`, which re-declares, re-checks against every live claim, and notifies the
 # workers it now collides with.
+#
+# Being unable to REACH a verdict is a different thing, and it fails the job (.github#318). "The
+# touch-set was checked and is fine" and "the touch-set was never checked" are not the same green.
 #
 # Scope: PRs whose head branch is `item/<n>-…` (the ADR-0021 isolation branch) or which close an issue.
 # Anything else has no touch-set to verify and exits clean.
@@ -40,24 +43,44 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # --warn: report drift, exit 0. The gate is advisory by decision, not by accident.
+          # --warn: report drift, exit 0. The gate is advisory by decision, not by accident. Under
+          # --warn EVERY verdict exits 0, so rc does not carry one: a non-zero rc means verify-paths
+          # never reached a verdict at all (gh auth, a rate-limited or 5xx API, absent jq/python3, a
+          # crash in fsgg-coord). Keep the rc instead of `|| true`-ing it away.
+          rc=0
           bash scripts/fsgg-coord verify-paths \
             --pr "${{ github.event.number }}" \
             --repo "${{ github.repository }}" \
-            --warn > drift.txt 2>&1 || true
+            --warn > drift.txt 2>&1 || rc=$?
           cat drift.txt
-          # Four verdicts. SKIP (no linked issue, or no declaration) must NOT read as a clean pass —
-          # and neither must INVALID (.github#273: the issue declared a `Paths:` token that can never
-          # match a file). INVALID is matched BEFORE the `else`, or it would land in `skip`, which
-          # DELETES the sticky comment and passes green — burying the one verdict that says the
-          # scheduler was reasoning about a touch-set reserving nothing.
+          # Record the output BEFORE classifying, so a fail-closed exit below still leaves the stack
+          # trace or HTTP error in the summary — that text is the whole diagnostic.
+          { echo '### Touch-set drift'; echo; echo '```'; cat drift.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+          # "I could not compute a verdict" is not "the verdict is: nothing to check" (.github#318,
+          # the same asymmetry #315 fixed in coordination-sync's roster gate). Both used to land in
+          # the `skip` bucket, which DELETES the sticky comment and passes green — so a transient 502
+          # across a busy merge window left the scheduler's disjointness guarantee unenforced on every
+          # concurrent PR, with nothing red and nothing commented to say so.
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::verify-paths exited $rc without reaching a verdict — this PR's touch-set was NOT checked."
+            exit 1
+          fi
+
+          # Four verdicts, each matched EXPLICITLY — nothing falls through to a default. SKIP (no
+          # linked issue, or no declaration) must not read as a clean pass, and neither must INVALID
+          # (.github#273: the issue declared a `Paths:` token that can never match a file, so it
+          # reserved nothing and `batch` cleared the item against everything). An rc-0 run that
+          # printed no `FSGG-PATHS *` marker did not check anything either: fail closed.
           if   grep -q 'FSGG-PATHS DRIFT'   drift.txt; then verdict=drift
           elif grep -q 'FSGG-PATHS INVALID' drift.txt; then verdict=invalid
           elif grep -q 'FSGG-PATHS OK'      drift.txt; then verdict=ok
-          else                                              verdict=skip
+          elif grep -q 'FSGG-PATHS SKIP'    drift.txt; then verdict=skip
+          else
+            echo "::error::verify-paths exited 0 but printed no FSGG-PATHS verdict — this PR's touch-set was NOT checked."
+            exit 1
           fi
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
-          { echo '### Touch-set drift'; echo; echo '```'; cat drift.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       # One sticky comment, addressed by its MARKER. `gh pr comment --edit-last` picks the actor's most
       # recent comment regardless of what it says, so in a repo where another GITHUB_TOKEN workflow also
@@ -67,6 +90,10 @@ jobs:
       # This step runs on EVERY verdict, including `skip`: a PR that drifted and then had its `Paths:`
       # declaration removed must not keep a stale ⚠️ asserting a violation of a declaration that no
       # longer exists. `skip` deletes the comment rather than leaving it to rot.
+      #
+      # It does NOT run when the check step above fails closed — no `if:`, so `success()` is implied,
+      # and that is load-bearing. An uncomputable verdict must never reach the deletion path: keeping
+      # a previous ⚠️ we can no longer re-verify beats erasing it on the strength of a 502.
       - name: Comment the verdict
         continue-on-error: true
         env:
