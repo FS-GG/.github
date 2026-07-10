@@ -138,10 +138,19 @@ A claimed item is worked on `item/<n>-<slug>` in its **own git worktree**, so pa
 share a working tree. `claim` prints the exact command.
 
 ```sh
-git worktree add ../<repo>-<n> -b item/<n>-<slug>
+git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main
 # ...work, commit, push, PR into main...
 git worktree remove ../<repo>-<n>
 ```
+
+The base ref is **not optional**. `git worktree add -b <new>` with no commit-ish branches from the
+shared checkout's `HEAD` — and the premise of this protocol is that N workers pass through that
+checkout, so its `HEAD` is routinely whatever unmerged branch the last one left. The item's PR then
+carries that branch's commits as well as its own, and nothing on the path warns: the touch-set
+declaration was honest, the *branch base* was not. At best `verify-paths` reports the resulting drift
+as an advisory — and only while the sibling branch is still unmerged. Once it lands on `main` first,
+GitHub computes the PR's diff against the new base, the foreign commits disappear from it, and nothing
+sees them at all (.github#319).
 
 Integration is by PR into a green `main`. Agents should prefer the harness's built-in worktree
 isolation (`isolation: "worktree"`), which is the same discipline managed for them. The worktree also
@@ -293,7 +302,7 @@ scripts/fsgg-coord batch --repo <r> -n 4
 # each worker, independently — named, isolated, and safe against a lost race:
 export FSGG_WORKER=finch-a3f                  # or let the worktree name it (§0 rule 3)
 scripts/fsgg-coord take --repo <r>            # pick + claim + print the worktree, retrying on a lost race
-git worktree add ../<repo>-<n> -b item/<n>-<slug>
+git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # name the base: HEAD is not `main` (§2)
 # ...implement; `heartbeat` if it runs long; `say`/`inbox` if work touches...
 scripts/fsgg-coord done <issue> --flip        # earn the stamp
 scripts/fsgg-coord release <issue>            # ...or hand it back
