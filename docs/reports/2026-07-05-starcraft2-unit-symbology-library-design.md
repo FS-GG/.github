@@ -116,7 +116,7 @@ edge / grid); the deliverable is the curated content + the discipline + the gate
 
 | # | Principle | What it means here |
 |---|---|---|
-| P1 | **The mapping is data; the engine is fixed** | Only `mapSc2Unit` (a pure `Sc2UnitStats -> Token`) is authored/tuned. We never fork `Symbology`/`Symbology.Render`. The unit of change in every loop iteration is the ChannelMap, never the grammar. |
+| P1 | **The mapping is data; the engine is fixed** | Only `mapSc2Unit` (a pure `float * float -> Sc2UnitStats -> Token`; it takes the token's centre because the caster `Mark` sigil is position-dependent, §5.4) is authored/tuned. We never fork `Symbology`/`Symbology.Render`. The unit of change in every loop iteration is the ChannelMap, never the grammar. |
 | P2 | **Roster is the source of truth** | The full unit corpus lives as data (`roster/{terran,protoss,zerg}.yml`), content-addressed to Liquipedia. Coverage/fidelity gates read *this*, not the code. |
 | P3 | **Legible beats complete** | SC2 has far more stats than the Token has pre-attentive channels. We *deliberately* route only the battle-relevant few to pop-out channels, push identity/economy detail to the `Label`/`AutoLabel` inspection channel, and **drop** the rest to tooltips. The linter enforces we don't overload. |
 | P4 | **Determinism under test** | Same roster + same mapping ⇒ byte-identical boards, across runs and OS/arch. Boards render headless; no device, no wall-clock, no hash-order nondeterminism. |
@@ -210,25 +210,69 @@ let DPS_CEIL = 40.0
 let SPEED_STEP = 1.0
 let hpMaxFor role = match role with "siege" | "capital" -> 500.0 | "core" -> 200.0 | _ -> 120.0
 
-let raceFaction = function Terran -> Custom 0 | Protoss -> Custom 1 | Zerg -> Custom 2
-let roleKlass  = function "worker" -> Scout | "siege" | "capital" -> Heavy | _ -> Mobile
-let roleSigil  = function
-    | "melee" -> Fang | "ranged" -> Bolt | "siege" -> Ring | "caster" -> Star | _ -> Bolt
+// §6's race palette. `Faction.Custom` carries a `Color`, not a palette index.
+let raceFaction =
+    function
+    | Terran -> Custom(Colors.rgb 74uy 124uy 178uy) // steel-blue
+    | Protoss -> Custom(Colors.rgb 214uy 170uy 54uy) // gold
+    | Zerg -> Custom(Colors.rgb 140uy 74uy 168uy) // violet-carapace
 
-// MAP — the ONLY thing the design loop edits
-let mapSc2Unit (u: Sc2UnitStats) : Token =
+let roleKlass  = function "worker" -> Scout | "siege" | "capital" -> Heavy | _ -> Mobile
+
+// The caster star is a `Mark`, and a `Mark`'s `PathSpec` is drawn in ABSOLUTE scene
+// coordinates — `sigilScene` hands it straight to `Scene.path`, without the centre/radius/
+// heading transform it applies to `Bolt`/`Fang`/`Ring`. So the star is a function of the
+// token's final centre and radius, which is why `mapSc2Unit` takes the centre below.
+let casterStar (cx: float) (cy: float) (r: float) : PathSpec =
+    let outer = r * 0.42 // `sigilScene`'s own sigil radius
+    let inner = outer * 0.40
+    let vertex i =
+        let theta = -System.Math.PI / 2.0 + float i * System.Math.PI / 5.0
+        let rad = if i % 2 = 0 then outer else inner
+        { X = cx + rad * cos theta; Y = cy + rad * sin theta }
+    let head = vertex 0
+    Path.create
+        Winding
+        ([ Path.moveTo head.X head.Y ]
+         @ [ for i in 1..9 -> let p = vertex i in Path.lineTo p.X p.Y ]
+         @ [ Path.close ])
+
+let roleSigil cx cy r = function
+    | "melee" -> Fang | "ranged" -> Bolt | "siege" -> Ring
+    | "caster" -> Mark(casterStar cx cy r)
+    | _ -> Bolt
+
+// MAP — the ONLY thing the design loop edits. It takes the token's centre because a `Mark`
+// sigil is position-dependent; boards therefore place tokens explicitly (§6) instead of
+// letting `Symbology.gallery` re-centre them, which would leave the star at the old centre.
+let mapSc2Unit (cx: float, cy: float) (u: Sc2UnitStats) : Token =
     let maxDps = max u.GroundDps u.AirDps
+    let r = 28.0
     { Symbology.defaultToken with
-        R        = 28.0
+        Cx       = cx
+        Cy       = cy
+        R        = r
         Faction  = raceFaction u.Race
         Klass    = roleKlass u.Role
-        Sigil    = roleSigil u.Role
+        Sigil    = roleSigil cx cy r u.Role
         Threat   = min 1.0 (maxDps / DPS_CEIL)
         Health   = float (u.Hp + u.Shields) / hpMaxFor u.Role
         Speed    = int (min 4.0 (u.Speed / SPEED_STEP))
         Shield   = u.Shields > 0 || u.Massive
         AutoLabel = Some(Symbology.autoLabel [ FactionCode; ThreatTier; SpeedPips ])
         Label    = Some(Symbology.plainLabel (sprintf "%s\n%d/%d · %g" u.Code u.Minerals u.Gas u.Supply)) }
+
+// PLACE — the roster wall, laid out explicitly. This is what `Symbology.gallery` would do,
+// except the centre reaches `mapSc2Unit` *before* the `Mark` sigil is built.
+let COLS = 8
+let SPACING = 80.0
+let cellCentre (i: int) : float * float =
+    (SPACING * (float (i % COLS) + 0.5), SPACING * (float (i / COLS) + 0.5))
+
+let raceBoard (grammar: Grammar) (roster: Sc2UnitStats list) : Scene =
+    roster
+    |> List.mapi (fun i u -> Symbology.render grammar (mapSc2Unit (cellCentre i) u))
+    |> Scene.group
 ```
 
 The `render → read PNG → tweak these constants and cases → repeat` loop is exactly the
@@ -247,16 +291,22 @@ The `render → read PNG → tweak these constants and cases → repeat` loop is
   already vends. These are the *only* saturated hues; state/inspection uses value, not new hues.
 - **Sigil families per role, coherent within a race.** Melee=fang, ranged=bolt, siege=ring,
   caster=star, air gets an elevated/winged variant. A race reads as a *family* because the
-  frame weight (`Klass`) and palette are shared; the sigil says the role.
+  frame weight (`Klass`) and palette are shared; the sigil says the role. Only the first three
+  are `Sigil` DU cases; **star and the winged variant are `Mark of PathSpec`** — the shipped
+  escape hatch — so the role vocabulary costs no new contract (§12).
 - **Grammar per view (one mapping, three drawings):**
   - **Badge** — the default for a **full-roster insignia wall** (upright, framed, dense);
     the "here is every Terran unit" board.
   - **Ring** — the **stat-forward comparison** view (radial gauges make Threat/Health/Speed
     read continuously); the "compare these three units" board.
   - **Token** — the **in-motion / heading** view for a hypothetical live battlefield.
-- **Boards produced:** `gallery` per race (roster wall), a cross-race `filmstrip`
-  (archetype-by-archetype comparison), and a `Ring` comparison of the "power" units. Every
-  board is a timestamped artifact under `readiness/symbology/`.
+- **Boards produced:** a per-race roster wall, a cross-race `filmstrip` (archetype-by-archetype
+  comparison), and a `Ring` comparison of the "power" units. Every board is a timestamped
+  artifact under `readiness/symbology/`. **Note:** `Symbology.gallery`/`galleryIn` re-centre
+  each token (`{ tk with Cx = cx; Cy = cy }`) without rebuilding its `Sigil`, so they cannot
+  lay out `Mark`-sigil tokens — the caster star would stay at the mapped centre while its body
+  moved. Walls containing casters place tokens explicitly and `Scene.group` the
+  `Symbology.render grammar` results; `filmstrip` has the same constraint.
 
 ---
 
@@ -315,7 +365,7 @@ orthogonal axes:
 |---|---|---|---|---|---|
 | **G1 — Coverage** | Deterministic | Every unit in `roster/*.yml` produces a Token; every race board contains exactly its roster. | `mapSc2Unit` is total over the roster; `board.units.Length == roster.Length` per race. | — |
 | **G2 — Channel-completeness** | Deterministic | Each unit encodes the **required** pop-out channels: `Faction`, `Klass`, `Threat`, `Health`, `Speed` **non-default**; `Label`/`AutoLabel` present. | A Token leaves a *required* channel at `defaultToken` (e.g. Threat 0 for a combat unit, no label). | `defaultToken` diff + per-role required-set policy. |
-| **G3 — Legibility** | Deterministic | Each race board (and the cross-race filmstrip) lints `Clean`. | `Legibility.score (roster |> List.map mapSc2Unit)` returns `Warning`/`Error`. | **The existing linter**, surfaced as a governance check via `tooling.yml`. |
+| **G3 — Legibility** | Deterministic | Each race board (and the cross-race filmstrip) lints `Clean`. | `Legibility.score (roster |> List.mapi (fun i u -> mapSc2Unit (cellCentre i) u))` returns `Warning`/`Error`. | **The existing linter**, surfaced as a governance check via `tooling.yml`. |
 | **G4 — Fidelity** | Deterministic | Encoded stats trace back to source; no hand-edited numbers. | A roster row's `sha256` ≠ its `SOURCES.yml` entry, or a value is out of domain (negative HP, DPS > ceiling×N). | The `sha256`/`SOURCES.yml` manifest pattern from the audio `LICENSES.yml` gate. |
 | **G5 — Determinism** | Deterministic | Re-rendering an unchanged mapping is byte-identical. | Two runs of the board diverge (hash-order / wall-clock / float nondeterminism leaked in). | `Render.toPng` + golden PNG hash in a cross-platform matrix. |
 | **G6 — Aesthetic sign-off** *(opt.)* | AgentReviewed | The eye critique (§9) records a pass on crowding/contrast/race-separation. | The agent's read-the-PNG-back verdict is negative and no override is recorded. | The kernel's `AgentReviewed` tier — a first-class, provenance-tracked non-deterministic check. |
@@ -393,7 +443,7 @@ Phased; each phase independently shippable. Sizes rough (S ≈ days, M ≈ 1–2
 | Phase | Deliverable | Effort | Notes / risk |
 |---|---|---|---|
 | **P0 — Corpus + intake** | `roster/*.yml` for one race (Terran) + `Sc2Roster.fs` + `SOURCES.yml`. | **S** | Data entry from Liquipedia; the schema §4 is fixed. Low risk, immediately useful. |
-| **P1 — First mapping + boards** | `mapSc2Unit` (§5), `Sc2Palette`, per-race gallery + Ring comparison, first `readiness/` snapshot. | **S–M** | The core design tension (Tier A/B/C) is resolved here via the loop. Reuses the whole engine. |
+| **P1 — First mapping + boards** | `mapSc2Unit` (§5), `Sc2Palette`, per-race roster wall (`raceBoard`, not `Symbology.gallery` — §6) + Ring comparison, first `readiness/` snapshot. | **S–M** | The core design tension (Tier A/B/C) is resolved here via the loop. Reuses the whole engine. |
 | **P2 — Governance gate-set** | `.fsgg/` gate-set (`governance/policy/capabilities/tooling.yml`) + the `gates/` check executables; applied via the `fs-gg-governance` overlay; `route --mode gate` blocking in CI; golden board hashes in a cross-platform matrix. | **M** | Hard dependency on `fsgg-governance` + `ReferenceGateSet`. G3 is `Legibility.score` reused; G4 is the sha256 manifest; G1/G2 small pure checks. Risk is gate-set schema authoring, not the checks. The explicit ask. |
 | **P3 — All three races + filmstrip** | Complete Protoss + Zerg rosters; cross-race archetype filmstrip; generated data-sheet for Tier-C. | **M** | Data entry + a few race-conditional mapping cases (shields, massive). Coverage gate turns green when complete. |
 | **P4 — Agent loop + optional skill** | Documented autonomous loop (§9); optional `fs-gg-sc2-roster` product-skill encoding the policy + gate list. | **S–M** | Mostly prose + a thin skill; proves the "rapidly design and iterate" claim end-to-end. |
@@ -433,7 +483,11 @@ project is **content + a mapping + five gates**, not a library build.
   `AudioEffect` variants), this project changes **nothing** in the `fs-gg-symbology`
   capability surface. It is a pure consumer. If the loop reveals a genuinely missing Token
   channel, *that* would be a Rendering surface-bump + `.github` registry reconcile — but the
-  design goal is explicitly to fit within the existing channel budget (P3).
+  design goal is explicitly to fit within the existing channel budget (P3). Concretely: the
+  shipped `Sigil` DU is `Bolt | Ring | Fang | Mark of PathSpec` — there is **no `Star` case**,
+  and the caster sigil is a `Mark` (§5.4, §6), not an additive variant. The cost of staying
+  inside the contract is that `Mark` is drawn in absolute scene coordinates, so `Mark`-bearing
+  tokens must be positioned before their sigil is built and cannot use `gallery` (§6).
 - **Governance stance.** The gates are a **hard, blocking `FS.GG.Governance` gate-set** (P5,
   §8): the product *requires* a green `fsgg-governance route --mode gate` to merge/ship. This
   is a *product-level* opt-in and does **not** contradict `architecture.md`'s framework rule
