@@ -148,12 +148,22 @@ is_co_tenant() {
 # A deliberately TINY boolean language over the scaffold parameters, mirrored 1:1 by the typed
 # validator so shell and F# never drift:  always | <clause> [ (and|or) <clause> ]...  where a
 # clause is  <param> == <value> | <param> != <value> | <param> in [<v>, <v>, ...].  No parentheses;
-# `and` binds tighter than `or` (evaluated: OR of ANDs of clauses). Values and params are bare
-# tokens ([A-Za-z0-9_-], plus true/false); a param absent from --params reads as the empty string,
-# so `== <v>` is false and `!= <v>` is true. PARAM[] is populated from .effectiveParameters below.
+# `and` binds tighter than `or` (evaluated: OR of ANDs of clauses). Params are bare tokens; a value
+# is a bare token ([A-Za-z0-9_-], plus true/false) OR a double-quoted literal `"..."`. A param absent
+# from --params reads as the empty string, so `== <v>` is false and `!= <v>` is true. PARAM[] is
+# populated from .effectiveParameters below.
+#
+# A value's quotes are DELIMITERS, not bytes: `normalize_when` (fsgg-skill-registry-check) preserves
+# a quoted literal verbatim into the manifest precisely so this gate parses it, and PARAM[] values
+# arrive UNQUOTED (jq `tostring`) — so a quoted literal must be compared by its INNER bytes. `unquote`
+# strips one matched surrounding pair; without it `profile == "game"` compares `game` against the
+# 6-byte string `"game"` and is ALWAYS FALSE — a fail-open for the [missing]/[unexpected] classes.
+# (The ` and `/` or ` clause split and the `in [...]` comma split are not literal-aware, so a value
+# containing those separators must be a bare token — every real registry row already is.)
 declare -A PARAM=()
 
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
+unquote() { local s="$1"; if [ "${#s}" -ge 2 ] && [ "${s:0:1}" = '"' ] && [ "${s: -1}" = '"' ]; then s="${s:1:${#s}-2}"; fi; printf '%s' "$s"; }
 
 # Evaluate a single comparison clause. Returns 0 (true) / 1 (false); dies (2) on an unparseable clause.
 eval_clause() {
@@ -165,7 +175,7 @@ eval_clause() {
     rhs="${c#*[}"; rhs="${rhs%]}"                    # contents between [ and ]
     local IFS=',' item_t
     for item in $rhs; do
-      item_t="$(trim "$item")"
+      item_t="$(unquote "$(trim "$item")")"
       [ -n "$item_t" ] || continue                   # skip empties (a trailing/doubled comma) — an
                                                      # empty token must never match an unset param
       [ "${PARAM[$key]-}" = "$item_t" ] && return 0
@@ -173,11 +183,11 @@ eval_clause() {
     return 1
   fi
   if [[ "$c" == *"!="* ]]; then
-    key="$(trim "${c%%!=*}")"; rhs="$(trim "${c#*!=}")"
+    key="$(trim "${c%%!=*}")"; rhs="$(unquote "$(trim "${c#*!=}")")"
     [ "${PARAM[$key]-}" != "$rhs" ]; return
   fi
   if [[ "$c" == *"=="* ]]; then
-    key="$(trim "${c%%==*}")"; rhs="$(trim "${c#*==}")"
+    key="$(trim "${c%%==*}")"; rhs="$(unquote "$(trim "${c#*==}")")"
     [ "${PARAM[$key]-}" = "$rhs" ]; return
   fi
   die "unparseable materializes-when clause: '$c'"

@@ -258,6 +258,87 @@ EMPTY="$WORK/cond-empty"
 for r in $ROOTS; do mkdir -p "$EMPTY/$r"; done          # roots present but hold no skills
 expect_fail "condition-aware [missing] survives an empty union (not masked by the misconfig die)" missing "$EMPTY" --manifest "$MAN_MISS" --params "$PROV"
 
+# --- 7g-7i. predicate-grammar coverage (#385) --------------------------------------------------
+# The materializes-when evaluator claims to mirror `normalize_when` 1:1, but three constructs
+# (`!=`, `or`, bare true/false) were exercised by no fixture, and a QUOTED string literal was
+# ALWAYS FALSE — the RHS kept its surrounding quotes (`"game"`) while PARAM values arrive unquoted
+# (`game`), so every quoted predicate mis-evaluated to false. That is a fail-open: a required skill
+# reads as not-required. These cases pin each construct in BOTH truth directions.
+PROV_G="$WORK/prov-grammar.json"
+cat > "$PROV_G" <<'EOF'
+{ "effectiveParameters": { "profile": "game", "lifecycle": "spec-kit", "feedback": true, "title": "Acme Corp" } }
+EOF
+
+# 7g. TRUE direction: quoted ==, quoted !=, quoted in[], or, bare true, and a quoted value WITH A
+#     SPACE (`"Acme Corp"` — only a quoted literal can carry one) all evaluate TRUE, so every
+#     present skill passes the digest check → PASS. Before the unquote fix each quoted predicate is
+#     false, turning its skill [unexpected] and reddening this PASS — the regression this pins.
+GRAM="$WORK/grammar-true"; build_good "$GRAM"
+for r in $ROOTS; do
+  for s in q-eq q-ne q-in disj lit spc; do mk_skill "$GRAM/$r" "$s" "# $s"; done
+done
+MAN_GRAM="$WORK/man-grammar-true.json"
+cat > "$MAN_GRAM" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$GRAM/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$GRAM/.claude/skills/beta")",  "materializes-when": "always" },
+  { "id": "q-eq", "scope": "product", "sha256": "$(digest "$GRAM/.claude/skills/q-eq")", "materializes-when": "profile == \"game\"" },
+  { "id": "q-ne", "scope": "product", "sha256": "$(digest "$GRAM/.claude/skills/q-ne")", "materializes-when": "profile != \"app\"" },
+  { "id": "q-in", "scope": "product", "sha256": "$(digest "$GRAM/.claude/skills/q-in")", "materializes-when": "profile in [\"app\", \"game\"]" },
+  { "id": "disj", "scope": "product", "sha256": "$(digest "$GRAM/.claude/skills/disj")", "materializes-when": "profile == app or profile == game" },
+  { "id": "lit",  "scope": "product", "sha256": "$(digest "$GRAM/.claude/skills/lit")",  "materializes-when": "true" },
+  { "id": "spc",  "scope": "product", "sha256": "$(digest "$GRAM/.claude/skills/spc")",  "materializes-when": "title == \"Acme Corp\"" }
+] }
+EOF
+expect_pass "grammar TRUE: quoted ==, !=, in[], or, bare true, quoted-space all evaluate true (present∧true)" "$GRAM" --manifest "$MAN_GRAM" --params "$PROV_G"
+
+# 7h. Fail-open from the ABSENT direction: a required skill whose quoted-literal predicate is TRUE
+#     but which is materialized in NO root must be [missing]. Pre-fix, `profile == "game"` was
+#     always false, so the dropped skill read as a justified off-profile omission and shipped
+#     silently — the same fail-open as 7g, caught from the opposite side.
+QMISS="$WORK/grammar-missing"; build_good "$QMISS"        # alpha + beta present; q-req absent
+MAN_QMISS="$WORK/man-grammar-missing.json"
+cat > "$MAN_QMISS" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$QMISS/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$QMISS/.claude/skills/beta")",  "materializes-when": "always" },
+  { "id": "q-req", "scope": "product", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "materializes-when": "profile == \"game\"" }
+] }
+EOF
+expect_fail "grammar: quoted-literal-true on an ABSENT required skill ⇒ [missing] (fail-open catch)" missing "$QMISS" --manifest "$MAN_QMISS" --params "$PROV_G"
+
+# 7i. FALSE direction, per construct: each present skill whose predicate is FALSE must be flagged
+#     [unexpected]. Asserting EACH id (not just that some [unexpected] appears) stops one construct's
+#     correct failure from masking another's mis-evaluation — and pins that `unquote` did not invert
+#     a quoted `!=` (`profile != "game"` must stay FALSE when profile==game, which the pre-fix code
+#     got wrong, reading `game != "game"` as true).
+GFALSE="$WORK/grammar-false"; build_good "$GFALSE"
+for r in $ROOTS; do
+  for s in f-eq f-ne f-or f-lit; do mk_skill "$GFALSE/$r" "$s" "# $s"; done
+done
+MAN_GFALSE="$WORK/man-grammar-false.json"
+cat > "$MAN_GFALSE" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$GFALSE/.claude/skills/alpha")", "materializes-when": "always" },
+  { "id": "beta",  "scope": "product", "sha256": "$(digest "$GFALSE/.claude/skills/beta")",  "materializes-when": "always" },
+  { "id": "f-eq",  "scope": "product", "sha256": "$(digest "$GFALSE/.claude/skills/f-eq")",  "materializes-when": "profile == \"app\"" },
+  { "id": "f-ne",  "scope": "product", "sha256": "$(digest "$GFALSE/.claude/skills/f-ne")",  "materializes-when": "profile != \"game\"" },
+  { "id": "f-or",  "scope": "product", "sha256": "$(digest "$GFALSE/.claude/skills/f-or")",  "materializes-when": "profile == app or profile == sample-pack" },
+  { "id": "f-lit", "scope": "product", "sha256": "$(digest "$GFALSE/.claude/skills/f-lit")", "materializes-when": "false" }
+] }
+EOF
+rc=0
+bash "$ASSERT" --product "$GFALSE" --roots "$ROOTS" --manifest "$MAN_GFALSE" --params "$PROV_G" >"$WORK/out" 2>&1 || rc=$?
+notflagged=""
+for s in f-eq f-ne f-or f-lit; do
+  grep -q "::error::\[unexpected\] skill '$s'" "$WORK/out" || notflagged="$notflagged $s"
+done
+if [ "$rc" -eq 1 ] && [ -z "$notflagged" ]; then
+  echo "PASS  (expected [unexpected] fail) grammar FALSE: quoted ==, quoted !=, all-false or, bare false each [unexpected]"; pass=$((pass+1))
+else
+  echo "FAIL  grammar FALSE direction (want rc=1 + every construct flagged; got rc=$rc, unflagged:$notflagged)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
 # --- a usage error is a misconfiguration (exit 2), never a union violation (exit 1) (#350) ---
 # Every flag used to take its value through bash's `${2:?…}`, which exits 1 — the code this script
 # reserves for "the union is violated". A typo'd command line reported itself as the very finding the
