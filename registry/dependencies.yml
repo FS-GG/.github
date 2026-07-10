@@ -409,6 +409,11 @@ contracts:
     # AudioEffect from the retired FS.GG.UI.Canvas surface) with the real playback realization.
     surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge"
     consumers: [audio, rendering]   # audio: WITHIN the component (sample app + test suites). rendering: the template game/sample-pack profiles (ADR-0024 step 3, .github#238, FS.GG.Rendering#156 wired / #162 released). A scaffolded product receives the packages through the template, so Templates consumes them TRANSITIVELY via fs-gg-ui-template — no direct templates→audio edge.
+  - id: keyboard-input
+    version: "0.5.0"          # Rendering-owned keyboard input-config SURFACE — the FS.GG.UI.KeyboardInput Keymap value type + rebind operations (FS.GG.Rendering#331), public Keymap.resolve + conflict diagnostics (FS.GG.Rendering#332), and the input-config-screen surface. FIRST available at the fs-gg-ui coherent-set version 0.5.0 (FS.GG.UI.KeyboardInput 0.5.0; every prior published version predated the Keymap merge). Registered per .github#365 (ADR-0028: the keyboard input-config mechanism/policy boundary). NO separate `package-version` here: the package (FS.GG.UI.KeyboardInput) is a member of the fs-gg-ui coherent set already tracked by the `fs-gg-ui-template` contract (pin == 0.5.0) — this row versions the consumed SURFACE, not a second package delivery. check-feed-coherence therefore leaves it out of the package-bearing set (correct — no double-count).
+    owner: rendering
+    surface: "FS.GG.UI.KeyboardInput public .fsi — Keymap (value type + rebind ops), Keymap.resolve + conflict diagnostics, keyboard input-config-screen surface; ships in the fs-gg-ui coherent set (FS.GG.UI.KeyboardInput package)"
+    consumers: [game]         # FS.GG.Game.Render's default command→key keymap consumes the Keymap surface (FS.GG.Game#109 / PR #115, merged 2026-07-10 against the published 0.5.0). Establishes a SECOND game -> rendering edge (see dependencies:), alongside game-scene-adapter -> FS.GG.UI.Scene.
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
@@ -442,7 +447,8 @@ dependencies:
   # at 0.2.0 until FS.GG.Templates#119 moved the pin.
   - { from: rendering, to: audio,      via: "fs-gg-audio@0.1.0 (FS.GG.Audio.Core/.Host/.Engine/.Elmish — template game/sample-pack audio realization, on the $(FsGgAudioVersion) axis; gated `game || sample-pack`)" }
   # ADR-0022 §2: the render edge. FS.GG.Game.Render (the Scene adapter) reaches UP to Rendering's Scene.
-  - { from: game,      to: rendering,  via: "game-scene-adapter@0.1.0-preview.1 -> FS.GG.UI.Scene@0.2.0-preview.1 (adapter projects sim state onto Scene drawables; the one Game -> Rendering edge)" }
+  - { from: game,      to: rendering,  via: "game-scene-adapter@0.1.0-preview.1 -> FS.GG.UI.Scene@0.2.0-preview.1 (adapter projects sim state onto Scene drawables; a Game -> Rendering edge)" }
+  - { from: game,      to: rendering,  via: "keyboard-input@0.5.0 -> FS.GG.UI.KeyboardInput@0.5.0 (FS.GG.Game.Render default command→key keymap consumes the Keymap surface; FS.GG.Game#109 / PR #115, merged against the published stable 0.5.0; .github#365, ADR-0028)" }
   - { from: templates, to: sdd,        via: "scaffold-provider@1 + SDD skeleton (min fsgg-sdd 0.4.0, orchestrator axis — ADR-0008)" }
   - { from: templates, to: governance, via: "governance-policy@1 / capabilities@2 / tooling@1 config" }
   - { from: templates, to: governance, via: "governance-reference-gate-set@1.2.1.1 (content package — overlay drift-gate source of truth, Templates#14)" }

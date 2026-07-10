@@ -464,6 +464,7 @@ The contracts that hold the system together:
 | `game-sim-core` | Game | the `FS.GG.Game.Core` package (BCL-only sim bottom layer, `$(FsGgGameVersion)` axis) | Rendering (template `game`/`sample-pack`) |
 | `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
 | `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |
+| `keyboard-input` | Rendering | the `FS.GG.UI.KeyboardInput` `Keymap` surface (value type + rebind + `Keymap.resolve`/conflict diagnostics; ships in the fs-gg-ui coherent set @ `0.5.0`, [ADR-0028](adr/0028-keyboard-input-config-mechanism-policy-boundary.md)) | Game (`FS.GG.Game.Render` default command→key keymap) |
 | `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` | all component repos |
 | `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
 | `skill-registry` | **.github** | [`registry/skills.yml`](../registry/skills.yml) — the org's authoritative skill catalog (process + product; `id`, `scope`, `owner`, canonical-body `sha256`, `materializes-when`), reconciled from the producer skill-manifests (ADR-0017) | **.github** (the union gate + registry validation) |
@@ -481,7 +482,7 @@ channel in FS.GG.Rendering#238, alongside `game-sim-core`@`0.2.0`; [ADR-0024](ad
 [.github#238](https://github.com/FS-GG/.github/issues/238)): Rendering's template `game`/`sample-pack`
 profiles reach *up* to two BCL-only bottom layers that are siblings of Rendering and themselves reach
 up to nothing (`FS.GG.Game.Core` on the `$(FsGgGameVersion)` axis; `FS.GG.Audio.*` on
-`$(FsGgAudioVersion)`). **Game → Rendering** (`game-scene-adapter`) is the one edge back down. A
+`$(FsGgAudioVersion)`). **Game → Rendering** now runs over two contracts back down: `game-scene-adapter` (`FS.GG.Game.Render` projects sim state onto `FS.GG.UI.Scene` drawables) and — since [.github#365](https://github.com/FS-GG/.github/issues/365) / [ADR-0028](adr/0028-keyboard-input-config-mechanism-policy-boundary.md) — `keyboard-input` (`FS.GG.Game.Render`'s default command→key keymap consumes `FS.GG.UI.KeyboardInput`'s `Keymap` surface @ `0.5.0`; [FS.GG.Game#109](https://github.com/FS-GG/FS.GG.Game/issues/109)). A
 scaffolded product receives all of these through the template, so Templates consumes them
 transitively — there is no `templates → game` or `templates → audio` edge.
 
