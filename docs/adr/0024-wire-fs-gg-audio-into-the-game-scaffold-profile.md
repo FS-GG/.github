@@ -1,6 +1,6 @@
 # ADR-0024: Wire FS.GG.Audio into the game/sample-pack scaffold profile
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-07
 - **Affects:** **FS.GG.Rendering** (owner of the `fs-gg-ui` template — adds the `$(FsGgAudioVersion)` axis + 4 pins/refs under the game/sample-pack gate; and the donor that must retire `FS.GG.UI.Canvas.Audio` — a breaking surface change + coherent-set release), **FS.GG.Audio** (the producer; `FS.GG.Audio.Core` becomes the platform's single audio request vocabulary), **FS.GG.Game** (owner of the record-only `fs-gg-audio` skill — re-points its taught surface `Canvas.Audio` → `FS.GG.Audio.Core` + regenerates the skill-manifest sha256), **.github** (this ADR + the later `fs-gg-audio` package **consumer edge** in `registry/dependencies.yml` + compatibility projection + architecture-map reconcile)
 
@@ -121,9 +121,10 @@ builds, degrade-to-zero) must survive all three.
   and owned by #158; acceptable while the platform is at `-preview`.
 
 - **CI feed availability.** The generated-product restore needs FS.GG.Audio on a feed the
-  gate reads. The **nuget.org dual-publish** (ADR-0012/0013) is still pending the org Trusted
-  Publishing policy + `NUGET_USER` secret; until it lands, CI restore of a scaffolded game
-  may fail closed. Tracked as its own epic child.
+  gate reads. The **nuget.org dual-publish** (ADR-0012/0013) is now **live** via the org
+  Trusted Publishing policy `fs-gg-audio-publishing` (OIDC, no stored key), so `fs-gg-audio`
+  is restorable from nuget.org and CI restore of a scaffolded game no longer fails closed on
+  feed availability.
 
 - **Design-report reconciliation.** The report's `FS.GG.UI.Audio`-under-Rendering placement
   is **superseded** by the as-built standalone `FS.GG.Audio` repo; the report's *backend /

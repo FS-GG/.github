@@ -1,6 +1,6 @@
 # ADR-0022: Extract FS.GG.Game as an SDD-driven component
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-06
 - **Affects:** **.github** (this ADR + roster row + registry contracts + architecture map 5→6 + skill-ownership migration), **FS.GG.Rendering** (donor — Canvas + Scene majors, frozen `--profile game`), **FS-GG/FS.GG.Game** (new repo), **FS.GG.SDD** (dogfood lifecycle host — defines the provider-less "dev-repo" provenance shape)
 
