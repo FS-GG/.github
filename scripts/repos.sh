@@ -11,7 +11,7 @@
 #   repos.sh validate [--registry <file>] [--root <dir>]   # schema + invariants + kit digests
 #   repos.sh list --receives <cap> [--field id|full] [--registry <file>]
 #                                                           # roster query for consumers (apply-labels …)
-#   repos.sh kit [--field id|kind|source] [--registry <file>]
+#   repos.sh kit [--field id|kind|source] [--kind skill|client] [--registry <file>]
 #                                                           # the kit item list, in roster order
 #   repos.sh digest <path>                                  # reference digest: skill dir -> sha256 of its
 #                                                           # SKILL.md; file -> sha256 of the file
@@ -84,17 +84,20 @@ cmd_list() {
 # title) read it from here rather than hardcoding — the roster is the one place the kit is defined,
 # and a kit item added there must not need an edit in every fabric that mentions it.
 cmd_kit() {
-  local field="id" reg="$REG_DEFAULT"
+  local field="id" kind="" reg="$REG_DEFAULT"
   while [ $# -gt 0 ]; do
     case "$1" in
       --field)    field="${2:?--field needs a value}"; shift 2 ;;
+      --kind)     kind="${2:?--kind needs a value}"; shift 2 ;;
       --registry) reg="${2:?--registry needs a value}"; shift 2 ;;
       *)          die "kit: unknown arg '$1'." ;;
     esac
   done
   case "$field" in id|kind|source) ;; *) die "kit: --field must be id, kind or source." ;; esac
+  case "$kind" in ""|skill|client) ;; *) die "kit: --kind must be skill or client." ;; esac
   [ -f "$reg" ] || die "registry not found: $reg"
-  yaml2json "$reg" | jq -r --arg f "$field" '(.kit // [])[] | .[$f]'
+  yaml2json "$reg" | jq -r --arg f "$field" --arg k "$kind" \
+    '(.kit // [])[] | select($k == "" or .kind == $k) | .[$f]'
 }
 
 cmd_validate() {
