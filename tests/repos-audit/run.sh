@@ -8,6 +8,11 @@
 # It also covers the audit's SURFACE — .github/workflows/repos-audit.yml — because an exit code the
 # workflow collapses is an exit code the operator never sees (#327). The workflow's own `run:` block
 # is extracted and executed, as tests/touch-set-drift/run.sh does. Pure-stdlib + PyYAML.
+#
+# The audit reports four outcomes: 0 wired, 1 a gap, 2 no verdict (retryable), 3 no verdict
+# (permanent). 2 and 3 were one code until #335, so the workflow told them apart by grepping the
+# script's prose; the legs below pin the exit codes AND assert the workflow never reads that prose
+# again — including the two crossed cases a grep gets wrong.
 
 set -euo pipefail
 
@@ -137,15 +142,19 @@ printf '%s' "$out" | grep -q 'FS-GG/.github receives' \
 # --- fails closed when the roster is unreachable or empty (#316, child (h) of #266) ---
 # Both legs assert on the REASON string, not a bare exit code: a script that dies for an unrelated
 # reason would otherwise satisfy a plain `rc != 0` and the fixture would stop testing its own claim.
+#
+# They assert exit 3, not 2: a roster that will not parse is a PERMANENT no-verdict, and a caller must
+# be able to tell it from a rate limit without grepping prose (#335). Exit 2 is reserved for the
+# retryable flavour — legs (4), (6), (8), (9) below.
 
 # (1) enumerator dies (malformed registry) -> misconfig, NOT "every declared receiver is wired".
 # No `wire`/`unwired` setup: the audit must die at the roster, before it ever reaches the gh stub.
 BADREG="$WORK/bad.yml"; printf 'schemaVersion: 1\nrepos: [ {id: x,\n' > "$BADREG"
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'cannot enumerate receivers' \
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'cannot enumerate receivers' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
-  && ok "unreadable roster -> exit 2, names the enumeration failure" \
-  || bad "unreadable roster must fail closed" "rc=$rc: $out"
+  && ok "unreadable roster -> exit 3 (permanent), names the enumeration failure" \
+  || bad "unreadable roster must fail closed, permanently" "rc=$rc: $out"
 
 # (2) enumerator succeeds but yields no receivers at all -> vacuous pass is an error
 EMPTYREG="$WORK/empty.yml"; cat > "$EMPTYREG" <<'YAML'
@@ -156,10 +165,36 @@ repos:
   - { id: .github, full: FS-GG/.github, role: authority, receives: [labels] }
 YAML
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$EMPTYREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'audited 0 receiver-capability pair' \
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'audited 0 receiver-capability pair' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
-  && ok "audited nothing -> exit 2, not a vacuous OK" \
-  || bad "empty audit must fail closed" "rc=$rc: $out"
+  && ok "audited nothing -> exit 3 (permanent), not a vacuous OK" \
+  || bad "empty audit must fail closed, permanently" "rc=$rc: $out"
+
+# (2b) a bad invocation is a permanent no-verdict too. `${2:?…}` exited 1 — indistinguishable from
+#      "a declared receiver is unwired", so a typo'd flag reported itself as the finding this gate
+#      exists to produce. Nothing asserted the exit code of a usage error, so nothing noticed.
+for badarg in "--registry" "--nonesuch"; do
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" "$badarg" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 3 ] && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+    && ok "usage error ('$badarg') -> exit 3, never 1 (a wiring gap)" \
+    || bad "usage error must not masquerade as a wiring gap" "arg=$badarg rc=$rc: $out"
+done
+
+# (2c) `--help` must document the exit contract it actually implements. The old `--help` printed a
+#      hardcoded line range that stopped one line short of the `Exit:` block, so it described
+#      everything about this script except the codes a caller keys on — and nothing noticed, because
+#      no test read it. A usage block that silently omits its own contract is the epic's rule applied
+#      to documentation: the record of the behaviour stood in for the behaviour.
+help_out="$(bash "$AUDIT" --help 2>&1)" && hrc=0 || hrc=$?
+help_missing=""
+for spec in "0 = every declared receiver is wired" "1 = at least one gap" \
+            "2 = no verdict, RETRYABLE" "3 = no verdict, PERMANENT"; do
+  printf '%s' "$help_out" | grep -qF "$spec" || help_missing="$help_missing
+  missing: $spec"
+done
+{ [ "$hrc" -eq 0 ] && [ -z "$help_missing" ]; } \
+  && ok "--help exits 0 and documents all four exit codes" \
+  || bad "--help does not document the exit contract it implements" "rc=$hrc$help_missing"
 
 # (3) the guards did not break the healthy path: a real audit still reports what it examined
 wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
@@ -270,7 +305,7 @@ elif not runs(audit[0], r'>>\s*"\$GITHUB_OUTPUT"'):
 def classifier(rc):
     return [s for s in steps if f"steps.audit.outputs.rc == '{rc}'" in str(s.get("if", ""))]
 
-for rc, must_fail in ((0, False), (1, True), (2, True)):
+for rc, must_fail in ((0, False), (1, True), (2, True), (3, True)):
     got = classifier(rc)
     if len(got) != 1:
         bad.append(f"exit {rc} is classified by {len(got)} step(s), want exactly 1")
@@ -281,21 +316,57 @@ for rc, must_fail in ((0, False), (1, True), (2, True)):
     if not must_fail and fails:
         bad.append(f"exit {rc}'s step fails the job, but exit {rc} is a clean audit")
 
-# 1 and 2 must be *distinguishable at a glance*: different failing step names, different annotations.
-if classifier(1) and classifier(2):
-    n1, n2 = classifier(1)[0].get("name", ""), classifier(2)[0].get("name", "")
-    if n1 == n2:
-        bad.append("the wiring-gap and no-verdict steps share a name; the failing step is the glance signal")
-    if "INCONCLUSIVE" not in n2.upper():
-        bad.append(f"the no-verdict step's name does not say so: {n2!r}")
-    if not all(runs(c, r"::error title=") for c in (classifier(1)[0], classifier(2)[0])):
-        bad.append("both classifying steps must emit a titled ::error:: annotation")
+# 1, 2 and 3 must be *distinguishable at a glance*: different failing step names, different
+# annotations. 2 and 3 are both no-verdicts, so both must SAY so — but they must not say only that,
+# because their remedies are opposites: re-run the workflow vs. commit a fix to the roster.
+names = {rc: classifier(rc)[0].get("name", "") for rc in (1, 2, 3) if classifier(rc)}
+if len(names) == 3:
+    if len(set(names.values())) != 3:
+        bad.append(f"the gap / retryable / permanent steps must not share a name: {names}")
+    for rc in (2, 3):
+        if "INCONCLUSIVE" not in names[rc].upper():
+            bad.append(f"exit {rc}'s step name does not say it reached no verdict: {names[rc]!r}")
+    if not all(runs(classifier(rc)[0], r"::error title=") for rc in (1, 2, 3)):
+        bad.append("every classifying step must emit a titled ::error:: annotation")
+
+# The retry must key on the EXIT CODE, not on the script's prose (#335). A `grep` of the audit's
+# output re-creates the exact coupling this item removed: reword the diagnostic, and the workflow
+# either stops retrying a rate limit or starts retrying an unparseable roster for 15 minutes.
+if audit:
+    body = cmds(audit[0])
+    if re.search(r"grep[^\n]*could not determine", body):
+        bad.append("the audit step greps the script's prose to decide whether to retry; key on the exit code (#335)")
+    if not re.search(r'"\$rc"\s+-eq\s+2', body):
+        bad.append("the audit step does not gate its retry on rc == 2; only the retryable no-verdict may be retried")
+    if re.search(r'"\$rc"\s+-eq\s+3', body):
+        bad.append("the audit step retries on rc == 3, which is the PERMANENT no-verdict — re-running cannot change it")
 
 # The `if:` set is a scoping predicate. An rc it does not enumerate must still be caught, or a crashed
 # audit matches no classifier and the job goes green having audited nothing.
-if not any("cancelled()" in str(s.get("if", "")) and "audit.outputs.rc" in str(s.get("if", ""))
-           and runs(s, r"^\s*exit 1\s*$") for s in steps):
+catchall = [s for s in steps if "cancelled()" in str(s.get("if", "")) and "audit.outputs.rc" in str(s.get("if", ""))
+            and runs(s, r"^\s*exit 1\s*$")]
+if not catchall:
     bad.append("no catch-all step: an exit code no `if:` enumerates would leave the job green")
+else:
+    # ...and the catch-all's OWN enumeration must be exactly the set of classified codes. That list is
+    # hand-maintained, which is the same fail-open one layer up. A code listed there with no
+    # classifier matches NOTHING — not a classifier, and not the catch-all that excluded it — so the
+    # job goes green having audited nothing. A classified code missing from it double-reports
+    # instead, telling the operator the workflow does not understand an exit code it demonstrably
+    # does. Neither shows up above, because both leave every individual step perfectly well-formed.
+    m = re.search(r"fromJSON\('\[([^\]]*)\]'\)", str(catchall[0]["if"]))
+    if not m:
+        bad.append("the catch-all's `if:` does not enumerate rc values via fromJSON([...]); its scope cannot be checked")
+    else:
+        listed = set(re.findall(r'"(\d+)"', m.group(1)))
+        # Derived from the steps, not probed over a numeric range: a bound would silently stop
+        # checking above itself, which is the very thing being asserted against.
+        classified = set(re.findall(r"steps\.audit\.outputs\.rc == '(\d+)'",
+                                    "\n".join(str(s.get("if", "")) for s in steps)))
+        for rc in sorted(listed - classified):
+            bad.append(f"the catch-all enumerates exit {rc}, but no step classifies it: rc={rc} matches nothing and the job goes GREEN")
+        for rc in sorted(classified - listed):
+            bad.append(f"exit {rc} has a classifier the catch-all does not enumerate: rc={rc} fires both, reporting 'no exit code this workflow understands' about one it does")
 
 # ...and this very assertion is only run when the selftest's paths: filter says so. If repos-audit.yml
 # is outside it, the workflow can be gutted and nothing re-checks its shape: the gate never runs.
@@ -306,7 +377,7 @@ for trigger in ("pull_request", "push"):
 print("\n".join(bad))
 PY
 )"
-[ -z "$shape" ] && ok "the workflow renders gap, no-verdict and crash as three distinguishable outcomes" \
+[ -z "$shape" ] && ok "the workflow renders gap, both no-verdicts and crash as distinguishable outcomes, and retries by exit code" \
   || bad "repos-audit.yml collapses outcomes a reader must tell apart" "$shape"
 
 # --- and the audit step's own `run:` block, EXECUTED (not just shaped) --------------------------
@@ -371,12 +442,29 @@ step '2:::error::repos-audit: could not determine wiring for 1 receiver-capabili
 { [ "$STEP_RC" = 2 ] && [ "$PASSES" -eq 2 ] && printf '%s' "$STEP_OUT" | grep -q 'could not determine'; } \
   && ok "step: a persistent no-verdict publishes rc=2" || bad "persistent no-verdict" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
 
-# (14) exit 2 is not one thing. `die()`'s causes — a roster that will not parse, a roster naming no
-#      receiver — are deterministic reads of a file in this checkout. A second identical pass returns
-#      an identical answer, so retrying only holds a runner for the delay and still goes red.
-step '2:::error::repos-audit: cannot enumerate receivers of coordination-kit — repos.sh list failed.'
-{ [ "$STEP_RC" = 2 ] && [ "$PASSES" -eq 1 ] && printf '%s' "$STEP_OUT" | grep -q 'cannot enumerate'; } \
-  && ok "step: a deterministic no-verdict (bad roster) is not retried" || bad "die() retried" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+# (14) the permanent no-verdict is exit 3, and is NOT retried. Its causes — a roster that will not
+#      parse, a roster naming no receiver — are deterministic reads of a file in this checkout. A
+#      second identical pass returns an identical answer, so retrying only holds a runner for the
+#      delay and still goes red. rc=3 must survive to the classifier verbatim.
+step '3:::error::repos-audit: cannot enumerate receivers of coordination-kit — repos.sh list failed.'
+{ [ "$STEP_RC" = 3 ] && [ "$PASSES" -eq 1 ] && printf '%s' "$STEP_OUT" | grep -q 'cannot enumerate'; } \
+  && ok "step: a permanent no-verdict (bad roster) publishes rc=3 and is not retried" \
+  || bad "die() must exit 3 and not be retried" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# (14b) the retry decision is made on the exit code alone. A permanent no-verdict whose text happens
+#       to contain the old magic sentence must STILL not be retried — this is the regression the grep
+#       caused, reproduced directly: prose is not the interface.
+step '3:::error::repos-audit: could not determine wiring for 1 receiver-capability pair(s)'
+{ [ "$STEP_RC" = 3 ] && [ "$PASSES" -eq 1 ]; } \
+  && ok "step: rc=3 is not retried even when its text matches the old grep" \
+  || bad "retry keyed on prose, not exit code" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# (14c) ...and the converse: a retryable no-verdict whose text does NOT contain that sentence is still
+#       retried. Under the grep, this run gave up after one pass on a live rate limit.
+step '2:::error::repos-audit: the API said no' '0:repos-audit: OK — every declared receiver is wired'
+{ [ "$STEP_RC" = 0 ] && [ "$PASSES" -eq 2 ]; } \
+  && ok "step: rc=2 is retried regardless of its wording" \
+  || bad "retryable no-verdict skipped because of its wording" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
 
 # (15) an exit code nobody planned for still reaches the classifier, which fails closed on it.
 step '127:'

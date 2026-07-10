@@ -18,10 +18,16 @@
 #
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
-# Exit: 0 = every declared receiver is wired; 1 = at least one gap; 2 = the audit did not reach a
-# verdict — a roster that cannot be enumerated, an audit that examined nothing, or a receiver whose
-# workflows could not be read. "I could not check" must never share an exit code with "I checked, and
-# it's fine" (#266) — nor with "I checked, and it's broken" (#320).
+# Exit: 0 = every declared receiver is wired; 1 = at least one gap; 2 = no verdict, RETRYABLE — a
+# receiver whose workflows could not be read (rate limit, auth, outage); 3 = no verdict, PERMANENT —
+# a roster that cannot be enumerated, an audit that examined nothing, or a bad invocation.
+#
+# "I could not check" must never share an exit code with "I checked, and it's fine" (#266) — nor with
+# "I checked, and it's broken" (#320). The same argument applies one level in, which is why 2 and 3
+# are not one code (#335): "try again" and "a human must fix a file" are different verdicts, and a
+# caller that wants to retry only the transient one must be able to ASK. It used to have to grep this
+# script's prose for `could not determine wiring for`, making an English sentence load-bearing — a
+# reword silently stopped the retry, or started retrying a malformed roster for 15 minutes.
 
 set -euo pipefail
 
@@ -30,13 +36,26 @@ REPOS_SH="$HERE/repos.sh"
 REGISTRY=""                       # empty => repos.sh default
 AUTHORITY="FS-GG/.github"         # the repo whose reusable workflows receivers call
 
-die() { echo "::error::repos-audit: $*" >&2; exit 2; }
+# Every `die` is a PERMANENT no-verdict: a deterministic read of this checkout, or the way we were
+# invoked. Re-running it changes nothing, so it exits 3 and its caller must not retry it. The
+# retryable no-verdict — a receiver the API would not show us — exits 2, at the bottom of this file.
+die() { echo "::error::repos-audit: $*" >&2; exit 3; }
+
+# `${2:?msg}` would exit 1 here, and 1 means "a declared receiver is unwired" — a bad flag would have
+# reported itself as the very finding this gate exists to produce. A usage error is a permanent
+# no-verdict like any other.
+need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --registry) REGISTRY="${2:?--registry needs a value}"; shift 2 ;;
-    --repos-sh) REPOS_SH="${2:?--repos-sh needs a value}"; shift 2 ;;
-    -h|--help)  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; exit 0 ;;
+    --registry) need_val "$@"; REGISTRY="$2"; shift 2 ;;
+    --repos-sh) need_val "$@"; REPOS_SH="$2"; shift 2 ;;
+    # Print the header block itself — every comment line after the shebang, up to the first line that
+    # is not one. A hardcoded `sed -n '2,20p'` used to do this, and it had already rotted: the range
+    # stopped one line short of the `Exit:` block, so `--help` documented everything about this script
+    # EXCEPT its exit codes — the one thing a caller must know, and the thing #335 is about. A line
+    # number coupled by hand to a comment block is the same fail-open this script is fixing.
+    -h|--help)  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; exit 0 ;;
     *)          die "unknown arg '$1'." ;;
   esac
 done
@@ -181,6 +200,10 @@ echo "repos-audit: $audited receiver-capability pair(s) — $wired wired, $gaps 
 
 # Undetermined outranks a gap: this run is not a verdict, so it must not be read as one. Any genuine
 # gap found alongside it was still printed above as its own ::error::, and survives the next run.
+#
+# This is the RETRYABLE no-verdict, and the only exit 2 in this script: the subject exists and we
+# failed to read it, so a later run may well reach a verdict. Callers retry on 2 alone — never by
+# matching this sentence, which is a diagnostic, not an interface.
 if [ "$undetermined" -ne 0 ]; then
   echo "::error::repos-audit: could not determine wiring for $undetermined receiver-capability pair(s) — the audit is incomplete and its result means nothing. This is an API failure (rate limit, auth, outage), not a wiring gap." >&2
   exit 2
