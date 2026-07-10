@@ -41,10 +41,11 @@ AUTHORITY="FS-GG/.github"         # the repo whose reusable workflows receivers 
 # retryable no-verdict — a receiver the API would not show us — exits 2, at the bottom of this file.
 die() { echo "::error::repos-audit: $*" >&2; exit 3; }
 
-# `${2:?msg}` would exit 1 here, and 1 means "a declared receiver is unwired" — a bad flag would have
-# reported itself as the very finding this gate exists to produce. A usage error is a permanent
-# no-verdict like any other.
-need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
+# need_val (a usage error is a permanent no-verdict, not the exit-1 "a declared receiver is unwired"
+# finding) is shared with coordination-sync and skill-union-assert.sh; see lib/args.sh. Sourced after
+# die, which it uses.
+# shellcheck source=lib/args.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/args.sh"
 
 while [ $# -gt 0 ]; do
   case "$1" in

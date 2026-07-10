@@ -68,7 +68,11 @@ jobs:
           repository: FS-GG/.github
           ref: ${{ inputs.github-ref }}
           path: dotgithub
-          sparse-checkout: scripts/skill-union-assert.sh
+          # skill-union-assert.sh sources scripts/lib/args.sh (shared need_val) at load, so the
+          # sparse checkout must fetch it too — a lone script would die before parsing any arg.
+          sparse-checkout: |
+            scripts/skill-union-assert.sh
+            scripts/lib/args.sh
           sparse-checkout-cone-mode: false
 
       - name: Assert the skill union is byte-identical across roots

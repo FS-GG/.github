@@ -89,8 +89,9 @@ expect_rc "gate: real receiver FS.GG.SDD proceeds (rc 0)" 0 bash "$SYNC" --check
 # Assert on the MESSAGE, not just the rc: a fake root has no kit sources, so a run that passes the gate
 # also exits 2 ("canonical kit source missing"). rc alone cannot tell "died at the gate" from "died
 # after it", and would stay green if the fix were reverted.
-FAKE="$WORK/fakeroot"; mkdir -p "$FAKE/scripts" "$FAKE/registry"
+FAKE="$WORK/fakeroot"; mkdir -p "$FAKE/scripts/lib" "$FAKE/registry"
 cp "$SYNC" "$FAKE/scripts/coordination-sync"
+cp "$REPO_ROOT/scripts/lib/args.sh" "$FAKE/scripts/lib/args.sh"  # coordination-sync sources it at load
 cp "$REPO_ROOT/registry/repos.yml" "$FAKE/registry/repos.yml"   # present, so the [ -f ] guard passes
 FSYNC="$FAKE/scripts/coordination-sync"
 # expect_gate <name> <want-rc> <want-stderr-regex> <cmd...>
@@ -161,8 +162,9 @@ expect_gate "gate: roster match is literal, not a regex" 0 'nothing to do' \
 # registered (and digest-checked on every edit) yet distributed to nobody, and `--check` stayed green.
 # Add a `kind: skill` row to a COPY of the registry and assert the distributor now demands ITS source.
 # Against the old literal this passed silently — the new row was simply never looked at.
-TRACK="$WORK/tracks-registry"; mkdir -p "$TRACK/scripts" "$TRACK/registry"
+TRACK="$WORK/tracks-registry"; mkdir -p "$TRACK/scripts/lib" "$TRACK/registry"
 cp "$SYNC" "$TRACK/scripts/coordination-sync"
+cp "$REPO_ROOT/scripts/lib/args.sh" "$TRACK/scripts/lib/args.sh"  # coordination-sync sources it at load
 cp "$REPO_ROOT/scripts/repos.sh" "$TRACK/scripts/repos.sh"
 cp "$REPO_ROOT/scripts/fsgg-coord" "$TRACK/scripts/fsgg-coord"
 mkdir -p "$TRACK/.claude"; cp -r "$REPO_ROOT/.claude/skills" "$TRACK/.claude/skills"
