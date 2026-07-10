@@ -68,5 +68,5 @@ kit:
   # `check-board` reconciles the board against issue state; `pnext-item` drives the worker loop.
   # They hold no protocol of their own, so they carry no ADR: each cites the skill it drives.
   - { id: check-board,             kind: skill,  source: .claude/skills/check-board,              sha256: ff4e55d2618f62b52c50d176d237cd3cc0282b2ea44ce87d53ebf4ddeb2a1d71 }
-  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: 3f37e28fe7284e864a63549cee4bf219b3fc313002afb4792f3349cb7904898f }
+  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: 578827d6bd80ab6a950a078d8c15d39f14b0730cc7f640aae64957eeb25b9d2e }
   - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 39af3c3d9425f26286d93e71fbabb1c65bff17296e9a6072050543ea4eb70737 }
