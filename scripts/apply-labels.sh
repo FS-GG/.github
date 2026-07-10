@@ -19,6 +19,7 @@ LABELS=(
   "blocked|b60205|Blocked on another repo"
   "contract-change|d93f0b|Changes a versioned cross-repo contract (update the registry)"
   "architecture-map:unaffected|c5def5|Opt out of the architecture-map reconcile gate (change does not alter the system shape)"
+  "roadmap|5319e7|On the org Coordination roadmap board (Projects v2 #1)"
 )
 
 for repo in "${REPOS[@]}"; do
