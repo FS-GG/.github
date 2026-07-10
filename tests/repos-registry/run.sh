@@ -145,13 +145,22 @@ def probes(item):
     if item["kind"] != "skill":
         return [item["source"]]
     claude = f"{item['source']}/SKILL.md"
-    return [claude, claude.replace(".claude/", ".agents/", 1)]
+    return sorted({claude, claude.replace(".claude/", ".agents/", 1)})
 
 gaps = []
 for trigger in ("pull_request", "push"):
-    pats = triggers.get(trigger, {}).get("paths")
+    if trigger not in triggers:
+        # The gate cannot run on this event at all — the widest possible coverage gap.
+        gaps.append(f"{trigger}: trigger absent — the fixture never runs on {trigger}")
+        continue
+    # A trigger that is null, or carries no `paths:`, is unfiltered: every path fires it, so every
+    # kit source is trivially covered. Only an explicitly empty list matches nothing.
+    cfg = triggers.get(trigger) or {}
+    if "paths" not in cfg:
+        continue
+    pats = cfg["paths"]
     if not pats:
-        gaps.append(f"{trigger}: no paths: filter at all")
+        gaps.append(f"{trigger}: paths: is empty — matches nothing")
         continue
     for item in reg["kit"]:
         for probe in probes(item):
