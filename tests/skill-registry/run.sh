@@ -273,4 +273,120 @@ assert got == 'name == \"Acme\"', repr(got)
 " "$REG" || { echo "FAIL: quoted predicate did not round-trip"; grep "id: quoted" "$REG"; exit 1; }
 echo "   ok"
 
+# Cases 17-21 cover a row's CONTENT where it is neither bytes nor presence (.github#292, epic #266):
+# the `materializes-when` predicate. It is what `skill-union-assert.sh --params` evaluates to decide
+# whether a skill's ABSENCE from a scaffold is legitimate, so a stale one makes the union gate wrong
+# in a direction it cannot detect — while every digest stays green. `fs-gg-testing` sat at
+# `profile == governed` for six days after Rendering widened it to five profiles (Rendering#90).
+
+# Producer.Two's manifest with a chosen `materializes-when` for `owned` ($1 is a JSON *value*, so a
+# string must arrive with its quotes: '"profile in [game]"').
+write_two_owned_when() {
+  cat > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "owned", "scope": "product", "sha256": "$OWNED", "supplied-by": "skills/owned/", "materializes-when": $1 }
+] }
+JSON
+}
+
+echo "== 17. a diverged materializes-when is reported (the fs-gg-testing shape) =="
+write_registry
+write_manifests
+# The registry narrows what the manifest widened — every digest still matches, as it did on main.
+sed -i 's|materializes-when: "profile in \[game\]"|materializes-when: "profile == governed"|' "$REG"
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[predicate-matches\] owned" <<<"$out" || { echo "FAIL: diverged predicate not reported"; echo "$out"; exit 1; }
+grep -q 'profile in \[game\]' <<<"$out" || { echo "FAIL: finding does not name the manifest's predicate"; echo "$out"; exit 1; }
+grep -q "\[digest-matches\] owned" <<<"$out" && { echo "FAIL: a predicate divergence is not a digest finding"; exit 1; }
+echo "   ok"
+
+echo "== 18. --write rewrites ONLY the predicate, byte-preserving the rest =="
+write_registry
+write_manifests
+# Clear the deliberately-stale digest first, so the predicate is the registry's ONLY defect.
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null
+cp "$REG" "$WORK/before-pred.yml"
+sed -i 's|materializes-when: "profile in \[game\]"|materializes-when: "profile == governed"|' "$REG"
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should reconcile the predicate"; exit 1; }
+# Restoring the manifest's predicate must reproduce the file EXACTLY — alignment, comments and all.
+cmp -s "$WORK/before-pred.yml" "$REG" || { echo "FAIL: --write did not byte-restore the row"; diff "$WORK/before-pred.yml" "$REG"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" >/dev/null || { echo "FAIL: not coherent after --write"; exit 1; }
+echo "   ok"
+
+echo "== 19. list spacing is not drift — whitespace is normalized before comparing =="
+write_registry
+write_manifests
+sed -i 's|materializes-when: "profile in \[game\]"|materializes-when: "profile  in  [ game ]"|' "$REG"
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"   # exits 1 on the `stale` digest
+grep -q "\[predicate-matches\]" <<<"$out" && { echo "FAIL: reformatting reported as drift"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 20. C-style grammar is a DIVERGENCE, never normalized away =="
+# `(profile == "game")` is semantically `profile == game`, but the ADR-0017 evaluator cannot parse
+# it and reads it as FALSE (the grammar Rendering shipped before Rendering#77). Absorbing it here
+# would make a producer's regression to an unevaluable predicate report green — the fails-open shape
+# epic #266 exists to close. It must surface. (Rejecting non-canonical grammar outright is #290.)
+write_registry
+sed -i 's|materializes-when: "profile in \[game\]"|materializes-when: "profile == game"|' "$REG"
+write_manifests
+write_two_owned_when '"(profile == \"game\")"'
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[predicate-matches\] owned" <<<"$out" || { echo "FAIL: C-style grammar silently normalized — the gate fails open"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 21. producers that contradict each other are reported; --write refuses to pick a side =="
+write_registry
+write_manifests
+# Producer.One re-declares `owned` with a different predicate. The row's `owner:` (fs-gg-game) names
+# NEITHER producer, so there is no authoritative side to reconcile from.
+write_manifests '{ "id": "owned", "scope": "product", "sha256": "'"$OWNED"'", "supplied-by": "skills/owned/", "materializes-when": "profile in [sample-pack]" }' ""
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[predicate-matches\] owned" <<<"$out" || { echo "FAIL: contradicting declarers not reported"; echo "$out"; exit 1; }
+grep -q "disagree on" <<<"$out" || { echo "FAIL: contradiction not named"; echo "$out"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 while producers contradict"; exit 1; }
+grep -q 'id: owned.*materializes-when: "profile in \[game\]"' "$REG" || { echo "FAIL: --write changed a row it cannot reconcile"; grep 'id: owned' "$REG"; exit 1; }
+echo "   ok"
+
+echo "== 22. the owning producer's manifest wins over a frozen mirror's re-declaration =="
+write_registry
+# `good` is owned by producer-one and declared by Producer.One (always). Producer.Two re-declares it
+# with a different predicate — the frozen-mirror shape. `owner:` says Producer.One's word is law, so
+# the mirror's disagreement must NOT be reported against the row.
+write_manifests "" '{ "id": "good", "scope": "process", "sha256": "'"$GOOD"'", "supplied-by": "skills/good/", "materializes-when": "profile in [game]" }'
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[predicate-matches\] good" <<<"$out" && { echo "FAIL: a mirror's predicate overrode the owner's"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 23. normalization never reaches inside a quoted string literal =="
+# `name == "a,b"` is a predicate over a VALUE containing a comma. Regularizing list spacing must not
+# rewrite it to `"a, b"` — `--write` persists this text into the registry, and the union gate parses
+# it. Layout outside the literal is still normalized.
+write_registry
+sed -i 's|materializes-when: "profile in \[game\]"|materializes-when: "profile == governed"|' "$REG"
+write_two_owned_when '"name ==  \"a,b\""'
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 || true
+python3 -c "
+import yaml,sys
+rows={r['id']: r for r in yaml.safe_load(open(sys.argv[1]))['skills']}
+got = rows['owned']['materializes-when']
+assert got == 'name == \"a,b\"', repr(got)   # collapsed the double space, kept the literal's bytes
+" "$REG" || { echo "FAIL: normalization mangled a quoted literal"; grep 'id: owned' "$REG"; exit 1; }
+echo "   ok"
+
+echo "== 24. a row with NO materializes-when field is reported, not crashed on =="
+# Absent ⇒ `always` (ADR-0017), so this is a real divergence — but there is no VALUE to rewrite in
+# place, and inserting one would re-align the hand-formatted flow map. Report, never abort.
+write_registry
+write_manifests
+sed -i 's|source: Producer.Two/skills/owned/SKILL.md,   sha256: '"$OWNED"', materializes-when: "profile in \[game\]" }|source: Producer.Two/skills/owned/SKILL.md,   sha256: '"$OWNED"' }|' "$REG"
+grep -q 'id: owned.*materializes-when' "$REG" && { echo "FAIL: fixture could not strip the field"; grep 'id: owned' "$REG"; exit 1; }
+out="$(run --registry "$REG" --repos-root "$ROOT" 2>&1 || true)"
+grep -q "\[predicate-matches\] owned" <<<"$out" || { echo "FAIL: absent field not reported as a divergence"; echo "$out"; exit 1; }
+grep -q "declares no .materializes-when:. field" <<<"$out" || { echo "FAIL: did not say why it cannot rewrite"; echo "$out"; exit 1; }
+wout="$(run --registry "$REG" --repos-root "$ROOT" --write 2>&1 || true)"
+grep -q "Traceback" <<<"$wout" && { echo "FAIL: --write crashed instead of reporting"; echo "$wout"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 while the row cannot be reconciled"; exit 1; }
+grep -q 'id: owned.*materializes-when' "$REG" && { echo "FAIL: --write inserted a field it should not have"; exit 1; }
+echo "   ok"
+
 echo "skill-registry fixture: all checks passed"

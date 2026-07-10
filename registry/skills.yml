@@ -33,11 +33,17 @@
 #     2026-07-05 catch-up (Rendering#113): the manifest grew 13→16 — `fs-gg-audio` and
 #     `fs-gg-persistence` (Rendering Features 243/244) shipped but were never flipped here, and
 #     `fs-gg-model-swap` (Rendering#113, same gate) was added. The predicates below are the
-#     ADR-0017 CANONICAL grammar (`==`/`!=`/`in [..]`/`and`/`or`/`always`), NORMALIZED from the
-#     C-style form Rendering currently ships (`(profile == "app" || ...)`) — semantically identical.
-#     NOTE (cross-repo): Rendering's shipped manifest grammar is NOT the grammar the ADR-0017 gate
-#     evaluator parses, so the gate reads those predicates as false. Tracked as a grammar-alignment
-#     request to Rendering; the enforcing flip (coherence `skill-registry-published`) is gated on it.
+#     ADR-0017 CANONICAL grammar (`==`/`!=`/`in [..]`/`and`/`or`/`always`). Rendering shipped a
+#     C-style form (`(profile == "app" || ...)`) until Rendering#77 (closed 2026-07-04, commit
+#     cf93eabd) aligned its manifest on the canonical grammar; both sides have emitted it since, so
+#     nothing is normalized on the way in and `predicate-matches` compares them directly. (The
+#     enforcing flip of coherence `skill-registry-published`, gated on that alignment, is .github#290.)
+#     2026-07-10 predicate reconcile (.github#292, epic #266): `materializes-when` was NEVER
+#     enforced — the gate asserted digests and (since #289) row presence, so a producer could move a
+#     skill's emission condition and this catalog silently kept the old one. `fs-gg-testing` had:
+#     Rendering deliberately widened it from `profile == governed` to all five profiles on
+#     2026-07-04 (Rendering#90, commit f4abd68c — a cross-repo request FROM this repo, accepted), and
+#     the row sat stale for six days while every digest stayed green. Reconciled to the manifest.
 #   * PROCESS skills (16) — RECONCILED from SDD's EMITTED process producer manifest
 #     `.agents/skills/skill-manifest.json` (schema `skill-manifest` v1, FS.GG.SDD#111 closing
 #     cross-repo #109; regenerable/checkable via `fsgg-sdd registry skill-manifest --write|--check`,
@@ -131,7 +137,7 @@ skills:
   - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: 4a4695836e3f50642cc9055f50ed74ac9a8be5bf81128e3857a3406785dda6ee, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: af107dec4e0a3464bb39d2dadd3101872bdf47351945151854d52f17234d1619, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: a48df195559c4f8e6499246e85261aca30182c1138eb9374df292dd4b9ec61d5, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 2b4812032f970ca8f7adcdaea6b9c12549c74837e3eb80d683bdd9e867f53f4d, materializes-when: "profile == governed" }
+  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 2b4812032f970ca8f7adcdaea6b9c12549c74837e3eb80d683bdd9e867f53f4d, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack and lifecycle == spec-kit" }
   - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: e6c16f33a3f9b06995378952ba07408cee8a9f4eb4a9ce18bf2142602c40f499, materializes-when: "feedback == true and lifecycle == spec-kit" }
 
