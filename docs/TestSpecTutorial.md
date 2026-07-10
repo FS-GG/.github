@@ -345,7 +345,7 @@ Decompose the plan into dependency-ordered tasks. A natural Pong breakdown:
 7. Subscriptions: 60 FPS `Tick`, keyboard input (§3, §7).
 8. Tests for each §14 scenario (see Part C).
 
-§10 Audio is a **first-class** task in v1, built on the FS.GG.UI `fs-gg-audio`
+§10 Audio is a **first-class** task in v1, built on the `fs-gg-audio`
 capability: `update` returns pure `AudioEffect` values (`Audio.playSfx` /
 `playMusic` / `stopMusic` / `setMasterVolume`) and a record-only interpreter
 (`Audio.interpret`) folds them into `AudioEvidence` you assert on — no sound
