@@ -1,0 +1,33 @@
+# Self-test for scripts/sync-build-config.sh — the org-shared .NET build-config distributor (ADR-0006).
+#
+# Runs tests/sync-build-config/run.sh, which drives the real script against the real dist/dotnet/
+# source and a throwaway consumer dir. It pins the .github#387 fix: apply/adopt is now fail-closed on
+# a hand-authored .config/dotnet-tools.json (it used to silently clobber it), without regressing the
+# *.props refuse-and-adopt path it was modelled on. This guards the distributor the same way the other
+# *-selftest workflows guard their scripts.
+name: sync-build-config-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/sync-build-config.sh"
+      - "tests/sync-build-config/**"
+      - ".github/workflows/sync-build-config-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/sync-build-config.sh"
+      - "tests/sync-build-config/**"
+      - ".github/workflows/sync-build-config-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the sync-build-config fixture
+        run: bash tests/sync-build-config/run.sh
