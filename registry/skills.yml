@@ -12,8 +12,8 @@
 # scaffold's `scaffold-provenance.json` effectiveParameters. Absent ⇒ `always`.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
-#   * PRODUCT skills (16) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
-#     (2026-07-06, epic #213/#218): 12 rows owned by `fs-gg-rendering` (reconciled from
+#   * PRODUCT skills (20) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
+#     (2026-07-06, epic #213/#218): 16 rows owned by `fs-gg-rendering` (reconciled from
 #     FS.GG.Rendering's `template/skill-manifest/skill-manifest.json`) + 4 GAME rows now owned by
 #     `fs-gg-game` (reconciled from FS.GG.Game's `template/skill-manifest/skill-manifest.json`,
 #     merged FS.GG.Game#4). The four migrated rows — `fs-gg-game-core`/`fs-gg-audio`/
@@ -21,7 +21,11 @@
 #     BYTE-IDENTICALLY; FS.GG.Rendering STILL ships frozen copies from `--profile game` (two-copies
 #     cost, ADR-0022 §6, retired at P6). The migration also corrected two digests that had drifted from
 #     Rendering's live manifest (Feature 250 / 0.1.67 body changes): `fs-gg-game-core` 87b9c55c…→16fd32b7…
-#     and `fs-gg-model-swap` 68edbe46…→a48df195…. registry = manifest = bytes for all 16 rows.
+#     and `fs-gg-model-swap` 68edbe46…→a48df195…. registry = manifest = bytes for all 20 rows.
+#     2026-07-10 completeness reconcile (.github#289, epic #266): the product set grew 16→20 —
+#     `fs-gg-collision`/`fs-gg-grids`/`fs-gg-line-drawing`/`fs-gg-visibility` had shipped on
+#     2026-07-05 (0.1.65-preview.1) and were never flipped here. The gate could not say so: it only
+#     asserted predicates over rows already declared, never manifest ⊆ registry. It does now.
 #     HISTORY of the 12 Rendering rows: reconciled verbatim from FS.GG.Rendering's published manifest
 #     (Feature 238, merged FS.GG.Rendering#76, closes Rendering#71); `sha256` + emission condition are
 #     authoritative. (`fs-gg-game-core` was dropped from the .github#168 provisional product count of
@@ -96,6 +100,21 @@ skills:
   - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: fbad9e801720b03820e34cda11f65e541a4218ff39fc9ac033c1e86c6eef0c01, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-styling,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-styling/SKILL.md,   sha256: 24754ec5cb931deb6fcaf7d4b9e5926c42f4325dc4f67cb4852295de8b405ac9, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-ui-widgets,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-ui-widgets/SKILL.md, sha256: e935367032e1b37ac5bfa4db40656f3b6c48b37a30b0d668545d0688c8e445f7, materializes-when: "profile in [app, game]" }
+  # GAME-SIM product skills — Rendering-owned. Authored 2026-07-05 (FS.GG.Rendering#125/#128/#130/
+  # #132) and shipped in fs-gg-ui-template 0.1.65-preview.1, but NEVER reconciled into this catalog.
+  # They stayed invisible for five days: the skill-registry gate emitted only predicates over rows
+  # already declared here, so an absent row was not a finding — it was nothing (.github#289, epic
+  # #266, "a missing subject reports green"). A `--profile game` scaffold has been shipping all four
+  # the whole time. The `declared-completeness` arm now asserts manifest ⊆ registry and fails closed.
+  # Reconciled from FS.GG.Rendering's producer manifest (template/skill-manifest/skill-manifest.json)
+  # @ 85381ba; registry = manifest = bytes for all four.
+  # NOT migrated to fs-gg-game by ADR-0022 P4 (which moved only the four `fs-gg-game-*`/audio/
+  # persistence/model-swap rows), so — like the 12 rows above — their predicates DO ride on the
+  # Rendering#77 grammar alignment.
+  - { id: fs-gg-collision,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-collision/SKILL.md, sha256: 3d4788ba9374b9d13bffbdee855b242ff2dab9b1b4426658b05aba40105d2b5d, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-grids,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-grids/SKILL.md, sha256: 6c61e9469c821ba2c91fe8e34ad220288baa12e4a0570c33a5e6eff26d35c541, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-line-drawing,     scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-line-drawing/SKILL.md, sha256: 70da6b04db6ae0204c01e71b4ebd10eb1edb839f19cde1ef2db1cf748b9fd087, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-visibility,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-visibility/SKILL.md, sha256: 09ca21571aa007f0806d2b1fd1430310f376af93d507670de69343adcc3b4e6c, materializes-when: "profile in [game, sample-pack]" }
   # GAME product skills — MIGRATED owner fs-gg-rendering → fs-gg-game (ADR-0022 P4, epic #213/#218).
   # Reconciled from FS.GG.Game's producer manifest FS.GG.Game/template/skill-manifest/skill-manifest.json
   # (schema skill-manifest v1; regenerable via `dotnet fsi scripts/generate-skill-manifest.fsx --check`,
