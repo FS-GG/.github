@@ -54,7 +54,7 @@ forked repos are **not** auto-exempt — archiving must never be a way out of th
 | Capability | What the repo participates in | Consumer | Status |
 |---|---|---|---|
 | `labels` | the shared cross-repo labels | `scripts/apply-labels.sh` | **migrated** (ADR-0019 slice 1) |
-| `coordination-kit` | the `cross-repo-coordination` skill + the `fsgg-coord` client | `scripts/coordination-sync` + `coordination-coherence.yml` gate | **built** (ADR-0019 slice 2) |
+| `coordination-kit` | the four coordination skills + the `fsgg-coord` client | `scripts/coordination-sync` + `coordination-coherence.yml` gate | **built** (ADR-0019 slice 2) |
 | `build-config` | the org-shared .NET build config | `scripts/sync-build-config.sh` | reserved; migrate in a follow-up |
 | `lockfile-sync` | the reusable lockfile-sync workflow | `.github/workflows/lockfile-sync.yml` | reserved; migrate in a follow-up |
 | `contract-coherence` | the reusable contract-coherence gate | `.github/workflows/contract-coherence.yml` | reserved; migrate in a follow-up |
@@ -69,7 +69,16 @@ The content-addressed bundle every `coordination-kit` receiver must hold (`sha25
 |---|---|---|
 | `cross-repo-coordination` | skill | `.claude/skills/cross-repo-coordination` |
 | `intra-repo-parallel-work` | skill | `.claude/skills/intra-repo-parallel-work` |
+| `check-board` | skill | `.claude/skills/check-board` |
+| `pnext-item` | skill | `.claude/skills/pnext-item` |
 | `fsgg-coord` | client | `scripts/fsgg-coord` |
+
+The first two skills define the **protocol**; `check-board` and `pnext-item` are **command skills**
+that drive it — respectively, reconciling the board against issue state, and taking a repo's next
+schedulable item from claim to done-stamp. Each skill materializes into every root in
+`AGENT_SKILL_ROOTS` (`.claude/skills`, `.agents/skills`), byte-identical. They are deliberately
+**not** `registry/skills.yml` rows: that catalog governs skills a producer *emits into a scaffold*,
+gated by `materializes-when`; these are kit skills for the framework repos themselves.
 
 **Distribution & coherence (slice 2).** [`scripts/coordination-sync`](../../scripts/coordination-sync)
 writes the kit into a receiver (`coordination-sync <target>`) and drift-checks it

@@ -22,7 +22,7 @@
 #
 # `receives` VOCABULARY (the controlled set the validator admits):
 #   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [migrated: ADR-0019 slice 1]
-#   coordination-kit   — the cross-repo-coordination skill + the fsgg-coord client   [consumer: slice 2]
+#   coordination-kit   — the four coordination skills + the fsgg-coord client        [consumer: slice 2]
 #   build-config       — the org-shared .NET build config (scripts/sync-build-config.sh)  [migrate: later slice]
 #   lockfile-sync      — the reusable lockfile-sync workflow                          [migrate: later slice]
 #   contract-coherence — the reusable contract-coherence gate                         [migrate: later slice]
@@ -64,4 +64,9 @@ outside-fabric: []
 kit:
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 00adaed77fa7d01d51f853d62bb06b3f9eef936bbb051f871fdac01d60220ce6 }
   - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: ef521912244507dd79c7b2710d608c4ec480293287f3b30cb6e6e190946aaef7 }
+  # Command skills — the two driver skills over the protocol the three items above define.
+  # `check-board` reconciles the board against issue state; `pnext-item` drives the worker loop.
+  # They hold no protocol of their own, so they carry no ADR: each cites the skill it drives.
+  - { id: check-board,             kind: skill,  source: .claude/skills/check-board,              sha256: ff4e55d2618f62b52c50d176d237cd3cc0282b2ea44ce87d53ebf4ddeb2a1d71 }
+  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: 3f37e28fe7284e864a63549cee4bf219b3fc313002afb4792f3349cb7904898f }
   - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 39af3c3d9425f26286d93e71fbabb1c65bff17296e9a6072050543ea4eb70737 }
