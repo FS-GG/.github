@@ -852,6 +852,20 @@ assert_eq "claim: re-claiming does not add a second marker" "801" "$(claims_on 4
 out70="$(as heron-b71 claim 'FS.GG.SDD#70' 2>/dev/null)"
 assert_contains "claim: uncontended claim succeeds"       "claimed FS.GG.SDD#70 by worker heron-b71" "$out70"
 assert_contains "claim: prints the isolation worktree"    "git worktree add ../FS.GG.SDD-70 -b item/70-scene-graph" "$out70"
+# .github#319: the base ref is load-bearing, and the assertion above cannot see it — that needle is a
+# PREFIX of the base-less command, so it passed happily for as long as the bug existed. `git worktree
+# add -b <new>` with no commit-ish branches from the shared checkout's HEAD, routinely another worker's
+# unmerged branch since N workers pass through that checkout, and the item's PR then carries that
+# branch's commits too. The base ref therefore gets its own assertion: check what FOLLOWS the branch
+# name, not that the branch name appears.
+isolate70="$(printf '%s\n' "$out70" | grep 'git worktree add' || true)"
+base70="${isolate70##* }"   # the trailing commit-ish; on the base-less command this is the branch name
+if [ "$base70" = "origin/main" ]; then
+  ok "claim: the isolation worktree names an explicit base ref"
+else
+  bad "claim: the isolation worktree names an explicit base ref" \
+    "expected a commit-ish after '-b <branch>', got trailing token '$base70' — that branches off the shared checkout's HEAD: $isolate70"
+fi
 assert_contains "claim: prints the attribution trailer"   'FSGG-Worker: heron-b71' "$out70"
 assert_contains "claim: flips the board to In progress"   "board: In progress" "$out70"
 assert_contains "claim: still assigns @me for the humans" "issue edit 70 --repo FS-GG/FS.GG.SDD --add-assignee @me" "$(cat "$GH_LOG")"
