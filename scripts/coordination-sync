@@ -56,10 +56,21 @@ target="$(cd "$target" && pwd)"
 
 # Roster gate: only repos that `receives: coordination-kit` hold the kit. If --repo is a non-receiver
 # (e.g. the authority .github itself, or a repo removed from the kit list), there is nothing to do.
+#
+# Read the roster BEFORE classifying against it. "I could not ask the roster" and "the roster says no"
+# are different answers, and only the second one may skip the drift check (.github#315): a failing
+# repos.sh prints nothing, and matching $repo against nothing would report every receiver as a
+# non-receiver and exit 0 green.
 if [ -n "$repo" ]; then
   [ -f "$REG" ] || die "registry not found: $REG"
-  if ! bash "$SRC_ROOT/scripts/repos.sh" list --receives coordination-kit --registry "$REG" \
-        | grep -qx "$repo"; then
+  roster_rc=0
+  roster="$(bash "$SRC_ROOT/scripts/repos.sh" list --receives coordination-kit --registry "$REG")" \
+    || roster_rc=$?
+  [ "$roster_rc" -eq 0 ] \
+    || die "could not read the coordination-kit roster from $REG (repos.sh exited $roster_rc)."
+  [ -n "$roster" ] \
+    || die "no repo declares 'receives: coordination-kit' in $REG — a capability the kit fabric requires."
+  if ! printf '%s\n' "$roster" | grep -Fqx "$repo"; then
     echo "coordination-sync: $repo does not receive coordination-kit (per repos.yml) — nothing to do."
     exit 0
   fi
