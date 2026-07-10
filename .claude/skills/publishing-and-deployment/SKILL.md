@@ -131,6 +131,17 @@ single-line `updated:` comment is retired (.github#129). A `contract-change` iss
 update the registry as part of its resolution. Keep the projection
 (`docs/registry/compatibility.md`) in sync.
 
+Then reconcile the **architecture map** `docs/architecture.md` — a republish touches
+`registry/dependencies.yml`, which is exactly the `architecture-map.yml` reconcile
+trigger. A routine version bump does not change the map's shape: take the opt-out, a
+one-line `architecture-map: unaffected` in the PR body (or the
+`architecture-map:unaffected` label). A set that moves a coherent-set axis or the map's
+§5 contract picture updates the map instead.
+
+**A green validator is not a green PR:** neither `fsgg-sdd registry validate` nor
+`check-feed-coherence` sees `docs/registry/compatibility.md` or `docs/architecture.md` —
+those are gated by `projection` and `architecture-map` respectively, and only in CI.
+
 ## Per-product authoritative docs
 
 - **SDD:** `FS.GG.SDD/docs/release/versioning-policy.md`, `.../compatibility-matrix.md`, `.../migrations/`
