@@ -2130,6 +2130,19 @@ if px overlap 'FS.GG.SDD#401' --active >/dev/null 2>&1
   then ok  "overlap --active: exits 0 when the only namesake claim is in another repo (#353)"
   else bad "overlap --active: exits 0 when the only namesake claim is in another repo (#353)" "exited non-zero"; fi
 
+# Pairwise `overlap a b` closes the same trap. #401 (SDD) and #402 (Rendering) BOTH declare the bare
+# token `scripts/fsgg-coord` right now — the phantom-collision setup. Repo-relative tokens in two
+# different repos can never name the same file, so this is DISJOINT, not the OVERLAP `conflicts_between`
+# would report if handed the two token lists raw (#353). (Run before the widen tests below mutate #401.)
+pov="$(px overlap 'FS.GG.SDD#401' 'FS-GG/FS.GG.Rendering#402' 2>&1 || true)"
+assert_contains "overlap a b: different repos are DISJOINT even on a same-named token (#353)" \
+  "different repos" "$pov"
+case "$pov" in *OVERLAP*) bad "overlap a b: never invents a cross-repo overlap (#353)" "$pov" ;;
+               *) ok "overlap a b: never invents a cross-repo overlap (#353)" ;; esac
+if px overlap 'FS.GG.SDD#401' 'FS-GG/FS.GG.Rendering#402' >/dev/null 2>&1
+  then ok  "overlap a b: exits 0 for a cross-repo pair (#353)"
+  else bad "overlap a b: exits 0 for a cross-repo pair (#353)" "exited non-zero"; fi
+
 # widen: the cross-repo namesake is NOT a collision, and its holder is NOT pestered.
 before402="$(jq 'length' "$STORE/comments-402.json")"
 wx="$(asx kite-t01 widen 'FS.GG.SDD#401' --paths 'scripts/fsgg-coord' 2>&1 || true)"
@@ -2151,6 +2164,12 @@ assert_contains "widen: ...and still notifies the same-repo worker (#353)" \
   "notified worker sdd-sib on FS.GG.SDD#403" "$wc353"
 assert_fails "widen: a real same-repo collision still exits non-zero (#353)" \
   asx kite-t01 widen 'FS.GG.SDD#401' --paths 'src/Scene/**'
+
+# ...and a genuine SAME-repo pairwise overlap is still caught (Test C left both declaring src/Scene/**).
+assert_contains "overlap a b: a real same-repo overlap is STILL detected (#353)" "OVERLAP" \
+  "$(px overlap 'FS.GG.SDD#401' 'FS.GG.SDD#403' 2>&1 || true)"
+assert_fails "overlap a b: a real same-repo overlap still exits non-zero (#353)" \
+  px overlap 'FS.GG.SDD#401' 'FS.GG.SDD#403'
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"

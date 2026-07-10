@@ -1921,9 +1921,10 @@ paths_of() {  # $1=owner $2=repo $3=num -> one normalized touch-set token per li
 # CONTRACT — both token lists MUST come from the SAME repo. `Paths:` tokens are repo-relative, so
 # `scripts/fsgg-coord` in repo A and `scripts/fsgg-coord` in repo B name two different files; this
 # function cannot see the repo and will happily report them as colliding (#353). Every caller is
-# therefore responsible for scoping its inputs to one repo first — `batch`/`widen`/`overlap --active`
-# do it by passing that repo to `active_claims`; the pairwise `overlap a b` relies on both refs being
-# compared as declared. Hand this cross-repo token lists and it invents collisions.
+# therefore responsible for confining its inputs to one repo before calling: `batch`/`widen`/`overlap
+# --active` pass that repo to `active_claims` so the compared claims are same-repo, and the pairwise
+# `overlap a b` short-circuits to DISJOINT when its two refs resolve to different repos. Hand this
+# cross-repo token lists and it invents collisions.
 conflicts_between() {
   local a="$1" b="$2"
   [ -n "$a" ] && [ -n "$b" ] || return 0
@@ -2156,8 +2157,17 @@ overlap_cmd() {
 
   # --- pairwise -------------------------------------------------------------------------------------
   [ -n "$b" ] || die "overlap: two issue refs required (overlap <a> <b>), or pass --active."
-  parse_ref "$a"; local ar="$R_REPO" an="$R_NUM"
-  parse_ref "$b"; local br="$R_REPO" bn="$R_NUM"
+  parse_ref "$a"; local ar="$R_REPO" an="$R_NUM" ao="$R_OWNER"
+  parse_ref "$b"; local br="$R_REPO" bn="$R_NUM" bo="$R_OWNER"
+  # `Paths:` tokens are repo-relative, so two items in DIFFERENT repos never name the same file — they
+  # live in separate checkouts and can always run in parallel. Answer that directly rather than handing
+  # cross-repo tokens to `conflicts_between`, which cannot see a repo and would read a shared prefix
+  # (`scripts/fsgg-coord` ⇄ `scripts/fsgg-coord`) as a phantom overlap (#353). Compare the NORMALIZED
+  # owner/repo, so `SDD#1` and `FS-GG/FS.GG.SDD#2` still count as one repo.
+  if [ "$ao/$ar" != "$bo/$br" ]; then
+    printf 'DISJOINT — %s and %s are in different repos; their touch-sets cannot overlap.\n' "$ar#$an" "$br#$bn"
+    return 0
+  fi
   local pa pb; pa="$(paths_for_ref "$a")"; pb="$(paths_for_ref "$b")"
   if [ -z "$pa" ] || [ -z "$pb" ]; then
     local which=""
