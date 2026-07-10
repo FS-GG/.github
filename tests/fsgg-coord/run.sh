@@ -17,8 +17,11 @@
 #   7. `Blocked by` is canonicalised to issue refs on write (prose refused, zero GraphQL spent) and
 #      honoured on read: `next` skips an item whose blockers are open / unverifiable.
 #   8. lint asserts the epic invariants — no childless `[epic]`, none Done over an open child, none
-#      with more children than the scan can see — and exits non-zero.
-#   9. epic_rollup flips a parent only when every child is board-Done AND issue-CLOSED.
+#      with more children than the scan can see, none whose body declares an unlinked child — and
+#      exits non-zero.
+#   9. epic_rollup flips a parent only when every child is board-Done AND issue-CLOSED, and REFUSES
+#      outright when the epic's body declares a child the sub-issue graph does not contain.
+#  10. `child` creates that sub-issue edge — by REST id, via `-F` (a `-f` string 422s), idempotently.
 #
 # Self-contained: a throwaway cache + stub under a temp dir, no network, no other repos. Mirrors
 # tests/skill-union/run.sh (FS-GG/.github#111) in shape so the two fixtures read the same way.
@@ -127,11 +130,16 @@ JSON
 # firing on everything.
 #   #400 [epic], OPEN, zero children                    -> EPIC-NO-CHILDREN
 #   #401 [epic], board Done, child #403 still OPEN      -> EPIC-DONE-OPEN-CHILD
-#   #404 [epic], totalCount 150 but 2 nodes visible     -> EPIC-CHILDREN-TRUNCATED
+#   #404 [epic], totalCount 150 but 2 nodes visible     -> EPIC-CHILDREN-TRUNCATED *only*: its body
+#                                                          declares #499, but a truncated child list
+#                                                          cannot tell "unlinked" from "unseen", so
+#                                                          EPIC-UNLINKED-CHILD must NOT also fire
 #   #405 non-epic, Status Done but issue OPEN           -> DONE-STATUS-OPEN-ISSUE (note, not an error)
-#   #406 [epic], board Done, every child CLOSED         -> clean
+#   #406 [epic], board Done, every child CLOSED         -> clean (body declares exactly its one child)
 #   #407 non-epic, zero children                        -> clean (the check is epic-scoped)
 #   #408 [epic], CLOSED, zero children                  -> clean (the check is live-work-scoped)
+#   #409 [epic], body declares #414, never linked       -> EPIC-UNLINKED-CHILD (and #415, named only
+#                                                          in prose, declares nothing)
 cat >"$FIXTURES/lint-p1.json" <<'JSON'
 {"data":{"organization":{"projectV2":{"items":{
   "pageInfo":{"hasNextPage":true,"endCursor":"LCUR1"},
@@ -147,14 +155,16 @@ cat >"$FIXTURES/lint-p2.json" <<'JSON'
 {"data":{"organization":{"projectV2":{"items":{
   "pageInfo":{"hasNextPage":false,"endCursor":null},
   "nodes":[
-    {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":404,"title":"[epic] Too many children to see","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/404","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"},"subIssues":{"totalCount":150,"nodes":[
+    {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":404,"title":"[epic] Too many children to see","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/404","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"},"body":"- [ ] #499 — invisible to the scan, but only because the child list is truncated\n","subIssues":{"totalCount":150,"nodes":[
       {"number":410,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}},
       {"number":411,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}]}}},
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":405,"title":"A merged PR that left its issue open","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Templates/issues/405","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"},"subIssues":{"totalCount":0,"nodes":[]}}},
-    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":406,"title":"[epic] Properly finished","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/406","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":1,"nodes":[
+    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":406,"title":"[epic] Properly finished","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/406","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"- [x] #412 — landed\n","subIssues":{"totalCount":1,"nodes":[
       {"number":412,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}},
     {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":407,"title":"An ordinary card, no children","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/407","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
-    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":408,"title":"[epic] Finished, and it never grew children","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/408","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}}
+    {"status":{"name":"Done"},"content":{"__typename":"Issue","number":408,"title":"[epic] Finished, and it never grew children","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/408","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":409,"title":"[epic] A child was filed, and only mentioned","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/409","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"## Children\n\n- [x] (a) #413 — linked, landed\n- [ ] (b) #414 — filed while working (a); a comment on this epic is not a link\n\nSee also #415, which is prose and declares nothing.\n","subIssues":{"totalCount":1,"nodes":[
+      {"number":413,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}
   ]}}}},"rateLimit":{"cost":1,"remaining":4969}}
 JSON
 
@@ -171,10 +181,11 @@ JSON
 cat >"$FIXTURES/rollup-42.json" <<'JSON'
 {"data":{"repository":{"issue":{"parent":{
   "number":300,"url":"https://github.com/FS-GG/FS.GG.SDD/issues/300","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},
+  "body":"## Children\n\n- [x] #42 — landed\n- [ ] #43 — still open\n",
   "projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},
   "subIssues":{"totalCount":2,"nodes":[
-    {"number":42,"state":"CLOSED","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}},
-    {"number":43,"state":"OPEN","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
+    {"number":42,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}},
+    {"number":43,"state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
   ]}}}}},"rateLimit":{"cost":1,"remaining":4967}}
 JSON
 cat >"$FIXTURES/done-44.json" <<'JSON'
@@ -186,11 +197,50 @@ JSON
 cat >"$FIXTURES/rollup-44.json" <<'JSON'
 {"data":{"repository":{"issue":{"parent":{
   "number":301,"url":"https://github.com/FS-GG/FS.GG.SDD/issues/301","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},
+  "body":"Children:\n\n- [x] #44 — landed\n- [x] (b) FS-GG/FS.GG.SDD#45 — landed (cf. #999, not a child)\n",
   "projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},
   "subIssues":{"totalCount":2,"nodes":[
-    {"number":44,"state":"CLOSED","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}},
-    {"number":45,"state":"CLOSED","projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
+    {"number":44,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}},
+    {"number":45,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
   ]}}}}},"rateLimit":{"cost":1,"remaining":4965}}
+JSON
+# #46 -> epic #302: the ONLY linked child (#46) is CLOSED + board-Done, so the graph alone says
+# "1/1 children done — flip". But the epic's BODY declares a second child, #47, that was never
+# linked as a sub-issue. That is FS-GG/.github#325: rollup must refuse, not stamp a green epic over
+# a child it cannot see. #999 appears as a trailing ref on a declaration line and is NOT a child.
+cat >"$FIXTURES/done-46.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":46,"title":"the only LINKED child of an epic with an unlinked one","url":"https://github.com/FS-GG/FS.GG.SDD/issues/46","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[{"number":11,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/11","merged":true,"mergedAt":"2026-07-03T10:00:00Z","mergeCommit":{"abbreviatedOid":"9ab0cde"}}]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":{"number":302}}}},"rateLimit":{"cost":1,"remaining":4963}}
+JSON
+cat >"$FIXTURES/rollup-46.json" <<'JSON'
+{"data":{"repository":{"issue":{"parent":{
+  "number":302,"url":"https://github.com/FS-GG/FS.GG.SDD/issues/302","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},
+  "body":"## Children\n\n- [x] (a) #46 — landed (cf. #999, a mention, not a child)\n- [ ] (b) #47 — filed while working (a), never linked\n",
+  "projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},
+  "subIssues":{"totalCount":1,"nodes":[
+    {"number":46,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
+  ]}}}}},"rateLimit":{"cost":1,"remaining":4962}}
+JSON
+# #48 -> epic #303: THREE unlinked children, declared with `+` and `*` bullets. GitHub renders a task
+# list for all three of `-`/`*`/`+`, so a matcher that knows only `-` would read this epic as
+# declaring nothing and wave the rollup through — a gate failing open on a formatting choice. Also
+# pins the join: `paste -sd', '` cycles its delimiters and would render "a,b c".
+cat >"$FIXTURES/done-48.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":48,"title":"child of an epic written with + bullets","url":"https://github.com/FS-GG/FS.GG.SDD/issues/48","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[{"number":13,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/13","merged":true,"mergedAt":"2026-07-04T10:00:00Z","mergeCommit":{"abbreviatedOid":"1234abc"}}]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":{"number":303}}}},"rateLimit":{"cost":1,"remaining":4961}}
+JSON
+cat >"$FIXTURES/rollup-48.json" <<'JSON'
+{"data":{"repository":{"issue":{"parent":{
+  "number":303,"url":"https://github.com/FS-GG/FS.GG.SDD/issues/303","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},
+  "body":"+ [x] #48 — landed\n+ [ ] #49 — never linked\n* [ ] #50 — never linked\n+ [ ] FS-GG/FS.GG.Rendering#51 — a cross-repo child, never linked\n",
+  "projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"In progress"}}]},
+  "subIssues":{"totalCount":1,"nodes":[
+    {"number":48,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"projectItems":{"nodes":[{"project":{"number":12},"status":{"name":"Done"}}]}}
+  ]}}}}},"rateLimit":{"cost":1,"remaining":4960}}
 JSON
 cat >"$FIXTURES/rollup-none.json" <<'JSON'
 {"data":{"repository":{"issue":{"parent":null}}},"rateLimit":{"cost":1,"remaining":4964}}
@@ -243,6 +293,7 @@ fi
 if [ "\$sub" = "api" ]; then
   echo r >>"\$GH_REST_COUNT"
   method=""; path=""; inm=""; jqexpr=""; body=""; include=""; hasfield=""; paginate=""
+  subid_f=""; subid_F=""
   n=\${#args[@]}
   for ((i=1;i<n;i++)); do
     case "\${args[i]}" in
@@ -251,8 +302,8 @@ if [ "\$sub" = "api" ]; then
       --paginate) paginate=1 ;;
       --jq)      jqexpr="\${args[i+1]}" ;;
       -H)        h="\${args[i+1]}"; case "\$h" in "If-None-Match: "*) inm="\${h#If-None-Match: }";; esac ;;
-      -f)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=*) body="\${kv#body=}";; esac ;;
-      -F)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=@*) body="\$(cat "\${kv#body=@}")";; esac ;;
+      -f)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=*) body="\${kv#body=}";; sub_issue_id=*) subid_f="\${kv#sub_issue_id=}";; esac ;;
+      -F)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=@*) body="\$(cat "\${kv#body=@}")";; sub_issue_id=*) subid_F="\${kv#sub_issue_id=}";; esac ;;
       user)      [ -z "\$path" ] && path="user" ;;
       repos/*)   path="\${args[i]}" ;;
     esac
@@ -264,6 +315,37 @@ if [ "\$sub" = "api" ]; then
   now="\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   if [ "\$path" = "user" ]; then printf '{"login":"EHotwagner"}' | emit; exit 0; fi
+
+  # --- sub-issues: the native child edge `child` writes and `epic_rollup` reads -------------------
+  # A real mutable store, so `child` can be observed to be idempotent rather than merely exit 0. The
+  # stub also reproduces the API's two traps: the endpoint keys on the child's REST **id** (not its
+  # number), and it 422s when sub_issue_id arrives as a JSON string — i.e. via \`gh api -f\`. A stub
+  # that accepted -f would let the client regress to the form the API rejects.
+  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/issues/([0-9]+)/sub_issues\$ ]]; then
+    snum="\${BASH_REMATCH[1]}"; sf="$STORE/subissues-\$snum.json"
+    [ -f "\$sf" ] || echo '[]' >"\$sf"
+    # GH_FAIL_SUBISSUES_GET=<n>: the existing-links read for <n> fails. `child` must not read that as
+    # "the edge is absent" and POST anyway — an unreachable subject is not an absent one (#266/#320).
+    if [ "\$method" = "GET" ] && [ "\$snum" = "\${GH_FAIL_SUBISSUES_GET:-}" ]; then
+      echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
+    fi
+    if [ "\$method" = "POST" ]; then
+      # GH_FORCE_SUBISSUE_POST_FAIL=1: the link POST fails the way the real API does. `child` must
+      # relay THIS text, not a guessed cause.
+      if [ -n "\${GH_FORCE_SUBISSUE_POST_FAIL:-}" ]; then
+        echo 'gh: Validation Failed (HTTP 422): sub_issue_id is not valid' >&2; exit 1
+      fi
+      if [ -n "\$subid_f" ]; then
+        echo 'gh: Validation Failed (HTTP 422): sub_issue_id must be an integer' >&2; exit 1
+      fi
+      [ -n "\$subid_F" ] || { echo "gh: sub_issue_id required" >&2; exit 1; }
+      printf 'sub-issue-add %s -F sub_issue_id=%s\n' "\$snum" "\$subid_F" >>"\$GH_LOG"
+      jq --argjson id "\$subid_F" 'if any(.[]; .id == \$id) then . else . + [{"id":\$id,"number":(\$id - 1000)}] end' \
+        "\$sf" >"\$sf.t" && mv "\$sf.t" "\$sf"
+      cat "\$sf" | emit; exit 0
+    fi
+    cat "\$sf" | emit; exit 0
+  fi
 
   # --- issue comments: a REAL mutable store, so the claim CAS can actually be raced -------------
   if [[ "\$path" =~ ^repos/[^/]+/[^/]+/issues/([0-9]+)/comments ]]; then
@@ -654,13 +736,28 @@ assert_eq "lint: a childless NON-epic is clean — the check is epic-scoped (#40
 assert_eq "lint: a childless CLOSED [epic] is clean — the check is live-work-scoped (#408)" "" "$(codes '#408')"
 assert_contains "lint: EPIC-DONE-OPEN-CHILD names the open child" "#403" \
   "$(jq -r '.[] | select(.code=="EPIC-DONE-OPEN-CHILD") | .detail' <<<"$lint_json")"
-assert_eq "lint: severities — 3 errors, 1 note" "3 1" \
+assert_eq "lint: severities — 4 errors, 1 note" "4 1" \
   "$(jq -r '"\([.[]|select(.severity=="error")]|length) \([.[]|select(.severity=="note")]|length)"' <<<"$lint_json")"
 
 assert_fails "lint: exits non-zero when an invariant is broken" run lint
 assert_contains "lint: text output is greppable" "FSGG-LINT ERROR  EPIC-NO-CHILDREN" "$(run lint 2>/dev/null || true)"
-assert_contains "lint: prints an error/note tally on stderr" "3 error(s), 1 note(s)" \
+assert_contains "lint: prints an error/note tally on stderr" "4 error(s), 1 note(s)" \
   "$(run lint 2>&1 >/dev/null || true)"
+
+# EPIC-UNLINKED-CHILD: the epic's body declares a child the sub-issue graph does not contain, so
+# rollup cannot see it (FS-GG/.github#325). #409 declares #414; only #413 is linked.
+assert_eq "lint: EPIC-UNLINKED-CHILD names the declared-but-unlinked child" "FS.GG.SDD#414" \
+  "$(run lint --json 2>/dev/null | jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .detail' \
+     | sed 's/.*graph, so rollup cannot see them: //')"
+assert_eq "lint: EPIC-UNLINKED-CHILD fires on exactly the one epic that has one" "FS-GG/FS.GG.SDD#409" \
+  "$(run lint --json 2>/dev/null | jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .id')"
+# #415 is named in the epic's prose, not in a task-list line. A mention is not a declaration.
+assert_eq "lint: a bare prose mention does not count as a declared child" "0" \
+  "$(run lint --json 2>/dev/null | jq -r '[.[] | select(.detail|test("415"))] | length')"
+# #404's body declares #499, but its child list is TRUNCATED — "unlinked" is unknowable there, and a
+# gate that guesses is the very defect this rule exists to prevent (FS-GG/.github#266).
+assert_eq "lint: a truncated epic yields no unlinked-child verdict" "0" \
+  "$(run lint --json 2>/dev/null | jq -r '[.[] | select(.code=="EPIC-UNLINKED-CHILD" and .id=="FS-GG/FS.GG.Rendering#404")] | length')"
 
 # --repo scopes the scan. FS.GG.Templates holds only #405 — a NOTE — so lint passes, and --strict fails.
 assert_eq "lint --repo templates: notes alone do not fail" "0" \
@@ -688,6 +785,74 @@ assert_contains "rollup: the stamp says Done + closed" "all 2 children Done + cl
 # Two Status writes: the child, then the epic it completed.
 assert_eq "rollup: flipping writes Status twice (child, then epic)" "2" \
   "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
+# A body declaration is not a hint the rollup may ignore. Epic #302's graph says 1/1 children done —
+# it would flip — but the body declares #47, never linked. "All children Done" is then a claim about
+# a set we already know is short, so it must not report green (FS-GG/.github#325, #266's rule).
+: >"$GH_LOG"
+unlinked="$(run done 'FS.GG.SDD#46' --pr 11 --flip 2>/dev/null)"
+assert_contains "done --flip: the child still stamps DONE"        "FSGG-DONE   FS.GG.SDD#46" "$unlinked"
+assert_contains "rollup: REFUSES when the body declares an unlinked child" \
+  "body declares 1 child(ren) the sub-issue graph does not contain" "$unlinked"
+assert_contains "rollup: names the unlinked child"                "FS-GG/FS.GG.SDD#47" "$unlinked"
+assert_contains "rollup: points at the verb that fixes it"        "fsgg-coord child" "$unlinked"
+# #999 is a trailing mention on a declaration line, not a second child.
+assert_eq "rollup: a trailing mention on a declaration line is not a child" "0" \
+  "$(printf '%s' "$unlinked" | grep -c '999' || true)"
+# The child's Status is written; the epic's is NOT. A refusal that still flipped would be the bug.
+assert_eq "rollup: refusing writes Status once (the child), never the epic" "1" \
+  "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
+
+# `+` and `*` are task-list bullets too. A matcher that knows only `-` reads epic #303 as declaring
+# nothing and rolls it up — the gate failing OPEN on a formatting choice.
+bullets="$(run done 'FS.GG.SDD#48' --pr 13 --flip 2>/dev/null)"
+assert_contains "rollup: '+' and '*' task-list bullets declare children too" \
+  "body declares 3 child(ren)" "$bullets"
+# ...and the three are joined with ", " — `paste -sd', '` would CYCLE the delimiters ("a,b c").
+# `unique` sorts the refs, so the cross-repo one leads; the point of the assertion is the separator.
+assert_contains "rollup: multiple unlinked children join on ', ' (no delimiter cycling)" \
+  "FS-GG/FS.GG.Rendering#51, FS-GG/FS.GG.SDD#49, FS-GG/FS.GG.SDD#50" "$bullets"
+assert_eq "rollup: a '+' epic is never flipped" "0" \
+  "$(printf '%s' "$bullets" | grep -c 'FS.GG.SDD#303 (epic)' || true)"
+
+# ---- `child`: the only thing that actually creates the edge rollup reads ------------------------
+# The epic #302 and the child #47 the rollup above just refused to roll up over — written here
+# (`seed_issue` is defined further down, with the ADR-0027 fixtures) so the fix reads next to the
+# failure it repairs. `id` is NOT the number: the endpoint keys on the REST id.
+for n in 302 47 49; do
+  jq -n --argjson n "$n" '{id:($n + 1000), number:$n, title:"fixture", body:"", assignees:[],
+    state:"open", repo:"FS-GG/FS.GG.SDD"}' >"$STORE/issue-$n.json"
+  echo '[]' >"$STORE/comments-$n.json"
+done
+: >"$GH_LOG"
+linked="$(run child 'FS.GG.SDD#302' 'FS.GG.SDD#47' 2>/dev/null)"
+assert_contains "child: links the issue as a sub-issue" "linked FS.GG.SDD#47 as a sub-issue of FS.GG.SDD#302" "$linked"
+# The endpoint keys on the REST id (1047), never the issue number (47).
+assert_contains "child: POSTs the child's REST id, not its number" "sub_issue_id=1047" "$(cat "$GH_LOG")"
+assert_contains "child: sends it with -F, the typed form" "-F sub_issue_id=1047" "$(cat "$GH_LOG")"
+# ...and that success is not vacuous: the stub really does 422 the `-f` string form, so `child`
+# passing above means it used `-F`. A failure leg that cannot fire is the defect this epic is about
+# (#266) — SDD#299's `/tmp` fixture is the same shape of mistake.
+assert_fails "child: the stub's -f leg is real — a string sub_issue_id 422s" \
+  env PATH="$STUB:$PATH" gh api "repos/FS-GG/FS.GG.SDD/issues/302/sub_issues" -f sub_issue_id=1047
+# Re-linking is success, not a 422 — a worker re-running its close-out must not have to check first.
+again="$(run child 'FS.GG.SDD#302' 'FS.GG.SDD#47' 2>/dev/null)"
+assert_contains "child: is idempotent" "already a sub-issue" "$again"
+assert_fails "child: refuses a missing argument" run child 'FS.GG.SDD#302'
+
+# An unreachable existing-links read must FAIL CLOSED. Swallowing it would make "I could not check"
+# indistinguishable from "the edge is absent": `child` would POST, collect a 422, and blame the
+# token. That is #320's defect exactly — reappearing inside the fix for its own epic.
+: >"$GH_LOG"
+unreachable="$(GH_FAIL_SUBISSUES_GET=302 run child 'FS.GG.SDD#302' 'FS.GG.SDD#47' 2>&1 || true)"
+assert_contains "child: an unreachable sub-issue read is refused, not guessed" \
+  "refusing to guess whether" "$unreachable"
+assert_eq "child: ...and it exits non-zero" "1" \
+  "$(GH_FAIL_SUBISSUES_GET=302 run child 'FS.GG.SDD#302' 'FS.GG.SDD#47' >/dev/null 2>&1; echo $?)"
+assert_eq "child: ...and POSTs nothing while it cannot tell" "0" \
+  "$(grep -c 'sub-issue-add' "$GH_LOG" || true)"
+# A failing POST surfaces gh's own diagnosis (422 vs 403), not a guessed cause.
+assert_contains "child: a failed link reports the API's error, not a guess" "422" \
+  "$(GH_FORCE_SUBISSUE_POST_FAIL=1 run child 'FS.GG.SDD#302' 'FS.GG.SDD#49' 2>&1 || true)"
 
 # budget reads both meters.
 bud="$(run budget)"
@@ -727,8 +892,10 @@ seed_issue() {  # seed_issue <num> <title> <paths-or-empty> [owner/repo]
   [ -n "$p" ] && body="$body
 
 Paths: $p"
+  # `id` is deliberately NOT the number: the sub-issues endpoint keys on the REST id, and a fixture
+  # where the two coincide would let `child` pass while POSTing the wrong field (.github#325).
   jq -n --argjson n "$n" --arg t "$t" --arg b "$body" --arg r "$repo" \
-    '{number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
+    '{id:($n + 1000), number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
       html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
   : >"$STORE/comments-$n.json"; echo '[]' >"$STORE/comments-$n.json"
 }
@@ -737,7 +904,7 @@ Paths: $p"
 seed_issue_raw() {  # seed_issue_raw <num> <title> <body> [owner/repo]
   local n="$1" t="$2" b="$3" repo="${4:-FS-GG/FS.GG.SDD}"
   jq -n --argjson n "$n" --arg t "$t" --arg b "$b" --arg r "$repo" \
-    '{number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
+    '{id:($n + 1000), number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
       html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
   echo '[]' >"$STORE/comments-$n.json"
 }

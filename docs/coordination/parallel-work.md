@@ -289,9 +289,26 @@ told its claim was collected, and a worker whose touch-set was invaded is told b
 
 ```sh
 scripts/fsgg-coord done <issue> --flip     # green FSGG-DONE only after PR merged AND Status=Done
+scripts/fsgg-coord child <parent> <issue>  # link a filed issue as a sub-issue of its epic
 ```
 
 Same stamp and epic roll-up as cross-repo.
+
+**An epic rolls up from its sub-issue graph, and from nothing else.** A `(j) child of #266` title, a
+`Child of #266` comment, a checklist line in the epic's body — all of them look like a link, and
+none of them is one. A child that was merely *mentioned* is invisible to `done --flip`, which will
+then stamp the epic `Done` over it. That is not hypothetical: an epic completed thirty minutes after
+an open child of it was filed ([#325](https://github.com/FS-GG/.github/issues/325)).
+
+So `child` is run **when the issue is filed**, not at close-out — the failure mode is precisely a
+worker who moved on. It is idempotent. Two API traps live inside it rather than in your fingers: the
+endpoint keys on the child's REST **id** (not its issue number), and `-f sub_issue_id=…` sends that
+id as a JSON string, which the API rejects with a 422. It must be `-F`.
+
+As a backstop, `done --flip` refuses to roll up an epic whose **body** declares a child the graph
+does not contain, and `fsgg-coord lint` reports the same condition as `EPIC-UNLINKED-CHILD`. The
+body's task-list is the epic's second, human-legible record of its children; the two records must
+agree, and "all children are Done" must never be a statement about a set already known to be short.
 
 ## The fan-out loop
 
@@ -313,7 +330,9 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
 - **Sequencing** — the Coordination board's `Blocked by` and sub-issues (ADR-0001). Overlap
   detection just decides *which* items get a dependency edge.
 - **Finishing** — `fsgg-coord done <issue> --flip`: the green `FSGG-DONE` stamp earned only after the
-  PR is merged **and** the board is `Done`, with automatic epic roll-up.
+  PR is merged **and** the board is `Done`, with automatic epic roll-up — which refuses to fire over
+  an epic whose body declares a child the sub-issue graph lacks. `fsgg-coord child <parent> <issue>`
+  is what puts a child *in* that graph; nothing else does.
 - **The GraphQL budget discipline.** Everything in this protocol is **REST** (a separate 5,000
   *requests*/hr budget) except the board scan `who`/`batch`/`reap` share (~3 GraphQL points). `who`,
   `reap`, and `inbox` add 2 REST reads per in-flight item — bounded by the number of workers.
