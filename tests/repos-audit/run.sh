@@ -89,8 +89,8 @@ printf '%s' "$out" | grep -q 'FS-GG/.github receives' \
 # Both legs assert on the REASON string, not a bare exit code: a script that dies for an unrelated
 # reason would otherwise satisfy a plain `rc != 0` and the fixture would stop testing its own claim.
 
-# (1) enumerator dies (malformed registry) -> misconfig, NOT "every declared receiver is wired"
-wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+# (1) enumerator dies (malformed registry) -> misconfig, NOT "every declared receiver is wired".
+# No `wire`/`unwired` setup: the audit must die at the roster, before it ever reaches the gh stub.
 BADREG="$WORK/bad.yml"; printf 'schemaVersion: 1\nrepos: [ {id: x,\n' > "$BADREG"
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'cannot enumerate receivers' \

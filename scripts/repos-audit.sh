@@ -106,7 +106,7 @@ done
 # catches today's enumerator failure; this one holds however a future enumerator finds to return
 # empty. The org's fabrics have receivers, so auditing none of them means we audited the wrong thing.
 [ "$audited" -ne 0 ] \
-  || die "audited 0 receiver-capability pair(s) over [$AUDITED_CAPS] — the roster declares receivers, so examining none of them is a failure to audit, not a clean audit."
+  || die "audited 0 receiver-capability pair(s) over [$AUDITED_CAPS] — either no capability maps to a reusable workflow, or no rostered repo receives one. Examining nothing is a failure to audit, not a clean audit."
 
 echo "repos-audit: $audited receiver-capability pair(s) — $wired wired, $gaps gap(s)"
 if [ "$gaps" -ne 0 ]; then
