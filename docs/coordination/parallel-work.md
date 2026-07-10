@@ -334,8 +334,14 @@ raw text, not rendered markdown. Three shapes were found live on five `.github` 
 - **A pull request is not a child.** A sub-issue graph holds issues, never PRs, so a line delivered
   by a PR has nothing to link. Cite it as a **bare** `/pull/` URL —
   `https://github.com/FS-GG/.github/pull/239` — which carries no `#n` token and so declares nothing.
-  A bare `(PR #243)`, or that URL wrapped in `[PR #243](…)`, is indistinguishable from an issue and
-  will be reported as an unlinked child forever.
+  A bare `(PR #243)`, or that URL wrapped in `[PR #243](…)`, reads as an ordinary `#n`. Since
+  [#346](https://github.com/FS-GG/.github/issues/346) both `done --flip` and `EPIC-UNLINKED-CHILD`
+  re-resolve an otherwise-unlinked ref and **drop** it once GitHub confirms it is a pull request, a
+  genuine same-repo `(PR #243)` no longer wedges the gate. It lingers only in the residual cases the
+  probe cannot clear: a number that resolves to an *issue* in the epic's own repo, or one that will
+  not resolve at all — 404, network, rate-limit — which is kept fail-closed
+  ([#266](https://github.com/FS-GG/.github/issues/266)). The bare `/pull/` URL stays the cleanest
+  form anyway: it declares nothing and spends no REST probe.
 
 For the same reason, a spun-off finding that is *not* epic scope belongs in prose beneath the
 checklist: any issue ref on a task-list line — bare, qualified, backticked, or an `/issues/` URL — is
