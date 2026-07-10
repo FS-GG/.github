@@ -108,8 +108,11 @@ Two edges carry the real risk. Both were pre-resolved:
 
 ### Open items carried into the epic (not blocking this ADR)
 
-- **Design-corpus location** — relocate the 6 game-logic library designs to `FS.GG.Game`;
-  keep the 15 game TestSpecs where cross-repo tests reference them (recommendation, settle
-  in P2/P3).
+- **Design-corpus location** — relocate the 6 game-logic library designs to `FS.GG.Game`.
+  The companion recommendation to *keep the 15 game TestSpecs in `.github`* was **superseded
+  by [ADR-0029](0029-game-owns-the-testspec-corpus.md)**: no code references the specs (the
+  "cross-repo tests reference them" premise did not hold) and the `.github`-canonical layout
+  produced the ADR-0024 audio-API drift ([.github#393](https://github.com/FS-GG/.github/pull/393)),
+  so FS.GG.Game now owns the whole corpus and `.github` keeps pointer stubs.
 - **Governance dogfood** — SDD-only in P3; the light governance overlay as a fast-follow.
 - **BOM** — ship the `FS.GG.Game` metapackage now or defer until ≥3 members.
