@@ -27,18 +27,57 @@ echo "touch-set-drift fixture — work='$WORK'"
 
 # --- extract the classifier from the shipped workflow -------------------------------------------
 # `${{ … }}` is Actions template syntax, not shell; the runner substitutes it before bash ever sees
-# it. Do the same, with values the stub ignores anyway.
-python3 - "$WORKFLOW" "$WORK/check.sh" <<'PY'
+# it. Do the same, with values the stub ignores anyway — and REFUSE an expression we have no value
+# for, rather than rewriting it to "": a substitution nobody chose would silently make this fixture
+# exercise a different program than the one CI runs.
+extract_err="$(python3 - "$WORKFLOW" "$WORK/check.sh" 2>&1 <<'PY'
 import sys, re, yaml
 wf = yaml.safe_load(open(sys.argv[1]).read())
 steps = wf["jobs"]["drift"]["steps"]
-run = next(s["run"] for s in steps if s.get("id") == "check")
+run = next((s["run"] for s in steps if s.get("id") == "check"), None)
+if run is None:
+    sys.exit("no step with `id: check` in jobs.drift.steps — did the step id change?")
 subs = {"github.event.number": "1", "github.repository": "FS-GG/.github"}
-run = re.sub(r"\$\{\{\s*(.*?)\s*\}\}", lambda m: subs.get(m.group(1), ""), run)
+unknown = [e for e in re.findall(r"\$\{\{\s*(.*?)\s*\}\}", run) if e not in subs]
+if unknown:
+    sys.exit("run block uses ${{ %s }} — add a fixture value for it" % " }}, ${{ ".join(unknown))
+# Strip comments before looking for the flag: this block DISCUSSES `--warn` at length, and a guard
+# that a comment can satisfy guards nothing.
+code = "\n".join(l for l in run.splitlines() if not l.lstrip().startswith("#"))
+if "--warn" not in code:
+    sys.exit("the gate no longer passes --warn: verify-paths would exit non-zero on a genuine DRIFT "
+             "verdict, and the rc guard would fail the job — making the advisory check a merge "
+             "blocker, against ADR-0021.")
+run = re.sub(r"\$\{\{\s*(.*?)\s*\}\}", lambda m: subs[m.group(1)], run)
 open(sys.argv[2], "w").write(run)
 PY
-[ -s "$WORK/check.sh" ] && ok "extracted the check step's run block from the workflow" \
-  || { bad "extract check step" "empty"; exit 1; }
+)" && ok "extracted the check step's run block (it still passes --warn)" \
+  || { bad "extract the check step's run block" "$extract_err"; exit 1; }
+
+# --- the gate and the real client must agree on the marker vocabulary ---------------------------
+# Everything below this line stubs verify-paths, which means nothing below it can notice that the
+# REAL client stopped printing the markers the gate greps for. That is the #266 shape one level up:
+# a fixture reporting green on a subject it never read. So read it here, in both directions.
+#
+#   gate ⊄ client — the gate greps a marker nobody emits: that verdict is dead, and its output falls
+#                   through to the fail-closed `else`.
+#   client ⊄ gate — the client emits a marker the gate does not classify: same fall-through, on a
+#                   verdict that was supposed to be handled.
+#
+# This is what earns `scripts/fsgg-coord` its place in the selftest's `paths:` trigger.
+markers_err="$(python3 - "$WORK/check.sh" "$REPO_ROOT/scripts/fsgg-coord" 2>&1 <<'PY'
+import sys, re
+gate   = set(re.findall(r"grep -q '(FSGG-PATHS [A-Z]+)'", open(sys.argv[1]).read()))
+client = set(re.findall(r"(FSGG-PATHS [A-Z]+)", open(sys.argv[2]).read()))
+if not gate:   sys.exit("the gate greps for no FSGG-PATHS markers at all")
+if not client: sys.exit("scripts/fsgg-coord prints no FSGG-PATHS markers at all")
+if gate != client:
+    sys.exit("gate greps %s; client prints %s; only-in-gate=%s only-in-client=%s" % (
+        sorted(gate), sorted(client), sorted(gate - client) or "-", sorted(client - gate) or "-"))
+print(" ".join(sorted(m.split()[-1] for m in gate)))
+PY
+)" && ok "the gate greps exactly the markers scripts/fsgg-coord prints ($markers_err)" \
+  || bad "gate/client marker vocabulary disagrees" "$markers_err"
 
 # The stub stands in for `bash scripts/fsgg-coord verify-paths …`, which the run block invokes by
 # relative path — so the fixture executes from a fake root carrying only that one file.
@@ -126,7 +165,9 @@ python3 - "$WORKFLOW" <<'PY' && ok "the comment step is guarded by the implied s
   || bad "comment step guard" "it must not carry an if: that runs on failure"
 import sys, yaml
 wf = yaml.safe_load(open(sys.argv[1]).read())
-step = next(s for s in wf["jobs"]["drift"]["steps"] if s.get("name") == "Comment the verdict")
+step = next((s for s in wf["jobs"]["drift"]["steps"] if s.get("name") == "Comment the verdict"), None)
+if step is None:
+    sys.exit("no step named 'Comment the verdict' — did it get renamed?")
 cond = str(step.get("if", "")).lower()
 sys.exit(0 if not cond or ("success()" in cond and "always()" not in cond) else 1)
 PY

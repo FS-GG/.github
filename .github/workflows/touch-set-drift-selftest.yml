@@ -4,9 +4,11 @@
 # themselves, and a run that dies or prints no `FSGG-PATHS *` marker fails closed instead of reporting
 # `skip` (.github#318). Mirrors coordination-sync-selftest.yml / repos-registry-selftest.yml.
 #
-# `scripts/fsgg-coord` is a trigger path: the fixture stubs verify-paths, so it pins the MARKER
-# STRINGS the gate greps for. Rename a marker in the client and this fixture is how you find out,
-# rather than a silently-`skip`ping gate in production.
+# `scripts/fsgg-coord` is a trigger path, and the fixture earns it: everything past the stub is blind
+# to the real client, so it first asserts the markers the gate greps for are EXACTLY the ones the
+# client prints, in both directions. Rename `FSGG-PATHS OK` in the client and this fixture says so —
+# rather than the gate matching nothing, failing every PR closed, and the selftest that exists to
+# catch it reporting green on a subject it never read (which is #266, one level up).
 name: touch-set-drift-selftest
 
 on:
