@@ -146,7 +146,7 @@ skills:
   # §6; retired by the P6 provider epic). This reconcile also CORRECTS two digests that had drifted from
   # Rendering's live manifest since the 2026-07-05 snapshot (bodies changed in Rendering Feature 250 /
   # 0.1.67, never reconciled): fs-gg-game-core 87b9c55c…→16fd32b7… and fs-gg-model-swap 68edbe46…→a48df195….
-  # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 12 rows
+  # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
   - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: f9f732cdfa0198ee2529e31eba383ca258f4574321c1432d7b5d3d5a2c8afd45, materializes-when: "profile in [game, sample-pack]" }

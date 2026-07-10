@@ -366,8 +366,9 @@ contracts:
     consumers: [github]     # .github's union gate + registry validation; Templates (P4, Templates#49) via provenance.
     validator: >
       Typed Fsgg.Registry validator (fsgg-sdd) — asserts registry = producer manifest = materialized bytes,
-      condition-aware. Both producer sides are now emitted: the 12 PRODUCT rows are producer-reconciled from
-      Rendering's published manifest (Feature 238 / Rendering#76), and the 16 PROCESS rows from SDD's EMITTED
+      condition-aware. Both producer sides are now emitted: the 21 PRODUCT rows are producer-reconciled from
+      the two product manifests (17 from Rendering's — Feature 238 / Rendering#76; 4 GAME rows from
+      FS.GG.Game's, since the ADR-0022 P4 ownership migration), and the 16 PROCESS rows from SDD's EMITTED
       process manifest (.agents/skills/skill-manifest.json; SDD#111 closing #109) — registry = manifest =
       bytes for both. Rendering's predicate-grammar alignment (Rendering#77) has LANDED, so no producer
       condition gates the enforcing flip; it now waits on the typed validator assertion shipping and a
