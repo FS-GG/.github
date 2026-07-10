@@ -134,28 +134,33 @@ kit_title="$(bash "$REPOS_SH" kit --registry "$BASE" | paste -sd, - | sed 's/,/,
 # --- a missing flag value is misconfiguration (exit 2), never a finding (exit 1) — #341 ---
 # `${2:?…}` let bash exit 1, the code reserved for "I checked the roster, and it is invalid". A
 # caller reading the `# Exit:` contract could not tell a typo'd command line from a broken registry.
-# Every flag of every subcommand gets a leg: the value may be absent, or present-but-empty (an unset
-# variable upstream, which is how this reaches a caller in practice).
+#
+# expect_usage <name> <subcommand> <args…> — asserts the exit code AND the diagnostic. Pinning the
+# `::error::repos-registry: <sub>:` prefix is half the point: exit 2 with a raw bash message (which
+# still contains "needs a value") would annotate nothing in Actions and name no subcommand.
 expect_usage() {
   local n="$1"; shift
-  local out rc=0
+  local sub="$1" out rc=0
   out="$(bash "$REPOS_SH" "$@" 2>&1)" || rc=$?
   if [ "$rc" -eq 1 ]; then bad "$n" "exit 1 — a usage error reported itself as a roster finding"; return; fi
   if [ "$rc" -ne 2 ]; then bad "$n" "expected exit 2 (misconfig), got $rc: $out"; return; fi
-  case "$out" in *"needs a value"*) ok "$n" ;;
-                 *) bad "$n" "exit 2 but no 'needs a value' diagnostic: $out" ;; esac
+  case "$out" in "::error::repos-registry: $sub: "*"needs a value"*) ok "$n" ;;
+                 *) bad "$n" "exit 2, but not a prefixed '$sub: <flag> needs a value': $out" ;; esac
 }
-for flag in --receives --field --registry; do
-  expect_usage "list $flag (absent value) -> exit 2"          list "$flag"
-  expect_usage "list $flag '' (empty value) -> exit 2"        list "$flag" ""
-done
-for flag in --field --kind --registry; do
-  expect_usage "kit $flag (absent value) -> exit 2"           kit "$flag"
-  expect_usage "kit $flag '' (empty value) -> exit 2"         kit "$flag" ""
-done
-for flag in --registry --root; do
-  expect_usage "validate $flag (absent value) -> exit 2"      validate "$flag"
-  expect_usage "validate $flag '' (empty value) -> exit 2"    validate "$flag" ""
+# Every flag of every subcommand, three ways it can lack a value. `--field`/`--registry` are shared
+# across subcommands, so each is asserted under each — that is what pins the prefix.
+for spec in "list:--receives --field --registry" \
+            "kit:--field --kind --registry" \
+            "validate:--registry --root"; do
+  sub="${spec%%:*}"
+  for flag in ${spec#*:}; do
+    # absent: `repos.sh list --receives`
+    expect_usage "$sub $flag (absent value) -> exit 2"        "$sub" "$flag"
+    # empty-but-present: an unset variable upstream, which is how this reaches a caller in practice
+    expect_usage "$sub $flag '' (empty value) -> exit 2"      "$sub" "$flag" ""
+    # the next flag swallowed as the value: must blame $flag, not the token two args later
+    expect_usage "$sub $flag --registry (flag as value) -> exit 2" "$sub" "$flag" --registry
+  done
 done
 # `digest` takes a positional, not a flag; it already routes through die(). Guard it against a
 # regression that makes the same class of mistake.
