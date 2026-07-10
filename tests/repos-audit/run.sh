@@ -327,9 +327,27 @@ if audit:
 
 # The `if:` set is a scoping predicate. An rc it does not enumerate must still be caught, or a crashed
 # audit matches no classifier and the job goes green having audited nothing.
-if not any("cancelled()" in str(s.get("if", "")) and "audit.outputs.rc" in str(s.get("if", ""))
-           and runs(s, r"^\s*exit 1\s*$") for s in steps):
+catchall = [s for s in steps if "cancelled()" in str(s.get("if", "")) and "audit.outputs.rc" in str(s.get("if", ""))
+            and runs(s, r"^\s*exit 1\s*$")]
+if not catchall:
     bad.append("no catch-all step: an exit code no `if:` enumerates would leave the job green")
+else:
+    # ...and the catch-all's OWN enumeration must be exactly the set of classified codes. That list is
+    # hand-maintained, which is the same fail-open one layer up. A code listed there with no
+    # classifier matches NOTHING — not a classifier, and not the catch-all that excluded it — so the
+    # job goes green having audited nothing. A classified code missing from it double-reports
+    # instead, telling the operator the workflow does not understand an exit code it demonstrably
+    # does. Neither shows up above, because both leave every individual step perfectly well-formed.
+    m = re.search(r"fromJSON\('\[([^\]]*)\]'\)", str(catchall[0]["if"]))
+    if not m:
+        bad.append("the catch-all's `if:` does not enumerate rc values via fromJSON([...]); its scope cannot be checked")
+    else:
+        listed = set(re.findall(r'"(\d+)"', m.group(1)))
+        classified = {str(rc) for rc in range(256) if classifier(rc)}
+        for rc in sorted(listed - classified):
+            bad.append(f"the catch-all enumerates exit {rc}, but no step classifies it: rc={rc} matches nothing and the job goes GREEN")
+        for rc in sorted(classified - listed):
+            bad.append(f"exit {rc} has a classifier the catch-all does not enumerate: rc={rc} fires both, reporting 'no exit code this workflow understands' about one it does")
 
 # ...and this very assertion is only run when the selftest's paths: filter says so. If repos-audit.yml
 # is outside it, the workflow can be gutted and nothing re-checks its shape: the gate never runs.
