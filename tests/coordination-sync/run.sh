@@ -25,13 +25,16 @@ expect_rc() { local n="$1" want="$2"; shift 2; local out rc=0; out="$("$@" 2>&1)
 
 echo "coordination-sync fixture — receiver='$RECV'"
 
-# The skill set under test is the REGISTRY's, read the same way the distributor reads it. Naming one
-# skill here is the defect this fixture exists to catch (#338): it proves nothing about the others,
-# and stayed green while `check-board` and `pnext-item` went undistributed.
-mapfile -t SKILLS < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field id --kind skill \
-                        --registry "$REPO_ROOT/registry/repos.yml")
-[ "${#SKILLS[@]}" -gt 0 ] \
-  || { echo "::error::fixture: registry declares no 'kind: skill' kit rows — nothing to assert."; exit 1; }
+# The skill set under test is the REGISTRY's, read the same way the distributor reads it — by `source`
+# path, not by id. Naming one skill here is the defect this fixture exists to catch (#338): it proves
+# nothing about the others, and stayed green while `check-board` and `pnext-item` went undistributed.
+# A repos.sh that dies yields an empty list, so treat "no rows" as a broken fixture, not a vacuous pass.
+mapfile -t SKILL_SRCS < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field source --kind skill \
+                            --registry "$REPO_ROOT/registry/repos.yml")
+[ "${#SKILL_SRCS[@]}" -gt 0 ] \
+  || { echo "::error::fixture: could not read any 'kind: skill' kit row — nothing to assert."; exit 1; }
+# The receiver-side directory name is the source's basename, which is what the distributor writes.
+SKILLS=(); for src in "${SKILL_SRCS[@]}"; do SKILLS+=("${src##*/}"); done
 echo "coordination-sync fixture — registry declares ${#SKILLS[@]} skill(s): ${SKILLS[*]}"
 
 # --- apply writes the full kit ---
@@ -43,12 +46,14 @@ diff -q "$REPO_ROOT/scripts/fsgg-coord" "$RECV/scripts/fsgg-coord" >/dev/null \
 
 # EVERY registered skill, in EVERY root. Register a skill in repos.yml and forget the distributor and
 # these go red — where before, `--check` passed on a receiver that lacked it entirely.
-for s in "${SKILLS[@]}"; do
+for i in "${!SKILLS[@]}"; do
+  s="${SKILLS[$i]}"; src="${SKILL_SRCS[$i]}"
   for root in .claude/skills .agents/skills; do
     [ -f "$RECV/$root/$s/SKILL.md" ] && ok "apply: $s in $root" \
       || bad "apply: $s in $root" "declared 'kind: skill' in repos.yml, not distributed"
   done
-  diff -q "$REPO_ROOT/.claude/skills/$s/SKILL.md" "$RECV/.claude/skills/$s/SKILL.md" >/dev/null \
+  # Bytes come from the registry's declared `source`, not from a path rebuilt out of the id.
+  diff -q "$REPO_ROOT/$src/SKILL.md" "$RECV/.claude/skills/$s/SKILL.md" >/dev/null \
     && ok "apply: $s bytes match canonical" || bad "apply: $s bytes"
 done
 
@@ -118,7 +123,7 @@ stub_repos_sh() {   # stub_repos_sh <list-body> <kit-body>
   } > "$FAKE/scripts/repos.sh"
 }
 healthy_list='printf "%s\n" FS-GG/FS.GG.SDD'
-healthy_kit='printf "%s\n" cross-repo-coordination'
+healthy_kit='printf "%s\n" .claude/skills/cross-repo-coordination'   # `kit` yields SOURCE paths
 
 stub_repos_sh "$healthy_list" "$healthy_kit"
 expect_gate "gate: healthy roster still skips a non-receiver (rc 0)" 0 'nothing to do' \
@@ -164,12 +169,20 @@ mkdir -p "$TRACK/.claude"; cp -r "$REPO_ROOT/.claude/skills" "$TRACK/.claude/ski
 cp "$REPO_ROOT/registry/repos.yml" "$TRACK/registry/repos.yml"
 # `kit:` is the last top-level key and its rows are one-line flow mappings, so a row appends cleanly.
 # The source deliberately does NOT exist: a distributor that reads the registry must name it and die.
-printf '  - { id: phantom-skill, kind: skill, source: .claude/skills/phantom-skill, sha256: %064d }\n' 0 \
+#
+# The row's id and its source directory DIFFER on purpose. `validate` permits that — it never asserts
+# `source == .claude/skills/<id>` — so a distributor that rebuilds the path from the id would go
+# looking for 'phantom-skill' and never read the declaration it claims to serve. Assert it names the
+# SOURCE, and does not name the id.
+printf '  - { id: phantom-skill, kind: skill, source: .claude/skills/phantom-dir, sha256: %064d }\n' 0 \
   >> "$TRACK/registry/repos.yml"
 track_out="$(bash "$TRACK/scripts/coordination-sync" --check "$RECV" 2>&1)" || true
-printf '%s' "$track_out" | grep -q 'phantom-skill' \
+printf '%s' "$track_out" | grep -q 'phantom-dir' \
   && ok "registry: a new 'kind: skill' row reaches the distributor" \
   || bad "registry: new skill row ignored by the distributor" "$track_out"
+printf '%s' "$track_out" | grep -q 'phantom-skill' \
+  && bad "registry: source path rebuilt from the id, not read from the row" "$track_out" \
+  || ok "registry: the skill's path is its declared 'source', not '.claude/skills/<id>'"
 
 echo "coordination-sync fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coordination-sync fixture FAILED"; exit 1; }
