@@ -277,6 +277,50 @@ cat >"$FIXTURES/rollup-none.json" <<'JSON'
 {"data":{"repository":{"issue":{"parent":null}}},"rateLimit":{"cost":1,"remaining":4964}}
 JSON
 
+# PR provenance (FS-GG/.github#342). `closedByPullRequestsReferences` also lists PRs that merely
+# MENTION the issue (our "Filed, not fixed: #N" convention), lowest-number-first — so the old code's
+# "first merged PR" stamped the wrong commit, or stamped green off an unrelated merge. These probe
+# the no-`--pr` auto-selection (the `--pr` tests above exercise the explicit-override branch, which
+# is unchanged). All three sit on the board as Done already, so a stamp turns only on PR selection.
+#
+# #84: real closer #92 (merged LATER), plus an earlier, lower-numbered PR #85 that only MENTIONS #84
+#      in prose while actually closing #74 — the exact live case in the issue. Must stamp #92.
+cat >"$FIXTURES/done-84.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":84,"title":"closed by its own PR, mentioned by an earlier one","url":"https://github.com/FS-GG/FS.GG.SDD/issues/84","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":85,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/85","merged":true,"mergedAt":"2026-07-10T13:41:56Z","mergeCommit":{"abbreviatedOid":"410843e"},
+      "closingIssuesReferences":{"nodes":[{"number":74,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}},
+    {"number":92,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/92","merged":true,"mergedAt":"2026-07-10T14:09:15Z","mergeCommit":{"abbreviatedOid":"09c836e"},
+      "closingIssuesReferences":{"nodes":[{"number":84,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}
+  ]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"Done"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4957}}
+JSON
+# #86: a merged PR #87 MENTIONS #86 but closes #70 — no PR closes #86. Must REFUSE, even though the
+#      board says Done: a mention is not authorship (#342's second failure — green with no closer).
+cat >"$FIXTURES/done-86.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":86,"title":"only mentioned by a merged PR, never closed by one","url":"https://github.com/FS-GG/FS.GG.SDD/issues/86","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":87,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/87","merged":true,"mergedAt":"2026-07-10T15:00:00Z","mergeCommit":{"abbreviatedOid":"beef777"},
+      "closingIssuesReferences":{"nodes":[{"number":70,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}
+  ]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"Done"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4956}}
+JSON
+# #88: reopened + re-closed, so TWO merged PRs both close it. The lower-numbered #89 merged EARLIER;
+#      "latest merge" must win over "lowest number". Must stamp #95.
+cat >"$FIXTURES/done-88.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":88,"title":"reopened and re-closed by two PRs","url":"https://github.com/FS-GG/FS.GG.SDD/issues/88","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":89,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/89","merged":true,"mergedAt":"2026-07-10T09:00:00Z","mergeCommit":{"abbreviatedOid":"1111aaa"},
+      "closingIssuesReferences":{"nodes":[{"number":88,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}},
+    {"number":95,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/95","merged":true,"mergedAt":"2026-07-10T11:00:00Z","mergeCommit":{"abbreviatedOid":"2222bbb"},
+      "closingIssuesReferences":{"nodes":[{"number":88,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}
+  ]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"Done"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4955}}
+JSON
+
 # ---- gh stub ------------------------------------------------------------------------------------
 cat >"$STUB/gh" <<STUB
 #!/usr/bin/env bash
@@ -913,6 +957,28 @@ esac
 # Two Status writes: the child, then the epic the PR-cite no longer wedges.
 assert_eq "rollup: flipping over a PR ref writes Status twice (child, then epic)" "2" \
   "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
+
+# (10) PR provenance (FS-GG/.github#342): with no `--pr`, `done` stamps the PR that actually CLOSED
+#      the issue — the latest-merged among true closers — and refuses a mere prose mention, where the
+#      old code stamped the first (lowest-numbered) merged reference of any kind.
+prov84="$(run done 'FS.GG.SDD#84' 2>/dev/null || true)"
+assert_contains "done: stamps the PR that CLOSED the issue, not an earlier prose mention" \
+  "merged PR #92 @ 09c836e" "$prov84"
+assert_eq "done: the mentioning PR #85 (which closed #74) is never stamped" "0" \
+  "$(printf '%s' "$prov84" | grep -c '#85\|410843e' || true)"
+
+refuse86="$(run done 'FS.GG.SDD#86' 2>/dev/null || true)"
+assert_contains "done: REFUSES when a merged PR only mentions the issue (no closer)" \
+  "no merged PR closes this issue" "$refuse86"
+assert_contains "done: the refusal is a red NOT-DONE stamp" "FSGG-NOT-DONE   FS.GG.SDD#86" "$refuse86"
+assert_eq "done: a board-Done issue with only a mention still fails (green needs a real closer)" "1" \
+  "$(run done 'FS.GG.SDD#86' >/dev/null 2>&1; echo $?)"
+
+prov88="$(run done 'FS.GG.SDD#88' 2>/dev/null || true)"
+assert_contains "done: among two closers, the LATEST-merged wins (not the lowest-numbered)" \
+  "merged PR #95 @ 2222bbb" "$prov88"
+assert_eq "done: the earlier-merged, lower-numbered closer #89 is not stamped" "0" \
+  "$(printf '%s' "$prov88" | grep -c '#89\|1111aaa' || true)"
 
 # ---- `child`: the only thing that actually creates the edge rollup reads ------------------------
 # The epic #302 and the child #47 the rollup above just refused to roll up over — written here
