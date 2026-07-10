@@ -1107,10 +1107,15 @@ banner() {   # $1=done|fail  $2=line1  $3=line2  — two full-width rows
 # `#n`, `owner/repo#n`, or a full issue URL, and all three canonicalize to `owner/repo#n` against
 # the epic's own repo — the same form `lint_items` builds for the sub-issue graph, so the two sets
 # are directly comparable.
+#
+# All THREE markdown bullets are accepted (`-`, `*`, `+`). GitHub renders a task list for each, so a
+# matcher that knows only `-` would read an epic written with `+` as declaring NO children — and the
+# gate below would wave it through. A gate that fails open on a formatting choice is the bug this
+# whole epic is about.
 JQ_BODY_CHILD_REFS='
 def body_child_refs($self):
   (. // "") | split("\n")
-  | map(select(test("^[ \t]{0,3}[-*][ \t]+\\[[ xX]\\][ \t]")))
+  | map(select(test("^[ \t]{0,3}[-*+][ \t]+\\[[ xX]\\][ \t]")))
   | map([ scan("([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#([0-9]+)|https?://github\\.com/([^/[:space:]]+)/([^/[:space:]]+)/issues/([0-9]+)|#([0-9]+)") ] | first)
   | map(select(. != null))
   | map( if   .[0] then "\(.[0])#\(.[1])"
@@ -1191,9 +1196,10 @@ epic_rollup() {
       | [ $p.subIssues.nodes[]? | "\(.repository.nameWithOwner)#\(.number)" ] as $linked
       | ($declared - $linked)[]' <<<"$out")"
     if [ -n "$unlinked" ]; then
+      # `paste -sd', '` would CYCLE the two delimiters (a,b c,d). Join on ',' and space it after.
       printf '  epic %s: body declares %s child(ren) the sub-issue graph does not contain — not rolling up: %s\n' \
         "$p_lbl" "$(printf '%s\n' "$unlinked" | wc -l | tr -d ' ')" \
-        "$(printf '%s\n' "$unlinked" | paste -sd', ' -)"
+        "$(printf '%s\n' "$unlinked" | paste -sd, - | sed 's/,/, /g')"
       printf '  link them, then re-run:  fsgg-coord child %s <issue>\n' "$p_lbl"
       break
     fi
@@ -1244,14 +1250,25 @@ child_cmd() {
 
   # Idempotent by ID, not by number: two repos can each have an issue #7. Re-linking is success, so
   # a worker re-running the close-out never has to reason about whether the edge already exists.
-  if gh api "repos/$po/$pp/issues/$pn/sub_issues" --paginate --jq '.[].id' 2>/dev/null \
-       | grep -qx "$cid"; then
+  #
+  # The read's exit status is KEPT. `2>/dev/null`-ing it would make "I could not reach the API" look
+  # exactly like "the edge is not there" — we would POST, collect a 422, and blame the token. That is
+  # the #266 defect (and #320's, precisely) reappearing inside the fix for it: an unreachable subject
+  # must not be reported as an absent one.
+  local existing rc=0
+  existing="$(gh api "repos/$po/$pp/issues/$pn/sub_issues" --paginate --jq '.[].id')" || rc=$?
+  [ "$rc" -eq 0 ] \
+    || die "child: cannot read $pp#$pn's sub-issues (rc=$rc) — refusing to guess whether $cp#$cn is already linked."
+  if printf '%s\n' "$existing" | grep -qx "$cid"; then
     printf 'child: %s#%s is already a sub-issue of %s#%s — nothing to do\n' "$cp" "$cn" "$pp" "$pn"
     return 0
   fi
 
-  gh api "repos/$po/$pp/issues/$pn/sub_issues" -F sub_issue_id="$cid" >/dev/null 2>&1 \
-    || die "child: could not link $cp#$cn under $pp#$pn (needs 'issues: write'; note GitHub may refuse a cross-repo sub-issue)."
+  # Surface gh's own diagnosis rather than guessing one: a 422 (already linked, or a cross-repo link
+  # GitHub refuses) and a 403 (no `issues: write`) are different problems with different fixes.
+  local err
+  err="$(gh api "repos/$po/$pp/issues/$pn/sub_issues" -F sub_issue_id="$cid" 2>&1 >/dev/null)" \
+    || die "child: could not link $cp#$cn under $pp#$pn — $err"
   printf 'linked %s#%s as a sub-issue of %s#%s  ·  `done --flip` can now see it\n' "$cp" "$cn" "$pp" "$pn"
 }
 
