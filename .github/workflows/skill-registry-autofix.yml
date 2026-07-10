@@ -1,0 +1,271 @@
+# The RESPONSE half of `registry = manifest = bytes` (.github#299, ADR-0017, epic #266).
+#
+# `skill-registry-coherence.yml` is the DETECTION half: its `schedule:` catches a producer that
+# merged a SKILL.md body change and left `registry/skills.yml` stale, because the producer's own
+# drift-guard stays green (it is internally consistent) while THIS registry silently falls behind.
+# Detection is sound — it caught the drift at #288, #297, and #308. What was missing was RESPONSE:
+# nothing turned "a producer moved a body" into "a `.github` PR re-digesting the row exists". Each
+# stale row waited for the next unrelated `.github` PR (or the nightly detection) to trip the gate,
+# and was then reconciled BY HAND. The count of manual sweeps (#288 → #297 → #308) grew rather than
+# converged. This workflow closes that edge: it runs the reconcile the humans were running, and
+# opens the PR they were opening.
+#
+# WHY POLL, NOT DISPATCH. #299 sketches two shapes: a `repository_dispatch` from each producer on a
+# skill-body merge, or a scheduled auto-PR here that polls. The issue says to "cost the simple
+# version first" — and the simple version is the only one that lives entirely in `.github`. Dispatch
+# would mean editing four producer repos' workflows; polling reuses the producer checkout the
+# detection job already does. Detection already polls on `schedule:`; this is its auto-PR twin, run
+# 25 minutes later so a body merged overnight is both detected AND has a reconcile PR by morning.
+#
+# WHAT IT WILL AND WON'T RECONCILE. `--write` is self-limiting to the MECHANICAL cases — it rewrites
+# a stale `sha256:` / `materializes-when:` verbatim from the manifest, and appends a missing row
+# only when exactly one manifest derives its `source:`. It then RE-CHECKS and refuses to touch the
+# JUDGEMENT cases: a vanished source, a frozen-mirror divergence (#295 — two repos disagree on who
+# owns a body), contradictory predicates, or a row two manifests declare (#298 — needs an owner
+# call). Those it leaves as findings and exits non-zero. Auto-resolving either would re-introduce
+# the fail-open shape of #266 INSIDE the fix for it — so this workflow carries them into the PR body
+# as "still needs a human", never silently resolves them.
+#
+# WHY IT SELF-VERIFIES INSTEAD OF LEANING ON THE PR's CHECKS. The PR is pushed with the run-scoped
+# GITHUB_TOKEN, whose pushes deliberately do NOT re-trigger `on: pull_request` workflows (GitHub's
+# recursion guard) — so `skill-registry-coherence`'s PR job will NOT run on this PR. That is fine
+# here because `--write` already re-checks `registry = manifest = bytes` from disk after writing;
+# this job surfaces that verdict in the PR body as the verification of record. (If a future revision
+# wants the PR's own checks to run — e.g. to gate on the full coherence matrix — swap the push to
+# the org `fs-gg-cross-repo-dispatch` App token, exactly as `lockfile-sync.yml` does and for exactly
+# this reason.)
+#
+# ONE STANDING PR. The reconcile is pushed to a fixed branch, so a second run force-updates the same
+# branch and the same open PR rather than opening a pile of them. A run that finds nothing stale
+# touches no branch and opens nothing.
+#
+# CLEAN REPOS-ROOT. `fsgg-skill-registry-check` reads EVERY directory under `--repos-root` as a
+# producer, so a stray checkout there corrupts the findings (a developer's in-flight `git worktree`s
+# are the classic trap). CI is clean by construction: `.repos` holds exactly the freshly-cloned
+# canonical producers and nothing else — the same guarantee `skill-registry-coherence.yml` relies on.
+name: skill-registry-autofix
+
+on:
+  # Detection runs at 17 6; this runs 25 min later so a nightly-detected drift also gets its PR.
+  schedule:
+    - cron: "42 6 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Reconcile and print the diff + PR body, but do NOT push a branch or open a PR."
+        type: boolean
+        default: false
+
+# contents: write pushes the reconcile branch; pull-requests: write opens/updates the standing PR.
+# Both are same-repo writes, so the run-scoped GITHUB_TOKEN suffices — no App token (see header).
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  # Never let two runs (a schedule and a manual dispatch) race on the standing branch.
+  group: skill-registry-autofix
+  cancel-in-progress: false
+
+jobs:
+  autofix:
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: bot/skill-registry-autofix
+      REGISTRY: registry/skills.yml
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      # The producer bodies whose digests the registry declares, at `main`. Public, so the default
+      # token suffices. `.repos` holds ONLY these — the clean root the check requires (see header).
+      #
+      # The producer set is DERIVED from the registry's own `source:` prefixes, not hardcoded: a new
+      # skill-producing repo starts being fetched the moment its first row lands, with nothing to keep
+      # in sync by hand. (Detection hardcodes the list; here the reconcile must not silently skip a
+      # producer the registry already names.)
+      #
+      # Blobless but NOT `--depth 1` (unlike detection, which only runs the check): the PR body names
+      # the producer commit/PR that MOVED each body, which needs real history — on a depth-1 clone
+      # `git log -- <path>` can only see the tip and would mislabel every row with the same HEAD.
+      # `--filter=blob:none` keeps it cheap: all commits/trees, blobs fetched lazily (none needed for
+      # `git log`; the body bytes the check hashes are the only blobs pulled).
+      - name: Check out the producer repos
+        run: |
+          set -euo pipefail
+          mkdir -p .repos
+          producers="$(python -c "import yaml; print('\n'.join(sorted({r['source'].split('/')[0] for r in yaml.safe_load(open('registry/skills.yml'))['skills']})))")"
+          echo "producers named by registry/skills.yml:"; echo "$producers"
+          while IFS= read -r repo; do
+            [ -n "$repo" ] || continue
+            git clone --filter=blob:none \
+              "https://github.com/FS-GG/$repo.git" ".repos/$repo"
+            echo "cloned $repo @ $(git -C ".repos/$repo" rev-parse --short HEAD)"
+          done <<< "$producers"
+
+      # Snapshot the findings BEFORE writing — the PR body names each reconciled row and, best
+      # effort, the producer commit that last moved its body (the research a human did by hand).
+      - name: Snapshot findings
+        run: python scripts/fsgg-skill-registry-check --repos-root .repos --json > findings.before.json || true
+
+      - name: Reconcile in place
+        # `--write` exits non-zero when JUDGEMENT cases remain (see header) — expected, and it must
+        # NOT fail the job, because the mechanical reconcile is still worth a PR. `|| true` swallows
+        # that exit; the decision to act is made on the git diff in the next step, not this code.
+        run: python scripts/fsgg-skill-registry-check --write --repos-root .repos || true
+
+      - name: Decide whether anything changed
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- "$REGISTRY"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "skill-registry-autofix: registry already coherent with the producer manifests — nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "skill-registry-autofix: reconciled rows in $REGISTRY:"
+            git --no-pager diff --stat -- "$REGISTRY"
+          fi
+
+      # Build the PR body from the pre-write findings + producer history. Defensive: a lookup that
+      # misses degrades to a bare row line, never fails the job.
+      - name: Compose PR body
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          python - <<'PY' > pr-body.md
+          import json, subprocess, pathlib, yaml
+
+          # Best-effort: a malformed snapshot must degrade the body, never fail the job and starve a
+          # genuine reconcile of its PR — the git diff, not this list, is what decides the PR opens.
+          try:
+              findings = json.loads(pathlib.Path("findings.before.json").read_text())["findings"]
+          except Exception:
+              findings = []
+          rows = {r["id"]: r for r in yaml.safe_load(pathlib.Path("registry/skills.yml").read_text())["skills"]}
+
+          # Pure VALUE rewrites, taken verbatim from the manifest — genuinely no producer decision.
+          RECONCILED = {"digest-matches", "predicate-matches"}
+          # `--write` may APPEND a `declared-completeness` row when it can derive `source:` from one
+          # manifest — but the OWNER/scope is a manifest GUESS, and re-homing it is the #298 owner-call
+          # the issue kept out of automation. Surface it for confirmation, never as an auto-resolve.
+          # (A non-derivable one carries no "row" and stays a red finding — handled under RESIDUAL.)
+
+          def producer_commit(source):
+              # source is "<repo>/<path>"; name the last producer commit that touched the body.
+              if not source or "/" not in source:
+                  return ""
+              repo, _, rel = source.partition("/")
+              try:
+                  out = subprocess.run(
+                      ["git", "-C", f".repos/{repo}", "log", "-1", "--format=%h %s", "--", rel],
+                      capture_output=True, text=True, timeout=30,
+                  ).stdout.strip()
+                  return f" — producer {repo}@{out}" if out else ""
+              except Exception:
+                  return ""
+
+          lines = [
+              "## Automated skill-registry reconcile",
+              "",
+              "`registry/skills.yml` had fallen behind the producer manifests it is reconciled from",
+              "(ADR-0017, `registry = manifest = bytes`). `fsgg-skill-registry-check --write` rewrote the",
+              "stale values **verbatim from the producer manifests** — this PR is that reconcile. It exists",
+              "because detection (`skill-registry-coherence`) had no automated response (.github#299).",
+              "",
+              "### Reconciled (mechanical — no producer decision)",
+              "",
+          ]
+          appended = [f for f in findings if f["check"] == "declared-completeness" and "row" in f]
+          reconciled = [f for f in findings if f["check"] in RECONCILED]
+          # Anything else `--write` could not resolve — including a NON-derivable declared-completeness
+          # (no "row") — stays a red finding for a human.
+          residual = [
+              f for f in findings
+              if f["check"] not in RECONCILED and not (f["check"] == "declared-completeness" and "row" in f)
+          ]
+
+          if reconciled:
+              for f in reconciled:
+                  src = rows.get(f["id"], {}).get("source", "")
+                  if f["check"] == "digest-matches":
+                      lines.append(f"- `{f['id']}` sha256 `{f['declared'][:8]}…` → `{f['actual'][:8]}…`{producer_commit(src)}")
+                  else:
+                      lines.append(f"- `{f['id']}` [{f['check']}] {f['detail']}{producer_commit(src)}")
+          else:
+              lines.append("_(none — see the appended/residual sections and the file diff)_")
+
+          if appended:
+              lines += [
+                  "",
+                  "### ⚠️ Appended — CONFIRM the owner before merge (not an auto-resolve)",
+                  "",
+                  "`--write` appended these rows with a **manifest-derived** `owner:`/`source:`. That guess",
+                  "is the #298 owner-call the automation deliberately does NOT make for you — confirm each",
+                  "`owner:`/`scope:` and re-home the row into the block it belongs to before merging:",
+                  "",
+              ]
+              lines += [f"- `{f['id']}` [{f['check']}] {f['detail']}" for f in appended]
+
+          if residual:
+              lines += [
+                  "",
+                  "### ⛔ Still needs a human — NOT resolved here",
+                  "",
+                  "Judgement cases `--write` refuses to touch (auto-resolving them would be the fail-open",
+                  "shape of epic #266). They keep `skill-registry-coherence` red until handled by hand:",
+                  "",
+              ]
+              lines += [f"- `{f['id']}` [{f['check']}] {f['detail']}" for f in residual]
+
+          lines += [
+              "",
+              "### Before merge",
+              "",
+              "- [ ] Confirm the `owner:`/`scope:` of any appended row (see above) and re-home it.",
+              "- [ ] Set `updated:` on each reconciled/appended row.",
+              "- [ ] Prepend a dated `registry/skills.CHANGELOG.md` entry naming the producer PR per row.",
+              "",
+              "<sub>Opened by `skill-registry-autofix`. Pushed with `GITHUB_TOKEN`, so the `pull_request`",
+              "coherence job does not re-run here — the reconcile's own post-write re-check is the verification",
+              "of record (see the workflow header). Re-run detection or push an empty commit to force the full matrix.</sub>",
+          ]
+          print("\n".join(lines))
+          PY
+          echo "----- PR body -----"
+          cat pr-body.md
+
+      - name: Open or update the standing PR
+        if: steps.diff.outputs.changed == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -- "$REGISTRY"
+          git commit -m "registry: auto-reconcile skill-registry against producer manifests (.github#299)"
+          # Plain --force: this branch is bot-owned and nobody else writes it, and the `concurrency`
+          # group already serializes runs — so there is no lost-update to guard against, while
+          # --force-with-lease would misfire on the first push (no remote-tracking ref to compare).
+          git push --force origin "$BRANCH"
+
+          # One standing PR: reuse the open one if present, else open it.
+          existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' || true)"
+          title="registry: re-digest stale skill rows (auto)"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body-file pr-body.md
+            echo "updated standing PR #$existing"
+          else
+            gh pr create --base main --head "$BRANCH" --title "$title" --body-file pr-body.md \
+              --label bug
+            echo "opened standing PR on $BRANCH"
+          fi
+
+      - name: Dry-run notice
+        if: steps.diff.outputs.changed == 'true' && github.event_name == 'workflow_dispatch' && inputs.dry-run == true
+        run: |
+          echo "dry-run: reconcile computed and PR body composed above; branch/PR NOT touched."
