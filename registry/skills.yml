@@ -51,7 +51,7 @@
 # catalog + `skill-registry` contract already landed (.github#168).
 
 schemaVersion: 1
-updated: "2026-07-08"
+updated: "2026-07-10"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -71,15 +71,15 @@ skills:
   - { id: fs-gg-sdd-charter,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-charter/SKILL.md,             sha256: 9855bd3c7d1422d331213fe0a7e59c7454e1cc1080cf0ef6bd25379da2e40b24, materializes-when: always }
   - { id: fs-gg-sdd-checklist,           scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-checklist/SKILL.md,           sha256: 63aa9c23681d61e572b850b1ad502e01ee8cd6b552dc3d3a783028a81d5fc736, materializes-when: always }
   - { id: fs-gg-sdd-clarify,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-clarify/SKILL.md,             sha256: 09d2ed9726307cd7ec745edf2fc7a9bd4f6c1486c62d954080ab534c0c5a4238, materializes-when: always }
-  - { id: fs-gg-sdd-evidence,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-evidence/SKILL.md,            sha256: 9294560c5a5cf74c9ec3b190206d20602af650d8e393493632ef7a1d08945aac, materializes-when: always }
+  - { id: fs-gg-sdd-evidence,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-evidence/SKILL.md,            sha256: 581db14d7e4f85401b0deca03bfe24bded405566be5f23db418ec849f2553447, materializes-when: always }
   - { id: fs-gg-sdd-getting-started,     scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-getting-started/SKILL.md,     sha256: 498a8881158fbb06495b7fbd1ef02ae07a5f7ddd6252954e7f2c0492b86a03b5, materializes-when: always }
   - { id: fs-gg-sdd-lifecycle,           scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-lifecycle/SKILL.md,           sha256: 628e1d53f08fc5407f016676e0b1495bf915d62f0330cf3d0c817cb7fc4e3e9e, materializes-when: always }
   - { id: fs-gg-sdd-plan,                scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-plan/SKILL.md,                sha256: a0c201136634403a7cefb79e05195a467d878361070c70aea406b99936ac7695, materializes-when: always }
-  - { id: fs-gg-sdd-refresh-agents,      scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-refresh-agents/SKILL.md,      sha256: 557ec14f288c39dc3fa337bcdee0e8765ff53b574527619c2564025db1a74838, materializes-when: always }
-  - { id: fs-gg-sdd-ship,                scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-ship/SKILL.md,                sha256: 45e67e5dbef7e0a1fe7006774a3c4b5cf66d19a8d37d41a2077fd91d103e067c, materializes-when: always }
+  - { id: fs-gg-sdd-refresh-agents,      scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-refresh-agents/SKILL.md,      sha256: 537dd263bb13d5570093764d8fd4e041ae28661070bc7fcb8d8c9067256d6f83, materializes-when: always }
+  - { id: fs-gg-sdd-ship,                scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-ship/SKILL.md,                sha256: c98e3e86701945bd90fdb3033ee991ad4e39e9b9699b081a438bb166099807bb, materializes-when: always }
   - { id: fs-gg-sdd-specify,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-specify/SKILL.md,             sha256: 55c65444da945788b247e38fcd1fc39540d5e3b1cc9a833365bc6f21b138454e, materializes-when: always }
   - { id: fs-gg-sdd-tasks,               scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-tasks/SKILL.md,               sha256: 5dad7efaa8da30560c852c8568528d6d401170f87b6453a36e0f9ffe77372692, materializes-when: always }
-  - { id: fs-gg-sdd-troubleshooting,     scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-troubleshooting/SKILL.md,     sha256: 96eb7eafe8f7f6127e4364ff54064c59f9c3a47627f59fa2dfe7622352c9bbd8, materializes-when: always }
+  - { id: fs-gg-sdd-troubleshooting,     scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-troubleshooting/SKILL.md,     sha256: e1d92bc789903d8c7c3920a8d56cc5e15c242f211a7b549858137c9431aac1cf, materializes-when: always }
   - { id: fs-gg-sdd-validate,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-validate/SKILL.md,            sha256: 87ed462650a26b7deafad23c46fa313928740ea9554385465fe74b5ecc23ec2a, materializes-when: always }
   - { id: fs-gg-sdd-verify,              scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-verify/SKILL.md,              sha256: 8ac403e477a02de2b5ea251e64146cea5798c33feb2a3a7c0868985368ab65c4, materializes-when: always }
 
@@ -95,7 +95,7 @@ skills:
   - { id: fs-gg-layout,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-layout/SKILL.md,    sha256: 85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: fbad9e801720b03820e34cda11f65e541a4218ff39fc9ac033c1e86c6eef0c01, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-styling,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-styling/SKILL.md,   sha256: 24754ec5cb931deb6fcaf7d4b9e5926c42f4325dc4f67cb4852295de8b405ac9, materializes-when: "profile in [app, game]" }
-  - { id: fs-gg-ui-widgets,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-ui-widgets/SKILL.md, sha256: a0c0ce7acafdb1b99b574616fe2940108524bdd11b4eb93b664a8b41dd56650f, materializes-when: "profile in [app, game]" }
+  - { id: fs-gg-ui-widgets,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-ui-widgets/SKILL.md, sha256: e935367032e1b37ac5bfa4db40656f3b6c48b37a30b0d668545d0688c8e445f7, materializes-when: "profile in [app, game]" }
   # GAME product skills — MIGRATED owner fs-gg-rendering → fs-gg-game (ADR-0022 P4, epic #213/#218).
   # Reconciled from FS.GG.Game's producer manifest FS.GG.Game/template/skill-manifest/skill-manifest.json
   # (schema skill-manifest v1; regenerable via `dotnet fsi scripts/generate-skill-manifest.fsx --check`,
