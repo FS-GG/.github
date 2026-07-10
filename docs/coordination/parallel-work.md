@@ -310,6 +310,36 @@ does not contain, and `fsgg-coord lint` reports the same condition as `EPIC-UNLI
 body's task-list is the epic's second, human-legible record of its children; the two records must
 agree, and "all children are Done" must never be a statement about a set already known to be short.
 
+#### What the body counts as a declaration
+
+Only a **task-list line** — `- [ ]` / `- [x]` (`*` and `+` bullets count; `[X]` counts), indented
+**at most three spaces** — declares a child, and only its **first** issue ref does. The matcher reads
+raw text, not rendered markdown. Three shapes were found live on five `.github` epics
+([#345](https://github.com/FS-GG/.github/issues/345)):
+
+- **A bare `#n` resolves against the epic's own repo**, exactly as GitHub renders it. `SDD#109` and
+  `Templates#49` have no slash, so they are read as `.github#109` and `.github#49` — a merged PR and
+  an unrelated issue. Write cross-repo children as `FS-GG/FS.GG.SDD#109`.
+- **The first ref wins, so an aside outranks the child.** `— simulation patterns (ties to ADR-0017 /
+  #163) → **FS-GG/FS.GG.Rendering#73**` declares `#163`, not the child that follows it. Put the
+  child ref first and let the aside trail. "First" is positional in the raw line, so a `#n` inside a
+  code span or a link's *text* still wins — `[PR #243](…/pull/243)` declares `.github#243`.
+- **A pull request is not a child.** A sub-issue graph holds issues, never PRs, so a line delivered
+  by a PR has nothing to link. Cite it as a **bare** `/pull/` URL —
+  `https://github.com/FS-GG/.github/pull/239` — which carries no `#n` token and so declares nothing.
+  A bare `(PR #243)`, or that URL wrapped in `[PR #243](…)`, is indistinguishable from an issue and
+  will be reported as an unlinked child forever.
+
+For the same reason, a spun-off finding that is *not* epic scope belongs in prose beneath the
+checklist: any issue ref on a task-list line — bare, qualified, backticked, or an `/issues/` URL — is
+a claim that the epic has that child.
+
+> **The one place this gate fails open.** A task-list line indented **four or more spaces** — a
+> nested sub-checklist — matches nothing, so it declares nothing. Its child is invisible to both
+> `lint` and `done --flip`'s cross-check, and the epic will roll up `Done` straight over it. Keep
+> epic children at the top level of the checklist. Tracked as
+> [#346](https://github.com/FS-GG/.github/issues/346).
+
 ## The fan-out loop
 
 ```sh
