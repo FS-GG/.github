@@ -17,10 +17,14 @@ on:
       - "tests/repos-registry/**"
       - ".github/workflows/repos-registry-selftest.yml"
       # kit sources — an edit here changes the content-addressed digest, so re-validate that
-      # registry/repos.yml's kit sha256 still matches (ADR-0019).
+      # registry/repos.yml's kit sha256 still matches (ADR-0019). The skill roots are wildcards, not
+      # a per-skill list: a hand-maintained list silently omitted intra-repo-parallel-work, so
+      # editing it never re-checked its sha256 (#334). A wildcard over-triggers on a non-kit skill;
+      # a stale list fails open, which is strictly worse. tests/repos-registry/run.sh asserts every
+      # kit: source is matched here, on both triggers — a gate on the gate.
       - "scripts/fsgg-coord"
-      - ".claude/skills/cross-repo-coordination/**"
-      - ".agents/skills/cross-repo-coordination/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
   push:
     branches: [main]
     paths:
@@ -30,8 +34,8 @@ on:
       - "tests/repos-registry/**"
       - ".github/workflows/repos-registry-selftest.yml"
       - "scripts/fsgg-coord"
-      - ".claude/skills/cross-repo-coordination/**"
-      - ".agents/skills/cross-repo-coordination/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
   workflow_dispatch:
 
 permissions:
@@ -42,5 +46,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # The fixture's paths:-coverage assertion parses this workflow with PyYAML. Declare it rather
+      # than inheriting whatever the runner image happens to ship: a gate that asserts other gates
+      # cannot itself rest on an undeclared dependency. Mirrors repos-audit-selftest.yml.
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
       - name: Run the repos-registry fixture
         run: bash tests/repos-registry/run.sh

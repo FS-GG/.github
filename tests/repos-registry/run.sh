@@ -116,6 +116,62 @@ kit_title="$(bash "$REPOS_SH" kit --registry "$BASE" | paste -sd, - | sed 's/,/,
 if bash "$REPOS_SH" validate >/dev/null 2>&1; then ok "the checked-in registry/repos.yml validates"
 else bad "real registry/repos.yml validates" "$(bash "$REPOS_SH" validate 2>&1)"; fi
 
+# --- CI guard on the gate itself (#266) ---
+# `validate` above is the only thing asserting the kit digests, and it runs only when this workflow's
+# `paths:` filter matches. A kit source outside that filter is therefore never digest-checked, and
+# nothing reports it: the gate reports green because it never ran. Assert every kit source (and, for
+# skills, the .agents mirror that carries the same bytes) is covered, on BOTH triggers.
+uncovered="$(python3 - "$REPO_ROOT" <<'PY'
+import sys, yaml, re, pathlib
+root = pathlib.Path(sys.argv[1])
+wf  = yaml.safe_load((root / ".github/workflows/repos-registry-selftest.yml").read_text())
+reg = yaml.safe_load((root / "registry/repos.yml").read_text())
+
+# YAML 1.1 reads a bare `on:` as the boolean True; a quoted "on": stays a string. Accept either
+# rather than KeyError-ing, and say so plainly if the key is gone — this assertion exists precisely
+# because a gate that cannot find its subject must fail loudly, not vanish.
+triggers = wf.get(True, wf.get("on"))
+if not isinstance(triggers, dict):
+    sys.exit("selftest workflow has no readable `on:` block — cannot check its paths: filter")
+
+def matches(path, pat):                       # GitHub glob: ** spans /, * does not
+    rx = "".join(r"[^/]*" if p == "*" else ".*" if p == "**" else re.escape(p)
+                 for p in re.split(r"(\*\*|\*)", pat))
+    return re.fullmatch(rx, path) is not None
+
+def probes(item):
+    # `digest` hashes a dir's SKILL.md and a file's own bytes, so those are the paths whose edits
+    # stale the sha256. Skills are mirrored byte-for-byte into .agents/, so an edit lands in either.
+    if item["kind"] != "skill":
+        return [item["source"]]
+    claude = f"{item['source']}/SKILL.md"
+    return sorted({claude, claude.replace(".claude/", ".agents/", 1)})
+
+gaps = []
+for trigger in ("pull_request", "push"):
+    if trigger not in triggers:
+        # The gate cannot run on this event at all — the widest possible coverage gap.
+        gaps.append(f"{trigger}: trigger absent — the fixture never runs on {trigger}")
+        continue
+    # A trigger that is null, or carries no `paths:`, is unfiltered: every path fires it, so every
+    # kit source is trivially covered. Only an explicitly empty list matches nothing.
+    cfg = triggers.get(trigger) or {}
+    if "paths" not in cfg:
+        continue
+    pats = cfg["paths"]
+    if not pats:
+        gaps.append(f"{trigger}: paths: is empty — matches nothing")
+        continue
+    for item in reg["kit"]:
+        for probe in probes(item):
+            if not any(matches(probe, p) for p in pats):
+                gaps.append(f"{trigger}: kit '{item['id']}' source {probe}")
+print("\n".join(gaps))
+PY
+)"
+if [ -z "$uncovered" ]; then ok "every kit source is covered by the selftest paths: filter"
+else bad "kit source ungated — an edit to it skips the digest check" "$uncovered"; fi
+
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
 echo "repos-registry fixture — OK"
