@@ -66,9 +66,10 @@ CO_TENANTS=""
 PARAMS=""
 
 die() { echo "::error::skill-union-assert: $*" >&2; exit 2; }
-# A flag with no value is a misconfiguration, not a verdict. `${2:?…}` would exit 1 — the code this
-# script reserves for "the union is violated" — reporting a violation it never checked for.
-need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
+# need_val (a flag with no value is a misconfiguration, not the exit-1 "the union is violated" verdict)
+# is shared with coordination-sync and repos-audit.sh; see lib/args.sh. Sourced after die, which it uses.
+# shellcheck source=lib/args.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/args.sh"
 
 usage() {
   cat <<'EOF'
