@@ -85,6 +85,39 @@ out="$(run 2>&1)"
 printf '%s' "$out" | grep -q 'FS-GG/.github receives' \
   && bad "authority wrongly audited" "$out" || ok "authority .github is not audited"
 
+# --- fails closed when the roster is unreachable or empty (#316, child (h) of #266) ---
+# Both legs assert on the REASON string, not a bare exit code: a script that dies for an unrelated
+# reason would otherwise satisfy a plain `rc != 0` and the fixture would stop testing its own claim.
+
+# (1) enumerator dies (malformed registry) -> misconfig, NOT "every declared receiver is wired".
+# No `wire`/`unwired` setup: the audit must die at the roster, before it ever reaches the gh stub.
+BADREG="$WORK/bad.yml"; printf 'schemaVersion: 1\nrepos: [ {id: x,\n' > "$BADREG"
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'cannot enumerate receivers' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "unreadable roster -> exit 2, names the enumeration failure" \
+  || bad "unreadable roster must fail closed" "rc=$rc: $out"
+
+# (2) enumerator succeeds but yields no receivers at all -> vacuous pass is an error
+EMPTYREG="$WORK/empty.yml"; cat > "$EMPTYREG" <<'YAML'
+schemaVersion: 1
+updated: 2026-07-04
+authority: FS-GG/.github
+repos:
+  - { id: .github, full: FS-GG/.github, role: authority, receives: [labels] }
+YAML
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$EMPTYREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'audited 0 receiver-capability pair' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "audited nothing -> exit 2, not a vacuous OK" \
+  || bad "empty audit must fail closed" "rc=$rc: $out"
+
+# (3) the guards did not break the healthy path: a real audit still reports what it examined
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 receiver-capability pair(s)'; } \
+  && ok "healthy roster -> still passes, having audited 2 pairs" || bad "healthy path regressed" "rc=$rc: $out"
+
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
 echo "repos-audit fixture — OK"

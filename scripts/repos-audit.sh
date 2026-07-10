@@ -18,7 +18,9 @@
 #
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
-# Exit: 0 = every declared receiver is wired (or nothing maps); 1 = at least one gap; 2 = misconfig.
+# Exit: 0 = every declared receiver is wired; 1 = at least one gap; 2 = misconfig, which includes a
+# roster that cannot be enumerated and an audit that examined nothing. "I could not check" must never
+# share an exit code with "I checked, and it's fine" (#266).
 
 set -euo pipefail
 
@@ -74,7 +76,7 @@ repo_wires() {
   return 1
 }
 
-roster_list() {  # <cap> -> receiver full names
+roster_list() {  # <cap> -> receiver full names; non-zero if the roster cannot be enumerated
   if [ -n "$REGISTRY" ]; then bash "$REPOS_SH" list --receives "$1" --registry "$REGISTRY"
   else bash "$REPOS_SH" list --receives "$1"; fi
 }
@@ -83,6 +85,11 @@ audited=0; wired=0; gaps=0
 for cap in $AUDITED_CAPS; do
   wf="$(wf_for_cap "$cap")"
   [ -n "$wf" ] || continue
+  # Enumerate into a variable, not `< <(roster_list)`: a process substitution's failure never trips
+  # `set -e` and nothing checked its rc, so a `repos.sh` that died printed nothing, the loop ran zero
+  # times, and the audit called that "no receivers" (#316).
+  roster="$(roster_list "$cap")" \
+    || die "cannot enumerate receivers of '$cap' — repos.sh list failed. The roster is unreadable, which is not the same as empty."
   while IFS= read -r repo; do
     [ -n "$repo" ] || continue
     audited=$((audited + 1))
@@ -92,8 +99,14 @@ for cap in $AUDITED_CAPS; do
       echo "::error::repos-audit: $repo receives '$cap' but no workflow calls $AUTHORITY/.github/workflows/$wf"
       gaps=$((gaps + 1))
     fi
-  done < <(roster_list "$cap")
+  done <<< "$roster"
 done
+
+# Non-vacuity. `for x in ∅` proves nothing, and this gate used to report it as proof. The guard above
+# catches today's enumerator failure; this one holds however a future enumerator finds to return
+# empty. The org's fabrics have receivers, so auditing none of them means we audited the wrong thing.
+[ "$audited" -ne 0 ] \
+  || die "audited 0 receiver-capability pair(s) over [$AUDITED_CAPS] — either no capability maps to a reusable workflow, or no rostered repo receives one. Examining nothing is a failure to audit, not a clean audit."
 
 echo "repos-audit: $audited receiver-capability pair(s) — $wired wired, $gaps gap(s)"
 if [ "$gaps" -ne 0 ]; then
