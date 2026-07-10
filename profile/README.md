@@ -125,7 +125,7 @@ later if you want gates.
 
 Full walkthrough →
 **[Getting started](https://github.com/FS-GG/.github/blob/main/docs/consumer/getting-started.md)**.
-Or create a ready specced sample game: https://github.com/FS-GG/.github/blob/main/docs/TestSpecTutorial.md
+Or create a ready specced sample game: https://github.com/FS-GG/FS.GG.Game/blob/main/docs/TestSpecTutorial.md
 
 ---
 

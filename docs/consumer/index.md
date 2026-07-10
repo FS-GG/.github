@@ -37,7 +37,7 @@ You only adopt what you need. The hard rule is one-directional: governance may
 to build, test, or ship. Your inner loop is never blocked by governance.
 
 > **New here? Build something first.** The
-> **[TestSpec tutorial](../TestSpecTutorial.md)** is the recommended first
+> **[TestSpec tutorial](https://github.com/FS-GG/FS.GG.Game/blob/main/docs/TestSpecTutorial.md)** is the recommended first
 > hands-on path: install, scaffold, then build a real game (Pong) from a ready-made
 > [TestSpec](../TestSpecs/) by driving it through the whole `charter → ship`
 > lifecycle. Come back to the map below when you want the bigger picture.
