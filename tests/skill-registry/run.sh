@@ -6,6 +6,14 @@
 # diverged from the canonical body (fs-gg-game-core — the mirror was RIGHT and the source stale).
 # Also proves --write reconciles only the stale digest, leaves the hand-aligned YAML otherwise
 # byte-identical, and refuses to claim success while a non-digest finding remains.
+#
+# Cases 9-13 cover the CONVERSE direction (.github#289, epic #266): a skill a producer manifest
+# declares but the registry never lists was not a finding, it was NOTHING — four shipped product
+# skills were invisible to this gate. They prove `declared-completeness` reports the absent row and
+# `--write` appends it; that a producer whose manifest VANISHED fails closed rather than silently
+# dropping every skill it declares; that an entry with no `supplied-by` is reported and NOT appended
+# (no invented `source:`); that a producer the registry names nowhere is still read; and that a
+# non-producer checkout (the frozen mirror) is not mistaken for one.
 # Pure-stdlib + PyYAML; no network. Mirrors tests/surface-impact/run.sh in shape.
 
 set -euo pipefail
@@ -47,6 +55,28 @@ skills:
 YAML
 }
 write_registry
+
+# The producer manifests the registry claims to have been reconciled FROM. Both publish locations
+# are exercised: Producer.One emits to `.agents/skills/` (SDD's shape, no `supplied-by`), Producer.Two
+# publishes from `template/skill-manifest/` (Rendering + Game's shape, with `supplied-by`).
+# `write_manifests <extra-one-json> <extra-two-json>` splices extra entries in for cases 9-13.
+write_manifests() {
+  mkdir -p "$ROOT/Producer.One/.agents/skills" "$ROOT/Producer.Two/template/skill-manifest"
+  cat > "$ROOT/Producer.One/.agents/skills/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "good",  "scope": "process", "sha256": "$GOOD" },
+  { "id": "stale", "scope": "process", "sha256": "$ACTUAL_STALE" }${1:+,}
+  ${1:-}
+] }
+JSON
+  cat > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "owned", "scope": "product", "sha256": "$OWNED", "supplied-by": "skills/owned/", "materializes-when": "profile in [game]" }${2:+,}
+  ${2:-}
+] }
+JSON
+}
+write_manifests
 
 # The tool derives the frozen-mirror path from FS.GG.Rendering; point it at our stand-in.
 run() { python3 - "$@" <<'PY'
@@ -134,5 +164,113 @@ ids=sorted(f['id'] for f in d['findings'])
 assert ids==['stale'], ids
 print('   ok')
 " "$json"
+
+echo "== 9. a manifest-declared skill with NO registry row is a finding (the .github#289 shape) =="
+write_registry
+mkdir -p "$ROOT/Producer.Two/skills/newbie"
+printf 'newbie body\n' > "$ROOT/Producer.Two/skills/newbie/SKILL.md"
+NEWBIE="$(sha "$ROOT/Producer.Two/skills/newbie/SKILL.md")"
+NEWBIE_ENTRY='{ "id": "newbie", "scope": "product", "sha256": "'"$NEWBIE"'", "supplied-by": "skills/newbie/", "materializes-when": "profile in [game]" }'
+write_manifests "" "$NEWBIE_ENTRY"
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[declared-completeness\] newbie" <<<"$out" || { echo "FAIL: absent row not reported"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 10. --write APPENDS the missing row, reconciled from the manifest =="
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should exit 0 once it can append"; exit 1; }
+grep -q "id: newbie" "$REG" || { echo "FAIL: missing row not appended"; cat "$REG"; exit 1; }
+grep -q "source: Producer.Two/skills/newbie/SKILL.md" "$REG" || { echo "FAIL: source not derived from supplied-by"; exit 1; }
+grep -q 'materializes-when: "profile in \[game\]"' "$REG" || { echo "FAIL: predicate not carried over (and quoted)"; exit 1; }
+# The appended row must be coherent on its own terms — a re-run finds nothing.
+run --registry "$REG" --repos-root "$ROOT" >/dev/null || { echo "FAIL: not coherent after --write appended"; exit 1; }
+echo "   ok"
+
+echo "== 11. an entry with no supplied-by is REPORTED, never appended with an invented source =="
+write_registry
+# `orphan` has no `supplied-by` — exactly SDD's process-manifest shape.
+write_manifests '{ "id": "orphan", "scope": "process", "sha256": "'"$GOOD"'" }' ""
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[declared-completeness\] orphan" <<<"$out" || { echo "FAIL: orphan not reported"; echo "$out"; exit 1; }
+grep -q "cannot append it" <<<"$out" || { echo "FAIL: did not say why it cannot append"; echo "$out"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 while orphan is unappendable"; exit 1; }
+grep -q "id: orphan" "$REG" && { echo "FAIL: --write invented a source for orphan"; exit 1; }
+echo "   ok"
+
+echo "== 12. a producer whose manifest VANISHED fails closed (it would hide every skill it declares) =="
+write_registry
+write_manifests
+rm "$ROOT/Producer.One/.agents/skills/skill-manifest.json"
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[manifest-found\] Producer.One" <<<"$out" || { echo "FAIL: vanished manifest not reported"; echo "$out"; exit 1; }
+# ...and a manifest that is present but unparseable is equally a finding, not a skip.
+write_manifests
+printf 'not json\n' > "$ROOT/Producer.One/.agents/skills/skill-manifest.json"
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[manifest-found\] Producer.One" <<<"$out" || { echo "FAIL: unreadable manifest not reported"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 13. a producer the registry names NOWHERE is still read; the frozen mirror is not a producer =="
+write_registry
+write_manifests
+# Producer.Three has no row pointing at it, so a producer set derived from `source:` alone cannot
+# see it — and every skill it declares would be invisible. It must still be read.
+mkdir -p "$ROOT/Producer.Three/template/skill-manifest" "$ROOT/Producer.Three/skills/stranger"
+printf 'stranger body\n' > "$ROOT/Producer.Three/skills/stranger/SKILL.md"
+STRANGER="$(sha "$ROOT/Producer.Three/skills/stranger/SKILL.md")"
+cat > "$ROOT/Producer.Three/template/skill-manifest/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "stranger", "scope": "product", "sha256": "$STRANGER", "supplied-by": "skills/stranger/" }
+] }
+JSON
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[declared-completeness\] stranger" <<<"$out" || { echo "FAIL: unnamed producer not read"; echo "$out"; exit 1; }
+# Mirror.Repo carries no manifest and is named by no `source:` — it is not a producer, so its
+# absence of a manifest must NOT be reported.
+grep -q "\[manifest-found\] Mirror.Repo" <<<"$out" && { echo "FAIL: frozen mirror mistaken for a producer"; exit 1; }
+# `always` is written as a bare token, never quoted — the ADR-0017 default round-trips.
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append stranger"; exit 1; }
+# Scope the assertion to the APPENDED row: `good`/`stale` already end `materializes-when: always }`,
+# so an unscoped grep passes no matter what format_row emitted.
+grep "id: stranger" "$REG" | grep -q "materializes-when: always }" \
+  || { echo "FAIL: default predicate not emitted bare"; grep "id: stranger" "$REG"; exit 1; }
+rm -rf "$ROOT/Producer.Three"
+echo "   ok"
+
+echo "== 14. a skill declared by TWO producers is reported, never attributed by sort order =="
+write_registry
+# The frozen-mirror shape: the alphabetically FIRST repo is the copy, not the owner. Guessing would
+# write `owner: producer-one` and a `source:` pointing at the mirror.
+DUP='{ "id": "dup", "scope": "product", "sha256": "'"$GOOD"'", "supplied-by": "skills/good/" }'
+write_manifests "$DUP" "$DUP"
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[declared-completeness\] dup" <<<"$out" || { echo "FAIL: duplicate-declared skill not reported"; echo "$out"; exit 1; }
+grep -q "declared by 2 producer manifests" <<<"$out" || { echo "FAIL: ambiguity not named"; echo "$out"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 on an ambiguous owner"; exit 1; }
+grep -q "id: dup" "$REG" && { echo "FAIL: --write guessed an owner for dup"; grep "id: dup" "$REG"; exit 1; }
+echo "   ok"
+
+echo "== 15. a manifest whose entries are not objects is a finding, not a traceback =="
+write_registry
+write_manifests
+printf '{ "schemaVersion": 1, "skills": ["fs-gg-oops"] }\n' > "$ROOT/Producer.One/.agents/skills/skill-manifest.json"
+out="$(run --registry "$REG" --repos-root "$ROOT" 2>&1 || true)"
+grep -q "\[manifest-found\] Producer.One" <<<"$out" || { echo "FAIL: non-object entry not reported"; echo "$out"; exit 1; }
+grep -q "Traceback" <<<"$out" && { echo "FAIL: crashed instead of reporting"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 16. a predicate containing a quote round-trips (no early-terminated YAML scalar) =="
+write_registry
+mkdir -p "$ROOT/Producer.Two/skills/quoted"
+printf 'quoted body\n' > "$ROOT/Producer.Two/skills/quoted/SKILL.md"
+QUOTED="$(sha "$ROOT/Producer.Two/skills/quoted/SKILL.md")"
+write_manifests "" '{ "id": "quoted", "scope": "product", "sha256": "'"$QUOTED"'", "supplied-by": "skills/quoted/", "materializes-when": "name == \"Acme\"" }'
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append quoted"; exit 1; }
+python3 -c "
+import yaml,sys
+rows={r['id']: r for r in yaml.safe_load(open(sys.argv[1]))['skills']}
+got = rows['quoted']['materializes-when']
+assert got == 'name == \"Acme\"', repr(got)
+" "$REG" || { echo "FAIL: quoted predicate did not round-trip"; grep "id: quoted" "$REG"; exit 1; }
+echo "   ok"
 
 echo "skill-registry fixture: all checks passed"

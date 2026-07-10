@@ -14,7 +14,9 @@ exactly what happened to `fs-gg-audio` (ADR-0024 step 4), to `fs-gg-game-core` a
 `fs-gg-model-swap` before it (registry changelog 2026-07-06), and to 14 of 32 rows by the time
 this check was written.
 
-Three checks, all over local checkouts (no network -- CI checks out the producer repos):
+Checks, all over local checkouts (no network -- CI checks out the producer repos).
+
+Over each row the registry ALREADY declares:
 
   1. SOURCE EXISTS   every row's `source:` resolves to a file in its owning repo. A renamed or
                      relocated skill currently goes unnoticed.
@@ -24,6 +26,38 @@ Three checks, all over local checkouts (no network -- CI checks out the producer
                      (ADR-0022 §6, retired at P6) -- is byte-identical to the canonical body.
                      Derived, not hardcoded: skipped when Rendering has no such copy.
 
+Over the SET of rows -- the converse direction, and the reason this file grew (.github#289, epic
+#266 "coherence gates that fail open"). Checks 1-3 are each a predicate over a row that is already
+declared, so a shipped skill simply ABSENT from the catalog was not a finding, it was nothing. Four
+of them were: `fs-gg-collision`, `fs-gg-grids`, `fs-gg-line-drawing`, `fs-gg-visibility` -- real,
+digest-matching, emitted by `--profile game`, and invisible to the gate guarding the registry
+ADR-0017 calls the "single authoritative catalog". This is ADR-0014's presence-vs-content lesson
+recurring in the opposite direction: we validated the CONTENT OF WHAT IS LISTED and never the
+COMPLETENESS OF THE LIST.
+
+  4. MANIFEST FOUND  every producer named by a `source:` prefix has a readable, well-shaped
+                     manifest. A manifest that vanished would silently drop every skill it
+                     declares out of check 5 -- the same fail-open, one level up. Fails closed.
+  5. DECLARED COMPLETENESS
+                     every skill any producer manifest declares has a row here. Matched on `id`
+                     alone (the registry's key), so Rendering's frozen re-declaration of a
+                     Game-owned skill is satisfied by the `fs-gg-game` row.
+
+Producers are DERIVED, never hardcoded: the repos named by `source:` prefixes (which MUST carry a
+manifest), plus any other checkout under `--repos-root` that carries one -- so a brand-new producer
+whose rows are ALL missing is still read, rather than being invisible for want of a row to name it.
+
+KNOWN BOUND, stated rather than hidden: a producer is recognised by a manifest at one of
+MANIFEST_CANDIDATES, directly under its checkout. A repo that publishes its manifest somewhere else
+is not seen at all -- and, if the registry names no row from it, is not seen by check 4 either. CI
+checks the producers out at exactly these paths, so this is a shape the gate requires, not a hole it
+tolerates; a producer that moves its manifest must add the new location here.
+
+Two producers may declare the SAME id -- that is the frozen mirror (ADR-0022 §6), where the copy and
+the canonical body are byte-identical. When such an id is MISSING from the registry, which repo owns
+it is not derivable from the manifests (the alphabetically first is as likely to be the copy), so the
+row is reported and `--write` refuses to guess an `owner:`/`source:` for it.
+
 Digest semantics match `scripts/repos.sh digest`, `Fsgg.SkillMirror.sha256`, and both producer
 generators: lowercase hex over the UTF-8 bytes of the body TEXT, with a leading BOM stripped so a
 BOM can never enter the digest on either the producing or the verifying side.
@@ -32,17 +66,25 @@ Pure-stdlib + PyYAML (already a coherence-gate dependency); no network, no token
 
 Usage:
   scripts/fsgg-skill-registry-check                       # check (default); exit 1 on any finding
-  scripts/fsgg-skill-registry-check --write               # reconcile stale sha256 in place, exit 0
+  scripts/fsgg-skill-registry-check --write               # reconcile in place, exit 0 if clean
   scripts/fsgg-skill-registry-check --json                # machine findings
   scripts/fsgg-skill-registry-check --repos-root DIR      # where the producer checkouts live
   scripts/fsgg-skill-registry-check --registry PATH       # explicit skills.yml
 
-Exit: 0 = coherent (or --write applied); 1 = findings / usage error.
+Exit: 0 = coherent (or --write left it coherent); 1 = findings / usage error.
 
-Note `--write` rewrites ONLY the `sha256:` value of a stale row, in place, leaving byte-for-byte
-everything else (the file is hand-formatted, aligned YAML flow maps -- a full yaml.dump would
-destroy it). It does NOT touch `updated:` or prepend a changelog entry: per the registry protocol
-those are the operator's, and a reconcile must be explained, not just applied.
+`--write` rewrites ONLY the `sha256:` value of a stale row and APPENDS a row for a skill a manifest
+declares that the registry lacks, in place, leaving byte-for-byte everything else (the file is
+hand-formatted, aligned YAML flow maps -- a full yaml.dump would destroy it). An appended row is
+reconciled FROM the manifest entry: `scope`/`sha256`/`materializes-when` verbatim, `source` from the
+entry's `supplied-by`, `owner` from the producer repo. A manifest that omits `supplied-by` (SDD's
+process manifest does) gives no `source:` to derive, so the row is REPORTED and not appended --
+inventing a path would be hand-authoring the bytes the registry header forbids.
+
+Whatever it wrote, `--write` then RE-CHECKS from disk and exits non-zero on anything left, so it can
+never report success over a registry that is still incoherent. It does NOT touch `updated:` or
+prepend a changelog entry: per the registry protocol those are the operator's, and a reconcile must
+be explained, not just applied.
 """
 from __future__ import annotations
 
@@ -63,6 +105,17 @@ FROZEN_MIRROR_OWNER = "fs-gg-game"
 FROZEN_MIRROR_REPO = "FS.GG.Rendering"
 FROZEN_MIRROR_PATH = "template/product-skills/{id}/SKILL.md"
 
+# Where a producer publishes its `skill-manifest` (schema v1). SDD EMITS its process manifest into
+# the agent-skill root; Rendering and Game publish theirs from the template tree. Probed in order;
+# the first hit wins. Locations, not repo names -- the producer SET is derived (see producers()).
+MANIFEST_CANDIDATES = (
+    ".agents/skills/skill-manifest.json",
+    "template/skill-manifest/skill-manifest.json",
+)
+
+# ADR-0017: an entry with no `materializes-when` is unconditionally emitted.
+DEFAULT_WHEN = "always"
+
 # A canonical-body digest: 64 lowercase hex chars. Anything else is a registry-shape defect.
 DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 
@@ -80,6 +133,139 @@ def read_bytes(path: str) -> bytes | None:
             return handle.read()
     except OSError:
         return None
+
+
+def owner_of(repo: str) -> str:
+    """The registry's `owner:` slug for a producer checkout: FS.GG.Rendering -> fs-gg-rendering."""
+    return repo.lower().replace(".", "-")
+
+
+def find_manifest(repos_root: str, repo: str) -> str | None:
+    for candidate in MANIFEST_CANDIDATES:
+        path = os.path.join(repos_root, repo, candidate)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def producers(repos_root: str, rows: list[dict]) -> tuple[list[str], list[str]]:
+    """(repos that MUST carry a manifest, other checkouts that happen to carry one).
+
+    The first set is derived from the `source:` prefixes -- those repos are the ones the registry
+    claims to have been reconciled from, so a manifest missing there is a finding, not a skip.
+    The second catches a producer the registry names NOWHERE (every one of its rows missing) --
+    which the first set, being keyed on existing rows, is structurally unable to see.
+    """
+    named = sorted({row["source"].split("/")[0] for row in rows if isinstance(row.get("source"), str)})
+    try:
+        present = sorted(d for d in os.listdir(repos_root) if os.path.isdir(os.path.join(repos_root, d)))
+    except OSError:
+        present = []
+    unnamed = [r for r in present if r not in named and find_manifest(repos_root, r)]
+    return named, unnamed
+
+
+def read_manifest(path: str) -> tuple[list[dict] | None, str]:
+    """(entries, error). A manifest we cannot read or make sense of is a finding, never a skip."""
+    try:
+        with open(path) as handle:
+            doc = json.load(handle)
+    except (OSError, ValueError) as exc:
+        return None, f"unreadable manifest {path}: {exc}"
+    entries = doc.get("skills") if isinstance(doc, dict) else None
+    if not isinstance(entries, list):
+        return None, f"manifest has no `skills` array: {path}"
+    # Guard the ELEMENTS too, not just the array: `{"skills": ["fs-gg-oops"]}` would otherwise
+    # reach entry.get() and raise. A manifest we cannot make sense of is a finding, never a crash.
+    bad = [i for i, entry in enumerate(entries) if not isinstance(entry, dict)]
+    if bad:
+        return None, f"manifest `skills[{bad[0]}]` is not an object: {path}"
+    return entries, ""
+
+
+def completeness(rows: list[dict], repos_root: str) -> list[dict]:
+    """Every skill a producer manifest declares must have a row here (.github#289)."""
+    declared = {row["id"] for row in rows}
+    named, unnamed = producers(repos_root, rows)
+
+    findings: list[dict] = []
+    missing: dict[str, dict] = {}
+
+    for repo in named + unnamed:
+        manifest_path = find_manifest(repos_root, repo)
+        if manifest_path is None:
+            # Only reachable for a `named` repo: `unnamed` was filtered on having one.
+            findings.append(
+                {
+                    "id": repo,
+                    "check": "manifest-found",
+                    "detail": (
+                        f"{repo} is named by a `source:` prefix but carries no skill-manifest "
+                        f"(looked for {', '.join(MANIFEST_CANDIDATES)}) — every skill it declares "
+                        "would go unchecked"
+                    ),
+                }
+            )
+            continue
+
+        entries, error = read_manifest(manifest_path)
+        if entries is None:
+            findings.append({"id": repo, "check": "manifest-found", "detail": error})
+            continue
+
+        for entry in entries:
+            skill_id = entry.get("id")
+            if not skill_id or skill_id in declared:
+                continue
+            # Record EVERY declarer. Taking the first would attribute `owner:`/`source:` by repo
+            # sort order — and the one id two producers legitimately share is a frozen mirror
+            # (ADR-0022 §6), where the alphabetically-first repo is the COPY, not the owner.
+            missing.setdefault(skill_id, []).append({"repo": repo, "entry": entry})
+
+    for skill_id, declarers in sorted(missing.items()):
+        if len(declarers) > 1:
+            repos = ", ".join(d["repo"] for d in declarers)
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "declared-completeness",
+                    "detail": (
+                        f"declared by {len(declarers)} producer manifests ({repos}) but absent from "
+                        "the registry; --write cannot append it (which repo is the owner and which "
+                        "the frozen mirror is not derivable from the manifests) — add the row by hand"
+                    ),
+                }
+            )
+            continue
+
+        repo, entry = declarers[0]["repo"], declarers[0]["entry"]
+        supplied_by = entry.get("supplied-by")
+        when = str(entry.get("materializes-when", DEFAULT_WHEN))
+        finding = {
+            "id": skill_id,
+            "check": "declared-completeness",
+            "detail": (
+                f"declared by {repo}'s manifest but absent from the registry "
+                f"(materializes-when: {when})"
+            ),
+        }
+        # `--write` can only append a row whose `source:` the manifest actually gives us.
+        digest = str(entry.get("sha256", ""))
+        if supplied_by and DIGEST_RE.fullmatch(digest):
+            finding["row"] = {
+                "id": skill_id,
+                "scope": str(entry.get("scope", "product")),
+                "owner": owner_of(repo),
+                "source": f"{repo}/{supplied_by.rstrip('/')}/SKILL.md",
+                "sha256": digest,
+                "materializes-when": when,
+            }
+        else:
+            why = "no `supplied-by`" if not supplied_by else f"unusable sha256 {digest!r}"
+            finding["detail"] += f"; --write cannot append it ({why}) — add the row by hand"
+        findings.append(finding)
+
+    return findings
 
 
 def check(registry_path: str, repos_root: str) -> list[dict]:
@@ -146,7 +332,60 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
                     }
                 )
 
+    findings.extend(completeness(registry["skills"], repos_root))
     return findings
+
+
+# The separating commas live in the PADDED fields, not the template — a comma in both yields
+# `id: x,   ,` and a YAML parse error, which is how the first draft of this failed.
+ROW_TEMPLATE = "  - {{ id: {id}scope: {scope}owner: {owner}source: {source} sha256: {sha256}, materializes-when: {when} }}"
+
+
+def format_row(row: dict) -> str:
+    """One hand-aligned YAML flow map, in the shape the surrounding rows are written in."""
+    when = row["materializes-when"]
+    return ROW_TEMPLATE.format(
+        id=f"{row['id']},".ljust(24),
+        scope=f"{row['scope']},".ljust(9),
+        owner=f"{row['owner']},".ljust(17),
+        source=f"{row['source']},",
+        sha256=row["sha256"],
+        # `always` is a bare token; every real predicate has spaces/brackets and must be quoted.
+        # json.dumps, not f'"{when}"' — a YAML double-quoted scalar escapes exactly as JSON does,
+        # so a predicate containing a `"` round-trips instead of terminating the scalar early.
+        when=when if when == DEFAULT_WHEN else json.dumps(when),
+    )
+
+
+def append_rows(registry_path: str, findings: list[dict]) -> int:
+    """Append a row for each manifest-declared skill the registry lacks, after the last row."""
+    rows = [f["row"] for f in findings if f["check"] == "declared-completeness" and "row" in f]
+    if not rows:
+        return 0
+
+    with open(registry_path) as handle:
+        lines = handle.read().splitlines(keepends=True)
+
+    # Anchor on the LAST row rather than EOF: a trailing comment must stay trailing.
+    last = max((i for i, line in enumerate(lines) if line.startswith("  - { id:")), default=None)
+    if last is None:
+        sys.exit(f"fsgg-skill-registry-check: no `- {{ id: ... }}` rows found in {registry_path}")
+    if not lines[last].endswith("\n"):
+        lines[last] += "\n"
+
+    block = [
+        "\n",
+        "  # APPENDED by `fsgg-skill-registry-check --write` from the producer manifests (.github#289).\n",
+        "  # Reconciled, not hand-authored: scope/sha256/materializes-when verbatim from the manifest\n",
+        "  # entry, `source` from its `supplied-by`. Re-home and annotate these into the block they\n",
+        "  # belong to, then set `updated:` and prepend a registry/skills.CHANGELOG.md entry.\n",
+    ]
+    block += [format_row(row) + "\n" for row in sorted(rows, key=lambda r: r["id"])]
+
+    lines[last + 1 : last + 1] = block
+    with open(registry_path, "w") as handle:
+        handle.write("".join(lines))
+    return len(rows)
 
 
 def reconcile(registry_path: str, findings: list[dict]) -> int:
@@ -195,11 +434,17 @@ def main() -> int:
     findings = check(args.registry, args.repos_root)
 
     if args.write:
+        appended = append_rows(args.registry, findings)
         written = reconcile(args.registry, findings)
-        blocked = [f for f in findings if f["check"] != "digest-matches"]
-        print(f"skill-registry: reconciled {written} sha256 row(s) in {args.registry}")
+        print(
+            f"skill-registry: reconciled {written} sha256 row(s), appended {appended} missing "
+            f"row(s) in {args.registry}"
+        )
+        # Re-check from disk. --write cannot invent a missing source, resolve a mirror divergence,
+        # or append a row the manifest gave no `supplied-by` for — and an appended row whose
+        # manifest digest disagrees with the body surfaces here rather than on someone else's CI.
+        blocked = check(args.registry, args.repos_root)
         if blocked:
-            # --write cannot invent a missing source or resolve a mirror divergence.
             for finding in blocked:
                 print(f"  still unresolved [{finding['check']}] {finding['id']}: {finding['detail']}")
             return 1
