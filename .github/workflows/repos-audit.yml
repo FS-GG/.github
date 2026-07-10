@@ -7,15 +7,21 @@
 # fails the audit. Complements the per-receiver pull coherence gate: this is .github auditing the
 # whole roster centrally. Reads the (public) FS-GG repos with the run-scoped token.
 #
-# The script distinguishes three outcomes, and this workflow must not collapse them (#327):
+# The script distinguishes four outcomes, and this workflow must not collapse them (#327, #335):
 #   0  every declared receiver is wired
 #   1  a real wiring gap — the finding this gate exists to produce
-#   2  no verdict — unreadable roster, unreachable receiver, or nothing audited (#316, #320)
+#   2  no verdict, RETRYABLE — a receiver's workflows could not be read (rate limit, auth, outage)
+#   3  no verdict, PERMANENT — the roster will not parse, or names no receiver (#316, #320)
 #
-# Exit 2 stays RED: "I could not check" must never render as "I checked, and it's fine" (#266). It
-# must not render as "I checked, and it's broken" either, so the two are split into separate, and
-# differently NAMED, steps — the name of the step that goes red is what an operator reads in the
+# Both no-verdicts stay RED: "I could not check" must never render as "I checked, and it's fine"
+# (#266). Neither may render as "I checked, and it's broken", so each outcome gets its own, and
+# differently NAMED, step — the name of the step that goes red is what an operator reads in the
 # notification and the run's step list, without opening a log.
+#
+# 2 and 3 are separate codes because only one of them is worth waiting out. This workflow used to
+# tell them apart by grepping the script's prose for `could not determine wiring for`; a reword of
+# that sentence silently stopped the retry, or started retrying a malformed roster for 15 minutes
+# before going red anyway. The exit code is the contract now (#335).
 name: repos-audit
 
 on:
@@ -53,12 +59,12 @@ jobs:
           audit() { rc=0; out="$(bash scripts/repos-audit.sh 2>&1)" || rc=$?; }
 
           audit
-          # Exit 2 covers two very different causes. `could not determine wiring for N …` is an API
-          # failure — a rate limit, an outage — and is worth waiting out. The rest of exit 2 is a
-          # `die()`: a roster that will not parse, or a roster that names no receiver. Those are
-          # deterministic reads of a file in this checkout, so a second identical pass returns an
-          # identical answer. Retrying them would hold a runner for 15 minutes and still go red.
-          if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'could not determine wiring for'; then
+          # Exit 2 is the retryable no-verdict: an API failure — a rate limit, an outage — and worth
+          # waiting out. Exit 3 is the permanent one — a roster that will not parse, or that names no
+          # receiver — a deterministic read of a file in this checkout, so a second identical pass
+          # returns an identical answer. Retrying 3 would hold a runner for 15 minutes and still go
+          # red. Ask by exit code: the reason string is a diagnostic, not an interface (#335).
+          if [ "$rc" -eq 2 ]; then
             echo "::notice::repos-audit: no verdict on the first pass — re-auditing once in ${REPOS_AUDIT_RETRY_AFTER_S}s, in case that was a rate limit. The first pass's output is superseded and not reported."
             sleep "$REPOS_AUDIT_RETRY_AFTER_S"
             audit
@@ -82,24 +88,40 @@ jobs:
           echo "::error title=repos-audit: wiring gap::The audit ran to completion and found a declared receiver that is not wired. This is a real finding — act on it."
           exit 1
 
-      - name: 'INCONCLUSIVE: the audit reached no verdict (this is not a wiring gap)'
+      - name: 'INCONCLUSIVE: could not read a receiver (transient — re-run)'
         if: steps.audit.outputs.rc == '2'
         run: |
           {
             echo "### ⚠️ repos-audit: inconclusive — nothing was proven"
-            echo "The audit could not read its subject (rate limit, auth, outage, or an unreadable"
-            echo "roster), and re-auditing after ${REPOS_AUDIT_RETRY_AFTER_S}s did not clear it."
-            echo "**No wiring gap was found, and none was ruled out.** Re-run this workflow before"
-            echo "treating the roster as audited."
+            echo "The audit could not read a receiver's workflows (rate limit, auth, outage), and"
+            echo "re-auditing after ${REPOS_AUDIT_RETRY_AFTER_S}s did not clear it."
+            echo "**No wiring gap was found, and none was ruled out.** This is transient: re-run this"
+            echo "workflow before treating the roster as audited."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=repos-audit: INCONCLUSIVE — could not check::The audit never reached a verdict, so its result means nothing. This is an API or roster failure, NOT a wiring gap. Re-run the workflow."
+          echo "::error title=repos-audit: INCONCLUSIVE — could not read a receiver::The audit never reached a verdict, so its result means nothing. This is an API failure, NOT a wiring gap. It is transient — re-run the workflow."
+          exit 1
+
+      # Split from exit 2 (#335). Same "nothing was proven" verdict, opposite remedy: re-running this
+      # cannot help, because the roster is a file in the checkout and it reads the same every time.
+      # Naming them alike would send an operator to the re-run button for a defect only a commit fixes.
+      - name: 'INCONCLUSIVE: the roster itself is unusable (permanent — fix the file)'
+        if: steps.audit.outputs.rc == '3'
+        run: |
+          {
+            echo "### ⚠️ repos-audit: inconclusive — the roster is unusable"
+            echo "\`registry/repos.yml\` will not parse, or it names no receiver of any audited"
+            echo "capability. The audit examined nothing, so **no wiring gap was found, and none was"
+            echo "ruled out.** Re-running will not help: this is a deterministic read of a file in"
+            echo "the checkout. Fix the roster."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=repos-audit: INCONCLUSIVE — unusable roster::The audit never reached a verdict, so its result means nothing. The roster will not parse or names no receiver. This is NOT a wiring gap, and NOT transient — fix registry/repos.yml."
           exit 1
 
       # The `if:` conditions above are a scoping predicate, and an ungated one fails open: an exit code
       # they do not enumerate — a crash, an OOM kill, a step that never ran — matches none of them and
       # would leave the job green having audited nothing. So gate the predicate itself (#266).
       - name: 'INCONCLUSIVE: the audit produced no exit code this workflow understands'
-        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2"]'), steps.audit.outputs.rc) }}
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.audit.outputs.rc) }}
         run: |
           echo "### ⚠️ repos-audit: inconclusive — the audit did not report" >> "$GITHUB_STEP_SUMMARY"
           echo "::error title=repos-audit: INCONCLUSIVE — no exit code::The audit step reported exit code '${{ steps.audit.outputs.rc }}', which this workflow does not classify. It crashed, was killed, or never ran. Nothing was audited."
