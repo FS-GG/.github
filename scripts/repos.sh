@@ -206,7 +206,7 @@ cmd_validate() {
     [ -n "$bcol" ] || continue
     err "kit skill rows share destination basename — they materialize to one path: $bcol"
   done < <(echo "$json" | jq -r '
-    [ (.kit // [])[] | select(.kind=="skill")
+    [ (.kit // [])[] | select(.kind=="skill" and (.source | type=="string"))
       | { id, base: (.source | sub("/+$";"") | split("/") | last) } ]
     | group_by(.base)[] | select(length>1)
     | "\(.[0].base) <- \([.[].id] | join(", "))"')
