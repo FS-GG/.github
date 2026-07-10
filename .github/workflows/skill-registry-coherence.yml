@@ -13,6 +13,10 @@
 # Triggers matter here more than usual: a producer merge staleness this registry WITHOUT any .github
 # PR, so PR-only would never fire. Hence `schedule` — the same reasoning as `fsgg-sdd validate`'s
 # scheduled deep check. `push: main` catches a bad reconcile immediately.
+#
+# This is the DETECTION half of the pair. Its RESPONSE twin is `skill-registry-autofix.yml`
+# (.github#299): on the same schedule it runs `--write` and opens a standing re-digest PR, so a
+# detected drift no longer waits for a human to run the reconcile by hand.
 name: skill-registry-coherence
 
 on:
