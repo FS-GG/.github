@@ -30,6 +30,25 @@ KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contrac
 
 die() { echo "::error::repos-registry: $*" >&2; exit 2; }
 
+# need_val <subcommand> <flag> [value …] — a missing flag value is a usage error ("I was called
+# wrong"), never a finding about the roster. `${2:?…}` would let bash exit 1, the code this script
+# reserves for "I checked, and it is invalid", leaving a caller unable to tell a typo'd command line
+# from a broken registry. Route it through die() (exit 2, misconfiguration) instead.
+#
+# Two deviations from repos-audit.sh's need_val, both because THIS script has three subcommands where
+# that one has a single top-level parser:
+#   - it takes the subcommand, so the diagnostic names it. `--field` and `--registry` are shared by
+#     `list`, `kit` and `validate`; an unprefixed message cannot be traced back to its call site, and
+#     every other die() in these parsers already says `list:` / `kit:` / `validate:`.
+#   - a `--flag`-looking value is a missing value, not a value. Without this, `list --receives
+#     --registry r.yml` silently takes "--registry" as the capability and then blames `r.yml` for
+#     being an unknown arg — naming an innocent token for a mistake made two arguments earlier.
+need_val() {
+  local sub="$1"; shift
+  [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$sub: $1 needs a value."
+  case "$2" in --*) die "$sub: $1 needs a value (got flag '$2')." ;; esac
+}
+
 # Anchored on the `# Exit:` line, not a line count: adding a usage line must not spill the script's
 # own code into --help (a fixed range did, printing `set -euo pipefail`).
 usage() { sed -n '2,/^# Exit:/p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
@@ -67,9 +86,9 @@ cmd_list() {
   local cap="" field="full" reg="$REG_DEFAULT"
   while [ $# -gt 0 ]; do
     case "$1" in
-      --receives) cap="${2:?--receives needs a value}"; shift 2 ;;
-      --field)    field="${2:?--field needs a value}"; shift 2 ;;
-      --registry) reg="${2:?--registry needs a value}"; shift 2 ;;
+      --receives) need_val list "$@"; cap="$2";   shift 2 ;;
+      --field)    need_val list "$@"; field="$2"; shift 2 ;;
+      --registry) need_val list "$@"; reg="$2";   shift 2 ;;
       *)          die "list: unknown arg '$1'." ;;
     esac
   done
@@ -87,9 +106,9 @@ cmd_kit() {
   local field="id" kind="" reg="$REG_DEFAULT"
   while [ $# -gt 0 ]; do
     case "$1" in
-      --field)    field="${2:?--field needs a value}"; shift 2 ;;
-      --kind)     kind="${2:?--kind needs a value}"; shift 2 ;;
-      --registry) reg="${2:?--registry needs a value}"; shift 2 ;;
+      --field)    need_val kit "$@"; field="$2"; shift 2 ;;
+      --kind)     need_val kit "$@"; kind="$2";  shift 2 ;;
+      --registry) need_val kit "$@"; reg="$2";   shift 2 ;;
       *)          die "kit: unknown arg '$1'." ;;
     esac
   done
@@ -104,8 +123,8 @@ cmd_validate() {
   local reg="$REG_DEFAULT" root="$ROOT_DEFAULT"
   while [ $# -gt 0 ]; do
     case "$1" in
-      --registry) reg="${2:?--registry needs a value}"; shift 2 ;;
-      --root)     root="${2:?--root needs a value}"; shift 2 ;;
+      --registry) need_val validate "$@"; reg="$2";  shift 2 ;;
+      --root)     need_val validate "$@"; root="$2"; shift 2 ;;
       *)          die "validate: unknown arg '$1'." ;;
     esac
   done

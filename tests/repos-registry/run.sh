@@ -131,6 +131,42 @@ kit_title="$(bash "$REPOS_SH" kit --registry "$BASE" | paste -sd, - | sed 's/,/,
 # The real roster must name a kit, or the propagate title would render empty.
 [ -n "$(bash "$REPOS_SH" kit)" ] && ok "the checked-in roster declares kit items" || bad "real roster kit empty"
 
+# --- a missing flag value is misconfiguration (exit 2), never a finding (exit 1) — #341 ---
+# `${2:?…}` let bash exit 1, the code reserved for "I checked the roster, and it is invalid". A
+# caller reading the `# Exit:` contract could not tell a typo'd command line from a broken registry.
+#
+# expect_usage <name> <subcommand> <args…> — asserts the exit code AND the diagnostic. Pinning the
+# `::error::repos-registry: <sub>:` prefix is half the point: exit 2 with a raw bash message (which
+# still contains "needs a value") would annotate nothing in Actions and name no subcommand.
+expect_usage() {
+  local n="$1"; shift
+  local sub="$1" out rc=0
+  out="$(bash "$REPOS_SH" "$@" 2>&1)" || rc=$?
+  if [ "$rc" -eq 1 ]; then bad "$n" "exit 1 — a usage error reported itself as a roster finding"; return; fi
+  if [ "$rc" -ne 2 ]; then bad "$n" "expected exit 2 (misconfig), got $rc: $out"; return; fi
+  case "$out" in "::error::repos-registry: $sub: "*"needs a value"*) ok "$n" ;;
+                 *) bad "$n" "exit 2, but not a prefixed '$sub: <flag> needs a value': $out" ;; esac
+}
+# Every flag of every subcommand, three ways it can lack a value. `--field`/`--registry` are shared
+# across subcommands, so each is asserted under each — that is what pins the prefix.
+for spec in "list:--receives --field --registry" \
+            "kit:--field --kind --registry" \
+            "validate:--registry --root"; do
+  sub="${spec%%:*}"
+  for flag in ${spec#*:}; do
+    # absent: `repos.sh list --receives`
+    expect_usage "$sub $flag (absent value) -> exit 2"        "$sub" "$flag"
+    # empty-but-present: an unset variable upstream, which is how this reaches a caller in practice
+    expect_usage "$sub $flag '' (empty value) -> exit 2"      "$sub" "$flag" ""
+    # the next flag swallowed as the value: must blame $flag, not the token two args later
+    expect_usage "$sub $flag --registry (flag as value) -> exit 2" "$sub" "$flag" --registry
+  done
+done
+# `digest` takes a positional, not a flag; it already routes through die(). Guard it against a
+# regression that makes the same class of mistake.
+rc=0; bash "$REPOS_SH" digest >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] && ok "digest (no path) -> misconfig (exit 2)" || bad "digest no path" "got exit $rc"
+
 # --- CI guard on the real, checked-in roster ---
 if bash "$REPOS_SH" validate >/dev/null 2>&1; then ok "the checked-in registry/repos.yml validates"
 else bad "real registry/repos.yml validates" "$(bash "$REPOS_SH" validate 2>&1)"; fi
