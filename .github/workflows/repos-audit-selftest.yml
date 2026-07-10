@@ -1,7 +1,9 @@
 # Self-test for scripts/repos-audit.sh — the roster participation audit (ADR-0019 follow-up). Runs
 # tests/repos-audit/run.sh, which drives the audit against a temp roster and a PATH-shim `gh` and
 # proves a wired receiver passes, an unwired one (or one with no workflows) fails and is named, and
-# the authority is never audited. Mirrors repos-registry-selftest.yml / fsgg-coord-selftest.yml.
+# the authority is never audited. It also asserts the shape of repos-audit.yml itself: that the
+# audit's three outcomes (wired / gap / no verdict) reach a reader as three distinguishable things
+# (#327). Mirrors repos-registry-selftest.yml / fsgg-coord-selftest.yml.
 name: repos-audit-selftest
 
 on:
@@ -11,6 +13,10 @@ on:
       - "scripts/repos.sh"
       - "tests/repos-audit/**"
       - ".github/workflows/repos-audit-selftest.yml"
+      # The fixture also asserts the SHAPE of repos-audit.yml — that it renders a wiring gap and a
+      # no-verdict as different things (#327). An edit there must re-run it, or that assertion is a
+      # gate that never runs.
+      - ".github/workflows/repos-audit.yml"
   push:
     branches: [main]
     paths:
@@ -18,6 +24,7 @@ on:
       - "scripts/repos.sh"
       - "tests/repos-audit/**"
       - ".github/workflows/repos-audit-selftest.yml"
+      - ".github/workflows/repos-audit.yml"
   workflow_dispatch:
 
 permissions:
@@ -28,5 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
       - name: Run the repos-audit fixture
         run: bash tests/repos-audit/run.sh

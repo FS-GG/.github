@@ -4,6 +4,10 @@
 # workflows but does NOT call it fails, and a receiver with no workflows at all fails — driving the
 # audit against a temp roster and a PATH-shim `gh` that serves canned repo-contents responses. No
 # network. Mirrors tests/fsgg-coord/run.sh (gh stub) + tests/repos-registry/run.sh (temp roster).
+#
+# It also covers the audit's SURFACE — .github/workflows/repos-audit.yml — because an exit code the
+# workflow collapses is an exit code the operator never sees (#327). The workflow's own `run:` block
+# is extracted and executed, as tests/touch-set-drift/run.sh does. Pure-stdlib + PyYAML.
 
 set -euo pipefail
 
@@ -227,6 +231,157 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && ! printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but no workflow calls'; } \
   && ok "invisible repo -> exit 2 'not readable', not a fabricated gap" \
   || bad "invisible repo must not be reported as unwired" "rc=$rc: $out"
+
+# --- the SURFACE keeps the distinction the script draws (#327, i-followup of #266) ---
+# Every assertion above is about the script's exit code. The exit code is not what an operator reads:
+# they read the run's failing step. `run: bash scripts/repos-audit.sh` renders 1 and 2 as one
+# undifferentiated red X, so the script's careful "this result means nothing" is buried under a check
+# shaped exactly like a real finding — and a red that routinely lies stops being read (#270).
+#
+# So assert on the workflow: the two outcomes must reach a reader as different things, an inconclusive
+# run must not go green, and the `if:` predicates that classify rc must themselves be gated — an
+# unenumerated exit code is the same fail-open one layer up.
+shape="$(python3 - "$HERE/../.." <<'PY'
+import sys, pathlib, re, yaml
+
+root = pathlib.Path(sys.argv[1])
+wf = yaml.safe_load((root / ".github/workflows/repos-audit.yml").read_text())
+st = yaml.safe_load((root / ".github/workflows/repos-audit-selftest.yml").read_text())
+steps = wf["jobs"]["audit"]["steps"]
+bad = []
+
+# Match COMMANDS, not text. A plain `"exit 1" in run` also matches the words in a comment or inside
+# an echoed summary line, so it would keep passing over a step someone had quietly changed to exit 0
+# — a gate that reports green about a subject it never looked at, which is the bug this file exists
+# to stop. Strip comments, then anchor.
+def cmds(step):
+    return "\n".join(re.sub(r"#.*$", "", ln) for ln in step.get("run", "").splitlines())
+def runs(step, pattern):
+    return re.search(pattern, cmds(step), re.M) is not None
+
+# The audit step must capture the exit code rather than let it decide the job.
+audit = [s for s in steps if s.get("id") == "audit"]
+if not audit:
+    bad.append("no step with `id: audit` — nothing captures the audit's exit code")
+elif not runs(audit[0], r'>>\s*"\$GITHUB_OUTPUT"'):
+    bad.append("the audit step does not publish its rc to $GITHUB_OUTPUT; the raw exit code decides the job")
+
+# One classifying step per outcome the script can produce, each keyed on that rc.
+def classifier(rc):
+    return [s for s in steps if f"steps.audit.outputs.rc == '{rc}'" in str(s.get("if", ""))]
+
+for rc, must_fail in ((0, False), (1, True), (2, True)):
+    got = classifier(rc)
+    if len(got) != 1:
+        bad.append(f"exit {rc} is classified by {len(got)} step(s), want exactly 1")
+        continue
+    fails = runs(got[0], r"^\s*exit 1\s*$")
+    if must_fail and not fails:
+        bad.append(f"exit {rc}'s step does not fail the job — 'could not check'/'is broken' must not go green")
+    if not must_fail and fails:
+        bad.append(f"exit {rc}'s step fails the job, but exit {rc} is a clean audit")
+
+# 1 and 2 must be *distinguishable at a glance*: different failing step names, different annotations.
+if classifier(1) and classifier(2):
+    n1, n2 = classifier(1)[0].get("name", ""), classifier(2)[0].get("name", "")
+    if n1 == n2:
+        bad.append("the wiring-gap and no-verdict steps share a name; the failing step is the glance signal")
+    if "INCONCLUSIVE" not in n2.upper():
+        bad.append(f"the no-verdict step's name does not say so: {n2!r}")
+    if not all(runs(c, r"::error title=") for c in (classifier(1)[0], classifier(2)[0])):
+        bad.append("both classifying steps must emit a titled ::error:: annotation")
+
+# The `if:` set is a scoping predicate. An rc it does not enumerate must still be caught, or a crashed
+# audit matches no classifier and the job goes green having audited nothing.
+if not any("cancelled()" in str(s.get("if", "")) and "audit.outputs.rc" in str(s.get("if", ""))
+           and runs(s, r"^\s*exit 1\s*$") for s in steps):
+    bad.append("no catch-all step: an exit code no `if:` enumerates would leave the job green")
+
+# ...and this very assertion is only run when the selftest's paths: filter says so. If repos-audit.yml
+# is outside it, the workflow can be gutted and nothing re-checks its shape: the gate never runs.
+for trigger in ("pull_request", "push"):
+    if ".github/workflows/repos-audit.yml" not in st[True][trigger]["paths"]:
+        bad.append(f"repos-audit-selftest {trigger} paths: does not cover repos-audit.yml — this check would not run on an edit to it")
+
+print("\n".join(bad))
+PY
+)"
+[ -z "$shape" ] && ok "the workflow renders gap, no-verdict and crash as three distinguishable outcomes" \
+  || bad "repos-audit.yml collapses outcomes a reader must tell apart" "$shape"
+
+# --- and the audit step's own `run:` block, EXECUTED (not just shaped) --------------------------
+# The assertions above read YAML. They cannot see whether the retry actually re-runs, whether the rc
+# it publishes is the second pass's, or whether the discarded pass's annotations leak into a green
+# run. So extract the shipped block and run it, exactly as tests/touch-set-drift/run.sh does for its
+# gate: a retyped copy would keep passing after someone edits the workflow.
+STEP="$WORK/audit-step.sh"
+python3 - "$HERE/../.." "$STEP" <<'PY'
+import sys, pathlib, yaml
+wf = yaml.safe_load((pathlib.Path(sys.argv[1]) / ".github/workflows/repos-audit.yml").read_text())
+run = next(s["run"] for s in wf["jobs"]["audit"]["steps"] if s.get("id") == "audit")
+assert "${{" not in run, "the audit step grew an Actions expression; this fixture would run different code than CI"
+pathlib.Path(sys.argv[2]).write_text(run)
+PY
+
+# A stub audit whose exit code and output come from the fixture, counting how many times it ran.
+# `bash -eo pipefail` is the runner's own shell for a `run:` block; anything else tests a different
+# program. RETRY_AFTER is 0 — the fixture must never actually sleep.
+SBOX="$WORK/sbox"; mkdir -p "$SBOX/scripts"
+# Sets STEP_OUT / STEP_RC / PASSES. It must not be called inside `$(…)`: that is a subshell, and the
+# variables would never reach the assertion.
+step() { # $1..= per-pass "<rc>:<output>"
+  local i=1 spec; : > "$SBOX/passes"; : > "$SBOX/gh_out"
+  for spec in "$@"; do printf '%s\n' "${spec#*:}" > "$SBOX/out.$i"; echo "${spec%%:*}" > "$SBOX/rc.$i"; i=$((i+1)); done
+  cat > "$SBOX/scripts/repos-audit.sh" <<'STUBSH'
+n=$(( $(wc -l < "$SBOX/passes") + 1 )); echo x >> "$SBOX/passes"
+cat "$SBOX/out.$n"
+exit "$(cat "$SBOX/rc.$n")"
+STUBSH
+  ( cd "$SBOX" && SBOX="$SBOX" GITHUB_OUTPUT="$SBOX/gh_out" REPOS_AUDIT_RETRY_AFTER_S=0 \
+      bash -eo pipefail "$STEP" ) > "$SBOX/stdout" 2>&1
+  STEP_OUT="$(cat "$SBOX/stdout")"
+  STEP_RC="$(sed -n 's/^rc=//p' "$SBOX/gh_out")"
+  PASSES="$(wc -l < "$SBOX/passes")"
+}
+
+# (10) a clean audit runs once and publishes rc=0
+step '0:repos-audit: OK — every declared receiver is wired'
+{ [ "$STEP_RC" = 0 ] && [ "$PASSES" -eq 1 ]; } \
+  && ok "step: a clean audit publishes rc=0 and does not retry" || bad "clean audit" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# (11) a wiring gap is NOT transient: exit 1 is believed the first time, and reported.
+step '1:::error::repos-audit: FS.GG.Game receives ... but no workflow calls'
+{ [ "$STEP_RC" = 1 ] && [ "$PASSES" -eq 1 ] && printf '%s' "$STEP_OUT" | grep -q 'FS.GG.Game'; } \
+  && ok "step: a wiring gap is not retried, and is reported" || bad "gap retried" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# (12) an API no-verdict IS retried, and a clean second pass wins — with the first pass's ::error::
+#      annotations SUPPRESSED. Replaying them would hang red annotations on a green run, which is the
+#      same "a red that lies stops being read" failure this item is about, moved into the annotation list.
+step '2:::error::repos-audit: could not determine wiring for 1 receiver-capability pair(s)' \
+            '0:repos-audit: OK — every declared receiver is wired'
+{ [ "$STEP_RC" = 0 ] && [ "$PASSES" -eq 2 ] \
+    && ! printf '%s' "$STEP_OUT" | grep -q '::error::' \
+    && printf '%s' "$STEP_OUT" | grep -q 'every declared receiver is wired'; } \
+  && ok "step: a transient no-verdict is retried, and the discarded pass does not annotate" \
+  || bad "transient no-verdict" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# (13) a no-verdict that persists stays a no-verdict: rc=2 reaches the classifier.
+step '2:::error::repos-audit: could not determine wiring for 1 receiver-capability pair(s)' \
+            '2:::error::repos-audit: could not determine wiring for 1 receiver-capability pair(s)'
+{ [ "$STEP_RC" = 2 ] && [ "$PASSES" -eq 2 ] && printf '%s' "$STEP_OUT" | grep -q 'could not determine'; } \
+  && ok "step: a persistent no-verdict publishes rc=2" || bad "persistent no-verdict" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# (14) exit 2 is not one thing. `die()`'s causes — a roster that will not parse, a roster naming no
+#      receiver — are deterministic reads of a file in this checkout. A second identical pass returns
+#      an identical answer, so retrying only holds a runner for the delay and still goes red.
+step '2:::error::repos-audit: cannot enumerate receivers of coordination-kit — repos.sh list failed.'
+{ [ "$STEP_RC" = 2 ] && [ "$PASSES" -eq 1 ] && printf '%s' "$STEP_OUT" | grep -q 'cannot enumerate'; } \
+  && ok "step: a deterministic no-verdict (bad roster) is not retried" || bad "die() retried" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# (15) an exit code nobody planned for still reaches the classifier, which fails closed on it.
+step '127:'
+{ [ "$STEP_RC" = 127 ] && [ "$PASSES" -eq 1 ]; } \
+  && ok "step: an unplanned exit code is published verbatim for the catch-all" || bad "crash rc" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
