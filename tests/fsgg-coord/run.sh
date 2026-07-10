@@ -709,10 +709,57 @@ assert_contains "next --repo FS.GG.SDD: no Ready -> falls back to Backlog #127" 
   "FS.GG.SDD#127" "$(run next --repo FS.GG.SDD 2>/dev/null)"
 assert_eq "ready --repo templates: registry short-id resolves to FS.GG.Templates (#99)" \
   "99" "$(run ready --repo templates --all --json 2>/dev/null | jq -r '.[0].number')"
+# The regression FS-GG/.github#381 fixed: `game`/`audio` are the two newest rostered repos, and
+# resolve_repo hard-coded only the four ORIGINAL short-ids — so `--repo audio` fell through to the
+# literal token `audio`, matched no `FS.GG.Audio` board item, and returned an empty queue. #189 is
+# the Ready Audio item on the default board; before the fix this assertion sees an empty list.
+assert_eq "ready --repo audio: registry short-id resolves to FS.GG.Audio (#189) [#381]" \
+  "189" "$(run ready --repo audio --json 2>/dev/null | jq -r '.[0].number')"
 assert_contains "next --repo sdd: short-id resolves to FS.GG.SDD (Backlog #127)" \
   "FS.GG.SDD#127" "$(run next --repo sdd 2>/dev/null)"
 assert_contains "next: unknown repo reports no startable item (stderr)" \
   "no startable item" "$(run next --repo nope 2>&1 >/dev/null)"
+
+# (6c) resolve_repo covers the WHOLE roster, not just the four original repos (FS-GG/.github#381).
+# resolve_repo maps a `--repo` short-id to the repo name board items carry. It hard-coded the four
+# framework short-ids and let `game`/`audio` fall through to the literal token, so `--repo game`
+# matched nothing and reported an empty queue — the silent-drift class the roster (registry/repos.yml)
+# exists to kill. The map is EMBEDDED in the client (it is a mirrored `kind: client` kit item shipped
+# WITHOUT the roster, so it cannot read repos.yml at run time), so this guard reads the roster HERE —
+# it is present in the .github checkout where CI runs — and proves every rostered short-id resolves.
+# The board is GENERATED from repos.yml (one Ready item per rostered repo) so it can never drift from
+# the roster: a repo added to repos.yml but not to resolve_repo's map lands as a red check here, with
+# `--repo <that-id>` selecting nothing, rather than as a silent empty queue in production.
+#
+# Enumerate the roster STRAIGHT from repos.yml — EVERY repo, regardless of `receives` — via the same
+# yq-or-python ladder repos.sh uses. `repos.sh list` can only filter by a capability (`--receives`),
+# and no single capability is guaranteed to cover the whole roster: `coordination-kit` excludes the
+# authority `.github` (it is the SOURCE), and even `labels` being universal is a convention no gate
+# enforces — so keying the guard on any one cap would let a repo that skips it slip the check. A
+# direct parse has no such blind spot: a repo in repos.yml is a repo the guard tests.
+REG="$HERE/../../registry/repos.yml"
+roster2json() {
+  if command -v yq >/dev/null 2>&1; then yq -o=json '.repos' "$REG"
+  else python3 -c 'import sys,yaml,json; json.dump(yaml.safe_load(open(sys.argv[1]))["repos"], sys.stdout)' "$REG"; fi
+}
+roster_pairs="$(roster2json | jq -r '.[] | [.id, .full] | @tsv')"     # id<TAB>FS-GG/<repo>, roster order
+roster_fulls="$(printf '%s\n' "$roster_pairs" | cut -f2)"
+jq -n --arg fulls "$roster_fulls" '
+  { data:{organization:{projectV2:{items:{
+      pageInfo:{hasNextPage:false,endCursor:null},
+      nodes:[ ($fulls|split("\n")|map(select(length>0))) | to_entries[]
+        | { status:{name:"Ready"}, phase:{name:"P1 Rendering"}, blockedBy:null,
+            content:{ __typename:"Issue", number:(7001+.key), title:("roster probe "+.value),
+              url:("https://github.com/"+.value+"/issues/"+((7001+.key)|tostring)),
+              state:"OPEN", repository:{nameWithOwner:.value} } } ]
+  }}}}, rateLimit:{cost:1,remaining:4000} }' >"$FIXTURES/board-roster.json"
+# `done <<<`, not a pipe: a `while` on the right of `|` runs in a subshell, and its assert_eq
+# increments to pass/failcount would be lost. A here-string keeps the loop in this shell.
+while IFS=$'\t' read -r rid rfull; do
+  [ -n "$rid" ] || continue
+  got="$(GH_BOARD_SET=roster run ready --repo "$rid" --jq '[.[].repo]|unique|join(",")' 2>/dev/null)"
+  assert_eq "resolve_repo: --repo $rid selects only $rfull (#381)" "$rfull" "$got"
+done <<< "$roster_pairs"
 
 # (6b) blocked-awareness: `next` skips items whose blockers are still open / unverifiable, and the
 #      whole thing resolves against the SAME scan — no extra GraphQL per blocker.
