@@ -55,6 +55,50 @@ out_auth="$(bash "$SYNC" --check --repo FS-GG/.github "$RECV" 2>&1)"; rc_auth=$?
   && ok "gate: authority .github is not a receiver -> skip" || bad "gate: .github skip" "$out_auth"
 expect_rc "gate: real receiver FS.GG.SDD proceeds (rc 0)" 0 bash "$SYNC" --check --repo FS-GG/FS.GG.SDD "$RECV"
 
+# --- the roster gate fails CLOSED on an unreadable roster (.github#315) ---
+# An unreadable registry, a missing yq/jq/python3, or any repos.sh bug prints nothing to stdout. The
+# gate must not read that silence as "not a receiver" and skip the drift check green. coordination-sync
+# resolves repos.sh relative to its OWN location, so stand up a fake source root to inject a broken one.
+#
+# Assert on the MESSAGE, not just the rc: a fake root has no kit sources, so a run that passes the gate
+# also exits 2 ("canonical kit source missing"). rc alone cannot tell "died at the gate" from "died
+# after it", and would stay green if the fix were reverted.
+FAKE="$WORK/fakeroot"; mkdir -p "$FAKE/scripts" "$FAKE/registry"
+cp "$SYNC" "$FAKE/scripts/coordination-sync"
+cp "$REPO_ROOT/registry/repos.yml" "$FAKE/registry/repos.yml"   # present, so the [ -f ] guard passes
+FSYNC="$FAKE/scripts/coordination-sync"
+# expect_gate <name> <want-rc> <want-stderr-regex> <cmd...>
+expect_gate() { local n="$1" want="$2" re="$3"; shift 3; local out rc=0; out="$("$@" 2>&1)" || rc=$?
+  if [ "$rc" -eq "$want" ] && printf '%s' "$out" | grep -qE "$re"; then ok "$n"
+  else bad "$n" "want rc=$want matching /$re/; got rc=$rc: $out"; fi; }
+
+# repos.sh dies (bad registry, absent yq, ...): stdout empty, exit nonzero.
+printf '#!/usr/bin/env bash\necho "repos.sh: bad registry" >&2\nexit 2\n' > "$FAKE/scripts/repos.sh"
+expect_gate "gate: roster reader that DIES fails closed, not a green skip" 2 \
+  'could not read the coordination-kit roster' \
+  bash "$FSYNC" --check --repo FS-GG/FS.GG.SDD "$RECV"
+
+# repos.sh succeeds but enumerates nothing: an empty roster for a declared capability is an error,
+# not a verdict that every repo is a non-receiver.
+printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKE/scripts/repos.sh"
+expect_gate "gate: EMPTY roster fails closed, not a green skip" 2 \
+  "no repo declares 'receives: coordination-kit'" \
+  bash "$FSYNC" --check --repo FS-GG/FS.GG.SDD "$RECV"
+
+# A healthy roster still classifies both ways — the fix did not turn the gate into an unconditional die.
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" FS-GG/FS.GG.SDD\n' > "$FAKE/scripts/repos.sh"
+expect_gate "gate: healthy roster still skips a non-receiver (rc 0)" 0 'nothing to do' \
+  bash "$FSYNC" --check --repo FS-GG/.github "$RECV"
+# ...and a receiver gets PAST the gate: it reaches the kit-source step, which the fake root lacks.
+expect_gate "gate: healthy roster still proceeds for a receiver (past the gate)" 2 \
+  'canonical kit source missing' \
+  bash "$FSYNC" --check --repo FS-GG/FS.GG.SDD "$RECV"
+
+# The repo name is matched literally, not as a regex — '.' must not match any character.
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" FS-GG/FSxGG.SDD\n' > "$FAKE/scripts/repos.sh"
+expect_gate "gate: roster match is literal, not a regex" 0 'nothing to do' \
+  bash "$FSYNC" --check --repo FS-GG/FS.GG.SDD "$RECV"
+
 echo "coordination-sync fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coordination-sync fixture FAILED"; exit 1; }
 echo "coordination-sync fixture — OK"
