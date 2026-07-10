@@ -103,6 +103,25 @@ kit_srcs="$(bash "$REPOS_SH" kit --field source --registry "$BASE" | tr '\n' ','
 rc=0; bash "$REPOS_SH" kit --field bogus --registry "$BASE" >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 2 ] && ok "kit --field bogus -> misconfig (exit 2)" || bad "kit bad field" "got exit $rc"
 
+# --- kit --kind (coordination-sync derives its distributed skill set from this) ---
+kit_skills="$(bash "$REPOS_SH" kit --kind skill --registry "$BASE" | tr '\n' ',')"
+[ "$kit_skills" = "demo-skill," ] && ok "kit --kind skill -> only the skill rows" \
+  || bad "kit --kind skill" "got: $kit_skills"
+kit_clients="$(bash "$REPOS_SH" kit --kind client --registry "$BASE" | tr '\n' ',')"
+[ "$kit_clients" = "democlient," ] && ok "kit --kind client -> only the client rows" \
+  || bad "kit --kind client" "got: $kit_clients"
+kit_srcs_skill="$(bash "$REPOS_SH" kit --field source --kind skill --registry "$BASE" | tr '\n' ',')"
+[ "$kit_srcs_skill" = ".claude/skills/demo-skill," ] && ok "kit --field source --kind skill" \
+  || bad "kit --field/--kind compose" "got: $kit_srcs_skill"
+# No --kind is "every row" — coordination-propagate's title depends on it staying unfiltered.
+kit_all="$(bash "$REPOS_SH" kit --registry "$BASE" | tr '\n' ',')"
+[ "$kit_all" = "demo-skill,democlient," ] && ok "kit without --kind -> every row" \
+  || bad "kit unfiltered" "got: $kit_all"
+# An unknown kind is a usage error, not an empty list: silence here would distribute nothing, green.
+rc=0; bash "$REPOS_SH" kit --kind bogus --registry "$BASE" >/dev/null 2>&1 || rc=$?
+[ "$rc" -eq 2 ] && ok "kit --kind bogus -> misconfig (exit 2), not an empty list" \
+  || bad "kit bad kind" "got exit $rc"
+
 # The title the propagate workflow renders. Guards the `paste -sd` delimiter-cycling trap: a
 # multi-char delimiter list would yield "demo-skill,democlient" with a SPACE before the last item.
 kit_title="$(bash "$REPOS_SH" kit --registry "$BASE" | paste -sd, - | sed 's/,/, /g')"

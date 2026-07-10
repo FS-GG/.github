@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # coordination-sync — distribute/verify the coordination kit into a receiver repo (ADR-0019 slice 2).
 #
-# The coordination kit (the cross-repo-coordination skill + the fsgg-coord client) is declared,
+# The coordination kit (the `kind: skill` skills + the fsgg-coord client) is declared,
 # content-addressed, in registry/repos.yml. This script is the DISTRIBUTION + COHERENCE arm over that
 # declaration — the participant-side analog of scripts/sync-build-config.sh, whose shape it mirrors:
 #
@@ -18,9 +18,9 @@
 #
 # Managed kit files (source here -> path in the receiver):
 #   scripts/fsgg-coord                                          -> scripts/fsgg-coord              (chmod +x)
-#   .claude/skills/<skill>/SKILL.md                             -> <root>/<skill>/SKILL.md
-#     ...for each skill in KIT_SKILLS and each root in AGENT_SKILL_ROOTS (default roots:
-#        ".claude/skills .agents/skills"). KIT_SKILLS mirrors the `kind: skill` rows in repos.yml.
+#   <kit row's `source`>/SKILL.md                               -> <root>/<basename source>/SKILL.md
+#     ...for each `kind: skill` row in repos.yml and each root in AGENT_SKILL_ROOTS (default roots:
+#        ".claude/skills .agents/skills"). The skill list is READ from the registry, never copied.
 # Each skill's SKILL.md is the content-addressed unit (its sha256 is the repos.yml kit digest); a
 # multi-file skill's remainder would be added here alongside it.
 #
@@ -33,9 +33,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
 REG="$SRC_ROOT/registry/repos.yml"
 ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .agents/skills}"
-# The kit's skills (the `kind: skill` rows in registry/repos.yml). Each is materialized, byte-identical,
-# into every root in ROOTS. Keep in sync with repos.yml's kit: block.
-KIT_SKILLS="cross-repo-coordination intra-repo-parallel-work"
 
 die()   { echo "coordination-sync: $*" >&2; exit 2; }
 usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//; s/^#$//'; }
@@ -76,13 +73,36 @@ if [ -n "$repo" ]; then
   fi
 fi
 
+# The kit's skills: the `kind: skill` rows of registry/repos.yml, READ from the registry rather than
+# copied into a literal here. A copy is a second source of truth that nothing compares against the
+# first, so a skill could be registered — and digest-checked on every edit — yet never distributed,
+# while `--check` passed on a receiver that lacked it (.github#338).
+#
+# Same fail-closed discipline as the roster gate above, and for the same reason: a repos.sh that dies
+# prints nothing, and an empty skill list would distribute the client alone and then report every
+# receiver coherent. "I could not ask the registry" is not "the kit has no skills".
+#
+# Read each row's `source` PATH, not its id. `source` is what the registry declares (and what its
+# digest is taken over); `.claude/skills/<id>` is a convention nothing enforces — `validate` accepts a
+# row whose id and source directory differ. Rebuilding the path from the id would be this very bug one
+# field over: a location invented here instead of read from the registry that owns it.
+[ -f "$REG" ] || die "registry not found: $REG"
+skills_rc=0
+KIT_SKILL_SRCS="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field source --kind skill --registry "$REG")" \
+  || skills_rc=$?
+[ "$skills_rc" -eq 0 ] \
+  || die "could not read the kit skill list from $REG (repos.sh exited $skills_rc)."
+[ -n "$KIT_SKILL_SRCS" ] \
+  || die "no 'kind: skill' kit item declared in $REG — the coordination kit requires at least one."
+
 # Build the managed source::dest list (dest is relative to the receiver root).
 managed() {
   printf '%s::%s\n' "scripts/fsgg-coord" "scripts/fsgg-coord"
-  local r s
-  for s in $KIT_SKILLS; do
+  local r src name
+  for src in $KIT_SKILL_SRCS; do
+    name="${src##*/}"                    # the receiver materializes it at <root>/<name>/SKILL.md
     for r in $ROOTS; do
-      printf '%s::%s\n' ".claude/skills/$s/SKILL.md" "$r/$s/SKILL.md"
+      printf '%s::%s\n' "$src/SKILL.md" "$r/$name/SKILL.md"
     done
   done
 }
