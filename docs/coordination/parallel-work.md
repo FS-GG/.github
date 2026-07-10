@@ -89,9 +89,16 @@ A worker claims an item by posting an `fsgg:claim` marker comment, re-reading, a
 scripts/fsgg-coord take --repo <r>          # pick + claim the next schedulable item (the usual entry point)
 scripts/fsgg-coord claim <issue>            # claim a specific item; prints the worktree to isolate in
 scripts/fsgg-coord claim <issue> --force    # steal an item another worker holds
-scripts/fsgg-coord release <issue>          # drop the lock; the item returns to the pool (Status=Ready)
+scripts/fsgg-coord release <issue>          # drop the lease; In progress -> Ready
+scripts/fsgg-coord release <issue> --status Blocked   # ...drop it, but say where it lands
 scripts/fsgg-coord heartbeat <issue>        # renew the lease on a long-running claim
 ```
+
+`release` drops the **lease**, which is not the same claim as *"this item is startable"*. It resets
+the `In progress` that `claim` set, and only that: a `Status` you chose deliberately — `Blocked`,
+`Backlog`, `Done` — is preserved, and a `Status` it cannot read is left alone rather than guessed.
+`reap` collects an expired lease under the same rule, so a claim that dies on a `Blocked` item is not
+resurrected as `Ready`. So handing back an item you cannot finish keeps its column honest.
 
 GitHub issues comment ids from **one server-side sequence**, so "lowest live id" is a total order
 that every racer observes identically: a simultaneous claim has exactly **one winner**, and the
