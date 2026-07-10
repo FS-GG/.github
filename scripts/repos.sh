@@ -191,6 +191,26 @@ cmd_validate() {
   local odups; odups="$(echo "$json" | jq -r '[(."outside-fabric" // [])[].full] | group_by(.)[] | select(length>1)[0]')"
   [ -z "$odups" ] || err "duplicate outside-fabric entr(ies): $(echo "$odups" | tr '\n' ' ')"
 
+  # --- kit rows must not collide at the receiver (.github#348) ---
+  # Two kit rows that resolve to one destination make the fabric unsatisfiable: coordination-sync
+  # writes both to the same path (last row wins), then --check fails forever and apply cannot repair
+  # it — the registry is valid and the fabric cannot honour it. validate is the gate whose job is to
+  # reject exactly that, so uniqueness is enforced here, at the source, not discovered downstream.
+  local kdups; kdups="$(echo "$json" | jq -r '[(.kit // [])[].id] | group_by(.)[] | select(length>1)[0]')"
+  [ -z "$kdups" ] || err "duplicate kit id(s): $(echo "$kdups" | tr '\n' ' ')"
+  # A skill materializes to <root>/<basename source>/SKILL.md, so its DESTINATION is a function of the
+  # source basename, not the id — two skill rows with distinct ids but a shared basename still target
+  # one path. (Clients name their own destination, so this is scoped to skills.)
+  local bcol
+  while IFS= read -r bcol; do
+    [ -n "$bcol" ] || continue
+    err "kit skill rows share destination basename — they materialize to one path: $bcol"
+  done < <(echo "$json" | jq -r '
+    [ (.kit // [])[] | select(.kind=="skill")
+      | { id, base: (.source | sub("/+$";"") | split("/") | last) } ]
+    | group_by(.base)[] | select(length>1)
+    | "\(.[0].base) <- \([.[].id] | join(", "))"')
+
   # --- content-addressed kit: source exists and digest matches ---
   local kid kind ksrc ksha got
   while IFS=$'\t' read -r kid kind ksrc ksha; do
