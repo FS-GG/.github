@@ -2,7 +2,8 @@
 # Fixture for scripts/repos.sh — the validator/query for registry/repos.yml (the org repo roster,
 # ADR-0019). Proves validate PASSES on a well-formed roster and FAILS on each violation class the
 # gate must catch (unknown capability, duplicate id, bad role, not-exactly-one-authority, authority
-# receiving the kit, kit digest drift, missing kit source, malformed repo name), that `list` returns
+# receiving the kit, kit digest drift, missing kit source, malformed repo name, duplicate kit id,
+# two kit skill rows whose sources share a destination basename), that `list` returns
 # the right repos for a capability, that `digest` follows the dir->SKILL.md / file rule, and — as the
 # CI guard on the real file — that the checked-in registry/repos.yml validates. Mirrors
 # tests/skill-union/run.sh and tests/fsgg-coord/run.sh: throwaway trees under a temp dir, no network.
@@ -75,6 +76,18 @@ expect_fail "kit digest drift"                1 "digest"             "$(variant 
 expect_fail "kit source missing"              1 "source missing"     "$(variant nosource    's/source: scripts\/democlient/source: scripts\/nope/')"
 expect_fail "kit id is not kebab/dotted"      1 "kit id"             "$(variant badkitid    's/id: demo-skill,/id: Demo Skill,/')"
 expect_fail "malformed repo full name"        1 "FS-GG"              "$(variant badfull     's/full: FS-GG\/FS.GG.SDD/full: GH\/FS.GG.SDD/')"
+# Two kit rows that collide at the receiver — the registry is valid but the fabric cannot honour it
+# (.github#348). A duplicate id is the pre-#347 vector; a shared skill-source basename is the post-#347
+# one, because coordination-sync writes each skill to <root>/<basename source>/SKILL.md.
+expect_fail "duplicate kit id"                 1 "duplicate kit id"   "$(variant dupkitid    's/id: democlient,/id: demo-skill,/')"
+# A second, legitimately-digested skill whose source basename collides with demo-skill's. Distinct id,
+# distinct real source, correct sha — so the ONLY defect is the shared destination path.
+mkdir -p "$ROOT/vendor/demo-skill"
+printf '# impostor demo skill\n' > "$ROOT/vendor/demo-skill/SKILL.md"
+VENDOR_SHA="$(sha256sum "$ROOT/vendor/demo-skill/SKILL.md" | cut -d' ' -f1)"
+DUPBASENAME="$WORK/dupbasename.yml"
+{ cat "$BASE"; printf '  - { id: vendored-demo, kind: skill, source: vendor/demo-skill, sha256: %s }\n' "$VENDOR_SHA"; } > "$DUPBASENAME"
+expect_fail "duplicate skill source basename"  1 "share destination basename" "$DUPBASENAME"
 
 # --- misconfiguration (exit 2) ---
 expect_fail "empty repos[] is misconfig"      2 "empty"              "$(variant emptyrepos  's/^repos:/repos: []\n_repos:/')"
