@@ -50,13 +50,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rc=0; out="$(bash scripts/repos-audit.sh 2>&1)" || rc=$?
-          if [ "$rc" -eq 2 ]; then
+          audit() { rc=0; out="$(bash scripts/repos-audit.sh 2>&1)" || rc=$?; }
+
+          audit
+          # Exit 2 covers two very different causes. `could not determine wiring for N …` is an API
+          # failure — a rate limit, an outage — and is worth waiting out. The rest of exit 2 is a
+          # `die()`: a roster that will not parse, or a roster that names no receiver. Those are
+          # deterministic reads of a file in this checkout, so a second identical pass returns an
+          # identical answer. Retrying them would hold a runner for 15 minutes and still go red.
+          if [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'could not determine wiring for'; then
             echo "::notice::repos-audit: no verdict on the first pass — re-auditing once in ${REPOS_AUDIT_RETRY_AFTER_S}s, in case that was a rate limit. The first pass's output is superseded and not reported."
             sleep "$REPOS_AUDIT_RETRY_AFTER_S"
-            rc=0; out="$(bash scripts/repos-audit.sh 2>&1)" || rc=$?
+            audit
           fi
-          printf '%s\n' "$out"
+          [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
       - name: Every declared receiver is wired
