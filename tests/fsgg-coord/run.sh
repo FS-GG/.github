@@ -296,6 +296,10 @@ if [ "\$sub" = "api" ] && [ "\$sub2" = "graphql" ]; then
   elif printf '%s' "\$q" | grep -q 'items(first' && printf '%s' "\$q" | grep -q 'subIssues'; then
     if [ -n "\$hascur" ]; then cat "$FIXTURES/lint-p2.json"; else cat "$FIXTURES/lint-p1.json"; fi
   elif printf '%s' "\$q" | grep -q 'items(first';      then
+    # GH_FAIL_BOARD=1 makes the whole-board scan unreachable (a 401), modelling the rate-limit /
+    # bad-credentials case #344 is about: the read cannot happen, so the client must fail CLOSED
+    # (non-zero) rather than render an empty board as a confident, itemised answer.
+    [ -n "\${GH_FAIL_BOARD:-}" ] && { echo "gh: Bad credentials (HTTP 401)" >&2; exit 1; }
     # GH_BOARD_SET=<name> serves fixtures/board-<name>.json instead of the default two-page board, so
     # the ADR-0027 tests get their own board without perturbing the existing count assertions. An
     # unknown name is a FIXTURE BUG, not a silent fallback to the default board.
@@ -565,6 +569,13 @@ if [ "\$sub" = "project" ] && [ "\$sub2" = "item-edit" ]; then
   # to edit. The MARKER is the lock, so nothing that holds it may unwind on this; but nothing may
   # report a board mutation it did not perform either.
   [ -n "\${GH_FAIL_ITEM_EDIT:-}" ] && { echo "gh: HTTP 502 Bad Gateway" >&2; exit 1; }
+  # Real \`gh project item-edit\` requires a non-empty --id and errors without one. Model that, so a
+  # caller that swallowed its item resolution (empty --id) cannot silently read as a successful write
+  # — the exact shape of #344 one layer down: set_field's \`item="\$(item_id …)"\` swallows item_id's
+  # \`die\`, and only the malformed edit failing turns that back into a caught failure.
+  idv=""; ne=\${#args[@]}
+  for ((i=0;i<ne;i++)); do [ "\${args[i]}" = "--id" ] && idv="\${args[i+1]:-}"; done
+  [ -n "\$idv" ] || { echo "gh: the '--id' flag is required" >&2; exit 1; }
   printf 'item-edit %s\n' "\$*" >>"\$GH_LOG"; exit 0
 fi
 
@@ -2170,6 +2181,49 @@ assert_contains "overlap a b: a real same-repo overlap is STILL detected (#353)"
   "$(px overlap 'FS.GG.SDD#401' 'FS.GG.SDD#403' 2>&1 || true)"
 assert_fails "overlap a b: a real same-repo overlap still exits non-zero (#353)" \
   px overlap 'FS.GG.SDD#401' 'FS.GG.SDD#403'
+
+# ---- #344: an unreadable board must FAIL CLOSED, not render as a confident empty answer ----------
+# `gql` dies inside a `$( )`, and `exit` there only unwinds the subshell; `set -e` does not carry the
+# substitution's non-zero across a bare `out="$(...)"` assignment. So every scheduler read used to get
+# an empty payload and carry on — `take`/`next`/`ready`/`batch` reported an empty, itemised board and
+# exited 0 when the board could not be read at all. `die` now signals the top-level shell, so a failed
+# read halts the whole command at any nesting depth. GH_FAIL_BOARD makes the board scan a 401.
+for spec in "ready" "next" "batch" "take --repo .github"; do
+  if GH_FAIL_BOARD=1 run $spec >/dev/null 2>&1; then
+    bad "#344: '$spec' fails closed (non-zero) when the board is unreachable"
+  else
+    ok  "#344: '$spec' fails closed (non-zero) when the board is unreachable"
+  fi
+done
+# The headline regression: `take` must not turn "I could not read the board" into the confident claim
+# "every candidate is blocked, claimed, overlapping, or undeclared."
+take_unreadable="$(GH_FAIL_BOARD=1 run take --repo .github 2>&1 || true)"
+case "$take_unreadable" in
+  *"every candidate is"*) bad "#344: take does NOT assert an empty queue on an unreadable board" "got: $take_unreadable" ;;
+  *)                      ok  "#344: take does NOT assert an empty queue on an unreadable board" ;;
+esac
+# ...and the failure is surfaced, not swallowed: `batch` (the 'see why' target) names the read error.
+assert_contains "#344: batch surfaces the read failure instead of an empty result" \
+  "GraphQL call failed" "$(GH_FAIL_BOARD=1 run batch --repo .github 2>&1 || true)"
+# The DELIBERATE exceptions stay soft under the now-fatal `die`. (1) A best-effort board write whose
+# subject is off-board must NOT unwind a claim whose lock is already held — the marker is the lock.
+# Pure signal-die would abort the whole claim after the marker was posted; `SOFT_DIE=1` on the
+# `( … set_field … )` subshell keeps that `die` local, so the claim completes and reports "not on
+# board". This is the path the earlier tests missed (they seed off-board markers directly rather than
+# driving `claim`), so it is asserted here explicitly.
+seed_issue 779 "An item that is not on the board" "src/Off344/**"
+# env-via-`env`, like `rel`: a shell prefix on the `as` FUNCTION would not export to the inner `bash`.
+claim_off="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  env GH_OFFBOARD_ITEM=779 bash "$COORD" --worker osprey-344 claim 'FS.GG.SDD#779' 2>&1 || true)"
+assert_contains "#344: an off-board claim still lands (best-effort flip's die stays local)" \
+  "not on board" "$claim_off"
+assert_contains "#344: ...and it reports the claim rather than a fatal abort" \
+  "claimed FS.GG.SDD#779 by worker osprey-344" "$claim_off"
+assert_eq "#344: ...and the marker (the lock) was actually posted" "yes" \
+  "$([ -f "$STORE/comments-779.json" ] && [ -n "$(claims_on 779)" ] && echo yes || echo no)"
+# (2) release/reap must still drop a lease when the board is unreadable (item_status marks its read
+# SOFT_DIE=1) — proven above at "release: an unreadable Status is not overwritten". So "unreachable"
+# and "readable, and empty" no longer share an exit code (#266), and neither strands a claim.
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
