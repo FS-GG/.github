@@ -12,8 +12,8 @@
 # scaffold's `scaffold-provenance.json` effectiveParameters. Absent ⇒ `always`.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
-#   * PRODUCT skills (20) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
-#     (2026-07-06, epic #213/#218): 16 rows owned by `fs-gg-rendering` (reconciled from
+#   * PRODUCT skills (21) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
+#     (2026-07-06, epic #213/#218): 17 rows owned by `fs-gg-rendering` (reconciled from
 #     FS.GG.Rendering's `template/skill-manifest/skill-manifest.json`) + 4 GAME rows now owned by
 #     `fs-gg-game` (reconciled from FS.GG.Game's `template/skill-manifest/skill-manifest.json`,
 #     merged FS.GG.Game#4). The four migrated rows — `fs-gg-game-core`/`fs-gg-audio`/
@@ -21,7 +21,18 @@
 #     BYTE-IDENTICALLY; FS.GG.Rendering STILL ships frozen copies from `--profile game` (two-copies
 #     cost, ADR-0022 §6, retired at P6). The migration also corrected two digests that had drifted from
 #     Rendering's live manifest (Feature 250 / 0.1.67 body changes): `fs-gg-game-core` 87b9c55c…→16fd32b7…
-#     and `fs-gg-model-swap` 68edbe46…→a48df195…. registry = manifest = bytes for all 20 rows.
+#     and `fs-gg-model-swap` 68edbe46…→a48df195…. registry = manifest = bytes for all 21 rows.
+#     2026-07-10 completeness reconcile (.github#298, epic #266): the product set grew 20→21 —
+#     `fs-gg-feedback-report` was vendored into Rendering on 2026-07-10 (Rendering#248, PR #251) and
+#     was never flipped here. It is the FIRST row the `declared-completeness` arm caught after that
+#     arm shipped (.github#289/PR #293, twelve minutes later) — the assertion working on live drift
+#     rather than on the backlog it was written for. Like its sibling `fs-gg-feedback-capture` it is
+#     `feedback`-gated and supplied from a `template/<feature>/skill/` path rather than the usual
+#     `template/product-skills/<id>/`; unlike it, the predicate carries NO `lifecycle` clause, so the
+#     report skill materializes on every lane whose `feedback == true`. Reconciled verbatim from
+#     Rendering's producer manifest by `--write` (which appends it, per .github#289), then RE-HOMED
+#     from the appended tail into the product block beside its sibling — as `--write`'s own emitted
+#     comment instructs. The row's bytes are the tool's; only its position and annotation are ours.
 #     2026-07-10 completeness reconcile (.github#289, epic #266): the product set grew 16→20 —
 #     `fs-gg-collision`/`fs-gg-grids`/`fs-gg-line-drawing`/`fs-gg-visibility` had shipped on
 #     2026-07-05 (0.1.65-preview.1) and were never flipped here. The gate could not say so: it only
@@ -140,6 +151,12 @@ skills:
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 2b4812032f970ca8f7adcdaea6b9c12549c74837e3eb80d683bdd9e867f53f4d, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack and lifecycle == spec-kit" }
   - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: e6c16f33a3f9b06995378952ba07408cee8a9f4eb4a9ce18bf2142602c40f499, materializes-when: "feedback == true and lifecycle == spec-kit" }
+  # Sibling of fs-gg-feedback-capture: same `feedback` gate, same off-convention supplied-by path
+  # (template/<feature>/skill/, not template/product-skills/<id>/) — but NO `lifecycle` clause, so the
+  # retrospective skill is lifecycle-INDEPENDENT and rides every lane with feedback on. Predicate is
+  # the manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality — do not
+  # "normalize" it to match the row above). Vendored Rendering#248 (PR #251); reconciled .github#298.
+  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: 4093ccd31db484e16f926cfc7423c0f8049ec110eb5d5b45997b91681ece8170, materializes-when: "feedback == true" }
 
   # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
   # fs-gg-project was formerly gated `lifecycle == spec-kit`, so under the `sdd`/`none` lanes NEITHER
