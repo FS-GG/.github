@@ -65,11 +65,14 @@
 #     bodies (checklist, clarify, lifecycle, tasks) after the .github#168 provisional snapshot — all
 #     re-reconciled here against the emitted manifest. All 16 are `always` (canonical grammar).
 #
-# BLOCKED-ON (final flip only): the typed validator (`Fsgg.Registry`, SDD CLI) + flipping coherence
-# `skill-registry-published` → true are now blocked ONLY on the Rendering predicate-grammar
-# alignment (FS.GG.Rendering#77 — the product `materializes-when` predicates ship C-style, which the
-# ADR-0017 gate reads as false). The P2 process-manifest emission blocker is CLEARED (SDD#111). The
-# catalog + `skill-registry` contract already landed (.github#168).
+# BLOCKED-ON (final flip only): BOTH producer-side conditions are now CLEARED (.github#290) — the P2
+# process-manifest emission (SDD#111) and the Rendering predicate-grammar alignment (FS.GG.Rendering#77,
+# closed 2026-07-04 in cf93eabd; `scripts/generate-skill-manifest.fsx` normalizes C-style → canonical on
+# emit, and the shipped manifest carries zero C-style predicates). The catalog + `skill-registry` contract
+# already landed (.github#168). What remains before flipping coherence `skill-registry-published` → true
+# is now .github-side only: publish the typed `Fsgg.Registry` validator assertion over this file, then
+# flip the row and update the `skill-mirror-verified` / `fsgg-sdd-orchestrator-axis` cross-refs.
+# The flip must NOT precede a green skill-registry-coherence on main (epic .github#266, fails-open class).
 
 schemaVersion: 1
 updated: "2026-07-10"
@@ -92,7 +95,7 @@ skills:
   - { id: fs-gg-sdd-charter,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-charter/SKILL.md,             sha256: 9855bd3c7d1422d331213fe0a7e59c7454e1cc1080cf0ef6bd25379da2e40b24, materializes-when: always }
   - { id: fs-gg-sdd-checklist,           scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-checklist/SKILL.md,           sha256: c267d33f32cc1d2ab571b8f9b4fcaecde31ba385a00337db2160d77ad351b507, materializes-when: always }
   - { id: fs-gg-sdd-clarify,             scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-clarify/SKILL.md,             sha256: 09d2ed9726307cd7ec745edf2fc7a9bd4f6c1486c62d954080ab534c0c5a4238, materializes-when: always }
-  - { id: fs-gg-sdd-evidence,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-evidence/SKILL.md,            sha256: 581db14d7e4f85401b0deca03bfe24bded405566be5f23db418ec849f2553447, materializes-when: always }
+  - { id: fs-gg-sdd-evidence,            scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-evidence/SKILL.md,            sha256: 7576a7c5fc31e29ce4b01b811cc8e0c8ab031a313c8d6966d42b12bba1a3d30d, materializes-when: always }
   - { id: fs-gg-sdd-getting-started,     scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-getting-started/SKILL.md,     sha256: 498a8881158fbb06495b7fbd1ef02ae07a5f7ddd6252954e7f2c0492b86a03b5, materializes-when: always }
   - { id: fs-gg-sdd-lifecycle,           scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-lifecycle/SKILL.md,           sha256: 64ea0db488639c35c449b5554282e294d97b4f9f638c7683273bbd34f839a598, materializes-when: always }
   - { id: fs-gg-sdd-plan,                scope: process, owner: fs-gg-sdd, source: FS.GG.SDD/.claude/skills/fs-gg-sdd-plan/SKILL.md,                sha256: 51a95d10b9412c6b01a962c3344e0245b6436d451b70cf6ab79f3fc88dac1e2f, materializes-when: always }
@@ -126,12 +129,13 @@ skills:
   # Reconciled from FS.GG.Rendering's producer manifest (template/skill-manifest/skill-manifest.json)
   # @ 85381ba; registry = manifest = bytes for all four.
   # NOT migrated to fs-gg-game by ADR-0022 P4 (which moved only the four `fs-gg-game-*`/audio/
-  # persistence/model-swap rows), so — like the 12 rows above — their predicates DO ride on the
-  # Rendering#77 grammar alignment.
+  # persistence/model-swap rows), so — like the 12 rows above — their predicates rode on the
+  # Rendering#77 grammar alignment, which LANDED 2026-07-04 (cf93eabd). Producer and registry have
+  # emitted the canonical grammar ever since; nothing is normalized on the way in.
   - { id: fs-gg-collision,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-collision/SKILL.md, sha256: 3d4788ba9374b9d13bffbdee855b242ff2dab9b1b4426658b05aba40105d2b5d, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-grids,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-grids/SKILL.md, sha256: 6c61e9469c821ba2c91fe8e34ad220288baa12e4a0570c33a5e6eff26d35c541, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-line-drawing,     scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-line-drawing/SKILL.md, sha256: 70da6b04db6ae0204c01e71b4ebd10eb1edb839f19cde1ef2db1cf748b9fd087, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-visibility,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-visibility/SKILL.md, sha256: 09ca21571aa007f0806d2b1fd1430310f376af93d507670de69343adcc3b4e6c, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-visibility,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-visibility/SKILL.md, sha256: 74f9d3fb5121f36785e58caf2fb64741922ed3b287c4fc92d9501d2f486031c3, materializes-when: "profile in [game, sample-pack]" }
   # GAME product skills — MIGRATED owner fs-gg-rendering → fs-gg-game (ADR-0022 P4, epic #213/#218).
   # Reconciled from FS.GG.Game's producer manifest FS.GG.Game/template/skill-manifest/skill-manifest.json
   # (schema skill-manifest v1; regenerable via `dotnet fsi scripts/generate-skill-manifest.fsx --check`,
@@ -142,8 +146,9 @@ skills:
   # §6; retired by the P6 provider epic). This reconcile also CORRECTS two digests that had drifted from
   # Rendering's live manifest since the 2026-07-05 snapshot (bodies changed in Rendering Feature 250 /
   # 0.1.67, never reconciled): fs-gg-game-core 87b9c55c…→16fd32b7… and fs-gg-model-swap 68edbe46…→a48df195….
-  # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 12 rows
-  # still owned by fs-gg-rendering, these four do NOT depend on the Rendering#77 grammar alignment.
+  # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
+  # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
+  # (which has since landed for those rows too, .github#290).
   - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: f9f732cdfa0198ee2529e31eba383ca258f4574321c1432d7b5d3d5a2c8afd45, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: 3a757374d1c7bcf95db95a1c3eb9ffde54647fafd158ff73eac5d97c686d300c, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: af107dec4e0a3464bb39d2dadd3101872bdf47351945151854d52f17234d1619, materializes-when: "profile in [game, sample-pack]" }

@@ -542,8 +542,11 @@ provenance and adds `[missing]` (declared ∧ true ∧ absent) and `[unexpected]
 (present ∧ false) — closing the blind spot. Rollout is board-sequenced (`skill-registry-published`
 coherence row): the catalog + contract landed, and both producer halves are now emitted — Rendering's
 product manifest (Feature 238) and SDD's process manifest (`.agents/skills/skill-manifest.json`,
-SDD#111 closing #109). The enforcing flip now waits **only** on Rendering's predicate-grammar
-alignment (Rendering#77).
+SDD#111 closing #109). Both producer-side conditions have now cleared (.github#290): Rendering's
+predicate-grammar alignment landed in Rendering#77 (closed 2026-07-04), so producer and registry both
+speak the ADR-0017 canonical grammar. The enforcing flip now waits on a **.github-side** step only —
+publishing the typed `Fsgg.Registry` validator assertion over `skills.yml` — and must not land over a
+red `skill-registry-coherence` (the fails-open class, epic #266).
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
