@@ -47,6 +47,17 @@ Producers are DERIVED, never hardcoded: the repos named by `source:` prefixes (w
 manifest), plus any other checkout under `--repos-root` that carries one -- so a brand-new producer
 whose rows are ALL missing is still read, rather than being invisible for want of a row to name it.
 
+KNOWN BOUND, stated rather than hidden: a producer is recognised by a manifest at one of
+MANIFEST_CANDIDATES, directly under its checkout. A repo that publishes its manifest somewhere else
+is not seen at all -- and, if the registry names no row from it, is not seen by check 4 either. CI
+checks the producers out at exactly these paths, so this is a shape the gate requires, not a hole it
+tolerates; a producer that moves its manifest must add the new location here.
+
+Two producers may declare the SAME id -- that is the frozen mirror (ADR-0022 §6), where the copy and
+the canonical body are byte-identical. When such an id is MISSING from the registry, which repo owns
+it is not derivable from the manifests (the alphabetically first is as likely to be the copy), so the
+row is reported and `--write` refuses to guess an `owner:`/`source:` for it.
+
 Digest semantics match `scripts/repos.sh digest`, `Fsgg.SkillMirror.sha256`, and both producer
 generators: lowercase hex over the UTF-8 bytes of the body TEXT, with a leading BOM stripped so a
 BOM can never enter the digest on either the producing or the verifying side.
@@ -164,6 +175,11 @@ def read_manifest(path: str) -> tuple[list[dict] | None, str]:
     entries = doc.get("skills") if isinstance(doc, dict) else None
     if not isinstance(entries, list):
         return None, f"manifest has no `skills` array: {path}"
+    # Guard the ELEMENTS too, not just the array: `{"skills": ["fs-gg-oops"]}` would otherwise
+    # reach entry.get() and raise. A manifest we cannot make sense of is a finding, never a crash.
+    bad = [i for i, entry in enumerate(entries) if not isinstance(entry, dict)]
+    if bad:
+        return None, f"manifest `skills[{bad[0]}]` is not an object: {path}"
     return entries, ""
 
 
@@ -199,12 +215,30 @@ def completeness(rows: list[dict], repos_root: str) -> list[dict]:
 
         for entry in entries:
             skill_id = entry.get("id")
-            if not skill_id or skill_id in declared or skill_id in missing:
+            if not skill_id or skill_id in declared:
                 continue
-            missing[skill_id] = {"repo": repo, "entry": entry}
+            # Record EVERY declarer. Taking the first would attribute `owner:`/`source:` by repo
+            # sort order — and the one id two producers legitimately share is a frozen mirror
+            # (ADR-0022 §6), where the alphabetically-first repo is the COPY, not the owner.
+            missing.setdefault(skill_id, []).append({"repo": repo, "entry": entry})
 
-    for skill_id, found in sorted(missing.items()):
-        repo, entry = found["repo"], found["entry"]
+    for skill_id, declarers in sorted(missing.items()):
+        if len(declarers) > 1:
+            repos = ", ".join(d["repo"] for d in declarers)
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "declared-completeness",
+                    "detail": (
+                        f"declared by {len(declarers)} producer manifests ({repos}) but absent from "
+                        "the registry; --write cannot append it (which repo is the owner and which "
+                        "the frozen mirror is not derivable from the manifests) — add the row by hand"
+                    ),
+                }
+            )
+            continue
+
+        repo, entry = declarers[0]["repo"], declarers[0]["entry"]
         supplied_by = entry.get("supplied-by")
         when = str(entry.get("materializes-when", DEFAULT_WHEN))
         finding = {
@@ -317,7 +351,9 @@ def format_row(row: dict) -> str:
         source=f"{row['source']},",
         sha256=row["sha256"],
         # `always` is a bare token; every real predicate has spaces/brackets and must be quoted.
-        when=when if when == DEFAULT_WHEN else f'"{when}"',
+        # json.dumps, not f'"{when}"' — a YAML double-quoted scalar escapes exactly as JSON does,
+        # so a predicate containing a `"` round-trips instead of terminating the scalar early.
+        when=when if when == DEFAULT_WHEN else json.dumps(when),
     )
 
 

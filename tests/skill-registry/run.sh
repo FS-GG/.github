@@ -229,8 +229,48 @@ grep -q "\[declared-completeness\] stranger" <<<"$out" || { echo "FAIL: unnamed 
 grep -q "\[manifest-found\] Mirror.Repo" <<<"$out" && { echo "FAIL: frozen mirror mistaken for a producer"; exit 1; }
 # `always` is written as a bare token, never quoted — the ADR-0017 default round-trips.
 run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append stranger"; exit 1; }
-grep -q "materializes-when: always }" "$REG" || { echo "FAIL: default predicate not emitted bare"; grep stranger "$REG"; exit 1; }
+# Scope the assertion to the APPENDED row: `good`/`stale` already end `materializes-when: always }`,
+# so an unscoped grep passes no matter what format_row emitted.
+grep "id: stranger" "$REG" | grep -q "materializes-when: always }" \
+  || { echo "FAIL: default predicate not emitted bare"; grep "id: stranger" "$REG"; exit 1; }
 rm -rf "$ROOT/Producer.Three"
+echo "   ok"
+
+echo "== 14. a skill declared by TWO producers is reported, never attributed by sort order =="
+write_registry
+# The frozen-mirror shape: the alphabetically FIRST repo is the copy, not the owner. Guessing would
+# write `owner: producer-one` and a `source:` pointing at the mirror.
+DUP='{ "id": "dup", "scope": "product", "sha256": "'"$GOOD"'", "supplied-by": "skills/good/" }'
+write_manifests "$DUP" "$DUP"
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[declared-completeness\] dup" <<<"$out" || { echo "FAIL: duplicate-declared skill not reported"; echo "$out"; exit 1; }
+grep -q "declared by 2 producer manifests" <<<"$out" || { echo "FAIL: ambiguity not named"; echo "$out"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 on an ambiguous owner"; exit 1; }
+grep -q "id: dup" "$REG" && { echo "FAIL: --write guessed an owner for dup"; grep "id: dup" "$REG"; exit 1; }
+echo "   ok"
+
+echo "== 15. a manifest whose entries are not objects is a finding, not a traceback =="
+write_registry
+write_manifests
+printf '{ "schemaVersion": 1, "skills": ["fs-gg-oops"] }\n' > "$ROOT/Producer.One/.agents/skills/skill-manifest.json"
+out="$(run --registry "$REG" --repos-root "$ROOT" 2>&1 || true)"
+grep -q "\[manifest-found\] Producer.One" <<<"$out" || { echo "FAIL: non-object entry not reported"; echo "$out"; exit 1; }
+grep -q "Traceback" <<<"$out" && { echo "FAIL: crashed instead of reporting"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 16. a predicate containing a quote round-trips (no early-terminated YAML scalar) =="
+write_registry
+mkdir -p "$ROOT/Producer.Two/skills/quoted"
+printf 'quoted body\n' > "$ROOT/Producer.Two/skills/quoted/SKILL.md"
+QUOTED="$(sha "$ROOT/Producer.Two/skills/quoted/SKILL.md")"
+write_manifests "" '{ "id": "quoted", "scope": "product", "sha256": "'"$QUOTED"'", "supplied-by": "skills/quoted/", "materializes-when": "name == \"Acme\"" }'
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should append quoted"; exit 1; }
+python3 -c "
+import yaml,sys
+rows={r['id']: r for r in yaml.safe_load(open(sys.argv[1]))['skills']}
+got = rows['quoted']['materializes-when']
+assert got == 'name == \"Acme\"', repr(got)
+" "$REG" || { echo "FAIL: quoted predicate did not round-trip"; grep "id: quoted" "$REG"; exit 1; }
 echo "   ok"
 
 echo "skill-registry fixture: all checks passed"
