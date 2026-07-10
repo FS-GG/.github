@@ -509,11 +509,26 @@ let private interactive () : Options option =
 // ── Arg parsing ──────────────────────────────────────────────────────────────
 
 let private parse (argv: string list) : Result<Options, string> =
+    let knownProfiles = profiles |> List.map fst
+    // A `--flag`-looking token is a missing value, not a value — the same guard repos.sh's
+    // `need_val` applies. Without it, `new-sdd-workspace ./x P --profile --ref v1` swallows
+    // `--ref` as the profile and then blames `v1` (`unknown argument: v1`) for a mistake made
+    // two args earlier. `--profile` is also validated here against the known set, so an invalid
+    // profile is caught on the CLI path — not late, inside the `fsgg-sdd scaffold` child — to
+    // match the interactive wizard, which already constrains it to `profiles`.
     let rec flags (acc: Options) rest =
         match rest with
         | [] -> Ok acc
-        | "--profile" :: value :: t -> flags { acc with Profile = Some value } t
+        | "--profile" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--profile needs a value (got flag '%s')" value)
+        | "--profile" :: value :: t ->
+            if List.contains value knownProfiles then
+                flags { acc with Profile = Some value } t
+            else
+                Error(sprintf "unknown profile '%s' (choose one of: %s)" value (String.Join(", ", knownProfiles)))
         | [ "--profile" ] -> Error "--profile needs a value"
+        | "--ref" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--ref needs a value (got flag '%s')" value)
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
         | [ "--ref" ] -> Error "--ref needs a value"
         | "--upgrade" :: t -> flags { acc with Upgrade = true } t
