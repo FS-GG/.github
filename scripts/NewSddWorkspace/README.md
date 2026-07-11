@@ -27,7 +27,7 @@ new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>
 ```
 
 Run it with **no arguments** on an interactive terminal and it walks you through the same
-parameters with prompts (product → target → profile → governance → descriptor ref → upgrade).
+parameters with prompts (product → target → profile → governance → descriptor ref → currency → upgrade).
 Beside the prompts a live preview fills in as you answer — a **parameters** card next to a
 **scaffold preview** tree of what the run will produce — and a final go/no-go confirmation
 guards the disk. When stdin is redirected (pipes, CI), it skips the wizard and keeps the
@@ -37,8 +37,26 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 |---|---|
 | `--profile <name>` | `fs-gg-ui` render profile: `game` (default — minimal Pong-style starter), `app`, `headless-scene`, `governed`, `sample-pack`. Omitted ⇒ the scaffold-provider default (`game`). |
 | `--ref <git-ref>` | `FS.GG.Templates` ref to fetch the provider descriptor from (default: `main` = newest coherent set). Pass a tag to pin a reproducible version. |
-| `--upgrade` | also run `fsgg-sdd upgrade` after scaffolding (reconcile if behind — ADR-0009: never automatic) |
+| `--pinned` | **skip** the pre-scaffold `fsgg-sdd` self-update and scaffold with the CLI you already have. The default is to update first (see below); pair `--pinned` with `--ref <tag>` for a fully reproducible, pinned scaffold. |
+| `--upgrade` | after scaffolding, also run `fsgg-sdd upgrade` to reconcile an existing project (self-update + re-pin + re-seed). Largely redundant on a fresh scaffold now that the CLI is updated *before* scaffolding — kept for the reconcile-an-existing-project case. |
 | `--no-governance` | skip the Governance overlay |
+
+### Currency by default (ADR-0030)
+
+By default, **step 2 self-updates the `fsgg-sdd` CLI to the newest published build before it
+scaffolds**, so a fresh workspace is always produced by the current coherent set's tooling — you
+don't have to remember to update your CLI first. This is the deliberate creation-time carve-out to
+[ADR-0009](https://github.com/FS-GG/.github/blob/main/docs/adr/0009-cli-single-orchestrator-detect-and-remediate.md)'s
+"never silently auto-update" rule ([ADR-0030](https://github.com/FS-GG/.github/blob/main/docs/adr/0030-creation-time-scaffolding-self-updates-by-default.md)):
+there is no existing consumer artifact to clobber, and newest-by-default is the whole point of
+*creating* a workspace. ADR-0009 still governs the in-project `fsgg-sdd` verbs — this default only
+touches the CLI used to create a brand-new workspace.
+
+The self-update is **best-effort and non-blocking**: `FS.GG.SDD.Cli` lives only on the org
+GitHub Packages feed (whose reads are all authenticated), so it needs a `read:packages` token
+(`FSGG_PACKAGES_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`); with no token — or if the update fails or
+you are offline — the step warns and scaffolding proceeds with the installed CLI. Pass `--pinned`
+to opt out entirely; `--pinned --ref <tag>` gives a byte-reproducible pinned scaffold.
 
 ## What it does
 
@@ -46,10 +64,11 @@ It orchestrates the commands that already exist, and reports each step's outcome
 (`✓ worked` / `⚠ warning` / `⊘ skipped` / `✗ failed`) in a summary table:
 
 1. **fetch** the newest rendering provider descriptor from `FS.GG.Templates` (HTTP, no clone) — *fatal on failure*
-2. **`fsgg-sdd scaffold`** — SDD skeleton + runnable Rendering app — *fatal on failure*
-3. **governance overlay** (`dotnet new fs-gg-governance`, profile `light`) — *non-blocking; best-effort*
-4. **`fsgg-sdd doctor`** — read-only coherence check — *non-blocking*
-5. **`fsgg-sdd upgrade`** (only with `--upgrade`) — *fatal on failure*
+2. **update `fsgg-sdd`** — self-update the CLI to the newest build so the scaffold is current (default; `--pinned` skips) — *non-blocking; best-effort* (ADR-0030)
+3. **`fsgg-sdd scaffold`** — SDD skeleton + runnable Rendering app — *fatal on failure*
+4. **governance overlay** (`dotnet new fs-gg-governance`, profile `light`) — *non-blocking; best-effort*
+5. **`fsgg-sdd doctor`** — read-only coherence check — *non-blocking*
+6. **`fsgg-sdd upgrade`** (only with `--upgrade`) — *fatal on failure*
 
 ### Governance overlay & feeds
 

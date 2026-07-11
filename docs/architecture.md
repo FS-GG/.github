@@ -283,7 +283,11 @@ present vs. those the pin expects — **warning when interactive and failing clo
 CI**. Remediation is never a side effect: a read-only `fsgg-sdd doctor` reports, and an
 explicit `fsgg-sdd upgrade` (self-update + template re-pin + `refresh-agents` re-seed)
 reconciles, **each as a confirmable diff**, touching only consumer-owned state. It
-stamps the CLI version used + required minimum into `scaffold-provenance.json`.
+stamps the CLI version used + required minimum into `scaffold-provenance.json`. The one
+bounded exception is **creation** (ADR-0030): `new-sdd-workspace` self-updates the CLI to
+the newest coherent set *before* it scaffolds, **by default** (`--pinned` opts back into a
+reproducible pin) — there is no existing consumer to clobber and no prior run to reproduce,
+so the detect-and-warn policy above applies only to *in-project* invocations.
 
 ### 4.3 FS.GG.Governance — the optional inference kernel
 
@@ -337,7 +341,9 @@ pins `FS.GG.UI.Template::<version>` and SDD installs the **live, pinned** upstre
 package at scaffold time. The [`new-sdd-workspace`](https://github.com/FS-GG/.github/tree/main/scripts/NewSddWorkspace)
 dotnet tool (F# / Spectre.Console) does the three steps — register the provider → `fsgg-sdd scaffold`
 → apply the governance overlay *after* (so it is not flagged writing into the SDD-owned `.fsgg/` tree)
-— with no FS.GG.Templates checkout, fetching the pinned descriptor over the network.
+— with no FS.GG.Templates checkout, fetching the pinned descriptor over the network. By default it
+first self-updates `fsgg-sdd` to the newest coherent set so the scaffold is built by current tooling
+(ADR-0030; `--pinned` skips it for a reproducible pin).
 
 **The `fs-gg-governance` overlay** ships a **populated** gate set (real
 build/test/evidence checks wired to tooling commands), authored to Governance's
@@ -507,9 +513,12 @@ alongside template and framework — so the `fs-gg-ui-template` registry entry c
 *policy*: the CLI is the single orchestration and enforcement surface but **not** the
 source of truth — it **detects** drift read-only on every command (interactive warns,
 CI fails closed) and **remediates only through an explicit, diff-reviewed `fsgg-sdd
-upgrade`** (self-update + re-pin + re-seed), never a silent auto-update. Truth stays
-declarative in the registry so it can be diffed, gated, and flipped after publish
-(`FR-007`). As of SDD v0.4.0 (2026-07-01) the registry pins `minimum-fsgg-sdd: 0.4.0`
+upgrade`** (self-update + re-pin + re-seed), never a silent auto-update — for *in-project*
+invocations. **ADR-0030** carves the one creation-time exception: `new-sdd-workspace`
+self-updates the CLI to the newest coherent set before scaffolding **by default**
+(`--pinned` restores a reproducible pin), because at creation there is no consumer artifact
+to clobber. Truth stays declarative in the registry so it can be diffed, gated, and flipped
+after publish (`FR-007`). As of SDD v0.4.0 (2026-07-01) the registry pins `minimum-fsgg-sdd: 0.4.0`
 (the oldest published CLI that seeds those artifacts — advanced `0.3.0→0.4.0` because
 feature 056 made `fsgg-sdd` the sole skill-mirror authority, seeding the `fs-gg-sdd-*`
 skills into a *third* root `.agents/skills/` and fanning the byte-identical union into

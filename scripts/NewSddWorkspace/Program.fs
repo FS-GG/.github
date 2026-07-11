@@ -6,13 +6,17 @@
 ///
 /// It orchestrates the commands that already exist today:
 ///   1. fetch the newest rendering provider descriptor from FS.GG.Templates (HTTP, no clone)
-///   2. fsgg-sdd scaffold        (SDD lifecycle skeleton + runnable Rendering app)   [fatal]
-///   3. governance overlay       (dotnet new fs-gg-governance — default on)          [non-fatal]
-///   4. fsgg-sdd doctor          (read-only coherence check)                          [non-fatal]
-///   5. fsgg-sdd upgrade         (optional --upgrade; ADR-0009 never automatic)       [fatal]
+///   2. update fsgg-sdd          (self-update to the newest build — DEFAULT; --pinned skips)  [non-fatal]
+///   3. fsgg-sdd scaffold        (SDD lifecycle skeleton + runnable Rendering app)            [fatal]
+///   4. governance overlay       (dotnet new fs-gg-governance — default on)                   [non-fatal]
+///   5. fsgg-sdd doctor          (read-only coherence check)                                  [non-fatal]
+///   6. fsgg-sdd upgrade         (optional --upgrade — reconcile an existing project)         [fatal]
 ///
-/// Currency stays EXPLICIT (ADR-0009): fetching `main` gives the current coherent set; pass
-/// --ref <tag> to pin a reproducible version; run --upgrade to reconcile a behind project.
+/// Currency is the DEFAULT (ADR-0030, the creation-time carve-out to ADR-0009): the CLI
+/// self-updates to the newest coherent set BEFORE scaffolding, so a fresh workspace is always
+/// produced by current tooling. --pinned skips the self-update; --pinned with --ref <tag> gives a
+/// fully reproducible, pinned scaffold. ADR-0009's "no silent auto-update" still governs the
+/// in-project fsgg-sdd verbs — this default is only the create-a-new-workspace step.
 module NewSddWorkspace.Program
 
 open System
@@ -41,6 +45,10 @@ type Options =
       Ref: string
       Upgrade: bool
       Governance: bool
+      /// Skip the pre-scaffold `fsgg-sdd` self-update (step 2) and scaffold with the installed
+      /// CLI. Default false = self-update to the newest coherent set first (ADR-0030); set true
+      /// (via `--pinned`) for a reproducible, pinned scaffold, ideally with `--ref <tag>`.
+      Pinned: bool
       /// The `fs-gg-ui` render profile (game/app/headless-scene/governed/sample-pack).
       /// None = pass no `--param profile`, deferring to the scaffold-provider default (game) —
       /// keeps the bare-CLI invocation byte-identical to before this flag existed.
@@ -169,6 +177,31 @@ let private installGovernanceTemplate () : int * string =
             let code2, log2 = installFromTempConfig (nugetOrgConfig ())
             code2, log + "\n" + log2
 
+/// Self-update the `fsgg-sdd` global tool to the newest published build BEFORE scaffolding, so a
+/// fresh workspace is produced by the current coherent set's tooling — the DEFAULT (ADR-0030, the
+/// creation-time carve-out to ADR-0009: there is no existing consumer artifact to clobber, and
+/// newest-by-default is the whole point of creating a workspace; `--pinned` + `--ref <tag>`
+/// restores a reproducible pin). `FS.GG.SDD.Cli` lives only on the org GitHub Packages feed, whose
+/// reads are all authenticated (FS.GG.Templates#82), so the update needs a `read:packages` token;
+/// with none the feed is unreachable and the step skips (scaffolding proceeds with the installed
+/// CLI). Best-effort throughout: an offline or failed update warns and never blocks creation. Runs
+/// from an isolated temp config so the org feed's anonymous 401 can't poison the restore.
+let private selfUpdateCli () : Outcome =
+    match feedToken () with
+    | None -> Skipped "no read:packages token (set FSGG_PACKAGES_TOKEN) — scaffolding with the installed CLI"
+    | Some token ->
+        let dir = Path.Combine(Path.GetTempPath(), "new-sdd-workspace-upd-" + Guid.NewGuid().ToString "N")
+        Directory.CreateDirectory dir |> ignore
+        try
+            let cfg = Path.Combine(dir, "nuget.config")
+            File.WriteAllText(cfg, orgFeedConfig token)
+            let code, _ =
+                runProcess true "dotnet" [ "tool"; "update"; "--global"; "FS.GG.SDD.Cli"; "--configfile"; cfg ]
+            if code = 0 then Succeeded
+            else Warned(sprintf "update failed (exit %d) — scaffolding with the installed CLI" code)
+        finally
+            try Directory.Delete(dir, true) with _ -> ()
+
 /// `command -v <cmd>` — is the executable resolvable on PATH? (dotnet global tools install
 /// to a directory that is itself on PATH, so this finds `fsgg-sdd`.)
 let private onPath (cmd: string) =
@@ -233,6 +266,11 @@ let private header (opts: Options) =
     )
     |> ignore
     grid.AddRow("[grey]descriptor ref[/]", Markup.Escape opts.Ref) |> ignore
+    grid.AddRow(
+        "[grey]currency[/]",
+        (if opts.Pinned then "[dim]pinned — installed CLI (--pinned)[/]" else "update fsgg-sdd before scaffold")
+    )
+    |> ignore
     grid.AddRow(
         "[grey]governance[/]",
         (if opts.Governance then "light / non-blocking" else "[dim]disabled (--no-governance)[/]")
@@ -302,7 +340,9 @@ let private usage () =
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   render profile (default: game = provider default)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
-    AnsiConsole.MarkupLine "  [green]--upgrade[/]          also run `fsgg-sdd upgrade` after scaffolding (reconcile if behind)"
+    AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
+    AnsiConsole.MarkupLine "                    [dim]default: self-update to the newest coherent set first; pair --pinned with --ref <tag> for a reproducible scaffold[/]"
+    AnsiConsole.MarkupLine "  [green]--upgrade[/]          also run `fsgg-sdd upgrade` after scaffolding (reconcile an existing project)"
     AnsiConsole.MarkupLine "  [green]--no-governance[/]    skip the governance overlay"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[dim]Run with no arguments on an interactive terminal to build the invocation with prompts.[/]"
@@ -317,10 +357,11 @@ type private Draft =
       Profile: string option
       Governance: bool option
       Ref: string option
+      Pinned: bool option
       Upgrade: bool option }
 
 let private emptyDraft =
-    { Product = None; Target = None; Profile = None; Governance = None; Ref = None; Upgrade = None }
+    { Product = None; Target = None; Profile = None; Governance = None; Ref = None; Pinned = None; Upgrade = None }
 
 /// Require a non-blank answer — the shared validator for the text prompts.
 let private required (label: string) (s: string) =
@@ -348,6 +389,11 @@ let private paramsPanel (d: Draft) =
          | Some "main" -> "[aqua]main[/] [grey](newest set)[/]"
          | Some r -> sprintf "[aqua]%s[/] [grey](pinned)[/]" (Markup.Escape r)
          | None -> pendingCell)
+    row "currency"
+        (match d.Pinned with
+         | Some true -> "[grey]pinned (installed CLI)[/]"
+         | Some false -> "[green]update[/] [grey]fsgg-sdd first[/]"
+         | None -> pendingCell)
     row "upgrade"
         (match d.Upgrade with
          | Some true -> "[green]yes[/] [grey](reconcile)[/]"
@@ -366,6 +412,14 @@ let private previewPanel (d: Draft) =
     let root = d.Target |> Option.map Markup.Escape |> Option.defaultValue "[grey37]<target>[/]"
     let tree = Tree(sprintf "[bold]%s[/]  [grey]· new workspace[/]" root)
     tree.Guide <- TreeGuide.BoldLine
+
+    // The pre-scaffold self-update is a tooling step, not an output artifact, but it shapes how
+    // current everything below will be — so it leads the tree (ADR-0030).
+    (match d.Pinned with
+     | Some true -> tree.AddNode "[grey37]fsgg-sdd — pinned to the installed build (--pinned)[/]"
+     | Some false -> tree.AddNode "[green]fsgg-sdd self-update[/]  [grey](newest coherent set, before scaffold)[/]"
+     | None -> tree.AddNode(sprintf "fsgg-sdd currency  %s" pendingCell))
+    |> ignore
 
     let refAnno = d.Ref |> Option.map (fun r -> sprintf "[aqua]@ %s[/]" (Markup.Escape r)) |> Option.defaultValue pendingCell
     tree.AddNode(sprintf "[grey].fsgg/providers.yml[/]  rendering descriptor %s" refAnno) |> ignore
@@ -414,6 +468,7 @@ let private equivalentCommand (d: Draft) =
     parts.Add(d.Product |> Option.defaultValue "<product>")
     (match d.Profile with Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
     (match d.Ref with Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r) | _ -> ())
+    (match d.Pinned with Some true -> parts.Add "--pinned" | _ -> ())
     (match d.Governance with Some false -> parts.Add "--no-governance" | _ -> ())
     (match d.Upgrade with Some true -> parts.Add "--upgrade" | _ -> ())
     String.Join(" ", parts)
@@ -489,6 +544,17 @@ let private interactive () : Options option =
     draft <- { draft with Ref = Some gitRef }
 
     draftView draft
+    let pinned =
+        AnsiConsole.Prompt(
+            SelectionPrompt<string>()
+                .Title("Tooling [green]currency[/] before scaffolding?")
+                .AddChoices(
+                    [| "update — self-update fsgg-sdd to the newest build (default, recommended)"
+                       "pinned — scaffold with the installed CLI (--pinned)" |]))
+            .StartsWith "pinned"
+    draft <- { draft with Pinned = Some pinned }
+
+    draftView draft
     let upgrade =
         AnsiConsole.Confirm("Also run [green]fsgg-sdd upgrade[/] after scaffolding (reconcile if behind)?", false)
     draft <- { draft with Upgrade = Some upgrade }
@@ -502,6 +568,7 @@ let private interactive () : Options option =
               Ref = gitRef
               Upgrade = upgrade
               Governance = governance
+              Pinned = pinned
               Profile = Some profile }
     else
         None
@@ -531,6 +598,7 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--ref needs a value (got flag '%s')" value)
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
         | [ "--ref" ] -> Error "--ref needs a value"
+        | "--pinned" :: t -> flags { acc with Pinned = true } t
         | "--upgrade" :: t -> flags { acc with Upgrade = true } t
         | "--no-governance" :: t -> flags { acc with Governance = false } t
         | other :: _ -> Error(sprintf "unknown argument: %s" other)
@@ -542,6 +610,7 @@ let private parse (argv: string list) : Result<Options, string> =
               Ref = "main"
               Upgrade = false
               Governance = true
+              Pinned = false
               Profile = None }
             rest
     | _ -> Error "target dir and product name are required"
@@ -552,7 +621,7 @@ let private run (opts: Options) : int =
     header opts
 
     if not (onPath "fsgg-sdd") then
-        // Preflight (matches the shell's exit 127): steps 2/4/5 drive `fsgg-sdd`, so fail fast
+        // Preflight (matches the shell's exit 127): steps 2/3/5/6 drive `fsgg-sdd`, so fail fast
         // with an actionable message rather than a bare "command not found" mid-scaffold.
         let panel =
             Panel(
@@ -588,9 +657,24 @@ let private run (opts: Options) : int =
             results.Add { Title = "fetch descriptor"; Outcome = Failed e }
             fatal <- true
 
-        // 2 · fsgg-sdd scaffold (fatal on failure)
+        // 2 · update fsgg-sdd to the newest coherent set BEFORE scaffolding — the DEFAULT
+        //     (ADR-0030, the creation-time carve-out to ADR-0009); --pinned skips it. Non-fatal:
+        //     an offline/failed update warns and scaffolding proceeds with the installed CLI.
+        if opts.Pinned then
+            results.Add { Title = "update fsgg-sdd"; Outcome = Skipped "--pinned (installed CLI)" }
+        elif not fatal then
+            step 2 "update fsgg-sdd"
+            let outcome = selfUpdateCli ()
+            (match outcome with
+             | Succeeded -> AnsiConsole.MarkupLine "  [green]✓[/] fsgg-sdd is at the newest published build"
+             | Warned n -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape n))
+             | Skipped r -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape r))
+             | Failed n -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape n)))
+            results.Add { Title = "update fsgg-sdd"; Outcome = outcome }
+
+        // 3 · fsgg-sdd scaffold (fatal on failure)
         if not fatal then
-            step 2 "fsgg-sdd scaffold"
+            step 3 "fsgg-sdd scaffold"
             // Pin the profile only when chosen; None defers to the provider default (game).
             let profileParam =
                 match opts.Profile with
@@ -609,11 +693,11 @@ let private run (opts: Options) : int =
                 results.Add { Title = "scaffold"; Outcome = Failed(sprintf "exit %d" code) }
                 fatal <- true
 
-        // 3 · governance overlay (non-fatal; best-effort — needs the published template on a reachable feed)
+        // 4 · governance overlay (non-fatal; best-effort — needs the published template on a reachable feed)
         if not opts.Governance then
             results.Add { Title = "governance overlay"; Outcome = Skipped "--no-governance" }
         elif not fatal then
-            step 3 "governance overlay"
+            step 4 "governance overlay"
             let installCode, installLog = installGovernanceTemplate ()
             if installCode = 0 then
                 let govCode, _ =
@@ -645,9 +729,9 @@ let private run (opts: Options) : int =
                 )
                 results.Add { Title = "governance overlay"; Outcome = Skipped "FS.GG.Templates template feed not reachable" }
 
-        // 4 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
+        // 5 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
         if not fatal then
-            step 4 "fsgg-sdd doctor"
+            step 5 "fsgg-sdd doctor"
             let code, _ = runProcess true "fsgg-sdd" [ "doctor"; "--root"; opts.Target ]
             if code = 0 then
                 AnsiConsole.MarkupLine "  [green]✓[/] product is coherent with its set"
@@ -656,9 +740,11 @@ let private run (opts: Options) : int =
                 AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] doctor reported issues (exit %d) — non-blocking" code)
                 results.Add { Title = "doctor"; Outcome = Warned(sprintf "reported issues (exit %d)" code) }
 
-        // 5 · fsgg-sdd upgrade (optional; fatal on failure, matching the shell's set -e)
+        // 6 · fsgg-sdd upgrade (optional; fatal on failure, matching the shell's set -e). With the
+        //     default pre-scaffold self-update this is largely redundant on a fresh scaffold; it
+        //     stays for the explicit "reconcile an existing project" invocation.
         if opts.Upgrade && not fatal then
-            step 5 "fsgg-sdd upgrade"
+            step 6 "fsgg-sdd upgrade"
             let code, _ = runProcess true "fsgg-sdd" [ "upgrade"; "--root"; opts.Target ]
             if code = 0 then
                 AnsiConsole.MarkupLine "  [green]✓[/] reconciled to the current coherent set"
