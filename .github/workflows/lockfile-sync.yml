@@ -31,8 +31,35 @@
 #      with `contents: write` — else the push 403s.
 #   2. The org Actions secrets FSGG_DISPATCH_APP_ID / _PRIVATE_KEY must be visible to the repo
 #      (selected-repos list) — else `secrets.app-id` resolves empty and the token step fails.
-# Rendering, SDD, and Governance were confirmed on both (org admin, 2026-07-03); confirm any new
-# adopter before it relies on this.
+#
+# "Both fail visibly" was true only of the SYMPTOM, never of the CAUSE, and this header is where the
+# gap started (.github#482, epic #266). It told adopters to "confirm before relying on this" without
+# saying how, and asserted the check needed org-admin — so nobody ever ran it. Both claims were wrong:
+#
+#   * `required: true` on a workflow_call secret means PROVIDED, not NON-EMPTY. A caller forwarding
+#     `${{ secrets.FSGG_DISPATCH_APP_ID }}` for a secret the repo cannot see passes the EMPTY STRING
+#     and satisfies `required`. Nothing downstream noticed until create-github-app-token failed — deep
+#     inside somebody's unrelated dependency-bump PR, naming neither the secret nor the App.
+#   * Prerequisite 2 is READABLE WITHOUT `admin:org`:
+#         GET /repos/{owner}/{repo}/actions/organization-secrets      (needs only `repo` scope)
+#     It lists the org secrets shared with a repo, values not revealed. It was believed unverifiable,
+#     so six adopters went unaudited and TWO of them were never provisioned at all: FS.GG.Game (live
+#     — Renovate onboarded, so its next renovate/* PR fails) and FS.GG.Audio (inert — Renovate not yet
+#     onboarded). Provisioning for both is .github#468.
+#
+# The `preflight` job below now asserts prerequisite 2 in the RECEIVER's own context, on every call.
+# That is the only place with the credentials to see it: this repo's CI holds a GITHUB_TOKEN scoped to
+# `.github` alone and CANNOT read another repo's secrets — an org-wide gate here would have needed a
+# new org-provisioned PAT, i.e. the fix for the provisioning problem would itself have needed
+# provisioning. Checking where the workflow already runs needs no token and no new grant at all.
+#
+# Prerequisite 1 (App installation) is NOT statically checkable — enumerating an installation's
+# selected repos needs a token no CI job here holds. It fails at the token step or 403s on the push,
+# and the two are provisioned in the same admin pass, so asserting 2 catches both real cases.
+#
+# Rendering, SDD, Governance and Templates are confirmed on prerequisite 2 (verified 2026-07-11 via
+# the endpoint above); Rendering and Governance are additionally proven on 1 (they have actually
+# pushed). A new adopter no longer needs to remember any of this: preflight tells it.
 name: lockfile-sync
 
 on:
@@ -69,9 +96,94 @@ permissions:
   packages: read
 
 jobs:
+  # Can this repo actually AUTHENTICATE? (.github#482, epic #266 — "a gate that cannot fail on its
+  # subject is not a gate".)
+  #
+  # Runs on EVERY call, deliberately UNGATED. `sync` only fires on renovate/* branches, so gating this
+  # the same way would mean an unprovisioned repo learns it is unprovisioned at the worst possible
+  # moment — inside a dependency-bump PR it did not open, from an opaque create-github-app-token
+  # error. Running it on every call turns "is this repo provisioned?" into a continuously-checked
+  # invariant that is answered on the FIRST PR after adoption, months before Renovate is onboarded.
+  #
+  # It costs one ~5s runner and no token: emptiness is decided by Actions' `!= ''` BEFORE the step
+  # runs, so the job needs neither the secret values nor a checkout nor an API call. That is the whole
+  # reason the check lives here rather than in a coherence gate in .github — this repo's CI holds a
+  # GITHUB_TOKEN scoped to `.github` alone and literally cannot read FS.GG.Game's secrets.
+  #
+  # Severity is deliberately split, because blast radius matters: a repo that is unprovisioned but not
+  # about to sync gets a WARNING (visible, non-blocking — it must not red an unrelated PR over a
+  # latent problem), while one that is unprovisioned AND about to sync gets a hard ERROR (the run was
+  # going to fail regardless; this only decides whether it fails legibly). Both name the repo, the
+  # secret and the fix. Neither can be skipped into green: this job has no `if:`, and `sync` `needs:`
+  # it — see tests/dispatch-preflight, which asserts exactly that.
+  preflight:
+    name: Preflight — dispatch App secrets resolve
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert the dispatch App secrets are visible to this repo
+        env:
+          # BOOLEANS ONLY. The secret values are never put in the environment, never interpolated
+          # into the script, and never printed — Actions evaluates `!= ''` before the step runs, so
+          # all this job ever sees is the string "true" or "false". (The org's uniform anti-injection
+          # pattern, and here it also means an unprovisioned repo leaks nothing by running the check.)
+          HAS_APP_ID: ${{ secrets.app-id != '' }}
+          HAS_APP_KEY: ${{ secrets.app-private-key != '' }}
+          # The same condition that gates `sync`. Duplicated ON PURPOSE: `sync`'s `if:` remains the
+          # single ENFORCEMENT point — it is the security boundary (never auto-commit to a fork head)
+          # and must stay readable in place, not hidden behind a job output. This copy only chooses
+          # error-vs-warning, so the worst a drift could do is misgrade a message while `sync`'s own
+          # `if:` still gates the push. tests/dispatch-preflight asserts the two stay identical.
+          WOULD_SYNC: >-
+            ${{ startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+            github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          set -eu
+
+          missing=''
+          [ "$HAS_APP_ID" = 'true' ]  || missing="$missing FSGG_DISPATCH_APP_ID"
+          [ "$HAS_APP_KEY" = 'true' ] || missing="$missing FSGG_DISPATCH_APP_PRIVATE_KEY"
+
+          if [ -z "$missing" ]; then
+            echo "ok: the fs-gg-cross-repo-dispatch App secrets resolve in $GITHUB_REPOSITORY."
+            exit 0
+          fi
+
+          # `required: true` on a workflow_call secret means PROVIDED, not NON-EMPTY: a caller
+          # forwarding a secret its repo cannot see passes the empty string and satisfies `required`.
+          # This is the only place that difference is observable before it becomes a mystery failure.
+          echo "$GITHUB_REPOSITORY cannot see:$missing"
+          echo
+          echo "The org Actions secret(s) above are not shared with this repository, so the caller"
+          echo "forwarded an empty string. create-github-app-token will fail with an empty app-id."
+          echo
+          echo "FIX (org-admin, ~2 min — tracked by FS-GG/.github#468):"
+          echo "  1. Org Settings -> Secrets and variables -> Actions: add $GITHUB_REPOSITORY to the"
+          echo "     selected-repositories list for BOTH FSGG_DISPATCH_APP_ID and _PRIVATE_KEY."
+          echo "  2. Add $GITHUB_REPOSITORY to the fs-gg-cross-repo-dispatch App installation with"
+          echo "     contents: write, or the push will 403 even once the token mints."
+          echo
+          echo "VERIFY (needs only \`repo\` scope — NOT admin:org, despite what this was long assumed"
+          echo "to require):"
+          echo "  gh api repos/$GITHUB_REPOSITORY/actions/organization-secrets --jq .total_count"
+          echo "  # want 2, not 0"
+
+          summary="$GITHUB_REPOSITORY is not provisioned for lockfile-sync: cannot see$missing."
+          fix="Add it to the secrets' selected-repositories list + the fs-gg-cross-repo-dispatch App installation (FS-GG/.github#468)."
+
+          if [ "$WOULD_SYNC" = 'true' ]; then
+            echo "::error title=lockfile-sync is not provisioned in this repo::$summary This renovate/* PR needs it NOW and the token step would have failed opaquely. $fix"
+            exit 1
+          fi
+
+          echo "::warning title=lockfile-sync will fail on the next renovate/* PR::$summary It is not blocking THIS PR (sync only runs on renovate/* branches), but it will fail the first one that opens. $fix"
+          exit 0
+
   sync:
     name: Sync packages.lock.json
     runs-on: ubuntu-latest
+    # The gate above must have passed. Without this, an unprovisioned repo would still reach the
+    # token step and fail there — with the opaque error preflight exists to replace.
+    needs: preflight
     # Renovate branches only, same-repo only (never fork PRs — a fork push would 403, and we
     # never want to auto-commit to an untrusted head). Evaluated in the caller's event context.
     if: >-
