@@ -1,0 +1,70 @@
+# TEMPORARY — probe for .github#514. Delete before this PR merges.
+#
+# Answers prerequisite 1 of #514: is `fs-gg-cross-repo-dispatch` installed on FS-GG/.github ITSELF,
+# with contents: write + pull_requests: write? That is NOT readable from a dev's OAuth token (it
+# needs App or PAT auth), and it is the fact that decides whether swapping skill-registry-autofix
+# to an App token fixes the gate or 403s and destroys the response half entirely.
+#
+# Read-only: it mints tokens and enumerates the installation. It pushes nothing and grants nothing.
+name: tmp-app-token-probe
+
+on:
+  push:
+    branches: [item/514-autofix-app-token]
+
+permissions: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      # Owner-scoped, no `repositories:` — this succeeds regardless of whether .github is selected,
+      # so it gives us a token we can use to ENUMERATE the installation rather than infer it.
+      - name: Mint an org-scoped token
+        id: org
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+
+      - name: Enumerate the repositories the installation can reach
+        if: steps.org.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.org.outputs.token }}
+        run: |
+          set -euo pipefail
+          echo "=== repositories in the fs-gg-cross-repo-dispatch installation ==="
+          gh api /installation/repositories --paginate --jq '.repositories[].full_name' | sort | tee repos.txt
+          echo
+          if grep -qx 'FS-GG/.github' repos.txt; then
+            echo "VERDICT-1: FS-GG/.github IS in the installation."
+          else
+            echo "VERDICT-1: FS-GG/.github is NOT in the installation."
+          fi
+
+      # The decisive test. The access-token API refuses a permission set that is not a SUBSET of what
+      # the installation actually holds on the repo, so a successful mint here proves both that
+      # .github is selected AND that contents+pull_requests are writable.
+      - name: Mint a .github-scoped token with contents+PR write
+        id: repo
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: .github
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Verdict
+        run: |
+          echo "org-scoped mint      : ${{ steps.org.outcome }}"
+          echo "..github write mint  : ${{ steps.repo.outcome }}"
+          if [ "${{ steps.repo.outcome }}" = "success" ]; then
+            echo "VERDICT-2: PREREQUISITE 1 SATISFIED — .github can be pushed with the App token. Proceed with #514."
+          else
+            echo "VERDICT-2: PREREQUISITE 1 NOT SATISFIED — swapping the token would 403. #514 needs the org-admin grant first."
+          fi
