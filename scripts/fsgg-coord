@@ -2906,6 +2906,12 @@ reap_cmd() {
       *)       die "reap: unexpected argument '$1'." ;;
     esac
   done
+  # Scoped to the checkout like its siblings (#480) — and this is the one where it matters most.
+  # `reap --apply` DESTROYS state: it deletes another worker's claim marker and unassigns them. A
+  # destructive command whose bare default is THE WHOLE ORG is the scope bug at its worst — a janitor
+  # run in `.github` would collect live-looking claims in five other repos it was never pointed at.
+  # Every documented use already passes --repo; nothing relied on the org-wide default.
+  repo="$(scope_repo "$repo")"
   [ -n "$repo" ] && repo="$(resolve_repo "$repo")"
   local stale n=0 i=0
   stale="$(active_claims "$repo" | jq -c '[.[] | select(.state == "stale")]')"

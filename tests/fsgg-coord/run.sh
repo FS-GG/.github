@@ -899,6 +899,14 @@ assert_contains "take: outside a checkout REFUSES rather than scanning the whole
 assert_eq "ready: bare from a checkout stays ORG-WIDE (/check-board depends on it) [#480]" \
   "true" "$(run_at "$CO_SDD" ready --all --json 2>/dev/null \
              | jq -r '[.[].repo] | unique | length > 1')"
+
+# `reap --apply` is the one command here that DESTROYS another worker's state — it deletes their claim
+# marker and unassigns them. So it is the worst possible place to keep an org-wide default: a janitor
+# run from `.github` would collect claims in five repos it was never pointed at. It scopes like its
+# siblings. (Asserted on the DRY RUN — the point is which claims it considers, not that it deletes.)
+assert_eq "reap: bare, from a checkout considers only THAT repo's claims [#480]" \
+  "true" "$(as_at "$CO_SDD" janitor-x reap 2>&1 \
+             | grep -qE 'FS\.GG\.(Templates|Governance|Rendering|Audio|Game)#' && echo false || echo true)"
 assert_contains "next: unknown repo reports no startable item (stderr)" \
   "no startable item" "$(run next --repo nope 2>&1 >/dev/null)"
 
