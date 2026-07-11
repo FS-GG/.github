@@ -10,6 +10,11 @@
 # points SRC at the real dist/dotnet/ and asserts the canonical source still ships all three managed
 # files. Omit it and a dist/dotnet-only PR never runs the fixture that checks it — the breakage then
 # surfaces on main, from somebody else's unrelated PR (#508, same class as #334).
+#
+# `.config/**` is listed SEPARATELY and is not redundant: one of those three managed files is
+# dist/dotnet/.config/dotnet-tools.json — the very file #387 armed this fixture for — and it sits in a
+# DOT-directory. GitHub does not document whether `**` descends into one, and this is a gate whose
+# failure mode is silently passing. An explicit entry costs a line; guessing wrong costs the manifest.
 name: sync-build-config-selftest
 
 on:
@@ -18,6 +23,7 @@ on:
       - "scripts/sync-build-config.sh"
       - "tests/sync-build-config/**"
       - "dist/dotnet/**"
+      - "dist/dotnet/.config/**"
       - ".github/workflows/sync-build-config-selftest.yml"
   push:
     branches: [main]
@@ -25,6 +31,7 @@ on:
       - "scripts/sync-build-config.sh"
       - "tests/sync-build-config/**"
       - "dist/dotnet/**"
+      - "dist/dotnet/.config/**"
       - ".github/workflows/sync-build-config-selftest.yml"
   workflow_dispatch:
 
