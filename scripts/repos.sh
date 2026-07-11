@@ -392,10 +392,16 @@ cmd_validate() {
   # outlived its row. Comparing the whole generated file against the whole checked-in one catches
   # both, plus ordering and formatting drift, in one diff — and it is the same comparison the gate
   # makes, so `relock` is always the fix.
-  local lock; lock="$(lock_path "$reg")"
-  if [ ! -f "$lock" ]; then
+  local lock nkit; lock="$(lock_path "$reg")"
+  nkit="$(echo "$json" | jq '(.kit // []) | length')"
+  # A roster that ships no kit has nothing to lock, and demanding a lock for it would fail rosters
+  # that legitimately have no `kit:` block (tests/roster-closure builds several). That is NOT a hole:
+  # if a lock EXISTS it is always compared, so deleting the `kit:` block from a roster that has one
+  # does not silence the check — it turns every checked-in pin into an orphan and the whole-file
+  # comparison below reports it. "No kit" only excuses the lock when there is genuinely no kit.
+  if [ "$nkit" -gt 0 ] && [ ! -f "$lock" ]; then
     err "kit lock missing: $lock (generate it: repos.sh relock)"
-  else
+  elif [ -f "$lock" ]; then
     local want got_lock
     want="$(gen_lock "$reg" "$root")" || err "cannot generate the kit lock (a source is missing or undigestable)."
     got_lock="$(cat "$lock")"

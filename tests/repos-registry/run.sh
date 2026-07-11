@@ -155,6 +155,23 @@ relock "$LOCKED"; cp "$LOCKF" "$WORK/once"; relock "$LOCKED"
 if diff -q "$WORK/once" "$LOCKF" >/dev/null; then ok "lock: relock is idempotent"
 else bad "lock: relock is NOT idempotent" "a generator that never settles reds a clean tree"; fi
 
+# A roster with NO kit: block ships no kit, so it needs no lock — several rosters in
+# tests/roster-closure are exactly this. The exemption is narrow, and the next assertion is why it is
+# not a hole.
+NOKIT="$WORK/nokit.yml"
+sed '/^kit:/,$d' "$BASE" > "$NOKIT"; rm -f "${NOKIT%.yml}.lock"
+expect_pass "lock: a roster with no kit: block needs no lock" "$NOKIT"
+
+# ...but DELETING the kit: block from a roster that HAS a lock must not silence the check. Every pin
+# in the lock is now an orphan — a standing guarantee about a kit the roster no longer ships — and
+# the whole-file comparison still runs whenever a lock exists. This is the leg that keeps the
+# exemption above from becoming a #266 fail-open: "no kit" excuses the lock only when there is
+# genuinely no kit, never when someone removed one and left its pins behind.
+cp "$WORK/locked.lock.bak" "${NOKIT%.yml}.lock"
+expect_fail "lock: dropping kit: while the lock still has pins fails (orphan pins, not a free pass)" \
+  1 "STALE" "$NOKIT"
+rm -f "${NOKIT%.yml}.lock"
+
 # Two kit rows that collide at the receiver — the registry is valid but the fabric cannot honour it
 # (.github#348). A duplicate id is the pre-#347 vector; a shared skill-source basename is the post-#347
 # one, because coordination-sync writes each skill to <root>/<basename source>/SKILL.md.
