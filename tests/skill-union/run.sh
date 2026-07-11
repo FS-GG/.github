@@ -344,12 +344,25 @@ fi
 # reserves for "the union is violated". A typo'd command line reported itself as the very finding the
 # script exists to produce. Both forms `${2:?…}` fired on are asserted, for every flag that takes a
 # value: absent, and empty-but-present.
-for flag in --product --roots --manifest --co-tenants --params --digest; do
+for flag in --product --roots --manifest --co-tenants --params --digest --eval-when; do
   expect_rc "usage: $flag with no value exits 2 (misconfig), not 1 (violation)"    2 "$flag"
   expect_rc "usage: $flag with an empty value exits 2, not 1"                      2 "$flag" ""
 done
 expect_rc "usage: an unknown flag still exits 2" 2 --bogus-flag
 expect_rc "usage: --help still exits 0"          0 --help
+
+# --- cross-impl conformance for the materializes-when grammar (ADR-0017, .github#398) -----------
+# The grammar has THREE implementations (shell eval_condition here, Python normalize_when, typed
+# Fsgg.Registry) and a divergence fails OPEN (#292/#266). conformance.sh drives the shared fixture
+# table through the shell evaluator (--eval-when) and round-trips each predicate through Python's
+# normalize_when (--normalize-when), asserting neither changes the evaluated truth. Delegated to its
+# own harness (own fixture file), folded into this fixture's pass/fail so CI's single entrypoint runs it.
+echo "--- materializes-when cross-impl conformance (.github#398) ---"
+if bash "$HERE/conformance.sh"; then
+  echo "PASS  (cross-impl conformance) shell eval == normalize_when round-trip across the fixture table"; pass=$((pass+1))
+else
+  echo "FAIL  materializes-when cross-impl conformance diverged (see above)"; failcount=$((failcount+1))
+fi
 
 echo "--------------------------------------------"
 echo "skill-union fixture: $pass passed, $failcount failed"

@@ -1,0 +1,54 @@
+{
+  "_comment": [
+    "SHARED cross-implementation conformance table for the ADR-0017 `materializes-when` grammar.",
+    "One tiny boolean language — `always | <clause> [(and|or) <clause>]...`, clause = `p == v | p != v",
+    "| p in [v, ...]` — is implemented THREE times, and a divergence between them fails OPEN in a",
+    "direction no single side can detect (.github#292/#266): the shell union gate",
+    "(scripts/skill-union-assert.sh eval_condition), the Python normalizer",
+    "(scripts/fsgg-skill-registry-check normalize_when), and the typed validator (FS.GG.Contracts",
+    "Fsgg.Registry). This table pins them together so the NEXT grammar tweak on one side reds a test",
+    "instead of shipping a wrong union gate into a scaffolded product.",
+    "",
+    "Each fixture is (predicate, params) -> expected bool. The harness (conformance.sh) asserts BOTH:",
+    "  (a) the shell evaluator returns `expected` for (predicate, params); and",
+    "  (b) it still returns `expected` for (normalize_when(predicate), params) — i.e. the Python",
+    "      normalizer never changes the evaluated meaning (the quoted-literal fail-open shape #292).",
+    "An `unparseable: true` fixture instead asserts the shell evaluator rejects it (exit 2).",
+    "",
+    "This file is the CONTRACT, not a shell/Python artifact: FS.GG.Contracts' typed Fsgg.Registry",
+    "validator should assert the same table (see the cross-repo item filed from #398) so all three",
+    "implementations are pinned to one truth."
+  ],
+  "fixtures": [
+    { "predicate": "always",                     "params": {},                          "expected": true,  "note": "always is unconditional true" },
+    { "predicate": "true",                        "params": {},                          "expected": true,  "note": "bare true" },
+    { "predicate": "false",                       "params": {},                          "expected": false, "note": "bare false" },
+
+    { "predicate": "profile == game",             "params": { "profile": "game" },       "expected": true,  "note": "== match" },
+    { "predicate": "profile == game",             "params": { "profile": "governed" },   "expected": false, "note": "== mismatch" },
+    { "predicate": "profile != game",             "params": { "profile": "governed" },   "expected": true,  "note": "!= match" },
+    { "predicate": "profile != game",             "params": { "profile": "game" },       "expected": false, "note": "!= mismatch" },
+
+    { "predicate": "profile == \"game\"",         "params": { "profile": "game" },       "expected": true,  "note": "quoted literal compares by INNER bytes — the #292 fail-open leg" },
+    { "predicate": "profile != \"game\"",         "params": { "profile": "governed" },   "expected": true,  "note": "quoted literal on !=" },
+    { "predicate": "name == \"a,b\"",             "params": { "name": "a,b" },           "expected": true,  "note": "a literal containing a comma must NOT be split — normalize must preserve it verbatim" },
+    { "predicate": "name == \"a,b\"",             "params": { "name": "a" },             "expected": false, "note": "and it is the WHOLE literal, not a prefix" },
+
+    { "predicate": "profile in [game, governed]", "params": { "profile": "governed" },   "expected": true,  "note": "in [...] member" },
+    { "predicate": "profile in [game, governed]", "params": { "profile": "minimal" },    "expected": false, "note": "in [...] non-member" },
+    { "predicate": "profile in [game,governed]",  "params": { "profile": "game" },       "expected": true,  "note": "no-space list — normalize regularizes spacing, meaning unchanged" },
+    { "predicate": "profile in [ game , governed ]", "params": { "profile": "game" },    "expected": true,  "note": "extra-space list — same predicate" },
+
+    { "predicate": "profile == game and feedback == true", "params": { "profile": "game", "feedback": true },  "expected": true,  "note": "and: both hold (feedback bool stringified to the token `true`)" },
+    { "predicate": "profile == game and feedback == true", "params": { "profile": "game", "feedback": false }, "expected": false, "note": "and: one fails" },
+    { "predicate": "profile == governed or feedback == true", "params": { "profile": "game", "feedback": true }, "expected": true, "note": "or: second holds" },
+    { "predicate": "profile == governed or feedback == false", "params": { "profile": "game", "feedback": true }, "expected": false, "note": "or: neither holds" },
+    { "predicate": "profile == governed and feedback == true or profile == game", "params": { "profile": "game", "feedback": false }, "expected": true, "note": "precedence: OR of ANDs — (governed AND true) OR (game) = true" },
+    { "predicate": "profile == governed and feedback == true or profile == minimal", "params": { "profile": "game", "feedback": true }, "expected": false, "note": "precedence: neither conjunction holds" },
+
+    { "predicate": "missing == x",                "params": {},                          "expected": false, "note": "absent param reads empty ⇒ == is false" },
+    { "predicate": "missing != x",                "params": {},                          "expected": true,  "note": "absent param reads empty ⇒ != is true" },
+
+    { "predicate": "profile =~ game",             "params": { "profile": "game" },       "unparseable": true, "note": "unknown operator ⇒ the evaluator dies (exit 2), not a silent false" }
+  ]
+}
