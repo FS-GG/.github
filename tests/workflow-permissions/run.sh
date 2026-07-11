@@ -164,12 +164,29 @@ algebra "read-all satisfies every need" 0 "ok:" "permissions: read-all"
 algebra "write-all satisfies every need" 0 "ok:" "permissions: write-all"
 algebra "a missing scope is caught"     1 "packages: needs read, caller grants none" \
         $'permissions:\n  contents: read'
-algebra "too LOW a level is caught (read < write)" 1 "contents: needs read" \
+algebra "an explicitly 'none' scope is caught" 1 "contents: needs read, caller grants none" \
         $'permissions:\n  contents: none\n  packages: read'
 algebra "an explicit empty block grants nothing, and is not 'absent'" \
         1 "packages: needs read, caller grants none" "permissions: {}"
 algebra "NO permissions block at all is an ERROR, not a skip" \
         1 "declares NO \`permissions:\` block" ""
+algebra "a bare \`permissions:\` with no value is exit 3 (ambiguous), NOT a crash reported as a finding" \
+        3 "present but has no value" $'permissions:'
+
+# read < write. THE ordering of the level lattice, and until now nothing exercised it: every leg
+# above uses a callee that needs only `read`, so a mis-ordered LEVELS map (write below read) would
+# have passed the whole suite while reporting green on a caller that grants `read` to a callee
+# demanding `write` — a real startup_failure, shipped green.
+RW="$WORK/r-write"; mkdir -p "$RW/registry"
+callee_root "$RW" "cal.yml" $'permissions:\n  contents: write'
+roster "$RW/registry/repos.yml" FS-GG/R
+WRW="$WORK/w-read-lt-write"; mkdir -p "$WRW/FS-GG__R"
+caller "$WRW/FS-GG__R/c.yml" $'permissions:\n  contents: read' "cal.yml@main"
+expect "read < write: a caller granting read to a callee that needs WRITE is caught" \
+  1 "contents: needs write, caller grants read" "$WRW" "$RW"
+WRW2="$WORK/w-write-ok"; mkdir -p "$WRW2/FS-GG__R"
+caller "$WRW2/FS-GG__R/c.yml" $'permissions:\n  contents: write' "cal.yml@main"
+expect "...and granting write satisfies it" 0 "ok:" "$WRW2" "$RW"
 
 # Job-level precedence: the job's block WINS over the workflow's. Reading only the top-level block
 # would report green on a job that narrows its own grant — and red on one that widens it.
@@ -224,6 +241,16 @@ caller "$WP2/FS-GG__R/c.yml" $'permissions:\n  contents: read' "cal.yml@$SHA"
   > "$WP2/refs/$SHA/cal.yml"
 expect "an under-granting SHA-pinned caller is still caught" \
   1 "packages: needs read" "$WP2" "$RC"
+
+# A TAG is not the working tree either. Only @main is. The local callee here needs packages:read;
+# the tagged one does not, so a caller granting only contents must pass — and would have been
+# red-lighted for a scope its callee never declared if tags resolved locally.
+WT="$WORK/w-tag"; mkdir -p "$WT/FS-GG__R" "$WT/refs/v1.2.0"
+caller "$WT/FS-GG__R/c.yml" $'permissions:\n  contents: read' "cal.yml@v1.2.0"
+{ echo "on: { workflow_call: }"; echo "permissions:"; echo "  contents: read"; } \
+  > "$WT/refs/v1.2.0/cal.yml"
+expect "a TAG-pinned caller is judged against the callee AT THAT TAG, not against local main" \
+  0 "ok:" "$WT" "$RC"
 
 WPX="$WORK/w-pinned-404"; mkdir -p "$WPX/FS-GG__R" "$WPX/refs"
 caller "$WPX/FS-GG__R/c.yml" $'permissions:\n  contents: read' "cal.yml@$SHA"

@@ -46,13 +46,16 @@ WHY IT DOES NOT USE `receives:` TO FIND ADOPTERS
 
 HOW A CALLEE IS RESOLVED (this decides what the gate protects)
   At the ref the CALLER pins, because that is the YAML GitHub will actually load:
-    @main / @<branch>  -> the LOCAL working tree. On a PR that edits a callee, this is the PROPOSED
+    @main              -> the LOCAL working tree. On a PR that edits a callee, this is the PROPOSED
                           content, so adding `packages: read` to a callee red-lights the callers who
                           do not grant it — BEFORE the merge strands them. Checking such a caller
                           against origin/main instead would report green on the very change that
                           breaks it.
-    @<sha> / @<tag>    -> fetched from the API at that immutable ref. That caller is unaffected by
-                          this PR, and checking it against local main would invent a finding.
+    everything else    -> fetched from the API AT THAT REF (a sha, a tag, another branch). That
+                          content is not what this PR changes. Judging such a caller against the
+                          working tree would invent findings (a scope this PR adds to a callee the
+                          caller does not point at) and miss real ones (a scope the pinned callee
+                          needs that the working tree has since dropped).
 
 Usage:
   check-workflow-permissions.py [--root <dir>] [--registry <file>] [--repo <full> ...]
@@ -72,6 +75,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 
 import yaml
 
@@ -84,14 +88,20 @@ CALL_RE = re.compile(
     r"^" + re.escape(AUTHORITY) + r"/\.github/workflows/(?P<callee>[^@/]+\.ya?ml)@(?P<ref>.+)$"
 )
 
-# A ref that names immutable content, i.e. a 40-hex commit sha. Everything else (`main`, a branch, a
-# tag) is mutable and tracks what this repo ships, so the local working tree is the right answer.
-SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+# The ONE ref that resolves to the working tree: this repo's default branch. A caller pinning it
+# tracks what we are about to ship, so on a PR the proposed content is the honest subject.
+#
+# EVERY other ref — a tag, a sha, another branch — names content this PR does not change, and is
+# fetched at that ref. Resolving a tag against the working tree instead would both invent findings
+# (a scope this PR adds to a callee the tag does not point at) and miss real ones (a scope the
+# tagged callee needs that the working tree has dropped).
+AUTHORITY_DEFAULT_BRANCH = "main"
 
 LEVELS = {"none": 0, "read": 1, "write": 2}
 
 GH_TRIES = int(os.environ.get("FSGG_PERMS_TRIES", "3"))
 GH_RETRY_DELAY = float(os.environ.get("FSGG_PERMS_RETRY_DELAY", "2"))
+GH_TIMEOUT = float(os.environ.get("FSGG_PERMS_TIMEOUT", "30"))
 
 
 class GateError(Exception):
@@ -115,9 +125,19 @@ def gh_api(*args: str) -> str:
     """
     delay = GH_RETRY_DELAY
     for attempt in range(1, GH_TRIES + 1):
-        proc = subprocess.run(
-            ["gh", "api", *args], capture_output=True, text=True, check=False
-        )
+        try:
+            proc = subprocess.run(
+                ["gh", "api", *args],
+                capture_output=True, text=True, check=False, timeout=GH_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            # A hung socket is "could not tell", not "not there" — and without this it is not even
+            # that: subprocess.run would block forever and the retry loop below would never run.
+            if attempt >= GH_TRIES:
+                raise Unreachable(f"gh api {' '.join(args)} timed out after {GH_TIMEOUT}s") from None
+            time.sleep(delay)
+            delay *= 2
+            continue
         if proc.returncode == 0:
             return proc.stdout
         err = " ".join(proc.stderr.split())
@@ -156,14 +176,22 @@ def triggers(doc: dict) -> dict:
     return {}
 
 
-def parse_permissions(raw: object, what: str) -> dict[str, int] | None:
-    """Normalise a `permissions:` value to {scope: level}, or None if there is no block at all.
+def parse_permissions(raw: object, what: str) -> dict[str, int]:
+    """Normalise a present `permissions:` value to {scope: level}.
 
     Handles the shorthands: `read-all`, `write-all`, and `{}` (which grants nothing). The shorthands
     are returned as the sentinel scope "*", which satisfies any scope at that level.
+
+    Never returns None. An ABSENT block is the caller's business to detect and is a different fact
+    from a block that grants nothing — conflating them is how `permissions:` with no value came out
+    as "grants nothing" instead of "this file is ambiguous, a human must look".
     """
     if raw is None:
-        return None
+        raise GateError(
+            f"{what}: `permissions:` is present but has no value. That is not an empty grant and it "
+            f"is not an absent block — it is ambiguous. Write an explicit mapping, `{{}}`, "
+            f"`read-all`, or `write-all`."
+        )
     if isinstance(raw, str):
         if raw == "read-all":
             return {"*": LEVELS["read"]}
@@ -224,19 +252,27 @@ class Callees:
             ) from e
 
     def permissions(self, callee: str, ref: str) -> dict[str, int] | None:
-        """The callee's declared top-level permissions, or None if it declares no block."""
+        """The callee's declared top-level permissions, or None if it declares no block at all.
+
+        A callee with no block imposes no floor — it inherits whatever token the caller job has, so
+        there is nothing the caller can under-grant.
+        """
         key = (callee, ref)
         if key not in self._cache:
-            text = self._at_ref(callee, ref) if SHA_RE.match(ref) else self._local(callee)
+            text = (
+                self._local(callee)
+                if ref == AUTHORITY_DEFAULT_BRANCH
+                else self._at_ref(callee, ref)
+            )
             doc = load_yaml(text, f"{AUTHORITY}/.github/workflows/{callee}@{ref}")
             if "workflow_call" not in triggers(doc):
                 raise GateError(
                     f"{AUTHORITY}/.github/workflows/{callee}@{ref} is called with `uses:` but does "
                     f"not declare `on: workflow_call` — the call cannot start"
                 )
-            self._cache[key] = parse_permissions(
-                doc.get("permissions"), f"{AUTHORITY}/.github/workflows/{callee}@{ref}"
-            )
+            what = f"{AUTHORITY}/.github/workflows/{callee}@{ref}"
+            raw = doc["permissions"] if "permissions" in doc else ABSENT
+            self._cache[key] = None if raw is ABSENT else parse_permissions(raw, what)
         return self._cache[key]
 
 
@@ -381,7 +417,6 @@ def main(argv: list[str]) -> int:
                 except GateError as e:
                     print(f"::error::check-workflow-permissions: {e}", file=sys.stderr)
                     return NO_VERDICT_PERMANENT
-                assert have is not None  # raw is not ABSENT, so a block is present
 
                 short = []
                 for scope, want in sorted(need.items()):
@@ -422,5 +457,35 @@ def main(argv: list[str]) -> int:
     return OK
 
 
+def cli(argv: list[str]) -> int:
+    """Guarantee the exit code is a VERDICT, never an accident.
+
+    Python exits 1 on any uncaught exception — and 1 is this gate's "a caller under-grants, its
+    workflow provably cannot start". So a crash anywhere in here would be dressed up by
+    permission-coherence.yml as a specific, confident, WRONG finding about somebody's permissions
+    block. That is precisely the conflation the exit-code contract exists to prevent (#266, #320):
+    "I could not check" must never share a code with "I checked, and it's broken".
+
+    An unforeseen exception means the gate does not know. It says so, and exits 3.
+    """
+    try:
+        return main(argv)
+    except Unreachable as e:
+        print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
+        return NO_VERDICT_RETRYABLE
+    except GateError as e:
+        print(f"::error::check-workflow-permissions: no verdict — {e}", file=sys.stderr)
+        return NO_VERDICT_PERMANENT
+    except Exception:  # noqa: BLE001 — deliberately broad; see the docstring
+        traceback.print_exc()
+        print(
+            "::error::check-workflow-permissions: the gate crashed, so it has NO VERDICT. This is "
+            "not a finding about any caller's permissions — it is a bug in the gate. See the "
+            "traceback above.",
+            file=sys.stderr,
+        )
+        return NO_VERDICT_PERMANENT
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(cli(sys.argv[1:]))
