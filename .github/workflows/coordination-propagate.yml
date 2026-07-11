@@ -199,37 +199,88 @@ jobs:
             exit 1
           fi
 
-          # Auto-merge IS allowed, so GitHub refused for the other reason: the PR is already mergeable
-          # with nothing to wait for (it rejects auto-merge on a clean PR). Before merging on that
-          # assumption, CHECK it — do not infer "no gate" from an error we did not read. `main` with
-          # required checks must never be merged blind: if any exist, arming should have succeeded, so
-          # a refusal here means something we do not understand. Fail closed.
-          # `gh api` prints a 404 body on STDOUT and exits non-zero, so `|| echo 0` would both corrupt
-          # the value and fail OPEN on a transient error. Read the body and classify it explicitly:
-          # contexts[] -> that count; "Branch not protected" -> genuinely zero; anything else -> stop.
-          prot="$(gh api "/repos/$TARGET/branches/main/protection/required_status_checks" 2>/dev/null || true)"
-          if printf '%s' "$prot" | jq -e 'has("contexts")' >/dev/null 2>&1; then
-            required="$(printf '%s' "$prot" | jq '(.contexts // []) | length')"
-          elif printf '%s' "$prot" | jq -e '.message == "Branch not protected"' >/dev/null 2>&1; then
-            required=0
-          else
-            echo "::error::Cannot read branch protection on $TARGET/main; refusing to guess whether a" >&2
-            echo "::error::required check exists. Response: ${prot:-<empty>}" >&2
-            exit 1
-          fi
-          if [ "$required" -gt 0 ]; then
-            echo "::error::Auto-merge refused on $TARGET#$pr although main has $required required check(s)." >&2
-            echo "::error::Refusing to merge past a gate we cannot explain. Merge by hand after review." >&2
-            exit 1
+          # Auto-merge IS allowed, so GitHub refused for the other reason: there is nothing to WAIT for.
+          # `enablePullRequestAutoMerge` is rejected on a PR that is already in a clean status, and on a
+          # branch with no protection rules at all — both mean "you can merge this right now". Neither
+          # means the PR is safe to merge, so CHECK before merging: never infer "no gate" from an error
+          # we did not read.
+          #
+          # ASK THE PULL REQUEST, NOT BRANCH PROTECTION. This used to read
+          # /repos/$TARGET/branches/main/protection/required_status_checks and count `contexts[]`. That
+          # endpoint needs `administration: read`, which the dispatch App does not have on the
+          # receivers, so it returned 403 `Resource not accessible by integration` — which is neither a
+          # contexts[] body nor the "Branch not protected" 404 the classifier knew. It fell through to
+          # the fail-closed arm and exited 1, on EVERY receiver whose sync PR was already clean. That is
+          # #463: propagation opened the PRs and then could not land them, so the kit stayed stale and
+          # the receiver's `coordination-kit` gate stayed red (FS.GG.Templates#139, FS.GG.Game#142 sat
+          # open and CLEAN for hours).
+          #
+          # `mergeStateStatus` answers the question we actually have — "are this PR's gates satisfied?"
+          # — needs only `pull_requests: read`, and is strictly MORE honest than counting required
+          # checks: it accounts for required REVIEWS too, which the old probe never looked at.
+          #   CLEAN / HAS_HOOKS -> mergeable, and every required gate passed. Merge.
+          #   BLOCKED           -> a required check or review is missing/failing. NOT ours to merge.
+          #   UNSTABLE          -> mergeable, but a check is red. A red check is a finding, not an
+          #                        obstacle to route around — refuse. (The old code MERGED here whenever
+          #                        main happened to be unprotected.)
+          #   BEHIND / DIRTY    -> the branch needs a rebase we did not do. Next run force-pushes it.
+          #   UNKNOWN           -> GitHub has not computed mergeability yet; poll, do not guess.
+          # A FAILED read is NOT "UNKNOWN". Collapsing the two would re-commit, one API call over, the
+          # very sin this commit removes: a 403 would be reported as "GitHub hasn't computed
+          # mergeability, re-run the workflow" when the truth is "the App cannot read pull requests
+          # here", and re-running can never fix that. Keep gh's error and print it.
+          err="$(mktemp)"
+          state=""
+          for attempt in 1 2 3 4 5; do
+            if ! state="$(gh pr view "$pr" --repo "$TARGET" --json mergeStateStatus \
+                            --jq '.mergeStateStatus' 2>"$err")"; then
+              echo "::error::Cannot read the merge state of $TARGET#$pr. The sync PR is open, and this" >&2
+              echo "::error::workflow cannot tell whether it is safe to merge. gh said:" >&2
+              sed 's/^/::error::  /' "$err" >&2
+              echo "::error::If that is a 403, the dispatch App is missing pull_requests:read on $TARGET." >&2
+              exit 1
+            fi
+            [ "$state" = "UNKNOWN" ] || break        # GitHub computes mergeability lazily; poll, don't guess
+            echo "mergeStateStatus=UNKNOWN on $TARGET#$pr (attempt $attempt/5) — GitHub is still computing it."
+            [ "$attempt" -eq 5 ] || sleep 5          # ...but don't sleep after the last look
+          done
+
+          # The checks GitHub actually ran on this PR. Serves two purposes below: naming what is red
+          # when we refuse, and detecting an entirely UNGATED receiver when we merge.
+          rollup() { gh pr view "$pr" --repo "$TARGET" --json statusCheckRollup --jq "$1" 2>/dev/null || true; }
+
+          case "$state" in
+            CLEAN|HAS_HOOKS) ;;                       # every required gate is satisfied — fall through and merge
+            *)
+              echo "::error::Auto-merge was refused on $TARGET#$pr and its mergeStateStatus is '$state'," >&2
+              echo "::error::not CLEAN — so its gates are NOT satisfied and this workflow will not merge it." >&2
+              red="$(rollup '[.statusCheckRollup[]? | select(((.conclusion // .state // "") | ascii_upcase)
+                              | IN("SUCCESS","NEUTRAL","SKIPPED") | not) | (.name // .context)] | join(", ")')"
+              [ -z "$red" ] || echo "::error::  not passing: $red" >&2
+              echo "::error::The kit will NOT land in $TARGET without a human. Look at $TARGET#$pr:" >&2
+              echo "::error::  BLOCKED  = a required check or review is missing/failing." >&2
+              echo "::error::  UNSTABLE = a check is red. Fix the check; do not merge past it — the red" >&2
+              echo "::error::             may be THIS kit breaking $TARGET, and merging would land it." >&2
+              echo "::error::  BEHIND/DIRTY = needs a rebase; the next propagate run force-pushes the branch." >&2
+              echo "::error::  UNKNOWN  = GitHub never computed mergeability after 5 looks. Re-run this workflow." >&2
+              exit 1
+              ;;
+          esac
+
+          # We deliberately cannot see branch protection (no administration: read — that is the whole
+          # point), so we can no longer say "this receiver has no required checks" the way the old probe
+          # did. An EMPTY check rollup is the readable proxy for it, and the warning must survive: the
+          # old code shouted here, and dropping the shout would quietly normalise an ungated receiver —
+          # a green "Merged (CLEAN)" line reads identically whether six checks passed or none ran.
+          if [ "$(rollup '(.statusCheckRollup // []) | length')" = "0" ]; then
+            echo "::warning::$TARGET#$pr ran NO checks at all — nothing gated this kit merge." >&2
+            echo "::warning::Protect $TARGET/main so the receiver's own CI gates the kit sync." >&2
           fi
 
-          # Genuinely no required check on this receiver, so nothing gates the merge — for us OR for
-          # the human who used to click the button. Say so out loud rather than implying CI passed:
-          # the kit is content-addressed and already passed the AUTHORITY's gates before this ran.
-          echo "::warning::$TARGET/main has no required status checks — merging $TARGET#$pr with no CI gate." >&2
-          echo "::warning::Protect $TARGET/main so the receiver's own CI gates the kit sync." >&2
+          # GitHub says every required gate on this PR is satisfied, and refused auto-merge only because
+          # there is nothing left to wait for. Merging is what the human used to do here.
           if ! gh pr merge "$pr" --repo "$TARGET" --squash; then
-            echo "::error::$TARGET#$pr could not be merged. The kit will NOT land without a human." >&2
+            echo "::error::$TARGET#$pr is $state but could not be merged. The kit will NOT land without a human." >&2
             exit 1
           fi
-          echo "Merged $TARGET#$pr (ungated)."
+          echo "Merged $TARGET#$pr ($state)."

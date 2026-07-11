@@ -185,14 +185,25 @@ if bash "$REPOS_SH" validate >/dev/null 2>&1; then ok "the checked-in registry/r
 else bad "real registry/repos.yml validates" "$(bash "$REPOS_SH" validate 2>&1)"; fi
 
 # --- CI guard on the gate itself (#266) ---
-# `validate` above is the only thing asserting the kit digests, and it runs only when this workflow's
-# `paths:` filter matches. A kit source outside that filter is therefore never digest-checked, and
-# nothing reports it: the gate reports green because it never ran. Assert every kit source (and, for
-# skills, the .agents mirror that carries the same bytes) is covered, on BOTH triggers.
-uncovered="$(python3 - "$REPO_ROOT" <<'PY'
+# Two DIFFERENT workflows are armed by a hand-maintained `paths:` filter that must enumerate every
+# kit source, and in both a missing entry fails SILENTLY — the workflow simply never runs, and a
+# workflow that never runs reports nothing at all:
+#
+#   repos-registry-selftest.yml  `validate` is the only thing asserting the kit digests. A kit source
+#                                outside its filter is never digest-checked; the gate is green because
+#                                it never ran (#266).
+#   coordination-propagate.yml   the PUSH arm. A kit source outside its filter PROPAGATES NOTHING:
+#                                receivers keep an old copy, their `coordination-kit` gate reddens,
+#                                and someone hand-syncs it (#463). Its own header warns of exactly
+#                                this, and nothing asserted it — so assert it here.
+#
+# Same check, same kit, two subjects. Assert every kit source (and, for skills, the .agents mirror
+# that carries the same bytes) is covered, on each trigger the workflow is supposed to fire on.
+uncovered_for() {                             # <workflow-path> <trigger>[,<trigger>...]
+  python3 - "$REPO_ROOT" "$1" "$2" <<'PY'
 import sys, yaml, re, pathlib
-root = pathlib.Path(sys.argv[1])
-wf  = yaml.safe_load((root / ".github/workflows/repos-registry-selftest.yml").read_text())
+root, wf_rel, want = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3].split(",")
+wf  = yaml.safe_load((root / wf_rel).read_text())
 reg = yaml.safe_load((root / "registry/repos.yml").read_text())
 
 # YAML 1.1 reads a bare `on:` as the boolean True; a quoted "on": stays a string. Accept either
@@ -200,7 +211,7 @@ reg = yaml.safe_load((root / "registry/repos.yml").read_text())
 # because a gate that cannot find its subject must fail loudly, not vanish.
 triggers = wf.get(True, wf.get("on"))
 if not isinstance(triggers, dict):
-    sys.exit("selftest workflow has no readable `on:` block — cannot check its paths: filter")
+    sys.exit(f"{wf_rel} has no readable `on:` block — cannot check its paths: filter")
 
 def matches(path, pat):                       # GitHub glob: ** spans /, * does not
     rx = "".join(r"[^/]*" if p == "*" else ".*" if p == "**" else re.escape(p)
@@ -209,17 +220,18 @@ def matches(path, pat):                       # GitHub glob: ** spans /, * does 
 
 def probes(item):
     # `digest` hashes a dir's SKILL.md and a file's own bytes, so those are the paths whose edits
-    # stale the sha256. Skills are mirrored byte-for-byte into .agents/, so an edit lands in either.
+    # stale the sha256 — and, identically, the paths whose edits the receivers need pushed to them.
+    # Skills are mirrored byte-for-byte into .agents/, so an edit lands in either.
     if item["kind"] != "skill":
         return [item["source"]]
     claude = f"{item['source']}/SKILL.md"
     return sorted({claude, claude.replace(".claude/", ".agents/", 1)})
 
 gaps = []
-for trigger in ("pull_request", "push"):
+for trigger in want:
     if trigger not in triggers:
-        # The gate cannot run on this event at all — the widest possible coverage gap.
-        gaps.append(f"{trigger}: trigger absent — the fixture never runs on {trigger}")
+        # The workflow cannot run on this event at all — the widest possible coverage gap.
+        gaps.append(f"{trigger}: trigger absent — never runs on {trigger}")
         continue
     # A trigger that is null, or carries no `paths:`, is unfiltered: every path fires it, so every
     # kit source is trivially covered. Only an explicitly empty list matches nothing.
@@ -236,9 +248,17 @@ for trigger in ("pull_request", "push"):
                 gaps.append(f"{trigger}: kit '{item['id']}' source {probe}")
 print("\n".join(gaps))
 PY
-)"
+}
+
+# The digest gate runs on both PR and push; the propagate arm is push-to-main only (there is nothing
+# to propagate from an unmerged PR), so each is asserted against the triggers it actually declares.
+uncovered="$(uncovered_for ".github/workflows/repos-registry-selftest.yml" "pull_request,push")"
 if [ -z "$uncovered" ]; then ok "every kit source is covered by the selftest paths: filter"
 else bad "kit source ungated — an edit to it skips the digest check" "$uncovered"; fi
+
+uncovered="$(uncovered_for ".github/workflows/coordination-propagate.yml" "push")"
+if [ -z "$uncovered" ]; then ok "every kit source is covered by the propagate paths: filter"
+else bad "kit source unpropagated — an edit to it never reaches the receivers (#463)" "$uncovered"; fi
 
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
