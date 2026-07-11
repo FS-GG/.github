@@ -1,0 +1,46 @@
+# The failure leg of the cold locked restore (.github#460, absorbing #459; ADR-0031; epic #266).
+#
+# lockfile-sync.yml regenerates lock files COLD, and each repo's `locked-restore` enforces them COLD.
+# Nothing asserted either — so a future edit could reinstate `cache: true`, drop the fresh
+# NUGET_PACKAGES, or remove the `http-cache --clear`, and the gate would go quietly back to validating
+# a committed hash against a package already on the runner: a record against a record. It would be
+# GREEN on a lock file no fresh clone can restore, which is exactly #429.
+#
+# Per epic #266's ratified rule — A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — this drives a
+# real `dotnet restore` against a hand-built package in a local feed (no network, no nuget.org) and
+# asserts BOTH directions: a stale contentHash is REJECTED cold (NU1403), and the very same lock file
+# RESTORES warm — #429 reproduced, which is what makes coldness a property rather than a preference.
+name: lockfile-cold-selftest
+
+on:
+  pull_request:
+    paths:
+      - "tests/lockfile-cold/**"
+      - ".github/workflows/lockfile-sync.yml"
+      - ".github/workflows/lockfile-cold-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/lockfile-cold/**"
+      - ".github/workflows/lockfile-sync.yml"
+      - ".github/workflows/lockfile-cold-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # NO `cache: true`. This job is the guard against a warm package folder; caching one here would
+      # be the fixture undoing the property it exists to assert. The fixture builds and clears its own
+      # caches per leg regardless, but the omission is deliberate — do not "optimise" it back in.
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.301"
+
+      - name: Run the cold-restore failure-leg fixture
+        run: bash tests/lockfile-cold/run.sh
