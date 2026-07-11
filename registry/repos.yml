@@ -62,11 +62,11 @@ outside-fabric: []
 # file: sha256 of the file). Regenerate with `scripts/repos.sh digest <source>`. The slice-2 sync
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
 kit:
-  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 00adaed77fa7d01d51f853d62bb06b3f9eef936bbb051f871fdac01d60220ce6 }
+  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: 13156d33d7017084661fa89bf604d983395f9e8930b583a5bb9087a01b07e058 }
   - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: ef521912244507dd79c7b2710d608c4ec480293287f3b30cb6e6e190946aaef7 }
   # Command skills — the two driver skills over the protocol the three items above define.
   # `check-board` reconciles the board against issue state; `pnext-item` drives the worker loop.
   # They hold no protocol of their own, so they carry no ADR: each cites the skill it drives.
   - { id: check-board,             kind: skill,  source: .claude/skills/check-board,              sha256: ff4e55d2618f62b52c50d176d237cd3cc0282b2ea44ce87d53ebf4ddeb2a1d71 }
-  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: 578827d6bd80ab6a950a078d8c15d39f14b0730cc7f640aae64957eeb25b9d2e }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 068998337dbdebb06394a1028c4bf81e671aab6a3f630e3ae67f0ce163c49b6d }
+  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: 7a52d336500e5caa7e03add60762077c96eb522e55f92a1247feb30a51374667 }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 6df064acb191cf1a35fc57fb902de5ad4c8b52ff8e92dd56681ca484575fe503 }

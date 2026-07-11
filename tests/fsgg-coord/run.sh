@@ -330,6 +330,12 @@ args=("\$@")
 
 if [ "\$sub" = "api" ] && [ "\$sub2" = "graphql" ]; then
   echo g >>"\$GH_GRAPHQL_COUNT"
+  # GH_RATELIMIT=1: the GraphQL budget is EXHAUSTED — every query AND every mutation 403s, exactly as
+  # it does on the real API, and in the real wording the client has to recognise (#418). REST keeps
+  # working, which is the whole point: it is a different budget, and the claim lock lives on it.
+  if [ -n "\${GH_RATELIMIT:-}" ]; then
+    echo "gh: GraphQL: API rate limit exceeded for user ID 12345. (HTTP 403)" >&2; exit 1
+  fi
   q=""; num=""
   for a in "\$@"; do case "\$a" in query=*) q="\${a#query=}";; num=*) num="\${a#num=}";; esac; done
   hascur=""; for a in "\$@"; do case "\$a" in cursor=*) hascur=1;; esac; done
@@ -389,7 +395,14 @@ fi
 if [ "\$sub" = "api" ] && [ "\$sub2" = "rate_limit" ]; then
   expr=""; n=\${#args[@]}
   for ((i=0;i<n;i++)); do [ "\${args[i]}" = "--jq" ] && expr="\${args[i+1]}"; done
-  payload='{"resources":{"graphql":{"remaining":4321,"limit":5000,"reset":1751630400},"core":{"remaining":4990,"limit":5000,"reset":1751630400}}}'
+  # Under GH_RATELIMIT the meter reads what the 403s imply — 0 GraphQL, REST untouched. `reset` sits
+  # in the future so \`rate_reset_in\` renders a real countdown instead of clamping to 0m00s.
+  if [ -n "\${GH_RATELIMIT:-}" ]; then
+    rlreset=\$(( \$(date -u +%s) + 900 ))
+    payload='{"resources":{"graphql":{"remaining":0,"limit":5000,"reset":'\$rlreset'},"core":{"remaining":4700,"limit":5000,"reset":'\$rlreset'}}}'
+  else
+    payload='{"resources":{"graphql":{"remaining":4321,"limit":5000,"reset":1751630400},"core":{"remaining":4990,"limit":5000,"reset":1751630400}}}'
+  fi
   if [ -n "\$expr" ]; then printf '%s' "\$payload" | jq -r "\$expr"; else printf '%s' "\$payload"; fi
   exit 0
 fi
@@ -419,6 +432,14 @@ if [ "\$sub" = "api" ]; then
   now="\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   if [ "\$path" = "user" ]; then printf '{"login":"EHotwagner"}' | emit; exit 0; fi
+
+  # --- assignees: the REST form of "assign @me" (#418) --------------------------------------------
+  # \`gh issue edit --add-assignee\` costs 4 GraphQL points; this endpoint costs 0 of them. The stub
+  # logs the two directions so the fixture can assert the client took the REST road and not the old one.
+  if [[ "\$path" =~ ^repos/([^/]+)/([^/]+)/issues/([0-9]+)/assignees\$ ]]; then
+    printf 'assignee-%s %s\n' "\$(printf '%s' "\$method" | tr 'A-Z' 'a-z')" "\${BASH_REMATCH[3]}" >>"\$GH_LOG"
+    printf '{"number":%s}' "\${BASH_REMATCH[3]}" | emit; exit 0
+  fi
 
   # --- sub-issues: the native child edge `child` writes and `epic_rollup` reads -------------------
   # A real mutable store, so `child` can be observed to be idempotent rather than merely exit 0. The
@@ -613,6 +634,10 @@ if [ "\$sub" = "project" ] && [ "\$sub2" = "item-edit" ]; then
   # to edit. The MARKER is the lock, so nothing that holds it may unwind on this; but nothing may
   # report a board mutation it did not perform either.
   [ -n "\${GH_FAIL_ITEM_EDIT:-}" ] && { echo "gh: HTTP 502 Bad Gateway" >&2; exit 1; }
+  # Projects v2 is GraphQL, so an exhausted budget takes the board WRITES with it — the half of #418
+  # that actually causes the drift. \`gh project\` phrases it slightly differently from
+  # \`gh api graphql\`; the client must recognise BOTH, so the stub speaks this one here.
+  [ -n "\${GH_RATELIMIT:-}" ] && { echo "gh: API rate limit already exceeded (HTTP 403)" >&2; exit 1; }
   # Real \`gh project item-edit\` requires a non-empty --id and errors without one. Model that, so a
   # caller that swallowed its item resolution (empty --id) cannot silently read as a successful write
   # — the exact shape of #344 one layer down: set_field's \`item="\$(item_id …)"\` swallows item_id's
@@ -1254,7 +1279,12 @@ else
 fi
 assert_contains "claim: prints the attribution trailer"   'FSGG-Worker: heron-b71' "$out70"
 assert_contains "claim: flips the board to In progress"   "board: In progress" "$out70"
-assert_contains "claim: still assigns @me for the humans" "issue edit 70 --repo FS-GG/FS.GG.SDD --add-assignee @me" "$(cat "$GH_LOG")"
+# The assignee is set over REST, not `gh issue edit` (#418): same courtesy to human readers, 4 fewer
+# GraphQL points per claim (and 4 more per release) — on a budget every worker shares. A regression to
+# `gh issue edit` would be invisible except here.
+assert_contains "claim: assigns @me for the humans — over REST" "assignee-post 70" "$(cat "$GH_LOG")"
+assert_eq "claim: does NOT spend GraphQL on the assignee (no 'gh issue edit')" \
+  "0" "$(grep -c '^issue-edit' "$GH_LOG" || true)"
 assert_eq "claim: exactly one marker on the item" "heron-b71" "$(workers_on 70)"
 
 # PROVENANCE. The marker records WHICH agent transcript claimed the item — the question #255 could
@@ -2363,16 +2393,37 @@ esac
 # an empty payload and carry on — `take`/`next`/`ready`/`batch` reported an empty, itemised board and
 # exited 0 when the board could not be read at all. `die` now signals the top-level shell, so a failed
 # read halts the whole command at any nesting depth. GH_FAIL_BOARD makes the board scan a 401.
+#
+# THE SCAN CACHE (#418) DOES NOT WEAKEN THIS, and the two rules have to be said together:
+#   * a failed READ is never rescued by the cache — the read dies, the command dies. That is what the
+#     loop below asserts, with the cache cold (FSGG_COORD_SCAN_TTL_SEC=0), which is the only state in
+#     which a read actually happens;
+#   * a cache HIT is not a read. `next`/`take` served from a <90s scan never touch the network, so
+#     there is no unreachable board for them to fail closed ON. That is the deal the cache makes, and
+#     it is safe precisely because the claim CAS — REST markers, never cached — is what grants the
+#     item. A stale schedule costs a lost race and a retry; it cannot cost a double claim.
+# The old fixture passed this loop with a cache warmed by earlier tests, which asserted neither rule.
+rm -f "$FSGG_COORD_CACHE"/scan-*.json
 for spec in "ready" "next" "batch" "take --repo .github"; do
-  if GH_FAIL_BOARD=1 run $spec >/dev/null 2>&1; then
+  if FSGG_COORD_SCAN_TTL_SEC=0 GH_FAIL_BOARD=1 run $spec >/dev/null 2>&1; then
     bad "#344: '$spec' fails closed (non-zero) when the board is unreachable"
   else
     ok  "#344: '$spec' fails closed (non-zero) when the board is unreachable"
   fi
 done
+# ...and the cache must not be a back door around it: a MISS + a 401 is still a hard failure, even
+# with caching switched fully on. (A stale file cannot mask it either — this one is empty.)
+rm -f "$FSGG_COORD_CACHE"/scan-*.json
+assert_fails "#418: a cache MISS + an unreachable board still fails closed (the cache never rescues a failed read)" \
+  env PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_BOARD=1 FSGG_COORD_SCAN_TTL_SEC=90 \
+    bash "$COORD" next --repo FS.GG.SDD
+assert_eq "#418: ...and a failed scan is NOT written to the cache" "no" \
+  "$(ls "$FSGG_COORD_CACHE"/scan-*.json >/dev/null 2>&1 && echo yes || echo no)"
 # The headline regression: `take` must not turn "I could not read the board" into the confident claim
-# "every candidate is blocked, claimed, overlapping, or undeclared."
-take_unreadable="$(GH_FAIL_BOARD=1 run take --repo .github 2>&1 || true)"
+# "every candidate is blocked, claimed, overlapping, or undeclared." (Cache off: `take` is a SCHEDULING
+# read, so a warm cache would legitimately answer without a read at all — see the two rules above. The
+# regression under test is what happens when it DOES read and the read fails.)
+take_unreadable="$(FSGG_COORD_SCAN_TTL_SEC=0 GH_FAIL_BOARD=1 run take --repo .github 2>&1 || true)"
 case "$take_unreadable" in
   *"every candidate is"*) bad "#344: take does NOT assert an empty queue on an unreadable board" "got: $take_unreadable" ;;
   *)                      ok  "#344: take does NOT assert an empty queue on an unreadable board" ;;
@@ -2399,6 +2450,100 @@ assert_eq "#344: ...and the marker (the lock) was actually posted" "yes" \
 # (2) release/reap must still drop a lease when the board is unreadable (item_status marks its read
 # SOFT_DIE=1) — proven above at "release: an unreadable Status is not overwritten". So "unreachable"
 # and "readable, and empty" no longer share an exit code (#266), and neither strands a claim.
+
+# ================================================================================================
+# #418 — THE SHARED BUDGET. N workers, one GitHub account, one 5,000-pt/hr GraphQL budget. The bug
+# this section pins down is not "we ran out of points"; it is what running out USED to do quietly:
+# `claim` took the lock over REST, could not write `Status: In progress` because GraphQL was gone,
+# swallowed the 403, and printed "not on board". The board then said `Backlog` while a worker held
+# the item, and `next` hid it from every other worker — the CLAIM-STATUS-LAG drift /check-board
+# reconciles. So the fixture asserts the three properties that close it, with the budget stubbed OUT
+# (GH_RATELIMIT=1) rather than reasoned about:
+#   (1) exhaustion is RECOGNISED and NAMED — exit EX_RATE (75), not a mystery 1;
+#   (2) the claim still LANDS (REST lock) and the board write is QUEUED, not lost, and says so;
+#   (3) `flush` replays the queue once the budget returns — and the board write actually happens.
+# Plus the lever that keeps the budget from running out at all: (4) the shared scan cache, which is
+# what turns N workers looping `next` into ONE board scan per TTL window.
+
+seed_issue 810 "Rate-limited claim" "src/Rl810/**"
+
+# (1)+(2) claim under an exhausted budget.
+: >"$GH_LOG"; rl_before_rest="$(rcount)"
+claim_rl="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 FSGG_COORD_SCAN_TTL_SEC=0 \
+  env GH_RATELIMIT=1 bash "$COORD" --worker vole-418 claim 'FS.GG.SDD#810' 2>&1 || true)"
+assert_contains "#418: a rate-limited claim still LANDS — the lock is REST, not GraphQL" \
+  "claimed FS.GG.SDD#810 by worker vole-418" "$claim_rl"
+assert_contains "#418: ...and the board write is reported DEFERRED, not silently dropped" \
+  "DEFERRED" "$claim_rl"
+assert_contains "#418: ...and names the condition (exhausted budget), NOT 'not on board'" \
+  "GraphQL budget exhausted" "$claim_rl"
+# The regression that mattered: the old code printed "not on board" for a 403. If that string comes
+# back for a rate-limited claim, the drift is back with it.
+case "$claim_rl" in *"not on board"*) bad "#418: a rate-limit must NOT be misreported as 'not on board'" "$claim_rl" ;;
+                    *) ok "#418: a rate-limit must NOT be misreported as 'not on board'" ;; esac
+assert_eq "#418: the marker (the lock) was posted despite the exhausted budget" "yes" \
+  "$([ -n "$(claims_on 810)" ] && echo yes || echo no)"
+# Count THIS item's entry, not the queue's depth: a transient 502 earlier in the fixture legitimately
+# queues a write too (any write the board refuses is queued — only an off-board item is dropped).
+assert_eq "#418: the deferred Status write is QUEUED" "1" \
+  "$(grep -c '"ref":"FS.GG.SDD#810","field":"Status"' "$FSGG_COORD_CACHE/pending.jsonl" 2>/dev/null || echo 0)"
+assert_eq "#418: ...and no board mutation was reported as done" "0" \
+  "$(grep -c '^item-edit' "$GH_LOG" || true)"
+
+# #421 (the #266 class, folded in here because it is the same defect and the same lines): a lookup
+# that FAILED must never be reported as a lookup that found nothing. With the budget exhausted,
+# `item-id`/`set-field` used to print "issue … is not on board 'Coordination' — add it first: gh
+# project item-add …" for an issue that WAS on the board — a confident absence, complete with a
+# remediation that would have created a DUPLICATE item. The read failing and the item being absent are
+# different facts, and only the second may be reported.
+itemid_rl="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw env GH_RATELIMIT=1 bash "$COORD" item-id 'FS.GG.SDD#42' --refresh 2>&1 || true)"
+case "$itemid_rl" in
+  *"not on board"*|*"item-add"*)
+    bad "#421: a rate-limited item-id must NOT be reported as 'not on board'" "$itemid_rl" ;;
+  *) ok "#421: a rate-limited item-id must NOT be reported as 'not on board'" ;;
+esac
+assert_contains "#421: ...it names the real cause (the exhausted budget)" "GraphQL budget EXHAUSTED" "$itemid_rl"
+rc_itemid=0
+PATH="$STUB:$PATH" GH_BOARD_SET=pw env GH_RATELIMIT=1 bash "$COORD" item-id 'FS.GG.SDD#42' --refresh >/dev/null 2>&1 || rc_itemid=$?
+assert_eq "#421: ...and exits EX_RATE (75), not the off-board code (3)" "75" "$rc_itemid"
+
+# (1) the exit code a worker loop backs off on — 75 (EX_TEMPFAIL), from `take`, not a generic 1.
+rc_take=0
+PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 FSGG_COORD_SCAN_TTL_SEC=0 \
+  env GH_RATELIMIT=1 bash "$COORD" --worker vole-418 take --repo FS.GG.SDD >/dev/null 2>&1 || rc_take=$?
+assert_eq "#418: an exhausted budget exits EX_RATE (75), the back-off signal" "75" "$rc_take"
+
+# (3) flush replays the queue once the budget is back — and the write REALLY lands on the board.
+: >"$GH_LOG"
+flush_out="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" flush 2>&1 || true)"
+assert_contains "#418: flush replays the queued board write" "written" "$flush_out"
+assert_contains "#418: ...as a real Status mutation" "PVTSSF_status" "$(cat "$GH_LOG")"
+assert_eq "#418: ...and the queue is then empty" "0" \
+  "$(wc -l <"$FSGG_COORD_CACHE/pending.jsonl" 2>/dev/null | tr -d ' ' || echo 0)"
+
+# (4) THE SCAN CACHE — the lever that stops the budget running out in the first place. Two `next`
+# calls inside the TTL must cost ONE board scan, because the second serves the first's scan from the
+# shared (user-level, therefore cross-worker) cache. This is the assertion that would have caught the
+# original burn: five workers looping `next` were paying five full scans a round.
+rm -f "$FSGG_COORD_CACHE"/scan-*.json
+before_scan="$(gcount)"
+PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_SCAN_TTL_SEC=90 bash "$COORD" next --repo FS.GG.SDD >/dev/null 2>&1 || true
+mid_scan="$(gcount)"
+PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_SCAN_TTL_SEC=90 bash "$COORD" next --repo FS.GG.SDD >/dev/null 2>&1 || true
+after_scan="$(gcount)"
+assert_eq "#418: the first 'next' pays for the board scan" "1" "$((mid_scan - before_scan))"
+assert_eq "#418: a second 'next' inside the TTL spends ZERO GraphQL (the shared scan cache)" \
+  "0" "$((after_scan - mid_scan))"
+# ...and --fresh must still be able to buy the truth. A cache you cannot bypass is a cache you cannot
+# trust — `take`'s retry-after-a-lost-race depends on this.
+PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_SCAN_TTL_SEC=90 bash "$COORD" next --repo FS.GG.SDD --fresh >/dev/null 2>&1 || true
+assert_eq "#418: --fresh bypasses the cache and rescans" "1" "$(( $(gcount) - after_scan ))"
+# The line the TTL is drawn on: RECONCILING reads never serve a cached board. `ready` is what
+# /check-board snapshots, and a reconciler that reports yesterday's drift is worse than none.
+before_ready_fresh="$(gcount)"
+PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_SCAN_TTL_SEC=90 bash "$COORD" ready --repo FS.GG.SDD >/dev/null 2>&1 || true
+assert_eq "#418: 'ready' (a TRUTH read) always scans fresh — it never serves the cache" \
+  "1" "$(( $(gcount) - before_ready_fresh ))"
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
