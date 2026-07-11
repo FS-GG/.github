@@ -159,8 +159,11 @@ skills:
   # live tree (.github#486): `template/product-skills/` ships 17 skills and none of these four is
   # among them. Do NOT "fix" that absence by vendoring them into Rendering — it would manufacture a
   # two-copies obligation ADR-0022 §6 never imposed. (FS.GG.Rendering#505 asked for exactly that, for
-  # ballistics + effects, and is a no-op; see the note there.) `skill-union-assert.sh` must therefore
-  # tolerate an `owner: fs-gg-game` row with no Rendering twin.
+  # ballistics + effects, and is a no-op; see the note there.) The `frozen-mirror` arm of
+  # `fsgg-skill-registry-check` is the ONLY thing that reads `owner:` to look for a twin, and it
+  # derives none for these four. `skill-union-assert.sh` has no twin concept at all — it never reads
+  # this registry (it asserts the byte-identical union across a scaffold's skill roots), so it needed
+  # no change to tolerate them (.github#486 checked; #311 had asked).
   #
   # ballistics shipped 2026-07-10 (Game#40, PR #58); ai / effects / physics were declared by FS.GG.Game's
   # manifest and never flipped here at all — the `declared-completeness` arm (.github#289) caught all
