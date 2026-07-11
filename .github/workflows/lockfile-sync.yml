@@ -113,12 +113,20 @@ jobs:
       #
       # `--force-evaluate` does NOT hash the package it downloads. It copies `contentHash`
       # verbatim out of the INSTALLED package's `.nupkg.metadata`, which NuGet writes once, at
-      # install time. So a package folder that was populated BEFORE a package was re-published
-      # carries the pre-republication hash forever, and this workflow commits it — leaving every
-      # consumer with a lock file no cold clone can restore, while the gate stays green against
-      # the same stale copy. That is the GENERATION half of the FSharp.Core 10.1.301 defect;
-      # SDD's locked-restore action fixed only the ENFORCEMENT half, and a cold gate over a
-      # poisoned lock file merely fails everyone honestly instead of silently.
+      # install time. So a package folder populated by an EARLIER, different restore carries that
+      # restore's hash forever, and this workflow would commit it — leaving consumers with a lock
+      # file no cold clone can restore, while the gate stays green against the same warm copy. The
+      # generator and the enforcer would compare a record against a record and never contact a feed.
+      # SDD's locked-restore action fixed the ENFORCEMENT half; this is the GENERATION half.
+      #
+      # CORRECTION (ADR-0032, #471): this comment used to say "populated BEFORE a package was
+      # re-published". FSharp.Core 10.1.301 was NEVER re-published — the SDK bundles a DIFFERENT
+      # .nupkg (…/sdk/10.0.301/FSharp/library-packs/, 3,051,664 B) than nuget.org serves
+      # (3,066,660 B) at the same id+version, so the hash depends on WHICH SOURCE resolved it, not
+      # on WHEN. Cold restores are still right — a warm folder is a genuine fail-open, and #460's
+      # fixture proves it against a real restore — but COLD IS NOT HERMETIC: `library-packs` is an
+      # MSBuild-injected local folder source that a fresh NUGET_PACKAGES does not bypass. Making the
+      # SOURCE deterministic is ADR-0032's decision, and it is not implemented here yet.
       #
       # Verified by falsification (#429): plant a stale `contentHash` in a package's
       # `.nupkg.metadata` and `--force-evaluate` writes THAT hash into packages.lock.json;
