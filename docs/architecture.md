@@ -560,7 +560,11 @@ red `skill-registry-coherence` (the fails-open class, epic #266).
 
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
-fails restore in CI in every repo), `apicompat-publicapi-gate` (a public-API break
+fails restore in CI in every repo — but **only where that restore is cold**, per
+ADR-0031: validated against a *warm* package folder the row is fails-open, which is
+how a re-published `FSharp.Core` left every repo pinning a hash no fresh clone could
+restore while CI stayed green, #429/epic #266; SDD and the `lockfile-sync` generator
+are cold, Game/Rendering/Audio adoption is in flight), `apicompat-publicapi-gate` (a public-API break
 on a packable forces a SemVer major), `fs-gg-ui-version`/`-bom` (single-pin and
 BOM coherence guarded on every Rendering PR), and
 `governance-cli-handoff-consumer-published` (the full strict/light matrix proven
@@ -607,9 +611,17 @@ install is what keeps the composition honest. See the
   `*.local.props` for repo-specific settings. A `--check` mode is the drift gate,
   run by the reusable `contract-coherence.yml` workflow (ADR-0006). See
   [`docs/build/README.md`](build/README.md).
-- **Locked restore everywhere.** Every project commits `packages.lock.json`;
-  CI restores `--locked-mode` (gated on `GITHUB_ACTIONS`), and `NU1603`/`NU1608`
-  are promoted to errors so a silent version substitution fails the build.
+- **Locked restore everywhere, and it must be COLD.** Every project commits
+  `packages.lock.json`; CI restores `--locked-mode` (gated on `GITHUB_ACTIONS`), and
+  `NU1603`/`NU1608` are promoted to errors so a silent version *substitution* fails the
+  build. A silent **re-publication** — same version, different bytes — is a different
+  animal: `NU1603`/`NU1608` never fire, and the only thing that catches it is the lock
+  file's `contentHash`, which `--locked-mode` validates against the package **already in
+  the package folder**. So the restore that writes (`--force-evaluate`) or enforces
+  (`--locked-mode`) a lock file must run against a fresh `NUGET_PACKAGES` with the HTTP
+  cache cleared (ADR-0031); a warm folder compares a record to a record and the gate
+  becomes a lottery on runner cache state — green on an unrestorable lock file, red on a
+  correct one (#429).
 - **Public-API breaking-change gate.** For F# packables the operative detector is
   the SDK's Package Validation / ApiCompat (PublicApiAnalyzers is C#-only); a real
   break fails the gate against the published feed baseline, forcing a SemVer major
