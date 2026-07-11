@@ -1,0 +1,37 @@
+# Self-test for `parse` in scripts/NewSddWorkspace/Program.fs — the new-sdd-workspace CLI arg parser.
+#
+# Runs tests/new-sdd-workspace/run.sh, which builds the REAL CLI and drives it end-to-end, reading the
+# parse result off main's exit-code contract (exit 2 = rejected, exit 127 = accepted → fsgg-sdd
+# preflight). It pins the .github#388 grammar: --profile/--ref no longer swallow a following flag as a
+# value, and an unknown --profile is refused on the CLI path. `parse` is pure and was previously
+# untested; this guards it the same way the other *-selftest workflows guard their scripts.
+name: new-sdd-workspace-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/NewSddWorkspace/**"
+      - "tests/new-sdd-workspace/**"
+      - ".github/workflows/new-sdd-workspace-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/NewSddWorkspace/**"
+      - "tests/new-sdd-workspace/**"
+      - ".github/workflows/new-sdd-workspace-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - name: Run the new-sdd-workspace parse fixture
+        run: bash tests/new-sdd-workspace/run.sh
