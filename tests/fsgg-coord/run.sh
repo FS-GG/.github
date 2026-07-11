@@ -1125,6 +1125,20 @@ cat >"$FIXTURES/board-pw.json" <<'JSON'
   ]}}}},"rateLimit":{"cost":1,"remaining":4980}}
 JSON
 
+# The #440 board: ZERO Ready items, one perfectly startable Backlog item (#520), and one Backlog item
+# that declares no touch-set (#521). This is the shape `.github` was actually in when `take` reported
+# "no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared" over a queue
+# that had startable work in it.
+cat >"$FIXTURES/board-bl.json" <<'JSON'
+{"data":{"organization":{"projectV2":{"items":{
+  "pageInfo":{"hasNextPage":false,"endCursor":null},
+  "nodes":[
+    {"status":{"name":"Backlog"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":520,"title":"Startable, but merely Backlog","url":"https://github.com/FS-GG/FS.GG.SDD/issues/520","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Backlog"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":521,"title":"Backlog, and undeclared","url":"https://github.com/FS-GG/FS.GG.SDD/issues/521","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}},
+    {"status":{"name":"Done"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":522,"title":"Finished work","url":"https://github.com/FS-GG/FS.GG.SDD/issues/522","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}
+  ]}}}},"rateLimit":{"cost":1,"remaining":4980}}
+JSON
+
 seed_issue() {  # seed_issue <num> <title> <paths-or-empty> [owner/repo]
   local n="$1" t="$2" p="$3" repo="${4:-FS-GG/FS.GG.SDD}" body="Some description."
   [ -n "$p" ] && body="$body
@@ -1577,8 +1591,14 @@ assert_contains "verify-paths: --issue bypasses the head-ref read entirely" "FSG
 # is claimed or overlapping, so this exercises the "nothing to hand out" path — which still exits 0.
 if as teal-e55 take >/dev/null 2>&1; then ok "take: board-wide (no --repo) exits cleanly"
 else bad "take: board-wide (no --repo) exits cleanly" "non-zero exit"; fi
-assert_contains "take: says WHY there is nothing to hand out" "no schedulable item" \
-  "$(as teal-e55 take 2>&1 >/dev/null)"
+# It must say why PER ITEM, in `batch`'s own words. This assertion used to accept the fixed sentence
+# "no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared", which named
+# four causes without observing any of them (#440) — so the test's own name was the thing it failed to
+# check. The reason now has to be one `batch` actually found.
+take_empty="$(as teal-e55 take 2>&1 >/dev/null)"
+assert_contains "take: says WHY there is nothing to hand out" "passed over:" "$take_empty"
+assert_contains "take: ...naming a real, observed reason rather than a guessed list" \
+  "already claimed by worker" "$take_empty"
 
 # ================================================================================================
 # The lock's hard cases. Each of these is an interleaving in which two workers could end up believing
@@ -2544,6 +2564,51 @@ before_ready_fresh="$(gcount)"
 PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_SCAN_TTL_SEC=90 bash "$COORD" ready --repo FS.GG.SDD >/dev/null 2>&1 || true
 assert_eq "#418: 'ready' (a TRUTH read) always scans fresh — it never serves the cache" \
   "1" "$(( $(gcount) - before_ready_fresh ))"
+
+# ================================================================================================
+# #440 — A FULL QUEUE MUST NOT READ AS AN EMPTY ONE. `next` picks "the first Ready, else the first
+# Backlog"; `take` stopped at Ready. So on a board with zero Ready items and startable Backlog ones —
+# which is what `.github` looked like — `take` reported:
+#
+#   no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared.
+#
+# Every clause of that was false, and the true reason (the item is in Backlog) was not among them. A
+# worker that believes the message idles in front of work it could have taken. The two commands a
+# worker treats as "what do I do next" must agree about what EXISTS, and neither may name a cause it
+# did not observe.
+bl() { PATH="$STUB:$PATH" GH_BOARD_SET=bl GH_ISSUES_FROM_STORE=1 FSGG_COORD_SCAN_TTL_SEC=0 \
+         bash "$COORD" --worker crake-440 "$@"; }
+seed_issue 520 "Startable, but merely Backlog" "src/Bl520/**"
+seed_issue 521 "Backlog, and undeclared" ""
+
+take440="$(bl take --repo FS.GG.SDD 2>&1 || true)"
+assert_contains "#440: take falls back to Backlog when no Ready item exists" \
+  "claimed FS.GG.SDD#520" "$take440"
+assert_contains "#440: ...and SAYS the pick came from Backlog (it is not a Ready item)" \
+  "from Backlog" "$take440"
+assert_eq "#440: ...and the claim marker really landed" "crake-440" "$(workers_on 520)"
+# The undeclared Backlog item is still refused — the fallback widens WHICH statuses are reachable,
+# not what counts as schedulable. An item with no touch-set can still not be scheduled.
+case "$take440" in
+  *"#521"*) bad "#440: an undeclared item must NOT become schedulable via the Backlog fallback" "$take440" ;;
+  *)        ok  "#440: an undeclared item must NOT become schedulable via the Backlog fallback" ;;
+esac
+
+# Now the empty case: with #520 claimed, only the undeclared #521 remains. `take` must report the
+# reason BATCH observed, per item — not recite a fixed list of causes.
+take440b="$(bl take --repo FS.GG.SDD 2>&1 || true)"
+assert_contains "#440: an empty queue names the REAL per-item reason" \
+  "#521 — no 'Paths:' declared" "$take440b"
+case "$take440b" in
+  *"every candidate is blocked, claimed, overlapping, or undeclared"*)
+    bad "#440: take must not recite a guessed list of causes" "$take440b" ;;
+  *) ok "#440: take must not recite a guessed list of causes" ;;
+esac
+# ...and `batch --json` must EMIT those reasons on stderr, or `take` has nothing true to relay. This
+# is the assertion that keeps the two halves of the fix from drifting apart.
+berr440="$(bl batch --repo FS.GG.SDD --include-backlog -n 1 --json 2>&1 >/dev/null || true)"
+assert_contains "#440: batch --json still reports 'passed over' reasons on stderr" \
+  "no 'Paths:' declared" "$berr440"
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
