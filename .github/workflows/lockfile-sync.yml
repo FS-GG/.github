@@ -128,6 +128,9 @@ jobs:
           # pattern, and here it also means an unprovisioned repo leaks nothing by running the check.)
           HAS_APP_ID: ${{ secrets.app-id != '' }}
           HAS_APP_KEY: ${{ secrets.app-private-key != '' }}
+          # Is the PR head in THIS repo? On a fork it is not, and that changes what the emptiness of
+          # the two booleans above MEANS — see the fork guard at the top of the script.
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
           # The same condition that gates `sync`. Duplicated ON PURPOSE: `sync`'s `if:` remains the
           # single ENFORCEMENT point — it is the security boundary (never auto-commit to a fork head)
           # and must stay readable in place, not hidden behind a job output. This copy only chooses
@@ -138,6 +141,27 @@ jobs:
             github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           set -eu
+
+          # FORK HEADS ARE UNKNOWABLE, NOT UNPROVISIONED — and conflating the two would make this gate
+          # a liar on its very first day.
+          #
+          # GitHub passes NO secrets but GITHUB_TOKEN to a workflow triggered by `pull_request` from a
+          # fork. So on a fork PR both booleans above are `false` BY DESIGN, in every repo, including
+          # the four that are demonstrably provisioned. Checking them here would annotate every fork PR
+          # against FS.GG.Rendering — 4 green pushes to its name — with "is not provisioned ... it will
+          # fail the first renovate/* PR that opens", and every clause of that would be false.
+          #
+          # This is NOT a fail-open. `sync` requires `head.repo.full_name == github.repository` (it
+          # never auto-commits to an untrusted head), so on a fork head there is no push to gate and
+          # nothing this job could protect. It reports what it knows — nothing — and says why.
+          if [ "$SAME_REPO" != 'true' ]; then
+            echo "not evaluated: this PR's head is not in $GITHUB_REPOSITORY (a fork)."
+            echo
+            echo "GitHub withholds secrets from workflows triggered from a fork, so the dispatch App"
+            echo "secrets are empty here BY DESIGN and say nothing about whether this repo is"
+            echo "provisioned. sync does not run on a fork head either, so there is nothing to gate."
+            exit 0
+          fi
 
           missing=''
           [ "$HAS_APP_ID" = 'true' ]  || missing="$missing FSGG_DISPATCH_APP_ID"

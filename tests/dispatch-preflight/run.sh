@@ -20,9 +20,9 @@
 # the thing under test. So `red` and `amber` both take a required pattern.
 #
 # The STRUCTURAL legs are the ones that matter most. A truth table only proves the script is right;
-# it cannot prove the script still RUNS. Legs S1-S4 assert the gate cannot be skipped into green:
-# preflight carries no `if:`, `sync` still `needs:` it, the two copies of the sync condition have not
-# drifted, and the secret VALUES never reach the environment.
+# it cannot prove the script still RUNS. Legs S1-S5 assert the gate cannot be skipped into green:
+# preflight carries no `if:` and no `continue-on-error`, `sync` still `needs:` it, the two copies of
+# the sync condition have not drifted, and the secret VALUES never reach the environment.
 #
 # No network, no git, no runner. Pure shell + the workflow's own YAML.
 
@@ -37,7 +37,13 @@ trap 'rm -rf "$WORK"' EXIT
 
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
-bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
+bad() {
+  echo "FAIL  $1"
+  # `[ -n ... ] && printf` would return 1 on an empty $2 and, under `set -e`, abort the whole fixture
+  # mid-run — truncating the remaining legs and the summary. Spell it as an `if`.
+  if [ -n "${2:-}" ]; then printf '%s\n' "$2" | sed 's/^/    | /'; fi
+  failcount=$((failcount+1))
+}
 
 [ -f "$SYNC_WF" ] || { echo "FAIL  lockfile-sync.yml is missing entirely — nothing to test."; exit 1; }
 
@@ -72,6 +78,12 @@ needs = sync.get("needs")
 meta = {
     # `if:` on the gate itself would let it be skipped into green — the #266 signature.
     "preflight_has_if": "if" in pre,
+    # ...and so would `continue-on-error`, on the job OR on the step. feed-coherence.yml and
+    # pin-coherence.yml both warn in prose that a gate "must never gain a continue-on-error";
+    # nothing enforced it. Now something does.
+    "preflight_continue_on_error": bool(pre.get("continue-on-error")) or any(
+        bool(st.get("continue-on-error")) for st in (pre.get("steps") or [])
+    ),
     # sync must not be able to run without it.
     "sync_needs": [needs] if isinstance(needs, str) else list(needs or []),
     # the two copies of the "would this actually sync?" condition, whitespace-normalised.
@@ -86,16 +98,16 @@ PY
 
 jq_meta() { python3 -c "import json,sys;print(json.load(open('$META'))$1)"; }
 
-# run_preflight <has_id> <has_key> <would_sync> -> writes combined output, echoes exit code
+# run_preflight <has_id> <has_key> <would_sync> <same_repo> -> writes combined output, echoes exit code
 run_preflight() {
-  HAS_APP_ID="$1" HAS_APP_KEY="$2" WOULD_SYNC="$3" \
+  HAS_APP_ID="$1" HAS_APP_KEY="$2" WOULD_SYNC="$3" SAME_REPO="$4" \
   GITHUB_REPOSITORY="FS-GG/FS.GG.Game" \
     bash "$SCRIPT" >"$WORK/out" 2>&1 && echo 0 || echo $?
 }
 
 # green <name> <has_id> <has_key> <would_sync>   — must exit 0 and emit NO annotation at all.
 green() {
-  local name="$1" rc; rc="$(run_preflight "$2" "$3" "$4")"
+  local name="$1" rc; rc="$(run_preflight "$2" "$3" "$4" "$5")"
   if [ "$rc" != 0 ]; then
     bad "$name" "$(printf 'expected exit 0, got %s\n%s' "$rc" "$(cat "$WORK/out")")"; return
   fi
@@ -107,7 +119,7 @@ green() {
 
 # red <name> <has_id> <has_key> <would_sync> <pattern>  — must exit 1 AND say why.
 red() {
-  local name="$1" pat="$5" rc; rc="$(run_preflight "$2" "$3" "$4")"
+  local name="$1" pat="$6" rc; rc="$(run_preflight "$2" "$3" "$4" "$5")"
   if [ "$rc" = 0 ]; then
     bad "$name" "expected a RED exit, got 0 — the gate passed a repo that cannot authenticate."; return
   fi
@@ -119,7 +131,7 @@ red() {
 
 # amber <name> <has_id> <has_key> <would_sync> <pattern> — must exit 0 but WARN, loudly and by name.
 amber() {
-  local name="$1" pat="$5" rc; rc="$(run_preflight "$2" "$3" "$4")"
+  local name="$1" pat="$6" rc; rc="$(run_preflight "$2" "$3" "$4" "$5")"
   if [ "$rc" != 0 ]; then
     bad "$name" "$(printf 'expected a non-blocking exit 0, got %s — this must not red an unrelated PR\n%s' "$rc" "$(cat "$WORK/out")")"; return
   fi
@@ -130,31 +142,56 @@ amber() {
     || bad "$name" "$(printf 'warned, but not for the stated reason (want %q):\n%s' "$pat" "$(cat "$WORK/out")")"
 }
 
-echo "== behaviour: the full truth table (has_id x has_key x would_sync) =="
+# silent_says <name> <has_id> <has_key> <would_sync> <same_repo> <pattern> — exit 0, NO annotation,
+# but it must still SAY why it declined to evaluate. Passing mutely and passing for a stated reason
+# look identical to CI and completely different to a human reading the log.
+silent_says() {
+  local name="$1" pat="$6" rc; rc="$(run_preflight "$2" "$3" "$4" "$5")"
+  if [ "$rc" != 0 ]; then
+    bad "$name" "$(printf 'expected exit 0, got %s\n%s' "$rc" "$(cat "$WORK/out")")"; return
+  fi
+  if grep -q '::error\|::warning' "$WORK/out"; then
+    bad "$name" "a fork PR carries no information about provisioning — it must not annotate at all"; return
+  fi
+  grep -qi -- "$pat" "$WORK/out" \
+    && ok "$name" \
+    || bad "$name" "$(printf 'silent, but it never explains itself (want %q):\n%s' "$pat" "$(cat "$WORK/out")")"
+}
+
+echo "== behaviour: the truth table (has_id x has_key x would_sync x same_repo) =="
 
 # Provisioned. The only combinations that may pass silently.
-green "B1  provisioned + renovate PR      -> green, silent"       true  true  true
-green "B2  provisioned + ordinary PR      -> green, silent"       true  true  false
+green "B1  provisioned + renovate PR      -> green, silent"       true  true  true  true
+green "B2  provisioned + ordinary PR      -> green, silent"       true  true  false true
 
 # Unprovisioned AND about to sync. The run was going to fail anyway; preflight only decides whether
 # it fails LEGIBLY. These are the legs that replace the opaque create-github-app-token error.
-red   "B3  no secrets at all + renovate   -> RED, names both"     false false true  'FSGG_DISPATCH_APP_ID'
-red   "B4  no secrets at all + renovate   -> RED, names the key"  false false true  'FSGG_DISPATCH_APP_PRIVATE_KEY'
-red   "B5  app-id only + renovate         -> RED (key missing)"   true  false true  'FSGG_DISPATCH_APP_PRIVATE_KEY'
-red   "B6  key only + renovate            -> RED (id missing)"    false true  true  'FSGG_DISPATCH_APP_ID'
-red   "B7  RED names the repo, not just the secret"               false false true  'FS-GG/FS.GG.Game'
-red   "B8  RED points at the org-admin fix (#468)"                false false true  '468'
+red   "B3  no secrets at all + renovate   -> RED, names both"     false false true  true 'FSGG_DISPATCH_APP_ID'
+red   "B4  no secrets at all + renovate   -> RED, names the key"  false false true  true 'FSGG_DISPATCH_APP_PRIVATE_KEY'
+red   "B5  app-id only + renovate         -> RED (key missing)"   true  false true  true 'FSGG_DISPATCH_APP_PRIVATE_KEY'
+red   "B6  key only + renovate            -> RED (id missing)"    false true  true  true 'FSGG_DISPATCH_APP_ID'
+red   "B7  RED names the repo, not just the secret"               false false true  true 'FS-GG/FS.GG.Game'
+red   "B8  RED points at the org-admin fix (#468)"                false false true  true '468'
 
 # Unprovisioned, NOT about to sync — FS.GG.Game and FS.GG.Audio's state today on an ordinary PR.
 # Must be visible and must NOT block: redding every unrelated PR in a repo over a latent problem is
 # how a gate gets switched off, and a gate that is switched off is worth less than no gate at all.
-amber "B9  unprovisioned + ordinary PR    -> WARN, non-blocking"  false false false 'FSGG_DISPATCH_APP_ID'
-amber "B10 the warning says it WILL fail later, not that it is fine" false false false 'next renovate'
-amber "B11 half-provisioned + ordinary PR -> WARN, non-blocking"  true  false false 'FSGG_DISPATCH_APP_PRIVATE_KEY'
+amber "B9  unprovisioned + ordinary PR    -> WARN, non-blocking"  false false false true 'FSGG_DISPATCH_APP_ID'
+amber "B10 the warning says it WILL fail later, not that it is fine" false false false true 'next renovate'
+amber "B11 half-provisioned + ordinary PR -> WARN, non-blocking"  true  false false true 'FSGG_DISPATCH_APP_PRIVATE_KEY'
 
-# A fork PR on a renovate/* branch: `sync` refuses it (never auto-commit to an untrusted head), so
-# WOULD_SYNC is false and this must warn, never red. The security boundary is unchanged by preflight.
-amber "B12 fork renovate PR               -> WARN, never RED"     false false false 'FSGG_DISPATCH_APP_ID'
+# FORK HEADS. GitHub withholds every secret but GITHUB_TOKEN from a workflow triggered from a fork,
+# so HAS_APP_ID/HAS_APP_KEY are false on a fork PR in EVERY repo — including the four that are
+# demonstrably provisioned. Without the fork guard, preflight annotates a fork PR against
+# FS.GG.Rendering (4 green pushes) with "is not provisioned ... it will fail the first renovate/* PR
+# that opens", and every clause of that is false. A gate that cries wolf gets switched off, so these
+# legs assert TOTAL SILENCE — no ::warning, no ::error — and that it says WHY rather than passing mutely.
+#
+# Not a fail-open: `sync` requires head.repo == this repo, so on a fork head there is no push to gate.
+green  "B12 fork PR, secrets redacted     -> SILENT (no false alarm)"   false false false false
+green  "B13 fork + renovate branch        -> SILENT (guard precedes RED)" false false true  false
+silent_says "B14 the fork leg explains WHY it did not evaluate"         false false false false 'fork'
+silent_says "B15 the fork leg names secret withholding, not provisioning" false false false false 'withholds secrets'
 
 echo
 echo "== structure: the gate cannot be skipped into green (the epic #266 class) =="
@@ -205,6 +242,17 @@ if [ -z "$LEAK" ]; then
 else
   bad "S4  preflight's env carries booleans only" \
       "a raw secret value was placed in the preflight step's environment: $LEAK. Pass \`secrets.x != ''\` instead — Actions evaluates it before the step runs, so the job sees only \"true\"/\"false\"."
+fi
+
+# S5. `continue-on-error: true` makes a FAILING job report SUCCESS. It is the single cheapest way to
+# turn this gate off while leaving every line of it in place — and the one a future "just get CI
+# green" commit reaches for first. Two sibling gates warn about it in a comment; a comment is not a
+# gate, which is the whole thesis of epic #266.
+if [ "$(jq_meta "['preflight_continue_on_error']")" = "False" ]; then
+  ok "S5  preflight carries no \`continue-on-error\` — a red gate stays red"
+else
+  bad "S5  preflight carries no \`continue-on-error\`" \
+      "\`continue-on-error: true\` was added to the preflight job or its step. A FAILING gate now reports SUCCESS, sync runs anyway, and an unprovisioned repo goes straight back to the opaque token-step failure — with the gate still sitting there looking like it works."
 fi
 
 echo
