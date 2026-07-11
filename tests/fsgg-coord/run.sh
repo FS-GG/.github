@@ -2514,12 +2514,35 @@ PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 FSGG_COORD_SCAN_TTL_SE
 assert_eq "#418: an exhausted budget exits EX_RATE (75), the back-off signal" "75" "$rc_take"
 
 # (3) flush replays the queue once the budget is back — and the write REALLY lands on the board.
+#
+# THE DRAIN MUST BE OBSERVED, NOT INFERRED FROM AN ABSENCE (#436). This assertion used to read the
+# queue depth as `wc -l <pending.jsonl 2>/dev/null || echo 0` and compare it to 0 — which is green
+# when the queue was drained AND green when the file never existed, never was written, or lived at a
+# different path. `flush` UNLINKS the file when it empties it, so the absent case is the one that
+# actually occurs: the assertion could not fail. That is epic #266's own shape — a coherence check
+# that reports green on a missing subject — guarding the mechanism that stops an exhausted budget
+# from silently dropping a board write. So: depth is ABSENT or a number (never conflated), the queue
+# is proven NON-EMPTY first, and the flush is made to account for exactly what was in it.
+pending_depth() {   # ABSENT | <count> — the two facts the old `|| echo 0` collapsed into one
+  local f="$FSGG_COORD_CACHE/pending.jsonl"
+  if [ -f "$f" ]; then wc -l <"$f" | tr -d ' '; else echo ABSENT; fi
+}
+depth_before="$(pending_depth)"
+case "$depth_before" in
+  ABSENT|0) bad "#418: the queue holds the deferred write(s) BEFORE flush" \
+              "depth=$depth_before — nothing was queued, so the drain below would prove nothing" ;;
+  *)        ok  "#418: the queue holds the deferred write(s) BEFORE flush ($depth_before queued)" ;;
+esac
 : >"$GH_LOG"
 flush_out="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" flush 2>&1 || true)"
 assert_contains "#418: flush replays the queued board write" "written" "$flush_out"
 assert_contains "#418: ...as a real Status mutation" "PVTSSF_status" "$(cat "$GH_LOG")"
-assert_eq "#418: ...and the queue is then empty" "0" \
-  "$(wc -l <"$FSGG_COORD_CACHE/pending.jsonl" 2>/dev/null | tr -d ' ' || echo 0)"
+# Every queued write is accounted for — not just "at least one was written".
+assert_contains "#418: ...and accounts for EVERY queued write" "$depth_before written" "$flush_out"
+# ...and the drained queue is UNLINKED. Distinguishing this from "0 lines" is the whole point: only
+# one of the two can be produced by a flush that ran, and it is this one.
+assert_eq "#418: ...leaving the queue drained and UNLINKED (not merely unreadable)" \
+  "ABSENT" "$(pending_depth)"
 
 # (4) THE SCAN CACHE — the lever that stops the budget running out in the first place. Two `next`
 # calls inside the TTL must cost ONE board scan, because the second serves the first's scan from the
