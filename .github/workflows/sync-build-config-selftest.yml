@@ -5,6 +5,11 @@
 # a hand-authored .config/dotnet-tools.json (it used to silently clobber it), without regressing the
 # *.props refuse-and-adopt path it was modelled on. This guards the distributor the same way the other
 # *-selftest workflows guard their scripts.
+#
+# dist/dotnet/** is in `paths:` because it is an INPUT to the fixture, not merely its output: run.sh
+# points SRC at the real dist/dotnet/ and asserts the canonical source still ships all three managed
+# files. Omit it and a dist/dotnet-only PR never runs the fixture that checks it — the breakage then
+# surfaces on main, from somebody else's unrelated PR (#508, same class as #334).
 name: sync-build-config-selftest
 
 on:
@@ -12,12 +17,14 @@ on:
     paths:
       - "scripts/sync-build-config.sh"
       - "tests/sync-build-config/**"
+      - "dist/dotnet/**"
       - ".github/workflows/sync-build-config-selftest.yml"
   push:
     branches: [main]
     paths:
       - "scripts/sync-build-config.sh"
       - "tests/sync-build-config/**"
+      - "dist/dotnet/**"
       - ".github/workflows/sync-build-config-selftest.yml"
   workflow_dispatch:
 
