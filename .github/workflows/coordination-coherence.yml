@@ -8,6 +8,36 @@
 # a repo that is NOT a coordination-kit receiver (e.g. .github itself) passes trivially with nothing
 # to check. Mirrors the contract-coherence / skill-union-assert reusable-gate pattern.
 #
+# ON A PULL REQUEST THE GATE ATTRIBUTES THE DRIFT (#450). Canonical is `.github@main`, which moves
+# constantly, and the receiver's own main moves behind it in the window before coordination-propagate's
+# sync PR lands. The check used to compare the PR's tree against canonical and report one identical
+# `DRIFT` for all three of:
+#
+#   1. the PR itself edits a vendored kit file   — real drift, and the author's to fix
+#   2. the receiver's main is behind canonical   — real, but the REPO's; propagate owes it a sync PR
+#   3. the PR's branch predates a kit sync that  — nothing is wrong at all
+#      is already on the receiver's main
+#
+# (2) and (3) fire on PRs that never went near the kit, so in a repo running 5-6 parallel workers the
+# check is red on branches that have nothing to do with it. That is not a cosmetic problem: a worker
+# read the red as a repo defect and filed a long, well-evidenced issue about a kit resync that had
+# merged 110 SECONDS EARLIER (FS.GG.Rendering#473, a phantom), and a second worker lost an hour to the
+# same signal 20 minutes later. A check that is red for a reason its reader cannot fix is one they
+# learn to ignore — and then it cannot catch the real drift when it comes.
+#
+# So on a `pull_request` we hand the script the caller's CURRENT base tip and it reports only the drift
+# the BRANCH AUTHORED (merge-base-relative); inherited drift becomes an advisory that names whose job it
+# is. Every other event — notably the receiver's push to main — takes no base ref and stays the strict
+# tree compare it always was. THAT run is the verdict of record on a repo's kit; the PR-side relaxation
+# only ever declines to blame a branch for drift it did not cause, and never hides it.
+#
+# The base tip is read FRESH (not the PR event's pinned `base.sha`), which is what makes the phantom
+# self-heal: once the sync lands on the receiver's main, a re-run of the stale branch's check goes green
+# on its own. Rendering#473's red would have cleared itself 110 seconds later instead of becoming an issue.
+#
+# Receivers need no change: `workflow_call` inherits the caller's triggering event, so this workflow
+# derives the base ref itself.
+#
 # Callers must be public or grant the checkout token read on FS-GG/.github (public). No packages/
 # write scopes are needed — this gate is pure file comparison, deliberately taking no dependency on
 # the SDD-owned typed tooling.
@@ -36,11 +66,42 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: caller
+          # Attribution is merge-base arithmetic, so a PR needs the branch's history: a shallow clone
+          # cannot answer "did this branch author the kit change?", and the script fails CLOSED (exit 2)
+          # rather than guessing. The push-to-main run passes no --base-ref and does a strict tree
+          # compare, so it needs no history at all — don't make every receiver's main pipeline pay for a
+          # full clone it never reads.
+          #
+          # The depths are QUOTED. GitHub expressions treat the number 0 as FALSY, so the obvious
+          # `${{ cond && 0 || 1 }}` silently evaluates to 1 on the true branch — a shallow clone, and an
+          # attribution that then fails closed on every PR. The strings '0'/'1' are both truthy.
+          fetch-depth: ${{ github.event_name == 'pull_request' && '0' || '1' }}
       - name: Checkout FS-GG/.github (canonical kit + roster)
         uses: actions/checkout@v7
         with:
           repository: FS-GG/.github
           ref: ${{ inputs.github-ref }}
           path: dotgithub
+      # Fetch the base branch's CURRENT tip. `github.event.pull_request.base.sha` is pinned to when the
+      # PR event fired, which would keep reporting a sync that has since landed — the phantom itself.
+      - name: Fetch the base branch tip (pull requests only)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: git -C caller fetch --no-tags origin "+refs/heads/$BASE:refs/remotes/origin/$BASE"
       - name: Verify the coordination kit is coherent
-        run: bash dotgithub/scripts/coordination-sync --check --repo "${{ github.repository }}" "caller/${{ inputs.target-path }}"
+        env:
+          # Empty on every non-PR event, which is exactly the strict, unattributed check — the verdict
+          # of record that a receiver's push-to-main run performs on its own kit.
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || '' }}
+          REPO: ${{ github.repository }}
+          TARGET: caller/${{ inputs.target-path }}
+        # Two explicit invocations rather than one with a `${BASE_REF:+--base-ref "$BASE_REF"}` splice:
+        # that idiom yields two argv entries only by way of unquoted word-splitting, and reads as though
+        # it might pass one. Spelling both calls out costs a line and hides nothing.
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            bash dotgithub/scripts/coordination-sync --check --repo "$REPO" --base-ref "$BASE_REF" "$TARGET"
+          else
+            bash dotgithub/scripts/coordination-sync --check --repo "$REPO" "$TARGET"
+          fi
