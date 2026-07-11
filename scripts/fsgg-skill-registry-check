@@ -125,10 +125,10 @@ import os
 import re
 import sys
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover - environment guard
-    sys.exit("fsgg-skill-registry-check: PyYAML is required (python -m pip install pyyaml)")
+# PyYAML is imported lazily by `check()` (see `_load_registry`), NOT at module load: the
+# reference seams (`--normalize-when`, and importing `normalize_when` for the cross-impl conformance
+# fixture, .github#398) are pure-stdlib and must run on a runner that never installed PyYAML — the
+# skill-union selftest is one. Reading a registry still hard-requires it, with the same message.
 
 # Rendering keeps frozen copies of the skills FS.GG.Game owns (ADR-0022 §6, retired at P6).
 FROZEN_MIRROR_OWNER = "fs-gg-game"
@@ -411,9 +411,17 @@ def completeness(rows: list[dict], declarers: dict[str, list[dict]]) -> list[dic
     return findings
 
 
-def check(registry_path: str, repos_root: str) -> list[dict]:
+def _load_registry(registry_path: str) -> dict:
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - environment guard
+        sys.exit("fsgg-skill-registry-check: PyYAML is required (python -m pip install pyyaml)")
     with open(registry_path) as handle:
-        registry = yaml.safe_load(handle)
+        return yaml.safe_load(handle)
+
+
+def check(registry_path: str, repos_root: str) -> list[dict]:
+    registry = _load_registry(registry_path)
 
     findings: list[dict] = []
     declarers, manifest_findings = manifest_index(repos_root, registry["skills"])
@@ -615,7 +623,19 @@ def main() -> int:
     parser.add_argument(
         "--write", action="store_true", help="reconcile stale sha256 / materializes-when in place"
     )
+    parser.add_argument(
+        "--normalize-when",
+        metavar="PREDICATE",
+        help="reference seam: print normalize_when(PREDICATE) and exit — the canonical comparable "
+        "form the drift check (check 6) uses. Lets the cross-impl conformance fixture pin this "
+        "normalizer against the shell evaluator and the typed Fsgg.Registry validator so the three "
+        "cannot silently drift (.github#398). Pure-stdlib: needs no registry, --repos-root, or PyYAML.",
+    )
     args = parser.parse_args()
+
+    if args.normalize_when is not None:
+        print(normalize_when(args.normalize_when))
+        return 0
 
     if not os.path.isdir(args.repos_root):
         sys.exit(

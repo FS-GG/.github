@@ -53,6 +53,7 @@
 #   skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
 #                         [--co-tenants "<glob> <glob> ..."] [--params <scaffold-provenance.json>]
 #   skill-union-assert.sh --digest <skill-dir>   # print the canonical SKILL.md digest and exit
+#   skill-union-assert.sh --eval-when <predicate> [--params <p.json>]  # print true/false, then exit
 # Roots default to AGENT_SKILL_ROOTS (env) or ADR-0011's three: ".claude/skills .codex/skills
 # .agents/skills". Roots are resolved relative to --product. --params requires --manifest. Exit
 # 0 = union coherent; 1 = at least one violation (each printed with its class); 2 = misconfiguration.
@@ -81,6 +82,7 @@ Usage:
   skill-union-assert.sh --product <dir> [--roots "<r1> <r2> ..."] [--manifest <file.json>]
                         [--co-tenants "<glob> <glob> ..."] [--params <scaffold-provenance.json>]
   skill-union-assert.sh --digest <skill-dir>
+  skill-union-assert.sh --eval-when <predicate> [--params <scaffold-provenance.json>]
 
 Options:
   --product <dir>         product tree to check (default: ".")
@@ -93,6 +95,12 @@ Options:
                           .effectiveParameters, adding [missing] / [unexpected]. Requires --manifest.
   --digest <skill-dir>    reference generator: print the canonical-body sha256 of the dir's SKILL.md,
                           then exit (so producers and this assertion never drift)
+  --eval-when <predicate> reference evaluator: evaluate a materializes-when <predicate> against the
+                          scaffold parameters from --params (absent ⇒ every param is empty), print
+                          `true`/`false`, then exit 0 (exit 2 on an unparseable predicate). Exposes
+                          the shell grammar evaluator so the cross-impl conformance fixture can pin it
+                          against normalize_when / the typed Fsgg.Registry validator and they never
+                          drift (tests/skill-union, .github#398). Does NOT require --manifest.
   -h, --help              print this help
 
 Exit: 0 = union coherent; 1 = at least one violation (each printed with its class); 2 = misconfiguration.
@@ -100,6 +108,8 @@ EOF
 }
 
 DIGEST_ONLY=""
+EVAL_WHEN=""
+EVAL_WHEN_SET=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -109,6 +119,7 @@ while [ $# -gt 0 ]; do
     --co-tenants) need_val "$@"; CO_TENANTS="$2"; shift 2 ;;
     --params)     need_val "$@"; PARAMS="$2"; shift 2 ;;
     --digest)     need_val "$@"; DIGEST_ONLY="$2"; shift 2 ;;
+    --eval-when)  need_val "$@"; EVAL_WHEN="$2"; EVAL_WHEN_SET=1; shift 2 ;;
     -h|--help)    usage; exit 0 ;;
     *)            die "unknown argument: $1" ;;
   esac
@@ -164,6 +175,23 @@ declare -A PARAM=()
 
 trim() { local s="$1"; s="${s#"${s%%[![:space:]]*}"}"; s="${s%"${s##*[![:space:]]}"}"; printf '%s' "$s"; }
 unquote() { local s="$1"; if [ "${#s}" -ge 2 ] && [ "${s:0:1}" = '"' ] && [ "${s: -1}" = '"' ]; then s="${s:1:${#s}-2}"; fi; printf '%s' "$s"; }
+
+# Populate PARAM[] from a scaffold-provenance.json (.effectiveParameters). Booleans/numbers are
+# stringified so `feedback == true` compares against the literal token. Shared by the real gate
+# (check 4) and the --eval-when reference evaluator, so the fixture pins the SAME param extraction
+# the gate uses, not a test-only re-read that could drift from it.
+load_params() {
+  local file="$1"
+  [ -f "$file" ] || die "params (scaffold-provenance) not found: $file"
+  command -v jq >/dev/null 2>&1 || die "jq not found (required to read --params)."
+  jq -e '.effectiveParameters | type == "object"' "$file" >/dev/null 2>&1 \
+    || die "params has no .effectiveParameters object: $file"
+  local k v
+  while IFS=$'\t' read -r k v; do
+    [ -n "$k" ] || continue
+    PARAM["$k"]="$v"
+  done < <(jq -r '.effectiveParameters | to_entries[] | [.key, (.value | tostring)] | @tsv' "$file")
+}
 
 # Evaluate a single comparison clause. Returns 0 (true) / 1 (false); dies (2) on an unparseable clause.
 eval_clause() {
@@ -225,6 +253,18 @@ if [ -n "$DIGEST_ONLY" ]; then
   exit 0
 fi
 
+# Reference evaluator (--eval-when): evaluate one materializes-when predicate against --params and
+# print true/false, then exit. It runs the SAME eval_condition the gate's check 4 uses (via the SAME
+# load_params), so the cross-impl conformance fixture can pin the shell grammar against normalize_when
+# and the typed Fsgg.Registry validator — the anti-drift purpose --digest serves for the digest
+# algorithm (.github#398). --manifest is irrelevant here (there is no manifest to read predicates
+# from — the predicate is supplied directly), so it is not required.
+if [ -n "$EVAL_WHEN_SET" ]; then
+  [ -z "$PARAMS" ] || load_params "$PARAMS"
+  if eval_condition "$EVAL_WHEN"; then echo true; else echo false; fi
+  exit 0
+fi
+
 [ -d "$PRODUCT" ] || die "product tree not found: $PRODUCT"
 
 # shellcheck disable=SC2206
@@ -260,17 +300,7 @@ if [ -n "$MANIFEST" ]; then
 fi
 
 # Scaffold parameters (scaffold-provenance.json → .effectiveParameters), read only with --params.
-# Booleans/numbers are stringified so `feedback == true` compares against the literal token.
-if [ -n "$PARAMS" ]; then
-  [ -f "$PARAMS" ] || die "params (scaffold-provenance) not found: $PARAMS"
-  command -v jq >/dev/null 2>&1 || die "jq not found (required to read --params)."
-  jq -e '.effectiveParameters | type == "object"' "$PARAMS" >/dev/null 2>&1 \
-    || die "params has no .effectiveParameters object: $PARAMS"
-  while IFS=$'\t' read -r k v; do
-    [ -n "$k" ] || continue
-    PARAM["$k"]="$v"
-  done < <(jq -r '.effectiveParameters | to_entries[] | [.key, (.value | tostring)] | @tsv' "$PARAMS")
-fi
+[ -z "$PARAMS" ] || load_params "$PARAMS"
 
 # Union of skill ids = every subdirectory across all roots. Manifest ids are NOT unioned in:
 # the manifest is a superset catalog (emission is lifecycle/profile-conditioned), so an id that
