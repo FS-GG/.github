@@ -57,11 +57,14 @@ scaffolds, by default.** Concretely:
    GitHub Packages feed. The scaffold (step 3) then executes with the newest tooling, so a fresh
    workspace is always produced by the current coherent set.
 
-2. **Best-effort and non-blocking.** `FS.GG.SDD.Cli` is published only on the org feed, whose reads
-   are all authenticated (FS.GG.Templates#82), so the update needs a `read:packages` token
-   (`FSGG_PACKAGES_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`). With no token, or on an offline/failed
-   update, the step **warns and scaffolds with the installed CLI** — creation is never blocked on a
-   feed hiccup. The preflight already requires `fsgg-sdd` on PATH; this only makes it *newer*.
+2. **Best-effort and non-blocking.** `FS.GG.SDD.Cli` is dual-published (ADR-0012): anonymously on
+   nuget.org **and** — possibly a newer build — on the org GitHub Packages feed, whose reads are all
+   authenticated (FS.GG.Templates#82). The update reuses the governance overlay's feed ladder: with
+   a `read:packages` token (`FSGG_PACKAGES_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`) it tries the org
+   feed first and falls back to nuget.org; **with no token it updates from nuget.org anonymously**,
+   so the common tokenless run still gets current tooling. On an offline/failed update the step
+   **warns and scaffolds with the installed CLI** — creation is never blocked on a feed hiccup. The
+   preflight already requires `fsgg-sdd` on PATH; this only makes it *newer*.
 
 3. **An explicit opt-out preserves reproducibility.** `--pinned` skips the self-update and
    scaffolds with the installed CLI. `--pinned --ref <tag>` is the fully reproducible, pinned

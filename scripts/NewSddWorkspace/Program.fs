@@ -177,30 +177,42 @@ let private installGovernanceTemplate () : int * string =
             let code2, log2 = installFromTempConfig (nugetOrgConfig ())
             code2, log + "\n" + log2
 
+/// Run `dotnet tool update --global FS.GG.SDD.Cli` from a temp dir carrying `configXml` as its
+/// nuget.config (passed with --configfile), then delete the temp dir. The isolated config's
+/// `<clear />` stops an ambient 401-on-read org feed in the caller's global config from poisoning
+/// the restore (one source hard-failing fails the whole restore). Mirrors `installFromTempConfig`.
+let private updateCliFromTempConfig (configXml: string) : int * string =
+    let dir = Path.Combine(Path.GetTempPath(), "new-sdd-workspace-upd-" + Guid.NewGuid().ToString "N")
+    Directory.CreateDirectory dir |> ignore
+    try
+        let cfg = Path.Combine(dir, "nuget.config")
+        File.WriteAllText(cfg, configXml)
+        runProcess true "dotnet" [ "tool"; "update"; "--global"; "FS.GG.SDD.Cli"; "--configfile"; cfg ]
+    finally
+        try Directory.Delete(dir, true) with _ -> ()
+
 /// Self-update the `fsgg-sdd` global tool to the newest published build BEFORE scaffolding, so a
 /// fresh workspace is produced by the current coherent set's tooling — the DEFAULT (ADR-0030, the
 /// creation-time carve-out to ADR-0009: there is no existing consumer artifact to clobber, and
 /// newest-by-default is the whole point of creating a workspace; `--pinned` + `--ref <tag>`
-/// restores a reproducible pin). `FS.GG.SDD.Cli` lives only on the org GitHub Packages feed, whose
-/// reads are all authenticated (FS.GG.Templates#82), so the update needs a `read:packages` token;
-/// with none the feed is unreachable and the step skips (scaffolding proceeds with the installed
-/// CLI). Best-effort throughout: an offline or failed update warns and never blocks creation. Runs
-/// from an isolated temp config so the org feed's anonymous 401 can't poison the restore.
+/// restores a reproducible pin). `FS.GG.SDD.Cli` is dual-published (ADR-0012): anonymously on
+/// nuget.org AND — possibly a newer build — on the org GitHub Packages feed, whose reads are all
+/// authenticated (FS.GG.Templates#82). Same best-effort ladder as the governance overlay: with a
+/// token, try the org feed first (may carry a newer build) and fall back to nuget.org; with no
+/// token, go straight to nuget.org anonymously. Non-fatal throughout — an offline or failed update
+/// warns and scaffolding proceeds with the installed CLI.
 let private selfUpdateCli () : Outcome =
-    match feedToken () with
-    | None -> Skipped "no read:packages token (set FSGG_PACKAGES_TOKEN) — scaffolding with the installed CLI"
-    | Some token ->
-        let dir = Path.Combine(Path.GetTempPath(), "new-sdd-workspace-upd-" + Guid.NewGuid().ToString "N")
-        Directory.CreateDirectory dir |> ignore
-        try
-            let cfg = Path.Combine(dir, "nuget.config")
-            File.WriteAllText(cfg, orgFeedConfig token)
-            let code, _ =
-                runProcess true "dotnet" [ "tool"; "update"; "--global"; "FS.GG.SDD.Cli"; "--configfile"; cfg ]
-            if code = 0 then Succeeded
-            else Warned(sprintf "update failed (exit %d) — scaffolding with the installed CLI" code)
-        finally
-            try Directory.Delete(dir, true) with _ -> ()
+    let code, _ =
+        match feedToken () with
+        | None -> updateCliFromTempConfig (nugetOrgConfig ())
+        | Some token ->
+            let code, log = updateCliFromTempConfig (orgFeedConfig token)
+            if code = 0 then code, log
+            else
+                let code2, log2 = updateCliFromTempConfig (nugetOrgConfig ())
+                code2, log + "\n" + log2
+    if code = 0 then Succeeded
+    else Warned(sprintf "update failed (exit %d) — scaffolding with the installed CLI" code)
 
 /// `command -v <cmd>` — is the executable resolvable on PATH? (dotnet global tools install
 /// to a directory that is itself on PATH, so this finds `fsgg-sdd`.)

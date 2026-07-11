@@ -52,11 +52,13 @@ there is no existing consumer artifact to clobber, and newest-by-default is the 
 *creating* a workspace. ADR-0009 still governs the in-project `fsgg-sdd` verbs — this default only
 touches the CLI used to create a brand-new workspace.
 
-The self-update is **best-effort and non-blocking**: `FS.GG.SDD.Cli` lives only on the org
-GitHub Packages feed (whose reads are all authenticated), so it needs a `read:packages` token
-(`FSGG_PACKAGES_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`); with no token — or if the update fails or
-you are offline — the step warns and scaffolding proceeds with the installed CLI. Pass `--pinned`
-to opt out entirely; `--pinned --ref <tag>` gives a byte-reproducible pinned scaffold.
+The self-update is **best-effort and non-blocking**. `FS.GG.SDD.Cli` is dual-published (ADR-0012):
+anonymously on nuget.org **and** — possibly a newer build — on the org GitHub Packages feed (whose
+reads are all authenticated). It reuses the governance overlay's feed ladder: with a `read:packages`
+token (`FSGG_PACKAGES_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`) it tries the org feed first and falls
+back to nuget.org; **with no token it updates from nuget.org anonymously**. If the update fails or
+you are offline, the step warns and scaffolding proceeds with the installed CLI. Pass `--pinned` to
+opt out entirely; `--pinned --ref <tag>` gives a byte-reproducible pinned scaffold.
 
 ## What it does
 
