@@ -160,13 +160,14 @@ skills:
   - { id: fs-gg-ballistics,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ballistics/SKILL.md, sha256: 44a1c7ae115d3a5ad01e2909ee0c6d183ddb542af48b305bf905ee89592bd7ba, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 2b4812032f970ca8f7adcdaea6b9c12549c74837e3eb80d683bdd9e867f53f4d, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack and lifecycle == spec-kit" }
-  - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: e6c16f33a3f9b06995378952ba07408cee8a9f4eb4a9ce18bf2142602c40f499, materializes-when: "feedback == true and lifecycle == spec-kit" }
-  # Sibling of fs-gg-feedback-capture: same `feedback` gate, same off-convention supplied-by path
-  # (template/<feature>/skill/, not template/product-skills/<id>/) — but NO `lifecycle` clause, so the
-  # retrospective skill is lifecycle-INDEPENDENT and rides every lane with feedback on. Predicate is
-  # the manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality — do not
+  - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: 5ef93a66cda609c92d9eb14d9fe1dc3ed152e20d72e16b8680e182abccd19ebe, materializes-when: "feedback == true and lifecycle == spec-kit" }
+  # Sibling of fs-gg-feedback-capture: same off-convention supplied-by path (template/<feature>/skill/,
+  # not template/product-skills/<id>/) — but the predicate is now `always` (Rendering#434), NOT the
+  # `feedback` gate its sibling carries: a reporter must ride EVERY lane, because an instruction placed
+  # only in the feedback-gated `capture` never reaches a reporter on the `sdd` or `none` lane. Predicate
+  # is the manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality — do not
   # "normalize" it to match the row above). Vendored Rendering#248 (PR #251); reconciled .github#298.
-  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: 4093ccd31db484e16f926cfc7423c0f8049ec110eb5d5b45997b91681ece8170, materializes-when: "feedback == true" }
+  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: 68626e2408d31b665c7ec7300df51a7e1037f26e9a4b6cc2b2e8e0b522aca5db, materializes-when: "always" }
 
   # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
   # fs-gg-project was formerly gated `lifecycle == spec-kit`, so under the `sdd`/`none` lanes NEITHER
