@@ -92,6 +92,30 @@ rm -f "$RECV/scripts/fsgg-coord"
 expect_rc "check: missing client fails (rc 1)" 1 bash "$SYNC" --check "$RECV"
 bash "$SYNC" "$RECV" >/dev/null
 
+# --- the exec bit: `apply` SETS it, so `--check` must ASSERT it (#506) ----------------------------
+# `diff -q` reads CONTENT. A receiver whose client has lost its +x bit is byte-identical to canonical, so
+# a mode-blind check pronounced the kit coherent while every worker in that repo got `permission denied`
+# running the client the gate had just certified. Strip ONLY the bit: the bytes must stay canonical, or
+# the assertion below passes on ordinary content drift and proves nothing about the mode.
+chmod -x "$RECV/scripts/fsgg-coord"
+diff -q "$REPO_ROOT/scripts/fsgg-coord" "$RECV/scripts/fsgg-coord" >/dev/null \
+  && ok "exec: (precondition) the de-chmodded client is still BYTE-IDENTICAL to canonical" \
+  || bad "exec: precondition" "the fixture changed the bytes — the assertions below would pass for the wrong reason"
+noexec_out="$(bash "$SYNC" --check "$RECV" 2>&1 || true)"
+expect_rc "exec: a byte-identical but NON-EXECUTABLE client FAILS (rc 1)" 1 bash "$SYNC" --check "$RECV"
+# rc alone cannot tell this drift from any other — the trap this fixture already warns about twice.
+printf '%s' "$noexec_out" | grep -q '::error::coordination-sync: DRIFT (not executable): scripts/fsgg-coord' \
+  && ok "exec: ...and NAMES the file and the kind, not a bare rc 1" \
+  || bad "exec: red without naming the mode drift" "$noexec_out"
+# "Re-sync it" reads as a no-op to someone whose file already matches byte for byte. Name the bit.
+printf '%s' "$noexec_out" | grep -q 'chmod +x' \
+  && ok "exec: ...and tells the reader to chmod +x" \
+  || bad "exec: red without a remediation the reader can act on" "$noexec_out"
+bash "$SYNC" "$RECV" >/dev/null
+[ -x "$RECV/scripts/fsgg-coord" ] \
+  && ok "exec: re-running apply RESTORES the bit" || bad "exec: apply did not restore the mode"
+expect_rc "exec: ...and the re-synced receiver passes again (rc 0)" 0 bash "$SYNC" --check "$RECV"
+
 # --- roster gate ---
 out_auth="$(bash "$SYNC" --check --repo FS-GG/.github "$RECV" 2>&1)"; rc_auth=$?
 { [ "$rc_auth" -eq 0 ] && printf '%s' "$out_auth" | grep -q 'nothing to do'; } \
@@ -345,6 +369,71 @@ expect_out "base-ref: (1c) ...but drift it AUTHORED is still a hard red (rc 1)" 
 
 # Misconfiguration is never a drift verdict (#350). "I cannot attribute this" must fail CLOSED and loud,
 # not silently fall back to a green — a gate that cannot tell whose drift it is has not cleared anyone.
+# --- the exec RULE itself fails closed (#315's shape, one level up) -------------------------------
+# The rule "must this dest be executable?" is read off the canonical SOURCE's own mode, which is what makes
+# apply and check agree by construction. That trade has a failure mode: a .github checkout that has itself
+# lost the client's +x bit would answer "no" everywhere, and BOTH arms would quietly stop caring — apply
+# would distribute a dead client and check would certify it. A source we cannot trust is not a verdict.
+EXROOT="$WORK/exroot"; mkdir -p "$EXROOT/scripts" "$EXROOT/registry"
+cp -r "$REPO_ROOT/scripts/lib" "$EXROOT/scripts/lib"
+cp "$SYNC" "$EXROOT/scripts/coordination-sync"
+cp "$REPO_ROOT/scripts/repos.sh" "$EXROOT/scripts/repos.sh"
+cp "$REPO_ROOT/registry/repos.yml" "$EXROOT/registry/repos.yml"
+cp "$REPO_ROOT/scripts/fsgg-coord" "$EXROOT/scripts/fsgg-coord"
+for src in "${SKILL_SRCS[@]}"; do
+  mkdir -p "$EXROOT/$src"; cp "$REPO_ROOT/$src/SKILL.md" "$EXROOT/$src/SKILL.md"
+done
+chmod -x "$EXROOT/scripts/fsgg-coord"       # every kit source PRESENT; the client just isn't runnable
+expect_gate "exec: a canonical client that is NOT executable fails closed (rc 2), not a green certificate" 2 \
+  'refusing to distribute or certify' \
+  bash "$EXROOT/scripts/coordination-sync" --check "$RECV"
+mkdir -p "$WORK/wouldbe"        # a real target, or apply dies at "target not found" and never reaches the guard
+expect_gate "exec: ...and apply refuses to distribute a dead client too" 2 \
+  'refusing to distribute or certify' \
+  bash "$EXROOT/scripts/coordination-sync" "$WORK/wouldbe"
+[ -e "$WORK/wouldbe/scripts/fsgg-coord" ] \
+  && bad "exec: apply wrote a non-executable client before dying" \
+  || ok "exec: ...and wrote NOTHING — it refused before distributing, not after"
+
+# --- the mode is read from the TREE under --base-ref, and rides the attribution (#450) ------------
+# Two different code paths read a mode: the worktree (`test -x`, asserted above) and a <ref> (`ls-tree`,
+# here). The attributed arm reads the BASE through the second one, so a <ref> read that cannot see a mode
+# calls a base whose client is 100644 "coherent" — and then tells an innocent author their branch merely
+# "predates a kit sync", which is both wrong and unactionable. Assert the verdict that distinguishes them.
+M="$WORK/moderecv"; mkdir -p "$M"
+git -C "$M" init -q -b main
+git -C "$M" config user.email fixture@fs-gg.invalid
+git -C "$M" config user.name  "coordination-sync fixture"
+mcommit() { git -C "$M" add -A && git -C "$M" commit -qm "$1"; }
+echo "unrelated" > "$M/README.md"
+bash "$SYNC" "$M" >/dev/null; mcommit "main: canonical kit, client executable"
+
+# (1) A branch that strips the bit AUTHORED it — `git diff` records a mode change, so attribution sees it.
+git -C "$M" checkout -q -b stripmode
+chmod -x "$M/scripts/fsgg-coord"; mcommit "strip the client's exec bit"
+expect_out "exec: (base-ref) a branch that strips the bit OWNS the red (rc 1)" 1 \
+  'DRIFT \(not executable\): scripts/fsgg-coord' bash "$SYNC" --check --base-ref main "$M"
+expect_out "exec: (base-ref) ...and is told where the kit is owned" 1 \
+  'owned by FS-GG/.github' bash "$SYNC" --check --base-ref main "$M"
+
+# (2) An INHERITED mode drift is the REPO's, not the branch's. This is the assertion that actually proves
+# the <ref> read sees modes: if it did not, the base would look coherent and this would report (3) instead.
+git -C "$M" checkout -q main
+chmod -x "$M/scripts/fsgg-coord"; mcommit "main: the bit is lost on main itself"
+git -C "$M" checkout -q -b innocent
+echo "my actual work" > "$M/src.txt"; mcommit "a change that never touches the kit"
+expect_out "exec: (base-ref) an inherited mode drift is the REPO's — the base's mode is read from the tree" 0 \
+  'is BEHIND the canonical kit' bash "$SYNC" --check --base-ref main "$M"
+mode_out="$(bash "$SYNC" --check --base-ref main "$M" 2>&1)"
+printf '%s' "$mode_out" | grep -q 'predates a kit sync' \
+  && bad "exec: (base-ref) a mode-blind base read misdiagnosed inherited drift as a stale branch" "$mode_out" \
+  || ok "exec: (base-ref) ...and is NOT misreported as a branch that merely predates a sync"
+printf '%s' "$mode_out" | grep -q '::error::' \
+  && bad "exec: (base-ref) an innocent branch was RED for drift it inherited" "$mode_out" \
+  || ok "exec: (base-ref) ...and the innocent branch gets no ::error::"
+# ...while the repo's own main run — strict, no --base-ref — stays the verdict of record, and stays red.
+expect_rc "exec: (base-ref) the repo's OWN main run is still a hard red (rc 1)" 1 bash "$SYNC" --check "$M"
+
 expect_out "base-ref: a non-git target is a misconfig (rc 2), not a verdict" 2 \
   'needs <target> to be a git checkout' bash "$SYNC" --check --base-ref main "$RECV"
 expect_out "base-ref: an unresolvable ref is a misconfig (rc 2), not a verdict" 2 \

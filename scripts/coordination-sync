@@ -145,6 +145,20 @@ while IFS= read -r entry; do
   [ -f "$SRC_ROOT/$rel_src" ] || die "canonical kit source missing: $rel_src (is this a .github checkout?)"
 done < <(managed)
 
+# Which managed files must be EXECUTABLE in the receiver — keyed on the canonical source's OWN mode, and
+# read by BOTH arms below, so `apply` chmods exactly what `check` asserts. The two arms used to carry
+# separate rules: apply chmodded the client, check compared bytes with `diff -q` and never looked at a
+# mode. A receiver whose client had lost its +x bit was therefore byte-identical to canonical, so the gate
+# pronounced the kit coherent while every worker in that repo got `permission denied` running the very
+# client it had just certified (.github#506). The check's subject is "the kit is USABLE here"; bytes alone
+# are not evidence of that, and a mode sits inside the subject and outside the evidence.
+wants_exec() { [ -x "$SRC_ROOT/$1" ]; }        # $1 = rel_src
+# ...and that rule is only as good as the mode it reads. If THIS checkout has lost the client's +x bit,
+# `wants_exec` answers "no" everywhere and BOTH arms quietly stop caring — the same fail-open, one level
+# up, that #315 already cost this script. A source we cannot trust is not a verdict: fail closed.
+[ -x "$SRC_ROOT/scripts/fsgg-coord" ] \
+  || die "canonical scripts/fsgg-coord is not executable in $SRC_ROOT — refusing to distribute or certify a kit whose client cannot run ('chmod +x scripts/fsgg-coord')."
+
 if [ "$mode" = "apply" ]; then
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
@@ -152,7 +166,7 @@ if [ "$mode" = "apply" ]; then
     dst="$target/$rel_dst"
     mkdir -p "$(dirname "$dst")"
     cp "$SRC_ROOT/$rel_src" "$dst"
-    case "$rel_dst" in */fsgg-coord) chmod +x "$dst" ;; esac
+    if wants_exec "$rel_src"; then chmod +x "$dst"; fi
     echo "wrote: $rel_dst"
   done < <(managed)
   echo "coordination-sync: kit written into $target"
@@ -171,14 +185,23 @@ tree_status() {   # tree_status [<ref>]
     if [ -z "$ref" ]; then
       if   [ ! -f "$target/$rel_dst" ];                                   then printf 'missing\t%s\n' "$rel_dst"
       elif ! diff -q "$src" "$target/$rel_dst" >/dev/null 2>&1;           then printf 'differs\t%s\n' "$rel_dst"
+      elif wants_exec "$rel_src" && [ ! -x "$target/$rel_dst" ];          then printf 'not executable\t%s\n' "$rel_dst"
       else                                                                     printf 'ok\t%s\n'      "$rel_dst"; fi
     else
       # `<rev>:./<path>` resolves the path relative to the CWD (here: $target). Plain `<rev>:<path>` is
       # relative to the REPO ROOT, which is a different file whenever <target> is a subdirectory of the
       # checkout — precisely what the gate's `target-path` input lets a caller ask for.
+      #
+      # The mode comes from the TREE, not the worktree: `ls-tree` reports what the commit actually records
+      # (100755 vs 100644), which is the only place a <ref> read can learn it. Its pathspec is CWD-relative
+      # like the `:./` above, so it asks about the same file. A blob mode git does not report as 100755 is
+      # not executable, whatever the checkout on disk happens to say.
       if   ! git -C "$target" cat-file -e "$ref:./$rel_dst" 2>/dev/null;  then printf 'missing\t%s\n' "$rel_dst"
       elif ! git -C "$target" show "$ref:./$rel_dst" 2>/dev/null \
              | diff -q "$src" - >/dev/null 2>&1;                          then printf 'differs\t%s\n' "$rel_dst"
+      elif wants_exec "$rel_src" \
+           && [ "$(git -C "$target" ls-tree "$ref" -- "$rel_dst" | cut -d' ' -f1)" != "100755" ]; then
+                                                                               printf 'not executable\t%s\n' "$rel_dst"
       else                                                                     printf 'ok\t%s\n'      "$rel_dst"; fi
     fi
   done < <(managed)
@@ -202,6 +225,11 @@ if [ -z "$base_ref" ]; then
     if [ "$kind" = "ok" ]; then echo "ok: $rel"; fi; done
   if [ -n "$head_drift" ]; then
     announce error "$head_drift"
+    # A mode drift's fix is not the one a byte drift's reader reaches for: the file is already correct, so
+    # "re-sync it" reads as a no-op and the reader disbelieves the gate. Name the bit.
+    if printf '%s\n' "$head_drift" | grep -q '^not executable	'; then
+      echo "::error::coordination-sync: a managed file is byte-identical to canonical but has LOST its executable bit — run 'chmod +x' on the file(s) above (or re-run 'coordination-sync $target', which restores the mode as well as the bytes)." >&2
+    fi
     echo "::error::coordination-sync: kit is INCOHERENT — run 'coordination-sync $target' from a .github checkout to fix." >&2
     exit 1
   fi
