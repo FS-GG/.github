@@ -45,8 +45,8 @@ repos:
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
 kit:
-  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill, sha256: $SKILL_SHA }
-  - { id: democlient, kind: client, source: scripts/democlient,        sha256: $CLIENT_SHA }
+  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }
+  - { id: democlient, kind: client, source: scripts/democlient }
 YAML
 
 # capreg <name> <sdd-receives> <capability-row>… — BASE's repos + kit, with a custom capabilities
@@ -58,10 +58,11 @@ capreg() {
     printf '  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }\n'
     printf '  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [%s] }\n' "$recv"
     printf 'kit:\n'
-    printf '  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill, sha256: %s }\n' "$SKILL_SHA"
-    printf '  - { id: democlient, kind: client, source: scripts/democlient,        sha256: %s }\n' "$CLIENT_SHA"
+    printf '  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }\n'
+    printf '  - { id: democlient, kind: client, source: scripts/democlient }\n'
     printf 'capabilities:\n'
     printf '  %s\n' "$@"; } > "$f"
+  relock "$f"
   printf '%s' "$f"
 }
 
@@ -69,8 +70,13 @@ pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
 
+# relock <registry> — regenerate <registry>'s sibling .lock (#527). The digests moved OUT of the
+# roster into a generated lock, so a registry with no lock is INVALID by construction. Every helper
+# that mints a registry locks it, so a new variant cannot forget and then fail for the wrong reason.
+relock() { bash "$REPOS_SH" relock --registry "$1" --root "$ROOT" >/dev/null 2>&1 || true; }
+
 # variant <name> <sed-expr> — copy BASE, apply one mutation, echo the path
-variant() { local f="$WORK/$1.yml"; sed "$2" "$BASE" > "$f"; printf '%s' "$f"; }
+variant() { local f="$WORK/$1.yml"; sed "$2" "$BASE" > "$f"; relock "$f"; printf '%s' "$f"; }
 
 # expect_pass <name> <registry>
 expect_pass() {
@@ -90,6 +96,8 @@ expect_fail() {
 
 echo "repos-registry fixture"
 
+relock "$BASE"   # the roster's digests live in its sibling lock now (#527)
+
 # --- happy path ---
 expect_pass "valid roster passes" "$BASE"
 
@@ -99,10 +107,54 @@ expect_fail "duplicate repo id"               1 "duplicate"          "$(variant 
 expect_fail "invalid role"                    1 "role"               "$(variant badrole     's/role: framework/role: banana/')"
 expect_fail "not exactly one authority"       1 "exactly one"        "$(variant twoauth     's/role: framework/role: authority/')"
 expect_fail "authority receives the kit"      1 "must not RECEIVE"   "$(variant authkit     's/full: FS-GG\/.github,   role: authority, receives: \[labels\]/full: FS-GG\/.github,   role: authority, receives: [labels, coordination-kit]/')"
-expect_fail "kit digest drift"                1 "digest"             "$(variant digestdrift "s/$SKILL_SHA/0000000000000000000000000000000000000000000000000000000000000000/")"
 expect_fail "kit source missing"              1 "source missing"     "$(variant nosource    's/source: scripts\/democlient/source: scripts\/nope/')"
 expect_fail "kit id is not kebab/dotted"      1 "kit id"             "$(variant badkitid    's/id: demo-skill,/id: Demo Skill,/')"
 expect_fail "malformed repo full name"        1 "FS-GG"              "$(variant badfull     's/full: FS-GG\/FS.GG.SDD/full: GH\/FS.GG.SDD/')"
+# --- the kit lock: the digests moved OUT of the roster into a generated artifact (#527) -----------
+# This section replaces the old single "kit digest drift" assertion, and must be at LEAST as strong:
+# the digest guarantee is the whole reason the kit is content-addressed, and it now lives in a file
+# the roster does not contain. Every way the lock can stop being a faithful function of the roster is
+# a fail-open on the receivers' bytes (#266), so each gets its own leg.
+LOCKED="$(variant locked 's/^$//')"            # a pristine, correctly-locked copy of BASE
+LOCKF="${LOCKED%.yml}.lock"
+
+expect_pass "lock: a correctly-locked roster passes" "$LOCKED"
+
+# Drift: the source changed and nobody relocked. This is the old "kit digest drift" case, moved.
+cp "$LOCKF" "$WORK/locked.lock.bak"
+sed -i "s/^$SKILL_SHA/0000000000000000000000000000000000000000000000000000000000000000/" "$LOCKF"
+expect_fail "lock: a STALE digest fails (the old drift case, now in the lock)" 1 "STALE" "$LOCKED"
+cp "$WORK/locked.lock.bak" "$LOCKF"
+
+# Absent: no lock at all. Must NOT read as "nothing to check" — that is the #266 fail-open exactly.
+mv "$LOCKF" "$WORK/locked.lock.away"
+expect_fail "lock: a MISSING lock fails closed, not 'nothing to check'" 1 "lock missing" "$LOCKED"
+mv "$WORK/locked.lock.away" "$LOCKF"
+
+# Incomplete: a kit row the lock does not cover is an UNGUARDED kit item — its receivers' bytes could
+# drift with nothing to say so. The whole-file comparison catches it; assert that it does.
+grep -v 'scripts/democlient' "$LOCKF" > "$WORK/partial" && mv "$WORK/partial" "$LOCKF"
+expect_fail "lock: a kit source the lock OMITS fails (an unguarded kit item)" 1 "STALE" "$LOCKED"
+cp "$WORK/locked.lock.bak" "$LOCKF"
+
+# Stale extra: a pin that outlived its roster row. Nothing consumes it, and it quietly implies a
+# guarantee about a source the kit no longer ships.
+printf '%s  scripts/gone\n' "$CLIENT_SHA" >> "$LOCKF"
+expect_fail "lock: a pin for a source NOT in the roster fails (a stale pin)" 1 "STALE" "$LOCKED"
+cp "$WORK/locked.lock.bak" "$LOCKF"
+
+# Split truth: the digest creeping back into the roster. Reject it rather than tolerate-and-ignore —
+# a tolerated field gets hand-edited, and a hand-edited digest nothing checks is the silent staleness
+# this whole move exists to prevent. Two places to state one fact is the bug, not the symptom.
+expect_fail "lock: a 'sha256:' back in a kit row is SPLIT TRUTH and is rejected" 1 "sha256" \
+  "$(variant shabackinroster 's|source: .claude/skills/demo-skill }|source: .claude/skills/demo-skill, sha256: 0000000000000000000000000000000000000000000000000000000000000000 }|')"
+
+# relock is a pure function of the roster + tree: running it twice is a no-op. If it were not, the
+# gate would go red on a clean tree and workers would learn to ignore it.
+relock "$LOCKED"; cp "$LOCKF" "$WORK/once"; relock "$LOCKED"
+if diff -q "$WORK/once" "$LOCKF" >/dev/null; then ok "lock: relock is idempotent"
+else bad "lock: relock is NOT idempotent" "a generator that never settles reds a clean tree"; fi
+
 # Two kit rows that collide at the receiver — the registry is valid but the fabric cannot honour it
 # (.github#348). A duplicate id is the pre-#347 vector; a shared skill-source basename is the post-#347
 # one, because coordination-sync writes each skill to <root>/<basename source>/SKILL.md.
@@ -351,6 +403,13 @@ for trigger in want:
         for probe in probes(item):
             if not any(matches(probe, p) for p in pats):
                 gaps.append(f"{trigger}: kit '{item['id']}' source {probe}")
+    # The lock itself (#527). It is the artifact the digests LIVE in now, so a `paths:` filter that
+    # omits it lets a stale — or hand-edited — lock merge without ever re-running the gate whose only
+    # job is to catch that. Exactly the #334 shape the kit-source probes above already guard against:
+    # the check is fine, its TRIGGER fails open. Only assert it where the gate actually validates.
+    if wf_rel.endswith("repos-registry-selftest.yml") and not any(
+            matches("registry/repos.lock", p) for p in pats):
+        gaps.append(f"{trigger}: registry/repos.lock (the kit digests) is not covered")
 print("\n".join(gaps))
 PY
 }
