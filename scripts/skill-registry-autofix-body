@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+"""Compose the standing skill-registry reconcile PR body (.github#425, epic #266).
+
+`skill-registry-autofix.yml` opens ONE standing PR that re-digests `registry/skills.yml` from the
+producer manifests. That PR is a POINT-IN-TIME SNAPSHOT, and it used to be written as if it were a
+standing truth: it asserted, in the present tense, that it "rewrote the stale values verbatim from
+the producer manifests", and its footer called the reconcile's own post-write re-check "the
+verification of record". Both are only true of the instant the job ran.
+
+They rot, and the artifact that would reveal the rot is disabled on the PR by design: the branch is
+pushed with `GITHUB_TOKEN`, whose pushes do not re-trigger `on: pull_request` workflows (GitHub's
+recursion guard), so `skill-registry-coherence` never runs on it. #425 measured the consequence —
+PR #414 was cut at 08:25Z, two producer merges landed after it, and merging it would have left
+`main` RED while its body said otherwise. A reviewer had no way to tell.
+
+So the body must carry its own provenance and its own verdict:
+
+  * WHAT IT WAS COMPUTED FROM — the producer commit each digest was taken at. A reader (or a bot)
+    can compare those SHAs against the producers' current `main` and settle currency in one command.
+    Without the stamp the question is unanswerable from the PR itself, which is the #425 defect.
+  * WHETHER MERGING IT ACTUALLY GREENS THE GATE — stated up front, not left to be inferred from the
+    absence of a section. #414's body listed no residual section because at cut time there was none;
+    the reader could not distinguish "nothing residual" from "nothing re-checked since".
+
+This is the "stamp the snapshot" fix (#425's own option 1). It makes the decay LEGIBLE; it does not
+abolish it. The structural fix is to push with the `fs-gg-cross-repo-dispatch` App token so the PR's
+own checks run and a stale PR simply goes red — that needs the App installed on `.github` with
+`contents: write`, an org-admin precondition this repo has never relied on (every other App-token
+mint here scopes to a TARGET repo), so it is filed separately rather than smuggled in here.
+
+Pure stdlib + PyYAML. Deterministic: `--now` and `--run-url` are injected, never read from the
+clock or the environment, so the fixture can assert on exact bytes.
+"""
+
+from __future__ import annotations
+
+import argparse
+import functools
+import json
+import pathlib
+import subprocess
+import sys
+
+import yaml
+
+# Pure VALUE rewrites, taken verbatim from the manifest — genuinely no producer decision to make.
+RECONCILED_CHECKS = {"digest-matches", "predicate-matches"}
+
+# The stamp rides in a marker comment, not in the rendered table, because the table SHORTENS each
+# sha to 8 chars for humans and the next run has to compare FULL commits. Scraping the table would
+# compare 8 chars against 40 and call every producer "moved" on every run — a staleness banner that
+# fires always is one nobody reads. Same idiom as `<!-- fsgg:claim ... -->` in scripts/fsgg-coord.
+STAMP_MARKER = "fsgg:autofix-stamp"
+
+
+def read_stamp(body: str) -> dict[str, str]:
+    """Recover the producer stamp a previous run left in the standing PR body.
+
+    Unparseable or absent -> `{}` ("no prior stamp"), never an exception: this only ENRICHES the
+    body with a supersession note, and a body that cannot be composed starves a genuine reconcile of
+    its PR. Failing open is correct here and only here — nothing downstream trusts this value.
+    """
+    for line in body.splitlines():
+        line = line.strip()
+        if line.startswith(f"<!-- {STAMP_MARKER} ") and line.endswith("-->"):
+            raw = line[len(f"<!-- {STAMP_MARKER} "):-len("-->")].strip()
+            try:
+                stamp = json.loads(raw)
+            except Exception:
+                return {}
+            return stamp if isinstance(stamp, dict) else {}
+    return {}
+
+
+def load_findings(path: str) -> list[dict]:
+    """The pre-write findings snapshot.
+
+    Best effort BY DESIGN: a malformed snapshot must degrade the body, never fail the job and starve
+    a genuine reconcile of its PR. The git diff, not this list, is what decides the PR opens.
+    """
+    try:
+        return json.loads(pathlib.Path(path).read_text())["findings"]
+    except Exception:
+        return []
+
+
+@functools.lru_cache(maxsize=None)
+def producer_commit(repos_root: str, source: str) -> str:
+    """Name the last producer commit that touched this body — the research a human did by hand.
+
+    Memoized: several rows routinely share one producer body (and the registry only grows), and each
+    miss is a `git log` subprocess with a 30s timeout. Cached on (repos_root, source), which is a pure
+    key — the clones do not move under us mid-run.
+    """
+    if not source or "/" not in source:
+        return ""
+    repo, _, rel = source.partition("/")
+    try:
+        out = subprocess.run(
+            ["git", "-C", f"{repos_root}/{repo}", "log", "-1", "--format=%h %s", "--", rel],
+            capture_output=True, text=True, timeout=30,
+        ).stdout.strip()
+        return f" — producer {repo}@{out}" if out else ""
+    except Exception:
+        return ""
+
+
+def classify(findings: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    """Split the findings the way `--write` itself does.
+
+    `--write` may APPEND a `declared-completeness` row when it can derive `source:` from exactly one
+    manifest — but the OWNER/scope is a manifest GUESS, and re-homing it is the #298 owner-call that
+    was deliberately kept out of automation. It is surfaced for confirmation, never as an
+    auto-resolve. A NON-derivable one carries no "row" and stays a red finding, so it must fall
+    through to `residual`.
+
+    Membership is decided on the check name, never on `f not in reconciled` — findings are plain
+    dicts, so a value-identity test would silently drop one of two byte-identical findings out of
+    the residual list, i.e. under-report exactly the thing this body exists to report.
+    """
+    reconciled = [f for f in findings if f["check"] in RECONCILED_CHECKS]
+    appended = [f for f in findings if f["check"] == "declared-completeness" and "row" in f]
+    residual = [
+        f for f in findings
+        if f["check"] not in RECONCILED_CHECKS
+        and not (f["check"] == "declared-completeness" and "row" in f)
+    ]
+    return reconciled, appended, residual
+
+
+def verdict_lines(residual: list[dict], appended: list[dict]) -> list[str]:
+    """State up front whether merging this as it stands actually greens the gate.
+
+    #414 listed no residual section and thereby read as "this fixes main". The absence of a section
+    is not a verdict, and a reader cannot tell it apart from a snapshot that was never re-checked.
+    So say it in words, every time, including when the answer is yes.
+    """
+    if residual:
+        return [
+            f"> ⛔ **Merging this as it stands would leave `main` RED.** {len(residual)} finding(s) "
+            "below are judgement cases this reconcile deliberately does not touch; they keep "
+            "`skill-registry-coherence` failing until a human handles them.",
+        ]
+    if appended:
+        return [
+            "> ⚠️ **Merging this greens the gate only once the appended rows are confirmed.** The "
+            f"{len(appended)} appended row(s) carry a manifest-DERIVED `owner:`/`source:` — a guess, "
+            "not a reconcile. Confirm each before merging.",
+        ]
+    return [
+        "> ✅ **As computed, merging this greens `skill-registry-coherence`** — every finding was a "
+        "mechanical value rewrite, with no judgement case left over. This holds only for the "
+        "producer commits stamped below; see *Currency*.",
+    ]
+
+
+def stamp_lines(producers: dict[str, str], now: str, run_url: str, prev: dict[str, str]) -> list[str]:
+    """The provenance stamp: exactly which producer commits these digests were taken from.
+
+    This is the load-bearing part of #425. The digests in this PR are a pure function of these
+    commits; if a producer has moved past its stamp, this PR is out of date and merging it will not
+    green the gate. With the stamp that is a one-command check. Without it — the status quo — it is
+    unanswerable from the PR, and #414 sat for hours looking correct while being wrong.
+    """
+    lines = [
+        "",
+        "### Computed from",
+        "",
+        f"Reconciled at **{now}**{f' ([run]({run_url}))' if run_url else ''}, against these producer",
+        "commits. **The digests below are a pure function of exactly these commits.**",
+        "",
+        "| producer | commit this was reconciled at |",
+        "|---|---|",
+    ]
+    for repo in sorted(producers):
+        sha = producers[repo]
+        moved = prev.get(repo) and prev[repo] != sha
+        note = f" ⟵ moved from `{prev[repo][:8]}`" if moved else ""
+        lines.append(f"| `{repo}` | `{sha[:8]}`{note} |")
+
+    superseded = sorted(r for r in prev if prev[r] != producers.get(r))
+    if superseded:
+        lines += [
+            "",
+            f"⚠️ This run **supersedes a stale snapshot**: {', '.join(f'`{r}`' for r in superseded)} "
+            "moved since the previous push to this branch, so the body you may have read earlier was "
+            "computed against commits that no longer exist on `main`. That is the decay #425 is about.",
+        ]
+    return lines
+
+
+def currency_lines(producers: dict[str, str]) -> list[str]:
+    """Tell the reader, honestly, what this PR cannot know about itself — and how to settle it.
+
+    The old footer claimed the post-write re-check was "the verification of record". It is the
+    verification of the INSTANT THE JOB RAN, and nothing re-checks it afterwards. Saying so, and
+    handing over the exact command, is the difference between a stale artifact and a misleading one.
+    """
+    check = " && ".join(
+        f"git ls-remote https://github.com/FS-GG/{repo} main" for repo in sorted(producers)
+    ) or "git ls-remote https://github.com/FS-GG/<producer> main"
+    return [
+        "",
+        "### Currency — read before merging",
+        "",
+        "This PR is a **snapshot**, not a standing truth. It is pushed with `GITHUB_TOKEN`, so by",
+        "GitHub's recursion guard `skill-registry-coherence` **does not run on it** — the checks below",
+        "cannot tell you whether it is still correct, and no check will go red when it rots.",
+        "",
+        "It goes out of date the moment any producer above moves. To settle that in one command,",
+        "compare the stamped commits against the producers' current `main`:",
+        "",
+        "```sh",
+        check,
+        "```",
+        "",
+        "Any producer whose `main` is past its stamped commit means **this reconcile is stale — do not",
+        "merge it.** Re-run `skill-registry-autofix` (`workflow_dispatch`) to recompute, then re-read.",
+        "",
+        "<sub>Opened by `skill-registry-autofix`. The permanent fix is to push this branch with the",
+        "`fs-gg-cross-repo-dispatch` App token so the PR's own checks run and a stale snapshot simply",
+        "goes red — see .github#425.</sub>",
+    ]
+
+
+def compose(findings, rows, producers, now, run_url, prev, repos_root) -> str:
+    reconciled, appended, residual = classify(findings)
+
+    lines = [
+        "## Automated skill-registry reconcile",
+        "",
+        "`registry/skills.yml` had fallen behind the producer manifests it is reconciled from",
+        "(ADR-0017, `registry = manifest = bytes`). `fsgg-skill-registry-check --write` rewrote the",
+        "stale values verbatim from the producer manifests, **as of the commits stamped below** — this",
+        "PR is that reconcile. It exists because detection (`skill-registry-coherence`) had no",
+        "automated response (.github#299).",
+        "",
+    ]
+    lines += verdict_lines(residual, appended)
+    lines += stamp_lines(producers, now, run_url, prev)
+
+    lines += ["", "### Reconciled (mechanical — no producer decision)", ""]
+    if reconciled:
+        for f in reconciled:
+            src = rows.get(f["id"], {}).get("source", "")
+            if f["check"] == "digest-matches":
+                lines.append(
+                    f"- `{f['id']}` sha256 `{f['declared'][:8]}…` → `{f['actual'][:8]}…`"
+                    f"{producer_commit(repos_root, src)}"
+                )
+            else:
+                lines.append(
+                    f"- `{f['id']}` [{f['check']}] {f['detail']}{producer_commit(repos_root, src)}"
+                )
+    else:
+        lines.append("_(none — see the appended/residual sections and the file diff)_")
+
+    if appended:
+        lines += [
+            "",
+            "### ⚠️ Appended — CONFIRM the owner before merge (not an auto-resolve)",
+            "",
+            "`--write` appended these rows with a **manifest-derived** `owner:`/`source:`. That guess",
+            "is the #298 owner-call the automation deliberately does NOT make for you — confirm each",
+            "`owner:`/`scope:` and re-home the row into the block it belongs to before merging:",
+            "",
+        ]
+        lines += [f"- `{f['id']}` [{f['check']}] {f['detail']}" for f in appended]
+
+    if residual:
+        lines += [
+            "",
+            "### ⛔ Still needs a human — NOT resolved here",
+            "",
+            "Judgement cases `--write` refuses to touch (auto-resolving them would be the fail-open",
+            "shape of epic #266). They keep `skill-registry-coherence` red until handled by hand:",
+            "",
+        ]
+        lines += [f"- `{f['id']}` [{f['check']}] {f['detail']}" for f in residual]
+
+    # Only ask for work that this PR actually contains. A checklist item pointing at an "appended"
+    # section that was never emitted is the kind of standing noise readers learn to tick through
+    # without reading — and the first item, the currency re-read, is the one that must not be
+    # tickable on autopilot.
+    lines += [
+        "",
+        "### Before merge",
+        "",
+        "- [ ] Re-read *Currency* below and confirm no producer has moved past its stamp.",
+    ]
+    if appended:
+        lines.append("- [ ] Confirm the `owner:`/`scope:` of each appended row (see above) and re-home it.")
+    lines += [
+        "- [ ] Set `updated:` on each reconciled row.",
+        "- [ ] Prepend a dated `registry/skills.CHANGELOG.md` entry naming the producer PR per row.",
+    ]
+    lines += currency_lines(producers)
+    lines += ["", f"<!-- {STAMP_MARKER} {json.dumps(producers, sort_keys=True)} -->"]
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--findings", default="findings.before.json")
+    parser.add_argument("--registry", default="registry/skills.yml")
+    parser.add_argument("--repos-root", default=".repos")
+    parser.add_argument(
+        "--producers",
+        help='JSON {"<repo>": "<sha>"} — the producer commits this reconcile was computed from.',
+    )
+    parser.add_argument(
+        "--prev-producers", default="{}",
+        help="JSON of the stamp already on the open standing PR, so a superseded snapshot is named.",
+    )
+    parser.add_argument("--now", help="UTC timestamp; injected, never read from the clock.")
+    parser.add_argument("--run-url", default="")
+    parser.add_argument(
+        "--read-stamp", metavar="BODY_FILE",
+        help="Print the producer stamp a previous run left in this PR body (JSON; `{}` if none), "
+             "then exit. The workflow uses this to diff the open PR's snapshot against the new one, "
+             "so the parsing lives in ONE place that the fixture actually tests.",
+    )
+    args = parser.parse_args()
+
+    if args.read_stamp:
+        try:
+            body = pathlib.Path(args.read_stamp).read_text()
+        except Exception:
+            body = ""
+        print(json.dumps(read_stamp(body), sort_keys=True))
+        return 0
+
+    if not args.producers or not args.now:
+        parser.error("--producers and --now are required unless --read-stamp is given")
+
+    producers = json.loads(args.producers)
+    # A malformed prior stamp must not fail the job — it only enriches the body. Degrade to "no
+    # prior stamp" and compose anyway, exactly as a malformed findings snapshot degrades.
+    try:
+        prev = json.loads(args.prev_producers)
+        if not isinstance(prev, dict):
+            prev = {}
+    except Exception:
+        prev = {}
+
+    registry = yaml.safe_load(pathlib.Path(args.registry).read_text())
+    rows = {r["id"]: r for r in registry["skills"]}
+
+    print(compose(
+        findings=load_findings(args.findings),
+        rows=rows,
+        producers=producers,
+        now=args.now,
+        run_url=args.run_url,
+        prev=prev,
+        repos_root=args.repos_root,
+    ))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
