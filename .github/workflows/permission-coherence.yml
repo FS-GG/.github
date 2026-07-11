@@ -1,0 +1,134 @@
+# permission-coherence — a caller of an FS-GG reusable workflow must grant what its callee declares.
+#
+# .github#478, epic #266. A called workflow cannot request a permission its caller did not grant:
+# GitHub kills the run at startup. A `startup_failure` is not a red check on the PR — it is a
+# workflow that never ran, so it reads as neither red nor green, and "does the repo have the caller
+# file?" says ✅ regardless. FS.GG.Game's lockfile-sync caller under-granted `packages: read` and all
+# 119 of its runs ended that way, having never once executed.
+#
+# The gate is a pure function of the caller/callee YAML pair — no run history, no API writes.
+#
+# It runs on a SCHEDULE as well as on PRs, because either side can break the pair from a repo this
+# workflow's `paths:` cannot see: a receiver can drop a scope from its caller without touching a file
+# here. A PR that edits a callee is caught here directly — the gate resolves an `@main` caller
+# against the WORKING TREE, so adding a scope to a callee red-lights the callers that do not grant
+# it before the merge strands them.
+name: permission-coherence
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "registry/repos.yml"
+      - "scripts/check-workflow-permissions.py"
+      - "tests/workflow-permissions/**"
+      - ".github/workflows/permission-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "registry/repos.yml"
+      - "scripts/check-workflow-permissions.py"
+      - "tests/workflow-permissions/**"
+      - ".github/workflows/permission-coherence.yml"
+  schedule:
+    - cron: "29 6 * * *"   # offset from feed-coherence (06:17) and pin-coherence (06:43)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: permission-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes.
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the workflow-permissions fixture (no network)
+        run: bash tests/workflow-permissions/run.sh
+
+  permissions-coherent:
+    runs-on: ubuntu-latest
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Assert every caller grants the permissions its callee declares
+        id: check
+        env:
+          # Env-passed, never interpolated into the run body — the org's uniform anti-injection
+          # pattern (cf. feed-coherence.yml, contract-coherence.yml).
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rc=0
+          out="$(python scripts/check-workflow-permissions.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320) — and "try again" must never
+      # be mistaken for "a human must fix a file" (#335). The exit code is the contract; nothing here
+      # greps the gate's prose.
+      - name: 'OK: every caller grants at least its callee'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "permission-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a caller under-grants — its workflow provably cannot start'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### permission-coherence: a caller cannot start"
+            echo
+            echo "A reusable workflow was called by a caller that grants fewer permissions than the"
+            echo "callee declares. GitHub kills such a run at **startup** — it never executes, and it"
+            echo "shows as neither red nor green. Grant the missing scope in the caller's"
+            echo '`permissions:` block. See the log above for the caller, the callee, and the scope.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=permission-coherence: a caller cannot start::A caller under-grants a permission its callee declares; its runs will startup_failure. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (retryable): a repo or workflow could not be read'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '2' }}
+        run: |
+          {
+            echo "### permission-coherence: no verdict"
+            echo
+            echo "A rostered repo's workflows could not be read (rate limit, auth, or outage), so the"
+            echo "gate has **no verdict** — this is not a pass. Re-run the workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=permission-coherence: no verdict (retryable)::A repo could not be read, so nothing was proven. Re-run. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a file a human must fix'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### permission-coherence: no verdict — a file must be fixed"
+            echo
+            echo "The roster could not be enumerated, a workflow would not parse, a caller names a"
+            echo "callee that does not exist at the ref it pins, or the audit examined **nothing**."
+            echo "Examining nothing is a failure to audit, not a clean audit. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=permission-coherence: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=permission-coherence: inconclusive::check-workflow-permissions.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
