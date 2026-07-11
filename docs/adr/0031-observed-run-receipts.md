@@ -104,6 +104,23 @@ What it does is move the bar from **assertion** to **artifact**: from a word an 
 
 - Decide the enforcement policy for `unobserved`, and receipt freshness. SDD ships the fact; Governance ships the verdict. **No Governance runtime is required for SDD to emit the fact** — the dependency stays one-directional, as it is today.
 
+### Registry + architecture-map obligation — **at resolution, not at proposal**
+
+This ADR changes no repo, no boundary, and no on-disk surface: it *applies* the existing
+"SDD reports, Governance enforces" line rather than redrawing it, and it is `Proposed`.
+
+But resolving it will touch the §5 contract picture, and that obligation is recorded here so it
+is not lost between the proposal and the patch:
+
+- **`governance-handoff`** (`registry/dependencies.yml`, `version: 1.0.0`, `surface:
+  readiness/<id>/governance-handoff.json`, owner `sdd`, consumer `governance`) gains the
+  `unobserved` disposition. Additive → **minor bump within `1.x`**; no consumer break.
+- `registry/dependencies.yml` is updated **first**, then `docs/architecture.md` §5 is reconciled —
+  per `docs/coordination/README.md#system-overview--the-architecture-map`, the map is reconciled
+  *after* the registry, not instead of it.
+- The implementing feature spec owns both. **A PR that lands the receipt without the registry bump
+  should be treated as incomplete**, not as a follow-up.
+
 ### Migration — this is a breaking change to the evidence contract
 
 Every existing `evidence.yml` with `result: pass` and no receipt currently reaches `satisfied`; under this decision it becomes `unobserved`. That is the entire point, and it will turn work items that report ship-ready today into work items that do not.
