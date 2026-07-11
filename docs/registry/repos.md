@@ -89,3 +89,20 @@ which checks out `.github` (the authority) and the caller and runs `coordination
 trivially. That trivial pass is *only* safe because the closed-world gate above independently proves
 no repo is a non-receiver by accident. `.github` remains the source (never a receiver), enforced by
 the roster validator.
+
+**The gate ATTRIBUTES drift; it does not merely report it** (#450). Canonical is `.github@main`, which
+moves constantly, and a receiver's `main` trails it in the window before `coordination-propagate`'s sync
+PR lands. A check that only asks *"does this tree equal canonical?"* therefore reds branches that never
+went near the kit — which is how a worker came to file a long, evidenced issue about a resync that had
+merged 110 seconds earlier ([FS.GG.Rendering#473](https://github.com/FS-GG/FS.GG.Rendering/issues/473)),
+and a second lost an hour to the same signal. So the two events a receiver wires differ:
+
+| run | invocation | verdict |
+|---|---|---|
+| `push` to `main` | `--check` (strict) | the **verdict of record**: any drift is a hard red (exit 1). |
+| `pull_request` | `--check --base-ref origin/<base>` | only drift the **branch authored** (merge-base-relative, per file) is a red. Drift it *inherited* — from a base that is behind canonical, or from a branch cut before a sync landed — is an **advisory** (exit 0) naming whose job the fix is. |
+
+A branch may still change the kit *correctly* — the `coordination-kit/sync` PR does exactly that — and
+passes when the result matches canonical; a gate that red the one PR which fixes the drift would deadlock
+the fabric. Receivers need no change for this: `workflow_call` inherits the caller's event, so the
+reusable gate derives the base ref itself.

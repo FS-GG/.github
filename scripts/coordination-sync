@@ -9,6 +9,12 @@
 #   coordination-sync --check <target>    # drift check only; exit 1 on drift (the CI coherence gate)
 #   coordination-sync --repo <full> ...   # gate on the roster: if <full> does not `receives:
 #                                         # coordination-kit`, there is nothing to do — exit 0
+#   coordination-sync --check --base-ref <ref> <target>
+#                                         # ATTRIBUTE the drift instead of merely reporting it (#450).
+#                                         # Only drift THIS BRANCH AUTHORED (vs <ref>, merge-base) is an
+#                                         # error; drift it merely INHERITED from an out-of-date base is
+#                                         # an advisory naming whose job it is. Without --base-ref the
+#                                         # check is the strict tree compare it has always been.
 #
 # `.github` (this repo, the ADR-0019 authority) is the canonical SOURCE — the kit files under this
 # checkout are the source of truth, exactly as sync-build-config's dist/dotnet/ is. Two arms carry the
@@ -35,7 +41,7 @@
 # multi-file skill's remainder would be added here alongside it.
 #
 # Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default ".claude/skills .agents/skills").
-# Exit: 0 = in sync / written; 1 = drift (check mode); 2 = misconfiguration.
+# Exit: 0 = in sync / written, or drift this branch did not author (--base-ref); 1 = drift; 2 = misconfiguration.
 
 set -euo pipefail
 
@@ -56,19 +62,23 @@ die()   { echo "coordination-sync: $*" >&2; exit 2; }
 # honour. Same rot, same fix, as repos-audit.sh (#335).
 usage() { awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"; }
 
-mode="apply"; repo=""; target=""
+mode="apply"; repo=""; target=""; base_ref=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --check) mode="check"; shift ;;
-    --repo)  need_val "$@"; repo="$2"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    -*)      die "unknown flag '$1'." ;;
-    *)       [ -z "$target" ] && target="$1" || die "unexpected argument '$1'."; shift ;;
+    --check)    mode="check"; shift ;;
+    --repo)     need_val "$@"; repo="$2"; shift 2 ;;
+    --base-ref) need_val "$@"; base_ref="$2"; shift 2 ;;
+    -h|--help)  usage; exit 0 ;;
+    -*)         die "unknown flag '$1'." ;;
+    *)          [ -z "$target" ] && target="$1" || die "unexpected argument '$1'."; shift ;;
   esac
 done
 [ -n "$target" ] || { usage; exit 2; }
 [ -d "$target" ] || die "target not found: $target"
 target="$(cd "$target" && pwd)"
+# Attribution is a property of the CHECK. In apply mode there is no branch to attribute drift to, and a
+# caller passing --base-ref to a writer has misunderstood the flag — say so rather than ignoring it.
+[ -z "$base_ref" ] || [ "$mode" = "check" ] || die "--base-ref is only meaningful with --check."
 
 # Roster gate: only repos that `receives: coordination-kit` hold the kit. If --repo is a non-receiver
 # (e.g. the authority .github itself, or a repo removed from the kit list), there is nothing to do.
@@ -126,35 +136,158 @@ managed() {
   done
 }
 
-drift=0
+# Every canonical source must exist before we compare or copy ANYTHING. Hoisted out of the loops below
+# so it dies in the main shell: the drift readers run in `$(...)`, where a `die` would only kill the
+# subshell, and "I could not find the kit to compare against" must never reach a caller as a verdict.
 while IFS= read -r entry; do
   [ -n "$entry" ] || continue
-  rel_src="${entry%%::*}"; rel_dst="${entry##*::}"
-  src="$SRC_ROOT/$rel_src"; dst="$target/$rel_dst"
-  [ -f "$src" ] || die "canonical kit source missing: $rel_src (is this a .github checkout?)"
-
-  case "$mode" in
-    check)
-      if [ ! -f "$dst" ]; then
-        echo "::error::coordination-sync: DRIFT (missing): $rel_dst"; drift=1
-      elif ! diff -q "$src" "$dst" >/dev/null 2>&1; then
-        echo "::error::coordination-sync: DRIFT (differs): $rel_dst"; drift=1
-      else
-        echo "ok: $rel_dst"
-      fi
-      ;;
-    apply)
-      mkdir -p "$(dirname "$dst")"
-      cp "$src" "$dst"
-      case "$rel_dst" in */fsgg-coord) chmod +x "$dst" ;; esac
-      echo "wrote: $rel_dst"
-      ;;
-  esac
+  rel_src="${entry%%::*}"
+  [ -f "$SRC_ROOT/$rel_src" ] || die "canonical kit source missing: $rel_src (is this a .github checkout?)"
 done < <(managed)
 
-if [ "$mode" = "check" ]; then
-  [ "$drift" -eq 0 ] || { echo "::error::coordination-sync: kit is INCOHERENT — run 'coordination-sync $target' from a .github checkout to fix." >&2; exit 1; }
-  echo "coordination-sync: OK — kit coherent in $target"
-else
+if [ "$mode" = "apply" ]; then
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    rel_src="${entry%%::*}"; rel_dst="${entry##*::}"
+    dst="$target/$rel_dst"
+    mkdir -p "$(dirname "$dst")"
+    cp "$SRC_ROOT/$rel_src" "$dst"
+    case "$rel_dst" in */fsgg-coord) chmod +x "$dst" ;; esac
+    echo "wrote: $rel_dst"
+  done < <(managed)
   echo "coordination-sync: kit written into $target"
+  exit 0
 fi
+
+# --- check ---------------------------------------------------------------------------------------
+# Compare one tree against canonical. With no <ref> that tree is the working checkout; with a <ref> it
+# is that commit's tree, read out of git. Prints one "<ok|missing|differs>\t<rel_dst>" line per file.
+tree_status() {   # tree_status [<ref>]
+  local ref="${1:-}" entry rel_src rel_dst src
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    rel_src="${entry%%::*}"; rel_dst="${entry##*::}"
+    src="$SRC_ROOT/$rel_src"
+    if [ -z "$ref" ]; then
+      if   [ ! -f "$target/$rel_dst" ];                                   then printf 'missing\t%s\n' "$rel_dst"
+      elif ! diff -q "$src" "$target/$rel_dst" >/dev/null 2>&1;           then printf 'differs\t%s\n' "$rel_dst"
+      else                                                                     printf 'ok\t%s\n'      "$rel_dst"; fi
+    else
+      # `<rev>:./<path>` resolves the path relative to the CWD (here: $target). Plain `<rev>:<path>` is
+      # relative to the REPO ROOT, which is a different file whenever <target> is a subdirectory of the
+      # checkout — precisely what the gate's `target-path` input lets a caller ask for.
+      if   ! git -C "$target" cat-file -e "$ref:./$rel_dst" 2>/dev/null;  then printf 'missing\t%s\n' "$rel_dst"
+      elif ! git -C "$target" show "$ref:./$rel_dst" 2>/dev/null \
+             | diff -q "$src" - >/dev/null 2>&1;                          then printf 'differs\t%s\n' "$rel_dst"
+      else                                                                     printf 'ok\t%s\n'      "$rel_dst"; fi
+    fi
+  done < <(managed)
+}
+drifted() { printf '%s\n' "$1" | grep -v '^ok	' || true; }   # the non-ok lines of a tree_status block
+# `if`, not `[ x ] && echo` — under `set -e` a trailing `&&` list that goes false makes the while body,
+# and so the whole pipeline, exit 1, killing the script BEFORE it prints its annotations. That failure is
+# invisible to an exit-code assertion (1 is also the drift code), and it goes red saying nothing at all.
+announce() { printf '%s\n' "$2" | while IFS=$'\t' read -r kind rel; do
+               if [ -n "$kind" ]; then echo "::$1::coordination-sync: DRIFT ($kind): $rel"; fi; done; }
+
+head_status="$(tree_status)"
+head_drift="$(drifted "$head_status")"
+
+# STRICT (no --base-ref): the tree either equals canonical or it does not. This is what a push to the
+# receiver's main runs, and what the fixture drives — it is the verdict of record on a repo's kit, and
+# it is unchanged. The attribution below only ever RELAXES a red on a branch that did not cause it, so
+# main keeps a true red to relax against.
+if [ -z "$base_ref" ]; then
+  printf '%s\n' "$head_status" | while IFS=$'\t' read -r kind rel; do
+    if [ "$kind" = "ok" ]; then echo "ok: $rel"; fi; done
+  if [ -n "$head_drift" ]; then
+    announce error "$head_drift"
+    echo "::error::coordination-sync: kit is INCOHERENT — run 'coordination-sync $target' from a .github checkout to fix." >&2
+    exit 1
+  fi
+  echo "coordination-sync: OK — kit coherent in $target"
+  exit 0
+fi
+
+# ATTRIBUTED (--base-ref <ref>): ask WHO AUTHORED the difference before calling it the PR's drift.
+#
+# The old check answered one question — "does <target> equal canonical?" — and printed the same red for
+# every way the answer could be no. Three unrelated situations produce that red, and only ONE of them is
+# the author's to fix:
+#
+#   1. the branch itself edits a vendored kit file       -> REAL drift. The kit is owned by .github.
+#   2. the base branch is BEHIND canonical               -> the REPO's drift. coordination-propagate owes
+#                                                           it a sync PR; a PR author cannot fix it.
+#   3. the branch predates a kit sync already on base    -> nothing is wrong AT ALL.
+#
+# Canonical is `.github@main`, which moves constantly, so (2) and (3) fire on PRs that never went near
+# the kit. A worker read that red as a repo defect and filed a long, well-evidenced issue about a kit
+# resync that had merged 110 SECONDS EARLIER (FS.GG.Rendering#473, the phantom). A second worker lost an
+# hour to the same signal 20 minutes later. A check that is red for a reason its reader cannot fix is one
+# they learn to ignore — and a gate nobody reads cannot catch the real drift when it comes.
+#
+# `<ref>...HEAD` is merge-base-relative, which is exactly the "what did this BRANCH author" question —
+# and it is right whether the caller checked out the PR's head or its merge commit, since the base is an
+# ancestor of both. Anything else the branch differs by, it inherited.
+git -C "$target" rev-parse --git-dir >/dev/null 2>&1 \
+  || die "--base-ref needs <target> to be a git checkout: $target"
+git -C "$target" rev-parse --verify --quiet "$base_ref^{commit}" >/dev/null \
+  || die "--base-ref '$base_ref' is not resolvable in $target — fetch the base branch first."
+
+mapfile -t DSTS < <(managed | sed 's/.*:://')
+authored="$(git -C "$target" diff --name-only "$base_ref...HEAD" -- "${DSTS[@]}")"
+base_drift="$(drifted "$(tree_status "$base_ref")")"
+
+# Split the drift by WHO AUTHORED IT, FILE BY FILE. Asking the coarser question — "did this branch touch
+# ANY kit file?" — and then blaming it for the whole drift set would re-commit this very misattribution
+# one level in: a branch that hand-restores one kit file while INHERITING another's staleness would be
+# red for the file it never touched.
+authored_drift=""; inherited_drift=""
+while IFS=$'\t' read -r kind rel; do
+  [ -n "$kind" ] || continue
+  if printf '%s\n' "$authored" | grep -Fqx "$rel"; then
+    authored_drift+="$kind	$rel"$'\n'
+  else
+    inherited_drift+="$kind	$rel"$'\n'
+  fi
+done <<< "$head_drift"
+
+# (1) Drift this branch AUTHORED is the branch's, always. The kit is owned by .github.
+if [ -n "$authored_drift" ]; then
+  announce error "$authored_drift"
+  echo "::error::coordination-sync: this branch changes a vendored kit file and the result does NOT match canonical." >&2
+  echo "::error::coordination-sync: the kit is owned by FS-GG/.github — land the change THERE and let coordination-propagate carry it back, or run 'coordination-sync $target' from a .github checkout to restore it." >&2
+  exit 1
+fi
+
+# A branch MAY touch the kit correctly — the coordination-kit/sync PR does exactly that, and a gate that
+# red the one PR which fixes the drift would deadlock the fabric.
+if [ -n "$authored" ]; then
+  echo "coordination-sync: this branch updates the kit, and the result matches canonical:"
+  printf '%s\n' "$authored" | while IFS= read -r f; do if [ -n "$f" ]; then echo "  $f"; fi; done
+fi
+
+# Whatever drift is left, the branch INHERITED. That is never its fault, and the base decides whose it is.
+if [ -z "$inherited_drift" ]; then
+  echo "coordination-sync: OK — no kit drift this branch is responsible for."
+  exit 0
+fi
+
+if [ -z "$base_drift" ]; then
+  # (3) Base is coherent, so the branch is simply older than a sync that already landed. Nothing is wrong.
+  announce notice "$inherited_drift"
+  echo "::notice::coordination-sync: your branch predates a kit sync that is ALREADY on '$base_ref' — '$base_ref' is in sync with canonical and this branch does not change the kit. Nothing to do (rebase to clear the diff)." >&2
+  echo "coordination-sync: OK — '$base_ref' is coherent; this branch merely predates its kit sync."
+  exit 0
+fi
+
+# (2) Base is genuinely behind canonical. Real drift — but the REPO's, not this branch's. Report it where
+# the author will see it, name the arm that owes the fix, and DO NOT red their PR: the receiver's own
+# push-to-main run is the verdict of record here, and that one is still strict (above). Every receiver
+# wires `push: branches: [main]` alongside `pull_request`, so that run exists — this advisory relaxes a
+# red on the branch, it does not retire the red on the repo.
+announce warning "$inherited_drift"
+echo "::warning::coordination-sync: '$base_ref' is BEHIND the canonical kit ($(printf '%s' "$inherited_drift" | grep -c .) file(s) above). This is NOT caused by your branch and CANNOT be fixed in it." >&2
+echo "::warning::coordination-sync: coordination-propagate owes ${repo:-this repo} a 'coordination-kit/sync' PR; landing that is what clears this. Your PR is unaffected — merging it neither causes nor worsens the drift." >&2
+echo "coordination-sync: OK — kit drift on '$base_ref' is not this branch's (advisory above)."
+exit 0

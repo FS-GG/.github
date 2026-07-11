@@ -67,6 +67,23 @@ for s in "${SKILLS[@]}"; do
   expect_rc "check: drifted skill '$s' fails (rc 1)" 1 bash "$SYNC" --check "$RECV"
   bash "$SYNC" "$RECV" >/dev/null                     # re-sync back to coherent before the next
 done
+# A red gate MUST say why. Drift in the LAST managed file is the case that catches a `set -e` trap: a
+# trailing `[ x ] && echo` in the print loop makes the whole pipeline exit 1 when the last line is not
+# `ok`, killing the script before it emits a single ::error::. The rc is 1 either way — identical to a
+# correct drift verdict — so an exit-code assertion stays GREEN while the gate goes red saying NOTHING.
+# That is this repo's own #266 shape (a check whose report is missing), one level down, inside the check.
+LAST_DST="$(bash "$SYNC" --check "$RECV" | grep '^ok: ' | tail -1 | sed 's/^ok: //')"
+[ -n "$LAST_DST" ] || { echo "::error::fixture: could not identify the last managed file."; exit 1; }
+printf 'tampered\n' >> "$RECV/$LAST_DST"
+drift_out="$(bash "$SYNC" --check "$RECV" 2>&1 || true)"
+printf '%s' "$drift_out" | grep -q "::error::coordination-sync: DRIFT (differs): $LAST_DST" \
+  && ok "check: drift in the LAST managed file still ANNOTATES it (not just a silent rc 1)" \
+  || bad "check: red with no ::error:: — the gate reports nothing" "$drift_out"
+printf '%s' "$drift_out" | grep -q 'kit is INCOHERENT' \
+  && ok "check: ...and still names the fix" \
+  || bad "check: red without the remediation line" "$drift_out"
+bash "$SYNC" "$RECV" >/dev/null                       # re-sync back to coherent
+
 rm -rf "$RECV/.agents/skills/${SKILLS[0]}"
 expect_rc "check: missing skill '${SKILLS[0]}' fails (rc 1)" 1 bash "$SYNC" --check "$RECV"
 bash "$SYNC" "$RECV" >/dev/null                       # re-sync back to coherent
@@ -211,6 +228,131 @@ usage_out="$(bash "$SYNC" --check --repo 2>&1 || true)"
 printf '%s' "$usage_out" | grep -q '^coordination-sync: ' \
   && ok "usage: the diagnostic carries the script's prefix, not bash's raw 'line N:'" \
   || bad "usage: raw bash diagnostic — will not annotate in Actions" "$usage_out"
+
+# --- --base-ref ATTRIBUTES the drift instead of merely reporting it (#450) ------------------------
+# The check answered "does <target> equal canonical?" and printed one red for every way the answer could
+# be no. Three unrelated situations produce that red and only ONE is the branch author's to fix. Canonical
+# is `.github@main` and it moves constantly, so the other two fire on PRs that never went near the kit:
+# a worker read one as a repo defect and filed a long, evidenced issue about a kit resync that had merged
+# 110 SECONDS EARLIER (FS.GG.Rendering#473), and a second worker lost an hour to the same signal.
+#
+# Build a REAL receiver git repo, because merge-base is the whole mechanism and a fake cannot exercise it:
+#
+#   B0 ──── B1(old kit) ──── B2(canonical kit)      <- main
+#                   └──────── F1(no kit edit)       <- feature, cut BEFORE the sync landed
+#
+# `feature`'s working tree holds the OLD kit — it is drifted from canonical in the only sense the old
+# check could see, and it is not the branch's doing.
+G="$WORK/gitrecv"; mkdir -p "$G"
+git -C "$G" init -q -b main
+git -C "$G" config user.email fixture@fs-gg.invalid
+git -C "$G" config user.name  "coordination-sync fixture"
+gcommit() { git -C "$G" add -A && git -C "$G" commit -qm "$1"; }
+
+echo "unrelated" > "$G/README.md"; gcommit "B0: repo exists"
+bash "$SYNC" "$G" >/dev/null                                  # canonical kit...
+printf '\n# stale byte from the previous kit\n' >> "$G/scripts/fsgg-coord"   # ...aged by one byte
+gcommit "B1: the kit as it was BEFORE the sync"
+B1="$(git -C "$G" rev-parse HEAD)"
+git -C "$G" checkout -q -b feature
+echo "my actual work" > "$G/src.txt"; gcommit "F1: a change that never touches the kit"
+git -C "$G" checkout -q main
+bash "$SYNC" "$G" >/dev/null; gcommit "B2: the kit sync lands on main"
+git -C "$G" checkout -q feature                               # ...and the branch never saw it
+
+# expect_out <name> <want-rc> <want-regex> <cmd...>  — the MESSAGE is the fix here, so assert on it.
+expect_out() { local n="$1" want="$2" re="$3"; shift 3; local out rc=0; out="$("$@" 2>&1)" || rc=$?
+  if [ "$rc" -eq "$want" ] && printf '%s' "$out" | grep -qE "$re"; then ok "$n"
+  else bad "$n" "want rc=$want matching /$re/; got rc=$rc: $out"; fi; }
+
+# (3) THE PHANTOM. Stale branch, main already in sync, PR touches no kit file -> GREEN, with an advisory
+# that names the real situation. This is the exact shape that manufactured Rendering#473. Without
+# --base-ref the very same tree is still a hard red — proving the relaxation is the ATTRIBUTION, not a
+# weakening of the check.
+expect_rc  "base-ref: (strict) a stale branch is still DRIFT without --base-ref (rc 1)" 1 \
+  bash "$SYNC" --check "$G"
+expect_out "base-ref: (3) stale branch + coherent main -> rc 0, no error" 0 \
+  'coordination-sync: OK' bash "$SYNC" --check --base-ref main "$G"
+expect_out "base-ref: (3) ...and says the branch merely PREDATES the sync" 0 \
+  'predates a kit sync that is ALREADY on' bash "$SYNC" --check --base-ref main "$G"
+out3="$(bash "$SYNC" --check --base-ref main "$G" 2>&1)"
+printf '%s' "$out3" | grep -q '::error::' \
+  && bad "base-ref: (3) must not emit an ERROR annotation on an innocent branch" "$out3" \
+  || ok "base-ref: (3) the innocent branch gets no ::error:: annotation"
+
+# (2) Main itself is BEHIND canonical (the propagate window). Still not the branch's fault: advise, do
+# not red. B1 is main-as-it-was, so pointing --base-ref at it reproduces exactly that window.
+expect_out "base-ref: (2) main behind canonical -> rc 0 (not the branch's drift)" 0 \
+  'is BEHIND the canonical kit' bash "$SYNC" --check --base-ref "$B1" "$G"
+expect_out "base-ref: (2) ...and names the arm that owes the fix" 0 \
+  'coordination-propagate owes' bash "$SYNC" --check --base-ref "$B1" "$G"
+out2="$(bash "$SYNC" --check --base-ref "$B1" "$G" 2>&1)"
+printf '%s' "$out2" | grep -q '::error::' \
+  && bad "base-ref: (2) a repo-level drift must not red an innocent PR" "$out2" \
+  || ok "base-ref: (2) repo drift is a ::warning::, not an ::error::"
+# ...but the receiver's own main run — strict, no --base-ref — is the verdict of record and stays RED.
+# Without this, "advisory" would mean the drift is reported to nobody.
+git -C "$G" stash -q -u 2>/dev/null || true
+git -C "$G" checkout -q "$B1"
+expect_rc "base-ref: (2) the repo's OWN main run is still a hard red (rc 1)" 1 bash "$SYNC" --check "$G"
+git -C "$G" checkout -q feature
+
+# (1) The branch DOES edit a vendored kit file, and the result is not canonical. That is real drift, it
+# is the branch's, and it stays red — the relaxation above must not have opened this door.
+printf '\n# hand-edited in the PR\n' >> "$G/scripts/fsgg-coord"; gcommit "F2: hand-edit the vendored kit"
+expect_out "base-ref: (1) a branch that hand-edits the kit is STILL a hard red (rc 1)" 1 \
+  'changes a vendored kit file' bash "$SYNC" --check --base-ref main "$G"
+expect_out "base-ref: (1) ...and says where the kit is actually owned" 1 \
+  'owned by FS-GG/.github' bash "$SYNC" --check --base-ref main "$G"
+
+# (1b) The coordination-kit/sync PR itself. It touches kit files BY DESIGN and matches canonical, so it
+# must be green — a check that reds the one PR that fixes the drift would deadlock the whole fabric.
+git -C "$G" checkout -q -b kitsync "$B1"
+bash "$SYNC" "$G" >/dev/null; gcommit "S1: the propagate arm's sync commit"
+expect_out "base-ref: (1b) the sync PR touches the kit and MATCHES canonical -> rc 0" 0 \
+  'this branch updates the kit, and the result matches canonical' bash "$SYNC" --check --base-ref "$B1" "$G"
+
+# (1c) MIXED: the branch authors a kit change AND inherits a stale one. Attribution is per FILE, not
+# all-or-nothing on "did it touch the kit at all" — a branch that FIXES one file must not be red for
+# another it merely inherited. That coarser test would re-commit this issue's own misattribution one
+# level in, and it is the exact bug the first draft of this fix shipped with.
+#
+# `mixed` is cut from a base stale in TWO kit files, and restores only the client.
+git -C "$G" checkout -q main
+printf '\n# stale\n' >> "$G/scripts/fsgg-coord"
+printf '\n# stale\n' >> "$G/.agents/skills/${SKILLS[0]}/SKILL.md"
+gcommit "M0: main falls behind canonical in two kit files"
+M0="$(git -C "$G" rev-parse HEAD)"
+git -C "$G" checkout -q -b mixed
+cp "$REPO_ROOT/scripts/fsgg-coord" "$G/scripts/fsgg-coord"     # fix ONE of the two, by hand
+gcommit "M1: restore the client to canonical; the skill stays stale (inherited)"
+mixed_out="$(bash "$SYNC" --check --base-ref "$M0" "$G" 2>&1)"; mixed_rc=$?
+[ "$mixed_rc" -eq 0 ] \
+  && ok "base-ref: (1c) a branch that FIXES one kit file is not red for one it INHERITED (rc 0)" \
+  || bad "base-ref: (1c) blamed for inherited drift" "$mixed_out"
+printf '%s' "$mixed_out" | grep -q "::error::.*scripts/fsgg-coord" \
+  && bad "base-ref: (1c) the file the branch FIXED is reported as its drift" "$mixed_out" \
+  || ok "base-ref: (1c) the fixed file is not reported as drift"
+printf '%s' "$mixed_out" | grep -q "::warning::.*${SKILLS[0]}" \
+  && ok "base-ref: (1c) the INHERITED stale file is an advisory, attributed to the base" \
+  || bad "base-ref: (1c) inherited drift went unreported" "$mixed_out"
+
+# ...and the same branch, if it BREAKS a file it authored, is still red for THAT file only.
+printf '\n# hand-mangled\n' >> "$G/scripts/fsgg-coord"; gcommit "M2: mangle the client it touched"
+expect_out "base-ref: (1c) ...but drift it AUTHORED is still a hard red (rc 1)" 1 \
+  '::error::coordination-sync: DRIFT \(differs\): scripts/fsgg-coord' \
+  bash "$SYNC" --check --base-ref "$M0" "$G"
+
+# Misconfiguration is never a drift verdict (#350). "I cannot attribute this" must fail CLOSED and loud,
+# not silently fall back to a green — a gate that cannot tell whose drift it is has not cleared anyone.
+expect_out "base-ref: a non-git target is a misconfig (rc 2), not a verdict" 2 \
+  'needs <target> to be a git checkout' bash "$SYNC" --check --base-ref main "$RECV"
+expect_out "base-ref: an unresolvable ref is a misconfig (rc 2), not a verdict" 2 \
+  'is not resolvable' bash "$SYNC" --check --base-ref no/such/ref "$G"
+expect_out "base-ref: --base-ref on a WRITE is a misconfig (rc 2)" 2 \
+  'only meaningful with --check' bash "$SYNC" --base-ref main "$G"
+expect_rc  "base-ref: with no value exits 2 (misconfig), not 1 (drift)" 2 \
+  bash "$SYNC" --check --base-ref
 
 echo "coordination-sync fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coordination-sync fixture FAILED"; exit 1; }
