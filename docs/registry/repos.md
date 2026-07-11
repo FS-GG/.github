@@ -14,12 +14,12 @@ it via `repos.sh list --receives <cap>` instead of hardcoding the repo list.
 | Repo | Role | Receives |
 |---|---|---|
 | `FS-GG/.github` | **authority** | `labels` |
-| `FS-GG/FS.GG.SDD` | framework | `labels`, `coordination-kit` |
-| `FS-GG/FS.GG.Rendering` | framework | `labels`, `coordination-kit` |
-| `FS-GG/FS.GG.Governance` | framework | `labels`, `coordination-kit` |
-| `FS-GG/FS.GG.Templates` | framework | `labels`, `coordination-kit` |
-| `FS-GG/FS.GG.Game` | framework | `labels`, `coordination-kit` |
-| `FS-GG/FS.GG.Audio` | framework | `labels`, `coordination-kit` |
+| `FS-GG/FS.GG.SDD` | framework | `labels`, `coordination-kit`, `lockfile-sync` |
+| `FS-GG/FS.GG.Rendering` | framework | `labels`, `coordination-kit`, `lockfile-sync` |
+| `FS-GG/FS.GG.Governance` | framework | `labels`, `coordination-kit`, `lockfile-sync` |
+| `FS-GG/FS.GG.Templates` | framework | `labels`, `coordination-kit`, `lockfile-sync` |
+| `FS-GG/FS.GG.Game` | framework | `labels`, `coordination-kit`, `lockfile-sync` |
+| `FS-GG/FS.GG.Audio` | framework | `labels`, `coordination-kit`, `lockfile-sync` |
 
 **Authority.** `.github` holds the canonical fabrics and the coordination kit and mirrors them out
 (the analog of `fsgg-sdd` for product skills). It is the SOURCE of the coordination kit, so it never
@@ -27,10 +27,30 @@ it via `repos.sh list --receives <cap>` instead of hardcoding the repo list.
 
 **Participation audit.** The fabrics are opt-in (a receiver participates by calling a reusable
 `.github` workflow), so `receives` only *declares* intent. [`scripts/repos-audit.sh`](../../scripts/repos-audit.sh)
-— run weekly by [`repos-audit.yml`](../../.github/workflows/repos-audit.yml) — closes the loop:
-for each capability that maps to a reusable workflow (today `coordination-kit` →
-`coordination-coherence.yml`), it verifies every declared receiver actually calls it. A
-declared-but-unwired repo fails the audit, so `receives` has teeth.
+— run weekly by [`repos-audit.yml`](../../.github/workflows/repos-audit.yml) — closes the loop in
+**both directions**, for every capability in the `capabilities:` block:
+
+| what it finds | verdict |
+|---|---|
+| declared *and* wired | ok |
+| declared, **not wired** | a **gap** — the repo promised to participate and did not (exit 1) |
+| wired, **not declared** | **drift** — an adopted-but-unrostered capability (exit 1) |
+
+The reverse direction is not symmetry for its own sake. The forward check starts from the
+declaration, so it is blind by construction to a repo that adopted a fabric without saying so — and
+the roster is what *every* org fabric iterates, so such a repo is invisible to all of them.
+
+**Every capability is audited on its own** (#503). The non-vacuity guard used to *sum* the examined
+pairs across capabilities, so one populated leg satisfied it for all of them: `coordination-kit` had
+six receivers, `lockfile-sync` and `contract-coherence` had none rostered, and the audit reported
+"every declared receiver is wired" having checked **one third of its own mandate** — while six repos
+had really adopted `lockfile-sync` and the roster never caught up.
+[`FS.GG.Game#137`](https://github.com/FS-GG/FS.GG.Game/issues/137) is the proof of what that cost: its
+`lockfile-sync` caller `startup_failed` **119 consecutive times** and no gate said a word, because as
+far as the roster was concerned nobody received `lockfile-sync`. A capability with no rostered
+receiver now fails **on its own name**, and it keys on the roster (a deterministic file read) rather
+than on how many pairs the run managed to examine — so an API outage reports as a *retryable*
+no-verdict, never as "this capability has no receivers".
 
 **Closed-world gate.** The audit above iterates repos that are *in* this roster, so a repo missing
 from it is missing from the audit too. The roster is a closed-world assumption, and
@@ -54,10 +74,27 @@ forked repos are **not** auto-exempt — archiving must never be a way out of th
 | Capability | What the repo participates in | Consumer | Status |
 |---|---|---|---|
 | `labels` | the shared cross-repo labels | `scripts/apply-labels.sh` | **migrated** (ADR-0019 slice 1) |
-| `coordination-kit` | the four coordination skills + the `fsgg-coord` client | `scripts/coordination-sync` + `coordination-coherence.yml` gate | **built** (ADR-0019 slice 2) |
-| `build-config` | the org-shared .NET build config | `scripts/sync-build-config.sh` | reserved; migrate in a follow-up |
-| `lockfile-sync` | the reusable lockfile-sync workflow | `.github/workflows/lockfile-sync.yml` | reserved; migrate in a follow-up |
-| `contract-coherence` | the reusable contract-coherence gate | `.github/workflows/contract-coherence.yml` | reserved; migrate in a follow-up |
+| `coordination-kit` | the four coordination skills + the `fsgg-coord` client | `scripts/coordination-sync` + `coordination-coherence.yml` gate | **built** (ADR-0019 slice 2) · **audited**, 6 receivers |
+| `lockfile-sync` | the reusable lockfile-sync workflow | `.github/workflows/lockfile-sync.yml` | **adopted**, 6 receivers · **audited** (rostered by #503) |
+| `contract-coherence` | the reusable contract-coherence gate | `.github/workflows/contract-coherence.yml` | **audited**, `receivers: none` — built to be receiver-wired, never adopted ([#519](https://github.com/FS-GG/.github/issues/519)) |
+| `build-config` | the org-shared .NET build config | `scripts/sync-build-config.sh` | reserved; not audited (no reusable workflow) |
+
+### The `capabilities:` block — what gets audited, and by which workflow
+
+A capability is audited only if it has a row in `capabilities:` naming the reusable workflow that
+wires it. That mapping used to be hardcoded in `repos-audit.sh` (a `wf_for_cap` case statement plus
+an `AUDITED_CAPS` string) — two hand-maintained copies of a fact the registry already owned, so a
+capability the roster gained was audited only if somebody *also* remembered to edit the script, and
+forgetting was silent. `repos.sh validate` now proves each row instead: the workflow must exist and
+must really carry a `workflow_call:` trigger (a workflow nothing can `uses:` would report every
+declared receiver unwired, forever).
+
+**`receivers: none` is a recorded claim, not a mute button.** A capability that genuinely has no
+receiver says so out loud, with a required `reason` — a reviewed claim, exactly like
+`outside-fabric:`. What keeps it honest is that it is **falsifiable**: the audit still sweeps every
+rostered repo for a real caller, so a capability claiming no receivers while somebody actually wires
+it goes **red** rather than quietly muting the leg. "Provably has none" is then a decision somebody
+recorded, and a decision the gate re-checks on every run — not a row nobody filled in.
 
 ## The coordination kit
 

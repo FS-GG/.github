@@ -30,14 +30,21 @@ ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
 
 # A roster with two coordination-kit receivers; the fixture toggles which are wired via $FIX.
+#
+# The audit reads its mandate from `capabilities:` (#503), so a fixture roster has to declare one —
+# and declaring a capability it roster no receivers for is now a hard failure, which is the whole
+# point. The legs under "every capability is audited on its own" build their own rosters to exercise
+# exactly that; this base one stays minimal and coherent: one capability, two receivers.
 mkreg() { cat > "$1" <<YAML
-schemaVersion: 1
+schemaVersion: 3
 updated: 2026-07-04
 authority: FS-GG/.github
 repos:
   - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
   - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [labels, coordination-kit] }
   - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
 YAML
 }
 REG="$WORK/repos.yml"; mkreg "$REG"
@@ -96,8 +103,16 @@ chmod +x "$STUB/gh"
 # Helpers to shape a repo's workflows in the stub. Each clears any injected failure first, so a
 # fixture step never inherits the previous step's outage.
 clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.gone"; }
-wire()   { clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"; printf '%s\n' "coord.yml" > "$FIX/$slug.list";
-           printf 'jobs:\n  x:\n    uses: FS-GG/.github/.github/workflows/coordination-coherence.yml@main\n' > "$FIX/$slug/coord.yml"; }
+# wire_wf <repo> <wf>… — the repo's one workflow file calls each named AUTHORITY reusable workflow.
+# The drift legs (#503) need a repo that calls a workflow it never declared, so which workflows a
+# repo calls has to be a parameter, not the single hardcoded coordination-coherence.yml it was.
+wire_wf() { clearfail "$1"; local slug="${1//\//__}"; shift; local i=0 wf
+            mkdir -p "$FIX/$slug"; printf '%s\n' "coord.yml" > "$FIX/$slug.list"
+            { printf 'jobs:\n'
+              for wf in "$@"; do i=$((i+1))
+                printf '  j%s:\n    uses: FS-GG/.github/.github/workflows/%s@main\n' "$i" "$wf"
+              done; } > "$FIX/$slug/coord.yml"; }
+wire()   { wire_wf "$1" coordination-coherence.yml; }
 unwired(){ clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"; printf '%s\n' "ci.yml" > "$FIX/$slug.list";
            printf 'jobs:\n  build:\n    runs-on: ubuntu-latest\n' > "$FIX/$slug/ci.yml"; }
 noflows(){ clearfail "$1"; local slug="${1//\//__}"; rm -f "$FIX/$slug.list"; rm -rf "$FIX/$slug"; }
@@ -149,26 +164,72 @@ printf '%s' "$out" | grep -q 'FS-GG/.github receives' \
 
 # (1) enumerator dies (malformed registry) -> misconfig, NOT "every declared receiver is wired".
 # No `wire`/`unwired` setup: the audit must die at the roster, before it ever reaches the gh stub.
+#
+# WHICH enumerator hits the unreadable file first is an implementation detail — since #503 the audit
+# reads `capabilities:` before any receiver roster, so it now dies there. Pinning the exact enumerator
+# would make this leg fail on a reordering that changes nothing it cares about. What it must pin is
+# the CLAIM: whatever could not be enumerated, an unreadable roster is not an empty one.
 BADREG="$WORK/bad.yml"; printf 'schemaVersion: 1\nrepos: [ {id: x,\n' > "$BADREG"
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BADREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'cannot enumerate receivers' \
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -qE 'cannot enumerate (audited capabilities|receivers)' \
+    && printf '%s' "$out" | grep -q 'not the same as empty' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "unreadable roster -> exit 3 (permanent), names the enumeration failure" \
   || bad "unreadable roster must fail closed, permanently" "rc=$rc: $out"
 
-# (2) enumerator succeeds but yields no receivers at all -> vacuous pass is an error
+# (2) enumerator succeeds but yields no receivers at all -> vacuous pass is an error. The guard is
+#     per-capability now (#503), so it fails on the capability's OWN NAME rather than on an aggregate.
 EMPTYREG="$WORK/empty.yml"; cat > "$EMPTYREG" <<'YAML'
-schemaVersion: 1
+schemaVersion: 3
 updated: 2026-07-04
 authority: FS-GG/.github
 repos:
   - { id: .github, full: FS-GG/.github, role: authority, receives: [labels] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
 YAML
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$EMPTYREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q "capability 'coordination-kit'" \
+    && printf '%s' "$out" | grep -q '0 rostered receivers' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "audited nothing -> exit 3 (permanent), naming the capability, not a vacuous OK" \
+  || bad "empty audit must fail closed, permanently" "rc=$rc: $out"
+
+# (2a) the aggregate backstop still exists underneath the per-capability guard. Every capability can
+#      individually and honestly record `receivers: none` — and the audit then examines no repo at
+#      all, which is a gate reporting on the org's participation without looking at the org.
+ALLNONE="$WORK/allnone.yml"; cat > "$ALLNONE" <<'YAML'
+schemaVersion: 3
+updated: 2026-07-04
+authority: FS-GG/.github
+repos:
+  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }
+  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml, receivers: none, reason: nobody receives it in this fixture }
+YAML
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$ALLNONE" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'audited 0 receiver-capability pair' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
-  && ok "audited nothing -> exit 3 (permanent), not a vacuous OK" \
-  || bad "empty audit must fail closed, permanently" "rc=$rc: $out"
+  && ok "every capability recording 'receivers: none' -> exit 3; each leg honest, the audit vacuous" \
+  || bad "the aggregate backstop must survive the per-capability guard" "rc=$rc: $out"
+
+# (2d) the audit's mandate comes from the roster, so a roster with no `capabilities:` block gives it
+#      nothing to audit. That must fail closed — it is the state of registry/repos.yml BEFORE #503,
+#      and reading it as "no capabilities, therefore nothing is wrong" is the fail-open one level up.
+NOCAPS="$WORK/nocaps.yml"; cat > "$NOCAPS" <<'YAML'
+schemaVersion: 3
+updated: 2026-07-04
+authority: FS-GG/.github
+repos:
+  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }
+  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }
+YAML
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NOCAPS" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'declares no audited capabilities' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "a roster with no capabilities: block -> exit 3, not a vacuous OK" \
+  || bad "a roster with no mandate must fail closed" "rc=$rc: $out"
 
 # (2b) a bad invocation is a permanent no-verdict too. `${2:?…}` exited 1 — indistinguishable from
 #      "a declared receiver is unwired", so a typo'd flag reported itself as the finding this gate
@@ -266,6 +327,100 @@ out="$(run 2>&1)" && rc=0 || rc=$?
     && ! printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but no workflow calls'; } \
   && ok "invisible repo -> exit 2 'not readable', not a fabricated gap" \
   || bad "invisible repo must not be reported as unwired" "rc=$rc: $out"
+
+# --- every capability is audited ON ITS OWN (#503, child of #266) --------------------------------
+# The masking bug. The non-vacuity guard summed the examined pairs ACROSS capabilities, so one
+# populated leg satisfied it for all of them: `coordination-kit` contributed six, `lockfile-sync` and
+# `contract-coherence` each iterated nothing, and the audit printed "every declared receiver is
+# wired" having examined one third of its own mandate. Meanwhile six repos had really adopted
+# lockfile-sync and the roster never caught up — so the gate whose literal job is "is every declared
+# receiver wired?" was structurally blind to a six-repo fabric (FS.GG.Game#137: its lockfile-sync
+# caller startup_failed 119 consecutive times and no gate said a word).
+#
+# Both directions are asserted here, because fixing only the forward one leaves the roster free to rot
+# again: a capability with no rostered receiver must fail ON ITS OWN NAME, and a repo that really
+# wires a capability it never declared must be REPORTED rather than silently believed absent.
+
+# helper: a roster declaring <caps-yaml> over the two-receiver repo set, with `receives` overridable.
+mkreg2() { # $1 = file, $2 = sdd receives, $3 = rendering receives, $4… = capability rows
+  local f="$1" sdd="$2" rend="$3"; shift 3
+  { printf 'schemaVersion: 3\nupdated: 2026-07-04\nauthority: FS-GG/.github\nrepos:\n'
+    printf '  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }\n'
+    printf '  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [%s] }\n' "$sdd"
+    printf '  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [%s] }\n' "$rend"
+    printf 'capabilities:\n'
+    printf '  %s\n' "$@"; } > "$f"
+}
+
+# (16) THE REGRESSION. Two capabilities; only one has rostered receivers. Under the summed guard this
+#      exited 0 — six wired pairs, "every declared receiver is wired" — while lockfile-sync audited
+#      nothing. It must now exit 3 and NAME lockfile-sync as the leg it could not audit.
+MASKREG="$WORK/mask.yml"
+mkreg2 "$MASKREG" "labels, coordination-kit" "labels, coordination-kit" \
+  "- { id: coordination-kit, workflow: coordination-coherence.yml }" \
+  "- { id: lockfile-sync,    workflow: lockfile-sync.yml }"
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MASKREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q "capability 'lockfile-sync'" \
+    && printf '%s' "$out" | grep -q '0 rostered receivers' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "a capability with 0 rostered receivers fails on its OWN name, though a sibling has two" \
+  || bad "the populated leg still masks the empty one (#503)" "rc=$rc: $out"
+
+# (17) `receivers: none` is a RECORDED claim, and it holds: nobody wires the workflow, so the audit
+#      passes — having actually scanned every repo for an adopter rather than skipping the leg.
+NONEREG="$WORK/none.yml"
+mkreg2 "$NONEREG" "labels, coordination-kit" "labels, coordination-kit" \
+  "- { id: coordination-kit,   workflow: coordination-coherence.yml }" \
+  "- { id: contract-coherence, workflow: contract-coherence.yml, receivers: none, reason: nobody adopted it yet }"
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'nobody adopted it yet' \
+    && printf '%s' "$out" | grep -q 'The claim holds'; } \
+  && ok "'receivers: none' + no adopter -> passes, and the log says the claim was CHECKED" \
+  || bad "a recorded 'no receivers' claim must pass when true" "rc=$rc: $out"
+
+# (18) ...and it is FALSIFIABLE, which is what stops it being a mute button. Rendering really calls
+#      contract-coherence.yml while the roster records the capability as having no receivers. The
+#      audit must go red and say the recorded claim is false — not skip the leg because a human once
+#      wrote a reason down.
+wire FS-GG/FS.GG.SDD; wire_wf FS-GG/FS.GG.Rendering coordination-coherence.yml contract-coherence.yml
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Rendering calls' \
+    && printf '%s' "$out" | grep -qi 'claim is now FALSE' \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "'receivers: none' + a real adopter -> exit 1: the recorded claim is falsified, not trusted" \
+  || bad "a 'no receivers' claim must not mute a real adopter" "rc=$rc: $out"
+
+# (19) THE RECURRENCE GUARD. lockfile-sync's six adopters were real, and unrostered — which is why
+#      `list --receives lockfile-sync` returned nothing and the audit believed the capability had no
+#      receivers. The forward check CANNOT see this by construction: it starts from the declaration
+#      that is missing. So the audit sweeps every rostered repo for a caller it did not expect.
+DRIFTREG="$WORK/drift.yml"
+mkreg2 "$DRIFTREG" "labels, coordination-kit, lockfile-sync" "labels, coordination-kit" \
+  "- { id: coordination-kit, workflow: coordination-coherence.yml }" \
+  "- { id: lockfile-sync,    workflow: lockfile-sync.yml }"
+wire_wf FS-GG/FS.GG.SDD       coordination-coherence.yml lockfile-sync.yml
+wire_wf FS-GG/FS.GG.Rendering coordination-coherence.yml lockfile-sync.yml   # adopted, never rostered
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS.GG.Rendering calls .*lockfile-sync\.yml" \
+    && printf '%s' "$out" | grep -q "does not declare 'receives: lockfile-sync'" \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "an adopted-but-unrostered capability -> exit 1, naming the repo and the capability" \
+  || bad "an unrostered adopter must not be invisible (#503)" "rc=$rc: $out"
+
+# (20) ...and the guard must not fire on the AUTHORITY running its own workflow. .github calls
+#      contract-coherence.yml on itself with a LOCAL `uses: ./.github/workflows/…`, which is not
+#      roster participation. Matching it would make the authority a phantom adopter of every
+#      capability it hosts — a fabricated finding, on every run, forever.
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+mkdir -p "$FIX/FS-GG__.github"; printf '%s\n' "self.yml" > "$FIX/FS-GG__.github.list"
+printf 'jobs:\n  self:\n    uses: ./.github/workflows/coordination-coherence.yml\n' > "$FIX/FS-GG__.github/self.yml"
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && ! printf '%s' "$out" | grep -q 'FS-GG/.github calls'; } \
+  && ok "the authority's local 'uses: ./…' self-call is not roster participation" \
+  || bad "the authority must not be a phantom adopter of a workflow it hosts" "rc=$rc: $out"
+rm -f "$FIX/FS-GG__.github.list"; rm -rf "$FIX/FS-GG__.github"
 
 # --- the SURFACE keeps the distinction the script draws (#327, i-followup of #266) ---
 # Every assertion above is about the script's exit code. The exit code is not what an operator reads:
