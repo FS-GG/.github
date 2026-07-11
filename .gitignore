@@ -1,0 +1,12 @@
+# Producer checkouts cloned to reproduce the coherence gates locally.
+# `skill-registry-coherence.yml` clones FS.GG.SDD / FS.GG.Rendering / FS.GG.Game into `.repos/`
+# and runs `fsgg-skill-registry-check --repos-root .repos`. That is the only way to run the gate
+# outside CI, so every registry reconcile does it — and in a fresh item worktree a `git add -A`
+# would otherwise stage three full repository clones.
+.repos/
+
+# Python bytecode from the checker scripts (`check-feed-coherence.py` et al. import `fsgg_feed`,
+# so merely RUNNING a gate writes these). One was committed this way in ac10a61 — a registry
+# release PR that swept it in — and it then showed as modified in every worker's tree.
+__pycache__/
+*.pyc
