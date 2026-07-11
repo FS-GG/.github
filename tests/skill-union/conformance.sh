@@ -31,6 +31,14 @@ command -v jq >/dev/null 2>&1      || { echo "conformance: jq required" >&2; exi
 command -v python3 >/dev/null 2>&1 || { echo "conformance: python3 required" >&2; exit 2; }
 [ -f "$FIXTURES" ]                 || { echo "conformance: fixtures not found: $FIXTURES" >&2; exit 2; }
 
+# Guard the harness's OWN fail-open (the very shape this test exists to prevent): a corrupt or empty
+# fixtures file must never read as green. `jq length` here also validates the JSON parses — a parse
+# error aborts under `set -e` rather than silently yielding zero rows — and the table must be
+# non-empty. After the loop we confirm every declared fixture actually ran (a truncated stream reads
+# as fewer rows, not as success).
+total="$(jq '.fixtures | length' "$FIXTURES")"
+[ "$total" -ge 1 ] || { echo "conformance: fixture table is empty or malformed: $FIXTURES" >&2; exit 2; }
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mw-conformance.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 PROV="$WORK/prov.json"
@@ -77,6 +85,8 @@ while IFS= read -r fx; do
     bad "[$n] normalize+eval '$norm' died (rc=$?)  [$note]"
   fi
 done < <(jq -c '.fixtures[]' "$FIXTURES")
+
+[ "$n" -eq "$total" ] || { echo "conformance: ran $n of $total fixtures — the table did not stream fully" >&2; exit 2; }
 
 echo "--------------------------------------------"
 echo "materializes-when conformance: $pass passed, $failcount failed across $n fixture(s)"
