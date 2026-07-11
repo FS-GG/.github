@@ -278,33 +278,52 @@ jobs:
             echo "opened standing PR on $BRANCH"
           fi
 
-      # IS THE REGISTRY ACTUALLY COHERENT, OR DID THE RECONCILE JUST FAIL? `changed == 'false'` alone
-      # cannot tell you. `Reconcile in place` ends in `|| true`, which swallows EVERY non-zero exit —
-      # not only the expected "judgement cases remain", but a genuine crash (an unparseable registry, a
-      # corrupt producer clone, an import error). A crash leaves the registry untouched, which produces
-      # an empty diff, which is byte-for-byte the same signal as "nothing needed reconciling".
+      # IS THIS RECONCILE FINISHED, OR DID IT JUST FAIL? `changed == 'false'` alone cannot tell you.
+      # `Reconcile in place` ends in `|| true`, which swallows EVERY non-zero exit — not only the
+      # expected "judgement cases remain", but a genuine crash (an unparseable registry, a corrupt
+      # producer clone, an import error). A crash leaves the registry untouched, which produces an
+      # empty diff, which is byte-for-byte the same signal as "nothing needed reconciling". Retiring a
+      # PR on that would close a NEEDED reconcile while commenting that all is well — the epic-#266
+      # fail-open, inside the fix for it. So the retire demands POSITIVE evidence. It always did.
       #
-      # Retiring a PR on that signal would close a NEEDED reconcile and comment that the registry is
-      # coherent — a destructive act justified by a state nothing verified. That is precisely the
-      # epic-#266 fail-open this workflow exists to remove, so it must not be reintroduced in the fix
-      # for it. Demand POSITIVE evidence instead: a read-only check that exits 0 (zero findings).
-      # A crash and a residual finding both exit non-zero, and both correctly withhold the retire.
-      - name: Prove the registry is coherent (not merely un-diffed)
-        id: coherent
+      # IT DEMANDED THE WRONG EVIDENCE (#537). The old gate required FULL COHERENCE — the check exits
+      # 0, i.e. zero findings. But `--write` deliberately REFUSES judgement cases (a frozen-mirror
+      # divergence, a row two manifests declare, a vanished source), and must keep refusing them for
+      # the same #266 reason. So while any judgement case is outstanding the registry can never be
+      # fully coherent, `coherent` can never be true, and the retire can NEVER FIRE — however obsolete
+      # the standing PR has become. The two are not independent: a judgement case is exactly the state
+      # in which the mechanical rows keep churning underneath it, which is exactly when standing PRs go
+      # obsolete. The guard was disabled in precisely the situation that produces the thing it guards
+      # against, and it showed — #414 and #521 both went obsolete under an outstanding judgement case,
+      # and both had to be closed BY HAND.
+      #
+      # The right question is not "is the registry coherent?" but "IS THIS RECONCILE FINISHED?" — is
+      # anything left that `--write` would have done and didn't? That is what makes the standing PR
+      # obsolete, and it can be true while a human still owes the registry a judgement call.
+      #
+      # `skill-registry-retire-gate` decides it, and refuses on three distinct failures rather than
+      # one: the check CRASHED (no parseable findings — its exit code cannot tell a crash from a
+      # finding, since both are 1), the check was BLINDED (a `manifest-found` finding: a producer
+      # clone that could not be read is the #425 fail-open wearing a finding's clothes, and a naive
+      # "only judgement cases left?" test would wave it through), or something MECHANICAL is still
+      # standing after an empty diff (the write did not take). It is a script, not an inline block,
+      # because a retire is the one branch here that DESTROYS state and so must be driven over its
+      # full truth table by tests/skill-registry — the same reason `dispatch-preflight` is a script.
+      - name: Decide whether the reconcile is finished (not merely un-diffed)
+        id: settled
         if: steps.diff.outputs.changed == 'false'
         run: |
           set -uo pipefail
-          if python scripts/fsgg-skill-registry-check --repos-root .repos > coherence.txt 2>&1; then
-            echo "coherent=true" >> "$GITHUB_OUTPUT"
-            echo "registry is coherent with the producer manifests — a standing PR, if any, is obsolete."
-          else
-            echo "coherent=false" >> "$GITHUB_OUTPUT"
-            echo "NOT retiring: the reconcile produced no diff, but the registry is NOT coherent."
-            echo "Either judgement cases remain, or the check itself failed. Either way the empty diff"
-            echo "is not evidence of coherence, and closing a standing PR on it would destroy a needed"
-            echo "reconcile. Output follows:"
-            cat coherence.txt
-          fi
+          # `|| true`: a non-zero exit here means "findings exist", which is the NORMAL case and is
+          # not an error. The gate reads the payload, never the exit code — that is its whole point.
+          python scripts/fsgg-skill-registry-check --repos-root .repos --json > findings.after.json 2>check-stderr.txt || true
+          # If the gate itself dies, $GITHUB_OUTPUT gets no `settled` key, the retire's `if` cannot
+          # match, and nothing is retired. Fail-closed by construction.
+          python scripts/skill-registry-retire-gate \
+            --findings findings.after.json \
+            --note-file retire-note.md >> "$GITHUB_OUTPUT"
+          echo "--- coherence check stderr (empty unless it crashed) ---"
+          cat check-stderr.txt
 
       # RETIRE A RECONCILE THAT IS NO LONGER TRUE (#425). If the registry is genuinely coherent, the
       # old behaviour was to touch nothing — which QUIETLY LEFT ANY OPEN STANDING PR IN PLACE, still
@@ -315,10 +334,17 @@ jobs:
       # Closing (not merging, not silently deleting) keeps the trail: the next run re-opens a fresh one
       # the moment there is genuinely something to reconcile. Gated on the PROOF above, never on the
       # bare absence of a diff.
-      - name: Retire the standing PR when the reconcile is empty
-        if: steps.diff.outputs.changed == 'false' && steps.coherent.outputs.coherent == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
+      #
+      # The comment must NOT claim the registry is coherent (#537). It is retired because this
+      # RECONCILE is finished — which is a different fact, and is the only one established. Judgement
+      # cases may well be outstanding; `retire-note.md` names them, so the close reads as "this
+      # snapshot is obsolete, and here is what a human still owes the registry" rather than as an
+      # all-clear the gate never gave. Asserting a coherence nobody proved is the #425 defect exactly.
+      - name: Retire the standing PR when the reconcile is finished
+        if: steps.diff.outputs.changed == 'false' && steps.settled.outputs.settled == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
         env:
           GH_TOKEN: ${{ github.token }}
+          RESIDUAL: ${{ steps.settled.outputs.residual }}
         run: |
           set -euo pipefail
           existing="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' || true)"
@@ -327,19 +353,24 @@ jobs:
             exit 0
           fi
           cat > retire-comment.md <<'EOF'
-          Retired by `skill-registry-autofix`: `registry/skills.yml` is now **coherent with the
-          producer manifests**, so this reconcile no longer applies.
+          Retired by `skill-registry-autofix`: **this reconcile is finished** — a fresh run has
+          nothing left to write — so its diff no longer applies.
 
           Its diff was computed against producer commits that `main` has since moved past (or the rows
-          were reconciled by hand). **Merging it would have written superseded digests over a coherent
+          were reconciled by hand). **Merging it would have written superseded digests over the current
           registry** — i.e. it would have RED the gate it was opened to green. That is the decay
           .github#425 is about, and closing it is the response.
+          EOF
+          # Never "the registry is coherent": with judgement cases outstanding that is false, and the
+          # old comment said it anyway. Say only what the gate proved.
+          cat retire-note.md >> retire-comment.md
+          cat >> retire-comment.md <<'EOF'
 
           A fresh standing PR opens automatically the next time there is genuinely something to
           reconcile.
           EOF
           gh pr close "$existing" --comment "$(cat retire-comment.md)"
-          echo "retired obsolete standing PR #$existing"
+          echo "retired obsolete standing PR #$existing (residual judgement cases: ${RESIDUAL})"
 
       # Say what actually happened, not what usually happens. With `changed == 'false'` the compose step
       # was SKIPPED, so claiming a body was "composed above" would be one more piece of status text
