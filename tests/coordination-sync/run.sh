@@ -434,6 +434,41 @@ printf '%s' "$mode_out" | grep -q '::error::' \
 # ...while the repo's own main run — strict, no --base-ref — stays the verdict of record, and stays red.
 expect_rc "exec: (base-ref) the repo's OWN main run is still a hard red (rc 1)" 1 bash "$SYNC" --check "$M"
 
+# The <ref> mode read must resolve the path the way the `:./` reads beside it do — RELATIVE TO <target>,
+# which the gate's `target-path` input lets be a SUBDIRECTORY of the checkout. A root-relative pathspec
+# would silently read a DIFFERENT file, so plant a decoy at the root with the same relative path and the
+# wrong mode.
+#
+# The verdict has to DEPEND on the base's mode, or the assertion is vacuous — and the obvious version of
+# this test is: a coherent receiver stays green either way, because the check returns before it ever looks
+# at the base. The base's mode only decides anything when the branch has INHERITED drift, where a coherent
+# base means "(3) you merely predate a sync" and a drifted one means "(2) the repo is BEHIND". So build (3)
+# — a stale branch over a base that is in sync — and assert THAT verdict: a root-relative read finds the
+# 100644 decoy, calls the base drifted, and flips the answer to (2).
+S="$WORK/subdirrecv"; mkdir -p "$S/sub"
+git -C "$S" init -q -b main
+git -C "$S" config user.email fixture@fs-gg.invalid
+git -C "$S" config user.name  "coordination-sync fixture"
+scommit() { git -C "$S" add -A && git -C "$S" commit -qm "$1"; }
+echo "unrelated" > "$S/README.md"
+bash "$SYNC" "$S/sub" >/dev/null                                    # the receiver lives in a SUBDIRECTORY
+printf '\n# stale byte from the previous kit\n' >> "$S/sub/scripts/fsgg-coord"
+mkdir -p "$S/scripts"                                               # ...and a decoy sits at the ROOT,
+cp "$REPO_ROOT/scripts/fsgg-coord" "$S/scripts/fsgg-coord"          # same relative path, wrong mode
+chmod -x "$S/scripts/fsgg-coord"
+scommit "B1: the subdir kit as it was BEFORE the sync; a non-executable decoy at the root"
+git -C "$S" checkout -q -b feature
+echo "my actual work" > "$S/src.txt"; scommit "F1: a change that never touches the kit"
+git -C "$S" checkout -q main
+bash "$SYNC" "$S/sub" >/dev/null; scommit "B2: the kit sync lands on main"
+git -C "$S" checkout -q feature                                     # ...and the branch never saw it
+expect_out "exec: (base-ref) the tree read resolves against <target>, not the repo root (subdir receiver)" 0 \
+  'predates a kit sync' bash "$SYNC" --check --base-ref main "$S/sub"
+sub_out="$(bash "$SYNC" --check --base-ref main "$S/sub" 2>&1)"
+printf '%s' "$sub_out" | grep -q 'is BEHIND the canonical kit' \
+  && bad "exec: (base-ref) the base's mode was read from the ROOT decoy, not from <target>" "$sub_out" \
+  || ok "exec: (base-ref) ...so a coherent base is not called drifted on a decoy's mode"
+
 expect_out "base-ref: a non-git target is a misconfig (rc 2), not a verdict" 2 \
   'needs <target> to be a git checkout' bash "$SYNC" --check --base-ref main "$RECV"
 expect_out "base-ref: an unresolvable ref is a misconfig (rc 2), not a verdict" 2 \
