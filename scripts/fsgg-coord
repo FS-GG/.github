@@ -3202,6 +3202,17 @@ kit_digest_warn() {  # $1 = file list, $2 = context label
   printf 'Its pinned sha256 is now stale, and `repos-registry` will red `main` (ADR-0019, #469). Regenerate:\n' >&2
   printf '%s' "$gap" | sed 's|^|  scripts/repos.sh digest |' >&2
   printf '...then commit `registry/repos.yml` — and declare it in the touch-set.\n' >&2
+
+  # A SKILL kit carries a SECOND obligation, and it is the same trap one step along: every agent-skill
+  # root holds the BYTE-IDENTICAL union (ADR-0011/0014), so editing `.claude/skills/<kit>/` without
+  # mirroring into `.agents/skills/<kit>/` reds the `roots` gate. Found by walking straight into it
+  # while fixing the digest half of this very bug — which is the argument for naming it here: ONE edit
+  # carries SEVERAL invisible obligations, and the tooling named none of them.
+  local sk; sk="$(printf '%s' "$gap" | grep '^\.claude/skills/' || true)"
+  [ -n "$sk" ] || return 0
+  printf '\nfsgg-coord: SKILL ROOTS — a skill kit must stay BYTE-IDENTICAL across every root\n' >&2
+  printf '(ADR-0011/0014), or the `roots` gate reds `main`. Mirror it:\n' >&2
+  printf '%s' "$sk" | sed 's|^\(\.claude/skills/.*\)$|  cp -r \1/. .agents/skills/|' >&2
   return 0
 }
 

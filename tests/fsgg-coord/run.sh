@@ -2759,6 +2759,18 @@ w469s="$(kd widen 'FS.GG.SDD#74' --paths '.claude/skills/pnext-item/**' 2>&1 || 
 # Again: assert the remediation, not the echoed path — see the note above.
 assert_contains "#469: a SKILL source is content-addressed too, and is named" \
   "repos.sh digest .claude/skills/pnext-item" "$w469s"
+# A skill kit carries a SECOND obligation — the byte-identical union across every root (ADR-0011/0014).
+# Editing .claude/skills/<kit>/ without mirroring to .agents/skills/ reds the `roots` gate. This
+# assertion exists because the fix for #469 walked straight into it: one edit, several invisible
+# obligations, and the tooling named none of them.
+assert_contains "#469: ...and a SKILL kit is also told to mirror to the other root" \
+  "SKILL ROOTS" "$w469s"
+assert_contains "#469: ...naming the root it must be byte-identical with" ".agents/skills" "$w469s"
+# ...but a CLIENT kit (scripts/fsgg-coord) has no mirror, and must NOT be told to make one.
+case "$w469" in
+  *"SKILL ROOTS"*) bad "#469: a CLIENT kit must NOT be told to mirror skill roots" "$w469" ;;
+  *) ok "#469: a CLIENT kit must NOT be told to mirror skill roots" ;;
+esac
 
 # THE NEGATIVE CONTROLS — the ones that stop this becoming a warning nobody reads.
 # (a) Declaring registry/repos.yml alongside the kit source MEETS the obligation: no warning.
