@@ -569,6 +569,26 @@ assert "coherent with the" not in steps[retire]["run"], \
 assert "retire-note.md" in steps[retire]["run"], \
     "the retire comment does not name the outstanding judgement cases (#537)"
 
+# EVERY `steps.<id>.outputs.*` REFERENCE MUST RESOLVE TO A STEP THAT EXISTS.
+#
+# GitHub resolves a reference to a step id that does not exist as the EMPTY STRING. It does not warn,
+# and the run stays green — so renaming a step silently turns every `if:` and every status line that
+# referenced its old id into a dead branch that can never be taken.
+#
+# This is not hypothetical: renaming `coherent` -> `settled` in this very PR left the "Dry-run notice"
+# step reading `steps.coherent.outputs.coherent`, which meant a dry run would have reported "a real run
+# would touch nothing" even when a real run would now RETIRE. A status message asserting work that never
+# ran is the exact defect this workflow exists to remove, so a rename must not be able to reintroduce it.
+import re
+raw = open(sys.argv[1]).read()
+declared = {s["id"] for s in wf["jobs"]["autofix"]["steps"] if s.get("id")}
+referenced = set(re.findall(r"steps\.([A-Za-z0-9_-]+)\.outputs", raw))
+dangling = referenced - declared
+assert not dangling, (
+    f"workflow references step id(s) that do not exist: {sorted(dangling)} (declared: {sorted(declared)}). "
+    "GitHub resolves these to the EMPTY STRING silently, so the branch is dead and the run still goes green."
+)
+
 # The recovered stamp comes out of a PR BODY (writable), so it must reach the shell through the
 # environment. `${{ }}` is substituted textually BEFORE bash parses the line: a single quote in the
 # stamp would escape the argument and execute, in a job holding `contents: write`.

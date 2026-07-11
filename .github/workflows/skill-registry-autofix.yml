@@ -380,9 +380,10 @@ jobs:
         run: |
           if [ "${{ steps.diff.outputs.changed }}" = "true" ]; then
             echo "dry-run: reconcile computed and PR body composed above; branch/PR NOT touched."
-          elif [ "${{ steps.coherent.outputs.coherent }}" = "true" ]; then
-            echo "dry-run: registry is coherent; a real run would RETIRE any open standing PR. Nothing composed."
+          elif [ "${{ steps.settled.outputs.settled }}" = "true" ]; then
+            echo "dry-run: the reconcile is FINISHED (${{ steps.settled.outputs.residual }} judgement case(s) outstanding, which no"
+            echo "dry-run: reconcile can resolve) — a real run would RETIRE any open standing PR. Nothing composed."
           else
-            echo "dry-run: no reconcile diff, and coherence NOT proven — a real run would touch nothing."
-            echo "dry-run: (an empty diff with a failing check is not evidence the registry is clean.)"
+            echo "dry-run: no reconcile diff, and the reconcile is NOT proven finished — a real run would touch nothing."
+            echo "dry-run: (an empty diff from a crashed or blinded check is not evidence of anything.)"
           fi
