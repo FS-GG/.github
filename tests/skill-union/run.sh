@@ -339,6 +339,73 @@ else
   echo "FAIL  grammar FALSE direction (want rc=1 + every construct flagged; got rc=$rc, unflagged:$notflagged)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
 fi
 
+# --- root-set resolution: --roots > $AGENT_SKILL_ROOTS > .agent-skill-roots > ADR-0011's three ----
+# (.github#517) The correct root set is a property of the TREE: a scaffolded product has ADR-0011's
+# three, a kit consumer (this repo) has the two `coordination-sync` writes. The bare command must be
+# green on a correct kit tree — a gate whose default is red on correct work is one workers skip past,
+# and its red is indistinguishable from the twin drift the gate exists to catch.
+#
+# The load-bearing case is the FIRST: it pins the product gate FAIL-CLOSED. The tempting fix for #517
+# was "drop .codex/skills from the default" — that would silently stop catching a product whose
+# producer never materialized .codex (ADR-0011's origin bug), turning this gate into the fail-OPEN
+# family of #266/#292. Declaring roots narrows WHAT IS ASKED FOR; it must never weaken the answer.
+echo "--- root-set resolution (.github#517) ---"
+KIT="$WORK/kit"                                    # a KIT tree: two roots, no .codex, no declaration
+mkdir -p "$KIT/.claude/skills/alpha" "$KIT/.agents/skills/alpha"
+printf '# alpha skill\n' > "$KIT/.claude/skills/alpha/SKILL.md"
+cp "$KIT/.claude/skills/alpha/SKILL.md" "$KIT/.agents/skills/alpha/SKILL.md"
+
+expect_rc "roots: NO declaration ⇒ ADR-0011's three ⇒ absent .codex is a hard exit 2 (fail-CLOSED)" \
+  2 --product "$KIT"
+
+printf '# this tree is a kit consumer, not a scaffolded product\n.claude/skills\n.agents/skills\n' \
+  > "$KIT/.agent-skill-roots"                      # comments + newline-separated must parse
+
+expect_rc "roots: .agent-skill-roots declares the two kit roots ⇒ the BARE command exits 0" \
+  0 --product "$KIT"
+expect_rc "roots: --roots still overrides the declaration (explicit wins)" \
+  2 --product "$KIT" --roots ".claude/skills .codex/skills .agents/skills"
+
+rc=0; AGENT_SKILL_ROOTS=".claude/skills .codex/skills .agents/skills" \
+  bash "$ASSERT" --product "$KIT" >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 2 ]; then
+  echo "PASS  roots: \$AGENT_SKILL_ROOTS overrides the declaration (env wins over the file)"; pass=$((pass+1))
+else
+  echo "FAIL  (want rc=2) roots: \$AGENT_SKILL_ROOTS must override .agent-skill-roots"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# A declared root that is ABSENT is still a misconfiguration — the declaration says which roots this
+# tree keeps, it does not excuse one of them going missing.
+printf '.claude/skills\n.agents/skills\n.nope/skills\n' > "$KIT/.agent-skill-roots"
+expect_rc "roots: a root the declaration NAMES but the tree lacks is still exit 2" 2 --product "$KIT"
+
+printf '# only comments, no roots\n' > "$KIT/.agent-skill-roots"
+expect_rc "roots: a comment-only/empty declaration is a misconfiguration (exit 2)" 2 --product "$KIT"
+
+# A CRLF checkout (Windows, or .gitattributes eol=crlf) must not leave a `\r` on the last root of a
+# line: the root '.claude/skills\r' does not exist, so the gate would report "configured root is
+# absent" for a root that is right there — #517's own failure mode, pointing at an EXISTING root.
+printf '.claude/skills\r\n.agents/skills\r\n' > "$KIT/.agent-skill-roots"
+expect_rc "roots: a CRLF-checked-out declaration parses (no trailing \\r on the root)" 0 --product "$KIT"
+
+# The PRODUCT gate never consults the subject's declaration. skill-union-assert.yml always passes
+# --roots, precisely so a producer-generated tree cannot narrow the audit performed on it: a template
+# that emitted a two-root declaration into a scaffolded product must NOT thereby make .codex/skills
+# stop being checked. Explicit roots must beat the declaration — the fail-open this whole change
+# refuses to introduce, asserted rather than merely commented.
+printf '.claude/skills\n.agents/skills\n' > "$KIT/.agent-skill-roots"
+expect_rc "roots: a tree's declaration CANNOT narrow an explicit --roots (the product gate's path)" \
+  2 --product "$KIT" --roots ".claude/skills .codex/skills .agents/skills"
+
+# ...and a declaration never softens a REAL violation inside the roots it declares.
+printf '# alpha skill TAMPERED\n' > "$KIT/.agents/skills/alpha/SKILL.md"
+rc=0; bash "$ASSERT" --product "$KIT" >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 1 ] && grep -q "::error::\[divergent\] skill 'alpha'" "$WORK/out"; then
+  echo "PASS  (expected divergent fail) roots: a declared root set still catches real drift (exit 1)"; pass=$((pass+1))
+else
+  echo "FAIL  (want rc=1 + [divergent]) roots: declaration must not weaken the union check (got rc=$rc)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
 # --- a usage error is a misconfiguration (exit 2), never a union violation (exit 1) (#350) ---
 # Every flag used to take its value through bash's `${2:?…}`, which exits 1 — the code this script
 # reserves for "the union is violated". A typo'd command line reported itself as the very finding the

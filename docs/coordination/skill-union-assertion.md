@@ -24,8 +24,9 @@ skills are consumed.
 
 ## What it checks
 
-Over the configured `AGENT_SKILL_ROOTS` (default ADR-0011's three: `.claude/skills`,
-`.codex/skills`, `.agents/skills`), for **every** skill in the union it asserts:
+Over the configured `AGENT_SKILL_ROOTS` ([which roots?](#which-roots--a-tree-declares-its-own-set-517)
+— default ADR-0011's three: `.claude/skills`, `.codex/skills`, `.agents/skills`), for **every** skill
+in the union it asserts:
 
 1. **present** — the skill directory exists in **every** root (a miss is a *partitioned* root);
 2. **byte-identical** — its bytes are identical across all roots (a diff is a *divergent* root);
@@ -144,6 +145,41 @@ adding a runtime root is a one-line change, no per-repo source edits. Exit `0` =
 byte-identical union; non-zero = at least one violation, each printed with its class
 (`[partitioned]` / `[divergent]` / `[dangling]` / `[drifted]` / `[missing]` / `[unexpected]`).
 
+### Which roots — a tree declares its own set (#517)
+
+The right root set is a property of **the tree being checked**, not of this script, because two
+lanes materialize different sets and *both are correct*:
+
+| Lane | Roots | Written by |
+| --- | --- | --- |
+| **Scaffolded product** | `.claude/skills` `.codex/skills` `.agents/skills` (ADR-0011's three) | `fsgg-sdd`, the sole mirror authority |
+| **Kit consumer** (FS-GG's own repos, incl. `.github`) | `.claude/skills` `.agents/skills` | `coordination-sync` (same default) |
+
+So the roots resolve in this order, and a tree that is not a scaffolded product **declares** its set:
+
+1. `--roots` — explicit; what the reusable workflow passes.
+2. `$AGENT_SKILL_ROOTS` — the env knob, shared with `coordination-sync`.
+3. `<product>/.agent-skill-roots` — **checked in**; whitespace/newline-separated, `#` comments allowed.
+4. ADR-0011's three — the scaffolded-product default.
+
+`FS-GG/.github` ships such a declaration, which is why `scripts/skill-union-assert.sh` with **no
+arguments** is green on a clean tree here, and why `skill-roots-selfcheck.yml` runs that exact bare
+command — the command CI runs is the command a worker runs.
+
+**An absent root stays a hard exit `2` at every level.** Declaring roots narrows *what is asked for*;
+it never weakens the answer. This is why the fix for #517 was a declaration rather than dropping
+`.codex/skills` from the default: a scaffolded product whose producer never materialized `.codex/`
+must keep failing — catching exactly that is the gate's reason to exist (ADR-0011's origin bug), and
+a default that no longer asks for the root would be the fail-*open* pattern of #266/#292.
+
+**The declaration is for a tree asserting *itself*, never for a tree being audited.** The reusable
+`skill-union-assert.yml` gate therefore **always passes `--roots` explicitly** and never consults the
+product's `.agent-skill-roots`. The tree it audits is producer-*generated* (`fsgg-sdd` and the
+`fs-gg-ui` template write it), whereas the `roots:` input is human-authored by the consumer repo —
+so honouring a declaration found *inside the subject* would let a template bug that emitted one
+silently switch `.codex/skills` off and turn the gate green on a partitioned product. The roots come
+from the caller; the declaration serves the bare local run and a repo's own selfcheck.
+
 ## Adoption — wiring it into a consumer repo's CI
 
 ```yaml
@@ -154,7 +190,9 @@ jobs:
     uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main
     with:
       product-path: "path/to/scaffolded/product"
-      # roots: ".claude/skills .codex/skills .agents/skills"   # AGENT_SKILL_ROOTS, if non-default
+      # roots: ".claude/skills .agents/skills"                 # default = ADR-0011's three, always
+      #                                                        # passed; the product's own
+      #                                                        # .agent-skill-roots is NOT consulted here
       # manifest: "path/to/skill-manifest.json"                # enables the digest cross-check
       # co-tenants: "fs-gg-sdd-* speckit-*"                    # undeclared co-tenant ids to admit
       # params: ".fsgg/scaffold-provenance.json"               # enables [missing]/[unexpected] (needs manifest)

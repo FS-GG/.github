@@ -54,15 +54,33 @@
 #                         [--co-tenants "<glob> <glob> ..."] [--params <scaffold-provenance.json>]
 #   skill-union-assert.sh --digest <skill-dir>   # print the canonical SKILL.md digest and exit
 #   skill-union-assert.sh --eval-when <predicate> [--params <p.json>]  # print true/false, then exit
-# Roots default to AGENT_SKILL_ROOTS (env) or ADR-0011's three: ".claude/skills .codex/skills
-# .agents/skills". Roots are resolved relative to --product. --params requires --manifest. Exit
-# 0 = union coherent; 1 = at least one violation (each printed with its class); 2 = misconfiguration.
-# `-h`/`--help` prints usage.
+#
+# WHICH ROOTS (.github#517) — the correct root set is a property of the TREE, not of this script,
+# because two lanes materialize different sets and both are right:
+#   - a SCAFFOLDED PRODUCT gets ADR-0011's three (.claude/.codex/.agents), fanned out by `fsgg-sdd`;
+#   - a KIT CONSUMER (this org's own repos — .github and friends) gets the two `coordination-sync`
+#     materializes into (.claude/skills .agents/skills). There is no `.codex/` here and never will be.
+# So a tree that is not a scaffolded product DECLARES its roots, and the resolution order is:
+#   1. --roots            (explicit; what CI's reusable workflow passes)
+#   2. $AGENT_SKILL_ROOTS (env; the same knob `coordination-sync` reads)
+#   3. <product>/.agent-skill-roots  (checked in — the tree states its own root set)
+#   4. ADR-0011's three   (the scaffolded-product default)
+# An absent root stays a HARD exit-2 at every level: the gate's whole job is catching a root a
+# producer failed to materialize (ADR-0011's origin bug), so absence must never degrade to a skip.
+# Declaring roots narrows WHAT IS ASKED FOR; it never weakens the answer. Roots are resolved
+# relative to --product. --params requires --manifest. Exit 0 = union coherent; 1 = at least one
+# violation (each printed with its class); 2 = misconfiguration. `-h`/`--help` prints usage.
 
 set -euo pipefail
 
 PRODUCT="."
-ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .codex/skills .agents/skills}"
+DEFAULT_ROOTS=".claude/skills .codex/skills .agents/skills"   # ADR-0011: the scaffolded-product set
+ROOTS_DECL_FILE=".agent-skill-roots"
+ROOTS=""
+ROOTS_ARG=""
+ROOTS_SET=""
+ROOTS_SRC=""
+ROOTS_FROM_DEFAULT=""
 MANIFEST=""
 CO_TENANTS=""
 PARAMS=""
@@ -86,8 +104,11 @@ Usage:
 
 Options:
   --product <dir>         product tree to check (default: ".")
-  --roots "<r1> ..."      space-separated skill roots, relative to --product
-                          (default: $AGENT_SKILL_ROOTS or ".claude/skills .codex/skills .agents/skills")
+  --roots "<r1> ..."      space-separated skill roots, relative to --product. Resolution order:
+                          --roots, then $AGENT_SKILL_ROOTS, then <product>/.agent-skill-roots (a
+                          checked-in declaration, for a tree that is not a scaffolded product),
+                          then ADR-0011's three: ".claude/skills .codex/skills .agents/skills".
+                          An absent root is a misconfiguration (exit 2) at every level.
   --manifest <file.json>  producer skill-manifest; enables the digest cross-check (check 3)
   --co-tenants "<glob>…"  globs of undeclared co-tenant skill ids to admit (only with --manifest)
   --params <file.json>    scaffold-provenance.json; enables the condition-aware check (check 4,
@@ -114,7 +135,7 @@ EVAL_WHEN_SET=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --product)    need_val "$@"; PRODUCT="$2"; shift 2 ;;
-    --roots)      need_val "$@"; ROOTS="$2"; shift 2 ;;
+    --roots)      need_val "$@"; ROOTS_ARG="$2"; ROOTS_SET=1; shift 2 ;;
     --manifest)   need_val "$@"; MANIFEST="$2"; shift 2 ;;
     --co-tenants) need_val "$@"; CO_TENANTS="$2"; shift 2 ;;
     --params)     need_val "$@"; PARAMS="$2"; shift 2 ;;
@@ -267,13 +288,55 @@ fi
 
 [ -d "$PRODUCT" ] || die "product tree not found: $PRODUCT"
 
+# Read a checked-in roots declaration: whitespace/newline-separated roots, `#` comments allowed.
+# `\r` is stripped with the other separators, NOT left on the token: a CRLF checkout (Windows, or a
+# .gitattributes `eol=crlf`) would otherwise yield a root '.claude/skills\r', whose directory does not
+# exist — reporting "configured root is absent" for a root that is right there. That is #517's own
+# failure mode one layer down, and it points at an existing root, so it reads even more like drift.
+read_roots_decl() {
+  sed 's/#.*$//' "$1" | tr '\n\t\r' '   ' | tr -s ' ' | sed 's/^ *//; s/ *$//'
+}
+
+# Resolve the root set (see header). Precedence: --roots > $AGENT_SKILL_ROOTS > the tree's own
+# .agent-skill-roots > ADR-0011's three. `--roots ""` never reaches here (need_val rejects an empty
+# value); a set-but-empty $AGENT_SKILL_ROOTS reads as unset and falls through, as it did when this
+# was one `${AGENT_SKILL_ROOTS:-<default>}` expansion.
+if [ -n "$ROOTS_SET" ]; then
+  ROOTS="$ROOTS_ARG";                       ROOTS_SRC="--roots"
+elif [ -n "${AGENT_SKILL_ROOTS:-}" ]; then
+  ROOTS="$AGENT_SKILL_ROOTS";               ROOTS_SRC="\$AGENT_SKILL_ROOTS"
+elif [ -f "$PRODUCT/$ROOTS_DECL_FILE" ]; then
+  ROOTS="$(read_roots_decl "$PRODUCT/$ROOTS_DECL_FILE")"
+  ROOTS_SRC="$ROOTS_DECL_FILE"
+  [ -n "$ROOTS" ] || die "$PRODUCT/$ROOTS_DECL_FILE declares no roots (it is empty, or all comments)."
+else
+  ROOTS="$DEFAULT_ROOTS";                   ROOTS_SRC="default (ADR-0011's three)"
+  ROOTS_FROM_DEFAULT=1
+fi
+
 # shellcheck disable=SC2206
 ROOT_ARR=($ROOTS)
 [ "${#ROOT_ARR[@]}" -ge 1 ] || die "no roots configured (AGENT_SKILL_ROOTS / --roots is empty)."
 
-# Every configured root directory must exist — a missing root is itself a partition.
+# Every configured root directory must exist — a missing root is itself a partition, and this stays
+# a hard exit-2 whatever the roots' source. Name that source: on the default set, an absent root is
+# far more often "this tree is not a scaffolded product" than a real partition, and a bare "root is
+# absent" is indistinguishable from the twin drift this gate exists to catch (.github#517).
+#
+# The guidance goes to stderr and the VERDICT through die: `::error::` is a GitHub workflow command,
+# parsed only to the first newline, so a multi-line die would annotate line 1 and dump the rest as
+# loose log text — the lines that matter would be the ones that fell out of the annotation.
 for r in "${ROOT_ARR[@]}"; do
-  [ -d "$PRODUCT/$r" ] || die "configured root is absent: $PRODUCT/$r"
+  [ -d "$PRODUCT/$r" ] && continue
+  if [ -n "$ROOTS_FROM_DEFAULT" ]; then
+    {
+      echo "skill-union-assert: the roots came from the scaffolded-product default ('$DEFAULT_ROOTS')."
+      echo "  If '$PRODUCT' is NOT a scaffolded product, declare the roots it actually keeps in"
+      echo "  $PRODUCT/$ROOTS_DECL_FILE (e.g. '.claude/skills .agents/skills' for a kit consumer), and re-run."
+      echo "  If it IS a scaffolded product, this is a REAL partition: the producer never materialized '$r'."
+    } >&2
+  fi
+  die "configured root is absent: $PRODUCT/$r (roots from $ROOTS_SRC)"
 done
 
 # --params is meaningless without a manifest to read materializes-when from — the conditions live
@@ -324,7 +387,7 @@ absent_everywhere() {
 fail=0
 present_ct=0; identical_ct=0; manifest_ct=0; cotenant_ct=0; skill_ct=0
 
-echo "skill-union-assert: product='$PRODUCT' roots='${ROOT_ARR[*]}'${MANIFEST:+ manifest='$MANIFEST'}${CO_TENANTS:+ co-tenants='$CO_TENANTS'}"
+echo "skill-union-assert: product='$PRODUCT' roots='${ROOT_ARR[*]}' (from $ROOTS_SRC)${MANIFEST:+ manifest='$MANIFEST'}${CO_TENANTS:+ co-tenants='$CO_TENANTS'}"
 
 while IFS= read -r id; do
   [ -n "$id" ] || continue
