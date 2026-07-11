@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-11"   # (skill-registry-published: both producer-side conditions re-derived to CLEARED — Rendering#77 grammar alignment landed 2026-07-04; the flip is now .github-side only, .github#290. PRIOR — STABLE-CHANNEL TRAIN: fs-gg-ui-template package 0.4.0 -> 0.4.1 (TEMPLATE-ONLY cut over a HELD 0.4.0 pin, shipping the stable payload; FS.GG.Rendering#242), fs-gg-audio 0.1.0-preview.1 -> 0.1.0 (channel promotion; the org's LAST -preview producer — every FS.GG.* producer is now stable), fs-gg-ui-template 0.3.1-preview.1 -> 0.4.0 (framework release + channel promotion; the 0.4.0-preview.1 flip had been MISSED) and game-sim-core / game-scene-adapter 0.1.0-preview.1 -> 0.2.0, unblocked by it via NU5104. Earlier same day: SDD v0.9.0 (FS.GG.SDD.Cli 0.9.0; FS.GG.Contracts HELD at 1.4.0) and the contract-coherence gate pin 0.5.0->0.9.0 after the H2 freeze recurred.) Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-11"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
