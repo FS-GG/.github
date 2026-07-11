@@ -2,9 +2,12 @@
 #
 # skill-union-selftest.yml proves scripts/skill-union-assert.sh works (synthetic fixtures);
 # this proves *this* repo actually holds the byte-identical union it preaches. .codex/skills
-# doesn't exist here (ADR-0011/0014 scope the three-root invariant to scaffolded products), so
-# the defaults would die on "configured root is absent" — we pass the two roots this repo keeps
-# explicitly. Until this gate existed, .claude/skills ≡ .agents/skills held by manual discipline.
+# doesn't exist here (ADR-0011/0014 scope the three-root invariant to scaffolded products) — this
+# repo's two roots are declared in `.agent-skill-roots`, which the script reads, so we run the BARE
+# command with no --roots. That is deliberate (.github#517): the command CI runs is now character-
+# for-character the command a worker runs before pushing a kit edit, so this gate can never again be
+# green on a root set the worker's local run doesn't check.
+# Until this gate existed, .claude/skills ≡ .agents/skills held by manual discipline.
 name: skill-roots-selfcheck
 
 on:
@@ -12,6 +15,7 @@ on:
     paths:
       - ".claude/skills/**"
       - ".agents/skills/**"
+      - ".agent-skill-roots"
       - "scripts/skill-union-assert.sh"
       - ".github/workflows/skill-roots-selfcheck.yml"
   push:
@@ -19,6 +23,7 @@ on:
     paths:
       - ".claude/skills/**"
       - ".agents/skills/**"
+      - ".agent-skill-roots"
       - "scripts/skill-union-assert.sh"
       - ".github/workflows/skill-roots-selfcheck.yml"
   workflow_dispatch:
@@ -31,5 +36,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # No --roots, no --product: exactly what a worker types. The roots come from .agent-skill-roots.
       - name: Assert own skill roots are the byte-identical union
-        run: bash scripts/skill-union-assert.sh --product . --roots ".claude/skills .agents/skills"
+        run: bash scripts/skill-union-assert.sh

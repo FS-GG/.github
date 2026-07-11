@@ -20,6 +20,15 @@
 # supplied: it evaluates each declared skill's materializes-when against .effectiveParameters and
 # adds [missing] (declared∧true∧absent) / [unexpected] (present∧false). Without `params` the gate
 # keeps the superset semantics of check 3 exactly, so adoption is opt-in per caller.
+#
+# ROOTS ARE ALWAYS PASSED EXPLICITLY (.github#517). skill-union-assert.sh will read a product's own
+# checked-in `.agent-skill-roots` declaration when no roots are given — right for a repo asserting
+# ITSELF (a kit repo; see skill-roots-selfcheck.yml), wrong here. The tree this gate audits is
+# producer-GENERATED (fsgg-sdd + the fs-gg-ui template write it), while `roots:` is human-authored
+# by the consumer repo. Letting the artifact under test declare the scope of its own audit is a
+# fail-open: a template that emitted a two-root declaration into a scaffolded product would make
+# this gate skip .codex/skills and go green on a partitioned product — ADR-0011's origin bug, the
+# exact thing this gate exists to catch. So the roots come from the caller, never from the subject.
 name: skill-union-assert
 
 on:
@@ -30,7 +39,11 @@ on:
         type: string
         default: "."
       roots:
-        description: "Space-separated AGENT_SKILL_ROOTS to check, relative to product-path."
+        description: >-
+          Space-separated AGENT_SKILL_ROOTS to check, relative to product-path. Defaults to ADR-0011's
+          three, and this gate ALWAYS passes it explicitly — a product's own `.agent-skill-roots` is
+          deliberately NOT consulted here (see the note above). A kit-consumer repo asserting its own
+          two roots through this workflow must say so: roots: ".claude/skills .agents/skills".
         type: string
         default: ".claude/skills .codex/skills .agents/skills"
       manifest:

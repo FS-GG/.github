@@ -1,0 +1,15 @@
+# The agent-skill roots THIS tree keeps — read by scripts/skill-union-assert.sh when neither
+# --roots nor $AGENT_SKILL_ROOTS is given (.github#517).
+#
+# FS-GG/.github is a KIT SOURCE repo, not a scaffolded product. `coordination-sync` materializes
+# each `kind: skill` row of the registry into these two roots (its own AGENT_SKILL_ROOTS default),
+# so these two are what must hold the byte-identical union here. ADR-0011's third root,
+# `.codex/skills`, belongs to the SCAFFOLDED-PRODUCT lane — `fsgg-sdd` fans the union into
+# .claude/.codex/.agents for a product tree. There is no `.codex/` in this repo, and its absence
+# is a fact about this repo, not a partition.
+#
+# Declaring the set here (rather than dropping `.codex/skills` from the script's default) keeps the
+# product gate fail-CLOSED: a scaffolded product that never materialized `.codex/skills` still exits
+# 2, which is the whole point of the check.
+.claude/skills
+.agents/skills
