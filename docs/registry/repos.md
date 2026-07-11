@@ -98,9 +98,17 @@ recorded, and a decision the gate re-checks on every run — not a row nobody fi
 
 ## The coordination kit
 
-The content-addressed bundle every `coordination-kit` receiver must hold (`sha256` is the digest of
-`source` — for a skill dir, its `SKILL.md`; for a file, the file). Regenerate a digest with
-`scripts/repos.sh digest <source>`.
+The content-addressed bundle every `coordination-kit` receiver must hold. `registry/repos.yml` names
+each kit item (`id`, `kind`, `source`); the **digests live in [`registry/repos.lock`](../../registry/repos.lock)**,
+which is **generated** — regenerate it with `scripts/repos.sh relock` (the digest of a `source` is its
+`SKILL.md` for a skill dir, or the file itself for a file).
+
+`repos.lock` is a **generated, CI-gated artifact** ([#309](https://github.com/FS-GG/.github/issues/309)):
+nobody authors it, `repos-registry-selftest` fails on any drift in it, and a collision in it is a
+rebase rather than a decision. **Do not reserve it in a `Paths:` touch-set** — regenerate it and name
+it as expected drift in the PR. The digests used to be a `sha256:` field on each `kit:` row, which
+forced every kit edit to reserve the whole authored roster and serialised them all against each other
+([#527](https://github.com/FS-GG/.github/issues/527)).
 
 | Kit id | Kind | Source |
 |---|---|---|

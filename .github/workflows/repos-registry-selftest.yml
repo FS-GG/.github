@@ -13,6 +13,9 @@ on:
     paths:
       - "scripts/repos.sh"
       - "registry/repos.yml"
+      # the GENERATED half (#527). A stale lock must re-run this gate, or the digests it exists to
+      # guard rot with nothing to say so — the #334 shape: the check is fine, its TRIGGER fails open.
+      - "registry/repos.lock"
       - "scripts/apply-labels.sh"
       - "tests/repos-registry/**"
       - ".github/workflows/repos-registry-selftest.yml"
@@ -37,6 +40,9 @@ on:
     paths:
       - "scripts/repos.sh"
       - "registry/repos.yml"
+      # the GENERATED half (#527). A stale lock must re-run this gate, or the digests it exists to
+      # guard rot with nothing to say so — the #334 shape: the check is fine, its TRIGGER fails open.
+      - "registry/repos.lock"
       - "scripts/apply-labels.sh"
       - "tests/repos-registry/**"
       - ".github/workflows/repos-registry-selftest.yml"

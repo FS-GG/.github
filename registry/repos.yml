@@ -34,7 +34,7 @@
 # repo that is not rostered is drift — so this list can no longer rot without a red check. Do not
 # hand-maintain it against intent; maintain it against what the callers actually do.
 
-schemaVersion: 3
+schemaVersion: 4
 updated: 2026-07-11
 authority: FS-GG/.github
 
@@ -93,17 +93,27 @@ capabilities:
 # Empty today: the org's seven live repos are all rostered above.
 outside-fabric: []
 
-# The coordination kit every `coordination-kit` receiver must hold, content-addressed like a
-# skills.yml row. `sha256` is the canonical digest of `source` (for a skill dir: sha256 of its
-# SKILL.md, byte-equivalent to `sha256sum SKILL.md` — the same rule skill-union-assert uses; for a
-# file: sha256 of the file). Regenerate with `scripts/repos.sh digest <source>`. The slice-2 sync
+# The coordination kit every `coordination-kit` receiver must hold. The slice-2 sync
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
+#
+# THE DIGESTS LIVE IN `repos.lock`, NOT HERE (#527). They used to be a `sha256:` field on each row,
+# and that made this file a chokepoint: a kit source is content-addressed, so editing ANY skill — or
+# `scripts/fsgg-coord`, which is itself a kit row — obliged the worker to re-pin a hash *in the middle
+# of the authored roster*. Every kit edit therefore had to reserve `repos.yml` in its `Paths:`
+# touch-set, and so serialised against every other kit edit AND against anyone genuinely authoring a
+# roster row. Three workers deadlocked on it in one afternoon (#428).
+#
+# #309's rule — *a generated, CI-gated artifact must not be reserved in a touch-set* — could not reach
+# it, because the rule classifies a FILE and the generated thing was a FIELD inside an authored one.
+# Splitting the field out of the file is what lets the existing rule apply: `repos.lock` is emitted by
+# a generator, guarded by a regeneration gate, and authored by nobody. This block is now purely
+# authored — a row here is a decision, and reserving it means something again.
 kit:
-  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: f4eee4061e8ed2e621be3c3e8dd5d9587e31f78c673ac7c6f9e8e698763b2118 }
-  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 8ade6c6fc4f6e8660bd35374cb7051183a40baebc28693ad27c12f8d5be4cbe0 }
+  - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination }
+  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work }
   # Command skills — the two driver skills over the protocol the three items above define.
   # `check-board` reconciles the board against issue state; `pnext-item` drives the worker loop.
   # They hold no protocol of their own, so they carry no ADR: each cites the skill it drives.
-  - { id: check-board,             kind: skill,  source: .claude/skills/check-board,              sha256: d2baab88479e23bdb782968fd4feb24f46a6f61737003fdbf8708d06b75b708b }
-  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: d5986d4f7af8270adadea058f7b8ab8cbfe89a73a5b93af6461eddcffa539aec }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 51d0276f7a48953cfff2e258f282bd9107372a123afbfe5fd1ea9bc3397d3a76 }
+  - { id: check-board,             kind: skill,  source: .claude/skills/check-board }
+  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord }
