@@ -92,7 +92,7 @@ Each finding has a code, a ground truth, and a fix — or an explicit refusal to
 | `STATUS-NOT-BLOCKED` | an open blocker, but `status` is `Ready`/`Backlog` | `set-field <i> Status Blocked` |
 | `STALE-CLAIM` | `who` says `state == "stale"` | `reap --repo <r> --apply` |
 | `UNCLAIMED-IN-PROGRESS` | `who` says `state == "unclaimed"` | **report only** — someone is working outside the protocol |
-| `CLAIM-STATUS-LAG` | held claim, but board `status != In progress` | `set-field <i> Status 'In progress'` |
+| `CLAIM-STATUS-LAG` | held claim, but board `status != In progress` | `flush` **first** — the write may be queued, not lost. `set-field <i> Status 'In progress'` only for what survives it |
 | `UNDECLARED-PATHS` | open, unclaimed, not `Done`, and the issue body declares no `Paths:` | **report only** — the fix is an *issue* edit, and this skill never writes to an issue |
 | `EPIC-*` | from `lint --json` (severity `error`) | **report only** — a broken epic needs a human |
 
@@ -157,13 +157,22 @@ Then, per blocker state:
   §2 said — `gh issue view` is GraphQL, and spending the budget here is spending the budget this
   pass needs to write its own fixes in §4:
 
+  A blocker ref reads `owner/repo#n`; REST wants the parts, so split it. Keep `html_url` — step 2
+  of §4 (`item-add --url`) needs it, and it is the field that tells an issue from a PR:
+
   ```sh
-  gh api repos/<owner>/<repo>/issues/<n> --jq '"\(.state)  is_pr=\(.pull_request != null)"'
-  # open  is_pr=true
+  # FS-GG/.github#449  ->  owner=FS-GG  repo=.github  n=449
+  gh api repos/FS-GG/.github/issues/449 \
+    --jq '"\(.state | ascii_upcase)  is_pr=\(.pull_request != null)  \(.html_url)  \(.title)"'
+  # OPEN  is_pr=true  https://github.com/FS-GG/.github/pull/449  [adr] …
   ```
 
-  `is_pr` is not a curiosity: an **off-board blocker is very often a PR** (an ADR PR gating an
-  issue). `gh issue view` renders a PR as an issue without saying so — only the `url` (`/pull/<n>`)
+  **`ascii_upcase` is not cosmetic.** REST emits `open`/`closed` in *lower* case, while this skill's
+  classes — and the table above — are `OPEN`/`CLOSED`. Compare the raw REST value against `CLOSED`
+  and it never matches, so every blocker silently classifies as still-holding.
+
+  `is_pr` is not a curiosity either: an **off-board blocker is very often a PR** (an ADR PR gating
+  an issue). `gh issue view` renders a PR as an issue without saying so — only the URL (`/pull/<n>`)
   gives it away — so it hides the one fact you need to read the blocker correctly. REST states it
   outright, and costs no GraphQL.
 
@@ -181,12 +190,19 @@ Then, per blocker state:
 Order matters — later steps read state the earlier ones changed.
 
 ```sh
+scripts/fsgg-coord flush                        # 0. replay board writes QUEUED behind the budget
 scripts/fsgg-coord reap --repo <r>              # 1. dry run: whose lease expired?
 scripts/fsgg-coord reap --repo <r> --apply      #    release them (tells the reaped worker)
 gh project item-add <n> --owner FS-GG --url <url>   # 2. off-board issues + off-board blockers
 scripts/fsgg-coord set-field <i> Status <V>     # 3. the status flips
 scripts/fsgg-coord ready --all --json           # 4. RE-READ: adding items changed the blocker index
 ```
+
+Step 0 is new, and it comes first for a reason: a queued write is a fix **already authored by the
+worker who owns the item** (#418). Flushing it can resolve a `CLAIM-STATUS-LAG` on its own, and a
+`set-field` applied *before* the flush races the worker's own pending write — you would be
+hand-writing a column that is about to be written correctly anyway. Re-derive your findings if the
+flush changed anything.
 
 Step 4 is not optional. Adding a blocker to the board in step 2 re-resolves it from `UNKNOWN` to
 `OPEN`/`CLOSED`, which can create or clear a `BLOCKER-CLEARED` finding that did not exist in your
