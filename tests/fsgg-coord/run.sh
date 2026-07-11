@@ -784,7 +784,29 @@ while IFS=$'\t' read -r rid rfull; do
   [ -n "$rid" ] || continue
   got="$(GH_BOARD_SET=roster run ready --repo "$rid" --jq '[.[].repo]|unique|join(",")' 2>/dev/null)"
   assert_eq "resolve_repo: --repo $rid selects only $rfull (#381)" "$rfull" "$got"
+  # ...and `issues` is held to the SAME roster guard (#446). It was the one repo-taking command that
+  # never called resolve_repo — it took the bare name verbatim, so `issues game` asked GitHub for
+  # `repos/FS-GG/game` and got a 404 while `--repo game` worked everywhere else. That is worse than it
+  # sounds: `issues` is the command both skills advertise as THE way to read issues without spending
+  # GraphQL, so the natural recovery from its 404 is `gh issue list` — 2 points a call, the exact
+  # budget the command exists to save (#418). Assert the RESOLVED REST path, per rostered short-id.
+  : >"$GH_LOG"
+  GH_ISSUES_FROM_STORE=1 run issues "$rid" --jq '.[].number' >/dev/null 2>&1 || true
+  assert_contains "issues: short-id $rid reads $rfull over REST, not '$rid' (#446)" \
+    "issue-list $rfull" "$(cat "$GH_LOG")"
 done <<< "$roster_pairs"
+# The 404 as reported: the bare short-id must never reach GitHub unresolved.
+: >"$GH_LOG"
+GH_ISSUES_FROM_STORE=1 run issues game --jq '.[].number' >/dev/null 2>&1 || true
+case "$(cat "$GH_LOG")" in
+  *"issue-list FS-GG/game"*) bad "#446: 'issues game' must not request repos/FS-GG/game (404)" "$(cat "$GH_LOG")" ;;
+  *)                         ok  "#446: 'issues game' must not request repos/FS-GG/game (404)" ;;
+esac
+# owner/repo and a literal repo name still work — resolve_repo's own fall-through, unchanged.
+: >"$GH_LOG"
+GH_ISSUES_FROM_STORE=1 run issues FS-GG/FS.GG.Game --jq '.[].number' >/dev/null 2>&1 || true
+assert_contains "issues: an explicit owner/repo is passed through untouched (#446)" \
+  "issue-list FS-GG/FS.GG.Game" "$(cat "$GH_LOG")"
 
 # (6b) blocked-awareness: `next` skips items whose blockers are still open / unverifiable, and the
 #      whole thing resolves against the SAME scan — no extra GraphQL per blocker.
