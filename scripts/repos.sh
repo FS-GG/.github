@@ -9,8 +9,13 @@
 #
 # Usage:
 #   repos.sh validate [--registry <file>] [--root <dir>]   # schema + invariants + kit digests
-#   repos.sh list --receives <cap> [--field id|full] [--registry <file>]
-#                                                           # roster query for consumers (apply-labels …)
+#   repos.sh list (--receives <cap> | --all) [--field id|full] [--registry <file>]
+#                                                           # roster query for consumers (apply-labels …).
+#                                                           # --all: every rostered repo, receives or not.
+#   repos.sh caps [--field id|workflow|receivers|reason] [--registry <file>]
+#                                                           # the AUDITED capabilities (repos-audit.sh).
+#                                                           # No --field: a TSV row per capability —
+#                                                           # id, workflow, receivers, reason.
 #   repos.sh kit [--field id|kind|source] [--kind skill|client] [--registry <file>]
 #                                                           # the kit item list, in roster order
 #   repos.sh digest <path>                                  # reference digest: skill dir -> sha256 of its
@@ -83,20 +88,59 @@ digest() {
 }
 
 cmd_list() {
-  local cap="" field="full" reg="$REG_DEFAULT"
+  local cap="" all=0 field="full" reg="$REG_DEFAULT"
   while [ $# -gt 0 ]; do
     case "$1" in
       --receives) need_val list "$@"; cap="$2";   shift 2 ;;
+      --all)      all=1;                          shift 1 ;;
       --field)    need_val list "$@"; field="$2"; shift 2 ;;
       --registry) need_val list "$@"; reg="$2";   shift 2 ;;
       *)          die "list: unknown arg '$1'." ;;
     esac
   done
-  [ -n "$cap" ] || die "list: --receives <cap> is required."
+  # --all is how repos-audit.sh sweeps for an adopted-but-UNROSTERED capability: a repo that wires a
+  # fabric it never declared is invisible to a `--receives` query by construction — the query trusts
+  # the very declaration that is missing — so the reverse check has to start from every repo (#503).
+  if [ "$all" = 1 ]; then
+    [ -z "$cap" ] || die "list: --all and --receives are mutually exclusive."
+  else
+    [ -n "$cap" ] || die "list: --receives <cap> or --all is required."
+  fi
   case "$field" in id|full) ;; *) die "list: --field must be id or full." ;; esac
   [ -f "$reg" ] || die "registry not found: $reg"
-  yaml2json "$reg" | jq -r --arg cap "$cap" --arg f "$field" \
-    '.repos[] | select((.receives // []) | index($cap)) | .[$f]'
+  if [ "$all" = 1 ]; then
+    yaml2json "$reg" | jq -r --arg f "$field" '.repos[] | .[$f]'
+  else
+    yaml2json "$reg" | jq -r --arg cap "$cap" --arg f "$field" \
+      '.repos[] | select((.receives // []) | index($cap)) | .[$f]'
+  fi
+}
+
+# The AUDITED capabilities: those that map to a reusable .github workflow. repos-audit.sh reads its
+# whole mandate from here — which capabilities exist, which workflow each one is wired by, and which
+# ones claim to have no receiver at all. It used to hardcode that in a `wf_for_cap` case statement,
+# so the roster and the audit could disagree about what the org even has, and did (#503).
+#
+# With no --field this emits a TSV row per capability — the audit needs every column at once, and
+# four `--field` passes over the same file is the kind of thing that drifts out of step.
+cmd_caps() {
+  local field="" reg="$REG_DEFAULT"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --field)    need_val caps "$@"; field="$2"; shift 2 ;;
+      --registry) need_val caps "$@"; reg="$2";   shift 2 ;;
+      *)          die "caps: unknown arg '$1'." ;;
+    esac
+  done
+  case "$field" in ""|id|workflow|receivers|reason) ;;
+    *) die "caps: --field must be id, workflow, receivers or reason." ;; esac
+  [ -f "$reg" ] || die "registry not found: $reg"
+  if [ -n "$field" ]; then
+    yaml2json "$reg" | jq -r --arg f "$field" '(.capabilities // [])[] | (.[$f] // "")'
+  else
+    yaml2json "$reg" | jq -r \
+      '(.capabilities // [])[] | [.id, (.workflow // ""), (.receivers // ""), (.reason // "")] | @tsv'
+  fi
 }
 
 # The kit item list, in roster order. Consumers that name the kit's contents (the propagate PR
@@ -191,6 +235,55 @@ cmd_validate() {
   local odups; odups="$(echo "$json" | jq -r '[(."outside-fabric" // [])[].full] | group_by(.)[] | select(length>1)[0]')"
   [ -z "$odups" ] || err "duplicate outside-fabric entr(ies): $(echo "$odups" | tr '\n' ' ')"
 
+  # --- audited capabilities (.github#503) ---
+  # The cap -> reusable-workflow map, and the place a capability may declare it has NO receiver.
+  # Both are load-bearing for repos-audit.sh, and both fail OPEN if they are wrong in the quiet
+  # direction: a capability naming a workflow that does not exist audits nothing and reports
+  # nothing, which is the vacuous green this block exists to make impossible.
+  echo "$json" | jq -e '(.capabilities // []) | type=="array"' >/dev/null \
+    || err "'capabilities' must be a list (omit it, or use [])."
+  local capdups; capdups="$(echo "$json" | jq -r '[(.capabilities // [])[].id] | group_by(.)[] | select(length>1)[0]')"
+  [ -z "$capdups" ] || err "duplicate capability id(s): $(echo "$capdups" | tr '\n' ' ')"
+
+  local cid cwf crecv creason
+  while IFS=$'\t' read -r cid cwf crecv creason; do
+    [ -n "$cid" ] || continue
+    echo "$KNOWN_CAPS" | jq -e --arg c "$cid" 'index($c)' >/dev/null \
+      || err "capability '$cid' is not in the receives vocabulary (known: $(echo "$KNOWN_CAPS" | jq -r 'join(", ")'))."
+    if [ -z "$cwf" ]; then
+      err "capability '$cid' has no 'workflow' — a capability is audited BY a reusable workflow; without one there is nothing to audit."
+    elif [ ! -f "$root/.github/workflows/$cwf" ]; then
+      # A typo'd filename is the fail-open case: every receiver is checked for a `uses:` of a
+      # workflow that cannot exist, so every receiver "is not wired" — or, if the capability has no
+      # receivers, nothing is checked at all and the audit is green about a workflow that is gone.
+      err "capability '$cid' names workflow '$cwf', which is not in .github/workflows/."
+    elif ! grep -qE '^[[:space:]]*workflow_call:' "$root/.github/workflows/$cwf"; then
+      # `receives` means "this repo CALLS the authority's reusable workflow". A workflow without a
+      # workflow_call trigger cannot be called, so no receiver could ever wire it and the audit
+      # would report a gap against every one of them, forever.
+      #
+      # Anchored, so a COMMENT cannot satisfy it. An unanchored `grep -q workflow_call:` matches the
+      # word anywhere in the file — including a line like `# this is not a workflow_call: trigger` —
+      # which would pass a workflow that nothing can `uses:` as reusable. A check whose subject is
+      # "can this really be called?" must not be satisfiable by prose about calling.
+      err "capability '$cid' names workflow '$cwf', which has no 'workflow_call:' trigger — it is not reusable, so no repo can wire it."
+    fi
+    case "$crecv" in
+      "") ;;   # the normal case: receivers are whichever repos[] declare the cap in `receives`
+      none)
+        # A reviewed claim, like outside-fabric — never a mute button. Two things keep it honest:
+        # a reason is mandatory here, and repos-audit.sh still SCANS every repo for a real caller,
+        # so the claim is falsifiable at audit time rather than merely asserted at review time.
+        [ -n "$creason" ] \
+          || err "capability '$cid' declares 'receivers: none' with no 'reason' — an unexplained exemption is a mute button."
+        if echo "$json" | jq -e --arg c "$cid" '[.repos[] | select((.receives // []) | index($c))] | length > 0' >/dev/null; then
+          err "capability '$cid' declares 'receivers: none', but repo(s) roster it: $(echo "$json" | jq -r --arg c "$cid" '[.repos[] | select((.receives // []) | index($c)) | .id] | join(", ")')."
+        fi
+        ;;
+      *) err "capability '$cid' receivers '$crecv' is invalid (omit it, or set it to 'none')." ;;
+    esac
+  done < <(echo "$json" | jq -r '(.capabilities // [])[] | [.id, (.workflow // ""), (.receivers // ""), (.reason // "")] | @tsv')
+
   # --- kit rows must not collide at the receiver (.github#348) ---
   # Two kit rows that resolve to one destination make the fabric unsatisfiable: coordination-sync
   # writes both to the same path (last row wins), then --check fails forever and apply cannot repair
@@ -228,12 +321,13 @@ cmd_validate() {
     echo "::error::repos-registry: INVALID — see errors above." >&2
     exit 1
   fi
-  echo "repos-registry: OK — $(echo "$json" | jq '.repos | length') repo(s), $(echo "$json" | jq '(.kit // []) | length') kit item(s), authority=$authority"
+  echo "repos-registry: OK — $(echo "$json" | jq '.repos | length') repo(s), $(echo "$json" | jq '(.capabilities // []) | length') audited capabilit(ies), $(echo "$json" | jq '(.kit // []) | length') kit item(s), authority=$authority"
 }
 
 case "${1:-}" in
   validate) shift; cmd_validate "$@" ;;
   list)     shift; cmd_list "$@" ;;
+  caps)     shift; cmd_caps "$@" ;;
   kit)      shift; cmd_kit "$@" ;;
   digest)   shift; [ $# -ge 1 ] || die "digest: <path> required."; digest "$1" ;;
   -h|--help|help|"") usage ;;

@@ -24,23 +24,60 @@
 #   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [migrated: ADR-0019 slice 1]
 #   coordination-kit   — the four coordination skills + the fsgg-coord client        [consumer: slice 2]
 #   build-config       — the org-shared .NET build config (scripts/sync-build-config.sh)  [migrate: later slice]
-#   lockfile-sync      — the reusable lockfile-sync workflow                          [migrate: later slice]
-#   contract-coherence — the reusable contract-coherence gate                         [migrate: later slice]
-# Only `labels` and `coordination-kit` are POPULATED in slice 1; the rest are reserved vocabulary,
-# added to the relevant rows when each fabric is migrated (verified against that workflow's list).
+#   lockfile-sync      — the reusable lockfile-sync workflow                          [migrated: #503]
+#   contract-coherence — the reusable contract-coherence gate                         [no receiver yet: see capabilities]
+#
+# A `receives` row is a CLAIM ABOUT REALITY, and it goes stale silently. `lockfile-sync` is the
+# proof: six repos really wired the reusable workflow, nobody added the rows, and `repos-audit`
+# went right on reporting green over a capability it believed had no receivers (#503). The audit
+# now closes that loop in BOTH directions — a rostered repo that is not wired is a gap, and a wired
+# repo that is not rostered is drift — so this list can no longer rot without a red check. Do not
+# hand-maintain it against intent; maintain it against what the callers actually do.
 
-schemaVersion: 2
+schemaVersion: 3
 updated: 2026-07-11
 authority: FS-GG/.github
 
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }
-  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit] }
-  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit] }
-  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit] }
-  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit] }
-  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit] }
-  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit] }   # the org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.
+  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, lockfile-sync] }
+  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, lockfile-sync] }
+  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, lockfile-sync] }
+  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync] }
+  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, lockfile-sync] }
+  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync] }   # the org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.
+
+# The capabilities that map to a reusable `.github` workflow, and are therefore AUDITED
+# (scripts/repos-audit.sh). This is the ONE place that mapping lives. The audit used to hardcode it
+# in a `wf_for_cap` case statement and an `AUDITED_CAPS` string — the redeclared-by-hand disease
+# this registry exists to cure, one layer down.
+#
+# Each row is audited INDEPENDENTLY. A capability that examines zero receiver-repo pairs fails the
+# audit ON ITS OWN NAME, because `for repo in ∅` proves nothing: the guard used to sum the pairs
+# across all capabilities, so `coordination-kit`'s six satisfied it while `lockfile-sync` and
+# `contract-coherence` each iterated nothing, and the gate reported green having checked one third
+# of its own mandate (#503).
+#
+# `receivers: none` is how a capability says it HAS no receiver, out loud and with a reason — a
+# reviewed claim, exactly like `outside-fabric`. It is NOT a mute button: the audit still scans
+# every rostered repo for a real caller, and a capability that claims no receivers while somebody
+# actually wires it FAILS. The claim is falsifiable, so it cannot quietly become a lie.
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+  - { id: lockfile-sync,    workflow: lockfile-sync.yml }
+  - id: contract-coherence
+    workflow: contract-coherence.yml
+    receivers: none
+    reason: >-
+      Built to be receiver-wired (its inputs drift-check THE CALLER's build config, and
+      coherence.yml records that "the four product repos call the same reusable workflow with
+      check-build-config: true — their CI adopts it as an H3 follow-up"), but that adoption never
+      landed: as of #503, MEASURED against the caller files, no repo calls it. The authority runs
+      it on ITSELF via coherence.yml — a local `uses: ./.github/workflows/contract-coherence.yml`,
+      which is not roster participation and is deliberately not matched by the audit. So this is
+      "provably no receivers" TODAY, not "never will have any". Whether the six framework repos
+      SHOULD adopt it is a live org question, filed as FS-GG/.github#519. When one wires it, the
+      audit's unrostered-adopter check goes red and tells you to roster it and delete this claim.
 
 # Repos that exist in the GitHub org and are DELIBERATELY outside every fabric. The roster is a
 # closed-world assumption, and `scripts/check-roster-closure.py` (.github#269) is what asserts the

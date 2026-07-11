@@ -25,6 +25,13 @@ on:
       - "scripts/fsgg-coord"
       - ".claude/skills/**"
       - ".agents/skills/**"
+      # capability workflows — `capabilities:` names the reusable workflow that audits each one, and
+      # validate now proves it EXISTS and really carries a `workflow_call:` trigger (#503). That makes
+      # registry/repos.yml's validity depend on these files, so renaming, deleting, or un-reusing one
+      # must re-run this gate — otherwise the roster silently goes invalid and merges green, which is
+      # #334 exactly: the check is fine, its trigger is what fails open. A wildcard for the same
+      # reason as the skill roots above; run.sh asserts every capabilities[].workflow is matched here.
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
@@ -36,6 +43,7 @@ on:
       - "scripts/fsgg-coord"
       - ".claude/skills/**"
       - ".agents/skills/**"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:

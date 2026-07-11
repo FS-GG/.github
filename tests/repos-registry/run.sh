@@ -17,26 +17,53 @@ REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/repos-registry-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
-# A throwaway root whose kit sources exist, so digest checks have something real to hash.
+# A throwaway root whose kit sources exist, so digest checks have something real to hash — and whose
+# .github/workflows exist, because a capability row names the reusable workflow that audits it and
+# validate now proves that workflow is really there and really callable (#503).
 ROOT="$WORK/root"
-mkdir -p "$ROOT/.claude/skills/demo-skill" "$ROOT/scripts"
+mkdir -p "$ROOT/.claude/skills/demo-skill" "$ROOT/scripts" "$ROOT/.github/workflows"
 printf '# demo skill\n' > "$ROOT/.claude/skills/demo-skill/SKILL.md"
 printf '#!/usr/bin/env bash\necho hi\n' > "$ROOT/scripts/democlient"
+printf 'on:\n  workflow_call:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
+  > "$ROOT/.github/workflows/coordination-coherence.yml"
+printf 'on:\n  workflow_call:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
+  > "$ROOT/.github/workflows/lockfile-sync.yml"
+# A workflow that is NOT reusable: no `workflow_call:` trigger, so no repo could ever `uses:` it.
+printf 'on:\n  push:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
+  > "$ROOT/.github/workflows/not-reusable.yml"
 SKILL_SHA="$(sha256sum "$ROOT/.claude/skills/demo-skill/SKILL.md" | cut -d' ' -f1)"
 CLIENT_SHA="$(sha256sum "$ROOT/scripts/democlient" | cut -d' ' -f1)"
 
 BASE="$WORK/base.yml"
 cat > "$BASE" <<YAML
-schemaVersion: 1
+schemaVersion: 3
 updated: 2026-07-04
 authority: FS-GG/.github
 repos:
   - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }
   - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
 kit:
   - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill, sha256: $SKILL_SHA }
   - { id: democlient, kind: client, source: scripts/democlient,        sha256: $CLIENT_SHA }
 YAML
+
+# capreg <name> <sdd-receives> <capability-row>… — BASE's repos + kit, with a custom capabilities
+# block. The rows are multi-line YAML, so the `variant` sed helper cannot express them.
+capreg() {
+  local n="$1" recv="$2"; shift 2
+  local f="$WORK/$n.yml"
+  { printf 'schemaVersion: 3\nupdated: 2026-07-04\nauthority: FS-GG/.github\nrepos:\n'
+    printf '  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }\n'
+    printf '  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [%s] }\n' "$recv"
+    printf 'kit:\n'
+    printf '  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill, sha256: %s }\n' "$SKILL_SHA"
+    printf '  - { id: democlient, kind: client, source: scripts/democlient,        sha256: %s }\n' "$CLIENT_SHA"
+    printf 'capabilities:\n'
+    printf '  %s\n' "$@"; } > "$f"
+  printf '%s' "$f"
+}
 
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
@@ -89,8 +116,86 @@ DUPBASENAME="$WORK/dupbasename.yml"
 { cat "$BASE"; printf '  - { id: vendored-demo, kind: skill, source: vendor/demo-skill, sha256: %s }\n' "$VENDOR_SHA"; } > "$DUPBASENAME"
 expect_fail "duplicate skill source basename"  1 "share destination basename" "$DUPBASENAME"
 
+# --- audited capabilities (#503) ---
+# repos-audit.sh reads its whole mandate from this block, so every way it can be wrong is a way the
+# audit goes quiet. A capability whose workflow is misspelled, missing, or not actually reusable
+# audits nothing and says nothing — the vacuous green, relocated from the roster into the mapping.
+
+expect_pass "a capability naming a real reusable workflow passes" \
+  "$(capreg cap_ok "labels, coordination-kit" "- { id: coordination-kit, workflow: coordination-coherence.yml }")"
+
+expect_fail "capability names a workflow that does not exist" 1 "is not in .github/workflows/" \
+  "$(capreg cap_nofile "labels, coordination-kit" "- { id: coordination-kit, workflow: no-such.yml }")"
+
+# The subtle one: the file is there, but it has no `workflow_call:` trigger, so nothing can `uses:` it.
+# Every declared receiver would be reported unwired, forever, against a workflow that cannot be wired.
+expect_fail "capability names a workflow that is not reusable" 1 "no 'workflow_call:' trigger" \
+  "$(capreg cap_notreusable "labels, coordination-kit" "- { id: coordination-kit, workflow: not-reusable.yml }")"
+
+expect_fail "capability with no workflow at all" 1 "has no 'workflow'" \
+  "$(capreg cap_nowf "labels, coordination-kit" "- { id: coordination-kit }")"
+
+# ...and a COMMENT must not satisfy the reusability check. An unanchored `grep -q workflow_call:`
+# matches the word anywhere in the file, so a workflow whose prose merely mentions it would pass as
+# reusable — a check whose subject is "can this really be called?" satisfied by writing about calling.
+printf 'on:\n  push:\n# deliberately NOT a workflow_call: trigger — just prose about one\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
+  > "$ROOT/.github/workflows/prose-only.yml"
+expect_fail "a workflow whose only 'workflow_call:' is in a comment is not reusable" 1 "no 'workflow_call:' trigger" \
+  "$(capreg cap_prose "labels, coordination-kit" "- { id: coordination-kit, workflow: prose-only.yml }")"
+
+expect_fail "capability outside the receives vocabulary" 1 "not in the receives vocabulary" \
+  "$(capreg cap_unknown "labels, coordination-kit" "- { id: bogus-cap, workflow: coordination-coherence.yml }")"
+
+expect_fail "duplicate capability id" 1 "duplicate capability id" \
+  "$(capreg cap_dup "labels, coordination-kit" \
+      "- { id: coordination-kit, workflow: coordination-coherence.yml }" \
+      "- { id: coordination-kit, workflow: lockfile-sync.yml }")"
+
+# `receivers: none` is a reviewed claim, like outside-fabric — so it needs a reason, and it must not
+# contradict the roster. (Its OTHER guard is at audit time: repos-audit.sh scans for a real adopter
+# and fails if one exists, so the claim is falsifiable rather than merely asserted here.)
+expect_pass "'receivers: none' with a reason, and no repo rostering it, passes" \
+  "$(capreg cap_none_ok "labels" \
+      "- { id: coordination-kit, workflow: coordination-coherence.yml, receivers: none, reason: nobody has adopted it }")"
+
+expect_fail "'receivers: none' with no reason" 1 "mute button" \
+  "$(capreg cap_none_noreason "labels" \
+      "- { id: coordination-kit, workflow: coordination-coherence.yml, receivers: none }")"
+
+expect_fail "'receivers: none' contradicted by a rostered receiver" 1 "but repo(s) roster it" \
+  "$(capreg cap_none_contra "labels, coordination-kit" \
+      "- { id: coordination-kit, workflow: coordination-coherence.yml, receivers: none, reason: nobody has adopted it }")"
+
+expect_fail "'receivers:' with a value other than none" 1 "is invalid" \
+  "$(capreg cap_recv_bad "labels, coordination-kit" \
+      "- { id: coordination-kit, workflow: coordination-coherence.yml, receivers: some }")"
+
+# --- caps query (repos-audit.sh reads its mandate through this) ---
+caps_tsv="$(bash "$REPOS_SH" caps --registry "$BASE")"
+[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t')" ] \
+  && ok "caps -> a TSV row per capability: id, workflow, receivers, reason" \
+  || bad "caps TSV" "got: $(printf '%s' "$caps_tsv" | cat -A | head -2)"
+caps_ids="$(bash "$REPOS_SH" caps --field id --registry "$BASE")"
+[ "$caps_ids" = "coordination-kit" ] && ok "caps --field id -> the capability ids" \
+  || bad "caps --field id" "got: $caps_ids"
+
+# --- list --all (the unrostered-adopter sweep starts from every repo, not from a declaration) ---
+all_repos="$(bash "$REPOS_SH" list --all --field id --registry "$BASE" | tr '\n' ',')"
+[ "$all_repos" = ".github,sdd," ] && ok "list --all -> every rostered repo, receives or not" \
+  || bad "list --all" "got: $all_repos"
+
 # --- misconfiguration (exit 2) ---
 expect_fail "empty repos[] is misconfig"      2 "empty"              "$(variant emptyrepos  's/^repos:/repos: []\n_repos:/')"
+
+# A usage error is exit 2 ("I was called wrong"), never exit 1 (the code reserved for "the roster is
+# invalid") — #341's rule, applied to the two query surfaces #503 added. `--all` and `--receives` ask
+# opposite questions; taking both silently would answer only one of them.
+for bad_call in "list --all --receives coordination-kit" "list" "caps --field bogus" "caps --field"; do
+  # shellcheck disable=SC2086
+  out="$(bash "$REPOS_SH" $bad_call --registry "$BASE" 2>&1)" && rc=0 || rc=$?
+  [ "$rc" -eq 2 ] && ok "usage error ('$bad_call') -> exit 2, never 1 (a roster finding)" \
+    || bad "usage error must not masquerade as a roster finding" "call=$bad_call rc=$rc: $out"
+done
 
 # --- list + digest ---
 list_kit="$(bash "$REPOS_SH" list --receives coordination-kit --registry "$BASE")"
@@ -255,6 +360,50 @@ PY
 uncovered="$(uncovered_for ".github/workflows/repos-registry-selftest.yml" "pull_request,push")"
 if [ -z "$uncovered" ]; then ok "every kit source is covered by the selftest paths: filter"
 else bad "kit source ungated — an edit to it skips the digest check" "$uncovered"; fi
+
+# ...and the same gate-on-the-gate for the CAPABILITY workflows (#503). `validate` now proves each
+# capabilities[].workflow exists and really carries a `workflow_call:` trigger, so registry/repos.yml's
+# validity depends on those files. If the selftest's paths: filter does not cover them, renaming or
+# deleting one leaves the roster INVALID and merges green — the check is fine and its trigger fails
+# open, which is #334 over again, and the reason that leg above exists at all.
+caps_uncovered_for() {  # <workflow-rel-path> <trigger,trigger…> -> uncovered "trigger: cap … wf …" lines
+  python3 - "$REPO_ROOT" "$1" "$2" <<'PY'
+import sys, yaml, re, pathlib
+root, wf_rel, want = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3].split(",")
+wf  = yaml.safe_load((root / wf_rel).read_text())
+reg = yaml.safe_load((root / "registry/repos.yml").read_text())
+
+triggers = wf.get(True, wf.get("on"))
+if not isinstance(triggers, dict):
+    sys.exit(f"{wf_rel} has no readable `on:` block — cannot check its paths: filter")
+
+def matches(path, pat):                       # GitHub glob: ** spans /, * does not
+    rx = "".join(r"[^/]*" if p == "*" else ".*" if p == "**" else re.escape(p)
+                 for p in re.split(r"(\*\*|\*)", pat))
+    return re.fullmatch(rx, path) is not None
+
+gaps = []
+for trigger in want:
+    if trigger not in triggers:
+        gaps.append(f"{trigger}: trigger absent — never runs on {trigger}")
+        continue
+    cfg = triggers.get(trigger) or {}
+    if "paths" not in cfg:
+        continue                              # unfiltered: everything fires it
+    pats = cfg["paths"]
+    if not pats:
+        gaps.append(f"{trigger}: paths: is empty — matches nothing")
+        continue
+    for cap in reg.get("capabilities", []):
+        probe = f".github/workflows/{cap['workflow']}"
+        if not any(matches(probe, p) for p in pats):
+            gaps.append(f"{trigger}: capability '{cap['id']}' workflow {probe}")
+print("\n".join(gaps))
+PY
+}
+uncovered="$(caps_uncovered_for ".github/workflows/repos-registry-selftest.yml" "pull_request,push")"
+if [ -z "$uncovered" ]; then ok "every capabilities[].workflow is covered by the selftest paths: filter"
+else bad "capability workflow ungated — renaming it leaves the roster invalid, green" "$uncovered"; fi
 
 uncovered="$(uncovered_for ".github/workflows/coordination-propagate.yml" "push")"
 if [ -z "$uncovered" ]; then ok "every kit source is covered by the propagate paths: filter"
