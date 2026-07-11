@@ -622,14 +622,19 @@ if [ "\$sub" = "api" ]; then
     # Record HOW the lock's candidate list was fetched: it must paginate (no 100-issue lock limit)
     # and must not send a conditional request (no cache may hide a live marker).
     printf 'issue-list %s paginate=%s inm=%s\n' "\$lo/\$lr" "\${paginate:-0}" "\${inm:-none}" >>"\$GH_LOG"
-    out='[]'
+    # Accumulate over a FILE, not through argv (#497). The real API happily serves >128 KiB of issue
+    # bodies; a stub that re-passes its own accumulator as \`--argjson\` cannot, because a single
+    # argument is capped at MAX_ARG_STRLEN. That cap is the very bug under test, so a stub carrying
+    # it would E2BIG before the client ever ran — and the defect would be structurally untestable
+    # (cf. #494). \`printf\` is a bash BUILTIN, so piping \$out onward is not an exec and not capped.
+    lst="\$(mktemp)"
     for jf in "$STORE"/issue-*.json; do
       [ -f "\$jf" ] || continue
       inum="\$(jq -r '.number' "\$jf")"; cf="$STORE/comments-\$inum.json"
       cc=0; [ -f "\$cf" ] && cc="\$(jq 'length' "\$cf")"
-      out="\$(jq -c -n --argjson acc "\$out" --slurpfile it "\$jf" --argjson cc "\$cc" \
-                '\$acc + [ \$it[0] + {comments: \$cc} ]')"
+      jq -c --argjson cc "\$cc" '. + {comments: \$cc}' "\$jf" >>"\$lst"
     done
+    out="\$(jq -c -s '.' "\$lst")"; rm -f "\$lst"
     [ -n "\$include" ] && { printf 'HTTP/2.0 200 OK\r\n'; printf '\r\n'; }
     printf '%s' "\$out" \
       | jq -c --arg nwo "\$lo/\$lr" 'map(select(.repo == \$nwo) | select(.state == "open"))' \
@@ -2896,6 +2901,84 @@ case "$w469r" in
   *"KIT DIGEST"*) bad "#469: no registry to read -> silent (receiver repos have no repos.yml)" "$w469r" ;;
   *) ok "#469: no registry to read -> silent (receiver repos have no repos.yml)" ;;
 esac
+
+# ================================================================================================
+# THE CLAIM SCAN MUST NOT TRAVEL THROUGH `argv` (FS-GG/.github#497)
+# ================================================================================================
+# `active_claims` reads each candidate's full BODY on purpose — arm B carries it so a touch-set costs
+# zero extra reads. It then used to pass that whole set back through the jq COMMAND LINE, both to
+# accumulate arm B repo-by-repo and to merge the two arms. On Linux a SINGLE argument is capped at
+# MAX_ARG_STRLEN (128 KiB) — independently of the far larger total ARG_MAX — so past that, `execve`
+# returns E2BIG, jq never runs, the `$( )` yields the EMPTY STRING, and the next loop iteration feeds
+# it back as `--argjson acc ''` ("invalid JSON text").
+#
+# This is not a corner case: the org crossed 128 KiB of open-issue bodies in July 2026 and EVERY
+# claim-aware read — who, reap, batch, take, inbox, widen, overlap --active — died at once. `take`
+# could not schedule, so no worker could pick up work through the protocol at all. It failed CLOSED
+# (#461's guard refused to report the empty claim set as "nobody holds anything"), so it was a loud
+# outage rather than a double-claim — but an outage that no amount of waiting would clear.
+#
+# The fixture therefore serves a candidate set BIGGER THAN THE CAP and asserts the scan still reads
+# it. The size assertion below is load-bearing: if a later edit shrinks these bodies under 128 KiB,
+# the test would still pass while no longer exercising the bug, which is worse than not having it.
+echo "--- .github#497: a claim scan larger than MAX_ARG_STRLEN is still readable ---"
+
+ARG_CAP=131072                      # MAX_ARG_STRLEN: the per-argument ceiling, not ARG_MAX
+seed_fat_issue() {                  # <num> <body-bytes> — an open, chatty issue with a BIG body
+  local n="$1" bytes="$2" repo="FS-GG/FS.GG.Audio" filler body
+  # Each body stays well under GitHub's 65,536-CHARACTER cap, so it is the ACCUMULATED set — not any
+  # one issue — that breaches MAX_ARG_STRLEN here. That is the outage this section pins. (A single
+  # body CAN breach it on its own once the characters are multi-byte: 65,536 CJK chars is ~196 KB.
+  # A different defect, on a per-item argv path this fix does not touch — filed as #507.)
+  filler="$(head -c "$bytes" /dev/zero | tr '\0' 'x')"
+  body="Paths: src/Fat$n/**
+
+$filler"
+  jq -n --argjson n "$n" --arg t "fat body $n" --arg b "$body" --arg r "$repo" \
+    '{id:($n + 1000), number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
+      html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
+  echo '[]' >"$STORE/comments-$n.json"
+}
+fat() { PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
+
+for n in 530 531 532; do seed_fat_issue "$n" 50000; done
+# `open_claim_candidates` prunes `comments == 0` — a claim marker IS a comment, so a silent issue can
+# hold no lock. These must therefore be CHATTY to enter the candidate set (and carry their bodies in
+# with them): #530 gets a real claim marker, #531/#532 merely get talked at, exactly as a live board
+# looks. Route both through the tool so the comment schema cannot drift from the real one.
+fat --worker kite-497 claim 'FS-GG/FS.GG.Audio#530' >/dev/null 2>&1 || true
+for n in 531 532; do
+  fat --worker kite-497 say "FS-GG/FS.GG.Audio#$n" --to '*' 'chatter, no marker' >/dev/null 2>&1 || true
+done
+# Assert the SEED landed before asserting anything about the scan. Without this, a regression in
+# `claim` shows up below as `expected='kite-497' actual=''` — which reads as a broken claim SCAN and
+# sends the next reader into the wrong function entirely.
+assert_eq "#497: (fixture) the marker seeded onto the fat issue" "kite-497" "$(workers_on 530)"
+
+# The fixture really is over the cap — otherwise everything below is vacuous.
+fatbytes="$(jq -c -s '[.[] | {number, title, url: .html_url, body}]' \
+              "$STORE"/issue-530.json "$STORE"/issue-531.json "$STORE"/issue-532.json | wc -c)"
+if [ "$fatbytes" -gt "$ARG_CAP" ]; then
+  ok "#497: the fixture candidate set really exceeds MAX_ARG_STRLEN ($fatbytes > $ARG_CAP bytes)"
+else
+  bad "#497: the fixture candidate set must EXCEED $ARG_CAP bytes or it tests nothing" "$fatbytes"
+fi
+
+# The scan reads it. Pre-fix this died with `Argument list too long` / `invalid JSON text passed to
+# --argjson`, and #461's guard turned that into a hard `cannot read the claim set`.
+fatwho="$(fat who --repo FS-GG/FS.GG.Audio --json 2>&1 || true)"
+case "$fatwho" in
+  *"cannot read the claim set"*|*"Argument list too long"*|*"--argjson"*)
+    bad "#497: a claim set over the arg cap must still be READ, not die" "$fatwho" ;;
+  *) ok "#497: a claim set over the arg cap must still be READ, not die" ;;
+esac
+assert_eq "#497: ...and the claim inside that oversized set is reported, with its holder" \
+  "kite-497" "$(printf '%s' "$fatwho" | jq -r '.[] | select(.number==530) | .worker' 2>/dev/null)"
+# The scan stays HONEST at size: the two chatty-but-markerless issues are not in-flight work, and a
+# body big enough to break the plumbing must not become a claim. Scoped to the fat fixtures — Audio
+# also holds the #422/#424 overlap section's board item, which `who` reports for its own good reason.
+assert_eq "#497: ...and chatty markerless issues in that set are still not claims" "[530]" \
+  "$(printf '%s' "$fatwho" | jq -c '[.[] | select(.number >= 530 and .number <= 532) | .number] | sort' 2>/dev/null)"
 
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
