@@ -242,6 +242,33 @@ overlapping held work is never scheduled. Items with no `Paths:` are unschedulab
 The touch-set is **transient** (per-item, gone at merge), so it lives in the issue body, not the
 registry — the registry is for *durable* cross-repo contracts only.
 
+**Do not reserve generated artifacts** (FS-GG/.github#309). A `Paths:` token names a file two workers
+might *author* into conflict. A file produced by a checked-in generator and verified by a CI drift gate
+is neither authored nor semantically conflicting — **a collision in it is a rebase, not a decision**.
+Declaring it reserves a file nobody owns, and serialises every item that regenerates it.
+
+The test is **authorship, not `.gitignore`**: a generated file that is committed and reviewed is still
+not authored. Ask whether a human makes a *merge decision* in it. If two workers' edits can only be
+reconciled by re-running a script, it does not belong in a touch-set — CI already guarantees the
+result independently, and the drift gate catches the worker who forgets to regenerate.
+
+The instance that produced this rule: `FS.GG.Game` has one generated
+`readiness/surface-baselines/<pkg>.txt` per package — a sorted list of exported type names, reflected
+out of the built assembly and gated by a CI drift check. Every `[core]` item adds a module, so every
+`[core]` item appends to that one file. Declared honestly, every `[core]` item became pairwise
+overlapping with every other, and the whole `P6 Game` phase collapsed to **one worker** — in the phase
+the protocol exists to fan out. Excluded, the same items ran concurrently and the baseline
+three-way-merged on rebase with zero manual fixup, drift gate green.
+
+Two corollaries, because both bit us:
+
+1. **Declare against what the generator emits, not against the issue's prose.** Game#31's acceptance
+   said "surface baseline". It adds a *function* to an existing module, and the generator emits one
+   exported **type** per line — so it never touched the baseline at all. A `Paths:` line asserted from
+   an issue body rather than from the generator's output is how a *false global lock* gets created.
+2. **`verify-paths` drift on a generated file is expected** — the advisory signal working as designed,
+   not an error (see **Drift** below).
+
 **Widening mid-flight.** ADR-0021 required a worker that widens its touch-set to re-declare and
 re-check. `widen` does all of it, including the part a worker cannot do alone — telling the workers it
 now collides with, on their own items:
@@ -261,6 +288,14 @@ scripts/fsgg-coord verify-paths --pr <n> [--warn]
 
 CI runs it in `--warn` mode (see `.github/workflows/touch-set-drift.yml`): it reports, it does not
 block. An undetected drift is what turns two "disjoint" items into a merge conflict.
+
+**A regenerated artifact will report as drift, and that is expected** — you excluded it deliberately,
+and then you regenerated it. `verify-paths` cannot today distinguish *"you touched a file you never
+declared"* (a real finding — you should have `widen`ed) from *"you regenerated the artifact the
+protocol told you not to declare"* (correct behaviour). Until it can, **say which one it is** in the
+PR, so the advisory does not decay into a line workers skip past. Closing that gap wants a second
+declaration surface that `verify-paths` subtracts before reporting — tracked in FS-GG/.github#498,
+with the ADR that owes ADR-0021 an explanation of why there are two.
 
 ### 4. See and say → visibility, and a channel
 
