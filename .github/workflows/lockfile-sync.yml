@@ -53,9 +53,28 @@
 # new org-provisioned PAT, i.e. the fix for the provisioning problem would itself have needed
 # provisioning. Checking where the workflow already runs needs no token and no new grant at all.
 #
-# Prerequisite 1 (App installation) is NOT statically checkable — enumerating an installation's
-# selected repos needs a token no CI job here holds. It fails at the token step or 403s on the push,
-# and the two are provisioned in the same admin pass, so asserting 2 catches both real cases.
+#   * Prerequisite 1 is ALSO checkable, and this header used to say it was not (.github#522):
+#         GET /installation/repositories      (with an OWNER-scoped App installation token)
+#     The old claim — "enumerating an installation's selected repos needs a token no CI job here
+#     holds" — was simply false. CI holds the App private key; it is what mints the token. #514
+#     measured it in about two seconds. The claim was never tested, and being written down is what
+#     stopped anyone from testing it: a gate that documents its own blind spot as a law of nature
+#     acquires a blind spot nobody audits. That is #482's mistake, one prerequisite over, in the very
+#     header that narrates #482.
+#
+#     The fallback it offered — "the two are provisioned in the same admin pass, so asserting 2
+#     catches both real cases" — is a CORRELATION, not a check, and it breaks on any sender-or-mixed
+#     role repo: `.github` passes prerequisite 2 NECESSARILY (it must hold the secrets to mint tokens
+#     for OTHER repos) while telling you nothing about whether it is itself a TARGET in the
+#     installation. So a repo de-scoped from the App sailed through preflight green and died later at
+#     the push, with a 403 inside somebody's unrelated dependency-bump PR — naming neither the App nor
+#     the repo. Exactly the failure preflight exists to abolish.
+#
+# The `preflight` job below now asserts BOTH prerequisites in the RECEIVER's own context, on every
+# call. Prerequisite 2 costs no token (Actions decides `!= ''` before the step runs); prerequisite 1
+# costs one owner-scoped mint and one API call. The mint is OWNER-scoped on purpose — it succeeds
+# whatever the repo selection is, so the token is not the assertion and a de-scoped repo gets an
+# unambiguous "you are not in the list" instead of an ambiguous failed mint.
 #
 # Rendering, SDD, Governance and Templates are confirmed on prerequisite 2 (verified 2026-07-11 via
 # the endpoint above); Rendering and Governance are additionally proven on 1 (they have actually
@@ -105,10 +124,15 @@ jobs:
   # error. Running it on every call turns "is this repo provisioned?" into a continuously-checked
   # invariant that is answered on the FIRST PR after adoption, months before Renovate is onboarded.
   #
-  # It costs one ~5s runner and no token: emptiness is decided by Actions' `!= ''` BEFORE the step
-  # runs, so the job needs neither the secret values nor a checkout nor an API call. That is the whole
-  # reason the check lives here rather than in a coherence gate in .github — this repo's CI holds a
-  # GITHUB_TOKEN scoped to `.github` alone and literally cannot read FS.GG.Game's secrets.
+  # PREREQUISITE 2 costs no token at all: emptiness is decided by Actions' `!= ''` BEFORE the step
+  # runs, so that leg needs neither the secret values nor a checkout nor an API call. PREREQUISITE 1
+  # costs one owner-scoped App-token mint and one `GET /installation/repositories` (~2s, .github#522);
+  # it runs only when prerequisite 2 HOLDS, because under a missing secret a failed mint says nothing
+  # about the installation and would blame the App for a secrets gap.
+  #
+  # Either way the check lives HERE, in the receiver, rather than in a coherence gate in `.github` —
+  # this repo's CI holds a GITHUB_TOKEN scoped to `.github` alone and literally cannot read
+  # FS.GG.Game's secrets. Checking where the workflow already runs needs no new org grant.
   #
   # Severity is deliberately split, because blast radius matters: a repo that is unprovisioned but not
   # about to sync gets a WARNING (visible, non-blocking — it must not red an unrelated PR over a
@@ -121,6 +145,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Assert the dispatch App secrets are visible to this repo
+        id: secrets
         env:
           # BOOLEANS ONLY. The secret values are never put in the environment, never interpolated
           # into the script, and never printed — Actions evaluates `!= ''` before the step runs, so
@@ -154,7 +179,13 @@ jobs:
           # This is NOT a fail-open. `sync` requires `head.repo.full_name == github.repository` (it
           # never auto-commits to an untrusted head), so on a fork head there is no push to gate and
           # nothing this job could protect. It reports what it knows — nothing — and says why.
+          # `can_mint` tells the prerequisite-1 steps below whether minting is even POSSIBLE here. It is
+          # false on a fork (no secrets by design) and false when the secrets are missing (already
+          # reported, in this step, with the fix) — in both cases a mint would fail for a reason that is
+          # not prerequisite 1, and reporting it as one would blame the App installation for a secrets
+          # problem. Only when prerequisite 2 HOLDS is a failed mint evidence about prerequisite 1.
           if [ "$SAME_REPO" != 'true' ]; then
+            echo "can_mint=false" >> "$GITHUB_OUTPUT"
             echo "not evaluated: this PR's head is not in $GITHUB_REPOSITORY (a fork)."
             echo
             echo "GitHub withholds secrets from workflows triggered from a fork, so the dispatch App"
@@ -168,9 +199,12 @@ jobs:
           [ "$HAS_APP_KEY" = 'true' ] || missing="$missing FSGG_DISPATCH_APP_PRIVATE_KEY"
 
           if [ -z "$missing" ]; then
+            echo "can_mint=true" >> "$GITHUB_OUTPUT"
             echo "ok: the fs-gg-cross-repo-dispatch App secrets resolve in $GITHUB_REPOSITORY."
             exit 0
           fi
+
+          echo "can_mint=false" >> "$GITHUB_OUTPUT"
 
           # `required: true` on a workflow_call secret means PROVIDED, not NON-EMPTY: a caller
           # forwarding a secret its repo cannot see passes the empty string and satisfies `required`.
@@ -200,6 +234,103 @@ jobs:
           fi
 
           echo "::warning title=lockfile-sync will fail on the next renovate/* PR::$summary It is not blocking THIS PR (sync only runs on renovate/* branches), but it will fail the first one that opens. $fix"
+          exit 0
+
+      # --- PREREQUISITE 1: is this repo actually IN the App installation? (.github#522) -------------
+      #
+      # The header used to assert this was "NOT statically checkable — enumerating an installation's
+      # selected repos needs a token no CI job here holds". That is false, and the token is right
+      # there: `secrets.app-private-key` is what mints one.
+      #
+      # The mint below is OWNER-scoped (`owner:`, and deliberately NO `repositories:`), which succeeds
+      # regardless of which repos are selected — so the token itself is not the assertion. That matters:
+      # a repo-scoped mint would simply FAIL for a de-scoped repo, and a failed mint is an ambiguous
+      # signal (bad key? wrong app-id? clock skew?). An owner-scoped mint that then ENUMERATES the
+      # installation gives an unambiguous, positive answer: the repo is in the list, or it is not.
+      - name: Mint an owner-scoped token (succeeds whatever the repo selection is)
+        id: install-token
+        if: steps.secrets.outputs.can_mint == 'true'
+        continue-on-error: true          # a failed mint is reported by the NEXT step, with a cause
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Assert this repo is in the fs-gg-cross-repo-dispatch App installation
+        id: installation
+        if: steps.secrets.outputs.can_mint == 'true'
+        env:
+          # Not a secret: an installation token, minted seconds ago, scoped to reading the installation.
+          GH_TOKEN: ${{ steps.install-token.outputs.token }}
+          WOULD_SYNC: >-
+            ${{ startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+            github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          set -eu
+
+          fix="Add $GITHUB_REPOSITORY to the fs-gg-cross-repo-dispatch App installation with contents: write (Org Settings -> GitHub Apps -> Configure -> Repository access)."
+
+          # A mint that failed under a HOLDING prerequisite 2 is itself a finding — the secrets are
+          # visible, so the key/app-id are the ones this org provisioned, and they still would not mint.
+          # Do not swallow it: an empty token here would make the enumeration below fail with a 401 that
+          # reads like a network blip.
+          #
+          # This is the step the `continue-on-error` on the mint hands control to, so it is where the
+          # gate must NOT fail open. Same split-severity rule as everywhere else in this job: a
+          # renovate/* PR needs the token NOW and would die at `sync`'s own mint, so RED it; an
+          # unrelated PR gets a loud warning rather than a block it cannot act on. What must never
+          # happen is a silent pass, which is what an unconditional `exit 0` here would be.
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "could not mint an owner-scoped App token, even though both secrets resolve."
+            echo "That is not a prerequisite-1 answer — it means the App id / private key this org"
+            echo "shared with $GITHUB_REPOSITORY do not mint against ${GITHUB_REPOSITORY%%/*}."
+            summary="The App secrets resolve in $GITHUB_REPOSITORY but minting an owner-scoped token FAILED, so sync would die at its own token step. Check FSGG_DISPATCH_APP_ID / _PRIVATE_KEY against the fs-gg-cross-repo-dispatch App."
+            if [ "$WOULD_SYNC" = 'true' ]; then
+              echo "::error title=lockfile-sync: the dispatch App token would not mint::$summary This renovate/* PR needs it NOW."
+              exit 1
+            fi
+            echo "::warning title=lockfile-sync: the dispatch App token would not mint::$summary Not blocking THIS PR, but the first renovate/* PR will fail."
+            exit 0
+          fi
+
+          # THE CHECK. `GET /installation/repositories` enumerates exactly the repos the installation
+          # selected — the list an org admin ticks. --paginate because `repository_selection: selected`
+          # has no size guarantee, and a repo missing only because it sat on page 2 would be the same
+          # fail-open one layer down.
+          if ! repos="$(gh api /installation/repositories --paginate --jq '.repositories[].full_name' 2>&1)"; then
+            echo "could not enumerate the App installation: $repos"
+            echo "::warning title=lockfile-sync: could not verify the App installation::GET /installation/repositories failed in $GITHUB_REPOSITORY. This is a no-verdict, not a pass — prerequisite 1 is unchecked on this run."
+            exit 0
+          fi
+
+          if printf '%s\n' "$repos" | grep -qxF "$GITHUB_REPOSITORY"; then
+            echo "ok: $GITHUB_REPOSITORY is in the fs-gg-cross-repo-dispatch App installation."
+            exit 0
+          fi
+
+          echo "$GITHUB_REPOSITORY is NOT in the fs-gg-cross-repo-dispatch App installation."
+          echo
+          echo "The installation currently selects:"
+          printf '%s\n' "$repos" | sed 's/^/  /'
+          echo
+          echo "So the App secrets resolve (prerequisite 2 passed, above) but the App cannot push here:"
+          echo "the token step will mint a token with no access to $GITHUB_REPOSITORY, and the push 403s."
+          echo
+          echo "FIX (org-admin, ~1 min):"
+          echo "  $fix"
+
+          summary="$GITHUB_REPOSITORY can see the App secrets but is NOT in the fs-gg-cross-repo-dispatch App installation, so a sync push would 403."
+
+          # Same split-severity rule as prerequisite 2, and for the same reason: a repo that is not
+          # about to sync must not have an unrelated PR redded over an adoption gap it can fix at
+          # leisure — but a renovate/* PR needs this NOW and would otherwise die opaquely at the push.
+          if [ "$WOULD_SYNC" = 'true' ]; then
+            echo "::error title=lockfile-sync: this repo is not in the dispatch App installation::$summary This renovate/* PR needs it NOW. $fix"
+            exit 1
+          fi
+
+          echo "::warning title=lockfile-sync will 403 on the next renovate/* PR::$summary It is not blocking THIS PR (sync only runs on renovate/* branches), but the first one that opens will 403 on the push. $fix"
           exit 0
 
   sync:
@@ -381,16 +512,21 @@ jobs:
 
       - name: Commit and push if changed
         working-directory: ${{ inputs.working-directory }}
-        env:
-          APP_ID: ${{ secrets.app-id }}
         run: |
           set -euo pipefail
           if [ -z "$(git status --porcelain -- '*packages.lock.json')" ]; then
             echo "No lockfile drift — nothing to sync."
             exit 0
           fi
-          git config user.name  'fsgg-dispatch[bot]'
-          git config user.email "${APP_ID}+fsgg-dispatch[bot]@users.noreply.github.com"
+          # The App pushed this branch, so the App authors the commit. GitHub links a bot commit to its
+          # account ONLY via `<BOT_USER_ID>+<slug>[bot]@users.noreply.github.com`, and BOT_USER_ID is the
+          # id of the `[bot]` USER (`gh api users/fs-gg-cross-repo-dispatch%5Bbot%5D` -> 297630107), NOT
+          # the App id. This used the App id, so every lockfile-sync commit has an UNLINKED author — and
+          # because the App id is a secret, Actions masks it to `***` in the log, so the wrong value did
+          # not even look wrong. #514 fixed the identical bug in skill-registry-autofix.yml and named
+          # this file as still carrying it (.github#522). Literal, because no step output carries it.
+          git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git add -- '*packages.lock.json'
           git commit -m 'chore: sync packages.lock.json (dotnet restore --force-evaluate)'
           git push
