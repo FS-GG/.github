@@ -1,8 +1,15 @@
 # ADR-0009: The `fsgg-sdd` CLI is the single orchestrator — detect-and-remediate, not silent auto-update
 
-- **Status:** Accepted
+- **Status:** Accepted (creation-time scaffolding refined by [ADR-0030](0030-creation-time-scaffolding-self-updates-by-default.md))
 - **Date:** 2026-07-01
 - **Affects:** FS.GG.SDD (CLI producer + policy owner), .github (registry/ADR owner), FS.GG.Templates + every scaffolded consumer
+
+> **Refined by [ADR-0030](0030-creation-time-scaffolding-self-updates-by-default.md) (2026-07-11):**
+> the "never silently self-update" rule below governs **in-project** `fsgg-sdd` invocations against
+> an **existing** consumer. At **creation** time — `new-sdd-workspace` building a brand-new
+> workspace — there is no consumer artifact to clobber and no prior run to reproduce, so the
+> scaffolder self-updates the CLI to the newest coherent set **before** scaffolding **by default**
+> (opt out with `--pinned`). That bounded carve-out does not touch any policy in this ADR.
 
 ## Context
 
