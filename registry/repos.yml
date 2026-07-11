@@ -100,10 +100,10 @@ outside-fabric: []
 # (scripts/coordination-sync) writes these into each receiver; the coherence gate asserts the bytes.
 kit:
   - { id: cross-repo-coordination, kind: skill,  source: .claude/skills/cross-repo-coordination, sha256: f4eee4061e8ed2e621be3c3e8dd5d9587e31f78c673ac7c6f9e8e698763b2118 }
-  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: da58b92c7b4a39375b6fa11eabb98f7c2b2ef527ab0f36ac10f8a655f5196eba }
+  - { id: intra-repo-parallel-work, kind: skill, source: .claude/skills/intra-repo-parallel-work, sha256: 183ab835a06dcb0137b9cafdd87fa88ebbc246b9d7ed45c0beee1dd2e7c20657 }
   # Command skills — the two driver skills over the protocol the three items above define.
   # `check-board` reconciles the board against issue state; `pnext-item` drives the worker loop.
   # They hold no protocol of their own, so they carry no ADR: each cites the skill it drives.
   - { id: check-board,             kind: skill,  source: .claude/skills/check-board,              sha256: 13798e12fe82719b752459caa1e76fc41b19d5690be243bd6b9d0c4f1082251c }
-  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: c29edd0c891dbfbfcf850b158c96682849c1dd3fff81ad30fac2b47576b01675 }
+  - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: 91d748aca7e1127ea02bf0c3aaa4fe8cdf6e3e2150ac98f43b148f40d0b1c2ac }
   - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 6d48f0cccfe9e276340cbdb226c3f84875b18752267a16f06ffcbded3f92cf22 }
