@@ -389,4 +389,164 @@ run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FA
 grep -q 'id: owned.*materializes-when' "$REG" && { echo "FAIL: --write inserted a field it should not have"; exit 1; }
 echo "   ok"
 
+
+# ─────────────────────────────────────────────────────────────────────────────────────────────────
+# Cases 25-30 cover the RESPONSE half's PR BODY (.github#425, epic #266) — `scripts/skill-registry-
+# autofix-body`, which composes the standing reconcile PR.
+#
+# The body is the artifact that misled: PR #414 asserted in the present tense that it had reconciled
+# the registry, listed no residual section (at cut time there was none), and called its own post-write
+# re-check "the verification of record" — while two producer merges had landed behind it, so merging
+# it would have left `main` RED. The PR's own `skill-registry-coherence` job is structurally prevented
+# from running on it (GITHUB_TOKEN pushes do not re-trigger `on: pull_request`), so nothing could
+# contradict the body. These cases pin the three properties that make it honest: it STAMPS the
+# producer commits it was computed from, it states a VERDICT, and it does not claim a currency it
+# cannot have.
+BODY="$HERE/../../scripts/skill-registry-autofix-body"
+SHA_ONE="1111111111111111111111111111111111111111"
+SHA_TWO="2222222222222222222222222222222222222222"
+SHA_ONE_MOVED="9999999999999999999999999999999999999999"
+PRODUCERS="{\"Producer.One\": \"$SHA_ONE\", \"Producer.Two\": \"$SHA_TWO\"}"
+
+# `stale` is a mechanical digest rewrite; `gone` is a judgement case `--write` refuses to touch;
+# `orphan` is a declared-completeness with NO derivable `row` — which must count as RESIDUAL, not as
+# an append (a non-derivable row stays a red finding).
+cat > "$WORK/findings.json" <<JSON
+{"findings": [
+  {"id": "stale",  "check": "digest-matches", "declared": "$WRONG", "actual": "$ACTUAL_STALE", "detail": "sha256 differs"},
+  {"id": "gone",   "check": "source-exists",  "detail": "source no longer exists"},
+  {"id": "orphan", "check": "declared-completeness", "detail": "declared by a manifest with no supplied-by"}
+]}
+JSON
+cat > "$WORK/findings-clean.json" <<JSON
+{"findings": [
+  {"id": "stale", "check": "digest-matches", "declared": "$WRONG", "actual": "$ACTUAL_STALE", "detail": "sha256 differs"}
+]}
+JSON
+
+body() { python3 "$BODY" --registry "$REG" --repos-root "$ROOT" --now "2026-07-11T06:42:00Z" "$@"; }
+
+echo "== 25. the PR body STAMPS the producer commits the reconcile was computed from =="
+write_registry
+out="$(body --findings "$WORK/findings.json" --producers "$PRODUCERS")"
+grep -q "### Computed from" <<<"$out" || { echo "FAIL: no provenance stamp — the #425 defect"; echo "$out"; exit 1; }
+grep -q "2026-07-11T06:42:00Z" <<<"$out" || { echo "FAIL: body does not say WHEN it was reconciled"; exit 1; }
+grep -q '`Producer.One` | `11111111`' <<<"$out" || { echo "FAIL: producer commit not stamped in the table"; echo "$out"; exit 1; }
+# The machine-readable marker must carry the FULL sha: the table shortens to 8 chars for humans, and
+# the next run compares full commits. A marker that stored the truncated form would report every
+# producer as "moved" on every run — a staleness banner that always fires is one nobody reads.
+grep -q "<!-- fsgg:autofix-stamp .*$SHA_ONE" <<<"$out" || { echo "FAIL: stamp marker missing or truncated"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 26. the body states a VERDICT — residual findings mean merging leaves main RED =="
+out="$(body --findings "$WORK/findings.json" --producers "$PRODUCERS")"
+grep -q "would leave \`main\` RED" <<<"$out" || { echo "FAIL: no verdict; #414 read as a fix because a section was ABSENT"; echo "$out"; exit 1; }
+# `orphan` has no derivable row, so it is a JUDGEMENT case, not an append: it must be counted in the
+# residual verdict (2 = `gone` + `orphan`), never silently classified as reconciled.
+grep -q "2 finding(s) below are judgement cases" <<<"$out" || { echo "FAIL: non-derivable declared-completeness not counted as residual"; echo "$out"; exit 1; }
+grep -q "Still needs a human" <<<"$out" || { echo "FAIL: residual section missing"; exit 1; }
+out="$(body --findings "$WORK/findings-clean.json" --producers "$PRODUCERS")"
+grep -q "merging this greens" <<<"$out" || { echo "FAIL: a clean reconcile must SAY it greens the gate, not imply it"; echo "$out"; exit 1; }
+grep -q "Still needs a human" <<<"$out" && { echo "FAIL: residual section on a clean reconcile"; exit 1; }
+# The checklist must only ask for work the PR actually contains. An "appended rows" item on a PR that
+# appended nothing points at a section that was never emitted — standing noise, and the reader who
+# learns to tick through it is the reader who ticks past the currency re-read directly above it.
+grep -q "appended row" <<<"$out" && { echo "FAIL: checklist asks to confirm appended rows on a PR with none"; echo "$out"; exit 1; }
+cat > "$WORK/findings-appended.json" <<JSON
+{"findings": [
+  {"id": "newrow", "check": "declared-completeness", "detail": "declared by a manifest, absent from the registry",
+   "row": {"id": "newrow", "scope": "product", "owner": "producer-two", "source": "Producer.Two/skills/owned/SKILL.md", "sha256": "$OWNED", "materializes-when": "always"}}
+]}
+JSON
+out="$(body --findings "$WORK/findings-appended.json" --producers "$PRODUCERS")"
+grep -q "CONFIRM the owner before merge" <<<"$out" || { echo "FAIL: appended rows not surfaced for confirmation"; echo "$out"; exit 1; }
+grep -q "appended row" <<<"$out" || { echo "FAIL: checklist omits the appended-row confirmation it DOES need"; echo "$out"; exit 1; }
+# An append is a manifest GUESS at the owner, so it is not a clean "this greens the gate" either.
+grep -q "greens the gate only once the appended rows are confirmed" <<<"$out" || { echo "FAIL: an appended row must not read as an unconditional green"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 27. the body does NOT claim a currency it cannot have =="
+out="$(body --findings "$WORK/findings-clean.json" --producers "$PRODUCERS")"
+# The exact phrase #425 indicted. It asserted the post-write re-check settled the question; it
+# settles only the instant the job ran, and nothing re-checks it afterwards.
+grep -qi "verification of record" <<<"$out" && { echo "FAIL: the body still claims to be the verification of record"; exit 1; }
+grep -q "does not run on it" <<<"$out" || { echo "FAIL: body must disclose that its own checks do not run"; echo "$out"; exit 1; }
+grep -q "git ls-remote https://github.com/FS-GG/Producer.One main" <<<"$out" || { echo "FAIL: body must hand over the command that settles currency"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 28. --read-stamp round-trips the marker, and fails SOFT on a body without one =="
+body --findings "$WORK/findings-clean.json" --producers "$PRODUCERS" > "$WORK/pr-body.md"
+got="$(python3 "$BODY" --read-stamp "$WORK/pr-body.md")"
+python3 -c "
+import json,sys
+got = json.loads(sys.argv[1])
+assert got == {'Producer.One': sys.argv[2], 'Producer.Two': sys.argv[3]}, got
+" "$got" "$SHA_ONE" "$SHA_TWO" || { echo "FAIL: stamp did not round-trip: $got"; exit 1; }
+# A first-ever run has no standing PR, and a hand-edited body may have lost the marker. Both must
+# yield "no prior stamp" rather than killing the job — the body only ENRICHES with a supersession
+# note, and a failure to read the OLD PR must never starve a genuine reconcile of its NEW one.
+printf 'a body with no marker\n' > "$WORK/nomarker.md"
+[ "$(python3 "$BODY" --read-stamp "$WORK/nomarker.md")" = "{}" ] || { echo "FAIL: a body with no marker must read as {}"; exit 1; }
+printf '<!-- fsgg:autofix-stamp {not json} -->\n' > "$WORK/badmarker.md"
+[ "$(python3 "$BODY" --read-stamp "$WORK/badmarker.md")" = "{}" ] || { echo "FAIL: a malformed marker must read as {}, not crash"; exit 1; }
+[ "$(python3 "$BODY" --read-stamp "$WORK/does-not-exist.md")" = "{}" ] || { echo "FAIL: a missing body must read as {}, not crash"; exit 1; }
+echo "   ok"
+
+echo "== 29. a snapshot that supersedes a stale one SAYS so, and names the producer that moved =="
+prev="{\"Producer.One\": \"$SHA_ONE_MOVED\", \"Producer.Two\": \"$SHA_TWO\"}"
+out="$(body --findings "$WORK/findings-clean.json" --producers "$PRODUCERS" --prev-producers "$prev")"
+grep -q "supersedes a stale snapshot" <<<"$out" || { echo "FAIL: a superseded snapshot is not named — this IS the #414 decay"; echo "$out"; exit 1; }
+grep -q "moved from \`99999999\`" <<<"$out" || { echo "FAIL: the moved producer is not named"; echo "$out"; exit 1; }
+# Producer.Two did NOT move, so it must not be reported as having moved.
+grep -q "\`Producer.Two\` | \`22222222\` |" <<<"$out" || { echo "FAIL: an unmoved producer was annotated as moved"; echo "$out"; exit 1; }
+# An unreadable prior stamp degrades to "no prior stamp" — never a crash, never a false banner.
+out="$(body --findings "$WORK/findings-clean.json" --producers "$PRODUCERS" --prev-producers 'not json')"
+grep -q "supersedes a stale snapshot" <<<"$out" && { echo "FAIL: a malformed prior stamp manufactured a supersession banner"; exit 1; }
+echo "   ok"
+
+echo "== 30. the body is deterministic — same inputs, same bytes =="
+# The composer must not read the clock or the environment: the fixture asserts on exact bytes, and a
+# body that drifts run-to-run would make the supersession diff above meaningless.
+a="$(body --findings "$WORK/findings.json" --producers "$PRODUCERS")"
+b="$(body --findings "$WORK/findings.json" --producers "$PRODUCERS")"
+[ "$a" = "$b" ] || { echo "FAIL: composer is not deterministic"; diff <(echo "$a") <(echo "$b") || true; exit 1; }
+echo "   ok"
+
+echo "== 31. the autofix workflow cannot RETIRE a standing PR on an unverified registry =="
+# The retire step is the only branch in this fabric that DESTROYS state (it closes a PR). Its trigger,
+# `changed == 'false'`, is derived from a step ending in `|| true` — so a CRASHED reconcile leaves the
+# registry untouched and produces exactly the same empty diff as a coherent one. Retiring on that
+# signal would close a NEEDED reconcile while commenting that the registry is clean: the epic-#266
+# fail-open, reintroduced inside the fix for it.
+#
+# So the retire must additionally require POSITIVE proof of coherence (a read-only check that exits 0).
+# This is asserted structurally because the condition lives in YAML, not in the composer — and both a
+# broken block scalar and the fail-open above shipped green through the fixture before this case existed.
+WF="$HERE/../../.github/workflows/skill-registry-autofix.yml"
+python3 - "$WF" <<'PY' || exit 1
+import sys, yaml
+wf = yaml.safe_load(open(sys.argv[1]))          # parses at all — a dedented block scalar fails HERE
+steps = {s.get("name"): s for s in wf["jobs"]["autofix"]["steps"] if s.get("name")}
+
+proof = next((n for n in steps if n.startswith("Prove the registry is coherent")), None)
+assert proof, "no step establishes positive evidence of coherence"
+
+retire = next((n for n in steps if n.startswith("Retire")), None)
+assert retire, "no retire step"
+cond = steps[retire]["if"]
+assert "steps.coherent.outputs.coherent == 'true'" in cond, \
+    f"retire is not gated on proven coherence — an empty diff from a CRASHED reconcile would close a needed PR: {cond}"
+assert "steps.diff.outputs.changed == 'false'" in cond, f"retire lost its empty-diff guard: {cond}"
+
+# The recovered stamp comes out of a PR BODY (writable), so it must reach the shell through the
+# environment. `${{ }}` is substituted textually BEFORE bash parses the line: a single quote in the
+# stamp would escape the argument and execute, in a job holding `contents: write`.
+compose = steps["Compose PR body"]
+assert "PREV_STAMP" in compose.get("env", {}), "prev stamp must be passed via env, not inlined"
+assert "${{ steps.prev.outputs.stamp }}" not in compose["run"], \
+    "prev stamp is interpolated into the run script — shell-injection via a hand-edited PR body"
+print("   (workflow: retire demands proof; stamp is not shell-interpolated)")
+PY
+echo "   ok"
+
 echo "skill-registry fixture: all checks passed"
