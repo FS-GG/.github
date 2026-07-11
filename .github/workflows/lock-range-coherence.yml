@@ -1,0 +1,83 @@
+# Reusable lock-range coherence gate (FS-GG/.github#495, epic #266; ADR-0006).
+#
+# The blind spot: `dotnet restore --locked-mode` validates package entries — id, version, contentHash.
+# It NEVER looks at the dependency ranges under a `"type": "Project"` entry. So a release bump that
+# edits a version without regenerating the locks leaves every sibling project reference recording the
+# OLD version, and every gate — including the cold locked restore — stays green over it. FS.GG.Audio
+# carried six stale ranges through its whole v0.2.0 cycle; FS.GG.Game's `main` has carried one since
+# `release: v0.4.0` (Game#128), which bumped <Version> and touched no lock file.
+#
+# Harmless at runtime — project references resolve from the project graph, not the lock — and that is
+# exactly why it survives. The cost is a POISONED LOCK DIFF, at the one moment the repo can least
+# afford noise: the reviewer scrutinising a contentHash reads it mixed with release-bump residue.
+#
+# This is the reusable arm of the guard FS.GG.Audio proved in Audio#52, generalised so every receiver
+# can call it instead of hand-rolling 30 lines of bash. The check itself lives in ONE script authored
+# here (scripts/check-lock-ranges.py) and sourced from public FS-GG/.github — the same
+# `contract-coherence` / `skill-union-assert` pattern, so the gate cannot drift per repo.
+#
+# STATIC. Committed files only: no restore, no SDK, no network, no feed, no NuGet auth. It needs none
+# of them, so it installs none of them and runs in seconds. Callers wire it with one `uses:` block and
+# need grant nothing beyond `contents: read`.
+#
+# The version-of-truth is each project's OWN effective <Version>, not a central property. That is not a
+# stylistic choice — it is the only rule true of all three receivers, which declare it three different
+# ways (a $(FsGgAudioVersion) property in Audio, a per-project literal in Rendering, an inherited
+# Directory.Build.local.props value in Game). A gate keyed on one central property would be a gate only
+# Audio could call. See the script's docstring.
+name: lock-range-coherence
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: "Directory to check, relative to the caller's repo root."
+        type: string
+        default: "."
+      min-ranges:
+        description: >-
+          Fail if fewer than this many project-reference ranges are inspected. The default of 1 is the
+          fail-closed floor from epic #266: a check that inspects nothing and reports green is the
+          defect, not the guard. Pass 0 ONLY for a repo whose projects genuinely do not reference each
+          other, so that "zero" is a decision someone made rather than an omission nobody noticed.
+        type: number
+        default: 1
+      github-ref:
+        description: "Ref of FS-GG/.github to source the check script from."
+        type: string
+        default: "main"
+
+permissions:
+  contents: read
+
+jobs:
+  lock-ranges:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout caller
+        uses: actions/checkout@v7
+        with:
+          path: caller
+
+      - name: Checkout FS-GG/.github (check-script authority)
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: ${{ inputs.github-ref }}
+          path: dotgithub
+          sparse-checkout: scripts/check-lock-ranges.py
+          sparse-checkout-cone-mode: false
+
+      - name: Assert every project-reference range tracks its project's declared version
+        shell: bash
+        env:
+          # Passed via env, never interpolated into the run script — `workflow_call` inputs are
+          # caller-controlled, and this is the org's uniform anti-injection pattern (cf.
+          # skill-union-assert.yml, architecture-map.yml).
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+          MIN_RANGES: ${{ inputs.min-ranges }}
+        run: |
+          set -euo pipefail
+          python3 dotgithub/scripts/check-lock-ranges.py \
+            --root "caller/${WORKING_DIRECTORY}" \
+            --min-ranges "${MIN_RANGES}"
