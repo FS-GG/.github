@@ -257,10 +257,15 @@ cmd_validate() {
       # workflow that cannot exist, so every receiver "is not wired" — or, if the capability has no
       # receivers, nothing is checked at all and the audit is green about a workflow that is gone.
       err "capability '$cid' names workflow '$cwf', which is not in .github/workflows/."
-    elif ! grep -q 'workflow_call:' "$root/.github/workflows/$cwf"; then
+    elif ! grep -qE '^[[:space:]]*workflow_call:' "$root/.github/workflows/$cwf"; then
       # `receives` means "this repo CALLS the authority's reusable workflow". A workflow without a
       # workflow_call trigger cannot be called, so no receiver could ever wire it and the audit
       # would report a gap against every one of them, forever.
+      #
+      # Anchored, so a COMMENT cannot satisfy it. An unanchored `grep -q workflow_call:` matches the
+      # word anywhere in the file — including a line like `# this is not a workflow_call: trigger` —
+      # which would pass a workflow that nothing can `uses:` as reusable. A check whose subject is
+      # "can this really be called?" must not be satisfiable by prose about calling.
       err "capability '$cid' names workflow '$cwf', which has no 'workflow_call:' trigger — it is not reusable, so no repo can wire it."
     fi
     case "$crecv" in

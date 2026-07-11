@@ -135,6 +135,14 @@ expect_fail "capability names a workflow that is not reusable" 1 "no 'workflow_c
 expect_fail "capability with no workflow at all" 1 "has no 'workflow'" \
   "$(capreg cap_nowf "labels, coordination-kit" "- { id: coordination-kit }")"
 
+# ...and a COMMENT must not satisfy the reusability check. An unanchored `grep -q workflow_call:`
+# matches the word anywhere in the file, so a workflow whose prose merely mentions it would pass as
+# reusable — a check whose subject is "can this really be called?" satisfied by writing about calling.
+printf 'on:\n  push:\n# deliberately NOT a workflow_call: trigger — just prose about one\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
+  > "$ROOT/.github/workflows/prose-only.yml"
+expect_fail "a workflow whose only 'workflow_call:' is in a comment is not reusable" 1 "no 'workflow_call:' trigger" \
+  "$(capreg cap_prose "labels, coordination-kit" "- { id: coordination-kit, workflow: prose-only.yml }")"
+
 expect_fail "capability outside the receives vocabulary" 1 "not in the receives vocabulary" \
   "$(capreg cap_unknown "labels, coordination-kit" "- { id: bogus-cap, workflow: coordination-coherence.yml }")"
 
@@ -352,6 +360,50 @@ PY
 uncovered="$(uncovered_for ".github/workflows/repos-registry-selftest.yml" "pull_request,push")"
 if [ -z "$uncovered" ]; then ok "every kit source is covered by the selftest paths: filter"
 else bad "kit source ungated — an edit to it skips the digest check" "$uncovered"; fi
+
+# ...and the same gate-on-the-gate for the CAPABILITY workflows (#503). `validate` now proves each
+# capabilities[].workflow exists and really carries a `workflow_call:` trigger, so registry/repos.yml's
+# validity depends on those files. If the selftest's paths: filter does not cover them, renaming or
+# deleting one leaves the roster INVALID and merges green — the check is fine and its trigger fails
+# open, which is #334 over again, and the reason that leg above exists at all.
+caps_uncovered_for() {  # <workflow-rel-path> <trigger,trigger…> -> uncovered "trigger: cap … wf …" lines
+  python3 - "$REPO_ROOT" "$1" "$2" <<'PY'
+import sys, yaml, re, pathlib
+root, wf_rel, want = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3].split(",")
+wf  = yaml.safe_load((root / wf_rel).read_text())
+reg = yaml.safe_load((root / "registry/repos.yml").read_text())
+
+triggers = wf.get(True, wf.get("on"))
+if not isinstance(triggers, dict):
+    sys.exit(f"{wf_rel} has no readable `on:` block — cannot check its paths: filter")
+
+def matches(path, pat):                       # GitHub glob: ** spans /, * does not
+    rx = "".join(r"[^/]*" if p == "*" else ".*" if p == "**" else re.escape(p)
+                 for p in re.split(r"(\*\*|\*)", pat))
+    return re.fullmatch(rx, path) is not None
+
+gaps = []
+for trigger in want:
+    if trigger not in triggers:
+        gaps.append(f"{trigger}: trigger absent — never runs on {trigger}")
+        continue
+    cfg = triggers.get(trigger) or {}
+    if "paths" not in cfg:
+        continue                              # unfiltered: everything fires it
+    pats = cfg["paths"]
+    if not pats:
+        gaps.append(f"{trigger}: paths: is empty — matches nothing")
+        continue
+    for cap in reg.get("capabilities", []):
+        probe = f".github/workflows/{cap['workflow']}"
+        if not any(matches(probe, p) for p in pats):
+            gaps.append(f"{trigger}: capability '{cap['id']}' workflow {probe}")
+print("\n".join(gaps))
+PY
+}
+uncovered="$(caps_uncovered_for ".github/workflows/repos-registry-selftest.yml" "pull_request,push")"
+if [ -z "$uncovered" ]; then ok "every capabilities[].workflow is covered by the selftest paths: filter"
+else bad "capability workflow ungated — renaming it leaves the roster invalid, green" "$uncovered"; fi
 
 uncovered="$(uncovered_for ".github/workflows/coordination-propagate.yml" "push")"
 if [ -z "$uncovered" ]; then ok "every kit source is covered by the propagate paths: filter"

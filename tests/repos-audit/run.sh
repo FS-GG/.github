@@ -409,6 +409,38 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --repos-sh "$REPO
   && ok "an adopted-but-unrostered capability -> exit 1, naming the repo and the capability" \
   || bad "an unrostered adopter must not be invisible (#503)" "rc=$rc: $out"
 
+# (19b) ...and the sweep must not have a quoting-dependent blind spot. YAML lets a receiver write
+#       `uses: "FS-GG/.github/…"`, and Actions honours it. The unquoted-only matcher missed it — which
+#       fails in opposite directions: a DECLARED receiver that quotes is a false gap (loud and wrong),
+#       an UNDECLARED one sails past the drift check (silent — the very adopter this sweep is for).
+qwire() { clearfail "$1"; local slug="${1//\//__}"; shift; local q="$1"; shift; local i=0 wf
+          mkdir -p "$FIX/$slug"; printf '%s\n' "coord.yml" > "$FIX/$slug.list"
+          { printf 'jobs:\n'
+            for wf in "$@"; do i=$((i+1))
+              printf '  j%s:\n    uses: %sFS-GG/.github/.github/workflows/%s@main%s\n' "$i" "$q" "$wf" "$q"
+            done; } > "$FIX/$slug/coord.yml"; }
+for q in '"' "'"; do
+  # declared + quoted -> wired, NOT a fabricated gap.
+  qwire FS-GG/FS.GG.SDD "$q" coordination-coherence.yml lockfile-sync.yml
+  # undeclared + quoted -> must still be caught as an unrostered adopter.
+  qwire FS-GG/FS.GG.Rendering "$q" coordination-coherence.yml lockfile-sync.yml
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "does not declare 'receives: lockfile-sync'" \
+      && ! printf '%s' "$out" | grep -q 'FS.GG.SDD receives .* but no workflow calls'; } \
+    && ok "a quoted ($q) uses: is still matched — no false gap, and the drift check still sees it" \
+    || bad "the uses: matcher has a quoting blind spot" "quote=$q rc=$rc: $out"
+done
+
+# (19c) an unreadable repo is charged to every capability it was rostered for, so the per-capability
+#       line still adds up. It used to report "2 rostered receiver(s): 1 wired, 0 gap(s)" and simply
+#       lose the second — a complete-looking accounting of a run that did not complete.
+wire FS-GG/FS.GG.SDD; unreachable FS-GG/FS.GG.Rendering
+out="$(run 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] \
+    && printf '%s' "$out" | grep -q 'coordination-kit .* 2 rostered receiver(s): 1 wired, 0 gap(s), 1 undetermined'; } \
+  && ok "an unreadable repo is charged to its capabilities — the per-capability tally adds up" \
+  || bad "the per-capability line loses an unreadable receiver" "rc=$rc: $out"
+
 # (20) ...and the guard must not fire on the AUTHORITY running its own workflow. .github calls
 #      contract-coherence.yml on itself with a LOCAL `uses: ./.github/workflows/…`, which is not
 #      roster participation. Matching it would make the authority a phantom adopter of every

@@ -187,8 +187,15 @@ repo_calls() {
     # is deliberately NOT matched: .github runs contract-coherence.yml on itself exactly that way, and
     # running your own workflow is not participating in somebody else's fabric. Matching it would make
     # the authority a phantom adopter of every capability it hosts.
+    #
+    # The optional quote is load-bearing. YAML lets a receiver write `uses: "FS-GG/.github/…"`, and
+    # Actions honours it — but the unquoted-only pattern this grew from MISSES it, and the two
+    # directions fail in opposite ways: a DECLARED receiver that quotes its `uses:` is reported as a
+    # false gap (loud, and wrong), while an UNDECLARED one sails past the drift check (silent, and
+    # exactly the adopted-but-unrostered capability this sweep exists to catch). A detector with a
+    # quoting-dependent blind spot is a fail-open in the guard against fail-open.
     printf '%s' "$text" \
-      | grep -oE "uses:[[:space:]]*${AUTHORITY//./\\.}/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml" \
+      | grep -oE "uses:[[:space:]]*[\"']?${AUTHORITY//./\\.}/\.github/workflows/[A-Za-z0-9._-]+\.ya?ml" \
       | sed -E 's#.*/##' || true
   done <<< "$files"
   return 0
@@ -222,7 +229,7 @@ caps="$(caps_list)" \
 [ -n "$caps" ] \
   || die "the roster declares no audited capabilities (registry 'capabilities:' is missing or empty). This audit's entire mandate comes from there, so it would examine nothing. Examining nothing is a failure to audit, not a clean audit."
 
-declare -A CAP_WF CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS
+declare -A CAP_WF CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS CAP_UNDET
 CAPS_ORDER=""
 rostered_total=0
 while IFS=$'\t' read -r cap wf recv reason; do
@@ -233,7 +240,7 @@ while IFS=$'\t' read -r cap wf recv reason; do
   [ -n "$wf" ] \
     || die "capability '$cap' declares no workflow — there is nothing to audit it by. Fix registry/repos.yml (repos.sh validate catches this)."
   CAPS_ORDER="$CAPS_ORDER $cap"
-  CAP_WF["$cap"]="$wf"; CAP_WIRED["$cap"]=0; CAP_GAPS["$cap"]=0
+  CAP_WF["$cap"]="$wf"; CAP_WIRED["$cap"]=0; CAP_GAPS["$cap"]=0; CAP_UNDET["$cap"]=0
 
   # Enumerate into a variable, not `< <(roster_list)`: a process substitution's failure never trips
   # `set -e` and nothing checked its rc, so a `repos.sh` that died printed nothing, the loop ran zero
@@ -283,6 +290,16 @@ while IFS= read -r repo; do
     # adopts-without-saying. Both directions are unexamined; the run is not a verdict.
     echo "::error::repos-audit: $repo — $(calls_last_err)"
     undetermined=$((undetermined + 1))
+    # Charge the miss to every capability this repo was supposed to be audited FOR, so the per-capability
+    # line below still adds up to its rostered count. Without this it reports "6 rostered receiver(s):
+    # 5 wired, 0 gap(s)" and simply loses the sixth — a summary that reads like a complete accounting
+    # of a run that did not complete. The exit code already says "no verdict"; the report must not
+    # quietly disagree with it.
+    for cap in $CAPS_ORDER; do
+      if printf '%s\n' "${CAP_ROSTER[$cap]}" | grep -qxF "$repo"; then
+        CAP_UNDET["$cap"]=$(( ${CAP_UNDET[$cap]} + 1 ))
+      fi
+    done
     continue
   fi
 
@@ -319,7 +336,7 @@ for cap in $CAPS_ORDER; do
   if [ -n "${CAP_NONE[$cap]:-}" ]; then
     echo "repos-audit: $cap (${CAP_WF[$cap]}) — 0 receivers, as recorded; every rostered repo was scanned and none adopts it. The claim holds."
   else
-    echo "repos-audit: $cap (${CAP_WF[$cap]}) — ${CAP_N[$cap]} rostered receiver(s): ${CAP_WIRED[$cap]} wired, ${CAP_GAPS[$cap]} gap(s)"
+    echo "repos-audit: $cap (${CAP_WF[$cap]}) — ${CAP_N[$cap]} rostered receiver(s): ${CAP_WIRED[$cap]} wired, ${CAP_GAPS[$cap]} gap(s), ${CAP_UNDET[$cap]} undetermined"
   fi
 done
 echo "repos-audit: $audited receiver-capability pair(s) — $wired wired, $gaps gap(s), $drift unrostered adopter(s), $undetermined undetermined"
