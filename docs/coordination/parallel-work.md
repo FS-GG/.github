@@ -242,6 +242,53 @@ overlapping held work is never scheduled. Items with no `Paths:` are unschedulab
 The touch-set is **transient** (per-item, gone at merge), so it lives in the issue body, not the
 registry — the registry is for *durable* cross-repo contracts only.
 
+**Do not reserve generated artifacts** (FS-GG/.github#309). A `Paths:` token names a file two workers
+might *author* into conflict. A file produced by a checked-in generator and guarded by a **regeneration
+gate** — a CI check that re-runs the generator and fails on any diff — is neither authored nor
+semantically conflicting: **a collision in it is a rebase, not a decision.** Declaring it reserves a
+file nobody owns, and serialises every item that regenerates it.
+
+Two conditions, and the second is not optional:
+
+1. **Nobody authors it.** Ask whether a human makes a *merge decision* in it. If two workers' edits can
+   only be reconciled by re-running a script, neither has an intent to preserve. The test is
+   **authorship, not `.gitignore`** — a generated file that is committed and reviewed is still not
+   authored.
+2. **A regeneration gate guards it.** Excluding the file moves the guarantee from the *scheduler* to
+   *CI* — so CI must actually have it. **If nothing fails on a stale copy, do not exclude it.** You
+   would be trading a loud false `OVERLAP` for a silent unguarded staleness, which is strictly worse.
+   Add the gate first, or keep declaring the file.
+
+Note this is **not** the `verify-paths` touch-set drift of the **Drift** section below, which is
+advisory and blocks nothing. The regeneration gate is the repo's own check on the artifact, and it is
+the thing that makes exclusion safe.
+
+**Beware the subtree.** `overlap` matches **directory prefixes**, so declaring the artifact's *parent*
+reserves the artifact exactly as effectively as naming it. Declare your sources, not the directory the
+generated file happens to sit in:
+
+| | `Paths:` |
+|---|---|
+| ❌ reserves the baseline against the whole board | `src/Core/**, readiness/**` |
+| ❌ same lock, one level down | `src/Core/**, readiness/surface-baselines/**` |
+| ✅ | `src/Core/Pathfinding.fs, tests/Core/PathfindingTests.fs` |
+
+The instance that produced this rule: `FS.GG.Game` has one generated
+`readiness/surface-baselines/<pkg>.txt` per package — a sorted list of exported type names, reflected
+out of the built assembly and gated by a CI check that regenerates it and fails on any diff. Every
+`[core]` item adds a module, so every `[core]` item appends to that one file. Declared honestly, every
+`[core]` item was pairwise-overlapping with every other, and the whole `P6 Game` phase collapsed to
+**one worker** — in the phase the protocol exists to fan out. Excluding it from FS-GG/FS.GG.Game#34's
+touch-set let that item run alongside `#32` and `#33`; on rebase onto a `main` that had meanwhile
+landed `#32` and `#41` (all `FS.GG.Game`), the baseline three-way-merged with **zero manual fixup** and
+the gate passed.
+
+And **declare against what the generator emits, not against the issue's prose** — the corollary that
+bit hardest. FS-GG/FS.GG.Game#31's acceptance said "surface baseline". It adds a *function* to an
+existing module, and the generator emits one exported **type** per line, so it never touched the
+baseline at all. A `Paths:` line asserted from an issue body rather than from the generator's output is
+how a *false global lock* gets created.
+
 **Widening mid-flight.** ADR-0021 required a worker that widens its touch-set to re-declare and
 re-check. `widen` does all of it, including the part a worker cannot do alone — telling the workers it
 now collides with, on their own items:
@@ -261,6 +308,15 @@ scripts/fsgg-coord verify-paths --pr <n> [--warn]
 
 CI runs it in `--warn` mode (see `.github/workflows/touch-set-drift.yml`): it reports, it does not
 block. An undetected drift is what turns two "disjoint" items into a merge conflict.
+
+**A regenerated artifact will report as touch-set drift, and that is expected** — you excluded it
+deliberately (see *Do not reserve generated artifacts* above), and then you regenerated it.
+`verify-paths` cannot today distinguish *"you touched a file you never declared"* (a real finding — you
+should have `widen`ed) from *"you regenerated the artifact the protocol told you not to declare"*
+(correct behaviour). Until it can, **say which one it is** in the PR, so the advisory does not decay
+into a line workers skip past. Closing that gap wants a second declaration surface that `verify-paths`
+subtracts before reporting — tracked in FS-GG/.github#498, with the ADR that owes ADR-0021 an
+explanation of why there are two.
 
 ### 4. See and say → visibility, and a channel
 
