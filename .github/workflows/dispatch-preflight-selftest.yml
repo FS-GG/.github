@@ -1,0 +1,56 @@
+# The failure legs of lockfile-sync's `preflight` gate (.github#482, epic #266).
+#
+# preflight asserts that an adopting repo can actually AUTHENTICATE — that the org dispatch App
+# secrets resolve non-empty in ITS context — before the sync job tries to mint a token with them.
+# It exists because `required: true` on a workflow_call secret means PROVIDED, not NON-EMPTY: a
+# caller forwarding a secret its repo cannot see passes the empty string, satisfies `required`, and
+# dies later at create-github-app-token, inside an unrelated dependency-bump PR, naming neither the
+# secret nor the App. Two of six adopters were in exactly that state and nothing said so (#468).
+#
+# Per epic #266's ratified rule — A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — this drives
+# the preflight script EXTRACTED FROM THE REAL WORKFLOW across the full truth table, and asserts the
+# reason on every leg, not merely a non-zero exit.
+#
+# The structural legs are the point. A truth table proves the script is correct; it cannot prove the
+# script still RUNS. So the fixture also asserts that preflight carries no `if:` (a skipped job is a
+# GREEN job), that `sync` still `needs:` it (or the gate is decorative), that preflight's copy of the
+# sync condition has not drifted from sync's own `if:`, and that no secret VALUE ever reaches the
+# step's environment. Those are the four edits that would silently disable this gate, and each one
+# turns this workflow red.
+name: dispatch-preflight-selftest
+
+on:
+  pull_request:
+    paths:
+      - "tests/dispatch-preflight/**"
+      - ".github/workflows/lockfile-sync.yml"
+      - ".github/workflows/dispatch-preflight-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/dispatch-preflight/**"
+      - ".github/workflows/lockfile-sync.yml"
+      - ".github/workflows/dispatch-preflight-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      # The fixture parses the real lockfile-sync.yml rather than a re-typed copy of it — a copy
+      # would keep passing after someone edits the workflow, which is the very fails-open shape this
+      # gate exists to close.
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Run the dispatch-preflight failure-leg fixture
+        run: bash tests/dispatch-preflight/run.sh
