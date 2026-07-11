@@ -2724,6 +2724,64 @@ case "$who461ok" in
   *) bad "#461: a SUCCESSFUL scan with no claims still reports an empty set" "$who461ok" ;;
 esac
 
+# ---- #469: the kit-digest coupling is NAMED, at declaration time --------------------------------
+# `registry/repos.yml` pins a content digest of every kit source (ADR-0019). Editing one invalidates
+# it and reds `main` — but the obligation was invisible: `verify-paths` only asks "did the PR stay
+# INSIDE what you declared", never "was your declaration SUFFICIENT for what you touched". A touch-set
+# of `scripts/fsgg-coord` alone passed verify-paths and red main (that is how this was found, #465).
+kitreg="$WORK/repos.yml"
+cat >"$kitreg" <<'YML'
+kits:
+  - { id: pnext-item,  kind: skill,  source: .claude/skills/pnext-item, sha256: aaaa }
+  - { id: fsgg-coord,  kind: client, source: scripts/fsgg-coord,        sha256: bbbb }
+YML
+kd() { FSGG_REPOS_YML="$kitreg" PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+         bash "$COORD" --worker kite-469 "$@"; }
+
+# Declaring a kit source WITHOUT registry/repos.yml must be called out — this is the whole bug.
+w469="$(kd widen 'FS.GG.SDD#74' --paths 'scripts/fsgg-coord, tests/fsgg-coord/run.sh' 2>&1 || true)"
+assert_contains "#469: widen NAMES the stale kit digest a kit-source touch-set implies" \
+  "KIT DIGEST" "$w469"
+# NOTE: do NOT assert on the bare source path here. `widen` ECHOES the touch-set it just declared
+# ("widened … → Paths: scripts/fsgg-coord"), so `assert_contains "scripts/fsgg-coord"` passes against
+# the UNFIXED script — a test satisfied by the subject's own echo, which is the exact fails-open shape
+# this repo keeps filing (#266). Assert the REMEDIATION, which only the warning can emit.
+assert_contains "#469: ...and prints the regenerate command for that source" \
+  "repos.sh digest scripts/fsgg-coord" "$w469"
+assert_contains "#469: ...and says which gate will red main" "repos-registry" "$w469"
+# ...and it still widens. The warning is ADVISORY: `repos-registry` is the authority, and a coord
+# that refused to declare a touch-set over a digest would be a worse bug than the one it is fixing.
+assert_contains "#469: ...while STILL widening (advisory, not fatal)" \
+  "widened FS.GG.SDD#74" "$w469"
+
+# A skill directory is content-addressed too — the coupling is not fsgg-coord-specific.
+w469s="$(kd widen 'FS.GG.SDD#74' --paths '.claude/skills/pnext-item/**' 2>&1 || true)"
+# Again: assert the remediation, not the echoed path — see the note above.
+assert_contains "#469: a SKILL source is content-addressed too, and is named" \
+  "repos.sh digest .claude/skills/pnext-item" "$w469s"
+
+# THE NEGATIVE CONTROLS — the ones that stop this becoming a warning nobody reads.
+# (a) Declaring registry/repos.yml alongside the kit source MEETS the obligation: no warning.
+w469ok="$(kd widen 'FS.GG.SDD#74' --paths 'scripts/fsgg-coord, registry/repos.yml' 2>&1 || true)"
+case "$w469ok" in
+  *"KIT DIGEST"*) bad "#469: declaring registry/repos.yml must SILENCE the warning" "$w469ok" ;;
+  *) ok "#469: declaring registry/repos.yml must SILENCE the warning" ;;
+esac
+# (b) A touch-set that touches no kit at all must not warn.
+w469n="$(kd widen 'FS.GG.SDD#74' --paths 'docs/adr/**' 2>&1 || true)"
+case "$w469n" in
+  *"KIT DIGEST"*) bad "#469: a non-kit touch-set must NOT warn" "$w469n" ;;
+  *) ok "#469: a non-kit touch-set must NOT warn" ;;
+esac
+# (c) No registry to read (a RECEIVER repo mirrors the kit but not registry/repos.yml) — stay silent
+#     rather than nagging every worker in every downstream repo about a file they do not have.
+w469r="$(FSGG_REPOS_YML="$WORK/nope.yml" PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+           bash "$COORD" --worker kite-469 widen 'FS.GG.SDD#74' --paths 'scripts/fsgg-coord' 2>&1 || true)"
+case "$w469r" in
+  *"KIT DIGEST"*) bad "#469: no registry to read -> silent (receiver repos have no repos.yml)" "$w469r" ;;
+  *) ok "#469: no registry to read -> silent (receiver repos have no repos.yml)" ;;
+esac
+
 # ================================================================================================
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::fsgg-coord fixture FAILED"; exit 1; }
