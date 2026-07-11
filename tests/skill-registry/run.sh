@@ -397,11 +397,16 @@ echo "   ok"
 # The body is the artifact that misled: PR #414 asserted in the present tense that it had reconciled
 # the registry, listed no residual section (at cut time there was none), and called its own post-write
 # re-check "the verification of record" — while two producer merges had landed behind it, so merging
-# it would have left `main` RED. The PR's own `skill-registry-coherence` job is structurally prevented
+# it would have left `main` RED. The PR's own `skill-registry-coherence` job was structurally prevented
 # from running on it (GITHUB_TOKEN pushes do not re-trigger `on: pull_request`), so nothing could
-# contradict the body. These cases pin the three properties that make it honest: it STAMPS the
-# producer commits it was computed from, it states a VERDICT, and it does not claim a currency it
-# cannot have.
+# contradict the body. These cases pin the properties that make it honest: it STAMPS the producer
+# commits it was computed from, and it states a VERDICT.
+#
+# #514 pushed the branch with the App token, so the gate now DOES run on the PR. That inverts the
+# third property rather than deleting it: the body must no longer disclaim a currency it CAN now have
+# (case 27), because a body that under-claims sends the reader off to re-derive by hand what the
+# checks already decide. The stamp survives — a running gate makes a stale reconcile RED, but only the
+# stamp makes it DIAGNOSABLE (which producer moved, and past what).
 BODY="$HERE/../../scripts/skill-registry-autofix-body"
 SHA_ONE="1111111111111111111111111111111111111111"
 SHA_TWO="2222222222222222222222222222222222222222"
@@ -465,13 +470,19 @@ grep -q "appended row" <<<"$out" || { echo "FAIL: checklist omits the appended-r
 grep -q "greens the gate only once the appended rows are confirmed" <<<"$out" || { echo "FAIL: an appended row must not read as an unconditional green"; echo "$out"; exit 1; }
 echo "   ok"
 
-echo "== 27. the body does NOT claim a currency it cannot have =="
+echo "== 27. the body claims neither a currency it cannot have, nor a staleness it no longer has =="
 out="$(body --findings "$WORK/findings-clean.json" --producers "$PRODUCERS")"
 # The exact phrase #425 indicted. It asserted the post-write re-check settled the question; it
 # settles only the instant the job ran, and nothing re-checks it afterwards.
 grep -qi "verification of record" <<<"$out" && { echo "FAIL: the body still claims to be the verification of record"; exit 1; }
-grep -q "does not run on it" <<<"$out" || { echo "FAIL: body must disclose that its own checks do not run"; echo "$out"; exit 1; }
-grep -q "git ls-remote https://github.com/FS-GG/Producer.One main" <<<"$out" || { echo "FAIL: body must hand over the command that settles currency"; echo "$out"; exit 1; }
+# ...and the #514 INVERSE, which is the failure this case now has to catch too. The branch is pushed
+# with the App token, so `skill-registry-coherence` DOES run on the PR. The old disclosure ("does not
+# run on it") and the by-hand `git ls-remote` currency check it prescribed are now FALSE — and a body
+# that UNDER-claims is misleading in the other direction: it would send a reader to re-derive by hand
+# what a red check on their screen already told them, which is the manual step #514 exists to delete.
+grep -q "does not run on it" <<<"$out" && { echo "FAIL: body still disclaims checks that now RUN (#514)"; echo "$out"; exit 1; }
+grep -q "git ls-remote" <<<"$out" && { echo "FAIL: body still asks a human to settle currency by hand (#514)"; echo "$out"; exit 1; }
+grep -q "runs on this PR" <<<"$out" || { echo "FAIL: body must say the gate runs on it, so a stale reconcile goes red by itself"; echo "$out"; exit 1; }
 echo "   ok"
 
 echo "== 28. --read-stamp round-trips the marker, and fails SOFT on a body without one =="
@@ -512,7 +523,7 @@ b="$(body --findings "$WORK/findings.json" --producers "$PRODUCERS")"
 [ "$a" = "$b" ] || { echo "FAIL: composer is not deterministic"; diff <(echo "$a") <(echo "$b") || true; exit 1; }
 echo "   ok"
 
-echo "== 31. the autofix workflow cannot RETIRE a standing PR on an unverified registry =="
+echo "== 31. the autofix workflow cannot RETIRE on an unverified registry, nor PUSH with a token that disables its own checks =="
 # The retire step is the only branch in this fabric that DESTROYS state (it closes a PR). Its trigger,
 # `changed == 'false'`, is derived from a step ending in `|| true` — so a CRASHED reconcile leaves the
 # registry untouched and produces exactly the same empty diff as a coherent one. Retiring on that
@@ -524,7 +535,7 @@ echo "== 31. the autofix workflow cannot RETIRE a standing PR on an unverified r
 # broken block scalar and the fail-open above shipped green through the fixture before this case existed.
 WF="$HERE/../../.github/workflows/skill-registry-autofix.yml"
 python3 - "$WF" <<'PY' || exit 1
-import sys, yaml
+import sys, json, yaml
 wf = yaml.safe_load(open(sys.argv[1]))          # parses at all — a dedented block scalar fails HERE
 steps = {s.get("name"): s for s in wf["jobs"]["autofix"]["steps"] if s.get("name")}
 
@@ -545,7 +556,39 @@ compose = steps["Compose PR body"]
 assert "PREV_STAMP" in compose.get("env", {}), "prev stamp must be passed via env, not inlined"
 assert "${{ steps.prev.outputs.stamp }}" not in compose["run"], \
     "prev stamp is interpolated into the run script — shell-injection via a hand-edited PR body"
-print("   (workflow: retire demands proof; stamp is not shell-interpolated)")
+
+# THE PUSH MUST NOT REVERT TO github.token (#514). Which token pushes the branch is what decides
+# whether `skill-registry-coherence` runs on the standing PR at all: GitHub's recursion guard drops
+# `on: pull_request` for a GITHUB_TOKEN push, so reverting this would fail the gate OPEN — silently,
+# and looking EXACTLY like a healthy workflow. There is no runtime signal to catch that (the run goes
+# green; only the PR's absent checks would show it, which is the very thing nobody was looking at), so
+# it is asserted structurally, here, where the revert would have to be written.
+mint = steps.get("Mint the cross-repo-dispatch App token")
+assert mint, "no App-token mint step — an unminted push cannot re-trigger the PR's own checks (#514)"
+assert mint.get("id") == "app-token", "the mint step's id is what every other step references"
+
+# The checkout persists the credential that `git push` later uses. A checkout that does not take the
+# App token leaves GITHUB_TOKEN as the pusher — the same fail-open, one step removed.
+checkout = next(
+    s for s in wf["jobs"]["autofix"]["steps"] if str(s.get("uses", "")).startswith("actions/checkout")
+)
+assert checkout.get("with", {}).get("token") == "${{ steps.app-token.outputs.token }}", \
+    "checkout does not persist the App token — the reconcile push falls back to GITHUB_TOKEN (#514)"
+
+pr = steps["Open or update the standing PR"]
+assert "git push" in pr["run"], "the standing-PR step no longer pushes — has the fabric moved?"
+assert pr.get("env", {}).get("GH_TOKEN") == "${{ steps.app-token.outputs.token }}", \
+    "the standing PR is not opened/updated with the App token (#514)"
+assert "github.token" not in json.dumps([pr.get("env", {}), pr["run"]]), \
+    "the reconcile push/PR reaches for github.token — the recursion guard would stop the PR's own " \
+    "checks from running, which fails the gate OPEN (#514)"
+
+# Belt and braces: deny GITHUB_TOKEN the scope such a revert would need to succeed at all. With
+# `contents: read`, a github.token push 403s LOUDLY instead of quietly producing a checkless PR.
+assert wf["permissions"]["contents"] == "read", \
+    "GITHUB_TOKEN holds contents: write — a revert to a github.token push would silently succeed (#514)"
+
+print("   (workflow: retire demands proof; stamp is not shell-interpolated; push cannot use github.token)")
 PY
 echo "   ok"
 

@@ -7,13 +7,19 @@ standing truth: it asserted, in the present tense, that it "rewrote the stale va
 the producer manifests", and its footer called the reconcile's own post-write re-check "the
 verification of record". Both are only true of the instant the job ran.
 
-They rot, and the artifact that would reveal the rot is disabled on the PR by design: the branch is
-pushed with `GITHUB_TOKEN`, whose pushes do not re-trigger `on: pull_request` workflows (GitHub's
-recursion guard), so `skill-registry-coherence` never runs on it. #425 measured the consequence —
-PR #414 was cut at 08:25Z, two producer merges landed after it, and merging it would have left
-`main` RED while its body said otherwise. A reviewer had no way to tell.
+They rot — and the artifact that would reveal the rot used to be disabled on the PR by design: the
+branch was pushed with `GITHUB_TOKEN`, whose pushes do not re-trigger `on: pull_request` workflows
+(GitHub's recursion guard), so `skill-registry-coherence` never ran on it. #425 measured the
+consequence — PR #414 was cut at 08:25Z, two producer merges landed after it, and merging it would
+have left `main` RED while its body said otherwise. A reviewer had no way to tell.
 
-So the body must carry its own provenance and its own verdict:
+The branch is now pushed with the `fs-gg-cross-repo-dispatch` App token (#514), whose pushes DO
+re-trigger `on: pull_request` — so the gate evaluates the very PR that exists to satisfy it, and a
+reconcile whose producers have moved past its stamp goes red on its own. The body must therefore no
+longer DISCLAIM a currency it cannot have; that disclosure is now false, and a body that under-claims
+is its own kind of misleading.
+
+What stays is the provenance, which the running gate does not make redundant:
 
   * WHAT IT WAS COMPUTED FROM — the producer commit each digest was taken at. A reader (or a bot)
     can compare those SHAs against the producers' current `main` and settle currency in one command.
@@ -22,11 +28,11 @@ So the body must carry its own provenance and its own verdict:
     absence of a section. #414's body listed no residual section because at cut time there was none;
     the reader could not distinguish "nothing residual" from "nothing re-checked since".
 
-This is the "stamp the snapshot" fix (#425's own option 1). It makes the decay LEGIBLE; it does not
-abolish it. The structural fix is to push with the `fs-gg-cross-repo-dispatch` App token so the PR's
-own checks run and a stale PR simply goes red — that needs the App installed on `.github` with
-`contents: write`, an org-admin precondition this repo has never relied on (every other App-token
-mint here scopes to a TARGET repo), so it is filed separately rather than smuggled in here.
+#425 landed the "stamp the snapshot" half, which made the decay LEGIBLE without abolishing it; #514
+landed the structural half (the App-token push above), which abolishes it. The stamp survives that
+change on purpose: it is what makes a red gate DIAGNOSABLE — "which producer moved, and past what?" —
+rather than merely red, and it is what `--read-stamp` recovers to tell a reader whether the standing
+PR they are looking at supersedes the one they reviewed yesterday.
 
 Pure stdlib + PyYAML. Deterministic: `--now` and `--run-url` are injected, never read from the
 clock or the environment, so the fixture can assert on exact bytes.
@@ -190,36 +196,34 @@ def stamp_lines(producers: dict[str, str], now: str, run_url: str, prev: dict[st
 
 
 def currency_lines(producers: dict[str, str]) -> list[str]:
-    """Tell the reader, honestly, what this PR cannot know about itself — and how to settle it.
+    """State who enforces currency — the gate, not the reader.
 
-    The old footer claimed the post-write re-check was "the verification of record". It is the
-    verification of the INSTANT THE JOB RAN, and nothing re-checks it afterwards. Saying so, and
-    handing over the exact command, is the difference between a stale artifact and a misleading one.
+    Until #514 this section had to disclaim: the branch was pushed with `GITHUB_TOKEN`, the recursion
+    guard kept `skill-registry-coherence` from running on the PR, and so the body handed the reader a
+    `git ls-remote` command and asked them to settle currency BY HAND. The branch is now pushed with
+    the App token, the gate runs on this PR, and a reconcile whose producers have moved goes red by
+    itself. Keeping the old disclosure would be a lie in the other direction — and the hand-check it
+    prescribed is exactly the manual step #514 exists to delete.
     """
-    check = " && ".join(
-        f"git ls-remote https://github.com/FS-GG/{repo} main" for repo in sorted(producers)
-    ) or "git ls-remote https://github.com/FS-GG/<producer> main"
     return [
         "",
-        "### Currency — read before merging",
+        "### Currency",
         "",
-        "This PR is a **snapshot**, not a standing truth. It is pushed with `GITHUB_TOKEN`, so by",
-        "GitHub's recursion guard `skill-registry-coherence` **does not run on it** — the checks below",
-        "cannot tell you whether it is still correct, and no check will go red when it rots.",
+        "This PR is a **snapshot**, computed from the producer commits stamped above. It goes out of",
+        "date the moment any of them moves — but you do not have to check that by hand, and you should",
+        "not have to trust this body about it.",
         "",
-        "It goes out of date the moment any producer above moves. To settle that in one command,",
-        "compare the stamped commits against the producers' current `main`:",
+        "The branch is pushed with the `fs-gg-cross-repo-dispatch` App token, so",
+        "**`skill-registry-coherence` runs on this PR**. (A `GITHUB_TOKEN` push would not re-trigger it —",
+        "GitHub's recursion guard — which is precisely how a stale reconcile used to sit here looking",
+        "mergeable, with nothing able to contradict it.)",
         "",
-        "```sh",
-        check,
-        "```",
+        "So: **read the checks, not this paragraph.** If a producer has moved past its stamp, the gate",
+        "on this PR is RED and the reconcile is stale — re-run `skill-registry-autofix`",
+        "(`workflow_dispatch`) to recompute it. If the gate is green, merging this greens `main`.",
         "",
-        "Any producer whose `main` is past its stamped commit means **this reconcile is stale — do not",
-        "merge it.** Re-run `skill-registry-autofix` (`workflow_dispatch`) to recompute, then re-read.",
-        "",
-        "<sub>Opened by `skill-registry-autofix`. The permanent fix is to push this branch with the",
-        "`fs-gg-cross-repo-dispatch` App token so the PR's own checks run and a stale snapshot simply",
-        "goes red — see .github#425.</sub>",
+        "<sub>Opened by `skill-registry-autofix` (.github#299). Its own checks run on it, so a snapshot",
+        "that has rotted cannot present itself as a standing truth — see .github#425 and .github#514.</sub>",
     ]
 
 
@@ -280,13 +284,17 @@ def compose(findings, rows, producers, now, run_url, prev, repos_root) -> str:
 
     # Only ask for work that this PR actually contains. A checklist item pointing at an "appended"
     # section that was never emitted is the kind of standing noise readers learn to tick through
-    # without reading — and the first item, the currency re-read, is the one that must not be
-    # tickable on autopilot.
+    # without reading.
+    #
+    # The currency re-read USED to head this list — "confirm no producer has moved past its stamp", a
+    # SHA comparison done by hand. #514 gave that job to the gate: the PR's own checks now run, so a
+    # stale reconcile is RED without anyone checking. An item asking a human to re-derive what a red
+    # check already tells them is precisely the tick-through noise above, so it is gone. What is left
+    # is the work no check can do.
     lines += [
         "",
         "### Before merge",
         "",
-        "- [ ] Re-read *Currency* below and confirm no producer has moved past its stamp.",
     ]
     if appended:
         lines.append("- [ ] Confirm the `owner:`/`scope:` of each appended row (see above) and re-home it.")
