@@ -132,7 +132,11 @@ expect_rc "gate: real receiver FS.GG.SDD proceeds (rc 0)" 0 bash "$SYNC" --check
 # after it", and would stay green if the fix were reverted.
 FAKE="$WORK/fakeroot"; mkdir -p "$FAKE/scripts/lib" "$FAKE/registry"
 cp "$SYNC" "$FAKE/scripts/coordination-sync"
-cp "$REPO_ROOT/scripts/lib/args.sh" "$FAKE/scripts/lib/args.sh"  # coordination-sync sources it at load
+# EVERY lib, not a named one: coordination-sync sources these at LOAD, so a fake root missing one dies
+# on line 1 and every assertion below it fails with a shell error instead of the verdict it is testing.
+# Naming them individually rotted the moment lib/roots.sh was added (#525) — the same "a hand-maintained
+# copy of a list that already exists" shape as #338/#334. Copy the directory; it cannot fall behind.
+cp "$REPO_ROOT"/scripts/lib/*.sh "$FAKE/scripts/lib/"
 cp "$REPO_ROOT/registry/repos.yml" "$FAKE/registry/repos.yml"   # present, so the [ -f ] guard passes
 FSYNC="$FAKE/scripts/coordination-sync"
 # expect_gate <name> <want-rc> <want-stderr-regex> <cmd...>
@@ -205,7 +209,7 @@ expect_gate "gate: roster match is literal, not a regex" 0 'nothing to do' \
 # Against the old literal this passed silently — the new row was simply never looked at.
 TRACK="$WORK/tracks-registry"; mkdir -p "$TRACK/scripts/lib" "$TRACK/registry"
 cp "$SYNC" "$TRACK/scripts/coordination-sync"
-cp "$REPO_ROOT/scripts/lib/args.sh" "$TRACK/scripts/lib/args.sh"  # coordination-sync sources it at load
+cp "$REPO_ROOT"/scripts/lib/*.sh "$TRACK/scripts/lib/"   # every lib it sources at load — see the fakeroot note
 cp "$REPO_ROOT/scripts/repos.sh" "$TRACK/scripts/repos.sh"
 cp "$REPO_ROOT/scripts/fsgg-coord" "$TRACK/scripts/fsgg-coord"
 mkdir -p "$TRACK/.claude"; cp -r "$REPO_ROOT/.claude/skills" "$TRACK/.claude/skills"
@@ -477,6 +481,63 @@ expect_out "base-ref: --base-ref on a WRITE is a misconfig (rc 2)" 2 \
   'only meaningful with --check' bash "$SYNC" --base-ref main "$G"
 expect_rc  "base-ref: with no value exits 2 (misconfig), not 1 (drift)" 2 \
   bash "$SYNC" --check --base-ref
+
+# --- the receiver's .agent-skill-roots is the ONE source of truth for its root set (#525) ---------
+# `skill-union-assert` has read a tree's checked-in `.agent-skill-roots` since #517. The distributor —
+# the thing that MATERIALIZES those roots — did not: it hardcoded `${AGENT_SKILL_ROOTS:-.claude/skills
+# .agents/skills}` at load time, BEFORE <target> was even parsed, so the receiver's own declaration was
+# structurally unreachable. The two agreed only by coincidence of defaults.
+#
+# The failure that bought this fixture: a receiver ADDS a root. The writer never fills it, the gate then
+# asserts it, and the receiver is told its tree is `[partitioned]` — blamed for the distributor's
+# omission. The reverse is worse and quieter: a receiver REMOVES a root, the writer keeps writing it, the
+# gate stops checking it, and it rots out of the union unwatched (#266/#292, the fail-open family).
+DECL="$WORK/decl-receiver"; mkdir -p "$DECL"
+printf '# a receiver that holds a THIRD root\n.claude/skills .agents/skills .gemini/skills  # trailing comment\n' \
+  > "$DECL/.agent-skill-roots"
+bash "$SYNC" "$DECL" >/dev/null
+one_skill="${SKILLS[0]}"
+[ -f "$DECL/.gemini/skills/$one_skill/SKILL.md" ] \
+  && ok "roots: an ADDED root in the receiver's .agent-skill-roots IS materialized" \
+  || bad "roots: declared .gemini/skills was not written" "the writer ignored the declaration the gate asserts"
+# ...and the gate, resolving through the SAME helper, agrees the tree is coherent. This is the whole
+# point of the hoist: writer and asserter cannot disagree about what the root set IS.
+expect_rc "roots: the gate agrees the declared 3-root tree is coherent" 0 \
+  bash "$REPO_ROOT/scripts/skill-union-assert.sh" --product "$DECL"
+
+# A REMOVED root must not be written. Declaring one root means one root — not "the default, plus".
+NARROW="$WORK/narrow-receiver"; mkdir -p "$NARROW"
+printf '.claude/skills\n' > "$NARROW/.agent-skill-roots"
+bash "$SYNC" "$NARROW" >/dev/null
+[ -f "$NARROW/.claude/skills/$one_skill/SKILL.md" ] \
+  && ok "roots: a NARROWED declaration still gets its declared root" || bad "roots: narrowed root missing"
+[ ! -e "$NARROW/.agents/skills" ] \
+  && ok "roots: a root the receiver did NOT declare is not written" \
+  || bad "roots: wrote .agents/skills into a receiver that declared only .claude/skills" \
+         "the declaration is the root set, not a supplement to the hardcoded default"
+
+# Precedence: $AGENT_SKILL_ROOTS still overrides the declaration (CI's knob keeps working), and the
+# default still applies to a receiver that declares nothing — the coincidence that held until now.
+ENVR="$WORK/env-receiver"; mkdir -p "$ENVR"
+printf '.gemini/skills\n' > "$ENVR/.agent-skill-roots"
+AGENT_SKILL_ROOTS=".claude/skills" bash "$SYNC" "$ENVR" >/dev/null
+[ -f "$ENVR/.claude/skills/$one_skill/SKILL.md" ] && [ ! -e "$ENVR/.gemini/skills" ] \
+  && ok "roots: \$AGENT_SKILL_ROOTS still beats the receiver's declaration" \
+  || bad "roots: env override no longer wins" "precedence must stay: env > .agent-skill-roots > default"
+
+PLAIN="$WORK/plain-receiver"; mkdir -p "$PLAIN"
+bash "$SYNC" "$PLAIN" >/dev/null
+[ -f "$PLAIN/.claude/skills/$one_skill/SKILL.md" ] && [ -f "$PLAIN/.agents/skills/$one_skill/SKILL.md" ] \
+  && ok "roots: a receiver declaring nothing still gets the kit lane's two (default unchanged)" \
+  || bad "roots: default root set changed" "the kit lane's default is NOT ADR-0011's three"
+
+# An empty/comment-only declaration is a MISCONFIGURATION (rc 2), never a silent fall-back to the
+# default: a tree that checked the file in meant to say something, and substituting the default there
+# would quietly hand it a root set it explicitly declined.
+EMPTY="$WORK/empty-decl-receiver"; mkdir -p "$EMPTY"
+printf '# all comments, no roots\n\n' > "$EMPTY/.agent-skill-roots"
+expect_out "roots: an empty .agent-skill-roots is a misconfig (rc 2), not a fall-back to the default" 2 \
+  'declares no roots' bash "$SYNC" "$EMPTY"
 
 echo "coordination-sync fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coordination-sync fixture FAILED"; exit 1; }
