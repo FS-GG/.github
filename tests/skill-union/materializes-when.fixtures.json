@@ -2,12 +2,12 @@
   "_comment": [
     "SHARED cross-implementation conformance table for the ADR-0017 `materializes-when` grammar.",
     "One tiny boolean language — `always | <clause> [(and|or) <clause>]...`, clause = `p == v | p != v",
-    "| p in [v, ...]` — is implemented THREE times, and a divergence between them fails OPEN in a",
+    "| p in [v, ...]` — is implemented TWICE, and a divergence between them fails OPEN in a",
     "direction no single side can detect (.github#292/#266): the shell union gate",
-    "(scripts/skill-union-assert.sh eval_condition), the Python normalizer",
-    "(scripts/fsgg-skill-registry-check normalize_when), and the typed validator (FS.GG.Contracts",
-    "Fsgg.Registry). This table pins them together so the NEXT grammar tweak on one side reds a test",
-    "instead of shipping a wrong union gate into a scaffolded product.",
+    "(scripts/skill-union-assert.sh eval_condition) and the Python normalizer",
+    "(scripts/fsgg-skill-registry-check normalize_when), both in this repo. This table pins them",
+    "together so the NEXT grammar tweak on one side reds a test instead of shipping a wrong union",
+    "gate into a scaffolded product.",
     "",
     "Each fixture is (predicate, params) -> expected bool. The harness (conformance.sh) asserts BOTH:",
     "  (a) the shell evaluator returns `expected` for (predicate, params); and",
@@ -15,9 +15,12 @@
     "      normalizer never changes the evaluated meaning (the quoted-literal fail-open shape #292).",
     "An `unparseable: true` fixture instead asserts the shell evaluator rejects it (exit 2).",
     "",
-    "This file is the CONTRACT, not a shell/Python artifact: FS.GG.Contracts' typed Fsgg.Registry",
-    "validator should assert the same table (see the cross-repo item filed from #398) so all three",
-    "implementations are pinned to one truth."
+    "There is no third implementation to pin: FS.GG.Contracts' `Fsgg.Registry` is the registry",
+    "document-schema validator (ADR-0015), not a `materializes-when` evaluator — it never parses a",
+    "predicate. SDD's process skills are all `materializes-when: always` by ADR-0017 construction, so",
+    "no typed conditional evaluator exists (or is needed) there today. If ADR-0017 is ever relaxed to",
+    "let a process skill materialize conditionally, adding a typed evaluator + a genuine third leg is",
+    "the trigger to extend this table (.github#408)."
   ],
   "fixtures": [
     { "predicate": "always",                     "params": {},                          "expected": true,  "note": "always is unconditional true" },

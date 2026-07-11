@@ -352,8 +352,9 @@ expect_rc "usage: an unknown flag still exits 2" 2 --bogus-flag
 expect_rc "usage: --help still exits 0"          0 --help
 
 # --- cross-impl conformance for the materializes-when grammar (ADR-0017, .github#398) -----------
-# The grammar has THREE implementations (shell eval_condition here, Python normalize_when, typed
-# Fsgg.Registry) and a divergence fails OPEN (#292/#266). conformance.sh drives the shared fixture
+# The grammar has TWO implementations (shell eval_condition here, Python normalize_when — no typed
+# Fsgg.Registry leg; that validator is a doc-schema checker, not a predicate evaluator, .github#408)
+# and a divergence fails OPEN (#292/#266). conformance.sh drives the shared fixture
 # table through the shell evaluator (--eval-when) and round-trips each predicate through Python's
 # normalize_when (--normalize-when), asserting neither changes the evaluated truth. Delegated to its
 # own harness (own fixture file), folded into this fixture's pass/fail so CI's single entrypoint runs it.
