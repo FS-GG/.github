@@ -404,6 +404,69 @@ must_fail "FAIL CLOSED: no project files" "no project files" "$noproj"
 # The gate must not be talked into inspecting a negative number of things.
 must_fail "a negative --min-ranges is refused" "cannot be negative" "$audio" --min-ranges -1
 
+# ---- a CONDITIONED value is not the truth, and must not be read as one -----------------------------
+# `<PropertyGroup Condition="'$(Configuration)' == 'Debug'"><Version>9.9.9</Version></PropertyGroup>` is
+# idiomatic MSBuild. Reading it as the version-of-truth reds a repo whose locks are perfectly correct —
+# the "cries wolf, gets deleted" failure. The condition must be honoured on the GROUP, not merely on the
+# property: skipping one and not the other is worse than not checking at all.
+cond="$(newrepo cond)"
+w "$cond" Directory.Build.local.props <<'EOF'
+<Project>
+  <PropertyGroup Label="Package">
+    <Version>0.4.0</Version>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <Version>9.9.9</Version>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SomeOther Condition="'$(X)' == 'y'">also-conditioned</SomeOther>
+  </PropertyGroup>
+</Project>
+EOF
+w "$cond" src/Core/FS.GG.C.Core.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>FS.GG.C.Core</PackageId></PropertyGroup>
+</Project>
+EOF
+w "$cond" src/App/FS.GG.C.App.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>FS.GG.C.App</PackageId></PropertyGroup>
+</Project>
+EOF
+lockfile "$cond" tests/App.Tests/packages.lock.json fs.gg.c.app FS.GG.C.Core "[0.4.0, )"
+seal "$cond"
+must_pass "a Debug-only <PropertyGroup> is NOT the version-of-truth (locks are correct: 0.4.0)" "$cond"
+
+# ---- two projects, one package id: there is no single version-of-truth -----------------------------
+# Last-writer-wins would silently pick one — reddening a correct repo, or greening a stale range that
+# happens to match the loser. Ambiguity is the one thing this gate must never resolve by guessing.
+dup="$(newrepo dup)"
+cp -r "$cond/." "$dup/" 2>/dev/null || true
+rm -rf "$dup/.git"; git -C "$dup" init -q -b main
+git -C "$dup" config user.email fixture@fs.gg; git -C "$dup" config user.name fixture
+w "$dup" src/Rival/Rival.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>FS.GG.C.Core</PackageId><Version>7.7.7</Version></PropertyGroup>
+</Project>
+EOF
+seal "$dup"
+must_fail "FAIL CLOSED: two projects claiming one package id is an ambiguity, not a pick" \
+  "project files claim that package id" "$dup"
+
+# …but a collision on an id NOTHING references decides no verdict, and must not red a healthy repo.
+dupquiet="$(newrepo dupquiet)"
+cp -r "$cond/." "$dupquiet/" 2>/dev/null || true
+rm -rf "$dupquiet/.git"; git -C "$dupquiet" init -q -b main
+git -C "$dupquiet" config user.email fixture@fs.gg; git -C "$dupquiet" config user.name fixture
+w "$dupquiet" samples/One/Demo.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><Version>1.0.0</Version></PropertyGroup></Project>
+EOF
+w "$dupquiet" samples/Two/Demo.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><Version>2.0.0</Version></PropertyGroup></Project>
+EOF
+seal "$dupquiet"
+must_pass "…but an unreferenced id collision decides nothing, and does not red the repo" "$dupquiet"
+
 # ---- what the gate considers part of the repo ------------------------------------------------------
 # TRACKED paths, at their CURRENT content. Both halves are deliberate.
 #

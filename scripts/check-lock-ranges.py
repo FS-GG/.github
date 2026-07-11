@@ -107,35 +107,57 @@ def strip_ns(tag: str) -> str:
     return tag.rsplit("}", 1)[-1] if "}" in tag else tag
 
 
+_PROPS_CACHE: dict[Path, dict[str, str]] = {}
+
+
 def read_properties(path: Path) -> dict[str, str]:
-    """Scalar <PropertyGroup> properties from an MSBuild file. Conditioned properties are skipped: we
-    cannot evaluate an MSBuild condition without MSBuild, and a value we cannot prove applies is a value
-    we must not treat as the truth."""
+    """Scalar <PropertyGroup> properties from an MSBuild file.
+
+    A CONDITIONED value is skipped — whether the condition sits on the property or on the PropertyGroup
+    around it. We cannot evaluate an MSBuild condition without MSBuild, and a value we cannot prove
+    applies is a value we must not treat as the truth. Skipping the property but honouring the group
+    would be worse than not checking at all: `<PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <Version>9.9.9</Version></PropertyGroup>` is idiomatic, and reading it as the version-of-truth reds
+    a repo whose locks are perfectly correct. A guard that cries wolf gets deleted."""
+    if path in _PROPS_CACHE:
+        return _PROPS_CACHE[path]
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError) as e:
         raise Problem(f"{path}: cannot parse as MSBuild XML: {e}") from e
     props: dict[str, str] = {}
     for group in root.iter():
-        if strip_ns(group.tag) != "PropertyGroup":
+        if strip_ns(group.tag) != "PropertyGroup" or "Condition" in group.attrib:
             continue
         for prop in group:
             if prop.tag is ET.Comment or "Condition" in prop.attrib:
                 continue
             props[strip_ns(prop.tag)] = (prop.text or "").strip()
+    _PROPS_CACHE[path] = props
     return props
 
 
 def inherited_properties(root: Path, project: Path) -> dict[str, str]:
-    """The props a project inherits, walking root -> project directory so the nearest file wins."""
+    """The props a project inherits.
+
+    NEAREST WINS, AND ONLY THE NEAREST — per file kind, walking up from the project to the root. That is
+    MSBuild's own rule: it imports the FIRST Directory.Build.props it finds walking up and stops; it does
+    not implicitly chain to the one above (a nested file that wants the parent must import it explicitly,
+    via GetPathOfFileAbove). Unioning the whole ancestor chain instead would hand a project under
+    `samples/` (which has its own Directory.Build.props — FS.GG.Rendering does) a version it does not
+    actually inherit. Where the real chain is explicit and we therefore miss it, the version simply fails
+    to resolve, and the gate says so rather than guessing."""
     props: dict[str, str] = {}
-    rel = project.parent.relative_to(root)
-    chain = [root] + [root / Path(*rel.parts[: i + 1]) for i in range(len(rel.parts))]
-    for directory in chain:
-        for name in PROPS_FILES:
+    for name in PROPS_FILES:
+        directory = project.parent
+        while True:
             f = directory / name
             if f.is_file():
                 props.update(read_properties(f))
+                break
+            if directory == root or root not in directory.parents:
+                break
+            directory = directory.parent
     return props
 
 
@@ -172,10 +194,16 @@ class Project:
         self.raw_version = raw_version
 
 
-def load_projects(root: Path) -> dict[str, Project]:
-    """Every package this repo's own projects PRODUCE, keyed by package id (lowercased — the lock keys
-    its project entries that way). A project's own PropertyGroup wins over what it inherits."""
-    projects: dict[str, Project] = {}
+def load_projects(root: Path) -> dict[str, list[Project]]:
+    """Every package this repo's own projects PRODUCE, keyed by package id (lowercased — the lock keys its
+    project entries that way). A project's own PropertyGroup wins over what it inherits.
+
+    The value is a LIST, not a Project, because two project files CAN claim one package id, and then this
+    repo has no single version-of-truth for it. Last-writer-wins would silently pick one — reddening a
+    correct repo, or worse, greening a stale range that happens to match the loser. The ambiguity is
+    reported at the point it would decide a verdict (see check), so an id nothing references cannot red a
+    healthy repo over a collision that changes no answer."""
+    projects: dict[str, list[Project]] = {}
     for path in git_ls(root, "*.fsproj", "*.csproj", "*.vbproj"):
         if not path.is_file():
             continue
@@ -187,7 +215,9 @@ def load_projects(root: Path) -> dict[str, Project]:
         # PackageId FS.GG.UI.Scene over a file stem of "Scene" — so the stem alone would miss it.
         package_id = expand(own.get("PackageId") or own.get("AssemblyName") or path.stem, props)
         raw = own.get("Version") or props.get("Version") or ""
-        projects[package_id.lower()] = Project(path, package_id, expand(raw, props), raw)
+        projects.setdefault(package_id.lower(), []).append(
+            Project(path, package_id, expand(raw, props), raw)
+        )
     return projects
 
 
@@ -221,11 +251,17 @@ def check(root: Path, min_ranges: int) -> int:
     project_entries = 0
     subjects: list[tuple[Path, str, str, str, str]] = []  # file, tfm, project, dependency, range
     for path, doc in locks:
+        if not isinstance(doc, dict):
+            raise Problem(f"{path}: the lock's top level is not an object — the schema has drifted.")
         deps_by_tfm = doc.get("dependencies") or {}
         if not isinstance(deps_by_tfm, dict):
             raise Problem(f"{path}: 'dependencies' is not an object — the lock schema has drifted.")
         for tfm, entries in deps_by_tfm.items():
-            for name, entry in (entries or {}).items():
+            if not isinstance(entries, dict):
+                raise Problem(
+                    f"{path}: the '{tfm}' entry is not an object — the lock schema has drifted."
+                )
+            for name, entry in entries.items():
                 if not isinstance(entry, dict) or entry.get("type") != "Project":
                     continue
                 project_entries += 1
@@ -253,7 +289,16 @@ def check(root: Path, min_ranges: int) -> int:
     problems: list[str] = []
     stale: list[tuple[Path, str, str, str, str, str]] = []
     for path, tfm, holder, dep, rng in subjects:
-        produced = projects[dep.lower()]
+        candidates = projects[dep.lower()]
+        if len(candidates) > 1:
+            where = ", ".join(str(c.path.relative_to(root)) for c in candidates)
+            problems.append(
+                f"'{dep}' is referenced by '{holder}', but {len(candidates)} project files claim that "
+                f"package id ({where}). There is no single version-of-truth for it, and this gate will "
+                "not pick one."
+            )
+            continue
+        produced = candidates[0]
         if not produced.version or PROP_REF_RE.search(produced.version):
             unresolved = produced.raw_version or "(no <Version> anywhere in its import chain)"
             problems.append(
