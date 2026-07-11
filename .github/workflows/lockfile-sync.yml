@@ -261,8 +261,25 @@ jobs:
       # (3,066,660 B) at the same id+version, so the hash depends on WHICH SOURCE resolved it, not
       # on WHEN. Cold restores are still right — a warm folder is a genuine fail-open, and #460's
       # fixture proves it against a real restore — but COLD IS NOT HERMETIC: `library-packs` is an
-      # MSBuild-injected local folder source that a fresh NUGET_PACKAGES does not bypass. Making the
-      # SOURCE deterministic is ADR-0032's decision, and it is not implemented here yet.
+      # MSBuild-injected local folder source that a fresh NUGET_PACKAGES does not bypass.
+      #
+      # THE SOURCE IS NOW MADE DETERMINISTIC — BUT NOT HERE (.github#473). ADR-0032 §2 is implemented
+      # in the org-shared build config (dist/dotnet/Directory.Build.props →
+      # DisableImplicitLibraryPacksFolder), which each repo picks up via sync-build-config.sh. That
+      # placement is deliberate and this workflow MUST NOT second-guess it by passing
+      # `-p:DisableImplicitLibraryPacksFolder=true` on the restore below:
+      #
+      #   This workflow GENERATES the lock; the caller's own gate.yml ENFORCES it, restoring with the
+      #   caller's Directory.Build.props. Forcing the property here would decouple the two. In a repo
+      #   that has not yet synced the shared config we would generate nuget.org's `excLf2zM…` and hand
+      #   it to a CI that still resolves `library-packs` and expects `FwQFuqOA…` — failing locked
+      #   restore on a CORRECT lock file. That is the exact fail-closed ADR-0032 §3 warns about, and
+      #   what blocked #429's repair for a day. Generator and enforcer must read the SAME build config,
+      #   so the property comes from the repo, and the sync + the re-pin land in ONE PR.
+      #
+      # Until a repo syncs, it keeps generating `FwQFuqOA…` — self-consistently, and its gate stays
+      # green. The step after this one says which source served the package, so that state is visible
+      # rather than inferred (ADR-0032 §4).
       #
       # Verified by falsification (#429): plant a stale `contentHash` in a package's
       # `.nupkg.metadata` and `--force-evaluate` writes THAT hash into packages.lock.json;
@@ -291,6 +308,76 @@ jobs:
           else
             dotnet restore --force-evaluate
           fi
+
+          # Hand the (still cold) package folder to the source report below. Each installed package's
+          # .nupkg.metadata records the source that served it — the one variable `contentHash` actually
+          # depends on. Exported rather than re-derived so the report reads the SAME folder this restore
+          # wrote; `mktemp -d` above stays exactly as it is (tests/lockfile-cold LEG 4 asserts it by name).
+          echo "NUGET_PACKAGES=$NUGET_PACKAGES" >> "$GITHUB_ENV"
+
+      # ADR-0032 §4: "say which source a hash came from". NU1403 is indistinguishable from a corrupt
+      # local cache and invites the wrong repair (pasting in the .nupkg.sha512 sidecar, which fails
+      # too) — so name the SOURCE, because that, not time, is the variable a contentHash depends on.
+      #
+      # ADVISORY, AND IT MUST STAY THAT WAY UNTIL THE RE-PIN IS DONE (#473). A repo that has not yet
+      # synced the shared build config still resolves `library-packs` — CORRECTLY and
+      # self-consistently: it generates FwQFuqOA… here and validates FwQFuqOA… in its own gate. Failing
+      # this step would red an unrelated dependency-bump PR over an adoption it has not been asked to
+      # make yet, which is the same fail-closed-on-a-correct-lock-file that blocked #429's repair. It
+      # reports; it never decides. Flip it to an error once every repo has synced + re-pinned, at which
+      # point a library-packs resolution really is a regression (tracked on the re-pin item).
+      - name: Report which source served each package (ADR-0032)
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set -uo pipefail
+
+          if [ -z "${NUGET_PACKAGES:-}" ] || [ ! -d "${NUGET_PACKAGES:-}" ]; then
+            echo "no package folder from the restore step — nothing to report."
+            exit 0
+          fi
+
+          echo "Packages by the source that served them:"
+          find "$NUGET_PACKAGES" -name '.nupkg.metadata' -exec jq -r '.source // "unknown"' {} + \
+            2>/dev/null | sort | uniq -c | sort -rn | sed 's/^/  /'
+          echo
+
+          # An SDK-bundled folder source (…/FSharp/library-packs) is the one that makes a lock file
+          # machine-dependent: it ships a DIFFERENT .nupkg than nuget.org at the same id+version, and a
+          # local folder source BEATS nuget.org when both are offered.
+          served_by_sdk="$(
+            find "$NUGET_PACKAGES" -name '.nupkg.metadata' -print0 2>/dev/null \
+              | xargs -0 -r grep -lF 'library-packs' 2>/dev/null \
+              | while IFS= read -r m; do
+                  v="$(basename "$(dirname "$m")")"
+                  p="$(basename "$(dirname "$(dirname "$m")")")"
+                  printf '%s %s\n' "$p" "$v"
+                done | sort
+          )"
+
+          if [ -z "$served_by_sdk" ]; then
+            echo "ok: no package was served by an SDK-bundled folder source."
+            echo "Every contentHash written above is a function of (id, version) alone, so this lock"
+            echo "file regenerates byte-identically on any machine — the ADR-0032 invariant."
+            exit 0
+          fi
+
+          echo "$served_by_sdk" | sed 's/^/  /'
+          echo
+          echo "The package(s) above were served by the SDK's bundled library-packs folder, NOT by a"
+          echo "feed. Their contentHash is a function of the SDK PATCH LEVEL, so this lock file will not"
+          echo "regenerate byte-identically on a machine with a different SDK — or on any machine whose"
+          echo "NuGet config excludes that folder (a packageSourceMapping does). That is the ADR-0032"
+          echo "defect: same id, same version, two different .nupkg files, two different hashes."
+          echo
+          echo "FIX (one PR, and the ORDER matters — ADR-0032 §3):"
+          echo "  1. Sync the org-shared build config:  scripts/sync-build-config.sh <this repo>"
+          echo "     dist/dotnet/Directory.Build.props sets DisableImplicitLibraryPacksFolder=true,"
+          echo "     which REMOVES that source, so FSharp.Core resolves from nuget.org everywhere."
+          echo "  2. Regenerate the lock IN THE SAME PR (cold):  dotnet restore --force-evaluate"
+          echo "     Re-pinning ahead of the sync fails locked restore on a CORRECT lock file."
+
+          echo "::warning title=lock file is not machine-independent yet (ADR-0032)::$GITHUB_REPOSITORY still resolves at least one package from the SDK's library-packs folder, so its committed contentHash depends on the SDK patch level. Not blocking: the repo is self-consistent until it adopts. Fix by syncing the org-shared build config (DisableImplicitLibraryPacksFolder) and regenerating the lock in the SAME PR — see FS-GG/.github#473."
+          exit 0
 
       - name: Commit and push if changed
         working-directory: ${{ inputs.working-directory }}
