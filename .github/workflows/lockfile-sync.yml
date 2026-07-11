@@ -109,7 +109,27 @@ jobs:
       # another repo (FS.GG.SDD), whereas GITHUB_TOKEN reads a public org package cross-repo (exactly
       # as the caller's gate.yml does). Harmless for repos that build the package from source or a
       # local feed (SDD / Rendering), whose nuget.config never references these vars.
-      - name: Regenerate lockfiles
+      # THE REGENERATION MUST BE COLD, OR IT WRITES A HASH NO FRESH CLONE CAN RESTORE (#429).
+      #
+      # `--force-evaluate` does NOT hash the package it downloads. It copies `contentHash`
+      # verbatim out of the INSTALLED package's `.nupkg.metadata`, which NuGet writes once, at
+      # install time. So a package folder that was populated BEFORE a package was re-published
+      # carries the pre-republication hash forever, and this workflow commits it — leaving every
+      # consumer with a lock file no cold clone can restore, while the gate stays green against
+      # the same stale copy. That is the GENERATION half of the FSharp.Core 10.1.301 defect;
+      # SDD's locked-restore action fixed only the ENFORCEMENT half, and a cold gate over a
+      # poisoned lock file merely fails everyone honestly instead of silently.
+      #
+      # Verified by falsification (#429): plant a stale `contentHash` in a package's
+      # `.nupkg.metadata` and `--force-evaluate` writes THAT hash into packages.lock.json;
+      # restore into an empty NUGET_PACKAGES and it writes the hash the feed actually serves.
+      # Neither the `.nupkg` bytes nor the `.nupkg.sha512` sidecar affect the value — do not
+      # try to "fix" a lock file by pasting a package's published hash (that sidecar is the
+      # catalog `packageHash`, a THIRD value, and committing it fails the gate too).
+      #
+      # NOTE: NUGET_PACKAGES relocates the global-packages folder but NOT the HTTP cache, which
+      # will happily replay stale .nupkg bytes. Clearing it is load-bearing, not belt-and-braces.
+      - name: Regenerate lockfiles (cold)
         working-directory: ${{ inputs.working-directory }}
         env:
           RESTORE_TARGET: ${{ inputs.restore-target }}
@@ -117,6 +137,11 @@ jobs:
           FSGG_PACKAGES_READ_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
+          NUGET_PACKAGES="$(mktemp -d)"
+          export NUGET_PACKAGES
+          dotnet nuget locals http-cache --clear
+
           if [ -n "$RESTORE_TARGET" ]; then
             dotnet restore "$RESTORE_TARGET" --force-evaluate
           else
