@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-07-06
 - **Affects:** **.github** (this ADR + roster row + registry contracts + architecture map 5→6 + skill-ownership migration), **FS.GG.Rendering** (donor — Canvas + Scene majors, frozen `--profile game`), **FS-GG/FS.GG.Game** (new repo), **FS.GG.SDD** (dogfood lifecycle host — defines the provider-less "dev-repo" provenance shape)
+- **Amended by:** [ADR-0033](0033-fixed-step-double-buffer-is-a-simulation-primitive.md) — §Decision 1's `FS.GG.Game.Core` inventory says `fixed-step`, and is **silent on the double-buffered loop built on it**. That silence left `Loop`/`StepState` upstream in Canvas while the accumulator they are built on moved down, splitting one accumulator across two repos; the two copies then diverged on non-finite input. ADR-0033 ratifies the buffer as a **simulation** primitive owned by `FS.GG.Game.Core`. The cut below is otherwise unchanged.
 
 ## Context
 
@@ -43,6 +44,10 @@ Two edges carry the real risk. Both were pre-resolved:
    - `FS.GG.Game.Core` — packable, **FSharp.Core-only** sim core (RNG, fixed-step,
      collision, pathfinding, grids/spatial partitioning, FOV/LOS, ECS/state model).
      Reaches up to **nothing**. Sibling to Rendering at the bottom of the graph.
+     *(Amended by [ADR-0033](0033-fixed-step-double-buffer-is-a-simulation-primitive.md):
+     "fixed-step" includes **the double-buffered fixed-step loop built on it** —
+     `StepState` / `Loop.init` / `advance` / `alpha`. Reading it as the bare accumulator is
+     what left the buffer in `FS.GG.UI.Canvas`.)*
    - `FS.GG.Game.Render` — packable adapter, depends on `Game.Core` + `FS.GG.UI.Scene`,
      mapping sim state onto `Scene` (drawable projection). Reaches **up** to Rendering
      (allowed — downstream → upstream).
