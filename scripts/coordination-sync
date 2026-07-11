@@ -48,13 +48,20 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
 REG="$SRC_ROOT/registry/repos.yml"
-ROOTS="${AGENT_SKILL_ROOTS:-.claude/skills .agents/skills}"
+DEFAULT_ROOTS=".claude/skills .agents/skills"   # the kit lane: what a receiver holds. NOT ADR-0011's three.
+ROOTS=""
+ROOTS_SRC=""
+ROOTS_FROM_DEFAULT=""
 
 die()   { echo "coordination-sync: $*" >&2; exit 2; }
 # need_val (a flag with no value is a misconfiguration, not the exit-1 "kit has drifted" verdict) is
 # shared with repos-audit.sh and skill-union-assert.sh; see lib/args.sh. Sourced after die, which it uses.
 # shellcheck source=lib/args.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/args.sh"
+# resolve_roots — the same root-set precedence skill-union-assert.sh uses to ASSERT the roots, so the
+# script that WRITES them cannot disagree with the gate that checks them (#525). Sourced after die.
+# shellcheck source=lib/roots.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/roots.sh"
 # Print the header block itself — every comment line after the shebang, up to the first line that is
 # not one. A hardcoded `sed -n '2,20p'` used to do this, and it had already rotted: the range stopped
 # eight lines short, so `--help` documented everything EXCEPT the `Env:` and `Exit:` lines — the exit
@@ -76,6 +83,14 @@ done
 [ -n "$target" ] || { usage; exit 2; }
 [ -d "$target" ] || die "target not found: $target"
 target="$(cd "$target" && pwd)"
+
+# Resolve the roots to materialize into — AFTER `target` is known, because the declaration that names
+# them belongs to the RECEIVER, not to this checkout. Resolving at load time (as a `${AGENT_SKILL_ROOTS
+# :-<default>}` expansion, which is what this was) made the receiver's own `.agent-skill-roots`
+# structurally unreachable: the file could not be consulted because the tree holding it had not been
+# identified yet. So the writer hardcoded a root set while the gate read a declared one, and the two
+# agreed only by coincidence of defaults (#525). Same precedence, same parser, same file — lib/roots.sh.
+resolve_roots "$target" "$DEFAULT_ROOTS" "default (the kit lane's two)"
 # Attribution is a property of the CHECK. In apply mode there is no branch to attribute drift to, and a
 # caller passing --base-ref to a writer has misunderstood the flag — say so rather than ignoring it.
 [ -z "$base_ref" ] || [ "$mode" = "check" ] || die "--base-ref is only meaningful with --check."
