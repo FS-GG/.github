@@ -75,7 +75,7 @@
 # The flip must NOT precede a green skill-registry-coherence on main (epic .github#266, fails-open class).
 
 schemaVersion: 1
-updated: "2026-07-10"
+updated: "2026-07-11"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -149,9 +149,9 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: db299500236e780142ad7fe2605640be72bf103a4921e98e2ee8eb4c129bf489, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 16978c46a5002af989dd1040781d4de3789652e3687d61168280126d2bcd44e7, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: a2941b2f97b268c7609fda020e5775ca5a75acdaf561f528b8a001f6ec971f7c, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: 5aea4524eb2f09cd403bac37e06fad07fc8380631ba298fa09b6b24d479535af, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: e9f471b06cf30e4dd9347c9dd34bfe0b555a94845f5da23c05d82958b9fb935a, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: e6be58c8761466445adf27359289a9c2c111699a45b03e7cd3e4494317465d4c, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-ballistics ORIGINATES in FS.GG.Game (Game#40, PR #58) — it is not an ADR-0022 migration and
   # has no FS.GG.Rendering counterpart, so no frozen mirror exists for it and the `frozen-mirror` arm
