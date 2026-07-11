@@ -561,10 +561,14 @@ red `skill-registry-coherence` (the fails-open class, epic #266).
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
 fails restore in CI in every repo — but **only where that restore is cold**, per
-ADR-0031: validated against a *warm* package folder the row is fails-open, which is
-how a re-published `FSharp.Core` left every repo pinning a hash no fresh clone could
-restore while CI stayed green, #429/epic #266; SDD and the `lockfile-sync` generator
-are cold, Game/Rendering/Audio adoption is in flight), `apicompat-publicapi-gate` (a public-API break
+ADR-0031: validated against a *warm* package folder the row is fails-open — it compares
+a record against a record and never contacts the feed, #429/epic #266; SDD and the
+`lockfile-sync` generator are cold, Game/Rendering/Audio adoption is in flight. Note
+`FSharp.Core` was **never re-published** (ADR-0032, #471): the SDK bundles a *different*
+`.nupkg` than nuget.org serves at the same id+version, so a lock's `contentHash` depends
+on **which source** resolved it — and cold does not mean hermetic, because the SDK's
+`library-packs` folder is injected by MSBuild and a fresh `NUGET_PACKAGES` does not bypass
+it), `apicompat-publicapi-gate` (a public-API break
 on a packable forces a SemVer major), `fs-gg-ui-version`/`-bom` (single-pin and
 BOM coherence guarded on every Rendering PR), and
 `governance-cli-handoff-consumer-published` (the full strict/light matrix proven

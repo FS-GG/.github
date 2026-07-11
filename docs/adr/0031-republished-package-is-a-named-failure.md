@@ -1,8 +1,31 @@
 # ADR-0031: A silently re-published package is a NAMED failure — lock-file restores are cold, and the catalog `packageHash` names the cause
 
-- **Status:** Accepted
+- **Status:** **Superseded in part by [ADR-0032](0032-the-lock-hash-must-not-depend-on-the-machine.md)**
+  (§Context and §Decision 2). **§Decision 1 — cold restores — STANDS**, on its own merits.
 - **Date:** 2026-07-11
 - **Affects:** `.github`, FS.GG.SDD, FS.GG.Rendering, FS.GG.Game, FS.GG.Audio, FS.GG.Templates, FS.GG.Governance
+
+> ## ⚠️ CORRECTION — the premise below is FALSE. `FSharp.Core 10.1.301` was never re-published.
+>
+> There have always been **two different `.nupkg` files** with that id and version: the copy the .NET
+> SDK bundles (`…/sdk/10.0.301/FSharp/library-packs/`, 3,051,664 B, sha256 `cdf9fbc3…`) and the copy
+> nuget.org serves (3,066,660 B, sha256 `9896603d…`). **Which `contentHash` you get is a function of
+> WHICH SOURCE served the package, not of WHEN you restored** — CI resolves the SDK's copy
+> (`FwQFuqOA…`), a dev box whose NuGet config excludes `library-packs` resolves nuget.org's
+> (`excLf2zM…`). Nothing was overwritten. See [#471](https://github.com/FS-GG/.github/issues/471) and
+> **[ADR-0032](0032-the-lock-hash-must-not-depend-on-the-machine.md)**, which decides the real question.
+>
+> **What survives:** §Decision 1 (**every restore that writes or enforces a lock file must be COLD**) is
+> independently correct — a warm package folder validates a record against a record and is a genuine
+> fail-open, demonstrated against a real restore in [#460](https://github.com/FS-GG/.github/issues/460)'s
+> fixture. **What does not:** §Decision 2 — verifying against the catalog `packageHash` to detect
+> re-publication would detect **nothing**, because no re-publication occurred, while the actual
+> divergence sails through it. And "cold" does **not** mean "hermetic": `library-packs` is an
+> MSBuild-injected local folder source that a fresh `NUGET_PACKAGES` and a cleared HTTP cache do not
+> bypass.
+>
+> The text below is left **unedited** — an ADR is a record of what was decided and why, and rewriting
+> its premise would erase the evidence of how the org got it wrong. Read it with this correction.
 
 ## Context
 

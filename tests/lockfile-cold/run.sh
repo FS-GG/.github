@@ -11,8 +11,23 @@
 # SUBJECT IS NOT A GATE — the failure leg has to be exercised, not asserted in prose. (.github#460,
 # absorbing #459.)
 #
+# ⚠️ CORRECTION (ADR-0032, .github#471). This header used to say FSharp.Core 10.1.301 "was re-published
+# under the same version". IT WAS NOT. There have always been TWO different .nupkg files at that
+# id+version — the one the .NET SDK bundles (…/sdk/10.0.301/FSharp/library-packs/, 3,051,664 B) and the
+# one nuget.org serves (3,066,660 B) — so the lock's contentHash is a function of WHICH SOURCE resolved
+# the package, not of WHEN. CI resolves the SDK's copy; a dev box whose NuGet config excludes
+# library-packs resolves nuget.org's.
+#
+# EVERY LEG BELOW STILL HOLDS, and none of them is about FSharp.Core: they are properties of NuGet's
+# warm-vs-cold validation, exercised against a package this fixture builds itself. A warm folder IS a
+# fail-open (leg 3 proves it), and a cold restore IS the fix for that — ADR-0031 §Decision 1 stands.
+# What the old narration got wrong was WHY the org's lock files diverged, and a fixture that teaches a
+# false cause is worse than one that teaches none. Cold is not hermetic: the SDK's library-packs folder
+# is injected by MSBuild and a fresh NUGET_PACKAGES does not bypass it. That is ADR-0032's problem, and
+# it is NOT what this fixture tests.
+#
 # WHAT IT PROVES, against a real `dotnet restore` and NO NETWORK. A hand-built .nupkg in a local feed
-# stands in for FSharp.Core; the mechanism under test is NuGet's, not the package's:
+# stands in for any package; the mechanism under test is NuGet's, not any particular package's:
 #
 #   LEG 1  cold  + the feed's contentHash   -> RESTORES.  A gate that rejects everything is not a
 #                                              passing gate; the check has to be DISCRIMINATING.
@@ -49,9 +64,9 @@ command -v dotnet >/dev/null 2>&1 || { echo "::error::dotnet not found — this 
 
 # ---- the local feed: one hand-built .nupkg, so the fixture is hermetic and offline -----------------
 # Built as a zip, not with `dotnet pack`: the subject is NuGet's hash validation, and a package we
-# assemble ourselves is one whose bytes (and therefore whose contentHash) no upstream can change
-# under us. That is the whole point — #429 happened because a package WAS re-published under the
-# same version.
+# assemble ourselves is one whose bytes — and therefore whose contentHash — nothing outside this
+# fixture can change. One feed, one copy, one hash. That isolation is what lets the legs below say
+# something about NuGet rather than about the state of the world's package sources (ADR-0032).
 FEED="$WORK/feed"; PROJ="$WORK/proj"; mkdir -p "$FEED" "$PROJ"
 python3 - "$FEED" <<'PY'
 import zipfile, sys, os
