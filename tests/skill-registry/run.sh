@@ -573,7 +573,13 @@ checkout = next(
     s for s in wf["jobs"]["autofix"]["steps"] if str(s.get("uses", "")).startswith("actions/checkout")
 )
 assert checkout.get("with", {}).get("token") == "${{ steps.app-token.outputs.token }}", \
-    "checkout does not persist the App token — the reconcile push falls back to GITHUB_TOKEN (#514)"
+    "checkout does not take the App token — the reconcile push falls back to GITHUB_TOKEN (#514)"
+# Taking the token and PERSISTING it are two different things: `persist-credentials: false` is a
+# common hardening reflex (actions/checkout's own docs encourage it) and would leave `token:` sitting
+# there looking correct while writing no credential at all, so the push would fail. Loud, not
+# fail-open — but the credential path is only half-pinned if this half is left unasserted.
+assert checkout.get("with", {}).get("persist-credentials") is True, \
+    "checkout does not persist the App token — `git push` would have no credential at all (#514)"
 
 pr = steps["Open or update the standing PR"]
 assert "git push" in pr["run"], "the standing-PR step no longer pushes — has the fabric moved?"

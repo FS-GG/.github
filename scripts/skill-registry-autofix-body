@@ -218,12 +218,17 @@ def currency_lines(producers: dict[str, str]) -> list[str]:
         "GitHub's recursion guard — which is precisely how a stale reconcile used to sit here looking",
         "mergeable, with nothing able to contradict it.)",
         "",
-        "So: **read the checks, not this paragraph.** If a producer has moved past its stamp, the gate",
-        "on this PR is RED and the reconcile is stale — re-run `skill-registry-autofix`",
-        "(`workflow_dispatch`) to recompute it. If the gate is green, merging this greens `main`.",
+        "So: **read the checks, not this paragraph.** A reconcile that no longer applies goes RED here",
+        "on its own — re-run `skill-registry-autofix` (`workflow_dispatch`) to recompute it.",
+        "",
+        "One honest limit, so this body does not repeat the sin it was written to fix: a check reports",
+        "the producers **as of when it ran**. A producer that moves *after* a green check does not",
+        "re-trigger it, so a green here can be up to one `skill-registry-autofix` cycle stale (the next",
+        "scheduled run recomputes and force-pushes, which re-runs the checks). If a producer above has",
+        "moved since the run linked in *Computed from*, treat the green as unsettled and re-run.",
         "",
         "<sub>Opened by `skill-registry-autofix` (.github#299). Its own checks run on it, so a snapshot",
-        "that has rotted cannot present itself as a standing truth — see .github#425 and .github#514.</sub>",
+        "that has rotted cannot silently present itself as mergeable — see .github#425 and .github#514.</sub>",
     ]
 
 
