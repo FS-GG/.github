@@ -117,8 +117,10 @@ opt-in per caller — no consumer is forced to change at once. `--params` **requ
 [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49) is the first
 caller to pass provenance, enforcing `[missing]`/`[unexpected]` in both lanes.
 
-**The predicate language** is deliberately tiny — evaluable in both the shell gate and the typed
-validator (`Fsgg.Registry`) without a real expression engine, so the two never drift:
+**The predicate language** is deliberately tiny — evaluable in both the shell gate
+(`eval_condition`) and the Python drift-normalizer (`normalize_when`) without a real expression
+engine, and a shared fixture table pins the two together so they never drift
+([`tests/skill-union/conformance.sh`](../../tests/skill-union/conformance.sh)):
 `always` · `<param> == <value>` · `<param> != <value>` · `<param> in [<v>, <v>, …]` · clauses joined
 by `and` / `or` (`and` binds tighter; no parentheses). Values and params are bare tokens
 (`[A-Za-z0-9_-]`, plus `true`/`false`); a param absent from the provenance reads as empty. The

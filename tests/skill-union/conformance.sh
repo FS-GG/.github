@@ -3,13 +3,14 @@
 # (deferred "ideally" clause of #385; the #266/#292 fail-open shape).
 #
 # The tiny predicate language `always | <clause> [(and|or) <clause>]...` (clause = `p == v | p != v
-# | p in [v, ...]`) is implemented THREE times, and a divergence between them fails OPEN in a
+# | p in [v, ...]`) is implemented TWICE, and a divergence between them fails OPEN in a
 # direction no single side detects: `registry/skills.CHANGELOG.md` (#292) records the union gate once
-# read a real predicate as *false* and silently dropped a skill. The three implementations:
+# read a real predicate as *false* and silently dropped a skill. The two implementations, both here:
 #   1. the shell union-gate evaluator  — scripts/skill-union-assert.sh   (eval_condition, via --eval-when)
 #   2. the Python drift normalizer      — scripts/fsgg-skill-registry-check (normalize_when, via --normalize-when)
-#   3. the typed validator              — FS.GG.Contracts Fsgg.Registry   (asserted against the SAME
-#                                          fixture table over in that repo — see the #398 cross-repo item)
+# There is no third leg: FS.GG.Contracts' Fsgg.Registry is the registry document-schema validator
+# (ADR-0015), not a `materializes-when` evaluator — SDD's process skills are all `always` by ADR-0017
+# construction, so no typed conditional evaluator exists there to pin (.github#408).
 #
 # This harness drives the SHARED fixture table (materializes-when.fixtures.json) through the two
 # implementations reachable from this repo and asserts, for each (predicate, params) -> expected:
