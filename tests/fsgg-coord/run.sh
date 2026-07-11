@@ -343,6 +343,12 @@ if [ "\$sub" = "api" ] && [ "\$sub2" = "graphql" ]; then
   # items(first:...) connection with the ready/next scan. Discriminate on the narrower marker first.
   if   printf '%s' "\$q" | grep -q 'projectsV2';                      then cat "$FIXTURES/projects.json"
   elif printf '%s' "\$q" | grep -q 'closedByPullRequestsReferences';  then cat "$FIXTURES/done-\$num.json"
+  elif printf '%s' "\$q" | grep -q 'pullRequest' && printf '%s' "\$q" | grep -q 'closingIssuesReferences'; then
+    # \`verify-paths\`' last-resort "which issue does this PR close?" query. MUST stay below the
+    # \`closedByPullRequestsReferences\` arm above, whose query selects this connection too.
+    # No fixture = the PR closes nothing, which is the pre-existing SKIP leg (PR 9).
+    if [ -f "$FIXTURES/pr-closes-\$num.json" ]; then cat "$FIXTURES/pr-closes-\$num.json"
+    else echo '{"data":{},"rateLimit":{"cost":1,"remaining":4999}}'; fi
   elif printf '%s' "\$q" | grep -q 'items(first' && printf '%s' "\$q" | grep -q 'subIssues'; then
     if [ -n "\$hascur" ]; then cat "$FIXTURES/lint-p2.json"; else cat "$FIXTURES/lint-p1.json"; fi
   elif printf '%s' "\$q" | grep -q 'items(first';      then
@@ -560,17 +566,23 @@ if [ "\$sub" = "api" ]; then
     echo '{}' | emit; exit 0
   fi
 
-  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/pulls/([0-9]+)/files ]]; then
-    emit <"$FIXTURES/pr-files-\${BASH_REMATCH[1]}.json"; exit 0
+  # Both PR reads LOG THE REPO they were asked for. The fixtures are keyed by PR number alone — which
+  # is to say the stub is exactly as repo-blind as the bug in .github#479 was, and would happily serve
+  # \`FS.GG.Audio/pulls/48\` from \`.github\`'s PR 48. So the repo cannot be asserted from the payload;
+  # it has to be asserted from the REQUEST. That is what this log line is for.
+  if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/pulls/([0-9]+)/files ]]; then
+    printf 'pr-files %s %s\n' "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}" >>"\$GH_LOG"
+    emit <"$FIXTURES/pr-files-\${BASH_REMATCH[2]}.json"; exit 0
   fi
   # GH_FAIL_PR_GET=<n>: the head-ref read for PR <n> fails. `verify-paths` resolves which issue a PR
   # implements from its branch name here, and an empty answer would read as "the branch is not
   # item/<n>-…" — i.e. a SKIP verdict invented from an unanswered query (.github#322).
-  if [[ "\$path" =~ ^repos/[^/]+/[^/]+/pulls/([0-9]+)$ ]]; then
-    if [ "\${BASH_REMATCH[1]}" = "\${GH_FAIL_PR_GET:-}" ]; then
+  if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/pulls/([0-9]+)$ ]]; then
+    printf 'pr-get %s %s\n' "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}" >>"\$GH_LOG"
+    if [ "\${BASH_REMATCH[2]}" = "\${GH_FAIL_PR_GET:-}" ]; then
       echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
     fi
-    emit <"$FIXTURES/pr-\${BASH_REMATCH[1]}.json"; exit 0
+    emit <"$FIXTURES/pr-\${BASH_REMATCH[2]}.json"; exit 0
   fi
 
   # --- a single issue: GET (title/body/Paths) or PATCH (widen rewrites the body) ----------------
@@ -1618,6 +1630,97 @@ assert_fails "verify-paths: an unreachable head ref fails closed by default" \
 assert_contains "verify-paths: --issue bypasses the head-ref read entirely" "FSGG-PATHS OK" \
   "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_FAIL_PR_GET=7 bash "$COORD" \
        verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS-GG/FS.GG.SDD#70' 2>&1)"
+
+# ---- the repo boundary: a verdict may only be printed on ONE repo's PR vs THAT repo's issue (#479) --
+# `--pr` used to resolve against the repo you were STANDING IN while `--issue` carried a repo of its
+# own. Nothing compared them. So `verify-paths --pr 48 --issue 'FS.GG.Audio#42'` run from `.github`
+# read `.github`'s PR 48 — a closed, unrelated PR — diffed it against Audio's touch-set, and printed
+# `FSGG-PATHS DRIFT`, naming a file that was in neither the PR nor the repo. The inverse is worse: a
+# genuinely drifting PR in another repo reports `FSGG-PATHS OK` whenever the same-numbered PR in the
+# CWD happens to be clean — the guard passing, with confidence, on a subject it never looked at. And
+# it is load-bearing: `.github/workflows/touch-set-drift.yml` greps this very output for its verdict.
+#
+# These tests are the mismatched leg #266 asks for. Note what makes them possible: the stub logs the
+# REPO of each PR read, because the payload cannot betray the bug — the fixtures are keyed by number
+# alone, so the stub is precisely as repo-blind as the code was. The subject has to be asserted from
+# the request, or the test would pass on the wrong repo exactly the way the tool did.
+no_verdict() { # <name> <output> — the ONLY safe outcome across a boundary is no OK/DRIFT at all
+  case "$2" in
+    *"FSGG-PATHS OK"*|*"FSGG-PATHS DRIFT"*) bad "$1" "printed a verdict across a repo boundary: $2" ;;
+    *) ok "$1" ;;
+  esac
+}
+mism="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+          verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS-GG/FS.GG.Rendering#70' 2>&1 || true)"
+no_verdict "verify-paths: --repo and --issue in different repos reach NO verdict" "$mism"
+assert_contains "verify-paths: ...and names BOTH repos it was asked to straddle" "FS-GG/FS.GG.Rendering" "$mism"
+assert_contains "verify-paths: ...and says the touch-set was not checked" "touch-set was NOT checked" "$mism"
+assert_fails "verify-paths: a cross-repo mismatch fails by default" \
+  env PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+    verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS-GG/FS.GG.Rendering#70'
+# --warn downgrades a VERDICT to advisory. It does not license a verdict on the wrong subject, so the
+# mismatch still fails closed under it — the rc the touch-set-drift gate keeps rather than `|| true`-ing.
+assert_fails "verify-paths: a cross-repo mismatch fails closed under --warn too" \
+  env PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+    verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS-GG/FS.GG.Rendering#70' --warn
+no_verdict "verify-paths: ...and still reaches no verdict under --warn" \
+  "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+       verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS-GG/FS.GG.Rendering#70' --warn 2>&1 || true)"
+
+# With no --repo, the ISSUE decides — not the checkout. `gh repo view` (the stub) says FS-GG/FS.GG.SDD,
+# so the old code would have read PR 7 from SDD; the acceptance criterion is that it reads it from
+# Rendering, the repo the caller actually named. Assert on the REQUEST, not the verdict: the fixtures
+# would serve an identical, healthy `FSGG-PATHS OK` either way — which is the whole trap.
+: >"$GH_LOG"
+PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+  verify-paths --pr 7 --issue 'FS-GG/FS.GG.Rendering#70' >/dev/null 2>&1 || true
+assert_contains "verify-paths: --issue decides the repo when --repo is absent" \
+  "pr-files FS-GG/FS.GG.Rendering 7" "$(cat "$GH_LOG")"
+case "$(cat "$GH_LOG")" in
+  *"FS.GG.SDD"*) bad "verify-paths: ...and the CHECKOUT's repo is never consulted for the PR" \
+                     "read the PR from the checkout's repo, not the issue's: $(cat "$GH_LOG")" ;;
+  *)             ok  "verify-paths: ...and the CHECKOUT's repo is never consulted for the PR" ;;
+esac
+
+# The refusal must not overshoot into a false alarm on refs that AGREE. Repo names are case-insensitive
+# on GitHub, and `--repo` takes a registry short-id everywhere else in this tool — both must still pass.
+assert_contains "verify-paths: a registry short-id --repo agrees with the issue's repo" "FSGG-PATHS OK" \
+  "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+       verify-paths --pr 7 --repo sdd --issue 'FS-GG/FS.GG.SDD#70' 2>&1)"
+assert_contains "verify-paths: a differently-cased --repo is not a conflict" "FSGG-PATHS OK" \
+  "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+       verify-paths --pr 7 --repo FS-GG/fs.gg.sdd --issue 'FS-GG/FS.GG.SDD#70' 2>&1)"
+assert_contains "verify-paths: a bare-repo --issue (owner defaults) is not a conflict" "FSGG-PATHS OK" \
+  "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+       verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS.GG.SDD#70' 2>&1)"
+
+# The boundary from the OTHER side, which the report did not name: GitHub lets a PR close an issue in
+# a DIFFERENT repo, so the closing-reference fallback can hand back a cross-repo ref all by itself —
+# no `--issue` flag involved, and straight back over the line the check above refuses to cross. PR 11's
+# branch is not `item/<n>-…`, so resolution falls through to that query.
+cat >"$FIXTURES/pr-11.json" <<'JSON'
+{"head":{"ref":"chore/closes-another-repo"},"number":11}
+JSON
+cat >"$FIXTURES/pr-files-11.json" <<'JSON'
+[{"filename":"src/Scene/Graph.fs"}]
+JSON
+cat >"$FIXTURES/pr-closes-11.json" <<'JSON'
+{"data":{"repository":{"pullRequest":{"closingIssuesReferences":{"nodes":[
+  {"number":70,"repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}]}}}},
+ "rateLimit":{"cost":1,"remaining":4999}}
+JSON
+xrepo="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+           verify-paths --pr 11 --repo FS-GG/FS.GG.SDD --warn 2>&1 || true)"
+no_verdict "verify-paths: a PR closing another repo's issue reaches NO verdict" "$xrepo"
+assert_contains "verify-paths: ...and is SKIP under --warn, with the reason" "FSGG-PATHS SKIP" "$xrepo"
+assert_contains "verify-paths: ...naming the other repo"                     "FS-GG/FS.GG.Rendering#70" "$xrepo"
+assert_fails "verify-paths: a PR closing another repo's issue fails without --warn" \
+  env PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" verify-paths --pr 11 --repo FS-GG/FS.GG.SDD
+# ...and the pre-existing SKIP leg still SKIPs: PR 9 closes nothing at all, which is a different thing
+# from closing something elsewhere, and the new arm in the stub must not have swallowed it.
+assert_contains "verify-paths: a PR that closes NOTHING is still the unlinked SKIP" \
+  "closes no issue" "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
+                         verify-paths --pr 9 --repo FS-GG/FS.GG.SDD --warn 2>&1)"
 
 # Board-wide take (no --repo) must not trip the empty-array expansion. By now everything schedulable
 # is claimed or overlapping, so this exercises the "nothing to hand out" path — which still exits 0.
