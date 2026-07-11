@@ -530,24 +530,64 @@ echo "== 31. the autofix workflow cannot RETIRE on an unverified registry, nor P
 # signal would close a NEEDED reconcile while commenting that the registry is clean: the epic-#266
 # fail-open, reintroduced inside the fix for it.
 #
-# So the retire must additionally require POSITIVE proof of coherence (a read-only check that exits 0).
-# This is asserted structurally because the condition lives in YAML, not in the composer — and both a
-# broken block scalar and the fail-open above shipped green through the fixture before this case existed.
+# So the retire must additionally require POSITIVE evidence. It always did — but until #537 it demanded
+# the WRONG evidence: FULL COHERENCE (the check exits 0). `--write` refuses judgement cases by design,
+# so while one is outstanding the registry can never be coherent and the retire could NEVER fire, however
+# obsolete the PR had become — the guard was disabled in exactly the state that produces obsolete PRs
+# (#414 and #521 both had to be closed by hand). The evidence it needs is "this RECONCILE is finished",
+# which `skill-registry-retire-gate` decides; case 32 drives that decision over its full truth table.
+#
+# This case pins the WIRING, structurally, because the condition lives in YAML and cannot be unit-tested:
+# a fail-open here ships green through a fixture that only tests the script.
 WF="$HERE/../../.github/workflows/skill-registry-autofix.yml"
 python3 - "$WF" <<'PY' || exit 1
 import sys, json, yaml
 wf = yaml.safe_load(open(sys.argv[1]))          # parses at all — a dedented block scalar fails HERE
 steps = {s.get("name"): s for s in wf["jobs"]["autofix"]["steps"] if s.get("name")}
 
-proof = next((n for n in steps if n.startswith("Prove the registry is coherent")), None)
-assert proof, "no step establishes positive evidence of coherence"
+proof = next((n for n in steps if n.startswith("Decide whether the reconcile is finished")), None)
+assert proof, "no step establishes positive evidence that the reconcile is finished"
+assert steps[proof]["id"] == "settled", "the retire's `if` reads steps.settled.outputs.settled"
+# The gate must read the PAYLOAD, not the exit code: the check exits 1 both when it merely found
+# something and when it CRASHED, so a gate keyed on the exit code cannot tell those apart — which is
+# the whole trap. Assert it runs the script that reads findings JSON.
+assert "skill-registry-retire-gate" in steps[proof]["run"], \
+    "the settled decision is not delegated to the tested retire-gate script"
+assert "--json" in steps[proof]["run"], "the gate is not given machine-readable findings to judge"
 
 retire = next((n for n in steps if n.startswith("Retire")), None)
 assert retire, "no retire step"
 cond = steps[retire]["if"]
-assert "steps.coherent.outputs.coherent == 'true'" in cond, \
-    f"retire is not gated on proven coherence — an empty diff from a CRASHED reconcile would close a needed PR: {cond}"
+assert "steps.settled.outputs.settled == 'true'" in cond, \
+    f"retire is not gated on the reconcile being finished — an empty diff from a CRASHED reconcile would close a needed PR: {cond}"
 assert "steps.diff.outputs.changed == 'false'" in cond, f"retire lost its empty-diff guard: {cond}"
+# The retire COMMENT must not assert a coherence nobody proved (#537). With judgement cases outstanding
+# "the registry is now coherent" is simply false, and the old comment said it anyway — which is the #425
+# defect (an artifact asserting a state nothing verified) reappearing in the step that cleans up after it.
+assert "coherent with the" not in steps[retire]["run"], \
+    "the retire comment still claims the registry is COHERENT — it is only finished; judgement cases may remain (#537)"
+assert "retire-note.md" in steps[retire]["run"], \
+    "the retire comment does not name the outstanding judgement cases (#537)"
+
+# EVERY `steps.<id>.outputs.*` REFERENCE MUST RESOLVE TO A STEP THAT EXISTS.
+#
+# GitHub resolves a reference to a step id that does not exist as the EMPTY STRING. It does not warn,
+# and the run stays green — so renaming a step silently turns every `if:` and every status line that
+# referenced its old id into a dead branch that can never be taken.
+#
+# This is not hypothetical: renaming `coherent` -> `settled` in this very PR left the "Dry-run notice"
+# step reading `steps.coherent.outputs.coherent`, which meant a dry run would have reported "a real run
+# would touch nothing" even when a real run would now RETIRE. A status message asserting work that never
+# ran is the exact defect this workflow exists to remove, so a rename must not be able to reintroduce it.
+import re
+raw = open(sys.argv[1]).read()
+declared = {s["id"] for s in wf["jobs"]["autofix"]["steps"] if s.get("id")}
+referenced = set(re.findall(r"steps\.([A-Za-z0-9_-]+)\.outputs", raw))
+dangling = referenced - declared
+assert not dangling, (
+    f"workflow references step id(s) that do not exist: {sorted(dangling)} (declared: {sorted(declared)}). "
+    "GitHub resolves these to the EMPTY STRING silently, so the branch is dead and the run still goes green."
+)
 
 # The recovered stamp comes out of a PR BODY (writable), so it must reach the shell through the
 # environment. `${{ }}` is substituted textually BEFORE bash parses the line: a single quote in the
@@ -596,6 +636,97 @@ assert wf["permissions"]["contents"] == "read", \
 
 print("   (workflow: retire demands proof; stamp is not shell-interpolated; push cannot use github.token)")
 PY
+echo "   ok"
+
+echo "== 32. the retire gate: FINISHED is not COHERENT, and a blinded check is not a judgement case =="
+# The retire is the only branch in this fabric that DESTROYS state, so its decision is driven here over
+# the whole truth table — asserting the REASON on every leg, not merely the verdict. Two of these legs
+# are the traps that make the decision worth extracting from the YAML at all:
+#
+#   * a CRASH and a FINDING both exit 1, so the exit code cannot separate them — the gate must read the
+#     payload, and the absence of parseable findings IS the crash signal;
+#   * a corrupt producer clone arrives as a `manifest-found` FINDING, and it is a "residual" one — so a
+#     naive "only judgement cases left?" test waves the #425 fail-open straight through, wearing a
+#     finding's clothes.
+GATE="$HERE/../../scripts/skill-registry-retire-gate"
+gate() { python3 "$GATE" --findings "$1" --note-file "$WORK/note.md" 2>"$WORK/why.txt"; }
+
+# (a) zero findings — the registry is coherent AND the reconcile is finished. Retire.
+echo '{"findings": []}' > "$WORK/f.json"
+gate "$WORK/f.json" > "$WORK/out.txt" || { echo "FAIL: a coherent registry must retire"; cat "$WORK/why.txt"; exit 1; }
+grep -q "settled=true" "$WORK/out.txt" || { echo "FAIL: settled!=true on a coherent registry"; exit 1; }
+[ -s "$WORK/note.md" ] && { echo "FAIL: no judgement cases, but a note was emitted"; cat "$WORK/note.md"; exit 1; }
+
+# (b) THE #537 CASE. Only judgement cases remain — `--write` will NEVER resolve them, so they cannot
+# make an obsolete snapshot any less obsolete. The old gate refused here, forever, and that is the bug.
+cat > "$WORK/f.json" <<'JSON'
+{"findings": [
+  {"check": "frozen-mirror", "id": "fs-gg-persistence", "detail": "mirror is not byte-identical to the canonical body"}
+]}
+JSON
+gate "$WORK/f.json" > "$WORK/out.txt" || { echo "FAIL: an outstanding judgement case must NOT block the retire (#537)"; cat "$WORK/why.txt"; exit 1; }
+grep -q "settled=true" "$WORK/out.txt" || { echo "FAIL: settled!=true with only judgement cases"; exit 1; }
+grep -q "residual=1"   "$WORK/out.txt" || { echo "FAIL: the residual count is not reported"; exit 1; }
+grep -q "fs-gg-persistence" "$WORK/note.md" || { echo "FAIL: the retire note does not NAME the outstanding judgement case"; cat "$WORK/note.md"; exit 1; }
+
+# (c) THE CRASH. Unparseable findings — the check died. Its exit code (1) is indistinguishable from
+# "found something", so the payload is the only evidence, and there is none. Never retire.
+printf 'Traceback (most recent call last):\n  File "x", line 1\nValueError: boom\n' > "$WORK/f.json"
+gate "$WORK/f.json" > "$WORK/out.txt" && { echo "FAIL: a CRASHED check retired a PR — the #425 fail-open"; exit 1; }
+grep -q "settled=false" "$WORK/out.txt" || { echo "FAIL: settled!=false on a crash"; exit 1; }
+grep -qi "crashed" "$WORK/why.txt" || { echo "FAIL: the crash was not NAMED as the reason"; cat "$WORK/why.txt"; exit 1; }
+# An absent file is the same crash, one step earlier (the redirect never produced anything).
+rm -f "$WORK/f.json"
+gate "$WORK/f.json" > "$WORK/out.txt" && { echo "FAIL: a missing findings file retired a PR"; exit 1; }
+
+# (d) THE BLINDED CHECK — the trap. `manifest-found` is a residual finding, so "only judgement cases
+# remain?" is TRUE for it. But a producer clone that could not be read means those rows were never
+# checked, `--write` had nothing to act on, and the empty diff it produced proves nothing at all.
+cat > "$WORK/f.json" <<'JSON'
+{"findings": [
+  {"check": "manifest-found", "id": "Producer.One", "detail": "manifest is unreadable"}
+]}
+JSON
+gate "$WORK/f.json" > "$WORK/out.txt" && { echo "FAIL: a BLINDED check retired a PR — the fail-open in a finding's clothes"; exit 1; }
+grep -q "settled=false" "$WORK/out.txt" || { echo "FAIL: settled!=false when a producer manifest could not be read"; exit 1; }
+grep -qi "blinded" "$WORK/why.txt" || { echo "FAIL: a blinded check was not named as such"; cat "$WORK/why.txt"; exit 1; }
+
+# (e) THE WRITE DID NOT TAKE. A mechanical finding is still standing after a reconcile that produced no
+# diff — `--write` claims it fixes these, so its absence from the diff means it silently failed. The
+# registry is not in the state the standing PR would leave it in, so that PR is not obsolete.
+cat > "$WORK/f.json" <<'JSON'
+{"findings": [
+  {"check": "digest-matches", "id": "fs-gg-elmish", "detail": "declared X but source hashes to Y"}
+]}
+JSON
+gate "$WORK/f.json" > "$WORK/out.txt" && { echo "FAIL: retired while a MECHANICAL finding was still standing"; exit 1; }
+grep -qi "did not take" "$WORK/why.txt" || { echo "FAIL: a failed write was not named as the reason"; cat "$WORK/why.txt"; exit 1; }
+
+# (f) A judgement case NEXT TO a mechanical one still refuses — (b) must not be a blanket amnesty.
+cat > "$WORK/f.json" <<'JSON'
+{"findings": [
+  {"check": "frozen-mirror",  "id": "fs-gg-persistence", "detail": "mirror diverged"},
+  {"check": "digest-matches", "id": "fs-gg-elmish",      "detail": "stale digest"}
+]}
+JSON
+gate "$WORK/f.json" > "$WORK/out.txt" && { echo "FAIL: a judgement case laundered a co-occurring mechanical finding"; exit 1; }
+
+# (g) "Mechanical" is IMPORTED from the composer's own classify(), never re-encoded here or in the YAML
+# (#485: one question, five implementations, agreeing in none). An APPENDABLE declared-completeness (it
+# carries a derivable `row`) is one --write acts on -> refuse; a NON-derivable one is a judgement call
+# the owner must make -> it cannot block the retire forever, exactly like (b).
+cat > "$WORK/f.json" <<'JSON'
+{"findings": [
+  {"check": "declared-completeness", "id": "newbie", "detail": "row missing", "row": {"id": "newbie"}}
+]}
+JSON
+gate "$WORK/f.json" > "$WORK/out.txt" && { echo "FAIL: an APPENDABLE row is mechanical — --write adds it — so it must refuse"; exit 1; }
+cat > "$WORK/f.json" <<'JSON'
+{"findings": [
+  {"check": "declared-completeness", "id": "orphan", "detail": "cannot append it: no derivable source"}
+]}
+JSON
+gate "$WORK/f.json" > "$WORK/out.txt" || { echo "FAIL: a NON-derivable row is a judgement case and must not block the retire"; cat "$WORK/why.txt"; exit 1; }
 echo "   ok"
 
 echo "skill-registry fixture: all checks passed"

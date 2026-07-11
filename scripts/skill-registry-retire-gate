@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""Decide whether the standing skill-registry PR may be RETIRED (.github#537, amends #425).
+
+THE QUESTION THIS ANSWERS IS NOT "IS THE REGISTRY COHERENT?"
+
+`skill-registry-autofix.yml` retires its own standing PR once that PR's diff is obsolete — #425's
+answer to "an obsolete reconcile must not sit there looking mergeable". It gated the retire on
+**full coherence** (`fsgg-skill-registry-check` exits 0, i.e. ZERO findings), on the sound reasoning
+that an empty diff alone proves nothing: `Reconcile in place` ends in `|| true`, so a CRASHED
+reconcile leaves the registry untouched and produces an empty diff that is byte-for-byte identical
+to the one a clean registry produces. Retiring on that signal would close a NEEDED reconcile while
+commenting that all is well — the epic-#266 fail-open, inside the fix for it.
+
+The gate was right to demand positive evidence. It demanded the WRONG evidence.
+
+`--write` **deliberately refuses judgement cases** — a frozen-mirror divergence, a row two manifests
+declare, a vanished source — because auto-resolving one would be that same fail-open. It must keep
+refusing them. But that means: while any judgement case is outstanding, the registry can NEVER be
+fully coherent, `coherent` can NEVER be true, and the retire step can NEVER fire — *no matter how
+obsolete the standing PR has become*.
+
+The two conditions are not independent. A judgement case is exactly the state in which the mechanical
+rows keep churning underneath it, which is exactly when standing PRs go obsolete. **The guard was
+disabled in precisely the situation that produces the thing it guards against**, and it showed: #414
+and #521 both went obsolete under an outstanding judgement case, and both had to be closed BY HAND.
+
+So the question is not "is the registry coherent?" but "**is this reconcile FINISHED?**" — is there
+anything left that `--write` would have done and didn't? That is what makes the standing PR obsolete,
+and it is true even while a human still owes the registry a judgement call.
+
+WHAT "FINISHED" REQUIRES — three conditions, each with its own failure
+
+  1. THE CHECK RAN AT ALL. A crash (unparseable registry, import error) exits 1 — and so does a
+     perfectly healthy run that merely found something. The exit code CANNOT tell them apart, which
+     is exactly the trap the old gate was avoiding. The discriminator is the PAYLOAD: a crash prints
+     a traceback and no JSON. Unparseable findings => crashed => refuse.
+
+  2. THE CHECK WAS NOT BLINDED. A corrupt or vanished producer clone surfaces as a `manifest-found`
+     FINDING, not as an exception — and it is a "residual" one, so a naive "only judgement cases
+     remain?" test would wave it straight through. It must not: if a producer manifest could not be
+     read, then the rows from that producer were never really checked, `--write` declined to touch
+     them, and the resulting empty diff is not evidence of ANYTHING. This is the #425 fail-open
+     wearing a finding's clothes. Refuse.
+
+  3. NOTHING MECHANICAL IS LEFT. If a finding `--write` claims it fixes is still standing after a
+     reconcile that produced no diff, then the write did not take (a silent partial failure), and
+     the registry is NOT in the state the standing PR would leave it in. Refuse.
+
+If all three hold, every remaining finding is one no reconcile will ever resolve. The standing PR's
+diff is therefore as complete as it will ever get — and if it is also empty, that PR is obsolete and
+may be retired, with the outstanding judgement cases named honestly in the retire comment rather than
+papered over with "the registry is now coherent" (which would be a lie, and the kind #425 is about).
+
+WHAT IS MECHANICAL IS NOT REDEFINED HERE. It is imported from `skill-registry-autofix-body.classify`
+— the function `--write`'s own PR body already uses to say what it did. Re-encoding that set in this
+file (or, worse, in the workflow YAML) is how "which findings are auto-fixable?" ends up computed in
+three places that agree in none (#485). One definition, imported.
+
+Exit 0 = retire allowed. Non-zero = do not retire, and the reason is on stderr.
+Emits `settled=` / `residual=` on stdout for $GITHUB_OUTPUT, and a human note for the retire comment.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import pathlib
+import sys
+from importlib.machinery import SourceFileLoader
+
+HERE = pathlib.Path(__file__).resolve().parent
+
+# `--write`'s own classifier, imported rather than re-encoded (#485). The body script has no `.py`
+# suffix, so `spec_from_file_location` cannot infer a loader and returns None — hand it a
+# SourceFileLoader explicitly. A failure here is fatal on purpose: a retire gate that cannot read the
+# definition of "mechanical" must not fall back to a guess of its own.
+_path = HERE / "skill-registry-autofix-body"
+_spec = importlib.util.spec_from_file_location(
+    "autofix_body", _path, loader=SourceFileLoader("autofix_body", str(_path))
+)
+_body = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_body)
+classify = _body.classify
+
+# A producer manifest that could not be read. NOT a judgement case, however much it looks like one:
+# it means the world was read wrong, so every verdict derived from it — including the empty diff —
+# is unsound. See condition 2 above.
+BLINDING_CHECKS = {"manifest-found"}
+
+
+def decide(raw: str) -> tuple[bool, str, list[dict]]:
+    """-> (settled, reason, residual_findings). `settled` is "this reconcile is finished"."""
+    try:
+        findings = json.loads(raw)["findings"]
+    except Exception as exc:  # noqa: BLE001 — any failure to parse means the check did not complete
+        return False, (
+            f"the coherence check produced no parseable findings ({exc.__class__.__name__}) — it "
+            "CRASHED. Its exit code cannot tell a crash from a finding (both are 1), so the payload "
+            "is the only evidence, and there is none. An empty diff from a crashed reconcile is not "
+            "evidence of anything, least of all that a standing PR is obsolete."
+        ), []
+
+    blinded = [f for f in findings if f["check"] in BLINDING_CHECKS]
+    if blinded:
+        named = ", ".join(f"{f['id']}" for f in blinded)
+        return False, (
+            f"a producer manifest could not be read ({named}). The check was BLINDED, not merely "
+            "unhappy: the rows from that producer were never checked, so `--write` had nothing to "
+            "act on and the empty diff it produced proves nothing. Refusing to retire on it."
+        ), []
+
+    reconciled, appended, residual = classify(findings)
+    mechanical = reconciled + appended
+    if mechanical:
+        named = ", ".join(f"[{f['check']}] {f['id']}" for f in mechanical)
+        return False, (
+            f"{len(mechanical)} finding(s) that `--write` reconciles are STILL STANDING after a "
+            f"reconcile that produced no diff ({named}). The write did not take. The registry is "
+            "not in the state the standing PR would leave it in, so that PR is not obsolete."
+        ), residual
+
+    return True, (
+        "the reconcile is FINISHED: nothing `--write` can act on remains. "
+        f"{len(residual)} judgement case(s) are outstanding — no reconcile will ever resolve them, "
+        "so they do not make a standing PR any less obsolete."
+    ), residual
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--findings", required=True, help="JSON from `fsgg-skill-registry-check --json`")
+    ap.add_argument("--note-file", help="write the residual judgement cases here, as markdown")
+    args = ap.parse_args()
+
+    path = pathlib.Path(args.findings)
+    raw = path.read_text() if path.exists() else ""
+    settled, reason, residual = decide(raw)
+
+    print(f"settled={'true' if settled else 'false'}")
+    print(f"residual={len(residual)}")
+    print(("RETIRE-OK: " if settled else "NOT RETIRING: ") + reason, file=sys.stderr)
+
+    if args.note_file:
+        lines = []
+        if residual:
+            lines = [
+                "",
+                f"**{len(residual)} judgement case(s) remain** — and they are why this PR could not "
+                "green the gate. `--write` refuses them by design (auto-resolving one would be the "
+                "epic-#266 fail-open inside the fix for it), so no reconcile will ever clear them, "
+                "and they do not make this snapshot any less obsolete:",
+                "",
+            ]
+            lines += [f"- `{f['id']}` [{f['check']}] {f['detail']}" for f in residual]
+        pathlib.Path(args.note_file).write_text("\n".join(lines) + ("\n" if lines else ""))
+
+    return 0 if settled else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
