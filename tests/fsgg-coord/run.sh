@@ -46,6 +46,20 @@ echo 900 >"$STORE/nextid"
 export FSGG_COORD_CACHE="$WORK/cache"
 run() { PATH="$STUB:$PATH" FSGG_COORD_DEBUG=1 bash "$COORD" "$@"; }
 
+# #480: a worker command's default scope is the repo you are STANDING IN, so the fixture has to be
+# able to stand somewhere. `run_at <dir>` runs the coord from a throwaway checkout whose `origin`
+# names a repo (or from a plain directory, which is no checkout at all).
+run_at() { local d="$1"; shift; ( cd "$d" && PATH="$STUB:$PATH" FSGG_COORD_DEBUG=1 bash "$COORD" "$@" ); }
+mkcheckout() {  # mkcheckout <name> [origin-url] -> prints the path
+  local dir="$WORK/co-$1"; mkdir -p "$dir"
+  git -C "$dir" init -q >/dev/null 2>&1
+  [ -n "${2:-}" ] && git -C "$dir" remote add origin "$2"
+  printf '%s' "$dir"
+}
+CO_SDD="$(mkcheckout sdd    https://github.com/FS-GG/FS.GG.SDD.git)"
+CO_TPL="$(mkcheckout tpl    git@github.com:FS-GG/FS.GG.Templates.git)"   # the ssh form must parse too
+NOGIT="$(mkcheckout nogit)"                                              # a dir with no remote at all
+
 pass=0; failcount=0
 ok()   { echo "PASS  $1"; pass=$((pass+1)); }
 bad()  { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
@@ -829,7 +843,13 @@ assert_eq "ready --status Done: widens past 'not Done' -> #54" \
 assert_eq "ready --phase 'P2': substring-matches the phase" \
   "127" "$(run ready --phase P2 --json 2>/dev/null | jq -r '.[0].number')"
 
-assert_contains "next: picks the Ready item first" "FS.GG.Templates#99" "$(run next 2>/dev/null)"
+# Ready-before-Backlog is a cross-repo preference (Templates#99 Ready vs SDD#127 Backlog), so it can
+# only be asserted over the WHOLE board. Since #480 a bare `next` scopes to the checkout, and the
+# fixture runs from inside `.github` — which would scope this to `.github` and assert nothing. Run it
+# from a directory that is not a checkout, where the org-wide fallback still applies. The scoping
+# itself is asserted below, deliberately, instead of riding on this test's cwd by accident.
+assert_contains "next (no checkout -> org-wide): picks the Ready item first" \
+  "FS.GG.Templates#99" "$(run_at "$NOGIT" next 2>/dev/null)"
 assert_contains "next --repo FS.GG.SDD: no Ready -> falls back to Backlog #127" \
   "FS.GG.SDD#127" "$(run next --repo FS.GG.SDD 2>/dev/null)"
 assert_eq "ready --repo templates: registry short-id resolves to FS.GG.Templates (#99)" \
@@ -842,6 +862,51 @@ assert_eq "ready --repo audio: registry short-id resolves to FS.GG.Audio (#189) 
   "189" "$(run ready --repo audio --json 2>/dev/null | jq -r '.[0].number')"
 assert_contains "next --repo sdd: short-id resolves to FS.GG.SDD (Backlog #127)" \
   "FS.GG.SDD#127" "$(run next --repo sdd 2>/dev/null)"
+
+# ---- #480: a worker command defaults to THE REPO YOU ARE STANDING IN -----------------------------
+#
+# `take`/`batch`/`next`/`who` initialised `repo=""`, and every board read treats that as THE WHOLE
+# ORG. The documented contract was the opposite ("Default: the repo you are standing in"), so a bare
+# `take` in the `.github` checkout claimed FS.GG.Game#141 — walking past four schedulable `.github`
+# items — and printed a worktree command against `.github`'s `origin/main`, which would have built a
+# worktree of the WRONG REPOSITORY. A dispatcher reporting work over a scope it never examined.
+#
+# Scope is resolved from the GIT REMOTE, not `gh repo view`: no API call, so it cannot burn budget and
+# cannot mistake an exhausted one for "you are not in a checkout" (#430).
+assert_contains "next: bare, from an FS.GG.SDD checkout -> that repo's queue (Backlog #127) [#480]" \
+  "FS.GG.SDD#127" "$(run_at "$CO_SDD" next 2>/dev/null)"
+assert_eq "next: bare, from an FS.GG.SDD checkout does NOT reach into Templates [#480]" \
+  "false" "$(run_at "$CO_SDD" next 2>/dev/null | grep -q 'FS.GG.Templates' && echo true || echo false)"
+# (`batch`'s own scoping is asserted in the #312 section below, which is the board set where it has
+# real Paths-carrying candidates in more than one repo — the only place the scope can be seen to bite.)
+#
+# An explicit --repo is the caller SPELLING OUT the scope. The checkout is a fallback, never evidence
+# that overrides it — the same precedence verify-paths states.
+assert_contains "scope: an explicit --repo still wins over the checkout [#480]" \
+  "FS.GG.Templates#99" "$(run_at "$CO_SDD" next --repo templates 2>/dev/null)"
+
+# `take` ACTS — it claims, and prints a worktree command against THIS checkout's origin/main. With no
+# detectable repo it must refuse, not quietly widen to the org: widening is what handed a `.github`
+# worker another repo's item plus an isolation command that would silently succeed at the wrong thing.
+take_nogit="$(run_at "$NOGIT" take 2>&1 || true)"
+assert_contains "take: outside a checkout REFUSES rather than scanning the whole org [#480]" \
+  "--repo required" "$take_nogit"
+
+# THE REGRESSION GUARD. `ready` and `lint` are org-wide RECONCILERS: /check-board runs a BARE
+# `ready --all --json` and `lint --json` to reconcile the WHOLE board. Defaulting them to the checkout
+# would silently shrink the reconciler to one repo — trading this scope bug for a strictly worse one,
+# in the very tool that exists to catch scope bugs. They must stay org-wide even from inside a checkout.
+assert_eq "ready: bare from a checkout stays ORG-WIDE (/check-board depends on it) [#480]" \
+  "true" "$(run_at "$CO_SDD" ready --all --json 2>/dev/null \
+             | jq -r '[.[].repo] | unique | length > 1')"
+
+# `reap --apply` is the one command here that DESTROYS another worker's state — it deletes their claim
+# marker and unassigns them. So it is the worst possible place to keep an org-wide default: a janitor
+# run from `.github` would collect claims in five repos it was never pointed at. It scopes like its
+# siblings. (Asserted on the DRY RUN — the point is which claims it considers, not that it deletes.)
+assert_eq "reap: bare, from a checkout considers only THAT repo's claims [#480]" \
+  "true" "$(as_at "$CO_SDD" janitor-x reap 2>&1 \
+             | grep -qE 'FS\.GG\.(Templates|Governance|Rendering|Audio|Game)#' && echo false || echo true)"
 assert_contains "next: unknown repo reports no startable item (stderr)" \
   "no startable item" "$(run next --repo nope 2>&1 >/dev/null)"
 
@@ -1326,6 +1391,10 @@ jq -n --arg ts "$stale_ts" '[{id:802, body:"<!-- fsgg:claim worker=ghost-000 lea
 pw() { PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
 as() { local w="$1"; shift
        PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" --worker "$w" "$@"; }
+# ...the same, but STANDING somewhere (#480): a worker command's default scope is its checkout, so a
+# test about `take`'s behaviour has to say where the worker is standing, not inherit the fixture's cwd.
+as_at() { local d="$1" w="$2"; shift 2
+       ( cd "$d" && PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" --worker "$w" "$@" ); }
 # Count markers exactly as the lock parses them — ANCHORED at the body start. An unanchored grep
 # would count a claim marker quoted inside a free-form message as a real lock, which is the forgery
 # the anchoring exists to prevent, and would make the forgery test pass for the wrong reason.
@@ -2063,15 +2132,22 @@ assert_contains "verify-paths: a PR that closes NOTHING is still the unlinked SK
   "closes no issue" "$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
                          verify-paths --pr 9 --repo FS-GG/FS.GG.SDD --warn 2>&1)"
 
-# Board-wide take (no --repo) must not trip the empty-array expansion. By now everything schedulable
-# is claimed or overlapping, so this exercises the "nothing to hand out" path — which still exits 0.
-if as teal-e55 take >/dev/null 2>&1; then ok "take: board-wide (no --repo) exits cleanly"
-else bad "take: board-wide (no --repo) exits cleanly" "non-zero exit"; fi
+# The "nothing to hand out" path must not trip the empty-array expansion, and still exits 0. Every
+# claim this fixture has made by now is in FS.GG.SDD, so that is the queue where everything schedulable
+# is claimed or overlapping — stand there.
+#
+# This used to be a BARE take, and its name said "board-wide (no --repo)". That mode was the #480
+# defect, not a feature: with no --repo the scan reached across the whole org, so a bare `take` in the
+# `.github` checkout claimed FS.GG.Game#141 and printed a worktree command against `.github`'s
+# origin/main. A `take` now always has a scope — the checkout, or an explicit --repo — so the test
+# says where it is standing instead of relying on the absence of a scope.
+if as_at "$CO_SDD" teal-e55 take >/dev/null 2>&1; then ok "take: the empty queue exits cleanly [#480]"
+else bad "take: the empty queue exits cleanly [#480]" "non-zero exit"; fi
 # It must say why PER ITEM, in `batch`'s own words. This assertion used to accept the fixed sentence
 # "no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared", which named
 # four causes without observing any of them (#440) — so the test's own name was the thing it failed to
 # check. The reason now has to be one `batch` actually found.
-take_empty="$(as teal-e55 take 2>&1 >/dev/null)"
+take_empty="$(as_at "$CO_SDD" teal-e55 take 2>&1 >/dev/null)"
 assert_contains "take: says WHY there is nothing to hand out" "passed over:" "$take_empty"
 assert_contains "take: ...naming a real, observed reason rather than a guessed list" \
   "already claimed by worker" "$take_empty"
@@ -2862,7 +2938,13 @@ jq -n --arg ts "$fresh_ts" '[{id:8423, body:"<!-- fsgg:claim worker=game-x1 leas
   user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-423.json"
 jq -n --arg ts "$fresh_ts" '[{id:8424, body:"<!-- fsgg:claim worker=audio-n1 lease=120 -->\nheld",
   user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-424.json"
-pb() { PATH="$STUB:$PATH" GH_BOARD_SET=xbatch GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@"; }
+# Runs from a directory that is NO CHECKOUT, deliberately. Since #480 a bare `batch` scopes to the repo
+# you are standing in, and this section is about the ONE case that can only be seen across repos: a
+# phantom cross-repo overlap. Standing nowhere is how you legitimately ask for the whole board — and it
+# keeps this test measuring `conflicts_between`, not the cwd of whoever ran the fixture.
+pb()    { ( cd "$NOGIT" && PATH="$STUB:$PATH" GH_BOARD_SET=xbatch GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@" ); }
+# ...and the same stub, STANDING in a Templates checkout, to prove the scope actually bites here.
+pb_tpl() { ( cd "$CO_TPL" && PATH="$STUB:$PATH" GH_BOARD_SET=xbatch GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@" ); }
 
 # The whole board, no --repo: the cross-repo phantom (#423) and same-repo neighbour (#424) are BOTH
 # in flight, but only #422/#425 (real same-repo overlaps) may be dropped. #420 clears the phantom;
@@ -2876,6 +2958,17 @@ assert_contains "batch: a genuine same-repo IN-FLIGHT overlap is still caught (#
   "#422 — overlaps in-flight work" "$xb_err"
 assert_contains "batch: a genuine same-repo BATCH-MATE overlap is still caught (#312)" \
   "#425 — overlaps batch member FS.GG.Templates#420" "$xb_err"
+
+# #480, where it bites: the SAME board, but STANDING in the Templates checkout. Org-wide it schedules
+# FS.GG.Templates#420 AND FS.GG.Governance#421 — a worker in the Templates tree must be offered only
+# #420. The Governance item is real work, it is simply not work you can do from this checkout, and
+# handing it over comes with a worktree command built against the wrong repository's origin/main.
+assert_eq "batch: standing in Templates, the Governance candidate is NOT offered [#480]" \
+  '["FS.GG.Templates#420"]' "$(pb_tpl batch --json 2>/dev/null | jq -c '.')"
+# The ssh remote form resolves identically — a worker who cloned over ssh is not a different worker.
+# ($CO_TPL's origin is git@github.com:FS-GG/FS.GG.Templates.git, so this leg also proves that parse.)
+assert_eq "batch: ...and the ssh remote form resolves to the same scope [#480]" \
+  "1" "$(pb_tpl batch --json 2>/dev/null | jq 'length')"
 # ...and neither cross-repo candidate is ever passed over for a phantom.
 case "$xb_err" in
   *"#420 — overlaps"*|*"#421 — overlaps"*)
