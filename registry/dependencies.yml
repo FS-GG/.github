@@ -167,8 +167,10 @@ contracts:
     # Production is gated on the G1–G7 reference-set guard, so the shipped artifact is provably the
     # tested artifact. It bundles the governance-policy@1 / governance-capabilities@2 /
     # governance-tooling@1 / governance-descriptor@1 surfaces as one pinnable set.
-    # Feed: local/CI `dotnet pack` to ~/.local/share/nuget-local/ now; org GitHub Packages push
-    # DEFERRED (admin-blocked, .github#21).
+    # Feed: PUBLISHED — live on the org GitHub Packages feed at 1.2.1.1 (check-feed-coherence.py
+    # verifies it as a mandatory daily subject) + nuget.org (ADR-0012 dual-publish). The org-feed
+    # push LANDED once the admin blocker .github#21 closed (2026-06-28); the earlier "local pack
+    # now / org push DEFERRED (admin-blocked)" state is retired (.github#382).
     surface: >
       FS.GG.Governance.ReferenceGateSet content package —
       contentFiles/any/any/.fsgg/{governance,capabilities,policy,tooling}.yml, byte-identical to
@@ -665,7 +667,7 @@ coherence:
     impact: "Templates' governance overlay enforces the build/test/evidence gates it advertises; the empty-stub capability gap (ADR-0002) is closed."
     tracking: "https://github.com/FS-GG/.github/issues/14"
   - id: reference-gate-set-published
-    coherent: false
+    coherent: true
     owner: governance
     summary: >
       Producer side delivered 2026-06-28 (.github#15, H3, epic #16 Pillar 3; ADR-0007): Governance
@@ -679,11 +681,16 @@ coherence:
       .nupkg; CI job `reference-gate-set-pack`. Materialized copy re-validates Valid through the real
       Config→Gates→Routing→Route→Enforcement pipeline (SC-004).
     note: >
-      coherent:false is a standing cross-repo request for the CONSUMER side: Templates#14 wires the
-      fs-gg-governance overlay drift gate (git diff --exit-code) against the package's materialized
-      contentFiles/any/any/.fsgg/. The ORG-FEED push is deferred (admin-blocked, .github#21); until
-      it lands, a consumable artifact via local/CI `dotnet pack` to ~/.local/share/nuget-local/ is
-      the done-definition (registered here so Templates#14 can legitimately pin it).
+      RESOLVED — flipped coherent:true (.github#382; the prose here previously contradicted itself
+      on the .github#21 org-feed push, "deferred (admin-blocked)" vs "closed / DONE + verified").
+      All three legs are delivered: PRODUCER (Governance#15) publishes
+      FS.GG.Governance.ReferenceGateSet@1.2.1.1; the ORG-FEED push LANDED once the admin blocker
+      .github#21 closed (2026-06-28) and the package is live at 1.2.1.1 — check-feed-coherence.py
+      verifies it GREEN as a mandatory daily subject, and it is on nuget.org too (ADR-0012),
+      retiring the earlier "deferred, local `dotnet pack` to ~/.local/share/nuget-local/ is the
+      done-definition" state; and the CONSUMER side Templates#14 wired the fs-gg-governance overlay
+      drift gate (git diff --exit-code) against the materialized contentFiles/any/any/.fsgg/ and
+      closed (2026-06-28).
     resolved_by: "FS-GG/FS.GG.Governance#15 (producer; this registry PR registers the contract)"
     impact: "Templates#14 has ONE published, versioned source of truth to diff its overlay against instead of a hand-copied set; the H3 Templates#14 blocker is removed."
     tracking: "https://github.com/FS-GG/FS.GG.Templates/issues/14"
