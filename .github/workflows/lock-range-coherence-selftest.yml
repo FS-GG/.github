@@ -1,0 +1,43 @@
+# The failure legs of the lock-range coherence gate (.github#495, epic #266).
+#
+# lock-range-coherence.yml is a REUSABLE workflow: it runs in the receivers' repos, not here, so
+# nothing in this repo would otherwise ever execute scripts/check-lock-ranges.py. A gate whose only
+# exercise is in somebody else's CI is a gate nobody can change safely — and per epic #266's ratified
+# rule, A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE.
+#
+# So the fixture builds throwaway git repos and drives the script against all three shapes the org
+# actually has (a central $(FsGgAudioVersion) property, a per-project literal, an inherited
+# Directory.Build.local.props value) and asserts BOTH directions: an un-regenerated version bump is
+# caught and named, while a `+ci` build-metadata bump and a consumption pin for a package the repo does
+# not build stay green — the two ways this guard would cry wolf and get deleted.
+#
+# Static: no SDK, no restore, no network. The fixture needs nothing but python3, git and bash.
+name: lock-range-coherence-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-lock-ranges.py"
+      - "tests/lock-range-coherence/**"
+      - ".github/workflows/lock-range-coherence.yml"
+      - ".github/workflows/lock-range-coherence-selftest.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-lock-ranges.py"
+      - "tests/lock-range-coherence/**"
+      - ".github/workflows/lock-range-coherence.yml"
+      - ".github/workflows/lock-range-coherence-selftest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the lock-range coherence fixture
+        run: bash tests/lock-range-coherence/run.sh
