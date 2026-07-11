@@ -9,13 +9,38 @@ and the skill routes board work through it.
 ## The one fact that dictates the fix
 
 GitHub's GraphQL **primary** limit is **5,000 points/hour**, it is **shared by every worker** (N agents
-authenticate as ONE account), and a query's cost is computed from **the number of nodes it requests —
-not the number of HTTP requests**. Three consequences:
+authenticate as ONE account), and a request costs
 
-- **Batching does nothing for the primary budget.** Aliasing five queries into one HTTP request
-  pays the same total node cost. (Batching *does* help the *secondary* per-minute/request-count
-  limits — but those are not what a read-heavy coordination workload hits.)
-- **The only levers that lower primary consumption are:**
+```
+cost = max(1, nodes_requested / 100)
+```
+
+— node count, **but never less than 1 point per request**. That floor is the whole subtlety, and it
+cuts in opposite directions for reads and writes:
+
+- **A node-HEAVY read is billed for its nodes.** Aliasing five such queries into one request pays the
+  same total node cost and saves nothing. This is why `gh project item-list` is a trap (below): its
+  cost grows with the board, and no amount of batching helps.
+- **A CHEAP write is billed the floor.** A Projects v2 field mutation returns ~1 node, so it costs
+  **1 point — the minimum — no matter how many you alias into one document.** For writes, therefore,
+  **cost tracks REQUEST COUNT**, and batching is a real primary-budget lever. Measured, five
+  aliased no-op `Status` mutations cost the same **1 point** as one:
+
+  ```
+  1 mutation                ->  1 pt
+  5 aliased in ONE document ->  1 pt
+  ```
+
+  A placement pass sets ~6 fields per item; sent one-per-request that is 6 points an item, aliased it
+  is 1 ([#448](https://github.com/FS-GG/.github/issues/448)).
+
+> **This section used to say "batching does nothing for the primary budget", flatly.** That is true
+> only of node-heavy reads. It is false for mutations, and stating it unconditionally cost us a real
+> decision: it was cited to talk a worker *out* of building `set-field --batch`, the one optimisation
+> that would have cut the write path ~6× ([#447](https://github.com/FS-GG/.github/issues/447),
+> [#421](https://github.com/FS-GG/.github/issues/421)).
+
+- **The levers that lower primary consumption:**
   1. **Don't re-fetch static data.** Field ids, single-select option ids, and the project
      number/node-id are stable for the life of the field. Re-introspecting them every session is
      pure waste.
@@ -27,6 +52,12 @@ not the number of HTTP requests**. Three consequences:
   4. **Spend a read once per *window*, not once per *worker*.** The budget is shared, so the same
      board scan performed by five workers costs five times as much and tells them the same thing.
      Cache it (`FSGG_COORD_SCAN_TTL_SEC`, 90s) and they pay for one between them ([#418](https://github.com/FS-GG/.github/issues/418)).
+  5. **Queue a write the budget refused; never drop it.** Exhaustion takes the board writes with it,
+     and a swallowed write is what makes the board lie (below). Persist it and replay it when the
+     budget returns — `fsgg-coord flush` ([#418](https://github.com/FS-GG/.github/issues/418)).
+  6. **Alias the WRITES.** Cheap mutations are billed the 1-point floor per *request*, so N field
+     writes sent as N requests cost N points and the same N aliased into one document cost **1**.
+     Reads cannot be batched away; writes can ([#448](https://github.com/FS-GG/.github/issues/448)).
 - **When it runs out, it takes the WRITES with it — which is how the board starts lying.** This is not
   a hypothetical: `claim` holds its lock in REST *comments*, so under exhaustion the lock is taken and
   the `Status: In progress` write is refused. Swallow that and the board says `Backlog` while a worker
@@ -41,8 +72,23 @@ cache can cause is "board schema changed", fixed by `fsgg-coord bootstrap --refr
 
 ## What things actually cost
 
-Measured against the live 640-item board, not estimated (`gh api rate_limit` is free, so you can
-re-derive any row of this table yourself — and should, before you trust it):
+Measured against the live 640-item board, not estimated — and you should re-derive any row before you
+trust it. **But measure it with the right instrument:**
+
+```sh
+FSGG_COORD_DEBUG=1 fsgg-coord batch --repo .github 2>&1 >/dev/null | grep 'graphql cost='
+```
+
+Every query `fsgg-coord` sends selects `rateLimit { cost }`, so `FSGG_COORD_DEBUG=1` reports what the
+server charged **that query** — attributable, and unaffected by anyone else.
+
+> ⚠️ **Do NOT measure by diffing `gh api rate_limit` before and after.** The budget is *shared*: every
+> other worker's spend lands inside your measurement window and is billed to your command. That is not
+> a small effect — it produced a "51-point `batch`" that is really **14**, and a claim that this
+> document's read costs were wrong by 3–25× when they were fine
+> ([#447](https://github.com/FS-GG/.github/issues/447)). A shared meter cannot attribute. If you have
+> no per-query cost (mutations cannot select `rateLimit`), take the **minimum over several trials** —
+> contention only ever adds.
 
 | Call | GraphQL | Note |
 |---|---|---|
@@ -62,10 +108,10 @@ re-derive any row of this table yourself — and should, before you trust it):
 | `bootstrap [--refresh]` | (1) | Introspect project id + field/option ids **once** into a user-level cache (`~/.cache/fsgg-coord`). Refresh is only needed when the board's *schema* changes. |
 | `board` / `field-id` / `option-id` | (1) | Serve ids from cache — **zero** GraphQL calls. |
 | `item-id <issue>` | (2) | Resolve an issue's board item via `issue -> projectItems`, pick the matching board, cache it. One narrow call, then free. |
-| `set-field <issue> <Field> <Value>` | (1)+(2) | Resolve project/field/item/option ids from cache and run **one** mutation, auto-routing by the field's `dataType` (single-select / date / number / text / iteration). No per-write introspection. |
+| `set-field <issue> <Field> <Value>` | (1)+(2) | Resolve project/field/item/option ids from cache and run **one** mutation, auto-routing by the field's `dataType` (single-select / date / number / text / iteration). No per-write introspection. **One mutation per invocation, so N fields on one item cost N points today** — aliasing them into a single document (lever 6, worth ~6× on a placement pass) is **not yet implemented**: [#448](https://github.com/FS-GG/.github/issues/448). |
 | `issues <repo> [--label L] [--jq E]` | (3) | List issues over **REST** with a stored **ETag**; an unchanged repeat 304s to cache. `--jq` projects the payload to trim what you read back. |
 | `ready [--repo R] [--status S] [--phase P] [--all]` | (4) | List the **actionable** board items (not `Done` by default). Projects v2 has no server-side item filter, so this is a full scan — but it selects only three fields per item (`Status`, `Phase`, `Blocked by`) via `fieldValueByName` (a **resolver** field, no node multiplication), not the `fieldValues(first:100)` nested inside `items(first:N)` that `gh project item-list` pays (**O(items × 100) ≈ 2,500 pts**). A 100-item page costs ~1 point. `--repo` takes a registry short-id (`sdd`/`rendering`/`governance`/`templates`/`.github`), an `owner/repo`, or a literal repo name. |
-| `next [--repo R] [--ignore-blocked] [--fresh]` | (4)+(5) | Print the one most-startable item — the first `Ready`, else the first `Backlog` — optionally scoped to a repo. Items whose `Blocked by` refs are still open (or cannot be verified) are **skipped**, with the reason on stderr; `--ignore-blocked` restores the unfiltered pick. Blocked-awareness is **free**: the blockers resolve against the same scan (which already carries every board item's `state`), so no per-blocker lookup is paid. A **scheduling** read, so it serves the shared 90s scan cache — the second worker to ask inside the window pays **0 pts**. `--fresh` forces a rescan. |
+| `next [--repo R] [--ignore-blocked] [--fresh]` | (4) | Print the one most-startable item — the first `Ready`, else the first `Backlog` — optionally scoped to a repo. Items whose `Blocked by` refs are still open (or cannot be verified) are **skipped**, with the reason on stderr; `--ignore-blocked` restores the unfiltered pick. Blocked-awareness is **free**: the blockers resolve against the same scan (which already carries every board item's `state`), so no per-blocker lookup is paid. A **scheduling** read, so it serves the shared 90s scan cache — the second worker to ask inside the window pays **0 pts**. `--fresh` forces a rescan. |
 | `lint [--repo R] [--json] [--strict]` | (4) | Assert the board's **epic invariants**: no **open** `[epic]` with zero sub-issues (the orphaned epic — a closed childless epic is finished work, not an orphan), none the board calls `Done` over a still-open child, none with more children than the scan can see. Exits non-zero on any error; `Status: Done` on a still-open issue is a NOTE (fatal only under `--strict`). Same paginated full scan as `ready` — 1 point per 100-item page — but it also selects each epic's `subIssues`, which raises **nodeCount** (~200 → ~10,100 per page) while leaving cost at 1. That buys every child's state in the same pagination, where the alternative is one follow-up query per epic. |
 | `who` / `reap` / `inbox` / `batch` / `take` / `overlap --active` / `widen` | (3)+(4) | All read "what is in flight" from one place, and because **the marker is the lock**, that set is found by reading markers — not by trusting the board's `In progress` column, which `claim` writes best-effort. Cost: the same one board scan as `ready`, plus **one paginated REST issue-list per repo** (which carries each issue's body, so a touch-set is free), plus **one comments read per candidate**. Candidates are pruned soundly on `comments > 0` — a claim marker *is* a comment, so a zero-comment issue cannot hold a lock. This list deliberately does **not** reuse the ETag'd `issues` command: that asks for one page of 100 (a lock may not have a 100-issue limit), and a 304 serving a pre-claim `comments: 0` would hide a live marker — **a lock may never be read from a cache**. Measured on `FS-GG/.github`: 4 GraphQL + 3 REST for one repo, 12 REST across all of them. Known bound: without `--repo`, the repos scanned come from the board, so a claim in a repo with zero board items needs an explicit `--repo`. |
 | `flush [--dry-run]` | (5) | Replay board writes an exhausted budget refused. `claim` queues them rather than losing them; every board-writing command drains the queue first, so it empties on its own once the budget returns. |
