@@ -106,4 +106,4 @@ kit:
   # They hold no protocol of their own, so they carry no ADR: each cites the skill it drives.
   - { id: check-board,             kind: skill,  source: .claude/skills/check-board,              sha256: 13798e12fe82719b752459caa1e76fc41b19d5690be243bd6b9d0c4f1082251c }
   - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item,               sha256: c29edd0c891dbfbfcf850b158c96682849c1dd3fff81ad30fac2b47576b01675 }
-  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 157f1033b825bc175eb9255589ece437e425d1acdc4a0cb147f0315d62c0e85c }
+  - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord,                      sha256: 6d48f0cccfe9e276340cbdb226c3f84875b18752267a16f06ffcbded3f92cf22 }
