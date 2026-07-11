@@ -449,8 +449,8 @@ if [ "\$sub" = "api" ]; then
   #     a silent fallback to the same-numbered issue next door.
   # Every issue-side arm below routes through this and logs '<verb> <owner>/<repo> <n>', so a test can
   # assert the subject from the REQUEST — the way #479 had to for the two pulls/ arms, because the
-  # payload cannot carry the answer. Sets JF; must be called DIRECTLY, never in a \$( ) — an exit
-  # inside a command substitution would kill the subshell and let the stub sail on with an empty JF.
+  # payload cannot carry the answer.
+  #
   # The store is keyed two ways, and the REPO-QUALIFIED key wins:
   #   issue-<owner>__<repo>-<n>.json   a genuine per-repo issue. Seed these (seed_issue_in) when a
   #                                    test needs the SAME number to exist in two repos as two
@@ -459,18 +459,33 @@ if [ "\$sub" = "api" ]; then
   #   issue-<n>.json                   the unqualified default, still answering for exactly ONE repo:
   #                                    the one its own .repo names. It is a default, NOT a fallback —
   #                                    a read from any other repo gets the 404 below, never this file.
-  issue_guard() {  # \$1=<owner>/<repo>  \$2=<num> -> sets JF and CF, or exits (404 / stub bug)
-    local slug home
-    slug="\${1//\//__}"
-    JF="$STORE/issue-\$slug-\$2.json"; CF="$STORE/comments-\$slug-\$2.json"
+  #
+  # Sets JF (the issue fixture), CF (its comments) and KEY (the store key both are built from — the
+  # suffix every other per-subject file must also carry, or two repos would share one). Call it
+  # DIRECTLY, never in a \$( ): an exit inside a command substitution kills only the subshell, and the
+  # stub would sail on with an empty JF.
+  issue_guard() {  # \$1=<owner>/<repo>  \$2=<num> -> sets JF, CF, KEY, or exits (404 / stub bug)
+    local home
+    KEY="\${1//\//__}-\$2"
+    JF="$STORE/issue-\$KEY.json"; CF="$STORE/comments-\$KEY.json"
     [ -f "\$JF" ] && return 0
-    JF="$STORE/issue-\$2.json"; CF="$STORE/comments-\$2.json"
+    KEY="\$2"; JF="$STORE/issue-\$2.json"; CF="$STORE/comments-\$2.json"
     [ -f "\$JF" ] || { echo "gh stub: no issue fixture \$1#\$2" >&2; exit 4; }
     home="\$(jq -r '.repo // empty' "\$JF")"
     if [ -n "\$home" ] && [ "\$home" != "\$1" ]; then
       printf 'issue-404 %s %s (lives in %s)\n' "\$1" "\$2" "\$home" >>"\$GH_LOG"
       echo "gh: Not Found (HTTP 404)" >&2; exit 1
     fi
+  }
+
+  # An injection var names a SUBJECT, and a subject is a repo and a number — not a number. The bare
+  # form (GH_VANISH_ISSUE=70) is the legacy one and still fires on #70 in whatever repo has it, which
+  # was unambiguous only while a number could name just one issue. Now that the store can hold SDD#70
+  # and Rendering#70 at once, a test that needs to aim at exactly one of them writes the qualified
+  # form (GH_VANISH_ISSUE=FS-GG/FS.GG.SDD#70). Accept both (#494).
+  injected() {  # \$1=<env value>  \$2=<owner>/<repo>  \$3=<num> -> 0 if THIS subject is the target
+    [ -n "\$1" ] || return 1
+    [ "\$1" = "\$3" ] || [ "\$1" = "\$2#\$3" ]
   }
 
   if [ "\$path" = "user" ]; then printf '{"login":"EHotwagner"}' | emit; exit 0; fi
@@ -498,7 +513,7 @@ if [ "\$sub" = "api" ]; then
     [ -f "\$sf" ] || echo '[]' >"\$sf"
     # GH_FAIL_SUBISSUES_GET=<n>: the existing-links read for <n> fails. `child` must not read that as
     # "the edge is absent" and POST anyway — an unreachable subject is not an absent one (#266/#320).
-    if [ "\$method" = "GET" ] && [ "\$snum" = "\${GH_FAIL_SUBISSUES_GET:-}" ]; then
+    if [ "\$method" = "GET" ] && injected "\${GH_FAIL_SUBISSUES_GET:-}" "\$snwo" "\$snum"; then
       echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
     fi
     if [ "\$method" = "POST" ]; then
@@ -530,30 +545,30 @@ if [ "\$sub" = "api" ]; then
     # GH_FAIL_READ_ISSUE=<n>: reads of <n>'s comments fail once a marker has been POSTed there.
     # Models a transient gh failure (rate limit / 5xx) landing on the CAS re-read, i.e. after our
     # marker exists but before we know whether we won it.
-    if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_FAIL_READ_ISSUE:-}" ] && [ -f "$STORE/posted-\$cnum" ]; then
+    if [ "\$method" = "GET" ] && injected "\${GH_FAIL_READ_ISSUE:-}" "\$cnwo" "\$cnum" && [ -f "$STORE/posted-\$KEY" ]; then
       echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
     fi
     # GH_VANISH_ISSUE=<n>: our marker is GONE by the time the CAS re-reads (a peer's --force/reap
     # collected it, or the read lagged the write). The re-read sees NO live marker at all, so the
     # claimant cannot show it holds the lock. It must treat that as a loss, not a win.
-    if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_VANISH_ISSUE:-}" ] && [ -f "$STORE/posted-\$cnum" ]; then
+    if [ "\$method" = "GET" ] && injected "\${GH_VANISH_ISSUE:-}" "\$cnwo" "\$cnum" && [ -f "$STORE/posted-\$KEY" ]; then
       jq 'map(select(.body | test("^<!--\\\\s*fsgg:claim") | not))' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
     fi
     # GH_REAP_RACE=<n>: the holder heartbeats between reap's snapshot read and its delete. Every read
     # after the first returns a freshly-renewed marker.
-    if [ "\$method" = "GET" ] && [ "\$cnum" = "\${GH_REAP_RACE:-}" ]; then
-      rc="\$(cat "$STORE/readcount-\$cnum" 2>/dev/null || echo 0)"
-      echo \$((rc + 1)) >"$STORE/readcount-\$cnum"
+    if [ "\$method" = "GET" ] && injected "\${GH_REAP_RACE:-}" "\$cnwo" "\$cnum"; then
+      rc="\$(cat "$STORE/readcount-\$KEY" 2>/dev/null || echo 0)"
+      echo \$((rc + 1)) >"$STORE/readcount-\$KEY"
       if [ "\$rc" -ge 1 ]; then
         jq --arg ts "\$now" 'map(.updated_at = \$ts)' "\$cf" >"\$cf.t" && mv "\$cf.t" "\$cf"
       fi
     fi
 
     if [ "\$method" = "POST" ]; then
-      touch "$STORE/posted-\$cnum"
+      touch "$STORE/posted-\$KEY"
       # GH_RACE_INJECT=<worker>: a rival worker's marker lands BETWEEN our read and our re-read,
       # taking a LOWER comment id. This is the exact interleaving the CAS exists to resolve.
-      if [ -n "\${GH_RACE_INJECT:-}" ] && [ "\$cnum" = "\${GH_RACE_ISSUE:-}" ]; then
+      if [ -n "\${GH_RACE_INJECT:-}" ] && injected "\${GH_RACE_ISSUE:-}" "\$cnwo" "\$cnum"; then
         rid="\$(cat "$STORE/nextid")"; echo \$((rid + 1)) >"$STORE/nextid"
         jq --argjson id "\$rid" --arg w "\$GH_RACE_INJECT" --arg ts "\$now" \
           '. + [{id:\$id, body:("<!-- fsgg:claim worker=" + \$w + " lease=120 -->\nrival"),
@@ -643,7 +658,7 @@ if [ "\$sub" = "api" ]; then
   # empty answer would read as "declared nothing" — i.e. disjoint from everything.
   if [[ "\$path" =~ ^repos/([^/]+)/([^/]+)/issues/([0-9]+)$ ]]; then
     inwo="\${BASH_REMATCH[1]}/\${BASH_REMATCH[2]}"; inum="\${BASH_REMATCH[3]}"
-    if [ "\$method" = "GET" ] && [ "\$inum" = "\${GH_FAIL_ISSUE_GET:-}" ]; then
+    if [ "\$method" = "GET" ] && injected "\${GH_FAIL_ISSUE_GET:-}" "\$inwo" "\$inum"; then
       echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
     fi
     issue_guard "\$inwo" "\$inum"
@@ -1246,40 +1261,40 @@ cat >"$FIXTURES/board-bl.json" <<'JSON'
   ]}}}},"rateLimit":{"cost":1,"remaining":4980}}
 JSON
 
-seed_issue() {  # seed_issue <num> <title> <paths-or-empty> [owner/repo]
-  local n="$1" t="$2" p="$3" repo="${4:-FS-GG/FS.GG.SDD}" body="Some description."
-  [ -n "$p" ] && body="$body
+# ONE writer for every issue fixture. Only the store KEY varies, and that is the whole of #494:
+#   <n>                    the unqualified default. Answers for exactly ONE repo — the one its own
+#                          .repo names — and 404s for any other. A default, never a fallback.
+#   <owner>__<repo>-<n>    repo-qualified, so the SAME number can exist in two repos as two different
+#                          issues. A number-keyed store cannot represent that at all, which is why a
+#                          cross-repo defect on the issue side used to be untestable.
+# `id` is deliberately NOT the number: the sub-issues endpoint keys on the REST id, and a fixture
+# where the two coincide would let `child` pass while POSTing the wrong field (.github#325).
+write_issue() {  # write_issue <key> <num> <title> <body> <owner/repo> <state>
+  jq -n --argjson n "$2" --arg t "$3" --arg b "$4" --arg r "$5" --arg s "$6" \
+    '{id:($n + 1000), number:$n, title:$t, body:$b, assignees:[], state:$s, repo:$r,
+      html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$1.json"
+  echo '[]' >"$STORE/comments-$1.json"
+}
+declared_body() {  # <paths-or-empty> -> a body that declares them (or declares nothing)
+  local b="Some description."
+  [ -n "$1" ] && b="$b
 
-Paths: $p"
-  # `id` is deliberately NOT the number: the sub-issues endpoint keys on the REST id, and a fixture
-  # where the two coincide would let `child` pass while POSTing the wrong field (.github#325).
-  jq -n --argjson n "$n" --arg t "$t" --arg b "$body" --arg r "$repo" \
-    '{id:($n + 1000), number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
-      html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
-  : >"$STORE/comments-$n.json"; echo '[]' >"$STORE/comments-$n.json"
+Paths: $1"
+  printf '%s' "$b"
+}
+seed_issue() {      # seed_issue <num> <title> <paths-or-empty> [owner/repo]
+  write_issue "$1" "$1" "$2" "$(declared_body "$3")" "${4:-FS-GG/FS.GG.SDD}" open
 }
 # A raw-body seeder. `seed_issue` can only produce a well-formed declaration; #277 is about bodies
 # that merely LOOK like they declare one, so those tests need to write the body verbatim.
 seed_issue_raw() {  # seed_issue_raw <num> <title> <body> [owner/repo]
-  local n="$1" t="$2" b="$3" repo="${4:-FS-GG/FS.GG.SDD}"
-  jq -n --argjson n "$n" --arg t "$t" --arg b "$b" --arg r "$repo" \
-    '{id:($n + 1000), number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
-      html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$n.json"
-  echo '[]' >"$STORE/comments-$n.json"
+  write_issue "$1" "$1" "$2" "$3" "${4:-FS-GG/FS.GG.SDD}" open
 }
 # Seed a REPO-QUALIFIED issue: the same number, in another repo, as a genuinely different issue with
-# its own body and its own touch-set. `seed_issue` cannot express that — its store key is the number
-# alone — and that limit is exactly what made a cross-repo defect on the issue side untestable (#494).
-seed_issue_in() {  # seed_issue_in <owner/repo> <num> <title> <paths-or-empty>
-  local repo="$1" n="$2" t="$3" p="$4" slug body="Some description."
-  slug="${repo//\//__}"
-  [ -n "$p" ] && body="$body
-
-Paths: $p"
-  jq -n --argjson n "$n" --arg t "$t" --arg b "$body" --arg r "$repo" \
-    '{id:($n + 1000), number:$n, title:$t, body:$b, assignees:[], state:"open", repo:$r,
-      html_url:("https://github.com/" + $r + "/issues/" + ($n|tostring))}' >"$STORE/issue-$slug-$n.json"
-  echo '[]' >"$STORE/comments-$slug-$n.json"
+# its own body and its own touch-set (#494). `state` defaults to open; pass `closed` for a fixture that
+# exists only to be READ (a `paths_of` subject), so it stays out of every open-issue candidate scan.
+seed_issue_in() {   # seed_issue_in <owner/repo> <num> <title> <paths-or-empty> [state]
+  write_issue "${1//\//__}-$2" "$2" "$3" "$(declared_body "$4")" "$1" "${5:-open}"
 }
 
 seed_issue 42 "Audio mixer"          "src/Audio/**, tests/Audio/**"
@@ -1760,7 +1775,10 @@ PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" \
   verify-paths --pr 7 --issue 'FS-GG/FS.GG.Rendering#70' >/dev/null 2>&1 || true
 assert_contains "verify-paths: --issue decides the repo when --repo is absent" \
   "pr-files FS-GG/FS.GG.Rendering 7" "$(cat "$GH_LOG")"
-case "$(cat "$GH_LOG")" in
+# Scoped to the PR-READ lines, which is what this assertion is actually about. Grepping the whole log
+# for the substring would go red the day any unrelated, legitimate SDD read joined this flow — and
+# since #494 every issue read logs its repo too, so that log is no longer a proxy for "the PR's repo".
+case "$(grep -E '^pr-(get|files) ' "$GH_LOG" || true)" in
   *"FS.GG.SDD"*) bad "verify-paths: ...and the CHECKOUT's repo is never consulted for the PR" \
                      "read the PR from the checkout's repo, not the issue's: $(cat "$GH_LOG")" ;;
   *)             ok  "verify-paths: ...and the CHECKOUT's repo is never consulted for the PR" ;;
@@ -1777,8 +1795,11 @@ esac
 # Their touch-sets DIVERGE deliberately: PR 7 touches src/Scene/**, which SDD#494 covers and
 # Rendering#494 does not. One PR, one number, two repos — and therefore two different honest verdicts.
 # A stub that cannot tell the repos apart cannot produce both, which is precisely the point.
-seed_issue_in FS-GG/FS.GG.SDD       494 "Scene work (SDD)"        "src/Scene/**, tests/Scene/**"
-seed_issue_in FS-GG/FS.GG.Rendering 494 "Audio work (Rendering)"  "src/Audio/**"
+# Seeded CLOSED: these two exist only to be READ as touch-sets. An open issue joins every subsequent
+# open-issue candidate scan in its repo, and a fixture that quietly changes what OTHER tests see is
+# the wrong way to pay for this one.
+seed_issue_in FS-GG/FS.GG.SDD       494 "Scene work (SDD)"        "src/Scene/**, tests/Scene/**" closed
+seed_issue_in FS-GG/FS.GG.Rendering 494 "Audio work (Rendering)"  "src/Audio/**"                 closed
 
 assert_contains "#494: SDD's #494 declares the PR's files — OK" "FSGG-PATHS OK" \
   "$(pw verify-paths --pr 7 --repo FS-GG/FS.GG.SDD --issue 'FS-GG/FS.GG.SDD#494' 2>&1 || true)"
@@ -1812,6 +1833,21 @@ esac
 # is not the same failure as a client that asked the wrong repo, and must not be quietly rendered as one.
 rawmiss="$(env PATH="$STUB:$PATH" gh api repos/FS-GG/FS.GG.SDD/issues/6553 2>&1 || true)"
 assert_contains "#494: an unseeded issue is still a loud STUB bug, not a 404" "no issue fixture" "$rawmiss"
+
+# A failure injection names a SUBJECT, and a subject is a repo AND a number. Now that SDD#494 and
+# Rendering#494 both exist, `GH_FAIL_ISSUE_GET=494` can no longer say WHICH one it means — and a stub
+# that let one number arm an injection in two repos would be conflating them again, one layer below
+# the bug this item is about. The qualified form aims.
+inj_sdd="$(env PATH="$STUB:$PATH" GH_FAIL_ISSUE_GET='FS-GG/FS.GG.Rendering#494' \
+             gh api repos/FS-GG/FS.GG.SDD/issues/494 --jq '.title' 2>&1 || true)"
+inj_rnd="$(env PATH="$STUB:$PATH" GH_FAIL_ISSUE_GET='FS-GG/FS.GG.Rendering#494' \
+             gh api repos/FS-GG/FS.GG.Rendering/issues/494 --jq '.title' 2>&1 || true)"
+assert_contains "#494: a qualified injection fires on the repo it names" "502" "$inj_rnd"
+assert_contains "#494: ...and leaves the same-numbered issue next door alone" "Scene work (SDD)" "$inj_sdd"
+# ...and the bare form still means "that number, in whatever repo has it" — the legacy spelling every
+# injection above this line uses, and which must keep working.
+assert_contains "#494: the bare injection form still fires regardless of repo" "502" \
+  "$(env PATH="$STUB:$PATH" GH_FAIL_ISSUE_GET=494 gh api repos/FS-GG/FS.GG.SDD/issues/494 2>&1 || true)"
 
 # Acceptance 2: a deliberately-introduced cross-repo confusion in `paths_of` turns this fixture RED.
 # This is the assertion that proves the leg is COVERED rather than merely coverable — a test suite can
