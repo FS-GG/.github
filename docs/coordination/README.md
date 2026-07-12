@@ -38,17 +38,20 @@ the thread is self-describing.
 ### Agent recipe (`gh` CLI)
 
 ```sh
-# request: open in the TARGET repo
-gh issue create --repo FS-GG/FS.GG.Rendering \
-  --title "[cross-repo] fs-gg-ui template drifted from framework HEAD" \
-  --label cross-repo --label cross-repo:request --label blocked \
-  --body "From: FS.GG.Templates. Blocks: FS-GG/FS.GG.Templates build of fs-gg-fullstack.
+# request: open in the TARGET repo.
+# REST throughout — `gh issue create`/`list` are GraphQL, on a budget the whole fleet shares (#587).
+gh api -X POST repos/FS-GG/FS.GG.Rendering/issues \
+  -f title='[cross-repo] fs-gg-ui template drifted from framework HEAD' \
+  -f 'labels[]=cross-repo' -f 'labels[]=cross-repo:request' -f 'labels[]=blocked' \
+  -f body="From: FS.GG.Templates. Blocks: FS-GG/FS.GG.Templates build of fs-gg-fullstack.
 Contract: fs-gg-ui-version. template/base/src/Product/*.fs (2026-06-15) no longer
-compiles against src/Scene/Types.fsi (2026-06-22). No release tag pins a coherent set."
+compiles against src/Scene/Types.fsi (2026-06-22). No release tag pins a coherent set.
 
-# triage / respond
-gh issue list   --repo FS-GG/FS.GG.Rendering --label cross-repo
-gh issue comment <n> --repo FS-GG/FS.GG.Rendering --body "## Response
+Paths: template/base/src/Product/" --jq .html_url
+
+# triage / respond — `fsgg-coord issues` is REST + ETag, so a repeat read costs ZERO.
+scripts/fsgg-coord issues rendering --label cross-repo
+gh api -X POST repos/FS-GG/FS.GG.Rendering/issues/<n>/comments -f body="## Response
 Refreshing template/base to the current Scene API; will tag 0.2.0-preview.1."
 ```
 
@@ -68,14 +71,17 @@ Create them in every repo with [`scripts/apply-labels.sh`](../../scripts/apply-l
 
 Cross-repo issues are aggregated on the org-level **Coordination** Project (Projects
 v2) so blocked/in-flight requests are visible across repos in one board. Add an issue
-with `gh project item-add`.
+with `fsgg-coord add`.
 
 Projects v2 is GraphQL-only, so board work spends from GitHub's GraphQL rate limit.
 Route reads/writes through the thrifty client [`scripts/fsgg-coord`](../../scripts/fsgg-coord)
 — it caches the static field/option ids, resolves board items narrowly, and reads issues
 over REST with an ETag. See [graphql-budget.md](graphql-budget.md) for the cost model.
 
-> One-time setup (needs the `project` scope: `gh auth refresh -s project,read:project`):
+> One-time setup (needs the `project` scope: `gh auth refresh -s project,read:project`). Run once, by
+> a human, with admin rights — never on a worker path, which is why it may spend GraphQL directly:
+>
+> <!-- graphql-monopoly: exempt — one-time board provisioning, run once by a human; never on a worker path -->
 > ```sh
 > gh project create --owner FS-GG --title "Coordination"
 > ```

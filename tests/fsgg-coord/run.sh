@@ -843,6 +843,16 @@ if [ "\$sub" = "api" ]; then
   exit 0
 fi
 
+if [ "\$sub" = "project" ] && [ "\$sub2" = "item-add" ]; then
+  # `add` (#587) — the verb whose ABSENCE is why every recipe reached past the client. It must go
+  # through the same budget classification as every other board write, so the stub speaks the
+  # rate-limit here too.
+  [ -n "\${GH_RATELIMIT:-}" ] && { echo "gh: API rate limit already exceeded (HTTP 403)" >&2; exit 1; }
+  printf 'item-add %s\n' "\$*" >>"\$GH_LOG"
+  echo '{"id":"PVTI_newlyadded"}'
+  exit 0
+fi
+
 if [ "\$sub" = "project" ] && [ "\$sub2" = "item-edit" ]; then
   # GH_FAIL_ITEM_EDIT=1: the board write fails — a Projects v2 5xx, or an item with no board entry
   # to edit. The MARKER is the lock, so nothing that holds it may unwind on this; but nothing may
@@ -3328,6 +3338,8 @@ rc_itemid=0
 PATH="$STUB:$PATH" GH_BOARD_SET=pw env GH_RATELIMIT=1 bash "$COORD" item-id 'FS.GG.SDD#42' --refresh >/dev/null 2>&1 || rc_itemid=$?
 assert_eq "#421: ...and exits EX_RATE (75), not the off-board code (3)" "75" "$rc_itemid"
 
+
+
 # (1) the exit code a worker loop backs off on — 75 (EX_TEMPFAIL), from `take`, not a generic 1.
 rc_take=0
 PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 FSGG_COORD_SCAN_TTL_SEC=0 \
@@ -3470,6 +3482,7 @@ after_scan="$(gcount)"
 assert_eq "#418: the first 'next' pays for the board scan" "1" "$((mid_scan - before_scan))"
 assert_eq "#418: a second 'next' inside the TTL spends ZERO GraphQL (the shared scan cache)" \
   "0" "$((after_scan - mid_scan))"
+
 # ...and --fresh must still be able to buy the truth. A cache you cannot bypass is a cache you cannot
 # trust — `take`'s retry-after-a-lost-race depends on this.
 PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_SCAN_TTL_SEC=90 bash "$COORD" next --repo FS.GG.SDD --fresh >/dev/null 2>&1 || true
@@ -3480,6 +3493,50 @@ before_ready_fresh="$(gcount)"
 PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_SCAN_TTL_SEC=90 bash "$COORD" ready --repo FS.GG.SDD >/dev/null 2>&1 || true
 assert_eq "#418: 'ready' (a TRUTH read) always scans fresh — it never serves the cache" \
   "1" "$(( $(gcount) - before_ready_fresh ))"
+
+# ================================================================================================
+# #587 — `add`: THE VERB WHOSE ABSENCE MADE THE MONOPOLY UNENFORCEABLE
+# ================================================================================================
+# Every recipe said `gh project item-add`, and so did this tool's own "not on board" message — so a
+# worker COULD NOT put an item on the board without reaching past the client, onto a GraphQL budget
+# the whole fleet shares and nothing else meters, caches, or queues against. A rule you cannot obey
+# is not a rule, it is a reprimand: the monopoly needed this verb before it could need a gate.
+#
+# NOTE the placement: these run AFTER the #418 block, not inside it. `add` calls `autoflush` like
+# every other board-writing command, so running it mid-#418 drains the very queue that section is
+# about to assert on — which is how the first cut of these tests broke four assertions above.
+
+# The tool must no longer PRESCRIBE the bypass it exists to replace.
+offboard_msg="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_OFFBOARD_ITEM=777 bash "$COORD" item-id 'FS.GG.SDD#777' --refresh 2>&1 || true)"
+case "$offboard_msg" in
+  *"gh project item-add"*) bad "#587: the tool must not prescribe the bypass it is meant to replace" "$offboard_msg" ;;
+  *) ok "#587: the tool must not prescribe the bypass it is meant to replace" ;;
+esac
+assert_contains "#587: ...it names its own verb instead" "fsgg-coord add" "$offboard_msg"
+
+# An issue NOT on the board is added, and the new item id is printed.
+: >"$GH_LOG"
+add_out="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_OFFBOARD_ITEM=777 bash "$COORD" add 'FS.GG.SDD#777' 2>&1 || true)"
+assert_contains "#587: add puts an off-board issue ON the board" "added FS.GG.SDD#777" "$add_out"
+assert_eq "#587: ...with exactly one item-add call" "1" "$(grep -c '^item-add' "$GH_LOG" || true)"
+
+# IDEMPOTENT. N parallel workers running the file-a-finding recipe would otherwise each create a
+# board item for the same issue — #464's shape, one layer down.
+: >"$GH_LOG"
+again="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw bash "$COORD" add 'FS.GG.SDD#42' 2>&1 || true)"
+assert_contains "#587: add is IDEMPOTENT — an item already on the board is not added twice" \
+  "already on board" "$again"
+assert_eq "#587: ...and spends no item-add" "0" "$(grep -c '^item-add' "$GH_LOG" || true)"
+
+# A FAILED LOOKUP IS NOT AN ABSENCE (#421, one verb along). On an exhausted budget the "is it already
+# there?" read cannot run — and adding on a read that FAILED is exactly how you create a duplicate
+# board item. It must REFUSE, not add.
+: >"$GH_LOG"
+add_rl_rc=0
+PATH="$STUB:$PATH" GH_BOARD_SET=pw env GH_RATELIMIT=1 bash "$COORD" add 'FS.GG.SDD#820' >/dev/null 2>&1 || add_rl_rc=$?
+assert_eq "#587: a rate-limited add REFUSES rather than adding on a failed lookup (#421)" \
+  "0" "$(grep -c '^item-add' "$GH_LOG" || true)"
+assert_eq "#587: ...and exits EX_RATE (75), the back-off signal" "75" "$add_rl_rc"
 
 # ================================================================================================
 # #440 — A FULL QUEUE MUST NOT READ AS AN EMPTY ONE. `next` picks "the first Ready, else the first

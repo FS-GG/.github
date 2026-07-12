@@ -6,6 +6,42 @@ and write spends from GitHub's GraphQL rate limit. Under sustained cross-repo co
 budget is the binding constraint, so this repo ships a thrifty client, [`scripts/fsgg-coord`](../../scripts/fsgg-coord),
 and the skill routes board work through it.
 
+## The client is the only GraphQL principal
+
+**No skill, doc, recipe, or agent may call `gh api graphql`, `gh project`, `gh issue view/list/create/edit`,
+or any `gh pr` subcommand.** Every board and issue operation goes through `fsgg-coord`, or over REST.
+Gated by `graphql-monopoly` (`.github#587`).
+
+This is not hygiene. The budget is **shared by the whole fleet** — N agents, one account — and the
+client is the *only* thing that can meter it, cache against it, and **queue** behind it. A recipe
+that reaches past the client is an unmetered principal on a budget whose exhaustion silently
+corrupts the board, which is the failure this whole document is about.
+
+It has bitten twice, both times in the command least able to afford it:
+
+- [#528](https://github.com/FS-GG/.github/issues/528) — `pnext-item` §5 was GraphQL-only, so a worker
+  who followed the recipe **could not land the work they had just finished**. Finished, green,
+  reviewed, unmergeable.
+- [#538](https://github.com/FS-GG/.github/issues/538) — `check-board` §3 resolved blockers over
+  GraphQL: **the reconciler drained the very budget it needed to do its job.**
+
+| instead of | use | cost |
+|---|---|---|
+| `gh project item-add` | **`fsgg-coord add <issue>`** | metered, cached, idempotent |
+| `gh project item-list` | `fsgg-coord ready` / `next` | 6 pts → ~0 |
+| `gh project item-edit` | `fsgg-coord set-field` | and it **queues** when the budget dies |
+| `gh issue view` / `list` | `fsgg-coord issues <repo>` | 2 pts → **0** (REST + ETag) |
+| `gh issue create`, any `gh pr …` | `gh api … repos/<o>/<r>/…` | GraphQL → **0** (REST) |
+
+**`add` exists because of this rule.** Every recipe used to say `gh project item-add`, and the tool's
+own "not on board" message said it too — so the monopoly was unenforceable until the client could put
+an item on the board. A rule you cannot obey is not a rule, it is a reprimand.
+
+Two things are deliberately *not* in scope. **Prose that warns you off a command** is the opposite of
+a violation — the cost table below exists to say "never use `gh project item-list`" — so the gate
+only reads *runnable lines inside a fence*. And **workflows** authenticate as `GITHUB_TOKEN` or an
+App installation, which has its own rate limit and does not spend the workers' shared budget.
+
 ## The one fact that dictates the fix
 
 GitHub's GraphQL **primary** limit is **5,000 points/hour**, it is **shared by every worker** (N agents

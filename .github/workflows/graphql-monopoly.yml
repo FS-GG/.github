@@ -1,0 +1,153 @@
+# graphql-monopoly — the coordination client is the org's ONLY GraphQL principal.
+#
+# .github#587, epic #266. GitHub's GraphQL primary limit is 5,000 points/hour and it is SHARED BY THE
+# WHOLE FLEET: N agents authenticate as one account. Five workers looping `take` drained it in ~15
+# minutes (#418). `fsgg-coord` is the one thing that can meter that budget, cache against it, and
+# QUEUE behind it — so a recipe that reaches past the client is an unmetered principal on a budget
+# whose exhaustion silently corrupts the board. `docs/coordination/graphql-budget.md`:
+#
+#   "When it runs out, it takes the WRITES with it — which is how the board starts lying. ... The
+#    protocol's failure mode is load-dependent: the more you fan out, the more the board lies — and
+#    fanning out is the point of the protocol."
+#
+# It has bitten twice, both times in the command least able to afford it:
+#   - #528 — pnext-item §5 was GraphQL-only, so a worker who followed the recipe could not LAND the
+#     work they had just finished. Finished, green, reviewed, unmergeable.
+#   - #538 — check-board §3 resolved blockers over GraphQL: the reconciler drained the very budget it
+#     needed to do its job.
+#
+# A recipe is COPIED, not imported: fixing today's four files fixes today's copies and nothing else,
+# and the next hand-written `gh` line reintroduces it. Hence a gate, not only a fix.
+#
+# WHAT IT DOES NOT ASSERT. A worker copies FENCED code. Prose that WARNS you off a command is the
+# opposite of a violation — graphql-budget.md's cost table exists precisely to say "never use
+# `gh project item-list`" — so the subject is a runnable line inside a fence, and nothing else. That
+# is the same fence-awareness `Paths:` parsing already needs (#277).
+#
+# Workflows are deliberately out of scope: a GitHub Actions run authenticates as GITHUB_TOKEN or an
+# App installation, which has its OWN rate limit and does not spend the workers' shared user budget.
+# The rule is about the fleet's budget, not about GraphQL as such.
+#
+# No `schedule:` — the subject is entirely in this repo's tree, so nothing can stale it between
+# pushes, and a nightly run would only re-prove a pure function of files that did not change.
+name: graphql-monopoly
+
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "scripts/check-graphql-monopoly.py"
+      - "tests/graphql-monopoly/**"
+      - ".github/workflows/graphql-monopoly.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "scripts/check-graphql-monopoly.py"
+      - "tests/graphql-monopoly/**"
+      - ".github/workflows/graphql-monopoly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: graphql-monopoly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO before believing it when it says yes.
+  # Two of the fixture's legs are regressions this gate already suffered in its first hour — the
+  # blockquoted fence it could not see, and the prose it must not flag. The fixture's own last leg
+  # runs the gate against the SHIPPED tree, so "passes on synthetic strings while the real skills
+  # spend GraphQL" is not a state this job can reach.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      # No pip install: the gate is stdlib-only (re, pathlib) on purpose. A lint that reads markdown
+      # should not need a dependency, which is one more thing that can fail open on a runner.
+      - name: Run the graphql-monopoly fixture (no network)
+        run: bash tests/graphql-monopoly/run.sh
+
+  monopoly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Assert no worker recipe spends GraphQL outside the client
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-graphql-monopoly.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      - name: 'OK: the client is the only GraphQL principal'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: echo "graphql-monopoly: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a worker recipe spends the shared GraphQL budget directly'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### graphql-monopoly: a recipe reaches past the client"
+            echo
+            echo 'The GraphQL budget is **5,000 pts/hr, shared by the whole fleet** — N agents, one'
+            echo 'account (#418). `fsgg-coord` is the only thing that can meter it, cache against it,'
+            echo 'and **queue** behind it. A recipe that goes around the client is an unmetered'
+            echo 'principal on that budget, and an exhausted budget takes the **board writes** with it,'
+            echo 'so the board starts lying (#528, #538).'
+            echo
+            echo '**Fix:** use the client, or REST.'
+            echo '- board reads → `fsgg-coord ready` / `next` (never `gh project item-list`: 6 pts for FIVE items)'
+            echo '- put an item on the board → `fsgg-coord add <issue>`'
+            echo '- board writes → `fsgg-coord set-field` (it queues when the budget is gone)'
+            echo '- issue reads → `fsgg-coord issues <repo>` (REST + ETag: **0 pts**)'
+            echo '- issues / PRs → `gh api … repos/<o>/<r>/…` (REST). Every `gh pr` and `gh issue create` is GraphQL.'
+            echo
+            echo 'Genuinely one-time board **provisioning**, run by a human with admin rights and never'
+            echo 'on a worker path, opts out explicitly on the line before the fence:'
+            echo
+            echo '    <!-- graphql-monopoly: exempt — one-time board provisioning; never on a worker path -->'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=graphql-monopoly: a recipe spends the shared GraphQL budget directly::A worker-facing recipe calls gh api graphql / gh project / gh issue / gh pr instead of the client. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate audited NOTHING'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### graphql-monopoly: no verdict"
+            echo
+            echo 'The gate found **zero** fenced lines across the worker-facing surfaces. Those files'
+            echo 'demonstrably carry fenced shell, so this means the **extractor broke** — not that the'
+            echo 'tree is clean. Examining nothing is a failure to audit, not a clean audit (#266): if'
+            echo 'the fence reader breaks, every recipe reads as clean and this gate goes green across'
+            echo 'the org while the budget-draining it exists to catch goes on happening.'
+            echo
+            echo 'Retrying will not help — fix the extractor or the surface list.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=graphql-monopoly: no verdict (permanent)::The gate audited zero subjects. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=graphql-monopoly: inconclusive::check-graphql-monopoly.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
