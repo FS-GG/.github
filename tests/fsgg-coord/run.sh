@@ -757,6 +757,20 @@ if [ "\$sub" = "api" ]; then
   # is to say the stub is exactly as repo-blind as the bug in .github#479 was, and would happily serve
   # \`FS.GG.Audio/pulls/48\` from \`.github\`'s PR 48. So the repo cannot be asserted from the payload;
   # it has to be asserted from the REQUEST. That is what this log line is for.
+  # THE LIVENESS PROBE (#581): `pr_alive` lists OPEN pull requests and looks for a head branch
+  # `item/<n>-*`. GH_LIVE_PR="<num>:<pr>" puts an open PR on item <num>. This is the ONLY signal that
+  # can tell "the worker died" from "the build took longer than the lease" — and getting that wrong
+  # reaped live, uncommitted work twice, once from the worker who was fixing the issue about it.
+  if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/pulls\?state=open ]]; then
+    printf 'pulls-list %s\n' "\${BASH_REMATCH[1]}" >>"\$GH_LOG"
+    if [ -n "\${GH_LIVE_PR:-}" ]; then
+      livenum="\${GH_LIVE_PR%%:*}"; livepr="\${GH_LIVE_PR##*:}"
+      printf '[{"number":%s,"head":{"ref":"item/%s-live-work"}}]\n' "\$livepr" "\$livenum" | emit
+    else
+      echo '[]' | emit
+    fi
+    exit 0
+  fi
   if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/pulls/([0-9]+)/files ]]; then
     printf 'pr-files %s %s\n' "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}" >>"\$GH_LOG"
     emit <"$FIXTURES/pr-files-\${BASH_REMATCH[2]}.json"; exit 0
@@ -1821,12 +1835,19 @@ assert_eq "release: the marker is gone" "" "$(workers_on 70)"
 for n in 340 341 342 343 344 346 347; do seed_issue "$n" "release case $n" "src/Rel$n/**"; done
 edits_to_status() { grep -c 'PVTSSF_status' "$GH_LOG" 2>/dev/null || true; }
 # rel <VAR=value> <args...> — `as pika-r01`, plus one stub knob for the Status read.
+#
+# These scenarios walk ONE worker through item after item to exercise release/`Paths:` semantics, and
+# a few deliberately do not release in between — so they claim with `--force`, which is the sanctioned
+# way to say "yes, I mean to hold more than one" (#516). The rule itself — at most one item per worker,
+# because a claim RESERVES A TOUCH-SET and a second unattended one locks files nobody is editing — is
+# asserted in its own section below, with its own failure leg. `--force` on an unheld item steals
+# nothing; it only opts out of the #516 guard.
 rel() { local e="$1"; shift
         PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
           env "$e" bash "$COORD" --worker pika-r01 "$@"; }
 
 # (a) the ordinary path is unchanged: the lease drops and the item returns to the pool.
-as pika-r01 claim 'FS.GG.SDD#340' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#340' --force >/dev/null 2>&1
 printf 'In progress' >"$STORE/itemstatus-340"; : >"$GH_LOG"
 assert_contains "release: resets the 'In progress' that claim set" "board: Ready" \
   "$(as pika-r01 release 'FS.GG.SDD#340' 2>/dev/null)"
@@ -1834,7 +1855,7 @@ assert_contains "release: ...with a real board write" "opt_ready" "$(cat "$GH_LO
 assert_eq "release: ...and the marker is gone" "" "$(workers_on 340)"
 
 # (b) THE REGRESSION. A deliberately-set Blocked survives its own release.
-as pika-r01 claim 'FS.GG.SDD#341' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#341' --force >/dev/null 2>&1
 printf 'Blocked' >"$STORE/itemstatus-341"; : >"$GH_LOG"
 rel341="$(as pika-r01 release 'FS.GG.SDD#341' 2>/dev/null)"
 assert_contains "release: PRESERVES a deliberately-set Blocked" "board: Blocked (preserved" "$rel341"
@@ -1842,14 +1863,14 @@ assert_eq "release: ...writing no Status at all, rather than a matching one" "0"
 assert_eq "release: ...and the lease is still dropped" "" "$(workers_on 341)"
 
 # (c) `--status S` is the caller stating the end state, and still wins over the preserve rule.
-as pika-r01 claim 'FS.GG.SDD#342' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#342' --force >/dev/null 2>&1
 printf 'Blocked' >"$STORE/itemstatus-342"; : >"$GH_LOG"
 assert_contains "release --status: an explicit end state overrides preserve" "board: Ready" \
   "$(as pika-r01 release 'FS.GG.SDD#342' --status Ready 2>/dev/null)"
 assert_contains "release --status: ...and is actually written" "opt_ready" "$(cat "$GH_LOG")"
 
 # (d) preserve is not Blocked-specific: release never downgrades a terminal column either.
-as pika-r01 claim 'FS.GG.SDD#343' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#343' --force >/dev/null 2>&1
 printf 'Done' >"$STORE/itemstatus-343"; : >"$GH_LOG"
 assert_contains "release: never downgrades a Done item to Ready" "board: Done (preserved" \
   "$(as pika-r01 release 'FS.GG.SDD#343' 2>/dev/null)"
@@ -1857,7 +1878,7 @@ assert_eq "release: ...Done is left untouched" "0" "$(edits_to_status)"
 
 # (e) A Status we could not READ is not a Status we may overwrite — forcing Ready over an unknown
 #     column is the same fail-open, one turn in. The lease still drops: the marker is the lock.
-as pika-r01 claim 'FS.GG.SDD#344' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#344' --force >/dev/null 2>&1
 : >"$GH_LOG"
 rel344="$(rel GH_FAIL_ITEM_STATUS=344 release 'FS.GG.SDD#344' 2>&1)"
 assert_contains "release: an unreadable Status is not overwritten" "Status unchanged" "$rel344"
@@ -1866,13 +1887,13 @@ assert_eq "release: ...no Status write on an unreadable column" "0" "$(edits_to_
 assert_eq "release: ...but the lease IS dropped" "" "$(workers_on 344)"
 
 # (f) On the board, but no Status set: nothing was chosen, so there is nothing to preserve.
-as pika-r01 claim 'FS.GG.SDD#346' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#346' --force >/dev/null 2>&1
 : >"$STORE/itemstatus-346"; : >"$GH_LOG"
 assert_contains "release: an item with no Status set returns to the pool" "board: Ready" \
   "$(as pika-r01 release 'FS.GG.SDD#346' 2>/dev/null)"
 
 # (g) An off-board item has no column to reset, and release must not pretend it did.
-as pika-r01 claim 'FS.GG.SDD#347' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#347' --force >/dev/null 2>&1
 : >"$GH_LOG"
 rel347="$(rel GH_OFFBOARD_ITEM=347 release 'FS.GG.SDD#347' 2>/dev/null)"
 assert_contains "release: an off-board item reports no board, not a phantom write" "not on board" "$rel347"
@@ -1938,7 +1959,7 @@ for n in 350 351 352 353 354 355 356 357 358; do seed_issue "$n" "restore case $
 
 # (a) THE DEFECT. `take` claims a Backlog item; `release` must not hand it back as Ready.
 printf 'Backlog' >"$STORE/itemstatus-350"
-as pika-r01 claim 'FS.GG.SDD#350' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#350' --force >/dev/null 2>&1
 assert_contains "#481: the claim RECORDS the column it overwrote, in its own marker" \
   "prev=Backlog" "$(bodies_on 350)"
 printf 'In progress' >"$STORE/itemstatus-350"; : >"$GH_LOG"   # ...which is what the claim wrote
@@ -1951,7 +1972,7 @@ assert_eq "#481: ...and the lease is still dropped" "" "$(workers_on 350)"
 # (b) Marker keys are SPACE-separated; Status names are not. `In review` must survive the round trip
 #     — an encoding that loses at the space would silently truncate the restore target to `In`.
 printf 'In review' >"$STORE/itemstatus-351"
-as pika-r01 claim 'FS.GG.SDD#351' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#351' --force >/dev/null 2>&1
 assert_contains "#481: a Status with a space is percent-encoded into the marker" \
   "prev=In%20review" "$(bodies_on 351)"
 printf 'In progress' >"$STORE/itemstatus-351"; : >"$GH_LOG"
@@ -1962,7 +1983,7 @@ assert_contains "#481: ...resolving the real option id, so the write is not a no
 # (c) A heartbeat REWRITES the whole marker body. Anything it does not carry forward is destroyed —
 #     so a claim that beats for two hours would forget the column long before it released it.
 printf 'Backlog' >"$STORE/itemstatus-352"
-as pika-r01 claim 'FS.GG.SDD#352' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#352' --force >/dev/null 2>&1
 printf 'In progress' >"$STORE/itemstatus-352"
 as pika-r01 heartbeat 'FS.GG.SDD#352' >/dev/null 2>&1
 assert_contains "#481: a heartbeat rewrites the marker and CARRIES the recorded column" \
@@ -1986,7 +2007,7 @@ assert_eq "#481: ...and still collects the lease" "" "$(workers_on 353)"
 #     inherited from the marker being collected, which means reading it BEFORE the GC deletes it.
 mark_stale 354 854 ghost-354 Backlog
 printf 'In progress' >"$STORE/itemstatus-354"
-as pika-r01 claim 'FS.GG.SDD#354' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#354' --force >/dev/null 2>&1
 assert_contains "#481: a re-claim over a dead lease INHERITS the column that claim overwrote" \
   "prev=Backlog" "$(bodies_on 354)"
 : >"$GH_LOG"
@@ -1996,7 +2017,7 @@ assert_contains "#481: ...so Backlog survives a reap-and-reclaim, not merely a c
 # (f) A --force steal evicts the holder and claims over the same already-overwritten column. Same
 #     inheritance, or the thief releases the item into the wrong queue.
 printf 'Backlog' >"$STORE/itemstatus-355"
-as pika-r01 claim 'FS.GG.SDD#355' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#355' --force >/dev/null 2>&1
 printf 'In progress' >"$STORE/itemstatus-355"
 as wren-c22 claim 'FS.GG.SDD#355' --force >/dev/null 2>&1
 assert_contains "#481: a --force steal inherits the column the EVICTED claim overwrote" \
@@ -2025,7 +2046,7 @@ assert_contains "#481: a recorded 'In progress' is a footprint, not a column —
 #      would reintroduce the promotion in the advice, on the one path that can still prove it wrong.
 seed_issue 361 "unreadable, but the marker remembers" "src/Rst361/**"
 printf 'Backlog' >"$STORE/itemstatus-361"
-as pika-r01 claim 'FS.GG.SDD#361' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#361' --force >/dev/null 2>&1
 : >"$GH_LOG"
 rel361="$(rel GH_FAIL_ITEM_STATUS=361 release 'FS.GG.SDD#361' 2>&1)"
 assert_contains "#481: an unreadable column still writes nothing (#331 holds)" "Status unchanged" "$rel361"
@@ -2036,7 +2057,7 @@ assert_eq "#481: ...and no Status is written on an unreadable column" "0" "$(edi
 # (i) #331 SURVIVES: a column set deliberately DURING the lease still beats the recorded one. The
 #     record answers "what did the claim overwrite", never "what should this item be now".
 printf 'Backlog' >"$STORE/itemstatus-358"
-as pika-r01 claim 'FS.GG.SDD#358' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#358' --force >/dev/null 2>&1
 printf 'Blocked' >"$STORE/itemstatus-358"; : >"$GH_LOG"
 rel358="$(as pika-r01 release 'FS.GG.SDD#358' 2>/dev/null)"
 assert_contains "#481: a column set DURING the lease still wins over the recorded one (#331 holds)" \
@@ -2052,7 +2073,7 @@ assert_eq "#481: ...writing no Status at all, rather than a matching one" "0" "$
 #     times every round — which would be invisible until the budget was gone.
 seed_issue 359 "what a claim costs" "src/Rst359/**"
 printf 'Backlog' >"$STORE/itemstatus-359"; : >"$GH_GRAPHQL_COUNT"
-as pika-r01 claim 'FS.GG.SDD#359' >/dev/null 2>&1
+as pika-r01 claim 'FS.GG.SDD#359' --force >/dev/null 2>&1
 assert_eq "#418: a claim spends 2 GraphQL reads — the item lookup, plus #481's pre-claim column" \
   "2" "$(gcount)"
 # ...and RELEASE is unchanged. It still makes the ONE read #331 needs (is this column one somebody
@@ -2430,16 +2451,18 @@ mk_claim() {  # mk_claim <issue> <id> <worker> <fresh|stale>
 #     is what `heartbeat` later resurrects underneath the new holder — two live markers, one item.
 mk_claim 84 810 ghost-111 stale | jq -s '.' >"$STORE/comments-84.json"
 : >"$GH_LOG"
-c84="$(as heron-b71 claim 'FS.GG.SDD#84' 2>&1)"
+c84="$(as heron-b71 claim 'FS.GG.SDD#84' --force 2>&1)"
 assert_contains "claim: collects the stale marker it claims over" "collected worker 'ghost-111' expired claim" "$c84"
 assert_eq "claim: exactly ONE marker survives (the stale one is gone)" "heron-b71" "$(workers_on 84)"
 assert_eq "claim: the collected worker is TOLD, not silently evicted" "1" \
   "$(jq '[.[] | select(.body | test("fsgg:msg")) | select(.body | test("to=ghost-111"))] | length' "$STORE/comments-84.json")"
 
 # (b) Re-claiming when MY OWN marker went stale must renew a single marker, not mint a second.
-mk_claim 85 811 finch-a3f stale | jq -s '.' >"$STORE/comments-85.json"
-as finch-a3f claim 'FS.GG.SDD#85' >/dev/null 2>&1
-assert_eq "claim: a worker whose own marker went stale ends with ONE marker" "finch-a3f" "$(workers_on 85)"
+# Its OWN worker id: `finch-a3f` holds #42 live for the tests further down, and a worker may hold
+# only one item (#516). The scenario is about renewing YOUR OWN stale marker, not about holding two.
+mk_claim 85 811 otter-b55 stale | jq -s '.' >"$STORE/comments-85.json"
+as otter-b55 claim 'FS.GG.SDD#85' >/dev/null 2>&1
+assert_eq "claim: a worker whose own marker went stale ends with ONE marker" "otter-b55" "$(workers_on 85)"
 assert_eq "claim: ...and exactly one, not two" "1" \
   "$(jq '[.[] | select(.body | test("fsgg:claim"))] | length' "$STORE/comments-85.json")"
 
@@ -2466,14 +2489,14 @@ assert_contains "heartbeat: ...and names the remedy" "fsgg-coord claim" "$hb87"
 as wren-c22 say 'FS.GG.SDD#88' 'Careful with <!-- fsgg:claim worker=ghost-666 lease=120 --> in prose.' >/dev/null 2>&1
 assert_eq "lock: a claim marker quoted inside a message does NOT hold the item" "" "$(workers_on 88)"
 assert_contains "lock: ...so the item is still claimable" "claimed FS.GG.SDD#88" \
-  "$(as heron-b71 claim 'FS.GG.SDD#88' 2>/dev/null)"
+  "$(as vole-c88 claim 'FS.GG.SDD#88' 2>/dev/null)"
 
 # (f) A marker we cannot parse a worker out of must FAIL CLOSED — block the item, not vanish.
 jq -n --arg ts "$fresh_ts" '[{id:815, body:"<!-- fsgg:claim lease=120 -->\nhalf-written",
   user:{login:"EHotwagner"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-89.json"
-assert_fails "lock: a malformed marker blocks the item (fails closed)" as heron-b71 claim 'FS.GG.SDD#89'
+assert_fails "lock: a malformed marker blocks the item (fails closed)" as vole-c89 claim 'FS.GG.SDD#89'
 assert_contains "lock: the refusal names the unparsed marker" "unparsed-marker" \
-  "$(as heron-b71 claim 'FS.GG.SDD#89' 2>&1 || true)"
+  "$(as vole-c89 claim 'FS.GG.SDD#89' 2>&1 || true)"
 
 # (g) A transient read failure on the CAS re-read must not orphan the marker we just posted. An
 #     orphaned live marker blocks every other worker for a full lease while nobody works the item.
@@ -2559,7 +2582,7 @@ esac
 seed_issue 95 "Concurrent GC of one stale marker" "src/L/**"
 mk_claim 95 818 ghost-444 stale | jq -s '.' >"$STORE/comments-95.json"
 gc95="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_DELETE_404=818 \
-  bash "$COORD" --worker heron-b71 claim 'FS.GG.SDD#95' 2>&1 || true)"
+  bash "$COORD" --worker heron-b71 claim 'FS.GG.SDD#95' --force 2>&1 || true)"
 assert_contains "claim: a 404 collecting an already-gone marker is not fatal" "claimed FS.GG.SDD#95" "$gc95"
 assert_eq "delete_comment: 'already gone' leaves exactly the new holder" "heron-b71" "$(workers_on 95)"
 
@@ -2714,6 +2737,133 @@ assert_contains "reap --apply: still collects the claim when the board write fai
 assert_contains "reap --apply: ...and does NOT claim a board reset it never performed" \
   "not on board (marker cleared; nothing to reset)" "$reap215"
 assert_eq "reap --apply: the marker is gone — the lock released, board or no board" "" "$(workers_on 216)"
+
+# ================================================================================================
+# THE CLAIM'S LIFETIME IS THE WORK'S LIFETIME (#581, #533, #516)
+# ================================================================================================
+# Three symptoms, one missing concept. A claim marker should live exactly as long as the work does,
+# and it failed at BOTH ENDS and in the middle:
+#
+#   #581  the WORK outlives the CLAIM — lease expiry is treated as proof of abandonment
+#   #533  the CLAIM outlives the WORK — `done --flip` never dropped the marker
+#   #516  one worker, N claims  — the CAS protects the ITEM; nobody protected the WORKER
+#
+# ---- #581: an expired lease is EVIDENCE of abandonment. It is not PROOF. ------------------------
+# The false positive is systematic, not incidental: WORK THAT TAKES LONGER THAN THE LEASE. And the
+# protocol's own remedy — heartbeat — is what a busy worker forgets precisely when the work is long.
+# `take --repo rendering` handed out FS.GG.Rendering#429 with PR #433 OPEN on `item/429-*`, because a
+# loaded box stretched one build past 120 minutes. Then it happened AGAIN, to the worker fixing #485:
+# the claim lapsed mid-test-cycle and was reaped with the work uncommitted. It survived only because
+# the reaping worker chose to preserve the worktree as a WIP commit. That is generosity, not a lock.
+#
+# An open PR on `item/<n>-*` is the worktree protocol's OWN artifact, and it is server-side proof.
+
+# Seed our OWN stale claim: the reap test above legitimately collected #216's, and a test that
+# depends on another test's leftovers is a test that passes for the wrong reason.
+jq -n --arg ts "$stale_ts" '[{id:880, body:"<!-- fsgg:claim worker=ghost-222 lease=120 -->\ndead",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-216.json"
+assert_eq "#581: precondition — the expired claim is back" "ghost-222" "$(workers_on 216)"
+
+# reap must REFUSE to destroy work that is demonstrably alive.
+reap_live="$(PATH="$STUB:$PATH" GH_BOARD_SET=blind GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="216:433" \
+  bash "$COORD" --worker wren-c22 reap --repo rendering --apply 2>&1 || true)"
+assert_contains "#581: reap REFUSES a claim whose PR is open — the lease lapsed, the WORK did not" \
+  "REFUSING" "$reap_live"
+assert_contains "#581: ...and names the PR, so the refusal is checkable" "#433" "$reap_live"
+# THE ONE THAT MATTERS: the marker must still be there. A refusal that deleted anyway is the bug.
+assert_eq "#581: ...and the claim SURVIVES — this is the leg that reaped live work twice" \
+  "ghost-222" "$(workers_on 216)"
+
+# ...and with NO open PR it still reaps. Without this the assertion above is satisfied by a reap that
+# simply stopped working — the #436 shape, guarding the mechanism that stops live work being destroyed.
+reap_dead="$(PATH="$STUB:$PATH" GH_BOARD_SET=blind GH_ISSUES_FROM_STORE=1 GH_FAIL_ITEM_EDIT=1 \
+  bash "$COORD" --worker wren-c22 reap --repo rendering --apply 2>/dev/null || true)"
+assert_contains "#581: an expired claim with NO open PR is still reaped (the negative control)" \
+  "reaped  FS.GG.Rendering#216" "$reap_dead"
+assert_eq "#581: ...and its marker is gone" "" "$(workers_on 216)"
+
+# `who` must SAY it. `STALE` and `STALE (PR #433 OPEN)` are not the same fact, and `who` is what a
+# human reads immediately before deciding to reap. Its own subject, in its own repo — a test that
+# leans on another test's leftovers passes for the wrong reason.
+seed_issue 890 "Long build, lapsed lease" 'src/Long890/**'
+jq -n --arg ts "$stale_ts" '[{id:890, body:"<!-- fsgg:claim worker=shrike-a91 lease=120 -->\nheld",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-890.json"
+who_live="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="890:433" \
+  bash "$COORD" who --repo sdd --json 2>/dev/null || true)"
+assert_eq "#581: who carries the proof of life on the STALE row" "#433 item/890-live-work" \
+  "$(jq -r '.[] | select(.number == 890) | .livePr // ""' <<<"$who_live")"
+who_txt="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="890:433" \
+  bash "$COORD" who --repo sdd 2>/dev/null || true)"
+assert_contains "#581: ...and the human-facing row says STALE (#433 OPEN), not a bare STALE" \
+  "STALE (#433 OPEN)" "$who_txt"
+# The negative control: with no open PR it is a bare STALE, and a reaper may collect it.
+who_dead="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  bash "$COORD" who --repo sdd 2>/dev/null || true)"
+case "$who_dead" in
+  *"STALE (#"*) bad "#581: with no open PR the row must be a BARE stale" "$who_dead" ;;
+  *)            ok  "#581: with no open PR the row must be a BARE stale" ;;
+esac
+
+# ---- #533: a COMPLETED item must not keep its lock. ---------------------------------------------
+# `done --flip` verified the merge, set Status, rolled up the epic — and never touched the marker.
+# `release` was the only path that dropped it, and `release` REWRITES Status, so running it on an item
+# you just stamped Done clobbers the stamp you just earned. So on the SUCCESS path there was no action,
+# in the tool or the recipe, that dropped the lock. It stayed live for the rest of the 120m lease, and
+# a live marker's `Paths:` keep reserving its touch-set.
+#
+# It bites hardest exactly where the protocol is working: the items most likely to overlap a
+# just-finished item are its own FOLLOW-UP findings — the ones §4 tells you to file BECAUSE you were
+# standing in those files. The recipe reliably produced an item its own author had locked out.
+jq -n --arg ts "$fresh_ts" '[{id:860, body:"<!-- fsgg:claim worker=vole-533 lease=120 -->\nheld",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-42.json"
+assert_eq "#533: precondition — the finished item is claimed" "vole-533" "$(workers_on 42)"
+: >"$GH_LOG"
+run_worker_done="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  bash "$COORD" --worker vole-533 done 'FS.GG.SDD#42' --pr 7 --flip 2>&1 || true)"
+assert_contains "#533: the stamp is still earned" "FSGG-DONE   FS.GG.SDD#42" "$run_worker_done"
+assert_eq "#533: ...and `done --flip` DROPS the claim — a finished item must not reserve its files" \
+  "" "$(workers_on 42)"
+
+# It must only drop OUR OWN marker. Deleting another worker's claim is `reap`'s job, and it is
+# destructive — `done` may not do it silently just because the item happens to be finished.
+jq -n --arg ts "$fresh_ts" '[{id:861, body:"<!-- fsgg:claim worker=other-999 lease=120 -->\nheld",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-42.json"
+other_done="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  bash "$COORD" --worker vole-533 done 'FS.GG.SDD#42' --pr 7 --flip 2>&1 || true)"
+assert_eq "#533: ...but it must NOT delete a claim that is not ours" "other-999" "$(workers_on 42)"
+assert_contains "#533: ...it says so instead, and points at reap" "still holds its claim" "$other_done"
+: >"$STORE/comments-42.json"; echo '[]' >"$STORE/comments-42.json"
+
+# ---- #516: at most ONE item per worker. ---------------------------------------------------------
+# The CAS is keyed on the ITEM, so it guarantees at most one worker per item. NOTHING guaranteed the
+# converse — and the cost model assumes it. This is #419/ADR-0027 turned inside out: that family is N
+# workers colliding on ONE id; this is one id holding N items, and "give every worker its own id" does
+# nothing for it. A claim RESERVES A TOUCH-SET, so the second, unattended claim is a live lock on files
+# nobody is editing — and in this repo `scripts/fsgg-coord` is exactly the contended path (#428).
+#
+# The worker who found it found it BY DOING IT: two `take`s, both succeeded, neither said a word.
+seed_issue 870 "First item"  'src/A870/**'
+seed_issue 871 "Second item" 'src/B871/**'
+jq -n --arg ts "$fresh_ts" '[{id:870, body:"<!-- fsgg:claim worker=godwit-b49 lease=120 -->\nheld",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-870.json"
+c516_rc=0
+c516="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  bash "$COORD" --worker godwit-b49 claim 'FS.GG.SDD#871' 2>&1)" || c516_rc=$?
+assert_eq "#516: a worker who already holds an item cannot silently claim a second" "1" "$c516_rc"
+assert_contains "#516: ...and the refusal NAMES the item they hold" "FS.GG.SDD#870" "$c516"
+assert_contains "#516: ...and says why it is not merely untidy (the touch-set stays reserved)" \
+  "reserves a touch-set" "$c516"
+assert_eq "#516: ...and the second item is NOT claimed" "" "$(workers_on 871)"
+# --force is the deliberate override. A rule with no escape hatch gets worked around, not obeyed.
+PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  bash "$COORD" --worker godwit-b49 claim 'FS.GG.SDD#871' --force >/dev/null 2>&1 || true
+assert_eq "#516: ...but --force still holds two, deliberately" "godwit-b49" "$(workers_on 871)"
+# A DIFFERENT worker is of course unaffected — the rule is one item per WORKER, not one per repo.
+: >"$STORE/comments-871.json"; echo '[]' >"$STORE/comments-871.json"
+PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  bash "$COORD" --worker stoat-c71 claim 'FS.GG.SDD#871' >/dev/null 2>&1 || true
+assert_eq "#516: a DIFFERENT worker claims freely — the rule is one item per worker, not per repo" \
+  "stoat-c71" "$(workers_on 871)"
 
 # ================================================================================================
 # FS-GG/.github#273: an unmatchable touch-set token must never read as DISJOINT.
