@@ -4462,6 +4462,21 @@ if [ ! -x "$ENGINE" ]; then
   fi
 fi
 
+# ---- 0. THE DEFAULT IS `auto`, AND THAT IS WHAT MAKES THE CLOCK START ------------------------------
+# `--engine=bash` as the default was faithful to the roadmap ("defaulting off") and produced a harness
+# that never runs: nothing in the fleet sets FSGG_COORD_ENGINE, so nothing ever compares, the log stays
+# empty forever, and "zero divergence across the live fleet for three consecutive days" can never be
+# met — because the clock never starts. An observer nobody switches on is a decoration.
+#
+# So: shadow WHEREVER AN ENGINE EXISTS, bash everywhere else. The presence of the engine IS the switch,
+# which is the honest gate — a repo that has not got one cannot be broken by a thing that is not there.
+: >"$FSGG_COORD_DIVERGENCE_LOG"
+auto_noeng="$(PATH="$STUB:$PATH" FSGG_COORD_ENGINE_BIN=/nonexistent \
+                bash "$COORD" batch --repo rendering --json 2>/dev/null)" && auto_rc=0 || auto_rc=$?
+assert_eq "shadow: with NO engine, the default is plain bash — a receiver is untouched" \
+  "0" "$(wc -c <"$FSGG_COORD_DIVERGENCE_LOG" | tr -d ' ')"
+assert_eq "shadow: ...and it decided normally" "0" "$auto_rc"
+
 # ---- 3. an empty log is NOT green. It is no-verdict, and no-verdict is non-zero. -------------------
 rc=0; run divergence >/dev/null 2>&1 || rc=$?
 assert_eq 'shadow: `divergence` over an EMPTY log exits 3 (no-verdict), never 0' "3" "$rc"
@@ -4549,6 +4564,21 @@ if [ -x "$ENGINE" ]; then
   assert_eq "shadow: the engine resolves off PATH (the shape the Phase 3 shim will use)" "$plain" "$viapath"
   assert_eq "shadow: ...and that run is recorded as RAN, not skipped" \
     "true" "$(jq -s -r '[.[] | select(.ran)] | last | .ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+
+  # AND WITH NO ENV VAR AT ALL. This is the assertion the whole phase turns on: an engine on PATH and
+  # nobody opting in to anything must still produce evidence, or the three-day clock never starts.
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  autoout="$(run batch --repo rendering --json 2>/dev/null || true)"
+  assert_eq "shadow: an engine on PATH shadows BY DEFAULT — no env var, no flag, no ceremony" \
+    "true" "$(jq -s -r '[.[] | select(.ran)] | last | .ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+  assert_eq "shadow: ...and it STILL returns bash's answer, byte for byte" "$plain" "$autoout"
+
+  # ...and `--engine bash` remains the escape hatch: never shadow, whatever is on PATH.
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  offout="$(run --engine bash batch --repo rendering --json 2>/dev/null || true)"
+  assert_eq "shadow: --engine bash refuses to shadow even with an engine right there" \
+    "0" "$(wc -c <"$FSGG_COORD_DIVERGENCE_LOG" | tr -d ' ')"
+  assert_eq "shadow: ...and answers identically" "$plain" "$offout"
   rm -f "$STUB/fsgg-coord-engine"
 fi
 
