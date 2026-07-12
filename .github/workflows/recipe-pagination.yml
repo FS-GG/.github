@@ -1,0 +1,135 @@
+# recipe-pagination — a `gh api` LIST read in a recipe must carry `--paginate`.
+#
+# .github#547, epic #266. GitHub's REST API pages at 30. A `gh api` read of a collection without
+# `--paginate` returns the first thirty items and exits 0 — the output carries no truncation marker,
+# so it does not look truncated, it looks like an answer. That is the #266 signature with a twist:
+# not a surface that does nothing, but one that returns a CONFIDENT WRONG ANSWER and is acted on.
+#
+# It bit twice, in the two places it hurts most:
+#   - the look-before-you-file dedupe read (`…/sub_issues`), which the skill itself calls "the
+#     highest-signal place to look, and the one people skip" — it showed 30 of epic #266's 51
+#     children, so it truncates exactly on the big, active epics where duplicate filings actually
+#     happen (#459/#460, #464), and it can make a worker read a truncated sub-issue graph as an epic
+#     whose children are all Done (#322);
+#   - the REST merge gate (`…/check-runs`), where past page 1 the aggregate reports
+#     `pending=0 failed=0` while the checks that would have stopped the merge sit on page 2.
+#
+# A recipe is COPIED, not imported: fixing the four files fixes today's copies and nothing else, and
+# the next hand-written `gh api` line reintroduces it. Hence a gate rather than only a fix.
+#
+# No `schedule:`, unlike permission-coherence — that gate's subject (caller workflows) lives in OTHER
+# repos and can go stale with no commit here. This gate's subject is entirely in this repo's tree, so
+# nothing can stale it between pushes, and a nightly run would only burn minutes to re-prove a pure
+# function of files that did not change.
+name: recipe-pagination
+
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "scripts/check-recipe-pagination.py"
+      - "tests/recipe-pagination/**"
+      - ".github/workflows/recipe-pagination.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "scripts/check-recipe-pagination.py"
+      - "tests/recipe-pagination/**"
+      - ".github/workflows/recipe-pagination.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recipe-pagination-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes.
+  # The fixture's own last leg runs the gate against the shipped recipes, so a fixture that passes
+  # on synthetic strings while the real skills truncate is not a state this job can reach.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      # No pip install: the gate is stdlib-only (re, shlex, pathlib) on purpose — a lint that reads
+      # markdown should not need a YAML parser, and a dependency is one more thing that can fail
+      # open on a runner.
+      - name: Run the recipe-pagination fixture (no network)
+        run: bash tests/recipe-pagination/run.sh
+
+  paginated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Assert every `gh api` list read in a recipe paginates
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-recipe-pagination.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      #
+      # There is deliberately no rc=2 ("no verdict, retryable") step: this gate is pure and offline —
+      # it reads files, makes no network call, and has no condition a re-run could resolve. An rc=2
+      # would therefore mean the gate grew a failure mode nobody classified, and it lands in the
+      # INCONCLUSIVE step below, which fails. That is the intended behaviour, not a gap.
+      - name: 'OK: every list read paginates'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "recipe-pagination: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a recipe list read will silently truncate at 30'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### recipe-pagination: a list read will truncate"
+            echo
+            echo 'A `gh api` read of a collection without `--paginate` returns the **first 30** items'
+            echo "and exits 0. The output does not look truncated — it looks like an answer, and the"
+            echo "worker who copies this recipe acts on it. See the log for the file, line, and command."
+            echo
+            echo '**Fix:** add `--paginate`. Aggregating across pages? `--slurp` cannot be combined'
+            echo 'with `--jq`, so pipe into a separate `jq`. Reading issues? Prefer'
+            echo '`scripts/fsgg-coord issues`, which pages for you.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=recipe-pagination: a list read will truncate::A recipe reads a GitHub collection without --paginate; it silently returns only the first 30 items. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a recipe could not be read, or NOTHING was audited'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### recipe-pagination: no verdict"
+            echo
+            echo "A recipe file would not read or tokenize, or the audit examined **zero** \`gh api\`"
+            echo "commands. Examining nothing is a failure to audit, not a clean audit (#266): if the"
+            echo "code-fence extractor breaks, every recipe reads as clean and this gate would go"
+            echo "green across the org while the truncation it exists to catch went on happening."
+            echo "Retrying will not help — fix the extractor or the file."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=recipe-pagination: no verdict (permanent)::The gate could not run against a valid subject, or audited nothing. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=recipe-pagination: inconclusive::check-recipe-pagination.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
