@@ -118,6 +118,16 @@ lit "an \`export\`ed literal is caught"                     'export FSGG_WORKER=
 lit "a QUOTED literal is caught"                            'export FSGG_WORKER="w-4f2a91c7"'
 lit "a single-quoted literal is caught"                     "export FSGG_WORKER='finch-a3f'"
 
+# A NON-HEX id is every bit as pasteable, and every bit as collidable. #551's acceptance grep
+# (`FSGG_WORKER=[a-z]*-[0-9a-f]`) would have missed all three of these — matching that grep's blind
+# spot rather than the rule it was reaching for is how a gate ships already-broken.
+lit "a non-hex literal (\`w-alice\`) is caught — the grep in #551 would have missed it" \
+    'export FSGG_WORKER=w-alice'
+lit "a hyphenless literal (\`alice\`) is caught — an assignment's RHS is never prose" \
+    'export FSGG_WORKER=alice'
+lit "the attractor WORD itself, unsuffixed (\`finch\`), is caught — the word is the attractor (#419)" \
+    'export FSGG_WORKER=finch'
+
 nolit() {  # nolit <name> <line>
   local d="$WORK/nolit-$RANDOM$RANDOM"; mksurface "$d" >/dev/null
   printf '\n```sh\n%s\n```\n' "$2" >> "$d/docs/protocol.md"
@@ -153,6 +163,17 @@ rival "\`\$RANDOM\` is a second idiom, and is caught" \
       'export FSGG_WORKER="w-$RANDOM"' "hand-rolled source of randomness"
 rival "a rival COMMAND SUBSTITUTION is caught even when it uses no known randomness primitive" \
       'export FSGG_WORKER="w-$(date +%s)"' "assigned from a command substitution that is not the sanctioned mint"
+
+# ONE mistake must produce ONE finding. `FSGG_WORKER="w-$(od -An …)"` trips both the randomness rule
+# and the rival-substitution rule; reporting it twice trains the reader to skim the gate's output.
+DUP="$(mksurface "$WORK/dup")"
+printf '\n```sh\nexport FSGG_WORKER="w-$(od -An -tx1 -N4 /dev/urandom)"\n```\n' >> "$DUP/docs/protocol.md"
+n=$(python3 "$GATE" --root "$DUP" 2>&1 | grep -c '::error::check-worker-id-attractor: docs/protocol.md' || true)
+if [ "$n" = "1" ]; then
+  ok "one bad line yields ONE finding, not two — the gate does not train you to skim it"
+else
+  bad "one bad line yielded $n findings, want 1"
+fi
 
 # The sanctioned idiom itself must NEVER be flagged — that is the whole point of having one.
 SANE="$(mksurface "$WORK/sane")"

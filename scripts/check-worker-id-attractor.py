@@ -116,18 +116,39 @@ class GateError(Exception):
     """A condition under which the gate must fail rather than skip. Maps to exit 3."""
 
 
-def is_literal(value: str) -> bool:
-    """Is this right-hand side a concrete id somebody could paste?
+def _is_pasteable(value: str) -> bool:
+    """A concrete, bare token — not a placeholder, not a substitution, not a backticked reference.
 
-    A placeholder (`<id>`), a substitution (`$(…)`, `$FSGG_WORKER`), a backticked reference, or an
-    empty value is exactly what a recipe SHOULD show, and is not a finding. Anything that reads as a
-    bare, concrete id is.
+    `<id>`, `$FSGG_WORKER`, `$(…)`, an empty value: all exactly what a recipe SHOULD show. Nobody
+    pastes a placeholder and collides with anybody.
     """
     if not value:
         return False
-    if value[0] in "<$`({[" or "$" in value:
-        return False
-    return re.fullmatch(WORKER_ID, value) is not None
+    return value[0] not in "<$`({[" and "$" not in value
+
+
+def is_literal_assignment(value: str) -> bool:
+    """Is the right-hand side of `FSGG_WORKER=` a concrete id?
+
+    ANY bare token is, and the check is deliberately not narrowed to hex-shaped ids. The rule is "no
+    id a worker can paste", and `FSGG_WORKER=w-alice` is every bit as pasteable — and every bit as
+    collidable — as `FSGG_WORKER=w-4f2a91c7`. #551's acceptance grep (`FSGG_WORKER=[a-z]*-[0-9a-f]`)
+    would have missed it; matching that grep's blind spot rather than the rule it was reaching for is
+    how a gate ships already-broken. An assignment's RHS is never prose, so there is nothing else it
+    could legitimately be.
+    """
+    return _is_pasteable(value)
+
+
+def is_literal_trailer(value: str) -> bool:
+    """Is the value after `FSGG-Worker:` a concrete id?
+
+    Stricter than the assignment case, because a TRAILER can be followed by prose — "the
+    `FSGG-Worker:` trailer that `claim` prints" — and flagging the word "trailer" as a worker id
+    would be the gate crying wolf on the very sentence that teaches the rule. So the value must also
+    LOOK like an id: it must carry a hyphen, which an English word in this position does not.
+    """
+    return _is_pasteable(value) and "-" in value
 
 
 def surface_files(root: Path, surfaces: list[str]) -> list[tuple[Path, str]]:
@@ -194,10 +215,13 @@ def main(argv: list[str]) -> int:
                 sanctioned += 1
 
             # 1. A concrete id, in either spelling.
-            for kind, rx in (("FSGG_WORKER=", ASSIGNMENT), ("FSGG-Worker:", TRAILER)):
+            for kind, rx, test in (
+                ("FSGG_WORKER=", ASSIGNMENT, is_literal_assignment),
+                ("FSGG-Worker:", TRAILER, is_literal_trailer),
+            ):
                 for m in rx.finditer(line):
                     value = m.group("value")
-                    if is_literal(value):
+                    if test(value):
                         findings.append(
                             f"{rel}:{lineno}: `{kind}{value}` is a LITERAL worker id, on a line a "
                             f"worker can paste. Ids picked by reading converge (#419: four `finch-*` "
@@ -206,32 +230,36 @@ def main(argv: list[str]) -> int:
                             f"placeholder (`<id>`) or the mint, never a usable id."
                         )
 
+            # 2b. A randomness primitive anywhere in the surface IS a second mint idiom: the only
+            #     sanctioned source of worker-id randomness lives inside fsgg-coord.
+            randomness = RIVAL_RANDOMNESS.search(line)
+            if randomness:
+                findings.append(
+                    f"{rel}:{lineno}: `{randomness.group(0)}` is a hand-rolled source of randomness. "
+                    f"The mint is a solved problem with exactly one idiom, "
+                    f"`eval \"$(scripts/fsgg-coord whoami --mint)\"`, and it lives inside fsgg-coord "
+                    f"so that it cannot drift. A doc that rolls its own is the second idiom #570 "
+                    f"exists to keep out."
+                )
+
             # 2a. A rival mint on the right of the assignment.
             #
             # A COMMAND SUBSTITUTION is what mints something. A bare variable expansion does not —
             # `FSGG_WORKER=$FSGG_WORKER cmd` forwards the id a worker already has, which is the
             # opposite of conjuring a new one, and flagging it would be the gate crying wolf at the
             # very idiom the protocol depends on.
-            for m in ASSIGNMENT.finditer(line):
-                value = m.group("value")
-                if MINTS_SOMETHING.search(value) and not SANCTIONED_MINT.search(line):
-                    findings.append(
-                        f"{rel}:{lineno}: `FSGG_WORKER=` is assigned from a command substitution "
-                        f"that is not the sanctioned mint. There is exactly ONE way to mint a worker "
-                        f"id — `eval \"$(scripts/fsgg-coord whoami --mint)\"` — and a second idiom is "
-                        f"a second thing to keep correct, in a place nobody looks."
-                    )
-
-            # 2b. A randomness primitive anywhere in the surface IS a second mint idiom: the only
-            #     sanctioned source of worker-id randomness lives inside fsgg-coord.
-            if (m := RIVAL_RANDOMNESS.search(line)):
-                findings.append(
-                    f"{rel}:{lineno}: `{m.group(0)}` is a hand-rolled source of randomness. The mint "
-                    f"is a solved problem with exactly one idiom, "
-                    f"`eval \"$(scripts/fsgg-coord whoami --mint)\"`, and it lives inside fsgg-coord "
-                    f"so that it cannot drift. A doc that rolls its own is the second idiom #570 "
-                    f"exists to keep out."
-                )
+            #
+            # Skipped when 2b already fired on this line: `FSGG_WORKER="w-$(od -An …)"` is ONE
+            # mistake, and reporting it twice trains the reader to skim the gate's output.
+            if not randomness and not SANCTIONED_MINT.search(line):
+                for m in ASSIGNMENT.finditer(line):
+                    if MINTS_SOMETHING.search(m.group("value")):
+                        findings.append(
+                            f"{rel}:{lineno}: `FSGG_WORKER=` is assigned from a command substitution "
+                            f"that is not the sanctioned mint. There is exactly ONE way to mint a "
+                            f"worker id — `eval \"$(scripts/fsgg-coord whoami --mint)\"` — and a "
+                            f"second idiom is a second thing to keep correct, in a place nobody looks."
+                        )
 
     # Fail closed: an extractor that sees nothing must not be mistaken for a clean surface. These
     # documents demonstrably discuss the worker id — if we found no mention of it at all, the glob or
