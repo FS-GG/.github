@@ -19,6 +19,17 @@
          other FS-GG repo commits packages.lock.json and CI restores in locked mode, so a silent
          version SUBSTITUTION fails the build instead of quietly changing what shipped. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- ADR-0032, and the reason CI red this on the first push. The F# SDK injects its OWN FSharp.Core
+         from the library-packs folder, and its `.nupkg` is NOT byte-identical to the one nuget.org
+         serves at the same id+version — so a lock file's contentHash becomes a function of the SDK
+         patch level of whichever machine wrote it. A lock written locally then fails NU1403 in CI on
+         a correct lock file. `DisableImplicitLibraryPacksFolder` is the SDK's own opt-out: it REMOVES
+         the folder from the source list, so FSharp.Core resolves from ONE source everywhere.
+
+         This lives in the org-shared `dist/dotnet/Directory.Build.props` that .github DISTRIBUTES TO
+         EVERY OTHER REPO — and .github has no root Directory.Build.props, so it never applied its own
+         fix to its own projects. Filed separately; set here so this project is correct today. -->
+    <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
     <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true'">true</RestoreLockedMode>
     <WarningsNotAsErrors></WarningsNotAsErrors>
     <InvariantGlobalization>true</InvariantGlobalization>
