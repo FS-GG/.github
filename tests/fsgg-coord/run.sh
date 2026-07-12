@@ -4431,6 +4431,197 @@ assert_contains "485(f): ...and names the blocker it caught the board lying abou
 assert_eq "485(f): ...and claims nothing — no marker is posted" \
   "0" "$(grep -c 'comment-post FS-GG/FS.GG.SDD 708' "$GH_LOG" || true)"
 
+# ==================================================================================================
+# THE SHADOW (ADR-0034 Phase 2) — and the only three things it is allowed to do.
+# ==================================================================================================
+# The typed F# engine runs beside bash on every scheduling call, bash's answer is returned, and the
+# disagreement is logged. Three properties, and every one of them is load-bearing:
+#
+#   1. IT MAY NOT CHANGE THE ANSWER. Byte-identical stdout and exit code, shadow on or off. If this
+#      assertion ever fails, the shadow has stopped being an observer and become a participant — and
+#      it will have done so on a tool that hands work to a live fleet.
+#   2. A MISSING ENGINE IS A SKIP, NOT AN ERROR. This script is byte-copied into six repos with no
+#      .NET on the coordination path until Phase 3. The shadow must not be able to red their CI.
+#   3. ...AND THEREFORE IT MUST NOT BE ABLE TO GO SILENTLY VACUOUS. (1) and (2) have just specified a
+#      component designed to do nothing when it goes wrong — which is epic #266's shape exactly. So
+#      the log must record that it RAN and WHAT it compared, and `divergence` must refuse to call an
+#      empty log green. A shadow nobody can prove ran is not evidence, and "zero divergence" would be
+#      the most reassuring possible way to say "we never looked".
+export FSGG_COORD_DIVERGENCE_LOG="$WORK/divergence.jsonl"
+: >"$FSGG_COORD_DIVERGENCE_LOG"
+
+# The engine, if this checkout has one built. CI builds it first and sets FSGG_SHADOW_REQUIRE_ENGINE=1,
+# which turns "no engine" from a skip into a FAILURE — because a fixture that quietly skips the half of
+# itself that does the actual comparing is the very thing this section exists to forbid.
+ENGINE="${FSGG_COORD_ENGINE_BIN:-$HERE/../../src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
+if [ ! -x "$ENGINE" ]; then
+  if [ -n "${FSGG_SHADOW_REQUIRE_ENGINE:-}" ]; then
+    bad "shadow: the engine must be built before this fixture runs" "not executable: $ENGINE"
+  else
+    echo "SKIP  shadow: no engine at $ENGINE (build: dotnet build src/FS.GG.Coord.Cli -c Release)"
+  fi
+fi
+
+# ---- 3. an empty log is NOT green. It is no-verdict, and no-verdict is non-zero. -------------------
+rc=0; run divergence >/dev/null 2>&1 || rc=$?
+assert_eq 'shadow: `divergence` over an EMPTY log exits 3 (no-verdict), never 0' "3" "$rc"
+assert_contains "shadow: ...and says so — an empty log is zero EVIDENCE, not zero divergence" \
+  "zero EVIDENCE" "$(run divergence 2>&1 >/dev/null || true)"
+
+# ---- 2. a missing engine is a logged SKIP, and bash is untouched -----------------------------------
+: >"$FSGG_COORD_DIVERGENCE_LOG"
+plain="$(run batch --repo rendering --json 2>/dev/null)" && plain_rc=0 || plain_rc=$?
+noeng="$(FSGG_COORD_ENGINE_BIN=/nonexistent PATH="$STUB:$PATH" FSGG_COORD_ENGINE=shadow \
+           bash "$COORD" batch --repo rendering --json 2>/dev/null)" && noeng_rc=0 || noeng_rc=$?
+assert_eq "shadow: a MISSING engine does not change bash's answer"    "$plain" "$noeng"
+assert_eq "shadow: ...nor its exit code (a receiver's CI must not red)" "$plain_rc" "$noeng_rc"
+assert_eq "shadow: ...and the skip is RECORDED, not silent" \
+  "false" "$(jq -s -r '.[-1].ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+assert_contains "shadow: ...naming the cause, so a silent no-op is impossible to mistake for agreement" \
+  "no engine" "$(jq -s -r '.[-1].reason' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo "")"
+
+if [ -x "$ENGINE" ]; then
+  # ---- 1. THE ANSWER IS BASH'S. Byte-identical, shadow on or off. --------------------------------
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  shadowed="$(FSGG_COORD_ENGINE_BIN="$ENGINE" FSGG_COORD_ENGINE=shadow run batch --repo rendering --json 2>/dev/null)" \
+    && sh_rc=0 || sh_rc=$?
+  assert_eq "shadow: the shadowed answer IS bash's answer, byte for byte" "$plain" "$shadowed"
+  assert_eq "shadow: ...and the exit code is bash's too" "$plain_rc" "$sh_rc"
+
+  # ---- 3. NON-VACUITY. It ran, and it compared something. ----------------------------------------
+  assert_eq "shadow: the run is RECORDED as having happened" \
+    "true" "$(jq -s -r '[.[] | select(.ran)] | last | .ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+  compared="$(jq -s -r '[.[] | select(.ran) | .compared] | add // 0' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo 0)"
+  if [ "${compared:-0}" -gt 0 ]; then
+    ok "shadow: it compared $compared item-verdict(s) — the comparison is not vacuous"
+  else
+    bad "shadow: it compared NOTHING" "a shadow that compares zero items reports zero divergence, which is indistinguishable from success"
+  fi
+
+  # ---- THE OBSERVER MAY NOT KILL THE CALLER --------------------------------------------------------
+  # The sharpest edge in this whole design, and it took a review to see it.
+  #
+  # The shadow reads markers for the candidates bash SHORT-CIRCUITS (a blocked one never has its lock
+  # read). Those reads go through `claims_of`, which is documented "or DIE" and means it — a lock
+  # guessed from a failed read is the one thing a lock may never be. But `die` is `kill -s TERM $$`: it
+  # takes down the TOP-LEVEL shell, and NO `|| true` can catch a signal.
+  #
+  # So one transient 5xx on a blocked candidate's comments would have aborted the entire tool. A worker
+  # running `--engine shadow take` would get a hard failure and NO ITEM — on a run bash alone completes
+  # without noticing. The observer would have changed the answer, which is the one thing it exists not
+  # to do. Rendering#200 is blocked, so it is swept and never otherwise read; failing its comment read
+  # reproduces exactly that.
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  : >"$STORE/posted-FS-GG__FS.GG.Rendering-200"     # arms GH_FAIL_READ_ISSUE for that subject
+  killed="$(FSGG_COORD_ENGINE_BIN="$ENGINE" FSGG_COORD_ENGINE=shadow \
+              GH_FAIL_READ_ISSUE='FS-GG/FS.GG.Rendering#200' \
+              run batch --repo rendering --json 2>/dev/null)" && killed_rc=0 || killed_rc=$?
+  rm -f "$STORE/posted-FS-GG__FS.GG.Rendering-200"
+  assert_eq "shadow: a DYING read inside the observer does not kill the tool (exit code is bash's)" \
+    "$plain_rc" "$killed_rc"
+  assert_eq "shadow: ...and bash's answer survives it intact" "$plain" "$killed"
+  assert_eq "shadow: ...and the unobservable candidate is COUNTED, not silently dropped" \
+    "true" "$(jq -s -r '([.[] | select(.ran) | .unobserved // 0] | add // 0) > 0' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+
+  # ---- `--ignore-blocked` MUST NOT MANUFACTURE OUTCOME DIVERGENCES ------------------------------
+  # The flag is a DIAGNOSTIC ("what WOULD be startable if the blockers cleared") and it relaxes the
+  # blocker filter and nothing else. The shadow's premise is that both engines decide from the same
+  # observations — so it must hand the engine the rule bash ENFORCED, not the rule bash knows.
+  #
+  # Before this was fixed, the snapshot still carried the blockers. The engine dutifully returned
+  # `blocked-by` for every candidate bash had deliberately let through, and each one was logged as an
+  # OUTCOME divergence — the RELEASE-BLOCKING class — while both engines were behaving exactly as
+  # designed. A diagnostic flag would have poisoned the one signal that has to stay trustworthy, and
+  # `--engine=fs` would have been held back by a disagreement that never existed.
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  FSGG_COORD_ENGINE_BIN="$ENGINE" FSGG_COORD_ENGINE=shadow \
+    run batch --repo rendering --include-backlog --ignore-blocked --json >/dev/null 2>&1 || true
+  assert_eq "shadow: --ignore-blocked reports ZERO outcome divergences (the engine is told what bash ENFORCED)" \
+    "0" "$(jq -s -r '[.[] | select(.ran) | .outcome] | add // 0' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+  assert_eq "shadow: ...and it still actually compared the candidates, rather than dodging them" \
+    "true" "$(jq -s -r '([.[] | select(.ran) | .compared] | add // 0) > 0' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+
+  # The engine must also be reachable through PATH alone — that is how Phase 3's shim will find it,
+  # and a resolution path nothing exercises is a resolution path that does not work.
+  cp "$ENGINE" "$STUB/fsgg-coord-engine" 2>/dev/null || true
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  viapath="$(FSGG_COORD_ENGINE=shadow run batch --repo rendering --json 2>/dev/null || true)"
+  assert_eq "shadow: the engine resolves off PATH (the shape the Phase 3 shim will use)" "$plain" "$viapath"
+  assert_eq "shadow: ...and that run is recorded as RAN, not skipped" \
+    "true" "$(jq -s -r '[.[] | select(.ran)] | last | .ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+  rm -f "$STUB/fsgg-coord-engine"
+fi
+
+# ---- the classifier: OUTCOME and REASON are not the same news, and must not be summed -------------
+# Fed by hand, because the point is the CLASSIFICATION, not the engines. An outcome divergence means
+# the two disagree about whether an item may be HANDED OUT — that is how two workers end up in one
+# file, and it blocks the flip. A reason divergence means they agree it is unschedulable and name a
+# different fact; at Phase 2 that is EXPECTED (they check in a different order) and it is a decision
+# to record, not a bug. Summing them would bury the first in the second, and "zero divergence for
+# three days" would never go green for something that was never wrong.
+cat >"$FSGG_COORD_DIVERGENCE_LOG" <<'JSONL'
+{"ts":"2026-07-12T10:00:00Z","mode":"shadow","ran":true,"compared":4,"extraReads":2,"outcome":1,"reason":1,"unpaired":0,"divergences":[{"id":"FS.GG.SDD#1","class":"outcome","bash":"startable","engine":"held-by"},{"id":"FS.GG.SDD#2","class":"reason","bash":"blocked-by","engine":"held-by"}]}
+{"ts":"2026-07-12T10:01:00Z","mode":"shadow","ran":false,"reason":"no engine on PATH"}
+JSONL
+# `|| true` is REQUIRED, and the reason is the contract under test: `divergence` exits 1 when the
+# engines disagree about what may be handed out. Under `set -euo pipefail` an unguarded capture of a
+# non-zero command kills the fixture — which is exactly what it did, silently truncating this whole
+# section on the first run.
+d="$(run divergence --json 2>/dev/null || true)"
+assert_eq "shadow: OUTCOME divergences are counted apart"  "1" "$(jq -r '.outcome' <<<"$d")"
+assert_eq "shadow: REASON divergences are counted apart"   "1" "$(jq -r '.reason'  <<<"$d")"
+assert_eq "shadow: SKIPPED runs are counted, and are not agreement" "1" "$(jq -r '.skipped' <<<"$d")"
+rc=0; run divergence >/dev/null 2>&1 || rc=$?
+assert_eq "shadow: an OUTCOME divergence exits 1 — the flip is BLOCKED" "1" "$rc"
+
+# ...and with the outcome divergence gone, a reason divergence alone must NOT block the flip.
+cat >"$FSGG_COORD_DIVERGENCE_LOG" <<'JSONL'
+{"ts":"2026-07-12T10:00:00Z","mode":"shadow","ran":true,"compared":4,"extraReads":0,"outcome":0,"reason":3,"unpaired":0,"divergences":[{"id":"FS.GG.SDD#2","class":"reason","bash":"blocked-by","engine":"held-by"}]}
+JSONL
+rc=0; run divergence >/dev/null 2>&1 || rc=$?
+assert_eq "shadow: reason divergences alone exit 0 — they are a decision, not a defect" "0" "$rc"
+
+# ---- A RUN THAT COMPARED NOTHING IS NOT AGREEMENT. ------------------------------------------------
+# Found by running the shadow ONCE against the real board. The queue happened to hold no Ready item, so
+# the shadow ran, compared ZERO verdicts, and `divergence` printed `green on OUTCOME` — a gate reporting
+# green over a subject it never read, which is epic #266 EXACTLY, rebuilt inside the tool whose whole
+# purpose is to retire it. It survived precisely as long as it took to run against real data once.
+#
+# `ran` is not the bar. `compared` is. A run over an empty candidate set agrees with every engine ever
+# written, because it decided nothing — and three days of an empty queue is not three days of agreement.
+cat >"$FSGG_COORD_DIVERGENCE_LOG" <<'JSONL'
+{"ts":"2026-07-12T10:00:00Z","mode":"shadow","ran":true,"compared":0,"extraReads":0,"outcome":0,"reason":0,"unpaired":0,"divergences":[]}
+JSONL
+rc=0; run divergence >/dev/null 2>&1 || rc=$?
+assert_eq "shadow: a run that compared ZERO verdicts is no-verdict (exit 3), NOT green" "3" "$rc"
+assert_contains "shadow: ...and says why — an empty queue agrees with everything" \
+  "compared ZERO" "$(run divergence 2>&1 >/dev/null || true)"
+
+# ---- THE OTHER TWO WAYS TO DISAGREE, both of which used to score as AGREEMENT ---------------------
+# `outcome` counts items on which the two engines ruled DIFFERENTLY. It therefore cannot see either of
+# the states below, because in both of them the engine produced no per-item ruling to differ WITH — so
+# `outcome` was 0, and a green sailed out of a run in which the engines could not have agreed less.
+
+# (a) THE ENGINE REFUSED THE BATCH. An in-flight reservation whose touch-set is unmatchable reserves
+#     NOTHING while occupying files (#273), so the engine refuses to schedule at all. `decisions` is
+#     empty. If bash proceeded, that is the sharpest disagreement available — not a quiet one.
+cat >"$FSGG_COORD_DIVERGENCE_LOG" <<'JSONL'
+{"ts":"2026-07-12T10:00:00Z","mode":"shadow","ran":true,"engineVerdict":"red","compared":0,"extraReads":0,"unobserved":0,"outcome":0,"reason":0,"unpaired":6,"divergences":[]}
+JSONL
+rc=0; run divergence >/dev/null 2>&1 || rc=$?
+assert_eq "shadow: an engine that REFUSED the batch is never green (it agreed to nothing)" "3" "$rc"
+
+# (b) AN ITEM ONLY ONE ENGINE RULED ON. Under `-n` each engine stops at its own cap, so a different
+#     EVALUATED SET is a divergence in the fold even when every shared verdict matches. `compared` now
+#     counts PAIRS, not the union — the union is what let this read as a large, confident comparison.
+cat >"$FSGG_COORD_DIVERGENCE_LOG" <<'JSONL'
+{"ts":"2026-07-12T10:00:00Z","mode":"shadow","ran":true,"engineVerdict":"green","compared":5,"extraReads":0,"unobserved":0,"outcome":0,"reason":0,"unpaired":2,"divergences":[{"id":"FS.GG.SDD#9","class":"bash-only","bash":"startable","engine":null}]}
+JSONL
+rc=0; run divergence >/dev/null 2>&1 || rc=$?
+assert_eq "shadow: an item ruled on by ONE engine only is RED — the folds evaluated different sets" "1" "$rc"
+assert_contains "shadow: ...and the report says what was NOT compared, not just what was" \
+  "NOT compared" "$(run divergence 2>/dev/null || true)"
+
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::fsgg-coord fixture FAILED"; exit 1; }
 echo "fsgg-coord fixture — OK"

@@ -75,8 +75,8 @@ jobs:
           out="$(dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --no-build -c Release 2>&1)"
           printf '%s\n' "$out"
           passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
-          if [ "${passed:-0}" -lt 40 ]; then
-            echo "::error title=coord-core: the suite audited nothing::Only ${passed:-0} tests ran. The incident log is ~54 assertions; a runner that discovers nothing exits 0, and a green gate over an untested core is exactly the fail-open this core exists to end (#266)."
+          if [ "${passed:-0}" -lt 60 ]; then
+            echo "::error title=coord-core: the suite audited nothing::Only ${passed:-0} tests ran. The incident log is ~72 assertions (54 from Phase 1, plus the Batch fold from Phase 2); a runner that discovers nothing exits 0, and a green gate over an untested core is exactly the fail-open this core exists to end (#266)."
             exit 1
           fi
           echo "coord-core: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"

@@ -44,6 +44,8 @@
     <Compile Include="Blockers.fs" />
     <Compile Include="Schedulability.fsi" />
     <Compile Include="Schedulability.fs" />
+    <Compile Include="Batch.fsi" />
+    <Compile Include="Batch.fs" />
   </ItemGroup>
 
   <ItemGroup>
