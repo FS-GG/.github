@@ -1,0 +1,68 @@
+# The failure legs of the required-context verifier (.github#549, epic #266).
+#
+# scripts/check-required-contexts.py answers the question #549 asked: is every context a repo's
+# branch protection REQUIRES one that some `pull_request` workflow can actually produce? It works —
+# it is validated below against FS.GG.Audio's real gate.yml and this repo's real
+# lock-range-coherence.yml — but it CANNOT be wired into CI, by anyone, in any repo:
+#
+#   - reading `branches/<b>/protection` requires `administration: read`;
+#   - `administration` is NOT a valid `permissions:` scope for a workflow's GITHUB_TOKEN — declaring
+#     it is a validation error and the run dies at STARTUP, producing no check run at all, so it
+#     shows as neither red nor green (the #478 blind spot);
+#   - and the org's dispatch App does not hold the scope either, which .github#463 already learned:
+#     coordination-propagate's protection probe 403'd on every receiver and was rewritten to ask the
+#     pull request instead.
+#
+# So it stays an ADMIN-RUN VERIFIER — anyone holding a token with admin rights can point it at a repo
+# and get a verdict — and the gate that actually protects the receivers is the credential-free
+# reusable-job-id-coherence.yml, which catches the rename HERE, on the PR that would cause it.
+#
+# A tool nothing runs is a tool that rots, so this selftest runs its fixture on every PR that touches
+# it. Per epic #266's ratified rule: A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE.
+#
+# The fixture's headline leg is the outage itself: Audio's real caller against this repo's real
+# callee, with the callee's `lock-ranges:` job renamed — and it asserts Audio deadlocks. Its `paths:`
+# therefore include lock-range-coherence.yml, so a PR here that renames that job breaks this fixture.
+#
+# Static: no SDK, no restore, no network. `gh` is stubbed and fails like the real one — a 404 is an
+# answer ("not protected"), a 403 is a permission a human must grant, a rate limit is neither.
+name: required-context-coherence-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-required-contexts.py"
+      - "tests/required-contexts/**"
+      - ".github/workflows/required-context-coherence-selftest.yml"
+      # The fixture pins the REAL callee: renaming a job in it must break this fixture, here.
+      - ".github/workflows/lock-range-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-required-contexts.py"
+      - "tests/required-contexts/**"
+      - ".github/workflows/required-context-coherence-selftest.yml"
+      - ".github/workflows/lock-range-coherence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: required-context-coherence-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Run the required-contexts fixture (no network)
+        run: bash tests/required-contexts/run.sh
