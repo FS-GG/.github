@@ -346,6 +346,33 @@ touch-set let that item run alongside `#32` and `#33`; on rebase onto a `main` t
 landed `#32` and `#41` (all `FS.GG.Game`), the baseline three-way-merged with **zero manual fixup** and
 the gate passed.
 
+**In this repo, the artifact is `registry/repos.lock`** (FS-GG/.github#527). The coordination kit is
+content-addressed: `repos.lock` pins a `sha256` of every kit source — `scripts/fsgg-coord` and each
+`.claude/skills/<kit>/`. Editing any kit source invalidates its digest, and `repos-registry-selftest`
+reds `main` until it is regenerated:
+
+```sh
+scripts/repos.sh relock          # regenerates registry/repos.lock
+```
+
+`repos.lock` is generated and CI-gated, so **the rule above applies to it: do not reserve it.**
+Regenerate it, commit it, and name it as **expected drift** in the PR.
+
+The digest used to be a `sha256:` field on each `kit:` row *inside the authored* `registry/repos.yml`.
+Because a kit source is content-addressed, every kit edit therefore had to reserve the authored roster
+— and so serialised against every other kit edit *and* against anyone genuinely authoring a roster row.
+**Three workers deadlocked on it in one afternoon** (FS-GG/.github#428). The rule above could not reach
+it, because **the rule classifies a FILE and the generated thing was a FIELD inside an authored one**.
+Splitting the field out into `repos.lock` (#527) is what lets the existing rule apply.
+
+Note where that fix did *not* land. #527 touched seven files and **none of them was a skill**, so
+`intra-repo-parallel-work` went on telling every worker to reserve `registry/repos.yml` and to run
+`scripts/repos.sh digest` — a command that still exists and now writes nothing — thereby re-creating
+the very deadlock the fix removed (FS-GG/.github#588). And this rule appeared in **no canonical doc at
+all**, so there was no source-of-truth statement a docs edit could have carried. It exists here now.
+That is the projection defect stated as plainly as it can be stated, and it is the argument for
+ADR-0034's decision to *generate* the skills from the model rather than copy them.
+
 And **declare against what the generator emits, not against the issue's prose** — the corollary that
 bit hardest. FS-GG/FS.GG.Game#31's acceptance said "surface baseline". It adds a *function* to an
 existing module, and the generator emits one exported **type** per line, so it never touched the
