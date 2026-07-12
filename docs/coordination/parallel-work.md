@@ -447,6 +447,29 @@ scripts/fsgg-coord child <parent> <issue>  # link a filed issue as a sub-issue o
 
 Same stamp and epic roll-up as cross-repo.
 
+**The claim's lifetime is the WORK's lifetime.** `done --flip` drops the marker
+([#533](https://github.com/FS-GG/.github/issues/533)); an expired lease whose `item/<n>-*` PR is
+still open does **not** release the item ([#581](https://github.com/FS-GG/.github/issues/581)); and a
+worker holds **at most one item** ([#516](https://github.com/FS-GG/.github/issues/516)).
+
+Three symptoms of one missing idea. A claim **reserves a touch-set**, so a claim that outlives its
+work is a live lock on files nobody is editing — and the items most likely to collide with a
+just-finished one are its own **follow-up findings**, the ones §4 tells you to file *because* you were
+standing in those files. A claim that dies before its work is worse: `take` handed out
+`FS.GG.Rendering#429` with its PR open, because a loaded box stretched one build past the lease, and
+the same thing later reaped the claim on `#485` **while that worker was fixing #485**. Lease expiry is
+*evidence* of abandonment; an **open PR on the item's own branch is proof of life**, and the branch
+name is this protocol's own artifact (§2), not a heuristic.
+
+"Workers should heartbeat" is true and insufficient. ADR-0027's argument is that **the lock**, not
+worker diligence, prevents collisions — so a lock that releases itself while its holder is
+demonstrably still working is a lock with a liveness bug, and the fix belongs in the scheduler.
+
+The CAS is keyed on the **item**, which is why it guarantees at most one worker per item and nothing
+guaranteed the converse. That asymmetry is #419/ADR-0027 turned inside out: that family is N workers
+colliding on one id; this is one id holding N items, and *"give every worker its own id"* does nothing
+for it. `--force` is the way to say you mean it.
+
 **An item is not Done while one of its own sub-issues is open**
 ([#583](https://github.com/FS-GG/.github/issues/583)). `done --flip` refuses, and names the child.
 
