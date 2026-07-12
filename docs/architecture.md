@@ -43,8 +43,11 @@ the decision records linked throughout.
                          │  FS-GG/.github  (this repo — coordination)     │
                          │  • registry/dependencies.yml (contract truth)  │
                          │  • registry/repos.yml (repo roster; ADR-0019)  │
+                         │  • registry/repos.lock (kit digests; #527)     │
                          │  • dist/dotnet/ (org-shared build config)      │
                          │  • docs/ (decision records + consumer guide)   │
+                         │  • the org CLIs: new-sdd-workspace, and the    │
+                         │    coordination engine (fsgg-coord; ADR-0034)  │
                          └───────────────────────────────────────────────┘
                                    │ syncs build config to ▼ all repos
    ┌───────────────────────────────┼───────────────────────────────────────┐
@@ -87,7 +90,7 @@ channel):
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), 0.1.0-preview.1 on the org feed + nuget.org |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, 0.1.0-preview.1 on the org feed |
-| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. | — |
+| [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns the two org-level CLIs, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`); **planned:** `FS.GG.Coord.Cli` (`fsgg-coord`, ADR-0034) |
 
 ---
 
@@ -637,6 +640,41 @@ install is what keeps the composition honest. See the
   `extends: ["github>FS-GG/.github"]`) with custom managers for the embedded pins
   the standard NuGet manager misses. Producers push to the org GitHub Packages
   feed on release; consumers auto-PR the bump.
+- **The coordination fabric is becoming a typed, packaged component ([ADR-0034](adr/0034-typed-coordination-engine.md), accepted 2026-07-12).**
+  The client every worker and CI job drives — `scripts/fsgg-coord` — is today **4,024 lines of bash**
+  whose state model is jq regexes over prose: claims are HTML comments, touch-sets are a `Paths:` line
+  in an issue body, dependency edges are free text (Projects v2 has no typed dependency field). That
+  is a concurrent, transactional, budget-constrained domain modelled in a substrate with no types, no
+  `Result`, and whose default failure mode is to **fail open** — which is why *"is this item
+  startable?"* is currently **computed in five places and agrees in none**
+  ([#485](https://github.com/FS-GG/.github/issues/485); 34 issues), and why
+  [epic #266](https://github.com/FS-GG/.github/issues/266) has 51 children.
+
+  ADR-0034 moves the domain into a pure typed F# core (`FS.GG.Coord.Core`) with **one** schedulability
+  function and a three-valued `Green | Red | NoVerdict` on every check, where `NoVerdict` is non-zero.
+  Migration is **shadow-mode**: both engines run, bash stays authoritative, and nothing cuts over
+  until divergence is zero on live traffic.
+
+  Two consequences land on this map. **`.github` becomes a two-tool producer** (above), the engine
+  shipping as a `dotnet tool` on the coherent set. And the **`kit:` row becomes a digest-pinned
+  shim** that resolves the tool from the already-distributed `.config/dotnet-tools.json`, so every
+  gate and every `scripts/fsgg-coord` path in the fabric survives untouched — and the publish cycle
+  breaks by asymmetry: **`.github` builds the engine from source and never depends on the feed**, so
+  a broken feed cannot prevent the coordination tool from being fixed. That kit-row shape change is a
+  contract-change under [ADR-0015](adr/0015-register-the-registry-schema-as-a-governed-contract.md)
+  and lands with the *implementation*, not with the decision.
+
+  The larger prize is not the language. `fsgg-coord` is **already the model** — in every drift that
+  can be dated, the tool was right and the prose was wrong — it simply is not the *source*. ADR-0034
+  inverts that: `docs/coordination/parallel-work.md` and the four `SKILL.md` become **generated
+  projections**, guarded by a regeneration gate exactly like `registry/repos.lock`. A protocol rule
+  can then no longer land in one tier and not the others, which is what **54 vendored copies** of the
+  protocol currently guarantee it will.
+
+  **Phase 0 shipped 2026-07-12** — one queueing board write, the done-stamp, the kit-digest obligation
+  made observable, and the GraphQL monopoly (the client is the org's only GraphQL principal, and
+  `fsgg-coord add` is the verb that made that rule obeyable).
+
 - **Public distribution (dual-publish, [ADR-0012](adr/0012-dual-publish-to-nuget-org.md) +
   [ADR-0013](adr/0013-trusted-publishing-oidc-for-nuget-org.md)).** On release each producer
   additionally pushes the **byte-identical** `.nupkg` to **public nuget.org** (after the
