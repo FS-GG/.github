@@ -1,0 +1,170 @@
+name: release-coord-engine
+
+# Publishes FS.GG.Coord.Cli — the typed coordination engine (`fsgg-coord-engine`; ADR-0034) — to the
+# org GitHub Packages feed. `.github` does not normally own a release workflow; this is the second
+# exception, on the same grounds as the first (release-new-sdd-workspace.yml): the tool lives here, so
+# its publish does too.
+#
+# THIS PUBLISH IS NOT THE FLIP, and the distinction is the whole reason it happens now.
+#
+# ADR-0034 Phase 2 exits on "zero divergence across the LIVE FLEET for three consecutive days". That
+# could never be met: the shadow only runs where an engine exists, an engine only existed where someone
+# had BUILT it (`.github`, and nowhere else), and distributing it was scheduled for Phase 3 — which was
+# itself gated on Phase 2 exiting. The clock could never start (.github#617).
+#
+# So publishing comes BEFORE flipping, and it is the only order in which the flip's evidence can exist.
+# Bash stays authoritative. The `fs` engine mode stays refused. The one thing this changes is that a
+# worker in a receiver repo now HAS an engine to shadow with.
+#
+# `.github` builds the engine FROM SOURCE and never restores it from the feed — the asymmetry ADR-0034
+# §4.4 relies on. A broken feed therefore cannot prevent the coordination tool from being fixed.
+#
+# Version is the EVALUATED fsproj <Version> (msbuild -getProperty), never a grep and never a value
+# pinned in this header. A tag is a COHERENCE CHECK against it, never the source of truth.
+#
+# Release by pushing a tag `coord-engine/v<version>` matching the fsproj <Version>; or run manually
+# (workflow_dispatch) with publish=true. A manual run with publish=false is a pack-only dry run.
+
+on:
+  push:
+    tags: ['coord-engine/v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Push to the org feed (false = pack-only dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-coord-engine-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack & publish fsgg-coord-engine
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.repository == 'FS-GG/.github'
+    # Least-privilege: only this job gains packages: write, and the push uses the run-scoped
+    # GITHUB_TOKEN, never a PAT.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Resolve version + publish decision
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          proj=src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj
+          version="$(dotnet msbuild "$proj" -getProperty:Version | tr -d '[:space:]')"
+          if [ -z "$version" ]; then
+            echo "::error::could not read <Version> from $proj (build defect); refusing to publish."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # A `-preview` engine would be INVISIBLE to the shared Renovate preset (ignoreUnstable: true),
+          # so receivers would never be bumped — and Renovate-invisibility is one of the stated reasons
+          # ADR-0034 §4.4 rejected the self-contained-binary option. Shipping a tool the update fabric
+          # cannot see would defeat the point of shipping it, so refuse rather than ship it silently.
+          case "$version" in
+            *-*) echo "::error::version '$version' is a prerelease. The org's Renovate preset sets ignoreUnstable=true, so receivers would never see it. Publish a stable 0.x version."; exit 1 ;;
+          esac
+
+          if [ "$EVENT" = "push" ]; then
+            # The tag is a coherence check against the evaluated version, never the source of truth.
+            tag_version="${REF#coord-engine/v}"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::tag $REF ($tag_version) does not match fsproj <Version> ($version)."
+              exit 1
+            fi
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$DISPATCH_PUBLISH" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore (locked)
+        run: dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+
+      # THE ENGINE IS NEVER PUBLISHED UNTESTED. Its whole claim is that it encodes rules the org has
+      # already paid for once; a publish that skipped them would be shipping the claim without the
+      # evidence. The core suite IS the incident log.
+      - name: Test — the incident log, and the wire contract
+        run: |
+          set -euo pipefail
+          dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj -c Release
+          dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release
+
+      - name: Pack
+        run: dotnet pack src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj -c Release -o artifacts/packages
+
+      # A TOOL THAT PACKS BUT DOES NOT RUN IS THE FAILURE MODE HERE — the payload is a private
+      # ProjectReference (FS.GG.Coord.Core) plus FSharp.Core, and `dotnet pack` succeeding says nothing
+      # about whether the installed tool can actually resolve them. So install the real .nupkg into a
+      # throwaway tool-path and drive it end to end, exactly as a receiver will.
+      - name: Smoke — install the real package and DECIDE with it
+        run: |
+          set -euo pipefail
+          cat > /tmp/isolated.config <<'CFG'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources><clear /><add key="local" value="./artifacts/packages" /></packageSources>
+          </configuration>
+          CFG
+          dotnet tool install --tool-path /tmp/toolhome --configfile /tmp/isolated.config \
+            FS.GG.Coord.Cli --version "${{ steps.v.outputs.version }}"
+
+          cat > /tmp/snap.json <<'SNAP'
+          { "schema": "fsgg.coord.snapshot/1", "allowBacklog": false, "items": [
+            {"owner":"FS-GG","repo":".github","number":1,"status":"Ready","state":"OPEN","body":"Paths: src/A.fs"},
+            {"owner":"FS-GG","repo":".github","number":2,"status":"Ready","state":"OPEN","body":"Paths: src/A.fs"} ] }
+          SNAP
+
+          out="$(/tmp/toolhome/fsgg-coord-engine decide < /tmp/snap.json)"
+          printf '%s\n' "$out"
+          chosen="$(printf '%s' "$out" | jq -r '[.chosen[].short] | join(",")')"
+          if [ "$chosen" != ".github#1" ]; then
+            echo "::error title=the packaged tool does not decide::expected the greedy fold to choose .github#1 and reserve src/A.fs against #2; got '$chosen'. The package installs but the engine inside it does not work."
+            exit 1
+          fi
+          echo "packaged engine: decided correctly (chose $chosen, reserved its touch-set against #2)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push to org GitHub Packages feed
+        if: steps.v.outputs.push == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Coord.Cli.*.nupkg" \
+            --source https://nuget.pkg.github.com/FS-GG/index.json \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      - name: Summary
+        run: |
+          {
+            echo "### fsgg-coord-engine ${{ steps.v.outputs.version }}"
+            if [ "${{ steps.v.outputs.push }}" = "true" ]; then
+              echo "Published \`FS.GG.Coord.Cli\` **${{ steps.v.outputs.version }}** to the org feed."
+              echo ""
+              echo "This is **not** the flip. Bash stays authoritative and the \`fs\` engine mode stays refused."
+              echo "What it changes: a worker in a receiver repo now has an engine to SHADOW with, so the"
+              echo "divergence log can start filling — which is the evidence Phase 3b's flip is gated on."
+            else
+              echo "Pack-only dry run — nothing pushed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
