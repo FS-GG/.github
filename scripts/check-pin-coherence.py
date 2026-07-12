@@ -16,11 +16,26 @@ literal sat at 0.2.1 while the org shipped 0.5.0 (.github#127, "H2"), was fixed 
 The mechanism the row depends on — the org preset's annotation manager auto-bumping the literal —
 was never proven. This gate proves it, every day, by checking its OUTPUT.
 
-WHAT IT ASSERTS. Two things, which together mean "this pin can move, and it has moved":
+WHAT IT ASSERTS. Three things, which together mean "this pin can move, and it has moved":
 
   1. FRESHNESS. For every annotated pin, the literal equals the newest version live on the org feed.
-  2. MECHANISM. This repo's own Renovate config carries the `hostRules` feed token, without which
-     Renovate cannot enumerate FS.GG.* versions and therefore cannot bump ANY of these pins.
+  2. MECHANISM (config). This repo's own Renovate config carries the `hostRules` feed token, without
+     which Renovate cannot enumerate FS.GG.* versions and therefore cannot bump ANY of these pins.
+  3. MECHANISM (behaviour) — .github#566. When a pin IS stale, the gate goes and finds out WHY,
+     from Renovate's own artifacts, instead of asserting a cause. (2) proves the token block is
+     PRESENT; it cannot prove the token RESOLVES, and those came apart: the block has been present
+     since #263 and the pin froze anyway, because `{{ secrets.FSGG_PACKAGES_READ_TOKEN }}` is a Mend
+     App Secret that nothing in CI can read — so nobody ever verified it. This gate used to print
+     "the annotation manager did not bump it", which is a cause it never checked and which reads
+     identically whether the bot is BLIND or merely hasn't run yet. It now discriminates:
+
+       * the dep is missing from Renovate's Dependency Dashboard  -> the manager's regex broke;
+       * the dep is detected AND a bump PR exists                 -> benign, merge that PR;
+       * the dep is detected, the feed has a newer version, and    -> THE BOT IS BLIND. It 401s on
+         Renovate opened no PR — ever                                 the feed. Fix the token; do NOT
+                                                                      hand-bump (that is what #127
+                                                                      and #263 did, and it froze
+                                                                      again both times).
 
 (2) is the root cause of the .github#263 recurrence. `FS.GG.*` resolves from the private org
 GitHub Packages feed, and Renovate does not substitute `{{ secrets }}` inside a preset pulled via
@@ -68,6 +83,9 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from fnmatch import fnmatch
 from typing import NamedTuple
 
@@ -326,6 +344,192 @@ def check_bump_mechanism(root: str) -> str:
     return config_path
 
 
+# ---- Is the bot ACTUALLY bumping, or only configured to? (.github#566) ---------------------------
+#
+# check_bump_mechanism above proves the `hostRules` block is PRESENT. It cannot prove the token in it
+# RESOLVES, and those are different facts: the block has been present since #263, and the pin froze
+# anyway. When the bot goes blind to the private feed — a Mend App Secret that was never set, an
+# expired or rotated token, a renamed secret — the presence check stays GREEN and only freshness goes
+# red. The gate then printed "the annotation manager did not bump it", which is a CAUSE IT NEVER
+# CHECKED, and is indistinguishable from the benign "0.10.0 shipped an hour ago and the bot has not
+# run since". That conflation is epic #266's subject exactly: "I could not check" must never share a
+# verdict with "I checked, and it is broken".
+#
+# The token itself is unreachable from here — it is a Mend App Secret, and CI's GITHUB_TOKEN is a
+# different credential on a different path, so a lookup that succeeds here proves nothing about the
+# bot. What IS reachable is the bot's OWN OUTPUT, and it discriminates:
+#
+#   * Renovate's Dependency Dashboard lists every dependency it DETECTED. If the pin is there, the
+#     manager's regex matched and the bot knows the dependency exists.
+#   * Renovate's PRs say what it managed to BUMP.
+#
+# Detected + an update is due on the feed + it opened no PR  ⇒  it could not enumerate the feed.
+# There is no other explanation: it saw the dependency, a newer version exists, and it did nothing.
+# That is the #127 / #263 root cause, and naming it is the difference between fixing the token and
+# hand-bumping the literal a third time.
+GITHUB_API = "https://api.github.com"
+DASHBOARD_TITLE = "Dependency Dashboard"
+
+
+class BotEvidence(NamedTuple):
+    """What Renovate itself says it saw and did. Gathered from its OWN artifacts, not inferred."""
+
+    detected: bool  # does the Dependency Dashboard list this dep? (i.e. did the manager match it?)
+    bump_prs: list  # (number, state, title) of Renovate PRs naming THIS dep — any state
+    dashboard: int | None
+    # Renovate PRs naming ANY FS.GG.* package. This is the FEED-ACCESS signal, and it is deliberately
+    # separate from bump_prs, because the two answer different questions and conflating them produces
+    # the exact wrong verdict this gate exists to prevent:
+    #
+    #   bump_prs   — "did the bot bump THIS pin?"        (empty is normal; the pin may be current)
+    #   feed_prs   — "can the bot see the private feed?" (empty, with a due update, means it CANNOT)
+    #
+    # Matching only on the dep name would call a WORKING bot blind, because the org preset GROUPS
+    # some FS.GG.* packages: `groupName: "FS.GG.UI coherent set"` opens ONE PR titled "update fs.gg.ui
+    # coherent set", whose title contains no member's name. A grouped bump is still proof the token
+    # resolves — so it must count here even though it does not count as a bump of this pin.
+    feed_prs: list
+
+
+def _gh_api(path: str, token: str):
+    req = urllib.request.Request(
+        f"{GITHUB_API}{path}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "fsgg-check-pin-coherence",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        # Fails CLOSED. An unreadable API is "I could not check", and this gate must never let that
+        # wear the same green as "I checked". The caller turns this into a GateError.
+        raise GateError(
+            f"cannot read {path} from the GitHub API ({e}). The bot-mechanism check needs it to tell "
+            f"a BLIND bot from a merely-late one, and a check that cannot see its subject must not "
+            f"report green (epic #266). Ensure the job grants `issues: read` and `pull-requests: read`."
+        ) from e
+
+
+def _search_all(repo: str, token: str) -> list:
+    """EVERY Renovate-authored issue/PR in the repo. Paginated — the first page is not the answer.
+
+    The Dependency Dashboard is one OLD issue (it is created once, then edited forever), so on any
+    repo with a busy bot it sinks below the first page. Reading only `per_page=100` and concluding
+    "no dashboard ⇒ the bot is not running here" would be a loud, false claim on a perfectly healthy
+    repo — and would report a WRONG CAUSE, which is the one thing this whole check exists to stop.
+    """
+    items: list = []
+    for page in range(1, 11):  # search caps at 1000 results; 10 pages is that ceiling, not a guess
+        q = urllib.parse.quote(f"repo:{repo} author:app/renovate", safe="")
+        got = _gh_api(f"/search/issues?q={q}&per_page=100&page={page}", token)
+        batch = got.get("items") or []
+        items.extend(batch)
+        if len(items) >= int(got.get("total_count") or 0) or not batch:
+            break
+    return items
+
+
+def gather_bot_evidence(repo: str, token: str, dep_name: str, items=None) -> BotEvidence:
+    """Read Renovate's own dashboard + PRs. Its artifacts, not our inference.
+
+    `items` may be passed in pre-fetched: the search is dep-INDEPENDENT, so N stale pins must not
+    cost N identical searches (the search API allows 30/min, and a gate that rate-limits itself into
+    a 403 fails on its own redundancy).
+    """
+    if items is None:
+        items = _search_all(repo, token)
+
+    dashboard = next(
+        (i["number"] for i in items if str(i.get("title", "")).strip() == DASHBOARD_TITLE), None
+    )
+    if dashboard is None:
+        raise GateError(
+            f"Renovate has opened no {DASHBOARD_TITLE!r} issue in {repo}, so there is no record of "
+            f"what it detected. The org preset enables `:dependencyDashboard`, so its absence means "
+            f"the bot is not running here at all — which is a bigger finding than a stale pin, and "
+            f"not something this gate may paper over by reporting green."
+        )
+
+    body = str(_gh_api(f"/repos/{repo}/issues/{dashboard}", token).get("body") or "")
+    detected = dep_name.lower() in body.lower()
+
+    needle = dep_name.lower()
+    prs = [i for i in items if i.get("pull_request")]
+    bump_prs = [
+        (i["number"], i.get("state", "?"), i.get("title", ""))
+        for i in prs
+        if needle in str(i.get("title", "")).lower()
+    ]
+    # Any FS.GG.* bump at all — including a GROUPED one, whose title names the group and not the
+    # member. See BotEvidence.feed_prs: this is the feed-access signal, not the per-pin one.
+    feed_prs = [
+        (i["number"], i.get("state", "?"), i.get("title", ""))
+        for i in prs
+        if "fs.gg" in str(i.get("title", "")).lower()
+    ]
+    return BotEvidence(
+        detected=detected, bump_prs=bump_prs, dashboard=dashboard, feed_prs=feed_prs
+    )
+
+
+def diagnose_stale_pin(pin: Pin, top: str, ev: BotEvidence) -> str:
+    """WHY is the pin stale? Answered from evidence, never asserted."""
+    where = f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r} but the org feed's newest is {top!r}."
+
+    if not ev.detected:
+        return (
+            f"{where} Renovate's Dependency Dashboard (#{ev.dashboard}) does NOT list this "
+            f"dependency, so the annotation manager's regex is no longer matching it — the bot is not "
+            f"even looking at this pin. Fix the manager/annotation; advancing the literal would leave "
+            f"the pin unmanaged and it would freeze again on the next release."
+        )
+
+    if ev.bump_prs:
+        prs = ", ".join(f"#{n} ({s})" for n, s, _ in ev.bump_prs)
+        return (
+            f"{where} The bot IS working — it detected the dependency and opened {prs}. This is the "
+            f"BENIGN case: merge that PR rather than hand-editing the literal. (Do not 'fix' this by "
+            f"advancing the pin; you would close a bump PR the bot will simply reopen.)"
+        )
+
+    if ev.feed_prs:
+        # It opened NO PR for this dep — but it HAS opened FS.GG.* PRs, so it can plainly reach the
+        # private feed. Whatever is wrong, it is not the credential, and saying "THE BOT IS BLIND"
+        # here would send someone to chase a token that works. The likeliest cause is the org
+        # preset's GROUPING (`groupName: "FS.GG.UI coherent set"`), whose PR title names the group,
+        # not the member.
+        prs = ", ".join(f"#{n} ({s})" for n, s, _ in ev.feed_prs[:3])
+        return (
+            f"{where} The bot can SEE the feed — it has opened FS.GG.* bump PRs here ({prs}) — but it "
+            f"opened none for {pin.dep_name} specifically. So this is NOT the #263 blind-token "
+            f"failure, and the credential is not the thing to go and fix.\n"
+            f"    Look instead at why THIS pin is exempt: a `groupName` packageRule in default.json "
+            f"can fold it into a grouped PR whose title names the group and not the member; a "
+            f"`matchPackageNames` rule can have disabled it; or the update may simply be newer than "
+            f"the bot's last run. Confirm against Dependency Dashboard #{ev.dashboard} before "
+            f"touching the literal."
+        )
+
+    return (
+        f"{where} THE BOT IS BLIND TO THE ORG FEED — do NOT hand-bump this literal.\n"
+        f"    Evidence: Renovate's Dependency Dashboard (#{ev.dashboard}) DOES list {pin.dep_name} "
+        f"(so the manager's regex matches and the bot knows the pin exists), the feed DOES serve "
+        f"{top!r}, and Renovate has opened NO bump PR for it — nor for ANY other FS.GG.* package, "
+        f"ever, grouped or otherwise. Third-party bumps (nuget.org, no auth) it opens fine. A bot "
+        f"that can see the dependency, and can see nothing to update, is a bot whose feed lookup "
+        f"returned nothing — i.e. it 401'd on {FEED_HOST}.\n"
+        f"    `renovate.json` carries the `hostRules` block (that was #263's fix), so the CONFIG is "
+        f"right and the CREDENTIAL is not: `{{{{ secrets.FSGG_PACKAGES_READ_TOKEN }}}}` is a Mend App "
+        f"Secret, and nothing in CI can read it — which is exactly why nobody has ever verified it. "
+        f"Set/repair that secret in the Mend dashboard for this repo.\n"
+        f"    Advancing the literal is what was done in .github#127 and .github#263, and the pin "
+        f"froze again both times. It is the paper-over, not the fix."
+    )
+
+
 def _resolve_newest(pin: Pin, resolve) -> str:
     if pin.datasource != "nuget":
         raise GateError(
@@ -340,18 +544,20 @@ def _resolve_newest(pin: Pin, resolve) -> str:
     return newest(resolve(pin.dep_name))
 
 
-def check_pin(pin: Pin, resolve) -> str | None:
-    """None if the pin is at feed-newest, else the reason it is not."""
+def check_pin(pin: Pin, resolve, evidence) -> str | None:
+    """None if the pin is at feed-newest, else the reason it is not — WITH the cause, evidenced.
+
+    `evidence` is a callable (dep_name -> BotEvidence). It is consulted only when a pin is actually
+    stale, so the happy path costs no extra API calls.
+    """
     top = _resolve_newest(pin, resolve)
     have, want = parse_version(pin.current_value), parse_version(top)
     if have == want:
         return None
     if have < want:
-        return (
-            f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r} but the org "
-            f"feed's newest is {top!r}. The pin has frozen — the annotation manager did not bump it "
-            f"(.github#127 / .github#263). Advance the literal, and check the bot can see the feed."
-        )
+        # The old code asserted "the annotation manager did not bump it" here — a cause it never
+        # verified (.github#566). Go and look instead.
+        return diagnose_stale_pin(pin, top, evidence(pin.dep_name))
     return (
         f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r}, which is AHEAD "
         f"of the org feed's newest {top!r}. The pin names a version no consumer can restore."
@@ -365,6 +571,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--root", default=".", help="repo root to scan (default: cwd)")
     ap.add_argument("--preset", help="path to the org Renovate preset (default: <root>/default.json)")
     ap.add_argument("--fixture", help="read the feed from a JSON file (tests only, never in CI)")
+    ap.add_argument(
+        "--repo",
+        help="owner/repo whose Renovate dashboard + PRs prove the bot can see the feed "
+        "(default: $GITHUB_REPOSITORY)",
+    )
     args = ap.parse_args(argv)
 
     root = args.root
@@ -389,12 +600,35 @@ def main(argv: list[str]) -> int:
             print(f"::error::check-pin-coherence: cannot read fixture: {e}", file=sys.stderr)
             return 1
 
+        # A fixture feed may carry a canned `_renovate` block so the harness can exercise the
+        # bot-evidence legs (blind / benign / manager-broke) with no network. Absent it, the gate is
+        # explicit that the cause is UNVERIFIED rather than quietly asserting one — which is the
+        # whole defect #566 is about, and it would be absurd to rebuild it inside the fix.
+        canned = table.pop("_renovate", None)
+
         def resolve(pkg: str) -> list[str]:
             if pkg not in table:
                 raise GateError(f"package {pkg!r} is not on the org feed (fixture: absent)")
             if not table[pkg]:
                 raise GateError(f"the feed served zero versions for {pkg!r}")
             return list(table[pkg])
+
+        def evidence(dep: str) -> BotEvidence:
+            if canned is None:
+                raise GateError(
+                    f"{dep} is stale, and this fixture carries no `_renovate` block, so the CAUSE is "
+                    f"UNVERIFIED. The gate will not name one it did not check (#566)."
+                )
+            e = canned.get(dep, canned)
+            bump = [tuple(p) for p in (e.get("bump_prs") or [])]
+            # A bump PR for THIS dep is also, trivially, an FS.GG.* PR — so a fixture that names one
+            # without restating it under feed_prs must not read as "the bot never touched the feed".
+            return BotEvidence(
+                detected=bool(e.get("detected")),
+                bump_prs=bump,
+                dashboard=e.get("dashboard"),
+                feed_prs=[tuple(p) for p in (e.get("feed_prs") or [])] or bump,
+            )
     else:
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
         if not token:
@@ -406,12 +640,36 @@ def main(argv: list[str]) -> int:
             )
             return 1
 
+        repo = args.repo or os.environ.get("GITHUB_REPOSITORY") or ""
+        if not repo:
+            print(
+                "::error::check-pin-coherence: no --repo and no GITHUB_REPOSITORY. The gate needs to "
+                "know which repo's Renovate dashboard and PRs to read in order to tell a BLIND bot "
+                "from a merely-late one (#566). It will not guess, and it will not skip the check.",
+                file=sys.stderr,
+            )
+            return 1
+
         def resolve(pkg: str) -> list[str]:
             return feed_versions(pkg, token)
 
+        _items: list = []  # the dep-independent search, fetched at most once per run
+
+        def evidence(dep: str) -> BotEvidence:
+            if not _items:
+                _items.extend(_search_all(repo, token))
+            return gather_bot_evidence(repo, token, dep, items=_items)
+
     try:
         config_path = check_bump_mechanism(root)
-        print(f"ok: {config_path} carries the {FEED_HOST} hostRules token (pins can be bumped).")
+        # Deliberately NOT "pins can be bumped" — that was the overclaim (#566). Presence of the
+        # block is not resolution of the token, and the gate has no way to prove the latter from
+        # here. If a pin turns out to be stale, diagnose_stale_pin() goes and gets the evidence.
+        print(
+            f"ok: {config_path} declares the {FEED_HOST} hostRules token. NOTE: this proves the "
+            f"block is PRESENT, not that the token RESOLVES — the bot's behaviour is checked below, "
+            f"and only if a pin is actually stale."
+        )
 
         regexes, matches_path = load_annotation_manager(preset)
         pins = scan_pins(root, regexes, matches_path)
@@ -431,7 +689,7 @@ def main(argv: list[str]) -> int:
     problems: list[str] = []
     for pin in sorted(pins):
         try:
-            problem = check_pin(pin, resolve)
+            problem = check_pin(pin, resolve, evidence)
         except GateError as e:
             problems.append(f"{pin.file}:{pin.line}: {e}")
             continue
@@ -443,7 +701,14 @@ def main(argv: list[str]) -> int:
     if problems:
         print()
         for p in problems:
-            print(f"::error::check-pin-coherence: {p}", file=sys.stderr)
+            # `::error::` is a LINE-ORIENTED workflow command: GitHub ends the annotation at the
+            # first newline, so a multi-line diagnosis would lose every line after the first — and
+            # the lost lines are the evidence, which is the entire point (#566). Newlines must be
+            # sent as the %0A escape to survive into the annotation. Print the readable form to the
+            # log too, since the log is where anyone reading a failed run actually looks.
+            print(f"::error::check-pin-coherence: {p.replace('%', '%25').replace(chr(13), '')
+                                                    .replace(chr(10), '%0A')}", file=sys.stderr)
+            print(f"check-pin-coherence: {p}", file=sys.stderr)
         print(f"\ncheck-pin-coherence: {len(problems)} problem(s).", file=sys.stderr)
         return 1
 

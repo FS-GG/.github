@@ -111,7 +111,7 @@ jobs:
           # annotation below is reworded or moved, or the pin is deleted, pin-coherence.yml fails —
           # it is named in that gate's REQUIRED_PINS. Do not "fix" a red pin gate by deleting it.
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli
-          dotnet tool install --global FS.GG.SDD.Cli --version 0.9.0
+          dotnet tool install --global FS.GG.SDD.Cli --version 0.10.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Resolve actual FS.GG.Contracts version

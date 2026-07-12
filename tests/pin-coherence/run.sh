@@ -49,13 +49,31 @@ PIN_FILE=".github/workflows/contract-coherence.yml"
 
 # The feed. FS.GG.SDD.Cli deliberately serves BOTH 0.9.0 and 0.9.0-preview.1 (the substring trap),
 # listed out of version order (the feed returns creation order, not version order).
+#
+# `_renovate` is the canned bot-evidence block (#566). When a pin is stale the gate no longer ASSERTS
+# a cause — it reads Renovate's own dashboard + PRs and names the one the evidence supports. Offline,
+# that evidence comes from here. The default is the LIVE defect: the bot detected the dependency
+# (so the manager's regex is fine) and never opened a bump PR — i.e. it is blind to the feed.
 FEED="$WORK/feed.json"
 cat > "$FEED" <<'JSON'
 {
   "FS.GG.SDD.Cli":   ["0.5.0", "0.9.0", "0.9.0-preview.1", "0.8.0", "0.6.0", "0.7.0"],
-  "FS.GG.Contracts": ["1.4.0"]
+  "FS.GG.Contracts": ["1.4.0"],
+  "_renovate": { "detected": true, "bump_prs": [], "dashboard": 54 }
 }
 JSON
+
+# feed_evidence <name> <_renovate-json> — the standard feed, with a different bot-evidence block.
+feed_evidence() {
+  local out="$WORK/feed-ev-$1.json"
+  python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["_renovate"] = json.loads(sys.argv[2])
+json.dump(d, open(sys.argv[3], "w"))
+' "$FEED" "$2" "$out"
+  printf '%s' "$out"
+}
 
 # make_repo <name> [pin-version] — a minimal repo carrying the real org preset, a renovate.json with
 # the feed hostRules token, and an annotated FS.GG.SDD.Cli pin at the given version. Echoes its path.
@@ -164,7 +182,7 @@ echo
 echo "--- a frozen pin is caught (the #127 / #263 defect itself) ---"
 FROZEN="$(make_repo frozen 0.9.0)"; repin "$FROZEN" 0.5.0
 must_fail "pin behind the feed fails" "$FROZEN" "$FEED" "is pinned at '0.5.0' but the org feed's newest is '0.9.0'"
-must_fail "...and names the freeze, not a generic mismatch" "$FROZEN" "$FEED" "has frozen"
+must_fail "...and names the freeze, not a generic mismatch" "$FROZEN" "$FEED" "BOT IS BLIND"
 
 AHEAD="$(make_repo ahead 0.9.0)"; repin "$AHEAD" 1.0.0
 must_fail "pin ahead of the feed fails" "$AHEAD" "$FEED" "AHEAD"
@@ -172,7 +190,7 @@ must_fail "pin ahead of the feed fails" "$AHEAD" "$FEED" "AHEAD"
 echo
 echo "--- versions are compared by ORDER, never by substring (the #268 defect class) ---"
 PRE="$(make_repo pre 0.9.0)"; repin "$PRE" 0.9.0-preview.1
-must_fail "'0.9.0-preview.1' is not 'equal' to feed-newest '0.9.0'" "$PRE" "$FEED" "has frozen"
+must_fail "'0.9.0-preview.1' is not 'equal' to feed-newest '0.9.0'" "$PRE" "$FEED" "is pinned at '0.9.0-preview.1' but the org feed's newest is '0.9.0'"
 must_pass "a release outranks its own prerelease" "$BASE" "$(feed_with onlyrelease '["0.9.0","0.9.0-preview.1"]')"
 must_fail "a pin is AHEAD of a feed serving only its prerelease" "$BASE" "$(feed_with onlypre '["0.9.0-preview.1"]')" "AHEAD"
 
@@ -180,6 +198,76 @@ echo
 echo "--- the bump MECHANISM is gated, not assumed (the #263 root cause) ---"
 NOTOKEN="$(make_repo notoken)"; edit_json "$NOTOKEN/renovate.json" 'del d["hostRules"]'; git -C "$NOTOKEN" add -A
 must_fail "renovate.json without the feed hostRules fails" "$NOTOKEN" "$FEED" "declares no \`hostRules\` token for nuget.pkg.github.com"
+
+echo
+echo "--- a STALE pin is DIAGNOSED, not merely reported (#566) --------------------------------------"
+#
+# This is the whole of #566. The gate used to print "the annotation manager did not bump it" for
+# every stale pin — a cause it never checked, and one that reads identically whether the bot is BLIND
+# to the feed or simply has not run since the release shipped. Three causes, three verdicts, and the
+# RIGHT ONE has to come out, because the wrong one sends you to hand-bump the literal, which is what
+# .github#127 and .github#263 both did — and the pin froze again both times.
+#
+# `hostRules` is PRESENT in every one of these repos. That is the point: presence is not resolution,
+# and the old MECHANISM check reports green in all three.
+
+# (a) BLIND — the bot detected the dep and never opened a PR. The live .github defect.
+must_fail "stale + detected + no bump PR ever ⇒ the bot is BLIND to the feed" \
+  "$FROZEN" "$(feed_evidence blind '{"detected": true, "bump_prs": [], "dashboard": 54}')" \
+  "THE BOT IS BLIND TO THE ORG FEED"
+must_fail "...and says NOT to hand-bump (the .github#127/#263 paper-over)" \
+  "$FROZEN" "$(feed_evidence blind '{"detected": true, "bump_prs": [], "dashboard": 54}')" \
+  "do NOT hand-bump this literal"
+must_fail "...and names the CREDENTIAL, not the config block, as the broken half" \
+  "$FROZEN" "$(feed_evidence blind '{"detected": true, "bump_prs": [], "dashboard": 54}')" \
+  "the CONFIG is right and the CREDENTIAL is not"
+
+# (b) BENIGN — the bot works; it opened a PR and nobody merged it. Hand-bumping here would be WRONG,
+#     and the old gate told you to do exactly that.
+must_fail "stale + detected + an open bump PR ⇒ benign, merge the PR" \
+  "$FROZEN" "$(feed_evidence benign '{"detected": true, "bump_prs": [[91, "open", "chore(deps): update dependency fs.gg.sdd.cli to 0.9.0"]], "dashboard": 54}')" \
+  "The bot IS working"
+must_fail "...and points at the PR rather than the literal" \
+  "$FROZEN" "$(feed_evidence benign '{"detected": true, "bump_prs": [[91, "open", "chore(deps): update dependency fs.gg.sdd.cli to 0.9.0"]], "dashboard": 54}')" \
+  "#91 (open)"
+
+# (b2) GROUPED — the bot opened no PR for THIS dep, but it plainly reaches the feed, because it has
+#      opened other FS.GG.* bumps. Calling that BLIND would send someone to chase a working token.
+#      This is not hypothetical: default.json carries `groupName: "FS.GG.UI coherent set"`, and a
+#      grouped PR's title names the GROUP, not the member — so a member pin's name appears in no PR
+#      title anywhere, exactly like a bot that never ran.
+GROUPED='{"detected": true, "bump_prs": [], "feed_prs": [[77, "merged", "chore(deps): update fs.gg.ui coherent set"]], "dashboard": 54}'
+must_fail "stale + no PR for this dep + OTHER FS.GG.* PRs ⇒ NOT blind (grouped/exempt)" \
+  "$FROZEN" "$(feed_evidence grouped "$GROUPED")" \
+  "The bot can SEE the feed"
+out="$(gate "$FROZEN" "$(feed_evidence grouped "$GROUPED")")" || true
+printf '%s' "$out" | grep -qF "BOT IS BLIND" \
+  && bad "a GROUPED bump is not mistaken for a blind bot (the false-BLIND trap)" "$out" \
+  || ok "a GROUPED bump is not mistaken for a blind bot (the false-BLIND trap)"
+
+# (c) MANAGER BROKE — the dep is not in the dashboard at all, so the bot never saw the pin. A
+#     different root cause with a different fix, and it must not be confused with a blind token.
+must_fail "stale + NOT detected ⇒ the annotation manager's regex stopped matching" \
+  "$FROZEN" "$(feed_evidence undetected '{"detected": false, "bump_prs": [], "dashboard": 54}')" \
+  "does NOT list this dependency"
+
+# (d) The three verdicts must be DISTINGUISHABLE, or the diagnosis is theatre. A blind bot must not
+#     be described as a working one.
+out="$(gate "$FROZEN" "$(feed_evidence benign '{"detected": true, "bump_prs": [[91, "open", "x fs.gg.sdd.cli x"]], "dashboard": 54}')")" || true
+printf '%s' "$out" | grep -qF "BOT IS BLIND" \
+  && bad "a WORKING bot is not reported as blind" "$out" \
+  || ok "a WORKING bot is not reported as blind"
+
+# (e) FAILS CLOSED. No evidence ⇒ the gate says the cause is UNVERIFIED. It must never fall back to
+#     asserting one — that is the very defect (#566), and rebuilding it inside the fix would be a
+#     bleak sort of joke.
+NOEV="$WORK/feed-noevidence.json"
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d.pop("_renovate",None); json.dump(d,open(sys.argv[2],"w"))' "$FEED" "$NOEV"
+must_fail "no bot evidence ⇒ the CAUSE is UNVERIFIED, never guessed" "$FROZEN" "$NOEV" "the CAUSE is UNVERIFIED"
+out="$(gate "$FROZEN" "$NOEV")" || true
+printf '%s' "$out" | grep -qE "BOT IS BLIND|bot IS working" \
+  && bad "an unverifiable cause is not reported as a verified one" "$out" \
+  || ok "an unverifiable cause is not reported as a verified one"
 
 EMPTYTOK="$(make_repo emptytok)"; edit_json "$EMPTYTOK/renovate.json" 'd["hostRules"][0]["token"] = ""'; git -C "$EMPTYTOK" add -A
 must_fail "a hostRules entry with an empty token fails" "$EMPTYTOK" "$FEED" "declares no \`hostRules\` token"

@@ -59,7 +59,14 @@ on:
 
 permissions:
   contents: read
-  packages: read   # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
+  packages: read        # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
+  issues: read          # Renovate's Dependency Dashboard — the record of what the bot DETECTED
+  pull-requests: read   # Renovate's PRs — the record of what the bot actually BUMPED
+  #
+  # The last two are what let a stale pin be diagnosed instead of merely reported (#566). The gate
+  # used to print "the annotation manager did not bump it" — a cause it never checked, and one that
+  # reads identically whether the bot is BLIND to the feed or simply has not run since the release.
+  # Detected-but-never-bumped is only visible in the bot's own artifacts, and both are read-only.
 
 concurrency:
   group: pin-coherence-${{ github.ref }}
@@ -95,4 +102,7 @@ jobs:
           # `packages: read`, which is what the feed's HTTP Basic auth wants; the same grant already
           # authenticates the NuGet restore in contract-coherence.yml.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Which repo's Renovate dashboard + PRs prove the bot can see the feed (#566). The gate
+          # refuses to guess this and refuses to skip the check without it.
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: python scripts/check-pin-coherence.py --root .
