@@ -143,6 +143,7 @@ jobs:
   preflight:
     name: Preflight — dispatch App secrets resolve
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Assert the dispatch App secrets are visible to this repo
         id: secrets
@@ -336,6 +337,7 @@ jobs:
   sync:
     name: Sync packages.lock.json
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # The gate above must have passed. Without this, an unprovisioned repo would still reach the
     # token step and fail there — with the opaque error preflight exists to replace.
     needs: preflight

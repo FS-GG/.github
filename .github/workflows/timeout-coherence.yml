@@ -1,0 +1,124 @@
+# timeout-coherence — every job this org ships declares a bound, because a caller cannot supply one.
+#
+# .github#541, epic #266. A job with no `timeout-minutes` inherits GitHub's 360-minute default. That
+# is a defect anywhere; in a REUSABLE workflow it is one the receiver structurally cannot fix. A job
+# that calls a reusable workflow accepts only `name`, `needs`, `if`, `permissions`, `uses`, `with`,
+# `secrets`, `strategy`, and `concurrency` — `timeout-minutes` is not a legal key there, and setting
+# it is a workflow validation error. So the bound must exist inside the callee or it exists nowhere,
+# and every repo that adopts the workflow inherits the six-hour ceiling along with it.
+#
+# All 31 of this repo's workflows were unbounded when #541 was filed. FS.GG.Game bounds every one of
+# its eight hand-authored jobs; adopting `lock-range-coherence.yml` (#495) introduced the repo's only
+# job that could hang for six hours — a job that is explicitly static and finishes in seconds.
+#
+# UNLIKE permission-coherence, this gate does NOT run on a schedule, and that is a deliberate
+# difference rather than an omission. permission-coherence needs one because either half of a
+# caller/callee PAIR can break from a repo its `paths:` cannot see — a receiver can drop a scope
+# without touching a file here. This gate's subject is entirely local: the workflows in THIS repo.
+# Nothing outside the tree can falsify it, so `paths:` sees every change that could, and a nightly
+# re-run would prove only that the tree did not change on its own.
+name: timeout-coherence
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check-workflow-timeouts.py"
+      - "tests/workflow-timeouts/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check-workflow-timeouts.py"
+      - "tests/workflow-timeouts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: timeout-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the workflow-timeouts fixture (no network)
+        run: bash tests/workflow-timeouts/run.sh
+
+  timeouts-bounded:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Assert every job declares a timeout, and no `uses:` job illegally declares one
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-workflow-timeouts.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is STATIC — working tree only, no API, no network —
+      # so it has no retryable failure to report. A leg for a verdict the gate can never mean would
+      # be a lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever appears.
+      - name: 'OK: every job is bounded'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "timeout-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a job is unbounded, over-bounded, or illegally bounded'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### timeout-coherence: a job is not bounded"
+            echo
+            echo "A job declares no \`timeout-minutes\` (so it inherits GitHub's **360-minute**"
+            echo "default), declares one that is not a literal positive integer under the ceiling,"
+            echo "or declares one on a \`uses:\` job — where GitHub rejects it outright."
+            echo
+            echo "If the job is in a **reusable** workflow, no caller can fix this for you:"
+            echo '`timeout-minutes` is not a legal key on a `uses:` job, so the bound has to live in'
+            echo "the callee. See the log above for the workflow, the job, and which rule it broke."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=timeout-coherence: a job is not bounded::A job inherits the 360-minute default, or declares an illegal timeout. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a file a human must fix'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### timeout-coherence: no verdict — a file must be fixed"
+            echo
+            echo "A workflow would not parse, a workflow declares no jobs, or the audit examined"
+            echo "**nothing**. Examining nothing is a failure to audit, not a clean audit. Retrying"
+            echo "will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=timeout-coherence: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=timeout-coherence: inconclusive::check-workflow-timeouts.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

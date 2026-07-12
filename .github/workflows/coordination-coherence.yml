@@ -61,6 +61,7 @@ permissions:
 jobs:
   coordination-kit:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout the calling repo
         uses: actions/checkout@v7

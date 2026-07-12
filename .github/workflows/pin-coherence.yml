@@ -69,6 +69,7 @@ jobs:
   # Offline. Proves the gate goes red on every freeze/fails-open condition before we trust its green.
   fixture:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
@@ -80,6 +81,7 @@ jobs:
   # Online. The actual coherence signal.
   pins:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: fixture
     steps:
       - uses: actions/checkout@v7

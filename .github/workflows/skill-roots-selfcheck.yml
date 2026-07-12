@@ -34,6 +34,7 @@ permissions:
 jobs:
   roots:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       # No --roots, no --product: exactly what a worker types. The roots come from .agent-skill-roots.
