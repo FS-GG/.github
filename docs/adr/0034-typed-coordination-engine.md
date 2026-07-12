@@ -1,7 +1,7 @@
 # ADR-0034: The coordination engine is a typed core; the tool is the model, and the docs are its projection
 
-- **Status:** Proposed
-- **Date:** 2026-07-12
+- **Status:** Accepted
+- **Date:** 2026-07-12 (proposed) · 2026-07-12 (accepted)
 - **Affects:** `.github` (authority), and every `receives: coordination-kit` repo — sdd, rendering, governance, templates, game, audio
 - **Design doc:** [docs/design/coordination-engine.md](../design/coordination-engine.md)
 - **Amends:** [0019](0019-org-repo-roster-registry-and-coordination-kit.md) (the `kit:` row shape), [0027](0027-worker-keyed-claim-lock-and-worker-channel.md) (implementation only — the CAS stands)
@@ -162,13 +162,27 @@ The build/publish/pin/feed substrate — #504, #561, #574, #576, #519, and epic
 design and it will keep producing findings at its current rate. This ADR must not be read as a
 remedy for it.
 
-**The architecture map**
+**The architecture map — reconciled with this ratification**
 
-This ADR is **Proposed** and changes no repo, boundary, or coherent-set axis, so
-`docs/architecture.md` is unaffected *today* and the proposing PR opts out. **Accepting it does
-not stay free:** the engine becomes a `dotnet tool` on the coherent set, and the `kit:` row gains
-a shim/tool distinction — both are shape changes. **The status flip to Accepted must reconcile the
-map in the same change**, and must not be merged with an `architecture-map: unaffected` opt-out.
+The proposing PR ([#589](https://github.com/FS-GG/.github/pull/589)) opted out of the map reconcile,
+correctly: a *Proposed* ADR changes no repo, boundary, or coherent-set axis. It recorded that
+**accepting it would not stay free**, and named the obligation so it could not be lost.
+
+Ratification discharges that obligation in the same change. `docs/architecture.md` §1 and §7 now
+record two things, and the second was already true before this ADR:
+
+1. **`.github` is a producer.** Its `Ships` column said `—`. It has shipped `FS.GG.NewSddWorkspace`
+   (`new-sdd-workspace`) as a `dotnet tool` since ADR-0016, with its own release workflow. The map
+   never caught up. This ADR adds a *second* tool to that repo, so the row had to be right first.
+2. **The coordination client becomes a coherent-set member.** `FS.GG.Coord.Cli` (`fsgg-coord`) is a
+   packaged `dotnet tool`; the `kit:` row becomes a digest-pinned **shim** that resolves it from the
+   already-distributed `.config/dotnet-tools.json`. That is the shape change this ADR decides, and
+   it is now on the map as *planned*, not as done — the engine does not exist yet.
+
+**The `repos.yml` `schemaVersion` bump is NOT part of this ratification.** It is a contract-change
+under ADR-0015 and it lands with the *implementation* (Phase 3), not with the decision. Bumping a
+schema for a shape no code produces would put the registry ahead of reality, which is the failure
+this ADR is about.
 
 **The standing risk**
 
