@@ -585,6 +585,27 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
 
 ## Setup
 
+- **Install the coordination engine, once, on any machine that runs a worker:**
+
+  ```sh
+  dotnet tool install -g FS.GG.Coord.Cli     # provides `fsgg-coord-engine`
+  ```
+
+  This is **optional and safe to skip** — `fsgg-coord` works exactly as before without it. What it
+  buys is the SHADOW (ADR-0034): with an engine present, every `batch`/`next`/`take` is decided by
+  **both** the bash client and the typed F# engine, **bash's answer is the one you get**, and any
+  disagreement is logged (`fsgg-coord divergence`). Nothing about your run changes — not the answer,
+  not the exit code, not the timing you would notice.
+
+  It is worth the one command because the shadow is how the port earns its cutover. Bash stays
+  authoritative until the divergence log has been clean across the live fleet for three consecutive
+  days, and that log only fills where an engine exists. A worker without one contributes no evidence,
+  and the clock does not move.
+
+  A global tool lands in `~/.dotnet/tools`, which is already on `PATH`, so it is found in **every**
+  repo with no per-repo setup. (A local `dotnet tool restore` also works — but note a local tool is
+  *not* on `PATH`, and `fsgg-coord` reaches it via `dotnet tool run`.)
+
 - `Status: In progress` and `Blocked by` already exist on the board — **no schema change is
   required**. A repo may add an optional `Paths` text field if it wants touch-sets filterable
   on the board, but the protocol reads the `Paths:` line from the issue body.
