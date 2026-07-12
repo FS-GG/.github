@@ -531,6 +531,43 @@ cosmetic today (an unparseable blocker still blocks, in both engines, which is t
 decides anything) and it is not worth a Phase 1 type change mid-shadow. It should become
 `Ref option` at the flip.
 
+#### What the shadow's own review caught — the five ways it could still have lied
+
+Every one of these was found *after* the harness was green, and every one of them is the failure this
+project exists to end, reproduced inside its remedy. They are recorded because the next person to
+touch this will be tempted by the same shortcuts.
+
+1. **The observer could kill the caller.** The shadow reads markers for the candidates bash
+   *short-circuits*, and those reads go through `claims_of` — *"or DIE"*, and it means it. But `die`
+   is `kill -s TERM $$`: it takes down the **top-level shell**, and no `|| true` catches a signal. One
+   transient 5xx on a blocked candidate would have aborted the tool, and a worker running
+   `--engine shadow take` would have got a hard failure and no item — on a run bash alone completes.
+   Contained with `soft_run`. **The shadow's first rule is that it may not change the answer, and it
+   could.**
+
+2. **...and containing it re-created the original sin.** A contained `die` returns the empty string,
+   and reading *that* as "nobody holds this item" is exactly #461 — an empty answer wearing a failed
+   read's clothes. A failed marker read now makes a candidate **unobservable**, not unheld: counted,
+   withheld from the comparison, never guessed at.
+
+3. **`--ignore-blocked` manufactured OUTCOME divergences.** The flag is a diagnostic that relaxes
+   bash's blocker filter and nothing else. The snapshot still carried the blockers, so the engine
+   dutifully returned `blocked-by` for every candidate bash had deliberately let through — and each
+   was logged as an **OUTCOME** divergence, the release-blocking class, while both engines behaved
+   exactly as designed. The engine must be told the rule bash **enforced**, not the rule bash knows.
+
+4. **`compared` counted the union, not the pairs.** An engine that decided *nothing* — a `Red` verdict
+   refusing the batch, or an empty `decisions` array — still produced `compared: 28`, every item
+   classed `bash-only`, `outcome: 0`. Green, over a run in which the engine had agreed to nothing.
+
+5. **A `Red` engine verdict was recorded and read by nothing.** The engine refusing the batch outright
+   while bash proceeds is the sharpest disagreement available. It scored as agreement.
+
+`divergence` now gates on `engineRed` and `unpaired` as well as `outcome`, and the report states what
+was **not** compared, not only what was. The pattern across all five is the same one the ADR opens
+with: *a number that only ever reports what it looked at is how "we agreed" and "we never checked"
+come to print the same sentence.*
+
 ### Phase 3 — flip *(days)*
 
 - `--engine=fs` becomes the default; `--engine=bash` remains as the escape hatch.
