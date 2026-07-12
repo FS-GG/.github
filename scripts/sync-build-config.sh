@@ -27,6 +27,26 @@ set -euo pipefail
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../dist/dotnet" && pwd)"
 
 # Managed files, relative to the repo root.
+#
+# ADDING A FILE HERE MERGE-FREEZES EVERY RECEIVER THAT DOES NOT ALREADY HAVE IT. `--check` treats a
+# missing managed file as DRIFT (see the `check` arm below), and the drift check is a REQUIRED check
+# in adopting repos. So the moment a name lands in this list, every repo without that file goes red
+# on a check it cannot make green from its own PR — which is a merge freeze, not a nudge.
+#
+# This is not hypothetical. #499 moved the source of truth in Directory.Build.props and FS.GG.SDD has
+# been unable to merge ANYTHING since (.github#379) — a finished, green PR sat blocked for hours. The
+# rule that avoids it is the same one ADR-0032 §3 states for lock files: THE RECEIVERS ADOPT FIRST,
+# and the shared config starts enforcing it LAST.
+#
+# So the order for any new managed file is:
+#   1. add it under dist/dotnet/ (harmless: not in this list, so nothing checks it yet)
+#   2. one PR per receiver, adopting it
+#   3. ONLY THEN add its name here — and now the gate is asserting something already true
+#
+# `global.json` is at step 1 right now (.github#536). It is in dist/dotnet/ and DELIBERATELY not in
+# this list: four of the five consumers (Game, Rendering, SDD, Governance) have no global.json at all,
+# so adding it today would freeze all four. tests/sync-build-config asserts that it stays out until
+# the adoption items land — a comment is not a gate (#266), so the ordering rule is a test.
 FILES=(
   "Directory.Build.props"
   "Directory.Packages.props"
