@@ -133,6 +133,33 @@ else
   bad ".props refusal must be unchanged" "rc=$rc"$'\n'"$OUT"
 fi
 
+# --- global.json: distributed, but NOT YET enforced. The ordering rule, as a gate (.github#536) ----
+#
+# `--check` treats a MISSING managed file as DRIFT, and the drift check is REQUIRED in adopting repos.
+# So a name added to FILES before the receivers carry that file merge-freezes every one of them — they
+# go red on a check they cannot make green from their own PR.
+#
+# That is not a hypothetical: #499 moved the source of truth and FS.GG.SDD could not merge ANYTHING
+# for hours (.github#379). Four of the five consumers have no global.json today, so putting it in FILES
+# now would do the same to four repos at once.
+#
+# The rule — receivers adopt first, the shared config enforces last — was written in a comment, and a
+# comment is not a gate (#266). So it is a test. These two legs are a TRIPWIRE, and they are meant to
+# be DELETED, not worked around: when Game / Rendering / SDD / Governance have all adopted, the item
+# that adds "global.json" to FILES removes this block in the same PR. Until then, a well-meaning
+# "finish the job" edit reds here, with the reason, instead of freezing the org.
+[ -f "$SRC/global.json" ] \
+  && ok "global.json: the canonical SDK pin is distributed (present under dist/dotnet/)" \
+  || bad "global.json: canonical SDK pin missing from dist/dotnet/" \
+         "#536 distributes the SDK pin; without the source file, step 3 (adding it to FILES) can never be taken."
+
+if grep -qE '^\s*"global\.json"' "$SCRIPT"; then
+  bad "global.json: is NOT in FILES yet — receivers must adopt FIRST" \
+      "$(printf '"global.json" was added to sync-build-config.sh FILES, but 4 of 5 consumers (Game, Rendering, SDD, Governance) have no global.json.\n--check reports a MISSING managed file as DRIFT, and that check is REQUIRED in those repos — so this change MERGE-FREEZES all four, exactly as .github#499 froze FS.GG.SDD (#379).\n\nIf the receivers HAVE now adopted: delete this tripwire block in the same PR. That is the intended way to remove it.\nIf they have not: land the per-repo adoption items first (see .github#536).')"
+else
+  ok "global.json: correctly NOT in FILES yet — adding it before the receivers adopt would freeze 4 repos"
+fi
+
 echo "sync-build-config fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::sync-build-config fixture FAILED"; exit 1; }
 echo "sync-build-config fixture — OK"
