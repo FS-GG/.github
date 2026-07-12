@@ -1,0 +1,147 @@
+# worker-id-attractor — no recipe may hand a worker an id to copy, or a second way to mint one.
+#
+# .github#570, epic #266 (the rule nothing asserts).
+#
+# #419 found the collision attractor: agents asked to pick a worker id converge on the same corner of
+# the name space, and an id two workers share is an id the claim lock cannot separate — `release`
+# drops the other's claim mid-flight, `heartbeat` renews a marker that is not yours, `say`/`inbox`
+# cross-deliver. This board carried FOUR `finch-*` workers at once, every one lifted from the example
+# that used to sit in the recipe. The attractor is the WORD, not the suffix.
+#
+# It has been removed BY HAND TWICE. #532 took it out of the four SKILL.md files; it grew straight
+# back in docs/coordination/parallel-work.md — the document those skills are a projection OF, which a
+# skills-only fix could not see — and #551 took it out a second time. Twice removed, twice by hand,
+# because nothing asserted it. #551's acceptance criteria were literally two greps in an issue body,
+# and a rule enforced by whoever happens to remember it is a rule that decays. This one already had,
+# in the window between #532 and #551.
+#
+# THE SURFACE IS THE SKILL ROOTS *PLUS* docs/. That is not incidental: a gate over the skill roots
+# alone is exactly the gate that would have reported green for the whole life of the #551 defect.
+#
+# No `schedule:` — the subject is committed files in this repo, so `paths:` sees every change that
+# could falsify it, and a nightly re-run would prove only that the tree did not change on its own.
+name: worker-id-attractor
+
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/**"
+      - ".agent-skill-roots"
+      - "scripts/check-worker-id-attractor.py"
+      - "tests/worker-id-attractor/**"
+      - ".github/workflows/worker-id-attractor.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/**"
+      - ".agent-skill-roots"
+      - "scripts/check-worker-id-attractor.py"
+      - "tests/worker-id-attractor/**"
+      - ".github/workflows/worker-id-attractor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-id-attractor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes. The
+  # fixture replays BOTH real regressions against a copy of the shipped tree — the `finch-*` literal
+  # #532 removed, and the hand-rolled `/dev/urandom` mint #551 removed — and its last leg runs the
+  # gate over the real surface, so a fixture that passed on synthetic strings while the attractor
+  # ships is not a state this job can reach.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Run the worker-id-attractor fixture (no network)
+        run: bash tests/worker-id-attractor/run.sh
+
+  no-attractor:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Assert no literal worker id ships, and exactly one mint idiom does
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-worker-id-attractor.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network — so
+      # it has no retryable failure to report. A leg for a verdict the gate can never mean would be a
+      # lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever appears.
+      - name: 'OK: no attractor, one mint idiom'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "worker-id-attractor: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a copyable worker id, a rival mint, or no mint at all'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### worker-id-attractor: the collision attractor is back"
+            echo
+            echo "A protocol doc or a skill either ships a **literal worker id** on a line somebody"
+            echo "can paste, offers a **second way to mint** one, or has stopped showing the mint at"
+            echo "all."
+            echo
+            echo "Ids picked by reading **converge**: this board carried **four \`finch-*\` workers at"
+            echo "once**, every one of them lifted from the example that sat in the recipe (#419)."
+            echo "Two workers on one id is an id the claim lock cannot separate — \`release\` drops the"
+            echo "other's claim mid-flight, \`heartbeat\` renews a marker that is not yours, and"
+            echo "\`say\`/\`inbox\` cross-deliver."
+            echo
+            echo "Show a **placeholder** (\`<id>\`), or the one sanctioned mint:"
+            echo
+            echo '```sh'
+            echo 'eval "$(scripts/fsgg-coord whoami --mint)"'
+            echo '```'
+            echo
+            echo "This has been removed by hand **twice** (#532, #551). That is what this gate is for."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=worker-id-attractor: the collision attractor is back::A literal worker id, a rival mint idiom, or no mint at all. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a file a human must fix'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### worker-id-attractor: no verdict"
+            echo
+            echo "A surface directory is missing, no Markdown was found, or the audit found **no"
+            echo "mention of a worker id at all** — which means the extractor is broken, not that the"
+            echo "tree is clean. These documents demonstrably carry them."
+            echo
+            echo "Examining nothing is a failure to audit, not a clean audit. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=worker-id-attractor: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=worker-id-attractor: inconclusive::check-worker-id-attractor.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
