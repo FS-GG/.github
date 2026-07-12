@@ -162,7 +162,7 @@ cat >"$FIXTURES/lint-p1.json" <<'JSON'
 {"data":{"organization":{"projectV2":{"items":{
   "pageInfo":{"hasNextPage":true,"endCursor":"LCUR1"},
   "nodes":[
-    {"status":{"name":"Backlog"},"content":{"__typename":"Issue","number":400,"title":"[sdd] [epic] Gap A: orphan","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/400","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Backlog"},"content":{"__typename":"Issue","number":400,"title":"[sdd] [epic] Gap A: orphan","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/400","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"An epic. It has no touch-set, and it SAYS so.\n\nPaths: none\n","subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":401,"title":"[epic] Done over an open child","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/401","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":2,"nodes":[
       {"number":402,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}},
       {"number":403,"state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}},
@@ -179,8 +179,13 @@ cat >"$FIXTURES/lint-p2.json" <<'JSON'
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":405,"title":"A merged PR that left its issue open","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Templates/issues/405","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"},"subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":406,"title":"[epic] Properly finished","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/406","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"- [x] #412 — landed\n","subIssues":{"totalCount":1,"nodes":[
       {"number":412,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}},
-    {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":407,"title":"An ordinary card, no children","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/407","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":407,"title":"An ordinary card, no children","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/407","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"Paths: src/Foo\n","subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":408,"title":"[epic] Finished, and it never grew children","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/408","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":420,"title":"Real work, and nobody can pick it up","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/420","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"A perfectly good item that forgot its touch-set.\n","subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Backlog"},"content":{"__typename":"Issue","number":421,"title":"Its only Paths: line is FENCED, so the scheduler cannot see it","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/421","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"Example of the syntax:\n\n```\nPaths: src/Foo\n```\n","subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Backlog"},"content":{"__typename":"Issue","number":422,"title":"A decision item that declares its touch-set-lessness","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/422","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"Paths: none\n","subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":423,"title":"Already claimed — not a scheduling candidate","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/423","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
+    {"status":{"name":"Backlog"},"content":{"__typename":"Issue","number":424,"title":"Closed, so nobody needs to pick it up","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/424","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"In progress"},"content":{"__typename":"Issue","number":409,"title":"[epic] A child was filed, and only mentioned","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/409","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"## Children\n\n- [x] (a) #413 — linked, landed\n- [ ] (b) #414 — filed while working (a); a comment on this epic is not a link\n- [x] (c) preview shipped — DONE (PR #418)\n\nSee also #415, which is prose and declares nothing.\n","subIssues":{"totalCount":1,"nodes":[
       {"number":413,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}
   ]}}}},"rateLimit":{"cost":1,"remaining":4969}}
@@ -1162,13 +1167,57 @@ assert_eq "lint: a childless NON-epic is clean — the check is epic-scoped (#40
 assert_eq "lint: a childless CLOSED [epic] is clean — the check is live-work-scoped (#408)" "" "$(codes '#408')"
 assert_contains "lint: EPIC-DONE-OPEN-CHILD names the open child" "#403" \
   "$(jq -r '.[] | select(.code=="EPIC-DONE-OPEN-CHILD") | .detail' <<<"$lint_json")"
-assert_eq "lint: severities — 4 errors, 1 note" "4 1" \
+assert_eq "lint: severities — 6 errors, 1 note (2 are NO-TOUCH-SET, #496)" "6 1" \
   "$(jq -r '"\([.[]|select(.severity=="error")]|length) \([.[]|select(.severity=="note")]|length)"' <<<"$lint_json")"
 
 assert_fails "lint: exits non-zero when an invariant is broken" run lint
 assert_contains "lint: text output is greppable" "FSGG-LINT ERROR  EPIC-NO-CHILDREN" "$(run lint 2>/dev/null || true)"
-assert_contains "lint: prints an error/note tally on stderr" "4 error(s), 1 note(s)" \
+assert_contains "lint: prints an error/note tally on stderr" "6 error(s), 1 note(s)" \
   "$(run lint 2>&1 >/dev/null || true)"
+
+
+# ---- NO-TOUCH-SET (#496): the rule whose absence let lint be GREEN over a DEAD queue ------------
+# Every other lint rule validates the epic roll-up graph. None asked the only question a worker has:
+# CAN ANYONE PICK THIS UP? A Ready/Backlog item with no `Paths:` is refused by batch/take — correctly
+# — so it sits on the board looking like work and is invisible to every worker who asks for work.
+# Nine had accumulated in `.github` while lint said `0 error(s)`.
+#
+# The NEGATIVES matter more than the positives here. A rule that fires on every touch-set-less item
+# would fire on every epic, and a gate that is always red is a gate nobody reads — which is how the
+# original state (always green) and the naive fix (always red) fail in exactly the same way.
+nts() { jq -r "[.[] | select(.code==\"NO-TOUCH-SET\") | .id | sub(\"^[^/]+/\";\"\")] | sort | join(\",\")" <<<"$lint_json"; }
+assert_eq "lint: NO-TOUCH-SET fires on EXACTLY the unschedulable items" \
+  "FS.GG.SDD#420,FS.GG.SDD#421" "$(nts)"
+
+# #420 — Ready, real work, forgot its touch-set. The whole point.
+assert_contains "lint: NO-TOUCH-SET says nobody can ever pick it up" "no worker can ever pick it up" \
+  "$(jq -r '.[] | select(.code=="NO-TOUCH-SET" and (.id|test("420"))) | .detail' <<<"$lint_json")"
+assert_contains "lint: NO-TOUCH-SET offers the sentinel by name" "Paths: none" \
+  "$(jq -r '.[] | select(.code=="NO-TOUCH-SET" and (.id|test("420"))) | .detail' <<<"$lint_json")"
+
+# #421 — its ONLY Paths: line is FENCED. The scheduler cannot see it, so the item declares nothing.
+# A checker that did not track fences would call it healthy while `take` kept refusing it — the gate
+# failing open on the one state it exists to catch. Same fence rule, both sides (#277).
+assert_contains "lint: a FENCED-only Paths: line is no declaration at all (fails closed)" \
+  "FS.GG.SDD#421" "$(nts)"
+
+# --- the negatives ---
+# #400 is an epic carrying `Paths: none`. It is unschedulable and that is CORRECT — the sentinel is
+# what makes the absence deliberate. If it fired here, every epic on the board would be an error.
+case "$(nts)" in *400*) bad "lint: NO-TOUCH-SET must NOT fire on an epic that declares 'Paths: none'" "$(nts)" ;;
+                 *)     ok  "lint: 'Paths: none' suppresses NO-TOUCH-SET — the sentinel is the whole point" ;; esac
+case "$(nts)" in *422*) bad "lint: NO-TOUCH-SET must NOT fire on a decision item declaring 'Paths: none'" "$(nts)" ;;
+                 *)     ok  "lint: a decision item declaring 'Paths: none' is clean" ;; esac
+# #407 declares a real touch-set.
+case "$(nts)" in *407*) bad "lint: NO-TOUCH-SET must NOT fire on an item with a real Paths: line" "$(nts)" ;;
+                 *)     ok  "lint: an item with a real touch-set is clean" ;; esac
+# #423 is In progress — already claimed, never a scheduling candidate. Firing here would red the board
+# for every item somebody is actively working.
+case "$(nts)" in *423*) bad "lint: NO-TOUCH-SET must NOT fire on an In progress item" "$(nts)" ;;
+                 *)     ok  "lint: NO-TOUCH-SET is scoped to Ready/Backlog — not items in flight" ;; esac
+# #424 is CLOSED. Nobody needs to pick it up.
+case "$(nts)" in *424*) bad "lint: NO-TOUCH-SET must NOT fire on a CLOSED issue" "$(nts)" ;;
+                 *)     ok  "lint: NO-TOUCH-SET does not fire on a closed issue" ;; esac
 
 # EPIC-UNLINKED-CHILD: the epic's body declares a child the sub-issue graph does not contain, so
 # rollup cannot see it (FS-GG/.github#325). #409 declares #414; only #413 is linked.
@@ -2834,7 +2883,12 @@ b5_out="$(pw5 batch --repo sdd --json 2>/dev/null)"
 b5_err="$(pw5 batch --repo sdd 2>&1 >/dev/null || true)"
 assert_eq "batch: schedules the honestly-declared item, and only it" '["FS.GG.SDD#311"]' "$(jq -c '.' <<<"$b5_out")"
 assert_contains "batch: says WHY it passed over the fenced-only candidate" \
-  "#317 — no 'Paths:' declared (cannot schedule)" "$b5_err"
+  "#317 — no 'Paths:' declared (cannot schedule" "$b5_err"
+# ...and calls it an OMISSION, not a design decision (#496). A fenced-only declaration is invisible to
+# the scheduler, so this item really does declare nothing — and the worker reading this list is the
+# person who can fix it. The sentinel is offered by name, so the fix is a copy-paste either way.
+assert_contains "batch: names the fenced-only candidate as an OMISSION, and offers the sentinel" \
+  "this is an OMISSION" "$b5_err"
 # The fail-open in one line: #317's quote names the very file #311 declares. Had the quote been read,
 # batch would have seen an OVERLAP it could not schedule — instead it must see no declaration at all.
 case "$b5_out" in *317*) bad "batch: never schedules an item on a fabricated touch-set" "$b5_out" ;;

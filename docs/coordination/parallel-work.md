@@ -218,6 +218,34 @@ comma- or space-separated list of **exact paths and directory prefixes**:
 Paths: src/Scene/**, tests/Scene/**, Directory.Packages.props
 ```
 
+#### `Paths: none` — the touch-set-less item, declared (`.github#496`)
+
+Some items genuinely have no touch-set: an epic, a decision item, an investigation whose scope *is*
+the question. They say so **in the declaration**, not in prose:
+
+```
+Paths: none
+```
+
+This does not make the item schedulable — nothing does, without files. What it buys is **intent, in
+a form a machine can read**. Before the sentinel, an epic and a forgotten touch-set rendered
+identically —
+
+```
+.github#416 — no 'Paths:' declared (cannot schedule)     <- an epic. correct.
+.github#419 — no 'Paths:' declared (cannot schedule)     <- somebody forgot. a bug.
+```
+
+— so the distinction the protocol depends on existed only in the filer's head. The recipe *asked* for
+it as prose ("no touch-set: declare at claim time"), and **nothing read prose**. The result: **nine
+items of real work sat on the board looking like work, invisible to every worker who asked for work**,
+while `fsgg-coord lint` reported `0 error(s)`. A gate green on a missing subject — the #266 family, in
+the one surface whose whole job is board health.
+
+So the sentinel exists, and `lint` enforces it: **`NO-TOUCH-SET`** is an **error** for any
+`Ready`/`Backlog` item that declares neither paths nor `Paths: none`. There are exactly two honest
+states, and the tool now knows which one it is looking at.
+
 **This is not a glob language** (FS-GG/.github#273). Each token is matched by *exact equality* or
 *subtree containment*; the only wildcard recognised is a **trailing** `/**` or `/*`, which is
 stripped to leave the directory prefix. A leading `**/`, or a `*` anywhere in the middle, matches
