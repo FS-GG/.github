@@ -2927,17 +2927,15 @@ conflicts_between() {
 
 paths_for_ref() { parse_ref "$1"; paths_of "$R_OWNER" "$R_REPO" "$R_NUM"; }
 
-# The worker holding a live claim on an item, or empty. The MARKER is the lock; the board's `Status`
-# is a projection of it that `claim` writes best-effort and can therefore lag (or fail). Any scheduler
-# decision that asks "is this taken?" must read the marker, never the column.
-live_claim_worker() {  # $1=owner $2=repo $3=num
-  claims_of "$1" "$2" "$3" | jq -r 'map(select(.stale | not)) | .[0].worker // empty'
-}
-
-# The same live claim, carrying its AGE — one comment read for both fields, because the scheduler
-# reads this per candidate and a second `claims_of` would double the REST cost of the hot loop.
+# The worker holding a live claim on an item, WITH the age of that claim. The MARKER is the lock; the
+# board's `Status` is a projection of it that `claim` writes best-effort and can therefore lag (or
+# fail). Any scheduler decision that asks "is this taken?" must read the marker, never the column.
 #
-# `batch` needs the age as well as the holder (#428). "Already claimed" tells a worker to go away;
+# Holder and age come back TOGETHER, in ONE comment read: the scheduler calls this per candidate, so
+# splitting them across two `claims_of` calls would double the REST cost of the hot loop. (It replaces
+# `live_claim_worker`, which returned the holder alone and had no other caller.)
+#
+# `batch` needs the age as much as the holder (#428). "Already claimed" tells a worker to go away;
 # "already claimed, lease frees in ~12m" tells them whether going away is even the right move. The
 # lock already knew this — it simply was not on the line the worker reads.
 live_claim_holder() {  # $1=owner $2=repo $3=num -> "worker<TAB>ageSec" (empty iff no LIVE claim)
@@ -2974,11 +2972,23 @@ lease_window() {  # $1=ageSec (empty, or -1 = unknown) -> a human phrase, never 
 # token on the reserved side of a `⇄` pair is, by construction, one of these. Same-repo only — a
 # `Paths:` token is repo-relative, so the caller has already confined both sides to one repo (see
 # `conflicts_between`'s contract), and this must not widen that.
-claim_reserving() {  # $1=active-claims JSON  $2=owner/repo  $3=token -> "worker<TAB>item<TAB>ageSec"
+#
+# The worker may be EMPTY, and that is a real state, not a gap: `active_claims` also reserves the
+# touch-set of an item the board says is `In progress` with NO claim marker on it. Something is
+# reserving those files and the protocol cannot name it — so the caller must say exactly that rather
+# than dress it up as a holder. There is no lease on a claim that does not exist, and no one to `say`
+# to; advertising "held by — (lease unknown)" would invite a worker to wait for a marker that is never
+# coming.
+# SEPARATED BY US (\x1f), NOT BY TAB, and that is load-bearing. Tab is an IFS *whitespace* character,
+# so `read -r a b c` with IFS=$'\t' silently COLLAPSES a leading empty field: on the markerless case
+# above — where the worker is deliberately empty — `a` would be handed the ITEM and `b` the age, and
+# the item ref would then be printed as the holder's name. A non-whitespace separator preserves empty
+# fields positionally, which is the whole reason the empty worker can be trusted to mean something.
+claim_reserving() {  # $1=active-claims JSON  $2=owner/repo  $3=token -> "worker<US>item<US>ageSec"
   jq -r --arg r "$2" --arg t "$3" '
     [ .[] | select(.repo == $r) | select((.paths // []) | any(. == $t)) ] | first
     | if . == null then empty
-      else "\(.worker // "—")\t\((.repo // "" | sub("^[^/]+/"; "")))#\(.number)\t\(.ageSec // -1)" end' <<<"$1"
+      else "\(.worker // "")\((.repo // "" | sub("^[^/]+/"; "")))#\(.number)\(.ageSec // -1)" end' <<<"$1"
 }
 
 # Every OPEN issue in a repo that could possibly hold a claim, with the body its touch-set is
@@ -3665,9 +3675,19 @@ batch_cmd() {
       rtok="${hit1##*  ⇄  }"
       owner_rec="$(claim_reserving "$active" "$r" "$rtok")"
       if [ -n "$owner_rec" ]; then
-        IFS=$'\t' read -r oworker oitem oage <<<"$owner_rec"
-        skipped="$skipped  $id — overlaps in-flight work held by $oworker on $oitem ($(lease_window "$oage")): $hit1"$'\n'
-        queued="$queued$oworker"$'\t'"$oage"$'\n'
+        # IFS=US, never TAB: an empty leading field must survive the split — see `claim_reserving`.
+        IFS=$'\x1f' read -r oworker oitem oage <<<"$owner_rec"
+        if [ -n "$oworker" ]; then
+          skipped="$skipped  $id — overlaps in-flight work held by $oworker on $oitem ($(lease_window "$oage")): $hit1"$'\n'
+          queued="$queued$oworker"$'\t'"$oage"$'\n'
+        else
+          # RESERVED, BUT BY NOBODY THE PROTOCOL CAN NAME: the board says $oitem is `In progress` and
+          # no marker backs it, so its touch-set is held by someone working outside the protocol. It
+          # is deliberately NOT counted into `queued`: there is no lease to wait out and no worker to
+          # `say` to, and folding it into "queued behind live claims … soonest frees in ~Nm" would
+          # advertise a wait that nothing will ever end. `who` already flags the item; point there.
+          skipped="$skipped  $id — overlaps $oitem, which the board says is In progress with NO claim marker (someone is working outside the protocol — there is no lease to wait out; see: fsgg-coord who): $hit1"$'\n'
+        fi
       else
         # Belt and braces: the reserved token came FROM the claim set, so a miss here means the two
         # went out of step. Report the collision we can prove rather than inventing an owner for it.

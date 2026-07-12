@@ -2725,7 +2725,9 @@ cat >"$FIXTURES/board-starved.json" <<'JSON'
   "nodes":[
     {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":221,"title":"Overlaps a live claim","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/221","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
     {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":222,"title":"Claimed outright","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/222","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
-    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":224,"title":"Overlaps a DEAD holder's claim","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/224","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}}
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":224,"title":"Overlaps a DEAD holder's claim","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/224","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
+    {"status":{"name":"Ready"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":225,"title":"Overlaps a MARKERLESS In progress item","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/225","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
+    {"status":{"name":"In progress"},"phase":null,"blockedBy":null,"content":{"__typename":"Issue","number":226,"title":"In progress, outside the protocol","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/226","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}}
   ]}}}},"rateLimit":{"cost":1,"remaining":4978}}
 JSON
 
@@ -2733,6 +2735,8 @@ seed_issue 221 "Overlaps a live claim"          "src/Starve/Sub/**" "$RND"
 seed_issue 222 "Claimed outright"               "src/Solo/**"       "$RND"
 seed_issue 223 "Holds src/Starve"               "src/Starve/**"     "$RND"
 seed_issue 224 "Overlaps a DEAD holder's claim" "src/Dead/Sub/**"   "$RND"
+seed_issue 225 "Overlaps a MARKERLESS item"     "src/Ghostly/Sub/**" "$RND"
+seed_issue 226 "In progress, outside protocol"  "src/Ghostly/**"    "$RND"   # NO comments = no marker
 
 mk_claim 222 840 kite-z01 fresh | jq -s '.' >"$STORE/comments-222.json"
 mk_claim 223 841 tern-y99 fresh | jq -s '.' >"$STORE/comments-223.json"
@@ -2760,6 +2764,24 @@ assert_contains "#428: an EXPIRED lease is a reap, never a wait" \
   "$starved_err"
 assert_contains "#428: ...and the starved-queue advice says how to collect it" \
   "1 of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo FS.GG.Rendering --apply" "$starved_err"
+
+# A MARKERLESS `In progress` item reserves its touch-set too — `active_claims` is right to, since
+# something is evidently editing those files. But there is no worker to name, no lease to wait out and
+# nobody to `say` to, so it must NOT be dressed up as a holder. "held by — (lease unknown)" would
+# invite a worker to wait for a marker that is never coming, and would put "—" in the holder list.
+assert_contains "#428: a markerless In progress item is not reported as a HOLDER" \
+  "#225 — overlaps FS.GG.Rendering#226, which the board says is In progress with NO claim marker" \
+  "$starved_err"
+assert_contains "#428: ...and it says there is no lease to wait out" \
+  "there is no lease to wait out; see: fsgg-coord who" "$starved_err"
+refute_contains "#428: ...and an unnameable reserver never appears as a holder named '—'" \
+  "held by —" "$starved_err"
+# It reserves, so it must not be scheduled over — but it is NOT a lease, so it must not inflate the
+# queued-behind-claims count either. Three items are queued behind real claims; #225 is not one.
+assert_contains "#428: ...and it is not counted as a lease the worker can wait out" \
+  "3 item(s) are QUEUED BEHIND LIVE CLAIMS held by: ghost-222, kite-z01, tern-y99" "$starved_err"
+assert_eq "#428: ...and the markerless item's files are still RESERVED (never scheduled over)" "[]" \
+  "$(jq -c '.' <<<"$starved_json")"
 
 # The advice must not fire when the worker actually GOT something — that queue is not starved, and a
 # "this queue is BUSY" banner on a successful schedule is noise that trains workers to skip stderr.
