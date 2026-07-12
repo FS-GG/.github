@@ -240,6 +240,27 @@ protect "$WNEST" FS-GG/R main "outer / middle / innermost"
 expect "nested reusable calls produce a nested context — every level's job id is API" \
   0 "ok: every required context is producible" "$WNEST" "$RNEST" FS-GG/R
 
+# An EXPRESSION in a job's `name:` resolves at run time, from values this gate cannot see. Deriving
+# the literal `Build ${{ matrix.os }}` would yield a context that can never match the real one — and
+# the gate would then announce, at exit 1, that the repo is DEADLOCKED and every PR will hang. A
+# confident, alarming, wrong finding is worse than no verdict.
+RE_="$WORK/r-expr"; WE_="$WORK/w-expr"
+mkwf "$RE_/.github/workflows/g.yml" <<'YML'
+name: g
+on: { pull_request: }
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps: [{ run: 'true' }]
+YML
+protect "$WE_" FS-GG/R main "Build ubuntu-latest (ubuntu-latest)"
+expect "an EXPRESSION in a job's \`name:\` is exit 3 — never a false 'your repo is deadlocked'" \
+  3 "contains an expression" "$WE_" "$RE_" FS-GG/R
+
 # =============================================================================================
 # 3. A context produced only on `push` can NEVER report on a PR — the message must say which.
 # =============================================================================================
@@ -305,6 +326,30 @@ WL="$WORK/w-legacy"; mkdir -p "$WL/protection"
 printf '{"required_status_checks":{"contexts":["ghost"]}}' > "$WL/protection/FS-GG__R__main.json"
 expect "the LEGACY \`contexts:\` shape is still audited — it deadlocks identically" \
   1 "REQUIRES the status check 'ghost'" "$WL" "$RN" FS-GG/R
+
+# A workflow that is NOT PR-triggered cannot deadlock a PR, whatever is wrong with it. Deriving its
+# contexts is a convenience — it only sharpens a message — so a broken or unfetchable callee THERE
+# must never cost the gate its verdict on the contexts that DO matter. Here `release.yml` calls a
+# callee that does not exist at its ref; the PR contexts are all fine, and the gate must still say so.
+RNPR="$WORK/r-nonpr-broken"; WNPR="$WORK/w-nonpr-broken"; mkdir -p "$WNPR/refs/main"
+mkwf "$RNPR/.github/workflows/g.yml" <<'YML'
+name: g
+on: { pull_request: }
+jobs:
+  bare:
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+mkwf "$RNPR/.github/workflows/release.yml" <<'YML'
+name: release
+on: { push: { tags: ['v*'] } }
+jobs:
+  publish:
+    uses: FS-GG/.github/.github/workflows/does-not-exist.yml@main
+YML
+protect "$WNPR" FS-GG/R main "bare"
+expect "a broken callee in a NON-PR workflow does not cost the verdict on the PR contexts" \
+  0 "ok: every required context is producible" "$WNPR" "$RNPR" FS-GG/R
 
 RBAD="$WORK/r-unparsable"; mkwf "$RBAD/.github/workflows/g.yml" <<'YML'
 name: g

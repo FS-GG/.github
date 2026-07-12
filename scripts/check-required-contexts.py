@@ -296,6 +296,18 @@ def contexts_of(doc: dict, what: str, wf: Workflows, prefix: str = "", depth: in
         subject = f"{what} [{job_id}]"
         for suffix in matrix_suffixes(job, subject):
             display = f"{prefix}{display_name(job_id, job)}{suffix}"
+            # An expression is resolved at run time, from values this gate cannot see. Deriving the
+            # LITERAL `Build ${{ matrix.os }}` would produce a context that can never match the real
+            # one — and the gate would then report exit 1: "this repo is deadlocked, every PR will
+            # hang". A confident, alarming, WRONG finding is worse than no verdict, so refuse.
+            if "${{" in display:
+                raise GateError(
+                    f"{subject}: the check-run name derives to {display!r}, which contains an "
+                    f"expression. Its real name is decided at run time by values this gate cannot "
+                    f"see, so the context cannot be derived exactly. This gate will not guess: a "
+                    f"guessed name that failed to match would be reported as a deadlocked repo, and "
+                    f"one that matched by luck would be a green verdict over a real deadlock."
+                )
             if "uses" in job:
                 callee = wf.callee(str(job["uses"]), subject)
                 out |= contexts_of(callee, f"{job['uses']}", wf, prefix=f"{display} / ",
@@ -331,10 +343,17 @@ def producible_contexts(root: str, repo: str) -> tuple[set[str], list[str]]:
         else:
             # Not a finding by itself — most workflows are not PR gates. But a required context that
             # matches one of these is a repo that will hang forever, and the message must say so.
+            #
+            # Nothing here may fail the run. This branch exists ONLY to sharpen a message, and a
+            # non-PR workflow cannot deadlock a PR whatever it contains — so an unparsable release.yml,
+            # or an outage fetching a callee that only `push` ever calls, must not cost the gate its
+            # verdict on the contexts that DO matter. Unreachable is caught alongside GateError for
+            # exactly that reason: without it, a flaky fetch for a workflow we are not judging would
+            # surface as exit 2 over a repo whose PR contexts are all provably fine.
             try:
                 non_pr.extend(sorted(contexts_of(doc, rel, wf)))
-            except GateError:
-                pass  # a non-PR workflow we cannot derive cannot deadlock a PR; do not fail on it
+            except (GateError, Unreachable):
+                pass
     return pr_contexts, non_pr
 
 
