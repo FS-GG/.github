@@ -372,10 +372,18 @@ def required_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
             return []  # the branch is not protected: it requires nothing, and that is an answer
         except Forbidden as e:
             raise GateError(
-                f"cannot read {repo}'s branch protection: {e}\nReading required status checks needs "
-                f"`administration: read`. In a reusable-workflow call, the CALLER must grant it — a "
-                f"callee cannot request a permission its caller withheld (#478). Add "
-                f"`administration: read` to the calling job's `permissions:` block."
+                f"cannot read {repo}'s branch protection: {e}\n"
+                f"Reading required status checks needs `administration: read`, and THIS TOKEN DOES "
+                f"NOT HAVE IT.\n"
+                f"Do not try to fix that in a workflow: `administration` is NOT a valid "
+                f"`permissions:` scope for a GITHUB_TOKEN — declaring it is a validation error and "
+                f"the run dies at startup, producing no check run at all (the #478 blind spot). The "
+                f"org's dispatch App does not hold the scope either (#463).\n"
+                f"Run this tool with a token that has admin rights on {repo} (a PAT, or an App "
+                f"installation with `administration: read`). The check that DOES run in CI without a "
+                f"credential is reusable-job-id-coherence.yml, which catches the rename in FS-GG/"
+                f".github before it can reach a receiver. See "
+                f"docs/coordination/reusable-workflow-contract.md."
             ) from e
         except json.JSONDecodeError as e:
             raise GateError(f"{repo}: branch protection was not valid JSON — {e}") from e
@@ -483,10 +491,9 @@ def cli(argv: list[str]) -> int:
     """Guarantee the exit code is a VERDICT, never an accident.
 
     Python exits 1 on any uncaught exception — and 1 is this gate's "a required context can never
-    report", i.e. "this repo is deadlocked". A crash would therefore be dressed up by
-    required-context-coherence.yml as a specific, confident, WRONG claim that somebody's branch
-    protection is broken. "I could not check" must never share a code with "I checked, and it's
-    broken" (#266, #320).
+    report", i.e. "this repo is deadlocked". A crash would therefore be reported as a specific,
+    confident, WRONG claim that somebody's branch protection is broken. "I could not check" must
+    never share a code with "I checked, and it's broken" (#266, #320).
     """
     try:
         return main(argv)

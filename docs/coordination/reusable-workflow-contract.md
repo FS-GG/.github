@@ -28,7 +28,7 @@ page rather than by a repo that stops merging.
 | **`permissions:`** | A callee cannot request a permission its caller did not grant — the token is the **intersection**. GitHub kills the run at *startup*, which is neither red nor green, so it reads as "the gate is present" while it has never once executed. FS.GG.Game's lockfile-sync caller under-granted `packages: read` and **all 119 runs** ended that way. | [`permission-coherence.yml`](../../.github/workflows/permission-coherence.yml) (#478) |
 | **Secrets / feed auth** | A callee that needs a credential the caller never forwarded cannot authenticate. | #482 |
 | **`timeout-minutes`** | A caller **cannot** supply one: `timeout-minutes` is not a legal key on a `uses:` job. An unbounded job in a callee exports GitHub's **360-minute** default into every repo that adopts it, and the receiver has no way to bound it. | [`timeout-coherence.yml`](../../.github/workflows/timeout-coherence.yml) (#541) |
-| **Job ids** | ← **the one this page is really about.** See below. | [`required-context-coherence.yml`](../../.github/workflows/required-context-coherence.yml) (#549) |
+| **Job ids** | ← **the one this page is really about.** See below. | [`reusable-job-id-coherence.yml`](../../.github/workflows/reusable-job-id-coherence.yml) (#549) |
 
 ## A reusable workflow's job ids are API
 
@@ -91,41 +91,71 @@ gh api repos/FS-GG/<repo>/branches/main/protection \
 If any receiver requires `<something> / <the job you are renaming>`, the rename must be sequenced:
 land the receiver's protection change first, or do not rename it.
 
-## What is asserted, and what is still remembered
+## What asserts it
 
-[`required-context-coherence.yml`](../../.github/workflows/required-context-coherence.yml) is a
-**reusable** gate that a receiver calls. It reads its **own** branch protection and asserts that
-every required context is one its `pull_request` workflows can actually produce — deriving the
-producible set **statically**, from committed YAML, including the nested `caller / callee` names.
-It catches the rename, and it catches a plain typo in a protection setting for free (a misspelled
-required context is indistinguishable from a renamed one, and both deadlock identically).
+[`reusable-job-id-coherence.yml`](../../.github/workflows/reusable-job-id-coherence.yml) runs on
+every PR **to this repo**. For each workflow that declared `on: workflow_call` at the merge-base, it
+asserts that **every context name it published then, it still publishes now** — catching all four
+ways to break a caller:
 
-**It is a diagnostic, not a preventive.** It runs in the receiver, so it fires on the receiver's
-next PR — turning a silent forever-pending check into a named red that says which job was renamed.
-It does **not** stop the rename from merging here.
+| Change | Breaks a caller? |
+|---|---|
+| Rename a job **id** | **yes** |
+| Rename, add, or remove a job's **`name:`** (it overrides the id as the published context) | **yes** |
+| Delete a job | **yes** |
+| Delete the workflow, or remove `on: workflow_call` | **yes** — every name it published is gone |
+| **Add** a job | no — nobody can require a context that did not exist |
+| Edit a job's body (steps, timeout, permissions) | no — the context name is unchanged |
 
-Why not: reading required status checks needs `administration: read`, and a workflow's
-`GITHUB_TOKEN` carries **no rights in any repo but its own**. A gate in `FS-GG/.github` therefore
-**cannot** read FS.GG.Audio's protection — not for want of trying, but structurally. Each repo reads
-its own, with its own token, granting the scope in its own caller; that is self-service, and needs
-no org-admin change. Closing the preventive half needs a credential that does not exist today (a
-GitHub App with org-wide `administration: read`), and is filed separately.
+It is **loud, not locked**. A rename may be exactly what you want; it is still breaking, and it must
+be **sequenced** — update the receivers' branch protection *first*. To proceed deliberately, add the
+`reusable-job-id:breaking` label, or put `reusable-job-id: breaking` on a line in the PR body. That
+is the same explicit opt-out [`architecture-map.yml`](../../.github/workflows/architecture-map.yml)
+uses, and its purpose is the same: to make breaking a contract *a decision somebody made* rather than
+an omission nobody noticed.
 
-Until then, the rule above is **remembered, not enforced**, on the producing side — which is exactly
-the state this page exists to make uncomfortable.
+## Why the check is here, and not in the receiver
 
-## Adopting the gate
+#549 asked for the mirror-image gate: have each repo read its own
+`branches/main/protection` and assert every required context is actually produced. **That check
+cannot run in GitHub Actions — by anyone, in any repo.**
 
-```yaml
-# <receiver>/.github/workflows/gate.yml
-jobs:
-  required-contexts:
-    permissions:
-      contents: read
-      administration: read      # required: protection lives behind the administration API, and a
-                                # callee cannot request a permission its caller withheld (#478)
-    uses: FS-GG/.github/.github/workflows/required-context-coherence.yml@main
+- The protection endpoint requires **`administration: read`**.
+- **`administration` is not a valid `permissions:` scope for a workflow's `GITHUB_TOKEN`.**
+  Declaring it is a *workflow validation error*: the run dies at **startup**, produces **no check
+  run at all**, and therefore shows as neither red nor green — the same
+  [#478](https://github.com/FS-GG/.github/issues/478) blind spot that hid 119 dead `lockfile-sync`
+  runs. (#549's own first attempt shipped exactly this, and was caught only by reading the
+  *workflow-run* list rather than the *check-run* list.)
+- The org's **dispatch App does not hold the scope either**. [#463](https://github.com/FS-GG/.github/issues/463)
+  learned this the hard way: `coordination-propagate`'s protection probe returned `403 Resource not
+  accessible by integration` on every receiver, fell through to the fail-closed arm, and stopped the
+  kit landing anywhere. It was rewritten to ask the *pull request* instead of branch protection —
+  and its code still carries the comment *"We deliberately cannot see branch protection (no
+  `administration: read` — that is the whole point)."*
+
+So the gate asks a question that needs **no credential**, and it asks it at the **source**: on the PR
+that would cause the outage, rather than in the victim's repo afterwards. That is strictly better —
+it *prevents* the deadlock instead of *explaining* it.
+
+## The verifier that still exists
+
+[`scripts/check-required-contexts.py`](../../scripts/check-required-contexts.py) does implement
+#549's original question: point it at a repo and it proves every required status check is a context
+some `pull_request` workflow can produce, deriving the producible set statically from committed YAML
+(job `name:` else id; `<caller> / <callee>` nested to any depth; matrix suffixes). It also catches a
+plain **typo** in a protection setting for free — a misspelled required context is indistinguishable
+from a renamed one, and both deadlock identically.
+
+It needs an **admin token**, so it is a tool a person runs, not a gate CI runs:
+
+```sh
+python3 scripts/check-required-contexts.py --repo FS-GG/FS.GG.Audio --root <a checkout of it>
 ```
 
-Grant `administration: read` in the **caller**. Without it the gate has **no verdict** (exit 3) —
-never a green one.
+Its fixture — [`tests/required-contexts/`](../../tests/required-contexts/) — runs on every PR, so the
+tool cannot rot, and its headline leg *is* the outage: FS.GG.Audio's real `gate.yml` against this
+repo's real `lock-range-coherence.yml` with the job renamed, asserting Audio deadlocks.
+
+Wiring it into CI is blocked on a credential the org does not have (a GitHub App with
+`administration: read` on the receivers). That is filed separately.

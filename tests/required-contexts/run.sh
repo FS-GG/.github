@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Fixture for scripts/check-required-contexts.py (.github#549, epic #266).
 #
-# required-context-coherence.yml is a REUSABLE workflow: it runs in the receivers' repos, not here,
-# so nothing in this repo would otherwise ever execute this script. Per epic #266's ratified rule,
-# A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE — so the fixture drives it against the shapes
-# the org actually has, and asserts BOTH directions.
+# check-required-contexts.py cannot be wired into CI — reading branch protection needs
+# `administration: read`, which is not a valid GITHUB_TOKEN `permissions:` scope and which the org's
+# dispatch App does not hold either (.github#463). It is therefore an ADMIN-RUN VERIFIER, and a tool
+# nothing runs is a tool that rots. Per epic #266's ratified rule, A GATE THAT CANNOT FAIL ON ITS
+# SUBJECT IS NOT A GATE — so this fixture drives it against the shapes the org actually has, on every
+# PR that touches it, and asserts BOTH directions.
+#
+# The gate that DOES run in CI, without any credential, is reusable-job-id-coherence.yml
+# (tests/reusable-job-ids/): it catches the rename here, on the PR that would cause the outage.
 #
 # Offline. `gh` is stubbed on PATH and FAILS LIKE THE REAL ONE — a 404 is an answer ("not
 # protected"), a 403 is a permission a human must grant, and a rate limit is neither — so the
@@ -289,10 +294,10 @@ expect "an UNPROTECTED branch requires nothing — exit 0, and it says so withou
 
 # 403 is a PERMISSION a human must grant. Retrying will not help, and it must never read as green.
 WF="$WORK/w-forbidden"; mkdir -p "$WF/protection"; : > "$WF/protection/FS-GG__R__main.forbidden"
-expect "a 403 on protection is exit 3, and names the permission the CALLER must grant" \
-  3 "administration: read" "$WF" "$RN" FS-GG/R
-expect "...and it explains that a callee cannot request what its caller withheld (#478)" \
-  3 "a callee cannot request a permission its caller withheld" "$WF" "$RN" FS-GG/R
+expect "a 403 on protection is exit 3 — the token lacks admin rights" \
+  3 "THIS TOKEN DOES NOT HAVE IT" "$WF" "$RN" FS-GG/R
+expect "...and it does NOT advise the impossible fix: \`administration\` is not a valid workflow scope" \
+  3 "is NOT a valid \`permissions:\` scope" "$WF" "$RN" FS-GG/R
 
 # A rate limit / outage is RETRYABLE — never green, never a finding about somebody's protection.
 WR="$WORK/w-unreachable"; mkdir -p "$WR/protection"; : > "$WR/protection/FS-GG__R__main.unreachable"
@@ -362,23 +367,40 @@ expect "an unparsable workflow is exit 3 — not a finding about a required cont
   3 "not parsable as YAML" "$WN" "$RBAD" FS-GG/R
 
 # =============================================================================================
-# 5. The gate's own shipped surface.
+# 5. WHY THIS TOOL IS NOT WIRED TO A WORKFLOW — and the regression guard that keeps it that way.
+#
+# This script needs to read `branches/<b>/protection`, which requires `administration: read`. That
+# is NOT a valid `permissions:` scope for a workflow's GITHUB_TOKEN: declaring it is a workflow
+# validation error, and the run dies at STARTUP — producing no check run at all, so it shows as
+# neither red nor green (the #478 startup_failure blind spot). #549's first attempt shipped exactly
+# that and was caught only by reading the workflow-run list rather than the check-run list.
+#
+# The org's dispatch App does not hold the scope either — .github#463 learned this when
+# coordination-propagate's protection probe 403'd on every receiver and had to be rewritten to ask
+# the pull request instead.
+#
+# So no workflow here may declare it, ever. The preventive gate that CAN run without a credential is
+# reusable-job-id-coherence.yml (tests/reusable-job-ids/); this script stays an admin-run verifier.
 # =============================================================================================
-if python3 - "$REPO_ROOT/.github/workflows/required-context-coherence.yml" <<'PY'
-import sys, yaml
-d = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-on = d.get("on", d.get(True))
-assert "workflow_call" in on, "required-context-coherence.yml is not a reusable workflow"
-perms = d.get("permissions") or {}
-assert perms.get("administration") == "read", f"the callee must DECLARE administration: read: {perms}"
-assert perms.get("contents") == "read", f"the callee must declare contents: read: {perms}"
-body = "".join(str(s.get("run", "")) for j in d["jobs"].values() for s in j.get("steps", []))
-assert "check-required-contexts.py" in body, "the gate workflow never runs the gate"
-for jid, j in d["jobs"].items():
-    assert isinstance(j.get("timeout-minutes"), int), f"job {jid} does not bound itself (#541)"
+if python3 - "$REPO_ROOT" <<'PY'
+import glob, os, sys, yaml
+root = sys.argv[1]
+offenders = []
+for path in sorted(glob.glob(os.path.join(root, ".github/workflows/*.yml"))):
+    doc = yaml.safe_load(open(path, encoding="utf-8")) or {}
+    scopes = [doc.get("permissions")] + [j.get("permissions") for j in (doc.get("jobs") or {}).values()
+                                         if isinstance(j, dict)]
+    for s in scopes:
+        if isinstance(s, dict) and "administration" in s:
+            offenders.append(os.path.basename(path))
+assert not offenders, (
+    f"{sorted(set(offenders))} declare `permissions: administration:`, which is not a valid "
+    f"GITHUB_TOKEN scope. The workflow will not validate and the run will die at startup — "
+    f"producing NO check run, so it reads as neither red nor green."
+)
 PY
-then ok "the shipped required-context-coherence.yml is reusable, declares administration+contents: read, bounds its jobs, and runs the gate"
-else bad "the shipped required-context-coherence.yml is not the shape this fixture asserts"
+then ok "no workflow declares \`permissions: administration:\` — the invalid scope that startup_failures a run, and cannot be reintroduced"
+else bad "a workflow declares \`permissions: administration:\` — it will die at startup and show as neither red nor green"
 fi
 
 echo

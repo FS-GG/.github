@@ -1,20 +1,28 @@
-# The failure legs of the required-context coherence gate (.github#549, epic #266).
+# The failure legs of the required-context verifier (.github#549, epic #266).
 #
-# required-context-coherence.yml is a REUSABLE workflow: it runs in the receivers' repos, not here,
-# so nothing in this repo would otherwise ever execute scripts/check-required-contexts.py. A gate
-# whose only exercise is in somebody else's CI is a gate nobody can change safely — and per epic
-# #266's ratified rule, A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE.
+# scripts/check-required-contexts.py answers the question #549 asked: is every context a repo's
+# branch protection REQUIRES one that some `pull_request` workflow can actually produce? It works —
+# it is validated below against FS.GG.Audio's real gate.yml and this repo's real
+# lock-range-coherence.yml — but it CANNOT be wired into CI, by anyone, in any repo:
 #
-# The headline leg is the outage itself, built from the real files: FS.GG.Audio's actual gate.yml
-# caller, THIS repo's actual lock-range-coherence.yml callee, and Audio's actual required contexts —
-# with the callee's `lock-ranges:` job renamed. That rename is a commit to THIS repo, and the fixture
-# asserts it stops every PR in Audio from merging. It is the closest thing to a live tripwire on the
-# coupling: a PR here that renames the job breaks this fixture, in this repo, before it can break
-# Audio.
+#   - reading `branches/<b>/protection` requires `administration: read`;
+#   - `administration` is NOT a valid `permissions:` scope for a workflow's GITHUB_TOKEN — declaring
+#     it is a validation error and the run dies at STARTUP, producing no check run at all, so it
+#     shows as neither red nor green (the #478 blind spot);
+#   - and the org's dispatch App does not hold the scope either, which .github#463 already learned:
+#     coordination-propagate's protection probe 403'd on every receiver and was rewritten to ask the
+#     pull request instead.
 #
-# It also asserts both directions of the cry-wolf risk: a third-party app's required context is
-# SKIPPED rather than flagged (the gate cannot see that producer), while a branch that is simply
-# unprotected is a clean exit 0 that does not pretend the repo's gates are green.
+# So it stays an ADMIN-RUN VERIFIER — anyone holding a token with admin rights can point it at a repo
+# and get a verdict — and the gate that actually protects the receivers is the credential-free
+# reusable-job-id-coherence.yml, which catches the rename HERE, on the PR that would cause it.
+#
+# A tool nothing runs is a tool that rots, so this selftest runs its fixture on every PR that touches
+# it. Per epic #266's ratified rule: A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE.
+#
+# The fixture's headline leg is the outage itself: Audio's real caller against this repo's real
+# callee, with the callee's `lock-ranges:` job renamed — and it asserts Audio deadlocks. Its `paths:`
+# therefore include lock-range-coherence.yml, so a PR here that renames that job breaks this fixture.
 #
 # Static: no SDK, no restore, no network. `gh` is stubbed and fails like the real one — a 404 is an
 # answer ("not protected"), a 403 is a permission a human must grant, a rate limit is neither.
@@ -25,7 +33,6 @@ on:
     paths:
       - "scripts/check-required-contexts.py"
       - "tests/required-contexts/**"
-      - ".github/workflows/required-context-coherence.yml"
       - ".github/workflows/required-context-coherence-selftest.yml"
       # The fixture pins the REAL callee: renaming a job in it must break this fixture, here.
       - ".github/workflows/lock-range-coherence.yml"
@@ -34,7 +41,6 @@ on:
     paths:
       - "scripts/check-required-contexts.py"
       - "tests/required-contexts/**"
-      - ".github/workflows/required-context-coherence.yml"
       - ".github/workflows/required-context-coherence-selftest.yml"
       - ".github/workflows/lock-range-coherence.yml"
   workflow_dispatch:

@@ -1,0 +1,161 @@
+# reusable-job-id-coherence — a job id in a reusable workflow is half of somebody else's required
+# status check, so renaming one is a breaking contract change, not a refactor.
+#
+# .github#549, epic #266. GitHub names a called workflow's check `<caller job> / <callee job>`.
+# FS.GG.Audio's branch protection requires `lock-ranges / lock-ranges` — and the right-hand half of
+# that string is a job id in THIS repo's lock-range-coherence.yml, tracked at the moving ref @main.
+# Rename it and Audio's required context is never reported again: every PR there hangs at "Expected
+# — waiting for status to be reported", with `enforce_admins: true` and no bypass, and no commit in
+# Audio having changed.
+#
+# WHY THIS GATE RUNS HERE, AND NOT IN THE RECEIVER. #549 asked for the mirror-image check — read each
+# repo's `branches/main/protection` and assert every required context is produced. That is NOT
+# IMPLEMENTABLE in GitHub Actions, by anyone: the protection endpoint needs `administration: read`,
+# which is not a valid `permissions:` scope for a workflow's GITHUB_TOKEN (declaring it is a
+# validation error — the run never starts), and the org's dispatch App does not hold it either.
+# .github#463 already learned this: coordination-propagate's protection probe 403'd on every receiver
+# and had to be rewritten to ask the pull request instead.
+#
+# So this gate asks a question that needs no credential — and it is the better question, because it
+# is asked on the PR that would CAUSE the outage rather than in the victim's repo afterwards. The
+# receiver-side verifier still exists (scripts/check-required-contexts.py, exercised by
+# required-context-coherence-selftest.yml) and can be run by anyone holding an admin token; wiring it
+# into CI is blocked on a credential that does not exist today, and is filed separately.
+#
+# LOUD, NOT LOCKED. A rename may be exactly what you want. It is still breaking, and it must be
+# sequenced — land the receivers' protection change first. So this offers the same explicit opt-out
+# as architecture-map.yml: breaking a contract becomes a decision somebody made, rather than an
+# omission nobody noticed.
+name: reusable-job-id-coherence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check-reusable-job-ids.py"
+      - "tests/reusable-job-ids/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reusable-job-id-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the reusable-job-ids fixture (no network)
+        run: bash tests/reusable-job-ids/run.sh
+
+  job-ids-stable:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0     # the merge-base must be reachable
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Assert no reusable workflow lost a context name it used to publish
+        id: check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Compare against the MERGE-BASE, not the base-branch tip: the change set must be this
+          # PR's own, independent of how far main has moved since the branch forked. Using BASE_SHA
+          # directly would attribute a rename that landed on main after the fork to this PR (#375).
+          base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          rc=0
+          out="$(python scripts/check-reusable-job-ids.py --root . --base "$base" 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      - name: 'OK: every published context name survives'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "reusable-job-id-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a reusable workflow lost a context name — this breaks its callers'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        env:
+          # Env-passed, never interpolated into the run body — the org's uniform anti-injection
+          # pattern (cf. architecture-map.yml, feed-coherence.yml).
+          PR_BODY: ${{ github.event.pull_request.body }}
+          OPT_OUT_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'reusable-job-id:breaking') }}
+        run: |
+          set -euo pipefail
+
+          # The opt-out. A rename may be exactly what you want — but it is breaking, and it must be
+          # sequenced. Saying so out loud is the whole point: it turns an invisible outage into a
+          # decision with a name on it.
+          if printf '%s' "$PR_BODY" | grep -qiE '^[[:space:]]*reusable-job-id:[[:space:]]*breaking'; then
+            echo "✓ Opt-out: the PR body declares 'reusable-job-id: breaking'." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=reusable-job-id-coherence: acknowledged breaking change::A reusable workflow's published context name changed. Receivers requiring it must have their branch protection updated FIRST, or their PRs will hang."
+            exit 0
+          fi
+          if [ "$OPT_OUT_LABEL" = "true" ]; then
+            echo "✓ Opt-out: the 'reusable-job-id:breaking' label is present." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=reusable-job-id-coherence: acknowledged breaking change::A reusable workflow's published context name changed. Receivers requiring it must have their branch protection updated FIRST, or their PRs will hang."
+            exit 0
+          fi
+
+          {
+            echo "### reusable-job-id-coherence: this renames somebody else's required check"
+            echo
+            echo "A reusable workflow no longer publishes a context name it used to. GitHub names a"
+            echo 'called workflow'"'"'s check `<caller job> / <callee job>`, so a receiver whose branch'
+            echo "protection **requires** that context will never see it reported again — every pull"
+            echo "request there hangs at *\"Expected — waiting for status to be reported\"*, forever,"
+            echo "with **no commit in that repo having changed**."
+            echo
+            echo '**FS.GG.Audio requires `lock-ranges / lock-ranges` today**, with `enforce_admins:'
+            echo 'true` and no required reviews — so there is no bypass, and recovery needs an admin.'
+            echo
+            echo "This may be exactly what you intend. It is still a **breaking contract change**, and"
+            echo "it has to be sequenced: **update the receivers' branch protection first**, then land"
+            echo "this. To proceed deliberately, add the \`reusable-job-id:breaking\` label, or put"
+            echo "\`reusable-job-id: breaking\` on a line in the PR body."
+            echo
+            echo "See [the reusable-workflow contract](docs/coordination/reusable-workflow-contract.md)."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=reusable-job-id-coherence: a reusable workflow lost a published context name::This renames half of a receiver's required status check and will hang every PR in that repo. Sequence it, or acknowledge it explicitly. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a file a human must fix'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### reusable-job-id-coherence: no verdict"
+            echo
+            echo "A workflow would not parse, the merge-base could not be read, or the gate compared"
+            echo "**nothing** — and examining nothing is a failure to audit, not a clean audit."
+            echo "Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=reusable-job-id-coherence: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=reusable-job-id-coherence: inconclusive::check-reusable-job-ids.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
