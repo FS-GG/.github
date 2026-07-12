@@ -40,8 +40,10 @@ Kept current — the system as built, and the machinery that keeps it coherent.
 - [Build config](build/) — the org-shared .NET build configuration (ADR-0006) and how
   consumer repos restore it.
 - [Reports](reports/) — dated review/analysis artifacts, including the
-  [2026-07-02 code-quality & architecture review](reports/2026-07-02-code-quality-architecture-review.md)
-  and the [2026-06-30 project-management topologies analysis](2026-06-30-project-management-topologies-adr-registry-projects-v2-analysis.md).
+  [2026-07-02 code-quality & architecture review](reports/2026-07-02-code-quality-architecture-review.md),
+  the [2026-06-30 project-management topologies analysis](2026-06-30-project-management-topologies-adr-registry-projects-v2-analysis.md),
+  and the [2026-07-12 up-front design practices report](reports/2026-07-12-up-front-design-practices-and-the-proposal-gap.md)
+  (what feeds the ADR pipeline, and the stale `Blocked by` premise in ADR-0034).
 
 The current recommendation is to stop treating the UI runtime, lifecycle
 workflow, and governance system as one self-hosting platform. The rendering
