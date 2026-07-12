@@ -1,0 +1,56 @@
+<!--
+  The typed coordination engine's executable edge (ADR-0034 Phase 2).
+
+  IT IS NOT PACKAGED, AND THAT IS DELIBERATE. Phase 3 owns distribution — the `kit:` row becomes a
+  shim that resolves this from `.config/dotnet-tools.json`, which is a `kit:` schema change and a
+  `schemaVersion` bump on `registry/repos.yml` (a contract-change under ADR-0015). Adding PackAsTool
+  here would put a package identity, a release workflow, and a Renovate datasource into the world for
+  a thing nothing consumes yet — which is the same failure the ADR refuses for `repos.yml`: putting
+  the registry ahead of reality.
+
+  In Phase 2, `.github` builds this FROM SOURCE and the bash client shells out to it. That asymmetry
+  is what breaks the publish cycle: a broken feed cannot prevent the coordination tool from being
+  fixed, because the repo that fixes it never depends on the feed.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <AssemblyName>fsgg-coord-engine</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+
+    <!-- ADR-0032. The F# SDK injects its OWN FSharp.Core from the library-packs folder, and that
+         .nupkg is not byte-identical to the one nuget.org serves at the same id+version — so a lock
+         file's contentHash becomes a function of the SDK patch level of whichever machine wrote it,
+         and a lock written locally then fails NU1403 in CI on a correct lock file. The org-shared
+         dist/dotnet/Directory.Build.props carries this fix; .github does not import its own shared
+         build config (#609), so every project here sets it by hand. -->
+    <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
+    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true'">true</RestoreLockedMode>
+
+    <!-- The engine is invoked once per scheduling call, on every worker, in a fan-out. Startup cost
+         is the whole of its runtime cost, so it takes no dependency it does not need. No
+         Spectre.Console here: JSON is the contract, and the text projection is a handful of printfn. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Snapshot.fsi" />
+    <Compile Include="Snapshot.fs" />
+    <Compile Include="Options.fsi" />
+    <Compile Include="Options.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+</Project>

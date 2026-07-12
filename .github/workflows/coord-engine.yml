@@ -1,0 +1,103 @@
+# coord-engine — the typed engine's executable edge, and the SHADOW (ADR-0034, Phase 2).
+#
+# Phase 1 built a pure core that nothing consumed. Phase 2 gives it a mouth and stands it next to the
+# incumbent: `fsgg-coord --engine shadow` runs BOTH engines on every scheduling call, returns BASH'S
+# answer, and logs the disagreement. Bash stays authoritative until that log has been empty across the
+# live fleet for three consecutive days. Nothing is cut over on faith — this tool schedules the work
+# that rewrites this tool, and a big-bang flip would be betting the queue on an untested rule.
+#
+# WHAT THIS GATE IS ACTUALLY FOR, and it is not "does the engine compile".
+#
+# The shadow is, by design, a component that does NOTHING when it goes wrong: it may not change bash's
+# answer, and it may not red a receiver's CI when the engine is absent. Those two rules are correct,
+# and together they describe a thing that fails SILENTLY — which is epic #266 ("coherence gates that
+# fail open: a missing subject reports green", 51 children) rebuilt inside the very mechanism meant to
+# retire it. A shadow nobody can prove ran is not evidence, and "zero divergence" is the most
+# reassuring possible way to say "we never looked".
+#
+# So this gate exists to make the shadow PROVE it ran. It builds the engine, sets
+# FSGG_SHADOW_REQUIRE_ENGINE=1 — which turns "no engine" from a skip into a failure inside the fixture
+# — and the fixture then asserts that the comparison was non-empty. The engine's absence cannot be the
+# reason this gate is green.
+name: coord-engine
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/fsgg-coord/**"
+      - "scripts/fsgg-coord"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/coord-engine.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/fsgg-coord/**"
+      - "scripts/fsgg-coord"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/coord-engine.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coord-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Locked restore. A silent version SUBSTITUTION fails here rather than quietly changing what the
+      # tests ran against (ADR-0006).
+      - name: Restore (locked)
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet restore tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --locked-mode
+
+      - name: Build the engine
+        run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Test — the wire contract, and the residue rule
+        run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
+
+      # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A runner that discovers nothing exits 0.
+      - name: Non-vacuity — the run must have executed tests
+        run: |
+          set -euo pipefail
+          out="$(dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj --no-build -c Release 2>&1)"
+          printf '%s\n' "$out"
+          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
+          if [ "${passed:-0}" -lt 20 ]; then
+            echo "::error title=coord-engine: the suite audited nothing::Only ${passed:-0} tests ran. The codec is a fail-open surface and these are the assertions that hold it shut; a green gate over an untested one is the bug this engine exists to end (#266)."
+            exit 1
+          fi
+          echo "coord-engine: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
+
+      # THE SHADOW MUST PROVE IT RAN. `FSGG_SHADOW_REQUIRE_ENGINE=1` turns a missing engine from the
+      # skip it legitimately is in a receiver into a FAILURE here — because .github is the one place
+      # that builds the engine from source, so here, and only here, its absence is a defect rather
+      # than a fact. The fixture then asserts the shadow compared a non-zero number of verdicts, that
+      # it did not change bash's answer by a single byte, and that `divergence` refuses to call an
+      # empty log green.
+      - name: The shadow — it ran, it compared, and it changed nothing
+        env:
+          FSGG_SHADOW_REQUIRE_ENGINE: "1"
+          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
+        run: bash tests/fsgg-coord/run.sh

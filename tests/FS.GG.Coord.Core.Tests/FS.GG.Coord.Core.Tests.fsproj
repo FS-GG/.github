@@ -33,6 +33,7 @@
     <Compile Include="TouchSetTests.fs" />
     <Compile Include="BlockerTests.fs" />
     <Compile Include="SchedulabilityTests.fs" />
+    <Compile Include="BatchTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -471,6 +471,66 @@ fix.
 **Exit:** zero divergence across the live fleet for **three consecutive days** under normal
 fan-out.
 
+#### Phase 2 as built — what shipped, and the two decisions it forced
+
+The shadow harness landed; `FS.GG.Coord.GitHub` (the `Result`-typed IO adapter) did **not**, and is
+deliberately deferred. Nothing in shadow mode needs it: the engine reads *nothing*. It is required
+only for the Phase 3 flip, when the engine must fetch its own state, and building it early would have
+put an unused adapter on the live path for no gain.
+
+**What shipped:** `FS.GG.Coord.Cli` (`fsgg-coord-engine decide` — a board-state snapshot on stdin, a
+typed verdict per candidate on stdout); `Batch` in the core — the greedy fold `next`/`take`/`batch`
+all delegate to, which `schedulable` alone cannot express because a chosen item *reserves* against the
+candidates after it; `fsgg-coord --engine shadow`; and `fsgg-coord divergence`.
+
+**Deviation from the plan above, stated plainly:** this phase was specified as shipping
+`--engine=fs` "behind a flag, defaulting off". It does not. An `--engine=fs` that did not actually
+make the engine authoritative would be an option that is accepted and ignored — indistinguishable,
+from the caller's side, from one that was honoured, which is the exact fail-open this project exists
+to end. Making it *genuinely* authoritative is the flip. So `--engine fs` is **refused**, with a
+message naming what it is waiting for. It lands in Phase 3, where it belongs.
+
+**Decision 1 — the two engines check in a different ORDER, and both orders are defensible.**
+
+Bash filters blocked candidates in bulk *before* it ever reads a lock, and reads the lock *before* the
+touch-set. The typed core does the reverse on both counts, deliberately: `Schedulability.fs` argues
+that "nobody can *claim* this item" (no touch-set) is a stronger and cheaper statement than "somebody
+already *has*", and that a worker told the second when the first is also true fixes the wrong thing.
+
+So for an item that is **both blocked and held**, bash says *"blocked by X"* and the core says
+*"held by W"*. Both are true. Neither engine is wrong. This is why `divergence` classifies on two
+axes and reports them apart:
+
+| Class | Meaning | Blocks the flip? |
+|---|---|---|
+| **OUTCOME** | The engines disagree about whether an item may be **handed out**. | **Yes.** This is how two workers end up in one file. |
+| **REASON** | They agree it is unschedulable and name a **different fact**. | No. A decision to record. |
+
+A single counter would have buried the first in the second, and "zero divergence for three
+consecutive days" could never have gone green — for something that was never a bug. **The choice of
+which order survives is a Phase 3 decision, taken with the live frequency data the shadow is now
+collecting.** It is recorded here rather than merged silently, because #485 exists precisely because
+five predicates were merged silently.
+
+**Decision 2 — the core's order is not free, and the shadow now measures what it costs.**
+
+Bash's order is *cheaper*, and that is not an accident. Blocker state arrives free in the board scan,
+so short-circuiting on it means a blocked candidate never costs an issue-body read. The core's order
+reaches the touch-set first, so it *needs* that body. A shadowed run therefore pays one body read and
+one marker read per blocked candidate — REST only, never the 5,000-pt/hr GraphQL budget that dies
+first under fan-out, and only when the shadow is switched on.
+
+Handing the engine an empty body instead would have fabricated a `NoTouchSet` verdict that neither
+engine holds — a manufactured divergence, which is worse than no shadow at all. So the shadow pays,
+and **counts** (`divergence` reports `extraReads`). If that number turns out to be large in practice,
+it is a real argument for bash's order, and it will be made with evidence rather than taste.
+
+**A modelling wart found in passing.** `Types.Blocker` requires a `Ref` even when its state is
+`BlockerUnparseable` — but the whole meaning of that case is that the text *is not a ref*. It is
+cosmetic today (an unparseable blocker still blocks, in both engines, which is the only property that
+decides anything) and it is not worth a Phase 1 type change mid-shadow. It should become
+`Ref option` at the flip.
+
 ### Phase 3 — flip *(days)*
 
 - `--engine=fs` becomes the default; `--engine=bash` remains as the escape hatch.

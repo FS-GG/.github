@@ -1,8 +1,13 @@
 <Project>
-  <!-- Central Package Management for the .github repo. The repo is docs/registry/scripts;
-       the only .NET project is scripts/NewSddWorkspace (the workspace scaffolder). Pins
-       track the org-common set: FSharp.Core 10.1.301 and Spectre.Console 0.57.2 (the version
-       verified in FS.GG.SDD / FS.GG.Governance — see the spectre-console skill, "Version scope"). -->
+  <!-- Central Package Management for the .github repo. The repo is mostly docs/registry/scripts, but
+       it is also a PRODUCER: scripts/NewSddWorkspace (the workspace scaffolder, a dotnet tool since
+       ADR-0016) and, since ADR-0034, the typed coordination engine — FS.GG.Coord.Core (the domain),
+       FS.GG.Coord.Cli (its executable edge), and their test projects. Pins track the org-common set:
+       FSharp.Core 10.1.301 and Spectre.Console 0.57.2 (the version verified in FS.GG.SDD /
+       FS.GG.Governance — see the spectre-console skill, "Version scope").
+
+       Note the engine takes NO Spectre dependency: it is invoked once per scheduling call on every
+       worker in a fan-out, so its startup cost IS its runtime cost. JSON is its contract. -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
