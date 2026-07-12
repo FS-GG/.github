@@ -132,6 +132,82 @@ gh api "repos/FS-GG/<repo>/commits/$SHA/check-runs" --paginate --slurp \
 [ "$RC" = 0 ] && ok "paginated read with a multi-line quoted jq is NOT flagged" \
               || bad "multi-line quoted jq must not be flagged — logical-line joining is broken (got rc=$RC)" "$OUT"
 
+# 7b. The line number must be the REAL line. A blank line inside the fence is consumed by the
+#     logical-line splitter and emitted as nothing; a caller that advances its own counter from the
+#     emitted commands loses those lines, and every finding after the first blank line lands on the
+#     wrong one. Caught reviewing this gate: it reported :196 and :360 for commands genuinely on
+#     lines 197 and 361. A lint that points at the wrong line is one workers stop believing.
+gate_on line-number-after-blank '# kit
+
+```sh
+# a comment
+
+# a blank line above me, and another below
+
+gh api repos/FS-GG/<repo>/issues/<parent>/sub_issues --jq '"'"'.[]'"'"'
+```'
+# The command sits on line 8 (1:`# kit` 2:blank 3:fence 4:comment 5:blank 6:comment 7:blank 8:cmd).
+# Two blank lines precede it inside the fence, so the pre-fix splitter reported it as line 6.
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'SKILL.md:8:'; then
+  ok "the finding names the REAL line (8) across blank lines in the fence"
+else
+  bad "blank lines in a fence must not shift the reported line; expected SKILL.md:8 (got rc=$RC)" "$OUT"
+fi
+
+# 7c. `gh api` POSTs when a body flag is present, with no `-X` anywhere: gh's method default is
+#     "GET normally, and POST if any parameters were added". `fsgg-coord child` creates a sub-issue
+#     edge with exactly this shape, and intra-repo-parallel-work documents it. Reading it as a GET
+#     fires the collection backstop on a WRITE.
+gate_on implicit-post '# kit
+
+```sh
+gh api "repos/FS-GG/<repo>/issues/<parent>/sub_issues" -F sub_issue_id=$cid
+```'
+[ "$RC" = 0 ] && ok "an implicit POST (-F, no -X) is a WRITE, not an unpaginated list read" \
+              || bad "-F with no -X is a POST; flagging it is a false positive (got rc=$RC)" "$OUT"
+
+# 7d. The remedy, done wrong. `--slurp` cannot be combined with `--jq` — gh refuses the command. It
+#     carries `--paginate`, so a naive pagination check passes it, and it then dies in the worker's
+#     terminal. The recipe now TELLS people to reach for --slurp, so the gate owns this trap.
+gate_on slurp-with-jq '# kit
+
+```sh
+gh api "repos/FS-GG/<repo>/commits/$SHA/check-runs" --paginate --slurp --jq '"'"'.[].check_runs[]'"'"'
+```'
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'slurp.*cannot be combined'; then
+  ok "--slurp with --jq is a FINDING (gh refuses it; the command cannot run)"
+else
+  bad "--paginate --slurp --jq must be a finding — gh refuses it (got rc=$RC)" "$OUT"
+fi
+
+# 7e. A shell COMMENT must not create a finding. These recipes comment their commands heavily — and
+#     this one's own prose discusses `--jq '.[]'` — so matching the array-iteration pattern against
+#     raw text instead of the tokenized (comment-stripped) command turns correct code red.
+gate_on comment-mentions-array '# kit
+
+```sh
+SHA=$(gh api repos/FS-GG/<repo>/pulls/<n> --jq .head.sha)   # not a list, unlike --jq '"'"'.[]'"'"'
+```'
+[ "$RC" = 0 ] && ok "a comment mentioning .[] does not make a scalar read a list read" \
+              || bad "a shell comment must not trigger a finding (got rc=$RC)" "$OUT"
+
+# 7f. The roots come from `.agent-skill-roots`, not a copy inside the gate. If the gate kept its own
+#     list, a root added to the declaration would go UNAUDITED while the gate reported green — the
+#     #266 fail-open, reintroduced in the thing built to close it. skill-union-assert.sh reads the
+#     same declaration for the same reason (#517). Declare an unusual root and prove the gate looks.
+mkdir -p "$WORK/roots-decl/.wherever/skills/kit"
+printf '# a comment line, and a blank one below\n\n.wherever/skills\n' > "$WORK/roots-decl/.agent-skill-roots"
+printf '# kit\n\n```sh\ngh api repos/FS-GG/<r>/issues/<p>/sub_issues --jq %s.[]%s\n```\n' "'" "'" \
+  > "$WORK/roots-decl/.wherever/skills/kit/SKILL.md"
+set +e
+OUT="$(cd "$WORK/roots-decl" && python3 "$GATE" --root . 2>&1)"; RC=$?
+set -e
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '.wherever/skills'; then
+  ok "the audited roots come from .agent-skill-roots, not a private copy in the gate"
+else
+  bad "the gate must read .agent-skill-roots; a declared root went unaudited (got rc=$RC)" "$OUT"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # NO-VERDICT LEGS — "I could not check" must never be mistaken for "I checked, and it's fine" (#266).
 # ---------------------------------------------------------------------------------------------

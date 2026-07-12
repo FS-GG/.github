@@ -83,10 +83,16 @@ import shlex
 import sys
 from pathlib import Path
 
-# Default recipe surface: every markdown file under an agent-skill root. These are the files whose
+# The recipe surface is every markdown file under an agent-skill root — those are the files whose
 # commands get COPIED by an agent, which is what makes an unpaginated read here different in kind
 # from one in a script.
-DEFAULT_ROOTS = (".claude/skills", ".agents/skills")
+#
+# The ROOTS ARE READ FROM `.agent-skill-roots`, not hardcoded (#517, as skill-union-assert.sh does).
+# Keeping a second copy of that list here would mean a root added to the declaration is silently NOT
+# audited — a new root's recipes could truncate and this gate would stay green. That is the #266
+# fail-open this gate exists to close, and there is no excuse for reintroducing it in the gate.
+ROOTS_DECL = ".agent-skill-roots"
+FALLBACK_ROOTS = (".claude/skills", ".agents/skills")
 
 FENCE_LANGS = {"sh", "bash", "shell", "console"}
 
@@ -109,8 +115,13 @@ class Unparseable(Exception):
     """A recipe command that will not tokenize. Never a skip — see the exit-code contract."""
 
 
-def logical_commands(block: str) -> list[str]:
-    """Join a code fence's physical lines into logical shell commands.
+def logical_commands(block: str) -> list[tuple[int, str]]:
+    """Split a code fence into logical shell commands, as (0-based line offset within block, cmd).
+
+    The OFFSET IS CARRIED, not recomputed by the caller from the emitted commands. A caller that
+    advances a counter by each returned command's line count silently loses the lines this function
+    drops (blank ones), and every finding after the first blank line in a fence is then reported at
+    the wrong line. A lint that points at the wrong line is one workers stop believing.
 
     Two things continue a command across a newline, and BOTH occur in these recipes:
       - a trailing backslash;
@@ -119,11 +130,14 @@ def logical_commands(block: str) -> list[str]:
         and the aggregate on the next line as two commands, and would miss the `--paginate` sitting
         on the first of them.
     """
-    out: list[str] = []
+    out: list[tuple[int, str]] = []
     buf: list[str] = []
+    start = 0
     quote: str | None = None
 
-    for line in block.splitlines():
+    for i, line in enumerate(block.splitlines()):
+        if not buf:
+            start = i
         buf.append(line)
         esc = False
         for ch in line:
@@ -149,10 +163,10 @@ def logical_commands(block: str) -> list[str]:
         cmd = "\n".join(buf)
         buf = []
         if cmd.strip():
-            out.append(cmd)
+            out.append((start, cmd))
 
     if buf:  # unterminated quote at end of fence
-        out.append("\n".join(buf))
+        out.append((start, "\n".join(buf)))
     return out
 
 
@@ -203,22 +217,46 @@ def endpoint_of(tokens: list[str]) -> str | None:
     return None
 
 
+# Passing any of these makes `gh api` send a BODY — and gh's documented default method is "GET
+# normally, and POST if any parameters were added". So a field/input flag with no explicit -X is a
+# WRITE, even though nothing on the line says POST.
+BODY_FLAGS = {"-f", "--raw-field", "-F", "--field", "--input"}
+
+
 def is_write(tokens: list[str]) -> bool:
+    """True if this `gh api` call is a write.
+
+    An explicit -X/--method wins. Otherwise gh infers the method from the presence of a body:
+    `gh api .../sub_issues -F sub_issue_id=$cid` — which is exactly how `fsgg-coord child` creates a
+    sub-issue edge, and how intra-repo-parallel-work documents it — is a POST with no `-X` anywhere.
+    Reading it as a GET would make the collection backstop fire on a write, and `--paginate` is
+    meaningless on a write. A gate that cries wolf on correct code is one workers scroll past.
+    """
+    explicit: str | None = None
     for i, tok in enumerate(tokens):
         if tok in {"-X", "--method"} and i + 1 < len(tokens):
-            if tokens[i + 1].upper() in WRITE_VERBS:
-                return True
-        if tok.startswith("--method="):
-            if tok.split("=", 1)[1].upper() in WRITE_VERBS:
-                return True
-    return False
+            explicit = tokens[i + 1].upper()
+        elif tok.startswith("--method="):
+            explicit = tok.split("=", 1)[1].upper()
+
+    if explicit is not None:
+        return explicit in WRITE_VERBS
+
+    return any(tok in BODY_FLAGS or tok.split("=", 1)[0] in BODY_FLAGS
+               for tok in tokens if tok.startswith("-"))
 
 
-def reads_a_list(cmd: str, tokens: list[str]) -> str | None:
-    """Why this command is a list read, or None if it is not one."""
-    # (a) the jq iterates the response as an array. Checked over the whole logical command, so a
-    #     `gh api … | jq '.[]…'` pipeline is caught as readily as a `--jq` on the call itself.
-    if ITERATES_ARRAY.search(cmd):
+def reads_a_list(tokens: list[str]) -> str | None:
+    """Why this command is a list read, or None if it is not one.
+
+    Everything here reads the TOKENS, never the raw command text: shlex has already stripped shell
+    comments, and these recipes comment their commands heavily. Matching the array-iteration pattern
+    against raw text would let a comment (`# unlike --jq '.[]'`) turn a correct single-resource read
+    into a finding.
+    """
+    # (a) the jq iterates the response as an array. Checked across the whole tokenized pipeline, so
+    #     `gh api … | jq '.[]…'` is caught as readily as a `--jq` on the call itself.
+    if ITERATES_ARRAY.search(" ".join(tokens)):
         return "its jq iterates the response as an array"
 
     # (b) no jq to go on — fall back to the endpoint's shape.
@@ -231,6 +269,21 @@ def reads_a_list(cmd: str, tokens: list[str]) -> str | None:
     return None
 
 
+def slurp_with_jq(tokens: list[str]) -> bool:
+    """`gh api --slurp` cannot be combined with `--jq`/`--template`; gh refuses it outright.
+
+    This is not a general lint — it is the specific way the REMEDY this gate prescribes goes wrong.
+    Aggregating across pages needs `--slurp`, and the obvious next keystroke is to keep the `--jq`
+    that was already there, producing a command that carries `--paginate`, passes a naive pagination
+    check, and then dies on execution. A gate that certifies a command which cannot run is worse than
+    no gate: it moves the failure from review to the worker's terminal.
+    """
+    if "--slurp" not in tokens:
+        return False
+    return any(t in {"--jq", "-q", "--template", "-t"} or t.startswith(("--jq=", "--template="))
+               for t in tokens)
+
+
 def audit_file(path: Path, rel: str) -> tuple[list[str], int]:
     """(findings, number of `gh api` commands audited)."""
     findings: list[str] = []
@@ -241,10 +294,11 @@ def audit_file(path: Path, rel: str) -> tuple[list[str], int]:
         raise Unparseable(f"{rel}: cannot read: {e}") from e
 
     for fence_line, body in shell_fences(text):
-        offset = 0
-        for cmd in logical_commands(body):
+        for offset, cmd in logical_commands(body):
+            # The offset comes FROM the splitter, which knows about the lines it dropped. Do not
+            # recompute it here from the emitted commands: blank lines are not emitted, and the
+            # count would drift by one per blank line in the fence.
             here = fence_line + offset
-            offset += cmd.count("\n") + 1
             if not re.search(r"\bgh\s+api\b", cmd):
                 continue
             try:
@@ -253,13 +307,21 @@ def audit_file(path: Path, rel: str) -> tuple[list[str], int]:
                 raise Unparseable(f"{rel}:{here}: will not tokenize: {e}") from e
 
             audited += 1
+            first = cmd.strip().splitlines()[0].strip()
+
+            if slurp_with_jq(tokens):
+                findings.append(
+                    f"{rel}:{here}: `--slurp` cannot be combined with `--jq`/`--template` — gh "
+                    f"refuses this command outright, so the recipe cannot run.\n      {first}"
+                )
+                continue
+
             if is_write(tokens):
                 continue
             if "--paginate" in tokens:
                 continue
-            why = reads_a_list(cmd, tokens)
+            why = reads_a_list(tokens)
             if why:
-                first = cmd.strip().splitlines()[0].strip()
                 findings.append(
                     f"{rel}:{here}: LIST read without `--paginate` — {why}, "
                     f"so it silently truncates at 30.\n      {first}"
@@ -272,12 +334,30 @@ def main() -> int:
     ap.add_argument("--root", default=".", help="repo root (default: .)")
     ap.add_argument(
         "--recipes", action="append", default=None,
-        help=f"recipe dir to audit, repeatable (default: {' '.join(DEFAULT_ROOTS)})",
+        help=f"recipe dir to audit, repeatable (default: the roots in {ROOTS_DECL})",
     )
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
-    recipe_dirs = args.recipes if args.recipes else list(DEFAULT_ROOTS)
+
+    if args.recipes:
+        recipe_dirs = args.recipes
+    else:
+        # Read the roots the tree DECLARES, so a root added there is audited without touching this
+        # file. A private copy of the list would go stale silently, and a root nobody audits is a
+        # root whose recipes can truncate while this gate reports green (#266, #517).
+        decl = root / ROOTS_DECL
+        if decl.is_file():
+            recipe_dirs = [
+                ln.strip() for ln in decl.read_text(encoding="utf-8").splitlines()
+                if ln.strip() and not ln.lstrip().startswith("#")
+            ]
+            if not recipe_dirs:
+                print(f"check-recipe-pagination: no verdict: {ROOTS_DECL} declares no roots.",
+                      file=sys.stderr)
+                return 3
+        else:
+            recipe_dirs = list(FALLBACK_ROOTS)
 
     files: list[tuple[Path, str]] = []
     for d in recipe_dirs:
