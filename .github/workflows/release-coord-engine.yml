@@ -122,10 +122,15 @@ jobs:
       - name: Smoke — install the real package and DECIDE with it
         run: |
           set -euo pipefail
-          cat > /tmp/isolated.config <<'CFG'
+          # ABSOLUTE, and it has to be: a NuGet source path in a config file resolves RELATIVE TO THAT
+          # FILE. This config lives in /tmp, so `./artifacts/packages` would resolve to
+          # /tmp/artifacts/packages — which does not exist, and the install fails with a "not found in
+          # NuGet feeds" that reads exactly like a broken package. (The dry run caught this. It is the
+          # reason to dry-run.)
+          cat > /tmp/isolated.config <<CFG
           <?xml version="1.0" encoding="utf-8"?>
           <configuration>
-            <packageSources><clear /><add key="local" value="./artifacts/packages" /></packageSources>
+            <packageSources><clear /><add key="local" value="${{ github.workspace }}/artifacts/packages" /></packageSources>
           </configuration>
           CFG
           dotnet tool install --tool-path /tmp/toolhome --configfile /tmp/isolated.config \
