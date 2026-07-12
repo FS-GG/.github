@@ -438,7 +438,7 @@ scripts/fsgg-coord inbox --repo <r> --peek                 # ...without advancin
 `reap --apply` and `widen` both post to this channel rather than acting silently: a reaped worker is
 told its claim was collected, and a worker whose touch-set was invaded is told by whom.
 
-### 5. Finish — the earned done-stamp (unchanged)
+### 5. Finish — the earned done-stamp
 
 ```sh
 scripts/fsgg-coord done <issue> --flip     # green FSGG-DONE only after PR merged AND Status=Done
@@ -446,6 +446,38 @@ scripts/fsgg-coord child <parent> <issue>  # link a filed issue as a sub-issue o
 ```
 
 Same stamp and epic roll-up as cross-repo.
+
+**An item is not Done while one of its own sub-issues is open**
+([#583](https://github.com/FS-GG/.github/issues/583)). `done --flip` refuses, and names the child.
+
+This is the rule §4 makes you need. §4 tells you to **split off what you cannot land and `child`-link
+it** — so the more faithfully a worker split their work, the more reliably they closed the parent
+over the piece they had just split out of it. The roll-up read the sub-issue graph of the item's
+**parent** and never asked the same question of the item **in hand**: an item was stamped `Done` and
+closed over an open child carrying one of its own acceptance criteria, and the green ✓✓ actively said
+otherwise. A red stamp is a finding; **a green stamp over unfinished work is a board that lies**,
+which is the one thing worse than an unstamped item.
+
+If the split-out work is genuinely *separate* rather than *part of* this item, it should not be a
+sub-issue at all — sequence it with `Blocked by`. A sub-issue means **part of**; `Blocked by` means
+**after**.
+
+**Put `Closes #<n>` in the commit BODY, not the subject**
+([#558](https://github.com/FS-GG/.github/issues/558)). `gh pr create --fill` maps the commit
+**subject → PR title** and the **body → PR body**, and GitHub builds `closingIssuesReferences` from
+the **PR body only, and only while the PR is open**. So `fix: the thing (closes #165)` — the
+near-universal convention — puts the keyword exactly where that field never looks. Everything still
+works (the squash commit closes the issue, because GitHub honours the keyword there too), so the
+stamp went **red on correct, merged, green work** — permanently, because editing the merged PR's body
+does not backfill the link. `done` now also reads GitHub's own `CLOSED_EVENT` closer, so the stamp is
+earned either way; but a red that fires reproducibly on correct work is how a red stamp becomes
+noise, and this stamp's credibility is the entire point of it.
+
+**`--pr <n>` overrides WHICH pull request, never WHETHER it closed the issue**
+([#543](https://github.com/FS-GG/.github/issues/543)). It used to select by number alone, so pointing
+it at any merged PR that merely *mentioned* the issue turned the stamp green — reintroducing
+[#342](https://github.com/FS-GG/.github/issues/342) through the escape hatch documented for the bug
+above. It now applies the same provenance test as the automatic path.
 
 **An epic rolls up from its sub-issue graph, and from nothing else.** A `(j) child of #266` title, a
 `Child of #266` comment, a checklist line in the epic's body — all of them look like a link, and
