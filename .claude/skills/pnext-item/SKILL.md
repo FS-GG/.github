@@ -375,9 +375,9 @@ disbelieving an error is one that teaches them to skip errors, and the next one 
 
 **Hard rules on the merge.** Never `--admin`. Never bypass branch protection, and never disable a
 required check to get past it. The repo's rules are authoritative over this skill: if protection
-requires a human review, the merge will be **refused** — 405, with the reason — and you **stop there
-and report the PR for review** rather than looking for a way around it. A red check is a finding, not
-an obstacle.
+requires a human review, the merge is **refused** — `gh api` exits non-zero and prints GitHub's
+reason — and you **stop there and report the PR for review** rather than looking for a way around it.
+A red check is a finding, not an obstacle.
 
 Then earn the stamp:
 
@@ -459,9 +459,16 @@ worker rediscovers it from scratch.
 
 ```sh
 cd - && git worktree remove ../<repo>-<n>
+git branch -D item/<n>-<slug>               # the LOCAL branch; §5's REST DELETE removed only the remote
 scripts/fsgg-coord inbox --repo <r>         # anything arrive while you were heads-down?
 /pnext-item                                 # next
 ```
+
+**The local branch is not cleaned by anything else.** `--delete-branch` never deleted it either — `gh`
+aborted at the `git checkout main` step *before* it got that far (#564) — so these have been quietly
+accumulating for as long as the bug existed: the shared checkout of `.github` was holding **~40**
+stale `item/*` branches from merged, done-stamped items when this was written. Harmless individually,
+noise in every `git branch` you will ever run.
 
 ## Abandoning an item
 
