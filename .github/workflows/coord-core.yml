@@ -1,0 +1,82 @@
+# coord-core — FS.GG.Coord.Core, the typed coordination domain (ADR-0034, Phase 1).
+#
+# THIS SHIPS NOTHING, AND THAT IS THE POINT. Phase 1 is deliberately dead code with a live test suite.
+#
+# The 4,024 lines of bash this core will replace are not merely code — they are a record of every way
+# this domain has gone wrong, written down by the people it went wrong for. `scripts/fsgg-coord` is an
+# incident log with a shebang. Porting that log into named regression tests BEFORE any of the new code
+# is trusted is the whole of Phase 1, and it is the direct cure for the failure that produced #488: a
+# fix that reintroduced its own bug, because nothing proved it could not.
+#
+# So this gate runs on a project nothing consumes. It will keep doing so until Phase 2 puts the engine
+# behind `--engine=fs` in shadow mode, and Phase 3 flips it. A green build here is not a claim that the
+# engine works; it is a claim that the RULES it encodes still hold.
+#
+# The tests carry issue numbers because the issues are the specification: #266 (an unverifiable subject
+# must not report green), #273/#277/#435/#496 (the touch-set grammar), #437/#440/#488 (a full queue is
+# not an empty one), #476/#520 (a MERGED blocker is resolved), #516/#533/#581 (a claim's lifetime is
+# the work's lifetime).
+name: coord-core
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Coord.Core/**"
+      - "tests/FS.GG.Coord.Core.Tests/**"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/coord-core.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Coord.Core/**"
+      - "tests/FS.GG.Coord.Core.Tests/**"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/coord-core.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coord-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Locked restore, like every other repo in the org. A silent version SUBSTITUTION fails here
+      # rather than quietly changing what the tests ran against (ADR-0006; NU1603/NU1608 are errors).
+      - name: Restore (locked)
+        run: dotnet restore tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --locked-mode
+
+      - name: Build
+        run: dotnet build tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --no-restore -c Release
+
+      # The incident log. Every failure here is a rule the org paid for once already.
+      - name: Test — the incident log
+        run: dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
+
+      # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). Assert a non-zero test count: a
+      # misconfigured runner that discovers nothing exits 0, and this gate would then go green over a
+      # core nobody tested — which is epic #266's exact shape, in the phase whose purpose is to end it.
+      - name: Non-vacuity — the run must have executed tests
+        run: |
+          set -euo pipefail
+          out="$(dotnet test tests/FS.GG.Coord.Core.Tests/FS.GG.Coord.Core.Tests.fsproj --no-build -c Release 2>&1)"
+          printf '%s\n' "$out"
+          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
+          if [ "${passed:-0}" -lt 40 ]; then
+            echo "::error title=coord-core: the suite audited nothing::Only ${passed:-0} tests ran. The incident log is ~54 assertions; a runner that discovers nothing exits 0, and a green gate over an untested core is exactly the fail-open this core exists to end (#266)."
+            exit 1
+          fi
+          echo "coord-core: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"

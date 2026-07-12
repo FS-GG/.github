@@ -1,0 +1,83 @@
+namespace FS.GG.Coord
+
+/// "Is this item startable?" — ONCE.
+///
+/// This is #485. In the bash client that question was computed in five places and agreed in none, and
+/// it took 34 issues to notice. Consolidating them helped only because the survivor was then made
+/// right: three disagreements outlived the merge, and one of them was handing CLOSED issues to live
+/// workers (#520).
+///
+/// The function is TOTAL and PURE. It cannot read anything, so it cannot mistake a failed read for a
+/// legitimate "no" — the mistake behind epic #266's 51 children. Where the caller could not learn a
+/// fact, it must say so in the input (`BlockerUnknown`, `LivenessUnknown`), and the answer comes back
+/// as `Undetermined` rather than as a confident skip.
+module Schedulability =
+
+    open Types
+
+    /// Why an item can or cannot be started.
+    ///
+    /// NOT A BOOL. Each case is a distinct fact a worker acts on differently, and collapsing them is
+    /// what let real work go invisible: an epic and a forgotten touch-set rendered identically, so
+    /// nine items sat unschedulable while `lint` reported `0 error(s)` over a dead queue (#496); an
+    /// empty queue and a fully-blocked one printed the same sentence, so "nothing to do" was
+    /// indistinguishable from "everything is blocked" (#440, #488).
+    type Schedulability =
+        /// Startable now.
+        | Startable
+
+        /// The board column says it is not ready. Carries which column, because `NoStatus` is its own
+        /// bug (#437) and must not read as `Backlog`.
+        | WrongStatus of BoardStatus
+
+        /// The ISSUE is closed, whatever the board column says (#520). The column is a projection of
+        /// the work; the issue IS the work. One was handed to a worker two hours after it was closed
+        /// as completed, and then PROMOTED back to Ready on release, re-arming it for the next.
+        | IssueClosed
+
+        /// No `Paths:` line at all — an OMISSION. Nobody can pick this up, and somebody should fix it.
+        | NoTouchSet
+
+        /// `Paths: none` — a DECISION (an epic, a decision item). Unschedulable BY DESIGN, and not a
+        /// bug. Telling this apart from the case above is the whole of #496.
+        | DeliberatelyNoTouchSet
+
+        /// A touch-set was declared and EVERY token of it is unmatchable. Just as dead as declaring
+        /// nothing — a token that matches no file conflicts with nothing — but a different diagnosis,
+        /// and `lint` was green over it for as long as the two were conflated.
+        | UnusableTouchSet of tokens: string list
+
+        /// Blockers still hold it. Resolved means CLOSED **or MERGED** (#476).
+        | BlockedBy of Blocker list
+
+        /// Another worker holds it, and the lock is live.
+        | HeldBy of WorkerId
+
+        /// Its lease lapsed, but its `item/<n>-*` PR is OPEN — the worker is demonstrably still
+        /// working (#581). Lease expiry is EVIDENCE of abandonment, never proof, and its false
+        /// positive is systematic: work that takes longer than the lease. This item is NOT free, and
+        /// its touch-set stays reserved.
+        | HeldByLiveWork of WorkerId * pr: int
+
+        /// It collides with work already in flight.
+        | OverlapsInFlight of (string * string) list
+
+        /// WE COULD NOT DECIDE. Never green, never a silent skip. This is the case whose absence made
+        /// every other case a lie waiting to happen.
+        | Undetermined of reason: string
+
+    /// Is `item` startable, given what is already in flight?
+    ///
+    /// `inFlight` is every touch-set currently held by a live claim IN THE SAME REPO. Tokens are
+    /// repo-relative, so mixing repos here invents collisions (#353) — the caller owns that.
+    ///
+    /// `allowBacklog` mirrors `batch --include-backlog`: `next`/`take` fall back to Backlog when no
+    /// Ready item is startable, and pretending otherwise is how a full queue read as an empty one
+    /// (#440).
+    val schedulable: allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
+
+    /// A one-line reason, for the "passed over:" list a worker reads when nothing is startable.
+    ///
+    /// A queue that shrinks without explanation is #440: `take` reported "no schedulable item" over a
+    /// board full of work, and the worker went home.
+    val explain: item: Item -> result: Schedulability -> string

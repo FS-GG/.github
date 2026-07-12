@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- THE INCIDENT LOG, AS TESTS (ADR-0034, Phase 1).
+       The 4,000 lines of bash this core will replace are not just code — they are a record of every
+       way this domain has gone wrong, written down by the people it went wrong for. Porting that
+       record into named regression tests, BEFORE any of the new code is trusted, is the point of the
+       phase. Every test below carries the number of the issue that bought it. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>true</GenerateProgramFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The org standard, and ADR-0034 says explicitly not to inherit .github's looser one: every
+         other FS-GG repo commits packages.lock.json and CI restores in locked mode, so a silent
+         version SUBSTITUTION fails the build instead of quietly changing what shipped. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- ADR-0032, and the reason CI red this on the first push. The F# SDK injects its OWN FSharp.Core
+         from the library-packs folder, and its `.nupkg` is NOT byte-identical to the one nuget.org
+         serves at the same id+version — so a lock file's contentHash becomes a function of the SDK
+         patch level of whichever machine wrote it. A lock written locally then fails NU1403 in CI on
+         a correct lock file. `DisableImplicitLibraryPacksFolder` is the SDK's own opt-out: it REMOVES
+         the folder from the source list, so FSharp.Core resolves from ONE source everywhere.
+
+         This lives in the org-shared `dist/dotnet/Directory.Build.props` that .github DISTRIBUTES TO
+         EVERY OTHER REPO — and .github has no root Directory.Build.props, so it never applied its own
+         fix to its own projects. Filed separately; set here so this project is correct today. -->
+    <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
+    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="TouchSetTests.fs" />
+    <Compile Include="BlockerTests.fs" />
+    <Compile Include="SchedulabilityTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FsCheck.Xunit" />
+  </ItemGroup>
+
+</Project>

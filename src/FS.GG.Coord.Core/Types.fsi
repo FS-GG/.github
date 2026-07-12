@@ -1,0 +1,165 @@
+namespace FS.GG.Coord
+
+/// The coordination domain, as types (ADR-0034).
+///
+/// THE DESIGN RULE, AND THE ONLY ONE THAT MATTERS HERE: a failed read must not be able to masquerade
+/// as a legitimate answer. `FS-GG/.github` epic #266 — "coherence gates that fail open: a missing
+/// subject reports green" — has 51 children, and almost every one of them is that mistake made in a
+/// substrate where an error, an empty result and a legitimate "no" are the same value (bash's empty
+/// string). So none of the types below can express it: there is no `bool` anywhere in a verdict, and
+/// "I could not look" is a case you must handle, not a value you can accidentally produce.
+module Types =
+
+    /// Which worker holds a lock. NOT the GitHub account: N agents in a fan-out authenticate as the
+    /// SAME account, so `@me` is one principal for all of them and an assignee-keyed lock is a no-op
+    /// under exactly the conditions it exists for (ADR-0027, superseding ADR-0021 §1).
+    type WorkerId =
+        | WorkerId of string
+
+        member Value: string
+
+    /// The agent harness session a claim was taken from — PROVENANCE, never identity.
+    ///
+    /// A session id is unique per *session*, not per *worker*, and the mapping between the two is a
+    /// property of the harness: on Claude Code every subagent of a session shares one
+    /// `CLAUDE_CODE_SESSION_ID`, so keying a lock on it collapses an N-agent fan-out onto a single
+    /// worker — the same-account bug, one level down. It is carried so that "which agent transcript
+    /// took this lock?" is a lookup rather than mtime forensics.
+    type SessionId =
+        | SessionId of string
+
+        member Value: string
+
+    /// The board's `Status` column.
+    ///
+    /// `NoStatus` is a CASE, not a null. An item on the board with no Status was invisible to every
+    /// scheduler — it is not `Backlog`, it is not an error, it is its own state and it must be named
+    /// (#437, #485 leg c). A three-valued thing modelled as two values is how it stayed invisible.
+    type BoardStatus =
+        | NoStatus
+        | Backlog
+        | Ready
+        | InProgress
+        | Blocked
+        | InReview
+        | Done
+
+    /// The state of the ISSUE, which is not the state of the board column.
+    ///
+    /// The board column is a PROJECTION of the work; the issue is the WORK. When they disagree the
+    /// issue wins. Keeping them as separate types is the whole of #520: candidate selection read the
+    /// column and nothing else, so a CLOSED issue whose column was never flipped stayed schedulable
+    /// forever, and one was handed to a worker two hours after it was closed as completed.
+    type IssueState =
+        | Open
+        | Closed
+
+    /// The state of a thing a `Blocked by` edge points AT — which may be a pull request.
+    ///
+    /// `Merged` is not pedantry, it is the bug. A PR's state is OPEN | CLOSED | MERGED, so a rule that
+    /// clears only on CLOSED unblocks when the PR is ABANDONED and blocks forever once it is
+    /// FINISHED: the gate opens precisely when the blocking work is thrown away, and shuts precisely
+    /// when it is done (#476).
+    ///
+    /// `Unknown` and `Unparseable` are the fail-open cases, made unforgettable. A blocker we could not
+    /// resolve is NOT a blocker we cleared.
+    type BlockerState =
+        | BlockerOpen
+        | BlockerClosed
+        | BlockerMerged
+        /// The ref parsed, but we could not learn its state. "I could not look" is not "I looked and
+        /// it is fine" (#266, #421).
+        | BlockerUnknown
+        /// The `Blocked by` text is not an issue ref at all. Prose in a dependency field blocks.
+        | BlockerUnparseable
+
+    /// A reference to another item, canonicalised. `Blocked by` is free TEXT only because Projects v2
+    /// has no typed dependency field — so the type has to be recovered here.
+    type Ref =
+        { Owner: string
+          Repo: string
+          Number: int }
+
+        member Short: string
+
+    type Blocker =
+        { Ref: Ref
+          State: BlockerState }
+
+    /// A single `Paths:` token. NOT a glob.
+    ///
+    /// A token matches by exact equality or subtree containment; the only wildcard is a TRAILING `/**`
+    /// or `/*`. A leading `**/`, or a `*` in the middle, matches nothing — and a token that matches
+    /// nothing CONFLICTS WITH NOTHING, so it would read as DISJOINT against every other worker. That
+    /// is ADR-0021's own failure — a lock that succeeds under exactly the conditions it exists to
+    /// prevent — one level down (#273). So an unmatchable token is a distinct case, never a token.
+    type PathToken =
+        /// A token the matcher can actually reserve.
+        | Matchable of string
+        /// A token that can never match a file. Reserving nothing, it protects nothing.
+        | Unmatchable of string
+
+    /// What an item declares about the files it will touch.
+    ///
+    /// `DeclaredNone` is the `Paths: none` SENTINEL, and it is not the same fact as `Undeclared`
+    /// (#496). Before they were told apart, an epic and a forgotten touch-set rendered identically —
+    /// so no gate could be written at all, nine items of real work went invisible to every worker who
+    /// asked for work, and the one surface whose job is board health reported `0 error(s)` over a dead
+    /// queue. Neither is schedulable. Only one is a bug.
+    type TouchSet =
+        /// No `Paths:` line at all. An OMISSION — somebody forgot, and the item is unschedulable.
+        | Undeclared
+        /// `Paths: none` — a decision somebody made. An epic, a decision item, an investigation whose
+        /// scope IS the question. Unschedulable BY DESIGN.
+        | DeclaredNone
+        /// A real declaration. May still contain unmatchable tokens — that is a third death, and the
+        /// scheduler and the linter must agree about it.
+        | Declared of PathToken list
+
+    /// A live claim on an item.
+    type Claim =
+        { Worker: WorkerId
+          Session: SessionId option
+          /// Seconds since the marker was last heartbeated.
+          AgeSeconds: int
+          /// The board column this claim OVERWROTE, so that releasing it can put that column back
+          /// rather than guessing `Ready` (#481). A value nobody recorded cannot be restored.
+          PreviousStatus: BoardStatus option }
+
+    /// Whether the WORK is alive — which is not the same question as whether the LEASE is.
+    ///
+    /// Lease expiry is EVIDENCE of abandonment, never proof, and it has a systematic false positive:
+    /// work that takes longer than the lease. An open PR on the item's own `item/<n>-*` branch is the
+    /// worktree protocol's own artifact and is server-side PROOF OF LIFE (#581). This type exists so
+    /// that a caller cannot decide "abandoned" from the lease alone — it has to say which it saw.
+    type Liveness =
+        /// The lease is current.
+        | LeaseHeld
+        /// The lease lapsed AND no open PR was found. Only now is abandonment a reasonable reading.
+        | LeaseExpiredNoPr
+        /// The lease lapsed but an `item/<n>-*` PR is open. The worker is demonstrably still working.
+        | LeaseExpiredPrOpen of pr: int
+        /// We could not ask. NOT the same as "no PR" — and this is the case that reaped live work.
+        | LivenessUnknown
+
+    /// An item, as the scheduler must see it.
+    type Item =
+        { Ref: Ref
+          Status: BoardStatus
+          /// The ISSUE's state. Separate from Status on purpose — see IssueState.
+          State: IssueState
+          TouchSet: TouchSet
+          Blockers: Blocker list
+          /// The live claim, if any — plus what we know about whether its work is alive.
+          Claim: (Claim * Liveness) option }
+
+    /// A three-valued verdict. There is no `bool` in this domain.
+    ///
+    /// `NoVerdict` is the whole reason this type exists, and it must be NON-ZERO at every exit. The
+    /// org evolved this rule the hard way — a non-vacuity guard plus `exit 3` — and enforces it by
+    /// CONVENTION across a dozen scripts. It is a type. This is it.
+    type Verdict<'a> =
+        | Green of 'a
+        | Red of reasons: string list
+        /// "I could not reach an answer." Never green, never silently dropped.
+        | NoVerdict of reason: string
