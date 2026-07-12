@@ -99,9 +99,16 @@ canonical docs, so there was no source-of-truth edit that could have carried it.
 
 `scripts/check-worker-id-attractor.py:11-18` describes `docs/coordination/parallel-work.md`
 as **"the document those skills are a projection OF"** — and exists because the projection is
-manual and the copy-paste keeps failing. The collision attractor (`FSGG_WORKER=finch-a3f`)
-was removed **by hand twice** (#532, #551) before #570 gated it. Four `finch-*` workers were
-live on the board at once, every one of them lifted from the example in the recipe.
+manual and the copy-paste keeps failing. The collision attractor — a literal worker id sitting
+in a copyable position in the recipe — was removed **by hand twice** (#532, #551) before #570
+gated it. Four workers sharing one id prefix were live on the board at once, every one of them
+lifted from that example.
+
+> **This document tripped that gate on its first CI run.** The draft quoted the offending
+> literal verbatim, here, in a paragraph explaining that the literal spreads by being read.
+> #570's gate caught it. That is the argument for §4.5 in miniature: a rule enforced by a
+> *generated* projection cannot be re-introduced by the next author who quotes it, and a rule
+> enforced by prose can — including by the author warning you about it.
 
 That gate is a hand-written, per-rule assertion. **This design generalises it: if the
 projection is generated, the rule cannot fail to arrive.**

@@ -162,6 +162,14 @@ The build/publish/pin/feed substrate — #504, #561, #574, #576, #519, and epic
 design and it will keep producing findings at its current rate. This ADR must not be read as a
 remedy for it.
 
+**The architecture map**
+
+This ADR is **Proposed** and changes no repo, boundary, or coherent-set axis, so
+`docs/architecture.md` is unaffected *today* and the proposing PR opts out. **Accepting it does
+not stay free:** the engine becomes a `dotnet tool` on the coherent set, and the `kit:` row gains
+a shim/tool distinction — both are shape changes. **The status flip to Accepted must reconcile the
+map in the same change**, and must not be merged with an `architecture-map: unaffected` opt-out.
+
 **The standing risk**
 
 The tool schedules the work that rewrites the tool. Shadow mode is what makes that survivable: nothing
