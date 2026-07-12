@@ -184,17 +184,43 @@ expect "a REUSABLE workflow's unbounded job gets the message that names the asym
   1 "no caller can supply a timeout for it" "$RRU"
 
 # =============================================================================================
-# 6. The gate is STATIC — prove it, rather than asserting it in a comment.
+# 6. The gate is STATIC — prove it, rather than asserting it in a comment. Its exit-code contract
+#    omits 2 ("retryable") on the strength of this claim, so the claim needs to be load-bearing.
 # =============================================================================================
+# The traps are PREPENDED to the real PATH, not swapped for a hand-rolled one. A fixed
+# `PATH=/usr/bin:/bin` would also discard the interpreter `actions/setup-python` puts first — the
+# only one with PyYAML installed — so the gate would die on `import yaml`, and this leg would report
+# a network failure that never happened. Shadowing gh/curl/wget is the whole job; nothing else about
+# the environment should move.
 NONET="$WORK/nonet"; mkdir -p "$NONET"
 for t in gh curl wget; do
   printf '#!/bin/sh\necho "%s: the gate reached the network" >&2\nexit 127\n' "$t" > "$NONET/$t"
   chmod +x "$NONET/$t"
 done
-if out="$(PATH="$NONET:/usr/bin:/bin" python3 "$TOOL" --root "$REPO_ROOT" 2>&1)"; then
-  ok "the gate reaches no network: it passes with gh/curl/wget replaced by traps"
+if out="$(PATH="$NONET:$PATH" python3 "$TOOL" --root "$REPO_ROOT" 2>&1)"; then
+  ok "the gate shells out to no network tool: it passes with gh/curl/wget shadowed by traps"
 else
-  bad "the gate failed with the network trapped — it is not static" "$out"
+  bad "the gate failed with gh/curl/wget trapped — it is not static" "$out"
+fi
+
+# Shadowing argv is only half of it: nothing stops a Python gate opening a socket itself. Assert the
+# source imports no transport at all, which is the property the missing exit-2 leg actually rests on.
+if python3 - "$TOOL" <<'PY'
+import ast, sys
+tree = ast.parse(open(sys.argv[1], encoding="utf-8").read())
+banned = {"urllib", "http", "socket", "requests", "subprocess", "ssl", "ftplib", "telnetlib"}
+for node in ast.walk(tree):
+    if isinstance(node, ast.Import):
+        names = [a.name for a in node.names]
+    elif isinstance(node, ast.ImportFrom):
+        names = [node.module or ""]
+    else:
+        continue
+    for n in names:
+        assert n.split(".")[0] not in banned, f"the gate imports {n} — it is not static"
+PY
+then ok "the gate imports no transport (urllib/http/socket/requests/subprocess) — so exit 2 is a verdict it can never mean"
+else bad "the gate imports a transport module — it can reach the network, and its exit-code contract is a lie"
 fi
 
 # =============================================================================================
