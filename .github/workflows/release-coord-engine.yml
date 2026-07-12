@@ -53,6 +53,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write      # ADR-0013: mint the GitHub OIDC token for nuget.org Trusted Publishing
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -157,6 +158,44 @@ jobs:
           dotnet nuget push "artifacts/packages/FS.GG.Coord.Cli.*.nupkg" \
             --source https://nuget.pkg.github.com/FS-GG/index.json \
             --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      # NUGET.ORG IS NOT A NICE-TO-HAVE HERE — IT IS THE ONLY ROAD INTO THE RECEIVERS.
+      #
+      # The org GitHub Packages feed requires AUTHENTICATION even to read, and only 1 of the 6 receiver
+      # repos configures it as a NuGet source. The other five restore every FS.GG.* package they use
+      # from PUBLIC NUGET.ORG — which is why they need no org-feed credential at all. So an engine that
+      # exists only on the org feed cannot reach them: adding it to the shared `.config/dotnet-tools.json`
+      # (which sync-build-config byte-copies into all six) would simply break `dotnet tool restore` in
+      # five repos.
+      #
+      # And the receivers are the whole point. ADR-0034 Phase 2 exits on divergence evidence from the
+      # LIVE FLEET, and the fleet is those six repos.
+      #
+      # ADR-0012 dual-publish, ADR-0013 auth (Trusted Publishing OIDC — no stored key). Pushes the
+      # BYTE-IDENTICAL org-feed .nupkg, no re-pack. Gated on `vars.NUGET_ORG_PUBLISH` so it stays
+      # DORMANT — org-feed releases keep working — until an org-owner creates the policy. Without it,
+      # NuGet/login fail-closes with a 401, which is the correct direction: never a silent no-op, never
+      # a half-published set.
+      #
+      # ⚠ THE POLICY IS BOUND TO BOTH THIS WORKFLOW'S FILENAME AND THE PACKAGE ID. An org-owner must
+      # create it for: Repository Owner `FS-GG` · Repository `.github` · Workflow file
+      # `release-coord-engine.yml` · package `FS.GG.Coord.Cli` — and then set
+      # `vars.NUGET_ORG_PUBLISH=true`. Renaming either afterwards invalidates the token exchange.
+      # See .github#624.
+      - name: NuGet login (OIDC → short-lived key)
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push byte-identical package to nuget.org
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Coord.Cli.*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
             --skip-duplicate
 
       - name: Summary
