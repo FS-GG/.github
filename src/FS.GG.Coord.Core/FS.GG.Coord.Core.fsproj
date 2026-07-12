@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- FS.GG.Coord.Core — the coordination domain, as types (ADR-0034, Phase 1).
+       PURE. No IO, no `gh`, no network, no filesystem. It takes a Board and an Item and returns a
+       verdict; the impure edge lives elsewhere. That boundary is the point: the defects this replaces
+       are overwhelmingly cases where a FAILED READ was indistinguishable from a legitimate "no", and
+       you cannot make that mistake in a function that cannot read anything.
+
+       Ships nothing yet. Phase 1 is deliberately dead code with a live test suite: the 4,000 lines of
+       bash it will replace are an incident log, and porting that log into named regression tests —
+       BEFORE any of it is trusted in production — is the whole point of the phase. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The org standard, and ADR-0034 says explicitly not to inherit .github's looser one: every
+         other FS-GG repo commits packages.lock.json and CI restores in locked mode, so a silent
+         version SUBSTITUTION fails the build instead of quietly changing what shipped. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true'">true</RestoreLockedMode>
+    <WarningsNotAsErrors></WarningsNotAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Types.fsi" />
+    <Compile Include="Types.fs" />
+    <Compile Include="TouchSet.fsi" />
+    <Compile Include="TouchSet.fs" />
+    <Compile Include="Blockers.fsi" />
+    <Compile Include="Blockers.fs" />
+    <Compile Include="Schedulability.fsi" />
+    <Compile Include="Schedulability.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
+</Project>

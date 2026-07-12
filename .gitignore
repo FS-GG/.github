@@ -10,3 +10,9 @@
 # release PR that swept it in — and it then showed as modified in every worker's tree.
 __pycache__/
 *.pyc
+
+# .NET build output (FS.GG.Coord.Core, ADR-0034 Phase 1; and scripts/NewSddWorkspace).
+# `.repos/` and `__pycache__` are already handled above (#443) — same rule: a generated artifact is
+# never authored, so it is never in a `Paths:` touch-set and never in a commit.
+bin/
+obj/

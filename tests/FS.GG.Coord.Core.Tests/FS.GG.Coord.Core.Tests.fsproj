@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- THE INCIDENT LOG, AS TESTS (ADR-0034, Phase 1).
+       The 4,000 lines of bash this core will replace are not just code — they are a record of every
+       way this domain has gone wrong, written down by the people it went wrong for. Porting that
+       record into named regression tests, BEFORE any of the new code is trusted, is the point of the
+       phase. Every test below carries the number of the issue that bought it. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>true</GenerateProgramFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The org standard, and ADR-0034 says explicitly not to inherit .github's looser one: every
+         other FS-GG repo commits packages.lock.json and CI restores in locked mode, so a silent
+         version SUBSTITUTION fails the build instead of quietly changing what shipped. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true'">true</RestoreLockedMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="TouchSetTests.fs" />
+    <Compile Include="BlockerTests.fs" />
+    <Compile Include="SchedulabilityTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FsCheck.Xunit" />
+  </ItemGroup>
+
+</Project>
