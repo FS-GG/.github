@@ -139,7 +139,11 @@ cat >"$FIXTURES/board-items-p2.json" <<'JSON'
     {"status":{"name":"Ready"},"phase":{"name":"P1 Rendering"},"blockedBy":{"text":"FS-GG/FS.GG.SDD#127, #201"},"content":{"__typename":"Issue","number":200,"title":"Blocked on an open item","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/200","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
     {"status":{"name":"Ready"},"phase":{"name":"P1 Rendering"},"blockedBy":{"text":"FS-GG/FS.GG.SDD#8"},"content":{"__typename":"Issue","number":201,"title":"Blocker already closed","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/201","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
     {"status":{"name":"Ready"},"phase":{"name":"P3 Governance"},"blockedBy":{"text":"FS-GG/FS.GG.Other#999"},"content":{"__typename":"Issue","number":202,"title":"Blocker is not on the board","url":"https://github.com/FS-GG/FS.GG.Governance/issues/202","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Governance"}}},
-    {"status":{"name":"Ready"},"phase":{"name":"P3 Governance"},"blockedBy":{"text":"RESOLVED: shipped last week"},"content":{"__typename":"Issue","number":203,"title":"Legacy prose in the field","url":"https://github.com/FS-GG/FS.GG.Governance/issues/203","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Governance"}}}
+    {"status":{"name":"Ready"},"phase":{"name":"P3 Governance"},"blockedBy":{"text":"RESOLVED: shipped last week"},"content":{"__typename":"Issue","number":203,"title":"Legacy prose in the field","url":"https://github.com/FS-GG/FS.GG.Governance/issues/203","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Governance"}}},
+    {"status":{"name":"Ready"},"phase":{"name":"P1 Rendering"},"blockedBy":null,"content":{"__typename":"Issue","number":502,"title":"CLOSED, but the column still says Ready (#520)","url":"https://github.com/FS-GG/FS.GG.Rendering/issues/502","state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.Rendering"}}},
+    {"status":{"name":"Ready"},"phase":{"name":"P2 SDD"},"blockedBy":{"text":"FS-GG/.github#449"},"content":{"__typename":"Issue","number":350,"title":"Blocked by a MERGED pull request (#476)","url":"https://github.com/FS-GG/FS.GG.Templates/issues/350","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Templates"}}},
+    {"status":{"name":"Ready"},"phase":{"name":"P7 Audio"},"blockedBy":null,"content":{"__typename":"Issue","number":31,"title":"Every Paths: token is unmatchable","url":"https://github.com/FS-GG/FS.GG.Audio/issues/31","state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.Audio"}}},
+    {"status":{"name":"Done"},"phase":null,"blockedBy":null,"content":{"__typename":"PullRequest","number":449,"title":"the ADR that resolves SDD#350","url":"https://github.com/FS-GG/.github/pull/449","state":"MERGED","repository":{"nameWithOwner":"FS-GG/.github"}}}
   ]}}}},"rateLimit":{"cost":1,"remaining":4989}}
 JSON
 
@@ -162,6 +166,7 @@ cat >"$FIXTURES/lint-p1.json" <<'JSON'
 {"data":{"organization":{"projectV2":{"items":{
   "pageInfo":{"hasNextPage":true,"endCursor":"LCUR1"},
   "nodes":[
+    {"status":{"name":"Ready"},"content":{"__typename":"Issue","number":31,"title":"Every Paths: token is unmatchable (#496 reopened)","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.Audio/issues/31","repository":{"nameWithOwner":"FS-GG/FS.GG.Audio"},"body":"Reserve every lockfile.\n\nPaths: **/packages.lock.json","subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"Backlog"},"content":{"__typename":"Issue","number":400,"title":"[sdd] [epic] Gap A: orphan","state":"OPEN","url":"https://github.com/FS-GG/FS.GG.SDD/issues/400","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"body":"An epic. It has no touch-set, and it SAYS so.\n\nPaths: none\n","subIssues":{"totalCount":0,"nodes":[]}}},
     {"status":{"name":"Done"},"content":{"__typename":"Issue","number":401,"title":"[epic] Done over an open child","state":"CLOSED","url":"https://github.com/FS-GG/FS.GG.SDD/issues/401","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"},"subIssues":{"totalCount":2,"nodes":[
       {"number":402,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}},
@@ -977,6 +982,12 @@ seed_issue_in() {   # seed_issue_in <owner/repo> <num> <title> <paths-or-empty> 
 seed_issue_in FS-GG/FS.GG.Templates   99 "Re-mirror minimumFsggSdd"  "src/Templates/**"
 seed_issue_in FS-GG/FS.GG.SDD        127 "TD1 SDD epic"              "src/Sdd/**"
 seed_issue_in FS-GG/FS.GG.Audio      189 "Placeholder dash"          "src/Audio/Dash.fs"
+# The #520/#476/#496 residue subjects. They are on the board from the FIRST scan, so their bodies must
+# exist from the first scan too: `body_of` fails CLOSED (correctly), so an unseeded board item kills
+# every `batch` call in the file — which is exactly how the first cut of these fixtures broke `next`.
+seed_issue_in FS-GG/FS.GG.Rendering  502 "closed but still Ready"    "src/Closed/**"
+seed_issue_in FS-GG/FS.GG.Templates  350 "blocked by a merged PR"    "src/Tpl350/**"
+seed_issue_in FS-GG/FS.GG.Audio       31 "unmatchable tokens"        "**/packages.lock.json"
 seed_issue_in FS-GG/FS.GG.Rendering  200 "Blocked on an open item"   "src/Render/Blocked.fs"
 seed_issue_in FS-GG/FS.GG.Rendering  201 "Blocker already closed"    "src/Render/Clear.fs"
 seed_issue_in FS-GG/FS.GG.Governance 202 "Blocker not on the board"  "src/Gov/Off.fs"
@@ -985,7 +996,12 @@ seed_issue_in FS-GG/FS.GG.Governance 202 "Blocker not on the board"  "src/Gov/Of
 before_ready="$(gcount)"
 ready_all="$(run ready --json 2>/dev/null)"
 assert_eq "ready: paginates in exactly 2 GraphQL calls" "$((before_ready + 2))" "$(gcount)"
-assert_eq "ready: excludes Done by default (8 of 10 items)" "8" "$(jq 'length' <<<"$ready_all")"
+# 11 of 14 now: the #520/#476/#496 residue fixtures added three non-Done items (a CLOSED-but-Ready
+# issue, an item blocked by a MERGED PR, and one whose every touch-set token is unmatchable) plus a
+# Done PR. `ready` is a TRUTH read — it shows what is on the board, including items the SCHEDULER
+# will refuse. That distinction is the point of #520: the board column is a projection, the issue is
+# the work, and /check-board is what reconciles them.
+assert_eq "ready: excludes Done by default (11 of 14 items)" "11" "$(jq 'length' <<<"$ready_all")"
 assert_contains "ready: keeps the Ready item"   '99'  "$(jq -c '[.[].number]' <<<"$ready_all")"
 assert_contains "ready: keeps a Backlog item"   '127' "$(jq -c '[.[].number]' <<<"$ready_all")"
 assert_eq "ready: drops the Done item (#54)"    "false" "$(jq 'any(.[]; .number==54)' <<<"$ready_all")"
@@ -1268,12 +1284,12 @@ assert_eq "lint: a childless NON-epic is clean — the check is epic-scoped (#40
 assert_eq "lint: a childless CLOSED [epic] is clean — the check is live-work-scoped (#408)" "" "$(codes '#408')"
 assert_contains "lint: EPIC-DONE-OPEN-CHILD names the open child" "#403" \
   "$(jq -r '.[] | select(.code=="EPIC-DONE-OPEN-CHILD") | .detail' <<<"$lint_json")"
-assert_eq "lint: severities — 6 errors, 1 note (2 are NO-TOUCH-SET, #496)" "6 1" \
+assert_eq "lint: severities — 7 errors, 1 note (2 NO-TOUCH-SET + 1 BAD-TOUCH-SET, #496)" "7 1" \
   "$(jq -r '"\([.[]|select(.severity=="error")]|length) \([.[]|select(.severity=="note")]|length)"' <<<"$lint_json")"
 
 assert_fails "lint: exits non-zero when an invariant is broken" run lint
 assert_contains "lint: text output is greppable" "FSGG-LINT ERROR  EPIC-NO-CHILDREN" "$(run lint 2>/dev/null || true)"
-assert_contains "lint: prints an error/note tally on stderr" "6 error(s), 1 note(s)" \
+assert_contains "lint: prints an error/note tally on stderr" "7 error(s), 1 note(s)" \
   "$(run lint 2>&1 >/dev/null || true)"
 
 
@@ -3537,6 +3553,72 @@ PATH="$STUB:$PATH" GH_BOARD_SET=pw env GH_RATELIMIT=1 bash "$COORD" add 'FS.GG.S
 assert_eq "#587: a rate-limited add REFUSES rather than adding on a failed lookup (#421)" \
   "0" "$(grep -c '^item-add' "$GH_LOG" || true)"
 assert_eq "#587: ...and exits EX_RATE (75), the back-off signal" "75" "$add_rl_rc"
+
+# ================================================================================================
+# #520 / #485 RESIDUE — THE SURVIVING DISAGREEMENTS
+# ================================================================================================
+# #485's fix landed (`batch` is THE predicate; `next` and `take` delegate to it). But consolidating
+# five copies into one only helps if the one is RIGHT, and three disagreements outlived the merge.
+
+# ---- 1. A CLOSED ISSUE IS NOT SCHEDULABLE (#520). The sixth disagreement. ------------------------
+# Candidate selection read the board `Status` column and NOTHING ELSE. `board_items` has carried
+# `.state` all along; nothing ever read it. So an issue whose column was never flipped to `Done`
+# stayed a candidate FOREVER — FS.GG.Rendering#502 was handed to a worker two hours after it was
+# closed as completed, and #481's restore-the-column logic then promoted it Backlog -> Ready on
+# release, re-arming it for the next one. `lint` always knew (`select(.state == "OPEN")`); the
+# scheduler simply never asked.
+b520="$(run batch --repo FS.GG.Rendering --json 2>/dev/null || true)"
+case "$b520" in
+  *502*) bad "#520: a CLOSED issue must NOT be schedulable, however the board column reads" "$b520" ;;
+  *)     ok  "#520: a CLOSED issue must NOT be schedulable, however the board column reads" ;;
+esac
+# ...and it must SAY so, not drop it silently. A queue that shrinks without explanation is #440.
+b520r="$(run batch --repo FS.GG.Rendering 2>&1 || true)"
+assert_contains "#520: ...and the reason names the issue state, not a mystery" \
+  "the issue is closed" "$b520r"
+# The board column is a PROJECTION; the issue is the WORK. `ready` must still SHOW it — only the
+# SCHEDULER refuses to hand it out — because /check-board is what reconciles the column.
+r520="$(run ready --repo FS.GG.Rendering 2>/dev/null || true)"
+assert_contains "#520: ...but `ready` still SHOWS it, so /check-board can reconcile the column" \
+  "502" "$r520"
+
+# ---- 2. A MERGED BLOCKER IS RESOLVED — IN EVERY SURFACE, NOT JUST `.blocked` (#476). -------------
+# #476 taught `board_annotate` that a `Blocked by` naming a PR clears on CLOSED *or* MERGED. Two
+# copies of the pre-#476 rule survived: `board_table`'s BLOCKED BY column and `take`'s "a BLOCKED
+# queue, not an empty one" diagnostic. So `.blocked` said false while the display and the diagnostic
+# both named a MERGED pull request as the reason — sending a worker to go and look at FINISHED work.
+# There is ONE definition now (JQ_BLOCKER_RULE) and every site consumes it.
+r476="$(run ready --repo FS.GG.Templates 2>/dev/null || true)"
+merged_row="$(printf '%s\n' "$r476" | grep '350' || true)"
+case "$merged_row" in
+  *"#449"*) bad "#476: a MERGED blocker must not be listed as still blocking (board_table)" "$merged_row" ;;
+  *)        ok  "#476: a MERGED blocker must not be listed as still blocking (board_table)" ;;
+esac
+# ...and the item is genuinely schedulable, not merely displayed as unblocked.
+b476="$(run batch --repo FS.GG.Templates --json 2>/dev/null || true)"
+assert_contains "#476: ...and the item it blocked is startable again" "350" "$b476"
+
+# ---- 3. `lint` WAS GREEN OVER AN ITEM `batch` WILL NEVER SCHEDULE (#496, reopened). --------------
+# `touchset_decl` asked only whether a `Paths:` line EXISTED — it never applied the grammar. So an
+# item whose every token is unmatchable (`**/packages.lock.json`: a leading `**/` matches nothing,
+# and a token that matches nothing CONFLICTS with nothing) was skipped forever by `batch` while the
+# one surface whose job is board health reported `0 error(s)`. That is #496's own defect, reopened
+# for the unmatchable case, and it is why the rule is now shared rather than re-spelled.
+lint31="$(run lint --repo FS.GG.Audio --json 2>/dev/null || true)"
+assert_contains "#496: lint goes RED on an item whose every touch-set token is unmatchable" \
+  "BAD-TOUCH-SET" "$lint31"
+assert_contains "#496: ...and names the token, and the grammar" "packages.lock.json" "$lint31"
+# The two deaths are DIFFERENT deaths, and must not be conflated: one declared nothing, one declared
+# something unusable. #496's whole point was making the distinction machine-readable.
+assert_eq "#496: ...and it is NOT reported as NO-TOUCH-SET — a declaration was made, it is just dead" \
+  "0" "$(printf '%s' "$lint31" | jq -r '[.[] | select(.id | test("#31")) | select(.code == "NO-TOUCH-SET")] | length' 2>/dev/null || echo 0)"
+# ...and a WELL-FORMED touch-set stays green. Without this the assertion above is satisfied by a lint
+# that simply reds everything.
+lint_ok="$(run lint --repo FS.GG.Templates --json 2>/dev/null || true)"
+case "$lint_ok" in
+  *BAD-TOUCH-SET*) bad "#496: a well-formed touch-set must NOT be flagged" "$lint_ok" ;;
+  *)               ok  "#496: a well-formed touch-set must NOT be flagged" ;;
+esac
 
 # ================================================================================================
 # #440 — A FULL QUEUE MUST NOT READ AS AN EMPTY ONE. `next` picks "the first Ready, else the first
