@@ -4556,11 +4556,56 @@ if [ -x "$ENGINE" ]; then
   assert_eq "shadow: ...and it still actually compared the candidates, rather than dodging them" \
     "true" "$(jq -s -r '([.[] | select(.ran) | .compared] | add // 0) > 0' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
 
-  # The engine must also be reachable through PATH alone — that is how Phase 3's shim will find it,
-  # and a resolution path nothing exercises is a resolution path that does not work.
-  cp "$ENGINE" "$STUB/fsgg-coord-engine" 2>/dev/null || true
+  # ---- HOW A RECEIVER ACTUALLY GETS THE ENGINE — and both ways were broken ------------------------
+  # Two resolution paths exist and NEITHER was exercised until now, because CI exports
+  # FSGG_COORD_ENGINE_BIN and an explicit path SHORT-CIRCUITS the resolver by design. Every run below
+  # therefore clears it. Without that, these assertions go green over the code they exist to cover —
+  # which is the same shape as the bug they are testing for.
+  #
+  # A NOTE ON THE STUB BINARY. `cp "$ENGINE" "$STUB/..."` does NOT work: the built engine is a native
+  # apphost that resolves its own .dll, FSharp.Core and runtimeconfig.json RELATIVE TO ITSELF, so a
+  # lone copy of it is a binary that starts and immediately dies. That is exactly what happened, and
+  # the leaked env var hid it. A wrapper script is the honest simulation of "a binary on PATH".
+  engine_on_path() { printf '#!/usr/bin/env bash\nexec "%s" "$@"\n' "$ENGINE" >"$STUB/fsgg-coord-engine"; chmod +x "$STUB/fsgg-coord-engine"; }
+
+  # (1) A LOCAL TOOL — the receivers' shape, and the one that would have made the whole distribution
+  #     a no-op. `dotnet tool restore` installs a MANIFEST-scoped tool, and a local tool is
+  #     deliberately NOT placed on $PATH: it answers to `dotnet tool run <command>` and nothing else.
+  #     A resolver that only did `command -v fsgg-coord-engine` would find NOTHING there — the package
+  #     ships, the manifest lands, the tool restores, and the shadow silently never runs. Shipped,
+  #     installed, and inert.
+  rm -f "$STUB/fsgg-coord-engine"          # no binary on PATH: force the local-tool path
   : >"$FSGG_COORD_DIVERGENCE_LOG"
-  viapath="$(FSGG_COORD_ENGINE=shadow run batch --repo rendering --json 2>/dev/null || true)"
+  LOCALTOOL="$WORK/localtool"; mkdir -p "$LOCALTOOL/.config"
+  git -C "$LOCALTOOL" init -q >/dev/null 2>&1
+  cat >"$LOCALTOOL/.config/dotnet-tools.json" <<'TOOLS'
+{ "version": 1, "isRoot": true,
+  "tools": { "fs.gg.coord.cli": { "version": "0.1.0", "commands": ["fsgg-coord-engine"] } } }
+TOOLS
+  # A `dotnet` implementing exactly the one contract the resolver depends on. If the resolver never
+  # reaches for `dotnet tool run`, this is never called, the run records a SKIP, and the assertion
+  # fails — which is what makes it bite.
+  cat >"$STUB/dotnet" <<DOTNET
+#!/usr/bin/env bash
+if [ "\$1" = "tool" ] && [ "\$2" = "run" ] && [ "\$3" = "fsgg-coord-engine" ]; then
+  shift 3; exec "$ENGINE" "\$@"
+fi
+echo "dotnet stub: unhandled: \$*" >&2; exit 3
+DOTNET
+  chmod +x "$STUB/dotnet"
+  localout="$( cd "$LOCALTOOL" && PATH="$STUB:$PATH" FSGG_COORD_CACHE="$FSGG_COORD_CACHE" \
+                 FSGG_COORD_ENGINE_BIN= bash "$COORD" batch --repo rendering --json 2>/dev/null || true )"
+  assert_eq "shadow: a LOCAL tool (dotnet tool restore) resolves — it is NOT on PATH, and never will be" \
+    "true" "$(jq -s -r '[.[] | select(.ran)] | last | .ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+  assert_eq "shadow: ...and it compared, rather than shipping an inert tool" \
+    "true" "$(jq -s -r '([.[] | select(.ran) | .compared] | add // 0) > 0' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+  assert_eq "shadow: ...and STILL returned bash's answer" "$plain" "$localout"
+  rm -f "$STUB/dotnet"
+
+  # (2) A GLOBAL TOOL on PATH — `dotnet tool install -g`, or anything the operator put there.
+  engine_on_path
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  viapath="$(FSGG_COORD_ENGINE_BIN= FSGG_COORD_ENGINE=shadow run batch --repo rendering --json 2>/dev/null || true)"
   assert_eq "shadow: the engine resolves off PATH (the shape the Phase 3 shim will use)" "$plain" "$viapath"
   assert_eq "shadow: ...and that run is recorded as RAN, not skipped" \
     "true" "$(jq -s -r '[.[] | select(.ran)] | last | .ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
@@ -4568,14 +4613,14 @@ if [ -x "$ENGINE" ]; then
   # AND WITH NO ENV VAR AT ALL. This is the assertion the whole phase turns on: an engine on PATH and
   # nobody opting in to anything must still produce evidence, or the three-day clock never starts.
   : >"$FSGG_COORD_DIVERGENCE_LOG"
-  autoout="$(run batch --repo rendering --json 2>/dev/null || true)"
+  autoout="$(FSGG_COORD_ENGINE_BIN= run batch --repo rendering --json 2>/dev/null || true)"
   assert_eq "shadow: an engine on PATH shadows BY DEFAULT — no env var, no flag, no ceremony" \
     "true" "$(jq -s -r '[.[] | select(.ran)] | last | .ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
   assert_eq "shadow: ...and it STILL returns bash's answer, byte for byte" "$plain" "$autoout"
 
   # ...and `--engine bash` remains the escape hatch: never shadow, whatever is on PATH.
   : >"$FSGG_COORD_DIVERGENCE_LOG"
-  offout="$(run --engine bash batch --repo rendering --json 2>/dev/null || true)"
+  offout="$(FSGG_COORD_ENGINE_BIN= run --engine bash batch --repo rendering --json 2>/dev/null || true)"
   assert_eq "shadow: --engine bash refuses to shadow even with an engine right there" \
     "0" "$(wc -c <"$FSGG_COORD_DIVERGENCE_LOG" | tr -d ' ')"
   assert_eq "shadow: ...and answers identically" "$plain" "$offout"
