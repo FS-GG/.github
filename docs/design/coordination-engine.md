@@ -568,6 +568,41 @@ was **not** compared, not only what was. The pattern across all five is the same
 with: *a number that only ever reports what it looked at is how "we agreed" and "we never checked"
 come to print the same sentence.*
 
+#### The phase boundary was circular, and the roadmap above still says so
+
+**Phase 2 as specified could never exit.** Its gate is *"zero divergence across the live fleet for
+three consecutive days"* — and at the moment the harness landed, **nothing anywhere ran it**:
+
+- The shadow defaulted **off** (`--engine=bash`), faithfully to *"behind a flag, defaulting off"*, and
+  nothing in the fleet sets the flag.
+- The engine only exists where somebody built it — which is `.github`, and nowhere else, because
+  distribution is Phase 3's job.
+- **No workflow scans the live board at all.** `GITHUB_TOKEN` is repo-scoped and cannot read an
+  *org* Projects v2 board, so a scheduled shadow would need an App or PAT grant that does not exist.
+
+So: Phase 2 cannot exit without fleet-wide evidence → fleet-wide evidence needs the engine distributed
+→ distribution is Phase 3 → Phase 3 is gated on Phase 2 exiting. **The clock could never start.** An
+observer nobody switches on is not a cautious observer; it is a decoration, and it would have sat there
+producing a reassuring empty log — which is, precisely, this project's own thesis about what an empty
+result means.
+
+**Half of it is fixed here.** The shadow now defaults to `auto`: it runs **wherever an engine
+resolves**, and does nothing where one does not. The presence of the engine *is* the switch, which is
+the honest gate — a repo without one is byte-for-byte unaffected and cannot be broken by a thing that
+is not there. No env var, no opt-in, no ceremony. It is safe to make this the default only because the
+shadow has been proven unable to change bash's answer, its exit code, or its life (709 assertions,
+including a mutation test that removes the containment and watches the tool die).
+
+**The other half is a real change to the roadmap, and it belongs to whoever schedules Phase 3:**
+
+> **Phase 3 must split into 3a (publish) and 3b (flip).** Shipping the engine as a `dotnet tool` plus
+> the kit shim is what lets the shadow run in the six receivers *at all* — and it is **not a flip**:
+> bash stays authoritative throughout, and `--engine=fs` stays refused. Only once 3a has been live long
+> enough for the divergence log to be both **non-empty and clean** does 3b become answerable.
+>
+> Publishing before flipping is not a compromise. It is the only order in which the flip's evidence can
+> exist.
+
 ### Phase 3 — flip *(days)*
 
 - `--engine=fs` becomes the default; `--engine=bash` remains as the escape hatch.
