@@ -46,6 +46,7 @@ jobs:
   # Offline, and first: prove the gate can still say NO before believing it when it says yes.
   fixture:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
@@ -58,6 +59,7 @@ jobs:
 
   permissions-coherent:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: fixture
     steps:
       - uses: actions/checkout@v7

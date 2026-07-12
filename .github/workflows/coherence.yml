@@ -36,6 +36,7 @@ jobs:
   # into a red check. Pure-stdlib + PyYAML; no network, no feed token.
   projection:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
@@ -57,6 +58,7 @@ jobs:
   # without rostering it" a red check. Pure-stdlib + PyYAML; one REST call.
   roster-closure:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6

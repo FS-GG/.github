@@ -32,6 +32,7 @@ jobs:
   publish:
     name: Pack & publish new-sdd-workspace
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: github.repository == 'FS-GG/.github'
     # Least-privilege: only this job gains packages: write; the push uses the run-scoped
     # GITHUB_TOKEN, never a PAT.

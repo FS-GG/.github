@@ -96,6 +96,7 @@ concurrency:
 jobs:
   autofix:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       BRANCH: bot/skill-registry-autofix
       REGISTRY: registry/skills.yml

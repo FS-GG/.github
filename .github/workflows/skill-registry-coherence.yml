@@ -45,6 +45,7 @@ jobs:
   # coherence`, and a bare `coherence` next to it is unreadable in the PR checks list.
   registry-coherence:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -71,6 +72,7 @@ jobs:
   # rewrites only the stale sha256. Mirrors surface-impact-selftest.yml.
   fixture:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Install PyYAML

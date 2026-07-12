@@ -41,6 +41,7 @@ permissions:
 jobs:
   fixture:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Run the coordination-sync fixture

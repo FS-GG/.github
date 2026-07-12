@@ -44,6 +44,7 @@ jobs:
   # Read the receiver list from the roster into a matrix — {full, owner, name} per repo.
   plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       repos: ${{ steps.roster.outputs.repos }}
       kit: ${{ steps.roster.outputs.kit }}
@@ -68,6 +69,7 @@ jobs:
     needs: plan
     if: ${{ needs.plan.outputs.repos != '[]' && needs.plan.outputs.repos != '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Serialize per receiver: the rolling sync branch is force-updated, so two concurrent runs
     # (rapid successive kit merges) must not race the same branch. Don't cancel — let each finish.
     concurrency:

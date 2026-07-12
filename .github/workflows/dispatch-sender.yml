@@ -49,6 +49,7 @@ permissions:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Preflight — App credentials present
         shell: bash
