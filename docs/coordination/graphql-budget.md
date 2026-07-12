@@ -145,9 +145,26 @@ So the client treats it as its own condition:
   by retrying immediately.
 - **The lock still works.** Claim markers, comments, issue reads, PR creation — all REST, all on the
   other budget. `claim` under exhaustion takes the lock and reports the board write as **DEFERRED**.
-- **The board write is queued, not lost.** `flush` replays it; the next board-writing command flushes
-  automatically. An off-board item is *dropped* from the queue (that fact is permanent, not transient) —
-  everything else is retried.
+- **The board write is queued, not lost — and this is now true of EVERY board write.** There is one
+  board write in the client (`board_write`), and it queues. `flush` replays it; the next board-writing
+  command flushes automatically.
+
+  It was not always so, and the way it failed is worth keeping: **only `claim` ever called
+  `defer_write`**, while the exhaustion message above told *every* caller "Board WRITES are queued".
+  So a `set-field` — which the recipes drive three times in a row when a worker files a finding —
+  printed the promise and **dropped the write**; `flush` then found an empty queue and reported
+  success, *confirming the lie*. The finding landed on the board with no Status, no Repo Scope and no
+  Phase, and the worker who read the message did the correct thing and carried on (`.github#510`).
+  A promise nothing keeps is worse than no promise: it is the one thing that stops the worker looking.
+
+- **Three failures, three facts — and only one of them is queued.**
+  - **EX_RATE — transient.** The budget returns and the same write then succeeds. **Queued.**
+  - **Off-board — permanent.** There is no item to write to; a queued write here could never land, so
+    queueing it would be a second unkeepable promise. **Dropped, loudly.**
+  - **Refused — the value or the field is wrong.** An unknown field, an unknown option, a `Blocked by`
+    that is not a ref (canonicalised *before* any GraphQL is spent, precisely so a bad value costs
+    nothing). Replaying it could not succeed on the tenth attempt either, and queueing it would
+    swallow the refusal that says why. **Never queued; the refusal reaches the worker.**
 - **A failed lookup is never a confident absence** ([#421](https://github.com/FS-GG/.github/issues/421),
   the [#266](https://github.com/FS-GG/.github/issues/266) class). A rate-limited `item-id` used to print
   "issue … is not on board — add it first: `gh project item-add …`" for an issue that *was* on the board,
