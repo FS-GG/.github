@@ -1,0 +1,160 @@
+# required-context-coherence — every required status check must be one some workflow can produce.
+#
+# .github#549, epic #266. Found while working FS.GG.Audio#60 — the first FS-GG repo to require a
+# reusable-workflow-nested context.
+#
+# When a caller invokes a reusable workflow, GitHub names the check `<caller job> / <callee job>`.
+# FS.GG.Audio's branch protection requires `lock-ranges / lock-ranges` — and the right-hand half of
+# that string is a job id inside FS-GG/.github's lock-range-coherence.yml, tracked at the moving ref
+# `@main`. Rename that job — an ordinary, apparently-internal refactor, in a repo whose CI is green,
+# reviewed by people with no reason to look downstream — and the context Audio requires is never
+# reported again. GitHub holds every PR at "Expected — waiting for status to be reported", forever.
+# Audio runs `enforce_admins: true` with no required reviews, so there is no bypass: the repo stops
+# merging, and no commit in it changed.
+#
+# So a reusable workflow's JOB IDS ARE API, exactly as its `permissions:` (#478) and its secrets
+# (#482) are. See docs/coordination/reusable-workflow-contract.md.
+#
+# WHY THIS IS REUSABLE, AND NOT A ROSTER-WIDE GATE HERE. Reading required status checks needs
+# `administration: read`, and a workflow's GITHUB_TOKEN carries NO rights in any repo but its own.
+# A gate in FS-GG/.github therefore CANNOT read FS.GG.Audio's protection — not for want of trying,
+# but structurally. Each repo reads its own, with its own token, granting the scope in its own
+# caller. That is self-service: it needs no org-admin App change, and #478's permission-coherence
+# then verifies the grant for free.
+#
+# It is a DIAGNOSTIC, not yet a preventive: it red-lights the receiver whose protection has become
+# unsatisfiable, converting a silent forever-pending PR into a named failure that says which job was
+# renamed. Catching the rename in the PR to FS-GG/.github that CAUSES it needs a second gate here,
+# reading every rostered repo's protection with a credential that does not exist today. Filed
+# separately; this workflow is the half that can be built without provisioning.
+#
+# STATIC. It derives what a repo CAN produce from committed YAML rather than sampling live check
+# runs — because a check that has not reported yet and a check that can NEVER report look identical
+# at any instant, and it is the second one that deadlocks the repo.
+name: required-context-coherence
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: "The protected branch whose required checks are audited."
+        type: string
+        default: "main"
+      github-ref:
+        description: "Ref of FS-GG/.github to source the check script from."
+        type: string
+        default: "main"
+
+permissions:
+  contents: read
+  # Required status checks live behind the repository-administration API. A CALLER must grant this;
+  # a callee cannot request a permission its caller withheld (#478), and without it the gate has no
+  # verdict rather than a green one.
+  administration: read
+
+jobs:
+  required-contexts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout caller
+        uses: actions/checkout@v7
+        with:
+          path: caller
+
+      - name: Checkout FS-GG/.github (check-script authority)
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/.github
+          ref: ${{ inputs.github-ref }}
+          path: dotgithub
+          sparse-checkout: scripts/check-required-contexts.py
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Assert every required status check is a context some workflow can produce
+        id: check
+        env:
+          # Passed via env, never interpolated into the run script — `workflow_call` inputs are
+          # caller-controlled, and this is the org's uniform anti-injection pattern (cf.
+          # lock-range-coherence.yml, skill-union-assert.yml).
+          BRANCH: ${{ inputs.branch }}
+          TARGET_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rc=0
+          out="$(python dotgithub/scripts/check-required-contexts.py \
+                   --repo "${TARGET_REPO}" --root caller --branch "${BRANCH}" 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320) — and "try again" must never
+      # be mistaken for "a human must fix a file" (#335). The exit code is the contract; nothing here
+      # greps the gate's prose.
+      - name: 'OK: every required context is producible'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "required-context-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a required status check can never report — this branch is deadlocked'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### required-context-coherence: a required check can never report"
+            echo
+            echo "This branch's protection **requires** a status check that no workflow here can"
+            echo "produce. GitHub will hold every pull request at *\"Expected — waiting for status"
+            echo "to be reported\"* indefinitely. **No commit in this repo need have changed for"
+            echo "that to start.**"
+            echo
+            echo "The usual cause is that half the context is owned elsewhere: a reusable workflow"
+            echo "names its check \`<caller job> / <callee job>\`, so **renaming a job inside the"
+            echo "callee is a breaking change for every caller that requires it**. The other cause"
+            echo "is a plain typo in the protection setting — identical symptom, identical outage."
+            echo
+            echo "See the log for the required context, and for what that job actually produces now."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=required-context-coherence: a required check can never report::A required status check is not producible by any pull_request workflow. Every PR to this branch will hang. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (retryable): the API could not be read'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '2' }}
+        run: |
+          {
+            echo "### required-context-coherence: no verdict"
+            echo
+            echo "Branch protection or a callee workflow could not be read (rate limit or outage),"
+            echo "so the gate has **no verdict** — this is not a pass. Re-run the workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=required-context-coherence: no verdict (retryable)::The API could not be read, so nothing was proven. Re-run. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): a permission or a file a human must fix'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### required-context-coherence: no verdict — a human must fix something"
+            echo
+            echo "Either the token may not read branch protection — the **calling job** must grant"
+            echo '`administration: read`; a callee cannot request a permission its caller withheld'
+            echo "(#478) — or a workflow will not parse, a callee is missing at the ref it is"
+            echo "pinned to, or a \`strategy.matrix\` cannot be enumerated exactly (this gate will"
+            echo "not guess a producible set, because a wrong guess that happened to contain the"
+            echo "required context would be a green verdict over a deadlocked repo)."
+            echo
+            echo "Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=required-context-coherence: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=required-context-coherence: inconclusive::check-required-contexts.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

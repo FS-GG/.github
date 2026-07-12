@@ -1,0 +1,62 @@
+# The failure legs of the required-context coherence gate (.github#549, epic #266).
+#
+# required-context-coherence.yml is a REUSABLE workflow: it runs in the receivers' repos, not here,
+# so nothing in this repo would otherwise ever execute scripts/check-required-contexts.py. A gate
+# whose only exercise is in somebody else's CI is a gate nobody can change safely — and per epic
+# #266's ratified rule, A GATE THAT CANNOT FAIL ON ITS SUBJECT IS NOT A GATE.
+#
+# The headline leg is the outage itself, built from the real files: FS.GG.Audio's actual gate.yml
+# caller, THIS repo's actual lock-range-coherence.yml callee, and Audio's actual required contexts —
+# with the callee's `lock-ranges:` job renamed. That rename is a commit to THIS repo, and the fixture
+# asserts it stops every PR in Audio from merging. It is the closest thing to a live tripwire on the
+# coupling: a PR here that renames the job breaks this fixture, in this repo, before it can break
+# Audio.
+#
+# It also asserts both directions of the cry-wolf risk: a third-party app's required context is
+# SKIPPED rather than flagged (the gate cannot see that producer), while a branch that is simply
+# unprotected is a clean exit 0 that does not pretend the repo's gates are green.
+#
+# Static: no SDK, no restore, no network. `gh` is stubbed and fails like the real one — a 404 is an
+# answer ("not protected"), a 403 is a permission a human must grant, a rate limit is neither.
+name: required-context-coherence-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-required-contexts.py"
+      - "tests/required-contexts/**"
+      - ".github/workflows/required-context-coherence.yml"
+      - ".github/workflows/required-context-coherence-selftest.yml"
+      # The fixture pins the REAL callee: renaming a job in it must break this fixture, here.
+      - ".github/workflows/lock-range-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-required-contexts.py"
+      - "tests/required-contexts/**"
+      - ".github/workflows/required-context-coherence.yml"
+      - ".github/workflows/required-context-coherence-selftest.yml"
+      - ".github/workflows/lock-range-coherence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: required-context-coherence-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Run the required-contexts fixture (no network)
+        run: bash tests/required-contexts/run.sh
