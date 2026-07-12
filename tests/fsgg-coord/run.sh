@@ -3215,6 +3215,98 @@ assert_contains "#418: ...and accounts for EVERY queued write" "$depth_before wr
 assert_eq "#418: ...leaving the queue drained and UNLINKED (not merely unreadable)" \
   "ABSENT" "$(pending_depth)"
 
+# ================================================================================================
+# #510 — THE PROMISE THAT WAS ONLY TRUE FOR `claim`. Every one of the assertions above is about
+# `claim`, and `claim` was the ONLY command that called defer_write. Every OTHER board write —
+# `set-field` (which the recipes drive several times in a row when filing a finding), `done --flip`,
+# `release`, `reap` — fell through to the shared EX_RATE handler, which prints:
+#
+#     "... Board WRITES are queued: see `fsgg-coord flush`."
+#
+# and queued NOTHING. The write was gone, and the message told the worker it was safe — so the worker
+# did the correct thing, trusted it, carried on, and the finding they had just filed landed on the
+# board with no Status, no Repo Scope and no Phase. `flush` then reported "nothing pending" and
+# CONFIRMED the lie. (Family: epic #416 — a surface that runs, reports success, and does nothing.)
+#
+# There is now exactly ONE board write (`board_write`) and it queues. These assertions are the
+# reproduction from the issue, verbatim: two `set-field` calls on an exhausted budget, then `flush`.
+
+seed_issue 811 "Rate-limited set-field" "src/Rl811/**"
+rm -f "$FSGG_COORD_CACHE/pending.jsonl"
+
+sf_rl_rc=0
+sf_rl="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw env GH_RATELIMIT=1 \
+  bash "$COORD" set-field 'FS.GG.SDD#811' Contract 'fs-gg-ui-template' 2>&1)" || sf_rl_rc=$?
+assert_eq "#510: a rate-limited set-field exits EX_RATE (75), the back-off signal" "75" "$sf_rl_rc"
+assert_contains "#510: ...and SAYS the write is queued" "QUEUED" "$sf_rl"
+# THE BUG, in one assertion: the message promised a queue and the queue was empty.
+assert_eq "#510: ...and the write is ACTUALLY in the queue — the promise is kept, not printed" "1" \
+  "$(grep -c '"ref":"FS.GG.SDD#811","field":"Contract"' "$FSGG_COORD_CACHE/pending.jsonl" 2>/dev/null || echo 0)"
+
+# The recipe drives several in a row (cross-repo-coordination + pnext-item §4 both do). Every one of
+# them must survive, not just the first — the worker filing a finding sets Status, Repo Scope, Phase.
+PATH="$STUB:$PATH" GH_BOARD_SET=pw env GH_RATELIMIT=1 \
+  bash "$COORD" set-field 'FS.GG.SDD#811' Status Backlog >/dev/null 2>&1 || true
+assert_eq "#510: a SECOND recipe-driven write queues too (a finding sets 3 fields, not 1)" "2" \
+  "$(pending_depth)"
+
+# ...but ONLY a transient failure is queued. A REFUSED write — an unknown field, an unknown option, a
+# `Blocked by` that is not a ref — must NEVER be queued: replaying it could not succeed on the tenth
+# attempt either, and the queue would carry it forever while swallowing the refusal that says why.
+# This is the trap the first cut of the fix fell into, so it is pinned here.
+refused_rc=0
+refused="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw \
+  bash "$COORD" set-field 'FS.GG.SDD#811' 'No Such Field' x 2>&1)" || refused_rc=$?
+assert_eq "#510: a REFUSED write is not EX_RATE — it is a plain error" "1" "$refused_rc"
+# Assert the REFUSED write's absence from the queue directly, not via the queue's depth: this call
+# runs with the budget restored, so `autoflush` legitimately drains the two writes queued above
+# first. Depth would then be green for the wrong reason — the #436 shape, and the very trap this
+# fixture already calls out one section up.
+assert_eq "#510: ...and is NOT queued (replaying it would never succeed)" "0" \
+  "$(grep -c 'No Such Field' "$FSGG_COORD_CACHE/pending.jsonl" 2>/dev/null || echo 0)"
+assert_contains "#510: ...and the refusal REACHES the worker, naming the fields that do exist" \
+  "no field named" "$refused"
+# The diagnostic itself used to die: the jq filter was written `join(\", \")` inside a $( ) — the
+# backslashes survive, jq gets a syntax error, and the message that explains the refusal IS the
+# refusal. A diagnostic that cannot render is a diagnostic that does not exist.
+case "$refused" in *"jq: error"*) bad "#510: the refusal message must RENDER, not throw a jq syntax error" "$refused" ;;
+                   *)             ok "#510: the refusal message must RENDER, not throw a jq syntax error" ;; esac
+
+# `done --flip` is the other silent dropper: it flipped Status and, on an exhausted budget, said
+# "board: Done" over a write that never landed. The stamp stays GREEN (the work IS merged and done —
+# a red stamp on correct work is how a red stamp becomes noise, #558), but the board note must not
+# claim Done, and the exit must be EX_RATE so a loop backs off and flushes.
+done_rl_rc=0
+done_rl="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 env GH_RATELIMIT=1 \
+  bash "$COORD" done 'FS.GG.SDD#801' --flip 2>&1)" || done_rl_rc=$?
+case "$done_rl" in
+  *"board: Done"*) bad "#510: done --flip must NOT report 'board: Done' over a write it only queued" "$done_rl" ;;
+  *)               ok  "#510: done --flip must NOT report 'board: Done' over a write it only queued" ;;
+esac
+assert_eq "#510: ...it exits EX_RATE (75) so the loop backs off and flushes" "75" "$done_rl_rc"
+
+# `release` restores the column the claim overwrote (#481). On an exhausted budget it used to report
+# "not on board" — #418's exact misdiagnosis, still live here — and DROP the restore, stranding the
+# item in the column the claim overwrote with no claim on it. It now names the real cause.
+#
+# NOTE the leg this does NOT cover: under exhaustion `release` fails at the *read* of the current
+# Status, before it ever reaches a write, so what it reports is "could not read it" and the restore is
+# still not queued. That is a real residue — the WRITE path is fixed here, the READ path is a separate
+# defect — and it is honest rather than false, which is the bar this issue sets. Do not read the
+# passing assertion below as "release under exhaustion restores the column"; it does not.
+rel_rl="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 env GH_RATELIMIT=1 \
+  bash "$COORD" --worker vole-418 release 'FS.GG.SDD#810' 2>&1 || true)"
+case "$rel_rl" in
+  *"not on board"*) bad "#510: a rate-limited release must NOT be misreported as 'not on board'" "$rel_rl" ;;
+  *)                ok  "#510: a rate-limited release must NOT be misreported as 'not on board'" ;;
+esac
+# Whatever it says, it must not ASSERT a board column it did not write.
+case "$rel_rl" in *"board: Ready"*|*"board: Backlog"*)
+    bad "#510: release must not claim a restore it never performed" "$rel_rl" ;;
+  *) ok "#510: release must not claim a restore it never performed" ;; esac
+
+rm -f "$FSGG_COORD_CACHE/pending.jsonl"
+
 # (4) THE SCAN CACHE — the lever that stops the budget running out in the first place. Two `next`
 # calls inside the TTL must cost ONE board scan, because the second serves the first's scan from the
 # shared (user-level, therefore cross-worker) cache. This is the assertion that would have caught the
