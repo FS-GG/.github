@@ -209,7 +209,8 @@ mkissue 414            # #409's (b): a genuine unlinked issue, and it must still
 #   #44 -> epic #301: children #44 and #45, both CLOSED and board Done.              Must FLIP.
 cat >"$FIXTURES/done-42.json" <<'JSON'
 {"data":{"repository":{"issue":{"number":42,"title":"child of an unfinished epic","url":"https://github.com/FS-GG/FS.GG.SDD/issues/42","state":"CLOSED",
-  "closedByPullRequestsReferences":{"nodes":[{"number":7,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/7","merged":true,"mergedAt":"2026-07-01T10:00:00Z","mergeCommit":{"abbreviatedOid":"abc1234"}}]},
+  "closedByPullRequestsReferences":{"nodes":[{"number":7,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/7","merged":true,"mergedAt":"2026-07-01T10:00:00Z","mergeCommit":{"abbreviatedOid":"abc1234"},
+      "closingIssuesReferences":{"nodes":[{"number":42,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}]},
   "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
   "parent":{"number":300}}}},"rateLimit":{"cost":1,"remaining":4968}}
 JSON
@@ -225,7 +226,8 @@ cat >"$FIXTURES/rollup-42.json" <<'JSON'
 JSON
 cat >"$FIXTURES/done-44.json" <<'JSON'
 {"data":{"repository":{"issue":{"number":44,"title":"last child of a finished epic","url":"https://github.com/FS-GG/FS.GG.SDD/issues/44","state":"CLOSED",
-  "closedByPullRequestsReferences":{"nodes":[{"number":9,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/9","merged":true,"mergedAt":"2026-07-02T10:00:00Z","mergeCommit":{"abbreviatedOid":"def5678"}}]},
+  "closedByPullRequestsReferences":{"nodes":[{"number":9,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/9","merged":true,"mergedAt":"2026-07-02T10:00:00Z","mergeCommit":{"abbreviatedOid":"def5678"},
+      "closingIssuesReferences":{"nodes":[{"number":44,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}]},
   "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
   "parent":{"number":301}}}},"rateLimit":{"cost":1,"remaining":4966}}
 JSON
@@ -245,7 +247,8 @@ JSON
 # a child it cannot see. #999 appears as a trailing ref on a declaration line and is NOT a child.
 cat >"$FIXTURES/done-46.json" <<'JSON'
 {"data":{"repository":{"issue":{"number":46,"title":"the only LINKED child of an epic with an unlinked one","url":"https://github.com/FS-GG/FS.GG.SDD/issues/46","state":"CLOSED",
-  "closedByPullRequestsReferences":{"nodes":[{"number":11,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/11","merged":true,"mergedAt":"2026-07-03T10:00:00Z","mergeCommit":{"abbreviatedOid":"9ab0cde"}}]},
+  "closedByPullRequestsReferences":{"nodes":[{"number":11,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/11","merged":true,"mergedAt":"2026-07-03T10:00:00Z","mergeCommit":{"abbreviatedOid":"9ab0cde"},
+      "closingIssuesReferences":{"nodes":[{"number":46,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}]},
   "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
   "parent":{"number":302}}}},"rateLimit":{"cost":1,"remaining":4963}}
 JSON
@@ -264,7 +267,8 @@ JSON
 # pins the join: `paste -sd', '` cycles its delimiters and would render "a,b c".
 cat >"$FIXTURES/done-48.json" <<'JSON'
 {"data":{"repository":{"issue":{"number":48,"title":"child of an epic written with + bullets","url":"https://github.com/FS-GG/FS.GG.SDD/issues/48","state":"CLOSED",
-  "closedByPullRequestsReferences":{"nodes":[{"number":13,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/13","merged":true,"mergedAt":"2026-07-04T10:00:00Z","mergeCommit":{"abbreviatedOid":"1234abc"}}]},
+  "closedByPullRequestsReferences":{"nodes":[{"number":13,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/13","merged":true,"mergedAt":"2026-07-04T10:00:00Z","mergeCommit":{"abbreviatedOid":"1234abc"},
+      "closingIssuesReferences":{"nodes":[{"number":48,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}]},
   "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
   "parent":{"number":303}}}},"rateLimit":{"cost":1,"remaining":4961}}
 JSON
@@ -283,7 +287,8 @@ JSON
 # and the epic rolls up (FS-GG/.github#346). Contrast #302, whose unlinked ref is a real ISSUE.
 cat >"$FIXTURES/done-52.json" <<'JSON'
 {"data":{"repository":{"issue":{"number":52,"title":"child of an epic that also cites the PR that closed it","url":"https://github.com/FS-GG/FS.GG.SDD/issues/52","state":"CLOSED",
-  "closedByPullRequestsReferences":{"nodes":[{"number":19,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/19","merged":true,"mergedAt":"2026-07-05T10:00:00Z","mergeCommit":{"abbreviatedOid":"cafe123"}}]},
+  "closedByPullRequestsReferences":{"nodes":[{"number":19,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/19","merged":true,"mergedAt":"2026-07-05T10:00:00Z","mergeCommit":{"abbreviatedOid":"cafe123"},
+      "closingIssuesReferences":{"nodes":[{"number":52,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}]},
   "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
   "parent":{"number":55}}}},"rateLimit":{"cost":1,"remaining":4959}}
 JSON
@@ -300,6 +305,92 @@ cat >"$FIXTURES/rollup-none.json" <<'JSON'
 {"data":{"repository":{"issue":{"parent":null}}},"rateLimit":{"cost":1,"remaining":4964}}
 JSON
 
+# ------------------------------------------------------------------------------------------------
+# THE DONE-STAMP'S THREE HOLES (#558, #543, #583). Fixtures here; assertions further down.
+#
+# #165: THE CLOSING KEYWORD WAS IN THE COMMIT SUBJECT (#558 / #543 leg 1). `gh pr create --fill` —
+#   which pnext-item §5 prescribes — maps the commit SUBJECT to the PR TITLE. GitHub populates
+#   `closingIssuesReferences` from the PR BODY only, and only while the PR is open. So a worker writing
+#   the near-universal `gate: reconstruct the scene edge (closes #165)` gets: PR merged ✓, issue closed
+#   ✓ (by the squash commit — GitHub honoured the keyword), CI green ✓, board Done ✓ ... and a
+#   PERMANENTLY RED STAMP. Editing the merged PR's body does not backfill the link; the window shut at
+#   merge. The item is genuinely done and genuinely unstampable, and the recipe forbids the only other
+#   route ("faking it is how the board starts lying"). A red that fires reproducibly on correct,
+#   merged, green work is the fastest way to teach every worker that red stamps are noise.
+#   GitHub's OWN record of the closing act — the CLOSED_EVENT's `closer` — names PR 175. Stamp DONE.
+cat >"$FIXTURES/done-165.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":165,"title":"closed by a squash commit whose SUBJECT carried the keyword","url":"https://github.com/FS-GG/FS.GG.SDD/issues/165","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":175,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/175","merged":true,"mergedAt":"2026-07-11T10:00:00Z","mergeCommit":{"abbreviatedOid":"5e5a17c"},
+      "closingIssuesReferences":{"nodes":[]}}
+  ]},
+  "timelineItems":{"nodes":[{"closer":{"__typename":"PullRequest","number":175}}]},
+  "subIssues":{"totalCount":0,"nodes":[]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4954}}
+JSON
+# #166: same, but GitHub recorded the closer as the COMMIT (the squash), not the PR. The commit's
+#   associated PR is 176. Same verdict — GitHub still says that is what closed it.
+cat >"$FIXTURES/done-166.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":166,"title":"closed by a COMMIT; the PR is reachable only through it","url":"https://github.com/FS-GG/FS.GG.SDD/issues/166","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":176,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/176","merged":true,"mergedAt":"2026-07-11T11:00:00Z","mergeCommit":{"abbreviatedOid":"77c0de1"},
+      "closingIssuesReferences":{"nodes":[]}}
+  ]},
+  "timelineItems":{"nodes":[{"closer":{"__typename":"Commit","oid":"77c0de1","associatedPullRequests":{"nodes":[{"number":176}]}}}]},
+  "subIssues":{"totalCount":0,"nodes":[]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4953}}
+JSON
+# #96: `--pr` USED TO SKIP PROVENANCE ENTIRELY (#543 leg 2) — it selected by NUMBER alone. So the
+#   documented escape hatch from #558 was a SOUNDNESS HOLE that reintroduced #342: point it at any
+#   merged PR that merely MENTIONS the issue and the stamp went green. PR 97 closes #70, not #96, and
+#   no CLOSED_EVENT names it. `done #96 --pr 97` must REFUSE. `--pr` overrides WHICH PR, never WHETHER.
+cat >"$FIXTURES/done-96.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":96,"title":"a merged PR mentions it; --pr must not launder that into a stamp","url":"https://github.com/FS-GG/FS.GG.SDD/issues/96","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":97,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/97","merged":true,"mergedAt":"2026-07-11T12:00:00Z","mergeCommit":{"abbreviatedOid":"deadfa1"},
+      "closingIssuesReferences":{"nodes":[{"number":70,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}
+  ]},
+  "timelineItems":{"nodes":[]},
+  "subIssues":{"totalCount":0,"nodes":[]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4952}}
+JSON
+# #507: DONE OVER AN OPEN CHILD (#583) — the #322 failure, in the command written to prevent it.
+#   `epic_rollup` reads the sub-issue graph of the item's PARENT and never asks the same question of
+#   the item in hand. A worker following pnext-item §4 (split off what you cannot land, `child`-link
+#   it) therefore closes the parent over the split-out acceptance criterion, with a green ✓✓ actively
+#   saying otherwise. The more faithfully a worker splits their work, the more reliably it fires.
+#   Must REFUSE, and name the open child.
+cat >"$FIXTURES/done-507.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":507,"title":"two of three criteria landed; the third was split out and child-linked","url":"https://github.com/FS-GG/FS.GG.SDD/issues/507","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":508,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/508","merged":true,"mergedAt":"2026-07-11T13:00:00Z","mergeCommit":{"abbreviatedOid":"c0ffee1"},
+      "closingIssuesReferences":{"nodes":[{"number":507,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}
+  ]},
+  "timelineItems":{"nodes":[]},
+  "subIssues":{"totalCount":1,"nodes":[
+    {"number":585,"state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}
+  ]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4951}}
+JSON
+# #509: the child list is TRUNCATED — 3 declared, 1 visible. "No open children" is then a statement
+#   about a set we already know is incomplete. An unverifiable subject must not report green (#266).
+cat >"$FIXTURES/done-509.json" <<'JSON'
+{"data":{"repository":{"issue":{"number":509,"title":"more sub-issues than the query could see","url":"https://github.com/FS-GG/FS.GG.SDD/issues/509","state":"CLOSED",
+  "closedByPullRequestsReferences":{"nodes":[
+    {"number":510,"url":"https://github.com/FS-GG/FS.GG.SDD/pull/510","merged":true,"mergedAt":"2026-07-11T14:00:00Z","mergeCommit":{"abbreviatedOid":"badca11"},
+      "closingIssuesReferences":{"nodes":[{"number":509,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}
+  ]},
+  "timelineItems":{"nodes":[]},
+  "subIssues":{"totalCount":3,"nodes":[
+    {"number":511,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}
+  ]},
+  "projectItems":{"nodes":[{"project":{"number":12,"title":"Coordination"},"status":{"name":"In progress"}}]},
+  "parent":null}}},"rateLimit":{"cost":1,"remaining":4950}}
+JSON
 # PR provenance (FS-GG/.github#342). `closedByPullRequestsReferences` also lists PRs that merely
 # MENTION the issue (our "Filed, not fixed: #N" convention), lowest-number-first — so the old code's
 # "first merged PR" stamped the wrong commit, or stamped green off an unrelated merge. These probe
@@ -1268,6 +1359,65 @@ assert_contains "rollup: HOLDS when a child is board-Done but still OPEN" \
 # Exactly one Status write: the child. The epic must NOT be flipped.
 assert_eq "rollup: holding writes Status once (the child), never the epic" "1" \
   "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
+
+# ================================================================================================
+# THE DONE-STAMP'S THREE HOLES (#558, #543, #583)
+# ================================================================================================
+#
+# (1) #558 / #543 leg 1 — THE STAMP MUST NOT GO RED ON CORRECT, MERGED, GREEN WORK.
+# The recipe's own `gh pr create --fill` routes a closing keyword in the commit SUBJECT to the PR
+# TITLE, where `closingIssuesReferences` never looks. The squash commit still closes the issue, so
+# everything succeeds and the stamp goes red — PERMANENTLY, because the link cannot be created after
+# the merge. GitHub's own CLOSED_EVENT `closer` is the record of what actually closed it.
+: >"$GH_LOG"
+subj_rc=0
+subj="$(run done 'FS.GG.SDD#165' --flip 2>&1)" || subj_rc=$?
+assert_contains "#558: a keyword in the commit SUBJECT still earns the stamp (GitHub's own closer)" \
+  "FSGG-DONE   FS.GG.SDD#165" "$subj"
+assert_eq "#558: ...and exits 0 — the work IS done, and a red stamp on done work is how red becomes noise" \
+  "0" "$subj_rc"
+# The closer can be the COMMIT rather than the PR (a squash). Same record, same verdict.
+commit_closer="$(run done 'FS.GG.SDD#166' --flip 2>&1 || true)"
+assert_contains "#558: a COMMIT closer resolves through to its PR" \
+  "FSGG-DONE   FS.GG.SDD#166" "$commit_closer"
+
+# (2) #543 leg 2 — `--pr` MUST NOT LAUNDER A MENTION INTO A STAMP.
+# It used to select by NUMBER alone, skipping the provenance check #342 added — so the documented
+# escape hatch from the bug above was a SOUNDNESS HOLE: point it at any merged PR that merely mentions
+# the issue and the stamp went green. PR 97 closes #70, not #96.
+mention_rc=0
+mention="$(run done 'FS.GG.SDD#96' --pr 97 --flip 2>&1)" || mention_rc=$?
+assert_contains "#543: --pr must REFUSE a PR that only MENTIONS the issue (#342, through the --pr hole)" \
+  "FSGG-NOT-DONE   FS.GG.SDD#96" "$mention"
+assert_eq "#543: ...with a non-zero exit" "1" "$mention_rc"
+case "$mention" in
+  *"FSGG-DONE"*) bad "#543: --pr must not be an override of PROVENANCE" "$mention" ;;
+  *) ok "#543: --pr overrides WHICH PR, never WHETHER it closed the issue" ;;
+esac
+
+# (3) #583 — DONE OVER AN OPEN CHILD. The #322 failure, in the command written to prevent it.
+# `epic_rollup` asks this of the item's PARENT and never of the item in hand, so a worker who follows
+# pnext-item §4 (split off what you cannot land, `child`-link it) closes the parent over the split-out
+# criterion — with a green ✓✓ actively saying otherwise.
+: >"$GH_LOG"
+kid_rc=0
+kid="$(run done 'FS.GG.SDD#507' --flip 2>&1)" || kid_rc=$?
+assert_contains "#583: REFUSES to stamp an item that has an OPEN sub-issue" \
+  "FSGG-NOT-DONE   FS.GG.SDD#507" "$kid"
+assert_contains "#583: ...and NAMES the open child, so the worker can act on it" \
+  "FS.GG.SDD#585" "$kid"
+assert_eq "#583: ...with a non-zero exit" "1" "$kid_rc"
+# THE ONE THAT MATTERS: it must not have written Done to the board on the way to refusing.
+assert_eq "#583: ...and writes NO board Status — a green stamp over unfinished work is a board that lies" \
+  "0" "$(grep -c -- '--field-id PVTSSF_status' "$GH_LOG" || true)"
+
+# ...and a child list we could not see WHOLE makes "no open children" a claim about a set already
+# known to be incomplete. An unverifiable subject must not report green (#266).
+trunc_rc=0
+trunc="$(run done 'FS.GG.SDD#509' --flip 2>&1)" || trunc_rc=$?
+assert_contains "#583: a TRUNCATED child list refuses rather than reporting green (#266)" \
+  "only 1 visible" "$trunc"
+assert_eq "#583: ...with a non-zero exit" "1" "$trunc_rc"
 
 : >"$GH_LOG"
 flip="$(run done 'FS.GG.SDD#44' --pr 9 --flip 2>/dev/null)"
