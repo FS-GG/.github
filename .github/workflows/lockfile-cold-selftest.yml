@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # NO `cache: true`. This job is the guard against a warm package folder; caching one here would
       # be the fixture undoing the property it exists to assert. The fixture builds and clears its own
