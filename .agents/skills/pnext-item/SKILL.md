@@ -162,11 +162,14 @@ discipline, managed for you.
   tells you to stop working it. Believe it. Re-take with `claim`, or walk away — renewing a dead
   marker would put two workers on one item, which is the entire failure this protocol exists to
   prevent.
-- **Commit with the trailer** `claim` printed, so attribution survives into history — it carries
-  **your** id, which is why no id is written here to copy (#551):
+- **Commit with the trailer `claim` printed** — the literal line, with your id already in it — so
+  attribution survives into history. No id is written here to copy (#551), and **do not derive one**:
+  `$FSGG_WORKER` is empty if your id came from the worktree name, and `$(git config fsgg.worker)`
+  returns whoever claimed most recently (it is repo-shared unless `extensions.worktreeConfig` is set).
+  A blank trailer loses the attribution; a borrowed one asserts a false one.
 
   ```sh
-  git commit --trailer "FSGG-Worker: $FSGG_WORKER"
+  git commit --trailer "FSGG-Worker: <the id `claim` printed>"
   ```
 
 - Watch for stray build artifacts (`.pyc`, `bin/`, `obj/`) sneaking into the commit from a fresh

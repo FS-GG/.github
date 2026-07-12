@@ -86,12 +86,20 @@ What the session id *is* good for is **provenance**: every claim marker records
 question the incident behind [#255](https://github.com/FS-GG/.github/issues/255) could only answer
 with file mtimes and the process list.
 
-The id is stamped where attribution is later needed — `claim` writes `git config fsgg.worker` into
-the worktree and prints the commit trailer to use:
+The id is stamped where attribution is later needed — `claim` prints the exact commit trailer to use,
+with your id already filled in. **Use the line it printed**; do not retype one, and do not derive one:
 
 ```sh
-git commit --trailer "FSGG-Worker: $FSGG_WORKER"   # `claim` prints this line with your id filled in
+git commit --trailer "FSGG-Worker: <the id `claim` printed>"
 ```
+
+There is no id written here to copy, and no expression to substitute for one, because **both of the
+obvious shortcuts are wrong**. `$FSGG_WORKER` is empty for a worker whose id came from the worktree
+name (rule 3 — the normal case), so it yields a blank trailer. And `$(git config fsgg.worker)` reads
+the id of *whoever claimed most recently*: `claim` stamps `fsgg.worker` per-worktree only when
+`extensions.worktreeConfig` is set, which is **not** git's default, so it falls back to the shared
+repo config that every linked worktree reads (`fsgg-coord` says so when it happens). A blank trailer
+loses the attribution; a borrowed one asserts a false one, which is worse.
 
 Without that, "who edited these files?" is answerable only by mtime forensics, which is where this
 protocol's first real incident ended up.
