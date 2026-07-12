@@ -40,6 +40,24 @@ Everything below is therefore keyed on a **worker id**.
 scripts/fsgg-coord whoami          # this worker's id, and which rule produced it
 ```
 
+**If `whoami` warns, mint an id — and mint it with the tool, never by hand:**
+
+```sh
+eval "$(scripts/fsgg-coord whoami --mint)"    # sets FSGG_WORKER in THIS shell; run it per worker
+```
+
+This is the **one** mint idiom. It is what `whoami`'s own warning prints, it needs no shell trivia,
+and it is the only one that can change its scheme without a migration across every doc that quotes it.
+
+**Do not invent an id, and do not copy one from a document — including this one.** That is why no
+literal id appears anywhere in these protocol docs as something you could paste. Agents asked to name
+themselves *converge*: [#419](https://github.com/FS-GG/.github/issues/419) found **four `finch-*`
+workers claiming at once**, every one of them pattern-matched off the single `finch-…` example that
+used to sit on this page, while the tool's own minted ids spread cleanly across the word list. The
+attractor is the **word**, not the suffix — re-rolling the hex does not help if you reach for the bird
+you just read. An id two workers share is an id the lock cannot separate: `release` drops the other's
+claim mid-flight, `heartbeat` renews a marker that is not yours, and `say`/`inbox` cross-deliver.
+
 Resolution order:
 
 | | Rule | When |
@@ -72,7 +90,7 @@ The id is stamped where attribution is later needed — `claim` writes `git conf
 the worktree and prints the commit trailer to use:
 
 ```sh
-git commit --trailer "FSGG-Worker: finch-a3f"
+git commit --trailer "FSGG-Worker: $FSGG_WORKER"   # `claim` prints this line with your id filled in
 ```
 
 Without that, "who edited these files?" is answerable only by mtime forensics, which is where this
@@ -425,7 +443,8 @@ a claim that the epic has that child.
 scripts/fsgg-coord batch --repo <r> -n 4
 
 # each worker, independently — named, isolated, and safe against a lost race:
-export FSGG_WORKER=finch-a3f                  # or let the worktree name it (§0 rule 3)
+eval "$(scripts/fsgg-coord whoami --mint)"    # MINT one; never invent or copy one (§0). Or let the
+                                              # worktree name it (§0 rule 3).
 scripts/fsgg-coord take --repo <r>            # pick + claim + print the worktree, retrying on a lost race
 git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # name the base: HEAD is not `main` (§2)
 # ...implement; `heartbeat` if it runs long; `say`/`inbox` if work touches...
