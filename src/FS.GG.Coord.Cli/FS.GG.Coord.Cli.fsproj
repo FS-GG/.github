@@ -1,24 +1,59 @@
 <!--
-  The typed coordination engine's executable edge (ADR-0034 Phase 2).
+  The typed coordination engine, as a `dotnet tool` (ADR-0034 Phase 3a).
 
-  IT IS NOT PACKAGED, AND THAT IS DELIBERATE. Phase 3 owns distribution — the `kit:` row becomes a
-  shim that resolves this from `.config/dotnet-tools.json`, which is a `kit:` schema change and a
-  `schemaVersion` bump on `registry/repos.yml` (a contract-change under ADR-0015). Adding PackAsTool
-  here would put a package identity, a release workflow, and a Renovate datasource into the world for
-  a thing nothing consumes yet — which is the same failure the ADR refuses for `repos.yml`: putting
-  the registry ahead of reality.
+  WHY IT IS PACKAGED NOW, AND WHY THAT IS *NOT* THE FLIP.
 
-  In Phase 2, `.github` builds this FROM SOURCE and the bash client shells out to it. That asymmetry
-  is what breaks the publish cycle: a broken feed cannot prevent the coordination tool from being
-  fixed, because the repo that fixes it never depends on the feed.
+  Phase 2 shipped the shadow: both engines decide, bash's answer is returned, the disagreement is
+  logged, and bash stays authoritative until that log is clean. Phase 2's exit criterion is "zero
+  divergence across the LIVE FLEET for three consecutive days" — and it could never be met, because
+  the engine existed only where somebody had BUILT it, which is `.github` and nowhere else. Fleet
+  evidence needs the engine distributed; distribution was scheduled for Phase 3; Phase 3 was gated on
+  Phase 2 exiting. The clock could never start (.github#617).
+
+  So publishing comes BEFORE flipping, and it is the only order in which the flip's evidence can
+  exist. Bash stays authoritative. The `engine=fs` mode stays refused. The single thing this changes
+  is that a worker in a receiver repo now HAS an engine to shadow with.
+
+  IDENTITY IS FOREVER (ADR-0003; "package identity == product identity, never rename in place"):
+
+    PackageId        FS.GG.Coord.Cli     — the name ADR-0034 §4.1 gives it, and the right one for what
+                                           it BECOMES: at the flip this is the coordination client.
+    ToolCommandName  fsgg-coord-engine   — and it never changes either. At the flip, the `kit:` row
+                                           `scripts/fsgg-coord` becomes a shim that EXECS this command,
+                                           so the command name never has to be renamed and no tool
+                                           manifest ever has to be rewritten.
+
+  STABLE, NOT -preview. The org promoted its last `-preview` producer in July, and the shared Renovate
+  preset now pins to stable (`ignoreUnstable: true`). A `-preview` tool would be INVISIBLE to Renovate
+  — and Renovate-invisibility is one of the stated reasons ADR-0034 §4.4 rejected the self-contained
+  binary. Shipping a tool the update fabric cannot see would defeat the point of shipping it.
+
+  `.github` builds this FROM SOURCE and never restores it from the feed. That asymmetry is what breaks
+  the publish cycle: a broken feed cannot stop the coordination tool being fixed, because the repo that
+  fixes it does not depend on the feed. Only RECEIVERS consume the package.
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <RollForward>Major</RollForward>
+
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>fsgg-coord-engine</ToolCommandName>
+    <PackageId>FS.GG.Coord.Cli</PackageId>
+    <Version>0.1.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
-    <IsPackable>false</IsPackable>
+
+    <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord`, as one total function over a board-state snapshot. Reads nothing; decides from stdin. Runs in shadow beside the bash client (ADR-0034).</Description>
+    <Authors>FS-GG</Authors>
+    <Company>FS-GG</Company>
+    <PackageTags>fsgg;coordination;scheduler;dotnet-tool;fsharp</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Coord.Cli</PackageProjectUrl>
+
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
@@ -44,6 +79,7 @@
     <Compile Include="Options.fsi" />
     <Compile Include="Options.fs" />
     <Compile Include="Program.fs" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
