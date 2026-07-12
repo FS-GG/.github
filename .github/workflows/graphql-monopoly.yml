@@ -100,7 +100,8 @@ jobs:
       # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
       - name: 'OK: the client is the only GraphQL principal'
         if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
-        run: echo "graphql-monopoly: OK" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "graphql-monopoly: OK" >> "$GITHUB_STEP_SUMMARY"
 
       - name: 'FINDING: a worker recipe spends the shared GraphQL budget directly'
         if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
