@@ -46,6 +46,8 @@
     <Compile Include="Schedulability.fs" />
     <Compile Include="Batch.fsi" />
     <Compile Include="Batch.fs" />
+    <Compile Include="Divergence.fsi" />
+    <Compile Include="Divergence.fs" />
   </ItemGroup>
 
   <ItemGroup>

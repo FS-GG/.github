@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Include="SnapshotTests.fs" />
+    <Compile Include="FleetTests.fs" />
     <Compile Include="OptionsTests.fs" />
   </ItemGroup>
 

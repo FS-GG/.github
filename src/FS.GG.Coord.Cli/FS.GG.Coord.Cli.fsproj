@@ -74,8 +74,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Json.fsi" />
+    <Compile Include="Json.fs" />
     <Compile Include="Snapshot.fsi" />
     <Compile Include="Snapshot.fs" />
+    <Compile Include="Fleet.fsi" />
+    <Compile Include="Fleet.fs" />
     <Compile Include="Options.fsi" />
     <Compile Include="Options.fs" />
     <Compile Include="Program.fs" />

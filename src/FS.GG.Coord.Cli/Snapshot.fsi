@@ -32,10 +32,10 @@ module Snapshot =
     open FS.GG.Coord.Types
 
     /// Where the snapshot is malformed, and how. Carries a JSON path so a fleet-wide shadow failure is
-    /// diagnosable from the log alone.
-    type Error =
-        { Path: string
-          Message: string }
+    /// diagnosable from the log alone. The accessors that produce it are shared with the fleet-ledger
+    /// codec (`Json`): both obey the same no-fail-open rule, and a second copy of that rule would be a
+    /// second place for it to rot.
+    type Error = Json.Error
 
     type Candidate =
         { Item: Item

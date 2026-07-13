@@ -606,6 +606,28 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   repo with no per-repo setup. (A local `dotnet tool restore` also works — but note a local tool is
   *not* on `PATH`, and `fsgg-coord` reaches it via `dotnet tool run`.)
 
+- **When your loop is done, publish what your shadow saw:**
+
+  ```sh
+  fsgg-coord divergence --publish            # one command, at the END of your run
+  ```
+
+  **Your local log is not evidence until you do this.** It lives in a *cache directory* on one
+  machine — `~/.cache/fsgg-coord/divergence.jsonl` — which nothing collects, and which dies with your
+  container. `--publish` sends a per-day **summary** (never your raw log, and never one comment per
+  call) to the fleet ledger, over REST, so it costs nothing from the GraphQL budget the whole fleet
+  shares.
+
+  The cut-over criterion is *"zero divergence across the **live fleet** for three consecutive days"*,
+  and a fleet is the thing you are part of. A worker who shadows and never publishes has moved the
+  clock exactly as far as a worker who never shadowed at all (#634).
+
+  To see where the fleet actually stands — never by reading the ledger by eye:
+
+  ```sh
+  fsgg-coord divergence --fleet              # 0 green · 1 they disagreed · 3 no verdict
+  ```
+
 - `Status: In progress` and `Blocked by` already exist on the board — **no schema change is
   required**. A repo may add an optional `Paths` text field if it wants touch-sets filterable
   on the board, but the protocol reads the `Paths:` line from the issue body.

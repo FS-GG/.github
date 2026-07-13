@@ -8,6 +8,7 @@ module Snapshot =
     open FS.GG.Coord
     open FS.GG.Coord.Types
     open FS.GG.Coord.Schedulability
+    open FS.GG.Coord.Cli.Json
 
     [<Literal>]
     let private SnapshotSchema = "fsgg.coord.snapshot/1"
@@ -15,7 +16,9 @@ module Snapshot =
     [<Literal>]
     let private DecisionSchema = "fsgg.coord.decision/1"
 
-    type Error = { Path: string; Message: string }
+    /// The generic JSON accessors live in `Json` — this codec and the fleet-ledger codec obey the same
+    /// no-fail-open rule, and a second copy of it would be a second place for it to rot.
+    type Error = Json.Error
 
     type Candidate =
         { Item: Item
@@ -26,69 +29,6 @@ module Snapshot =
           Limit: int option
           InFlight: Batch.Reservation list
           Candidates: Candidate list }
-
-    // ================================================================================================
-    // READING. Every accessor below is REQUIRED-by-default and returns a Result.
-    // ================================================================================================
-    // The one rule: absence is an error unless absence is a modelled fact. `jq -r .foo` on a missing
-    // key yields the string "null", and bash then compares it to something — which is how "I could not
-    // read it" and "it is not set" became the same value in the first place. Not here.
-
-    let private err path message = Error [ { Path = path; Message = message } ]
-
-    let private prop (path: string) (name: string) (el: JsonElement) : Result<JsonElement, Error list> =
-        match el.TryGetProperty name with
-        | true, v -> Ok v
-        | _ -> err $"%s{path}.%s{name}" "required field is missing"
-
-    /// A field that may be legitimately absent OR explicitly null — both mean "not set", which is a
-    /// FACT here (no claim, no limit), not a failure to read one.
-    let private optProp (name: string) (el: JsonElement) : JsonElement option =
-        match el.TryGetProperty name with
-        | true, v when v.ValueKind <> JsonValueKind.Null -> Some v
-        | _ -> None
-
-    let private asString (path: string) (el: JsonElement) : Result<string, Error list> =
-        if el.ValueKind = JsonValueKind.String then
-            Ok(el.GetString())
-        else
-            err path $"expected a string, got %A{el.ValueKind}"
-
-    let private asInt (path: string) (el: JsonElement) : Result<int, Error list> =
-        match el.ValueKind with
-        | JsonValueKind.Number ->
-            match el.TryGetInt32() with
-            | true, n -> Ok n
-            | _ -> err path "expected a 32-bit integer"
-        | k -> err path $"expected a number, got %A{k}"
-
-    let private asBool (path: string) (el: JsonElement) : Result<bool, Error list> =
-        match el.ValueKind with
-        | JsonValueKind.True -> Ok true
-        | JsonValueKind.False -> Ok false
-        | k -> err path $"expected a boolean, got %A{k}"
-
-    let private asArray (path: string) (el: JsonElement) : Result<JsonElement list, Error list> =
-        if el.ValueKind = JsonValueKind.Array then
-            Ok(el.EnumerateArray() |> List.ofSeq)
-        else
-            err path $"expected an array, got %A{el.ValueKind}"
-
-    let private stringField path name el =
-        prop path name el |> Result.bind (asString $"%s{path}.%s{name}")
-
-    let private intField path name el =
-        prop path name el |> Result.bind (asInt $"%s{path}.%s{name}")
-
-    /// Collect EVERY error, not just the first. A shadow that has to be debugged one field per
-    /// round-trip, across six repos, does not get debugged.
-    let private collect (results: Result<'a, Error list> list) : Result<'a list, Error list> =
-        let errors = results |> List.collect (function Error e -> e | Ok _ -> [])
-
-        if List.isEmpty errors then
-            Ok(results |> List.choose (function Ok v -> Some v | Error _ -> None))
-        else
-            Error errors
 
     // ---- the domain vocabulary ---------------------------------------------------------------------
     // Every mapping below is TOTAL and CLOSED. An unrecognised value is refused, never coerced: if the

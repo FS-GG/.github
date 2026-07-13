@@ -655,6 +655,15 @@ install is what keeps the composition honest. See the
   Migration is **shadow-mode**: both engines run, bash stays authoritative, and nothing cuts over
   until divergence is zero on live traffic.
 
+  *"Zero divergence on live traffic"* is itself a **computed verdict**, not a judgement call
+  ([#634](https://github.com/FS-GG/.github/issues/634)). The shadow's evidence used to end its life in a
+  disposable cache directory on whichever machine produced it, with no worker id on the rows and no code
+  evaluating the criterion — so the cut-over would have been decided by a human reading one laptop's
+  counters. Workers now publish a per-`(worker, day, engine)` summary to a **fleet ledger** (REST, on the
+  budget that does not die first), and `Divergence.evaluate` folds it in the typed core:
+  `fsgg-coord divergence --fleet` returns `Green | Red | NoVerdict` and fails closed on evidence that is
+  absent, thin, single-worker, or from a different engine build.
+
   Two consequences land on this map. **`.github` becomes a two-tool producer** (above), the engine
   shipping as a `dotnet tool` on the coherent set. And the **`kit:` row becomes a digest-pinned
   shim** that resolves the tool from the already-distributed `.config/dotnet-tools.json`, so every
