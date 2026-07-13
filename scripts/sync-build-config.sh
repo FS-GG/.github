@@ -26,6 +26,14 @@ set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../dist/dotnet" && pwd)"
 
+# Absolute, resolved path to this script. The --check failure message must name a command the reader
+# can actually RUN, and the reader is almost never standing where this script lives (.github#633):
+# every receiver's CI checks this repo out into a scratch dir and invokes it against a separate
+# checkout of the repo under test, so "scripts/sync-build-config.sh" is No such file or directory in
+# the repo whose gate just went red. $0 alone is not enough either — it is relative to the invoking
+# cwd, so it stops resolving the moment the reader cd's anywhere.
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
 # Managed files, relative to the repo root.
 #
 # ADDING A FILE HERE MERGE-FREEZES EVERY RECEIVER THAT DOES NOT ALREADY HAVE IT. `--check` treats a
@@ -200,7 +208,39 @@ for rel in "${FILES[@]}"; do
 done
 
 if [[ "$mode" == "check" && "$drift" -ne 0 ]]; then
-  echo "Build-config drift detected. Re-run: scripts/sync-build-config.sh <repo>" >&2
+  # Name a runnable command, not a relative path that exists only in .github (#633). Both forms are
+  # printed because there are two readers of this failure and they are standing in different places:
+  # someone with a .github checkout (the resolved path works), and someone looking at a red gate in a
+  # receiver repo, who has no .github checkout at all (the clone form works).
+  #
+  # %q, not bare interpolation: these lines exist to be PASTED. An unquoted path with a space in it
+  # would paste as two arguments and run the sync against the wrong directory. %q leaves an ordinary
+  # path untouched, so this costs nothing in the normal case.
+  #
+  # The clone form clones into a FRESH mktemp dir rather than a fixed /tmp/... path, because a fixed
+  # one makes the command fail on its SECOND use ("destination path already exists and is not an empty
+  # directory") — for the reader with two drifted repos, or who simply runs it twice. A remediation
+  # that only works once is the same defect as one that never works.
+  {
+    echo ""
+    echo "Build-config drift detected: the file(s) marked DRIFT above differ from the org source of truth."
+    echo ""
+    echo "This script lives in FS-GG/.github and is NOT checked into the repo being checked, so there is"
+    echo "no 'scripts/sync-build-config.sh' in $TARGET. Re-sync with whichever fits where you are:"
+    echo ""
+    echo "  # ...from a checkout of FS-GG/.github (this script, resolved):"
+    echo "  $(printf '%q' "$SELF") $(printf '%q' "$TARGET")"
+    echo ""
+    echo "  # ...from the root of the repo that just went red, with no .github checkout to hand:"
+    echo "  d=\$(mktemp -d) && git clone --depth 1 https://github.com/FS-GG/.github.git \"\$d/org\" \\"
+    echo "    && \"\$d/org/scripts/sync-build-config.sh\" ."
+    echo ""
+    echo "Then commit the updated file(s). Do not hand-edit them — they are overwritten on every re-sync."
+    echo ""
+    echo "If that re-sync REFUSES a file, this repo is ADOPTING one it hand-authored before the org"
+    echo "managed it. Re-run the same command once with --adopt, which moves your version aside to"
+    echo "*.local.props (still imported, so your settings survive) before writing the canonical file."
+  } >&2
   exit 1
 fi
 if [[ "$mode" != "check" && "$drift" -ne 0 ]]; then
