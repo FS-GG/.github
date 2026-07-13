@@ -549,3 +549,114 @@ module Snapshot =
         w.Flush()
 
         Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    // ================================================================================================
+    // LANES (#428) — the partition, as the chore agent's input document.
+    // ================================================================================================
+
+    [<Literal>]
+    let private LanesSchema = "fsgg.coord.lanes/1"
+
+    let renderLanes (startable: Item -> bool) (partition: Lanes.Partition) : string =
+        use stream = new MemoryStream()
+
+        use w =
+            new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        let free = Lanes.free startable partition
+
+        let isFree (lane: Lanes.Lane) =
+            free |> List.exists (fun f -> f.Id = lane.Id)
+
+        w.WriteStartObject()
+        w.WriteString("schema", LanesSchema)
+
+        // THE CEILING IS THE HEADLINE. Fan out wider than this and the extra workers are handed nothing
+        // — and `take` reports an empty queue over a board that is full of work (#440's shape).
+        w.WriteNumber("ceiling", List.length free)
+        w.WriteNumber("lanes", List.length partition.Lanes)
+
+        w.WritePropertyName "partition"
+        w.WriteStartArray()
+
+        for lane in partition.Lanes do
+            w.WriteStartObject()
+            w.WriteString("id", lane.Id.Short)
+            w.WriteString("repo", $"%s{lane.Owner}/%s{lane.Repo}")
+            w.WriteBoolean("free", isFree lane)
+
+            w.WritePropertyName "heldBy"
+            w.WriteStartArray()
+
+            for wk in lane.HeldBy do
+                w.WriteStringValue wk.Value
+
+            w.WriteEndArray()
+
+            w.WritePropertyName "tokens"
+            w.WriteStartArray()
+
+            for t in lane.Tokens do
+                w.WriteStringValue t
+
+            w.WriteEndArray()
+
+            w.WritePropertyName "items"
+            w.WriteStartArray()
+
+            for item in lane.Items do
+                w.WriteStartObject()
+                w.WriteString("ref", item.Ref.Short)
+                w.WriteBoolean("startable", startable item)
+                w.WriteEndObject()
+
+            w.WriteEndArray()
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+
+        // THE THREE UNLANABLE STATES, NAMED SEPARATELY. An agent that cannot tell a forgotten `Paths:`
+        // from a deliberate `Paths: none` will "helpfully" declare a touch-set for an epic — making the
+        // board worse while reporting that it improved it (#496).
+        w.WritePropertyName "unlanable"
+        w.WriteStartArray()
+
+        for u in partition.Unlanable do
+            w.WriteStartObject()
+            w.WriteString("ref", u.Item.Ref.Short)
+
+            match u with
+            | Lanes.NoTouchSet _ ->
+                w.WriteString("reason", "no-touch-set")
+                w.WriteBoolean("chore", true)
+                w.WriteString("detail", "no `Paths:` line at all — somebody forgot. Real work, and nobody can pick it up.")
+
+            | Lanes.DeliberatelyNone _ ->
+                w.WriteString("reason", "declared-none")
+                w.WriteBoolean("chore", false)
+                w.WriteString("detail", "`Paths: none` — an epic or a decision. Unschedulable BY DESIGN. Do NOT propose a touch-set.")
+
+            | Lanes.UnusableTokens(_, tokens) ->
+                w.WriteString("reason", "unusable-tokens")
+                w.WriteBoolean("chore", true)
+
+                w.WriteString(
+                    "detail",
+                    "declares tokens that match NOTHING, so it reserves nothing and reads as disjoint from everybody. Worse than undeclared (#273)."
+                )
+
+                w.WritePropertyName "tokens"
+                w.WriteStartArray()
+
+                for t in tokens do
+                    w.WriteStringValue t
+
+                w.WriteEndArray()
+
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+        w.WriteEndObject()
+        w.Flush()
+
+        Text.Encoding.UTF8.GetString(stream.ToArray())
