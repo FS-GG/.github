@@ -86,6 +86,38 @@ module Lanes =
           /// on the board: it is either work nobody can pick up, or a declaration that protects nothing.
           Unlanable: Unlanable list }
 
+    /// A token that is holding a lane together, and what it COSTS.
+    ///
+    /// This is the chore's target list, and it is the reason the chore can be a computation rather than
+    /// an opinion. A lane of forty items is not forty items of naturally-coupled work — it is a handful
+    /// of over-broad declarations gluing unrelated things together, and until now the only way to find
+    /// out WHICH ones was to read forty issue bodies and guess.
+    ///
+    /// `SplitsInto` is the whole point: it is what the board's parallelism would become if this one
+    /// token stopped being declared. A token declared by five items whose removal splits the lane into
+    /// four is worth an afternoon. A token whose removal splits it into one is load-bearing and must be
+    /// left alone — the work really is coupled, and narrowing it would be a lie that puts two workers in
+    /// one file.
+    type Glue =
+        { Token: string
+
+          /// The items that declare it. These are the issues the chore would have to narrow.
+          DeclaredBy: Ref list
+
+          /// How many lanes this lane becomes if this token is removed from every item above.
+          /// `1` means removing it buys NOTHING — the items are coupled by something else too.
+          SplitsInto: int }
+
+    /// Rank a lane's tokens by how much parallelism each one is costing. Highest `SplitsInto` first.
+    ///
+    /// Removing a token is HYPOTHETICAL — this computes what the partition WOULD be, and changes
+    /// nothing. Acting on it means narrowing a real `Paths:` declaration on a real issue, and that is a
+    /// judgement about what the work actually touches. The tool can say *"this token costs you three
+    /// lanes"*; only a human or an agent reading the issue can say *"and it did not need to declare it"*.
+    /// The tool must never do the second, because a touch-set narrowed wrongly reserves less than the
+    /// work touches, and then `batch` hands those files to somebody else (#273).
+    val glue: lane: Lane -> Glue list
+
     /// Partition the board. Pure, total, deterministic.
     ///
     /// Two items are joined iff they are in the SAME repo and `TouchSet.conflicts` finds an overlapping

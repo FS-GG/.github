@@ -133,6 +133,81 @@ module Lanes =
 
         { Lanes = lanes; Unlanable = unlanable }
 
+    type Glue =
+        { Token: string
+          DeclaredBy: Ref list
+          SplitsInto: int }
+
+    /// The number of connected components among `items`, comparing touch-sets with `tokens` of each item
+    /// projected out. Same repo throughout (a lane never spans repos), so no repo test is needed here.
+    let private componentsWithout (drop: string) (items: Item list) =
+        let project (it: Item) =
+            let kept =
+                match it.TouchSet with
+                | Declared tokens ->
+                    tokens
+                    |> List.filter (
+                        function
+                        | Matchable t -> t <> drop
+                        | Unmatchable _ -> true
+                    )
+                | other -> []
+
+            { it with TouchSet = Declared kept }
+
+        let arr = items |> List.map project |> List.toArray
+        let n = arr.Length
+        let parent = Array.init n id
+
+        let rec find i =
+            if parent[i] = i then
+                i
+            else
+                parent[i] <- find parent[i]
+                parent[i]
+
+        for i in 0 .. n - 1 do
+            for j in i + 1 .. n - 1 do
+                if not (List.isEmpty (TouchSet.conflicts arr[i].TouchSet arr[j].TouchSet)) then
+                    let ri, rj = find i, find j
+
+                    if ri <> rj then
+                        parent[max ri rj] <- min ri rj
+
+        // An item left with NO matchable token reserves nothing and joins nothing — it becomes its own
+        // singleton. That is the honest count: without the dropped token it genuinely contends with
+        // nobody, which is exactly the parallelism the chore would be buying.
+        [ 0 .. n - 1 ] |> List.map find |> List.distinct |> List.length
+
+    let glue (lane: Lane) : Glue list =
+        // A lane of one cannot be glued to anything.
+        if List.length lane.Items < 2 then
+            []
+        else
+
+        lane.Tokens
+        |> List.map (fun token ->
+            let declaredBy =
+                lane.Items
+                |> List.filter (fun it ->
+                    match it.TouchSet with
+                    | Declared tokens ->
+                        tokens
+                        |> List.exists (
+                            function
+                            | Matchable t -> t = token
+                            | Unmatchable _ -> false
+                        )
+                    | _ -> false)
+                |> List.map (fun it -> it.Ref)
+
+            { Token = token
+              DeclaredBy = declaredBy
+              SplitsInto = componentsWithout token lane.Items })
+        // Highest payoff first, then by the number of issues that would have to be edited (cheapest
+        // first), then by name so the ranking is deterministic and two workers agree on the target.
+        |> List.sortBy (fun g -> (-g.SplitsInto, List.length g.DeclaredBy, g.Token))
+
     let free (startable: Item -> bool) (partition: Partition) : Lane list =
         // A lane is FREE only if nobody is standing in it AND there is something in it to start. Both
         // halves matter: a lane with no startable item is not capacity, it is a lane whose work is all
@@ -160,12 +235,26 @@ module Lanes =
 
             yield $"lane %s{lane.Id.Short}  (%d{List.length lane.Items} item(s), %d{starts} startable)%s{held}"
 
-            for token in lane.Tokens do
-                yield $"    %s{token}"
-
             for item in lane.Items do
                 let mark = if startable item then "→" else " "
                 yield $"  %s{mark} %s{item.Ref.Short}"
+
+            // THE GLUE, and it is the actionable half. A lane of forty items is not forty items of
+            // naturally-coupled work — it is a handful of over-broad declarations holding unrelated
+            // things together. Only tokens whose removal actually BUYS something are worth printing;
+            // one that splits the lane into 1 is load-bearing, and narrowing it would be a lie.
+            let worthwhile = glue lane |> List.filter (fun g -> g.SplitsInto > 1)
+
+            if not (List.isEmpty worthwhile) then
+                yield "  the declarations gluing this lane together:"
+
+                for g in worthwhile |> List.truncate 5 do
+                    let refs = g.DeclaredBy |> List.map (fun r -> r.Short) |> String.concat ", "
+
+                    yield
+                        $"    %s{g.Token}  — declared by %d{List.length g.DeclaredBy}; drop it and this lane becomes %d{g.SplitsInto} lanes"
+
+                    yield $"        ({refs})"
 
             yield ""
 

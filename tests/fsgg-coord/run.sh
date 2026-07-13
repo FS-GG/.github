@@ -4867,6 +4867,56 @@ if [ -x "$ENGINE" ]; then
       <"$FSGG_COORD_DIVERGENCE_LOG")"
 fi
 
+# ==================================================================================================
+# LANES (#428) — the partition, the ceiling, and the preference that may never subtract.
+# ==================================================================================================
+if [ -x "$ENGINE" ]; then
+  lanes_run() { PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$COORD" "$@"; }
+
+  out="$(lanes_run lanes --repo sdd 2>/dev/null || true)"
+  assert_contains "lanes: prints the CEILING — how many workers this board can actually absorb" \
+    "CEILING:" "$out"
+  assert_contains "lanes: ...and names each lane by its lowest-numbered item, deterministically" \
+    "lane FS.GG.SDD#" "$out"
+
+  # THE THREE UNLANABLE STATES STAY APART (#496, #273). Two are a chore; one is correct and must never
+  # be "fixed" — an agent that declared a touch-set for an epic would make the board worse and report
+  # that it had improved it.
+  j="$(lanes_run lanes --repo sdd --json 2>/dev/null || echo '{}')"
+  assert_eq "lanes --json: an epic's \`Paths: none\` is NOT a chore" \
+    "false" "$(jq -r '[.unlanable[] | select(.reason == "declared-none") | .chore] | first // "false"' <<<"$j")"
+  assert_eq "lanes --json: a FORGOTTEN touch-set IS a chore — real work nobody can pick up" \
+    "true" "$(jq -r '[.unlanable[] | select(.reason == "no-touch-set") | .chore] | first // "true"' <<<"$j")"
+
+  # THE GLUE. A lane of N items is not N items of coupled work — it is a handful of over-broad
+  # declarations. `splitsInto` is what narrowing one would actually BUY, and a token that buys nothing
+  # is load-bearing and must be left alone.
+  assert_eq "lanes --json: the glue only names tokens whose removal actually SPLITS the lane" \
+    "true" "$(jq -r '[.partition[].glue[]?.splitsInto] | all(. > 1) // true' <<<"$j")"
+
+  # A PREFERENCE MAY NEVER SUBTRACT, AND THIS PINS THE HAZARD IT MUST SURVIVE.
+  #
+  # `batch` fails CLOSED on a touch-set it could not read — correctly: it will not schedule against a
+  # body it never saw, and that is the whole Red leg. But `-n 1` STOPS AT THE FIRST PICK and so never
+  # reaches a later unreadable item. A lane preference needs the WHOLE startable set, and asking for it
+  # walks straight into one.
+  #
+  # These two lines are the hazard, measured: on the SAME board, the CAPPED read returns an item and the
+  # UNCAPPED read returns nothing at all. Without `take`'s fallback to the capped read, one unreadable
+  # issue body anywhere would leave every worker with nothing — the preference costing them their item.
+  #
+  # If somebody later makes the uncapped read tolerate an unreadable candidate, THIS test goes red — and
+  # that is the point: it says out loud that the fallback rests on this, so the assumption cannot rot
+  # silently. (The fallback's own coverage is indirect but real: the entire `take` suite above passes
+  # only because it is there.)
+  capped="$(PATH="$STUB:$PATH" bash "$COORD" batch --repo governance --ignore-blocked -n 1 --json 2>/dev/null || true)"
+  uncapped="$(PATH="$STUB:$PATH" bash "$COORD" batch --repo governance --ignore-blocked --json 2>/dev/null || true)"
+  assert_contains "lanes: the CAPPED batch returns an item on a board with an unreadable touch-set" \
+    "FS.GG.Governance#202" "$capped"
+  assert_eq "lanes: ...and the UNCAPPED batch returns NOTHING — the hazard take's fallback exists for" \
+    "0" "$(jq 'length' <<<"${uncapped:-[]}" 2>/dev/null || echo 0)"
+fi
+
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::fsgg-coord fixture FAILED"; exit 1; }
 echo "fsgg-coord fixture — OK"
