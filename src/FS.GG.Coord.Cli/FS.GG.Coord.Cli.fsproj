@@ -42,7 +42,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coord-engine</ToolCommandName>
     <PackageId>FS.GG.Coord.Cli</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord`, as one total function over a board-state snapshot. Reads nothing; decides from stdin. Runs in shadow beside the bash client (ADR-0034).</Description>
