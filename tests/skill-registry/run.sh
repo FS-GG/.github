@@ -634,7 +634,63 @@ assert "github.token" not in json.dumps([pr.get("env", {}), pr["run"]]), \
 assert wf["permissions"]["contents"] == "read", \
     "GITHUB_TOKEN holds contents: write — a revert to a github.token push would silently succeed (#514)"
 
-print("   (workflow: retire demands proof; stamp is not shell-interpolated; push cannot use github.token)")
+# THE MERGE MUST BE GATED, AND IT MUST NOT BE `--auto` (#642). A green PR nobody merges lands nothing,
+# so the bot now merges its own standing PR — which makes MERGE the second branch here that destroys
+# state (it lands a commit on `main`). Two things are asserted structurally, because both would fail
+# SILENTLY and GREEN:
+#
+#   * The merge is gated on the TESTED script's verdict, not on an inline "are the checks green?" block.
+#   * It is a DIRECT merge, never `gh pr merge --auto`. Native auto-merge waits only for REQUIRED
+#     checks, and `registry-coherence` is NOT required on `main` (and must not become one: its verdict
+#     depends on other repos' mains, so requiring it would let a producer's merge deadlock every open
+#     `.github` PR — #549). So `--auto` would merge straight past a RED registry-coherence, i.e. land a
+#     snapshot its own gate calls obsolete. That is #425's inversion, automated — and a run doing it
+#     would be GREEN. There is no runtime signal to catch it, so it is pinned here, where the revert
+#     would have to be written.
+merge = next((n for n in steps if n.startswith("Merge the standing PR")), None)
+assert merge, "nothing merges the standing PR — a green PR that nobody merges lands nothing (#642)"
+mcond = steps[merge]["if"]
+assert "steps.merge-gate.outputs.merge == 'true'" in mcond, \
+    f"the merge is not gated on the tested merge-gate script's verdict: {mcond}"
+assert "--auto" not in steps[merge]["run"], \
+    "the merge arms GitHub's NATIVE auto-merge, which waits only for REQUIRED checks — and " \
+    "`registry-coherence` is not one, so this would merge past the single check that can prove the " \
+    "snapshot obsolete (#642, #425)"
+assert steps[merge].get("env", {}).get("GH_TOKEN") == "${{ steps.app-token.outputs.token }}", \
+    "the merge does not use the App token (#514)"
+
+gate = next((n for n in steps if n.startswith("Decide whether the standing PR may be merged")), None)
+assert gate, "no step establishes that the standing PR is safe to merge"
+assert steps[gate]["id"] == "merge-gate", "the merge's `if` reads steps.merge-gate.outputs.merge"
+assert "skill-registry-merge-gate" in steps[gate]["run"], \
+    "the merge decision is not delegated to the tested merge-gate script — a merge lands a commit on " \
+    "`main`, so its truth table may not live in an untestable inline block"
+
+# MERGE AND RETIRE MUST STAY ON MUTUALLY EXCLUSIVE BRANCHES. This is the sequencing #642 flags as the
+# thing that makes it more than a copy-paste: a PR that is about to be RETIRED as obsolete must not be
+# merged first, and vice versa. They cannot race — merge hangs off `changed == 'true'`, retire off
+# `changed == 'false'` — but that is a property of two `if:` strings, and nothing but this assertion
+# stops a future edit from quietly moving one of them.
+assert "steps.diff.outputs.changed == 'true'" in mcond, \
+    f"the merge lost its non-empty-diff guard — it could now race the retire on the same run: {mcond}"
+assert "steps.diff.outputs.changed == 'false'" in cond, "the retire lost its empty-diff guard"
+
+# FAILING TO LAND IT IS AN ERROR, NOT A WARNING — the rule both other propagation arms state in their
+# own comments, and the one #642 quotes. A run that reconciles the registry, pushes the branch and then
+# does NOT merge it has left `main` exactly as stale as it found it. If that run is GREEN it asserts
+# work it did not do — which is the defect this workflow exists to remove, reappearing in the step that
+# reports on it. A `::warning::` here would be invisible: the run goes green, the schedule goes green,
+# and the registry stays stale, which is EXACTLY the state #642 was filed about.
+land = next((n for n in steps if n.startswith("The reconcile did not land")), None)
+assert land, "nothing reports a reconcile that did not land — a green run would imply it did (#266)"
+assert "steps.merge-gate.outputs.merge != 'true'" in steps[land]["if"], \
+    f"the did-not-land report is not triggered by the gate refusing: {steps[land]['if']}"
+assert "exit 1" in steps[land]["run"], \
+    "a reconcile that did not land exits 0 — the run goes GREEN over a registry that is still stale. " \
+    "Failing to land it is an ERROR, not a warning (#642, #266): both other propagation arms exit 1."
+
+print("   (workflow: retire demands proof; merge is gated and NOT --auto; the two cannot race;")
+print("    stamp is not shell-interpolated; push cannot use github.token)")
 PY
 echo "   ok"
 
@@ -868,6 +924,94 @@ out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/lau
 run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/launder-base.yml" >/dev/null 2>&1 \
   && { echo "FAIL: rewriting a stale digest to another wrong value must NOT inherit the old finding"; echo "$out"; exit 1; }
 grep -q "introduced by this change" <<<"$out" || { echo "FAIL: the rewritten row must be reported as introduced"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 43. the merge gate: an absent check is not a passing one, and a NON-required red still refuses =="
+# A green PR that nobody merges lands nothing (#642). #640 fixed the reason the standing PR could never
+# go green; #595 then went green and SAT there for days while `main` stayed red on the eight stale
+# digests it had already fixed. This gate lands it — and, like the retire gate, it is a SCRIPT driven
+# over its whole truth table here, because a merge is the other branch in this fabric that DESTROYS
+# state: it lands a commit on `main`.
+#
+# THE TWO LEGS THAT ARE THE WHOLE POINT — both are cases GitHub's NATIVE auto-merge gets WRONG, which
+# is why #642's "just copy the propagate arm and pass --auto" is not the fix it looks like:
+#
+#   * (d) a RED `registry-coherence`. It is NOT a required check on `main` (required: contract-coherence
+#     / coherence, projection, roster-closure, drift, reconcile) and it must not become one — its
+#     verdict is a function of OTHER repos' mains, so requiring it would let a producer's merge deadlock
+#     every open `.github` PR (#549). Native auto-merge waits for REQUIRED checks and merges straight
+#     past a red non-required one — i.e. it would land a snapshot whose own coherence check says it is
+#     OBSOLETE, writing superseded digests over the registry and REDing the gate it was opened to green.
+#     That is #425's inversion, automated.
+#
+#   * (c) an ABSENT `registry-coherence`. A renamed job or a narrowed `paths:` filter, and the subject
+#     simply never reports — at which point "are all checks green?" is TRUE and vacuous. An absent
+#     subject reads exactly like a passing one (#606, #266), so it is asserted BY NAME.
+MGATE="$HERE/../../scripts/skill-registry-merge-gate"
+# `${2-CLEAN}`, not `${2:-CLEAN}`: leg (g) passes an EXPLICITLY EMPTY merge state — the shape a failed
+# `gh pr view` leaves behind — and `:-` substitutes CLEAN for an empty argument just as it does for an
+# absent one. That would have tested the happy path while LOOKING like it tested the refusal.
+mgate() { python3 "$MGATE" --checks "$1" --merge-state "${2-CLEAN}" 2>"$WORK/mwhy.txt"; }
+runs() { python3 -c 'import json,sys; print(json.dumps([{"check_runs": json.loads(sys.argv[1])}]))' "$1"; }
+
+# (a) every check green, including the subject, and the PR is CLEAN. Merge.
+runs '[{"name":"registry-coherence","status":"completed","conclusion":"success"},
+       {"name":"drift","status":"completed","conclusion":"success"},
+       {"name":"fixture","status":"completed","conclusion":"skipped"}]' > "$WORK/c.json"
+mgate "$WORK/c.json" > "$WORK/mout.txt" || { echo "FAIL: an all-green PR must merge"; cat "$WORK/mwhy.txt"; exit 1; }
+grep -q "merge=true" "$WORK/mout.txt" || { echo "FAIL: merge!=true on an all-green PR"; exit 1; }
+grep -q "checks=3"  "$WORK/mout.txt" || { echo "FAIL: the check count is not reported"; exit 1; }
+
+# (b) ZERO CHECK RUNS. "Everything passed" and "CI never started" are the SAME EMPTY SET, and only one
+# of them is safe (#606). The commonest cause is a CONFLICTED PR: GitHub cannot build refs/pull/N/merge,
+# so no workflow is ever scheduled and the head SHA has zero check runs forever. Never a pass.
+echo '[]' > "$WORK/c.json"
+mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: a PR with ZERO checks was merged — the #606 fail-open"; exit 1; }
+grep -q "merge=false" "$WORK/mout.txt" || { echo "FAIL: merge!=false on zero checks"; exit 1; }
+grep -qi "zero check runs" "$WORK/mwhy.txt" || { echo "FAIL: an empty check list was not NAMED as the reason"; cat "$WORK/mwhy.txt"; exit 1; }
+runs '[]' > "$WORK/c.json"      # the same emptiness, one page-shape in
+mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: an empty check_runs page was merged"; exit 1; }
+
+# (c) THE SUBJECT IS ABSENT. Everything that DID report is green — so a naive aggregate says "merge".
+mgate <(runs '[{"name":"drift","status":"completed","conclusion":"success"},
+               {"name":"projection","status":"completed","conclusion":"success"}]') CLEAN > "$WORK/mout.txt" \
+  && { echo "FAIL: merged with registry-coherence ABSENT — the reconcile was never verified"; exit 1; }
+grep -qi "did not report" "$WORK/mwhy.txt" || { echo "FAIL: the absent subject was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (d) THE SUBJECT IS RED — and it is NOT a required check, so native auto-merge would have merged it.
+runs '[{"name":"registry-coherence","status":"completed","conclusion":"failure"},
+       {"name":"drift","status":"completed","conclusion":"success"}]' > "$WORK/c.json"
+mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged past a RED registry-coherence — #425's inversion, automated"; exit 1; }
+grep -q "registry-coherence=failure" "$WORK/mwhy.txt" || { echo "FAIL: the red check was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (e) STILL RUNNING. A pending check has not passed. Refuse — the next run re-pushes and re-gates.
+runs '[{"name":"registry-coherence","status":"in_progress","conclusion":null},
+       {"name":"drift","status":"completed","conclusion":"success"}]' > "$WORK/c.json"
+mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged while a check was still running"; exit 1; }
+grep -qi "not completed" "$WORK/mwhy.txt" || { echo "FAIL: the pending check was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (f) A completed run with a NULL conclusion is not green either — it is the shape a cancelled or
+# still-settling run takes, and `(.conclusion or "") in GREEN` is the only test that catches it.
+runs '[{"name":"registry-coherence","status":"completed","conclusion":null}]' > "$WORK/c.json"
+mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: a null conclusion was treated as green"; exit 1; }
+
+# (g) EVERY CHECK GREEN, but GitHub says the PR is not mergeable. Asked of the PR, never of branch
+# protection — the protection endpoint needs `administration: read`, and a 403 there is neither a
+# verdict nor an absence of one (#463). UNSTABLE is the sharp one: mergeable, but something is red.
+runs '[{"name":"registry-coherence","status":"completed","conclusion":"success"}]' > "$WORK/c.json"
+for bad in BLOCKED UNSTABLE DIRTY BEHIND UNKNOWN ""; do
+  mgate "$WORK/c.json" "$bad" > "$WORK/mout.txt" \
+    && { echo "FAIL: merged a PR whose mergeStateStatus is '$bad'"; exit 1; }
+done
+mgate "$WORK/c.json" HAS_HOOKS > /dev/null || { echo "FAIL: HAS_HOOKS is mergeable and must not refuse"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (h) THE READ FAILED. An unparseable payload means the checks were NOT read — an absence of evidence,
+# not an absence of red checks. Same discriminator as the retire gate: the payload, never an exit code.
+printf 'gh: could not read check runs\n' > "$WORK/c.json"
+mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged on an unparseable check payload"; exit 1; }
+grep -qi "did not parse" "$WORK/mwhy.txt" || { echo "FAIL: the failed read was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+rm -f "$WORK/c.json"            # an absent file is the same failure, one step earlier
+mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged with NO check payload at all"; exit 1; }
 echo "   ok"
 
 echo "skill-registry fixture: all checks passed"

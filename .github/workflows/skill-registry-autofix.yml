@@ -62,6 +62,49 @@
 # opens nothing — and RETIRES an open standing PR, whose diff is by then provably obsolete (see the
 # retire step; an obsolete reconcile does not sit there looking mergeable).
 #
+# AND IT MERGES ITS OWN PR (#642). A green PR that nobody merges lands nothing. #640 fixed the reason
+# the standing PR could never go green — its own coherence check was failed by the judgement findings
+# the bot correctly REFUSES to touch — and the result was #595: green, correct, and sitting there for
+# days while `main` stayed red on the eight stale digests it had already fixed. The bot was an
+# ornament; #640 only made it a green one. This is the step that lands it.
+#
+# WHY NOT `gh pr merge --auto`, WHICH IS WHAT THE OTHER TWO PROPAGATION ARMS DO. Because it cannot
+# work here, and the second reason is the serious one:
+#
+#   1. `.github` has `allow_auto_merge: false`, so `--auto` fails outright. A verbatim copy of the
+#      propagate arm would take its `autoMergeAllowed != true` branch and exit 1 EVERY DAY, telling a
+#      human to flip a repo setting — a new permanently-red check, which is the exact thing the
+#      comment it was copied from says trains everyone to ignore checks.
+#
+#   2. `registry-coherence` — the check that decides whether this PR is CORRECT — is NOT required on
+#      `main` (the required set is `contract-coherence / coherence`, `projection`, `roster-closure`,
+#      `drift`, `reconcile`). Native auto-merge waits for REQUIRED checks and merges straight past a
+#      red non-required one. So `--auto` would ignore the single signal that separates a good
+#      reconcile from a poisonous one: a red `registry-coherence` means the snapshot is OBSOLETE, and
+#      merging it writes superseded digests over the registry and REDs the gate it was opened to
+#      green. Arming `--auto` would not fix the bot — it would AUTOMATE the #425 inversion.
+#
+# NOR CAN `registry-coherence` SIMPLY BE MADE REQUIRED. Its verdict is a function of OTHER repos'
+# `main`s, so requiring it would let a producer's skill-body merge turn every open `.github` PR red
+# and block the repo until the next 06:42 run landed — an external repo's merge deadlocking this
+# one's, the hazard `check-required-contexts.py` (#549) exists to document. It stays non-required,
+# which means native auto-merge can never be safe on this PR.
+#
+# So the merge is GATED and DIRECT, and the gate is strictly STRONGER than `--auto`: it refuses on a
+# red NON-required check, on a PR with ZERO checks (#606 — "CI never started" and "everything passed"
+# are the same empty set), and on a `registry-coherence` that did not report at all (an absent subject
+# reads exactly like a passing one). Branch protection still applies underneath — a direct merge is
+# refused by GitHub exactly as `--auto` would be — so this ADDS a gate rather than routing around one.
+# `skill-registry-merge-gate` decides it; like the retire gate it is a SCRIPT, because a merge is the
+# other branch here that DESTROYS state (it lands a commit on `main`) and so must be driven over its
+# full truth table by tests/skill-registry.
+#
+# MERGE AND RETIRE CANNOT RACE, AND NOT BY LUCK. Merge hangs off `changed == 'true'`, retire off
+# `changed == 'false'` — mutually exclusive branches of one boolean, so no run takes both, and the
+# `concurrency` group serialises runs so no two can interleave. A PR the gate MERGED is closed, so no
+# later run can retire it; a PR a later run RETIRES has an empty diff, which is exactly the state in
+# which the merge gate is never consulted. Case 31 pins that structurally.
+#
 # CLEAN REPOS-ROOT. `fsgg-skill-registry-check` reads EVERY directory under `--repos-root` as a
 # producer, so a stray checkout there corrupts the findings (a developer's in-flight `git worktree`s
 # are the classic trap). CI is clean by construction: `.repos` holds exactly the freshly-cloned
@@ -96,7 +139,12 @@ concurrency:
 jobs:
   autofix:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 before #642. The job now waits for the standing PR's own checks before merging it (~90s
+    # measured, ~8 min ceiling), so the old bound would have killed the run mid-gate — and a job
+    # cancelled after the push but before the verdict leaves the PR open and unjudged, which is the
+    # state this change exists to end. Sized to the work, not rounded up: the ceiling
+    # `check-workflow-timeouts.py` enforces is 60.
+    timeout-minutes: 25
     env:
       BRANCH: bot/skill-registry-autofix
       REGISTRY: registry/skills.yml
@@ -246,6 +294,7 @@ jobs:
       # too, so the standing PR is OPENED BY the identity that pushed it rather than by two different
       # actors. `git push` needs no explicit credential: the checkout persisted this token.
       - name: Open or update the standing PR
+        id: pr
         if: steps.diff.outputs.changed == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -272,12 +321,151 @@ jobs:
           title="registry: re-digest stale skill rows (auto)"
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --title "$title" --body-file pr-body.md
-            echo "updated standing PR #$existing"
+            pr="$existing"
+            echo "updated standing PR #$pr"
           else
-            gh pr create --base main --head "$BRANCH" --title "$title" --body-file pr-body.md \
-              --label bug
-            echo "opened standing PR on $BRANCH"
+            # Take the number from create's own URL — re-listing can miss a just-created PR.
+            url="$(gh pr create --base main --head "$BRANCH" --title "$title" --body-file pr-body.md \
+                     --label bug)"
+            pr="${url##*/}"
+            echo "opened standing PR #$pr on $BRANCH"
           fi
+          # Anything non-numeric is "no PR", never an arg to a later `gh` call.
+          case "$pr" in ''|*[!0-9]*) echo "::error::could not determine the standing PR number." >&2; exit 1 ;; esac
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+          # The SHA the checks will report against. Read from the LOCAL branch we just pushed, not
+          # from the API: the PR object's head SHA is eventually-consistent right after a force-push,
+          # and gating on a stale SHA would read the PREVIOUS commit's (green) checks and merge a
+          # commit nothing ever checked.
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # WAIT FOR THE PR's OWN CHECKS, then let the gate judge them. This step deliberately makes NO
+      # decision: it polls until the checks settle (or the budget runs out) and dumps what it saw. The
+      # verdict is the gate's, and the gate is a tested script — because a merge lands a commit on
+      # `main`, and a decision that destroys state does not belong in an untestable inline block.
+      #
+      # Measured: `.github`'s PR checks complete in ~90s. The ceiling here is ~8 min, which is slack,
+      # not an expectation. Running out is NOT a failure — the gate simply sees pending checks and
+      # refuses, and tomorrow's run re-pushes and re-gates. Latency is not a failure mode; merging
+      # early is.
+      #
+      # `|| true` on the reads: a failed API call must leave an EMPTY payload for the gate to refuse
+      # on, not kill the step with `set -e` and skip straight past the merge with no verdict recorded.
+      - name: Wait for the standing PR's own checks
+        id: checks
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.pr.outputs.number }}
+          SHA: ${{ steps.pr.outputs.sha }}
+        run: |
+          set -uo pipefail
+          echo "gating standing PR #$PR at $SHA"
+          # WAIT FOR THE CHECKS TO REGISTER, NOT MERELY TO FINISH. GitHub schedules a PR's workflows
+          # over 20-60s, so the rollup GROWS: an early poll can legitimately show "3 checks, 0 pending"
+          # while four more have not been created yet. Breaking there would hand the gate a PARTIAL
+          # rollup and call it complete — and a check that has not registered is indistinguishable from
+          # one that passed, which is #606's defect at one remove.
+          #
+          # `mergeStateStatus` catches a missing REQUIRED check (it reports BLOCKED), so the sharp edge
+          # is the NON-required ones — `registry-coherence` above all, which is the whole subject here.
+          # The gate asserts that one by name; this loop is what stops the others being missed. So:
+          # break only when the count has been STABLE across two consecutive polls with nothing pending.
+          # It costs one extra 20s on the happy path, which is the cheapest insurance in this workflow.
+          prev=-1
+          for attempt in $(seq 24); do
+            # --paginate, ALWAYS. check-runs pages at 30 and this repo has ~30 workflows; a truncated
+            # read does not look truncated, it looks like an answer — and here the answer would be
+            # "nothing is pending, nothing is red" over a page-2 failure (#547).
+            gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs" --paginate --slurp > checks.json 2>/dev/null || echo '[]' > checks.json
+            n="$(jq '[.[].check_runs[]] | length' checks.json 2>/dev/null || echo 0)"
+            pending="$(jq '[.[].check_runs[] | select(.status != "completed")] | length' checks.json 2>/dev/null || echo 1)"
+            echo "  attempt $attempt/24: $n check(s), $pending pending (previous count: $prev)"
+            [ "$n" -gt 0 ] && [ "$pending" -eq 0 ] && [ "$n" -eq "$prev" ] && break
+            prev="$n"
+            [ "$attempt" -eq 24 ] || sleep 20
+          done
+          # GitHub computes mergeability lazily, so an immediate read is routinely UNKNOWN. Poll it too
+          # rather than handing the gate an UNKNOWN it can only refuse on.
+          state=""
+          for attempt in 1 2 3 4 5; do
+            state="$(gh pr view "$PR" --json mergeStateStatus --jq '.mergeStateStatus' 2>/dev/null || echo '')"
+            [ "$state" = "UNKNOWN" ] || [ -z "$state" ] || break
+            echo "  mergeStateStatus=$state (attempt $attempt/5) — GitHub is still computing it."
+            [ "$attempt" -eq 5 ] || sleep 5
+          done
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          echo "mergeStateStatus=$state"
+
+      # THE VERDICT. Fail-closed by construction: if the gate dies, $GITHUB_OUTPUT gets no `merge` key,
+      # the merge step's `if` cannot match, and nothing is merged. Exactly as the retire gate is wired.
+      - name: Decide whether the standing PR may be merged
+        id: merge-gate
+        if: steps.pr.outputs.number != ''
+        env:
+          # Through the ENVIRONMENT, never `${{ }}` inside the script — the same rule the stamp follows,
+          # and for the same reason: `${{ }}` is substituted textually BEFORE bash parses the line. This
+          # value is a GitHub enum today, so it is not the live injection the stamp is, but "it happens
+          # to be safe" is not the invariant this workflow keeps; "no step output is ever re-parsed as
+          # shell" is, and an exception is how the rule stops being one.
+          MERGE_STATE: ${{ steps.checks.outputs.state }}
+        run: |
+          set -uo pipefail
+          # `|| true`: a non-zero exit means "do not merge", which is a NORMAL outcome (pending checks
+          # on a slow day), not an error. The merge reads the payload, never the exit code.
+          python scripts/skill-registry-merge-gate \
+            --checks checks.json \
+            --merge-state "$MERGE_STATE" >> "$GITHUB_OUTPUT" || true
+
+      # LAND IT. The App token merges, for the same reason it pushed (#514): GITHUB_TOKEN is held at
+      # `contents: read` precisely so no step here can quietly fall back to it.
+      #
+      # This is a DIRECT merge, not `--auto`, and the header says why at length: `registry-coherence`
+      # is not a required check, so native auto-merge would land this PR while the one check that can
+      # prove it obsolete is RED. Branch protection still gates this merge exactly as it would gate an
+      # auto-merge — GitHub refuses it if a required check is unsatisfied — so the gate above ADDS a
+      # constraint (no red non-required check, no absent subject) rather than removing one.
+      - name: Merge the standing PR
+        if: steps.diff.outputs.changed == 'true' && steps.merge-gate.outputs.merge == 'true' && (github.event_name != 'workflow_dispatch' || inputs.dry-run != true)
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          if ! gh pr merge "$PR" --squash --delete-branch=false; then
+            echo "::error::#$PR is green on every check and CLEAN, but GitHub refused the merge. The" >&2
+            echo "::error::reconcile will NOT land without a human. If that is a branch-protection" >&2
+            echo "::error::refusal, it is authoritative — do not route around it." >&2
+            exit 1
+          fi
+          echo "Merged standing PR #$PR — the registry on \`main\` is now reconciled."
+
+      # FAILING TO LAND IT IS AN ERROR, NOT A WARNING — the rule both other propagation arms state in
+      # their own comments, and the one #642 quotes:
+      #
+      #   "the PR would sit exactly as before, and a green propagate run would report that the kit had
+      #    been propagated when it had not. That is the fails-open shape #266 exists to kill."
+      #
+      # It applies here verbatim. A run that reconciles the registry, pushes the branch, and then does
+      # NOT land it has left `main` exactly as stale as it found it — so a GREEN run would assert work
+      # it did not do, which is the defect this whole workflow exists to remove, reappearing in the step
+      # that reports on it. Red, and say which of the gate's refusals it was.
+      #
+      # This deliberately reds on "checks were still pending after ~8 minutes" too. That is not a false
+      # alarm: measured, they complete in ~90s, so exhausting five times that slack means CI got slow or
+      # the checks are not scheduling — and either way the reconcile did not land, which is the fact the
+      # run has to carry. A daily bot that runs, succeeds, and achieves nothing is epic #416.
+      - name: The reconcile did not land
+        if: steps.diff.outputs.changed == 'true' && steps.pr.outputs.number != '' && steps.merge-gate.outputs.merge != 'true'
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          echo "::error::Standing PR #$PR was NOT merged — the gate's reason is printed above." >&2
+          echo "::error::The registry on \`main\` is STILL STALE: this run reconciled it, opened the PR," >&2
+          echo "::error::and did not land it. That is the whole job, unfinished — not a warning." >&2
+          echo "::error::The next scheduled run re-pushes the branch and re-gates it, but if this keeps" >&2
+          echo "::error::failing, LOOK: a red \`registry-coherence\` means the snapshot is obsolete (#425)." >&2
+          exit 1
 
       # IS THIS RECONCILE FINISHED, OR DID IT JUST FAIL? `changed == 'false'` alone cannot tell you.
       # `Reconcile in place` ends in `|| true`, which swallows EVERY non-zero exit — not only the
@@ -381,6 +569,9 @@ jobs:
         run: |
           if [ "${{ steps.diff.outputs.changed }}" = "true" ]; then
             echo "dry-run: reconcile computed and PR body composed above; branch/PR NOT touched."
+            echo "dry-run: a real run would push it, WAIT for the PR's own checks, and merge it only if"
+            echo "dry-run: every one of them is green — including \`registry-coherence\`, which is not a"
+            echo "dry-run: required check and which native auto-merge would ignore (#642)."
           elif [ "${{ steps.settled.outputs.settled }}" = "true" ]; then
             echo "dry-run: the reconcile is FINISHED (${{ steps.settled.outputs.residual }} judgement case(s) outstanding, which no"
             echo "dry-run: reconcile can resolve) — a real run would RETIRE any open standing PR. Nothing composed."
