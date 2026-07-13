@@ -569,9 +569,15 @@ a record against a record and never contacts the feed, #429/epic #266; SDD and t
 `lockfile-sync` generator are cold, Game/Rendering/Audio adoption is in flight. Note
 `FSharp.Core` was **never re-published** (ADR-0032, #471): the SDK bundles a *different*
 `.nupkg` than nuget.org serves at the same id+version, so a lock's `contentHash` depends
-on **which source** resolved it — and cold does not mean hermetic, because the SDK's
-`library-packs` folder is injected by MSBuild and a fresh `NUGET_PACKAGES` does not bypass
-it), `apicompat-publicapi-gate` (a public-API break
+on **which source** resolved it. Cold was therefore not the same as hermetic — the SDK's
+`library-packs` folder is injected by MSBuild (`RestoreAdditionalProjectSources`) and a
+fresh `NUGET_PACKAGES` does not bypass it. **That hole is now closed** (#504): the org-shared
+build config sets `DisableImplicitLibraryPacksFolder`, which removes the folder from the
+source list, and all five F# repos (SDD, Rendering, Governance, Game, Audio) have synced it
+and re-pinned to nuget.org's hash — so a lock now regenerates byte-identically on any
+machine, whatever its SDK patch level or `packageSourceMapping`. `lockfile-sync`'s
+source report is **fail-closed** accordingly: a `library-packs` resolution is a regression,
+not an un-adopted repo), `apicompat-publicapi-gate` (a public-API break
 on a packable forces a SemVer major), `fs-gg-ui-version`/`-bom` (single-pin and
 BOM coherence guarded on every Rendering PR), and
 `governance-cli-handoff-consumer-published` (the full strict/light matrix proven

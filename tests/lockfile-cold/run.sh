@@ -214,6 +214,48 @@ else
   bad "LEG 4: the workflow is asserted" "no $SYNC_WF"
 fi
 
+# ---- LEG 5: the ADR-0032 source report is still FAIL-CLOSED (.github#504) --------------------------
+# Cold (legs 1-4) is not enough on its own: a cold restore that resolves FSharp.Core from the SDK's
+# bundled library-packs folder still writes a machine-DEPENDENT contentHash, because that folder ships
+# a different .nupkg than nuget.org at the same id+version. lockfile-sync's "Report which source served
+# each package" step is what catches it, and it was deliberately ADVISORY (exit 0) for as long as some
+# repo had not yet synced DisableImplicitLibraryPacksFolder — failing then would have redded a repo
+# whose lock was correct FOR IT.
+#
+# Every F# repo has now synced, so #504 flipped that step to exit 1. This is the same class of guard as
+# leg 4, and it exists for the same reason: nothing stops a future edit from putting the `exit 0` back,
+# and every behavioural leg above would keep passing while production quietly resumed COMMITTING
+# machine-dependent lock files. Assert the exit code, by name.
+if [ -f "$SYNC_WF" ]; then
+  report_step="$(awk '/name: Report which source served each package/,/name: Commit and push if changed/' "$SYNC_WF")"
+
+  if printf '%s' "$report_step" | grep -qE '^\s*echo "::error title=lock file is not machine-independent'; then
+    ok "LEG 5: the ADR-0032 source report FAILS (::error) on a library-packs resolution"
+  else
+    bad "LEG 5: the ADR-0032 source report FAILS (::error) on a library-packs resolution" \
+        "it warns instead of failing — a library-packs hash would be COMMITTED again (#504/ADR-0032)"
+  fi
+
+  # The ::error alone is NOT the gate: an annotation followed by `exit 0` is a message, and the job
+  # would go on to COMMIT the machine-dependent lock anyway. So assert ADJACENCY — the statement
+  # immediately after that annotation must be `exit 1`. (Counting `exit 1`s in the step would not do:
+  # the no-evidence branch above has one, so a count >= 2 stays satisfied even if THIS branch is
+  # flipped back to exit 0 — passing the guard while the hole it guards is wide open.)
+  after_error="$(
+    printf '%s\n' "$report_step" \
+      | grep -A1 -E '^\s*echo "::error title=lock file is not machine-independent' \
+      | sed -n '2p' | tr -d '[:space:]'
+  )"
+  if [ "$after_error" = 'exit1' ]; then
+    ok "LEG 5: ...and EXITS NON-ZERO right after it, so the machine-dependent lock is never pushed"
+  else
+    bad "LEG 5: ...and EXITS NON-ZERO right after it, so the machine-dependent lock is never pushed" \
+        "the statement after the ::error is '${after_error:-<nothing>}', not 'exit 1' — an annotation the job walks straight past is not a gate; 'Commit and push' still runs"
+  fi
+else
+  bad "LEG 5: the source report is asserted" "no $SYNC_WF"
+fi
+
 echo "lockfile-cold fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::lockfile-cold fixture FAILED"; exit 1; }
 echo "lockfile-cold fixture — OK"

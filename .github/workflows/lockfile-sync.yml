@@ -410,9 +410,15 @@ jobs:
       #   what blocked #429's repair for a day. Generator and enforcer must read the SAME build config,
       #   so the property comes from the repo, and the sync + the re-pin land in ONE PR.
       #
-      # Until a repo syncs, it keeps generating `FwQFuqOA…` — self-consistently, and its gate stays
-      # green. The step after this one says which source served the package, so that state is visible
-      # rather than inferred (ADR-0032 §4).
+      # THAT RULE OUTLIVES THE ROLLOUT, so do not "simplify" it away now that every repo has adopted
+      # (#504). It is what keeps generator and enforcer reading one config; forcing the property here
+      # would re-introduce the decoupling for the next repo that onboards before it syncs, and would
+      # ALSO mask the regression the step below now fails on — this job would silently generate the
+      # right hash for a repo whose own gate expects the wrong one.
+      #
+      # Which source actually served each package is asserted by the step after this one (ADR-0032 §4).
+      # Since #504 that step is FAIL-CLOSED: every repo has synced, so a `library-packs` resolution is
+      # a regression rather than a not-yet-adopted state.
       #
       # Verified by falsification (#429): plant a stale `contentHash` in a package's
       # `.nupkg.metadata` and `--force-evaluate` writes THAT hash into packages.lock.json;
@@ -452,21 +458,35 @@ jobs:
       # local cache and invites the wrong repair (pasting in the .nupkg.sha512 sidecar, which fails
       # too) — so name the SOURCE, because that, not time, is the variable a contentHash depends on.
       #
-      # ADVISORY, AND IT MUST STAY THAT WAY UNTIL THE RE-PIN IS DONE (#473). A repo that has not yet
-      # synced the shared build config still resolves `library-packs` — CORRECTLY and
-      # self-consistently: it generates FwQFuqOA… here and validates FwQFuqOA… in its own gate. Failing
-      # this step would red an unrelated dependency-bump PR over an adoption it has not been asked to
-      # make yet, which is the same fail-closed-on-a-correct-lock-file that blocked #429's repair. It
-      # reports; it never decides. Flip it to an error once every repo has synced + re-pinned, at which
-      # point a library-packs resolution really is a regression (tracked on the re-pin item).
+      # FAIL-CLOSED SINCE #504. This step was ADVISORY for exactly as long as that was the honest
+      # setting: while some repo had not yet synced the shared build config, a `library-packs`
+      # resolution was CORRECT and self-consistent there (it generated FwQFuqOA… here and validated
+      # FwQFuqOA… in its own gate), so failing it would have redded an unrelated dependency-bump PR
+      # over an adoption that repo had not been asked to make — the same fail-closed-on-a-correct-lock
+      # -file that blocked #429's repair for a day.
+      #
+      # That condition is now discharged. Every F# repo in the org (SDD, Rendering, Governance, Game,
+      # Audio) carries DisableImplicitLibraryPacksFolder and commits nuget.org's excLf2zM…; Templates
+      # has no packages at all (its lock is `"net10.0": {}`), so it resolves nothing and passes
+      # trivially. There is no repo left for which resolving from the SDK's bundled folder is correct.
+      # A library-packs resolution is therefore no longer a not-yet-adopted state to report — it is a
+      # REGRESSION (the shared config was un-synced, or an SDK shipped a new injected source), and the
+      # lock file this job is about to COMMIT would be machine-dependent. Reporting that and exiting 0
+      # would push the bad lock anyway.
       - name: Report which source served each package (ADR-0032)
         working-directory: ${{ inputs.working-directory }}
         run: |
           set -uo pipefail
 
+          # NO EVIDENCE IS NOT A PASS. While this step merely reported, exiting 0 here was harmless.
+          # Now that it GATES the commit below, an empty NUGET_PACKAGES means the one artifact this
+          # check reads does not exist — so it cannot see its subject, and a check that cannot fail on
+          # its subject is not a check (the fails-open class, epic #266). The restore step exports this
+          # unconditionally, so an absence here means the restore step no longer works the way this one
+          # assumes; that is a defect in the workflow, not a quiet green.
           if [ -z "${NUGET_PACKAGES:-}" ] || [ ! -d "${NUGET_PACKAGES:-}" ]; then
-            echo "no package folder from the restore step — nothing to report."
-            exit 0
+            echo "::error title=lockfile-sync: the ADR-0032 source check has no evidence to read::The restore step did not export a NUGET_PACKAGES folder, so this gate cannot tell which source served each package — and it must not pass without knowing. Check the 'Regenerate lockfiles (cold)' step above."
+            exit 1
           fi
 
           echo "Packages by the source that served them:"
@@ -502,15 +522,20 @@ jobs:
           echo "NuGet config excludes that folder (a packageSourceMapping does). That is the ADR-0032"
           echo "defect: same id, same version, two different .nupkg files, two different hashes."
           echo
+          echo "This is now a REGRESSION, not a not-yet-adopted state: every F# repo in the org carries"
+          echo "DisableImplicitLibraryPacksFolder and commits nuget.org's hash (FS-GG/.github#504). This"
+          echo "job was about to COMMIT the machine-dependent lock above, so it stops instead."
+          echo
           echo "FIX (one PR, and the ORDER matters — ADR-0032 §3):"
-          echo "  1. Sync the org-shared build config:  scripts/sync-build-config.sh <this repo>"
+          echo "  1. Re-sync the org-shared build config:  scripts/sync-build-config.sh <this repo>"
           echo "     dist/dotnet/Directory.Build.props sets DisableImplicitLibraryPacksFolder=true,"
           echo "     which REMOVES that source, so FSharp.Core resolves from nuget.org everywhere."
+          echo "     Confirm it survived: grep -r DisableImplicitLibraryPacksFolder Directory.Build.props"
           echo "  2. Regenerate the lock IN THE SAME PR (cold):  dotnet restore --force-evaluate"
           echo "     Re-pinning ahead of the sync fails locked restore on a CORRECT lock file."
 
-          echo "::warning title=lock file is not machine-independent yet (ADR-0032)::$GITHUB_REPOSITORY still resolves at least one package from the SDK's library-packs folder, so its committed contentHash depends on the SDK patch level. Not blocking: the repo is self-consistent until it adopts. Fix by syncing the org-shared build config (DisableImplicitLibraryPacksFolder) and regenerating the lock in the SAME PR — see FS-GG/.github#473."
-          exit 0
+          echo "::error title=lock file is not machine-independent (ADR-0032)::$GITHUB_REPOSITORY resolved at least one package from the SDK's library-packs folder, so the lock file this job would have committed depends on the SDK patch level. Every F# repo has adopted DisableImplicitLibraryPacksFolder (FS-GG/.github#504), so this is a regression — most likely the shared build config was un-synced. Re-sync it and regenerate the lock in the SAME PR."
+          exit 1
 
       - name: Commit and push if changed
         working-directory: ${{ inputs.working-directory }}
