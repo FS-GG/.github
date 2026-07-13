@@ -39,9 +39,23 @@
 #   LEG 4  the workflow still IS cold                     Static guard: the three properties that
 #                                                         make leg 2 possible cannot be quietly
 #                                                         removed from lockfile-sync.yml.
+#   LEG 5  the ADR-0032 source report still               Static guard (#504): an ::error with an
+#          FAILS CLOSED                                   `exit 0` after it is a message, not a gate.
+#   LEG 6  ...and that report actually RUNS,   -> the report step, LIFTED OUT OF THE YAML and executed
+#          in every state, under the shell        under GitHub's own `bash -e {0}`, against a package
+#          GitHub really gives it                 folder that is compliant (PASS), regressed (FAIL),
+#                                                 absent (FAIL — no evidence), empty (PASS — Templates
+#                                                 resolves nothing), and unreadable (FAIL — a broken
+#                                                 read is not a pass either).
 #
 # Legs 2 and 3 are the pair. Leg 2 alone would be satisfied by a gate that is merely broken; leg 3
 # shows the SAME lock file passing the moment the restore stops being cold, which is the defect.
+#
+# Legs 5 and 6 are the other pair, and #639 is why leg 6 exists. Leg 5 GREPS the report step; it went on
+# passing while that step could not pass AT ALL — errexit, which GitHub reimposes on a script that opted
+# out of it, killed the step on `grep`'s no-match, and no-match is the ADR-0032 PASS. So the gate was red
+# on the good state, and a repo went red for ADOPTING the invariant. A guard that only reads the source
+# of a gate cannot tell you the gate runs. Leg 6 runs it.
 #
 # The trap that cost .github#429 an hour, encoded here so no one re-treads it: NUGET_PACKAGES=$(mktemp -d)
 # IS NOT A COLD CACHE. It relocates global-packages but NOT the HTTP cache, which happily serves stale
@@ -254,6 +268,158 @@ if [ -f "$SYNC_WF" ]; then
   fi
 else
   bad "LEG 5: the source report is asserted" "no $SYNC_WF"
+fi
+
+# ---- LEG 6: the ADR-0032 report is RUN — in every state, under the shell GitHub actually gives it ---
+# LEGS 4 AND 5 ARE GREPS, AND THEY BOTH STAYED GREEN WHILE THE STEP THEY GUARD COULD NOT PASS. They
+# assert that the report still SAYS the right things; neither can see whether it still DOES them, and
+# it did not. The step declares no `shell:`, so GitHub runs it under its default `bash -e {0}` — while
+# the script opened `set -uo pipefail`, deliberately omitting the `-e` that was being reimposed over its
+# head. `grep -l` exits 1 on NO MATCH, which here is the PASS (it IS the ADR-0032 invariant); xargs maps
+# that to 123, pipefail promotes it out of the command substitution, and errexit killed the step before
+# the `-z` test could read the empty result it had just computed. The `ok:` branch was dead code: the
+# gate went RED on a repo precisely for ADOPTING ADR-0032, and Renovate PRs stopped landing behind it
+# (#639, found from FS.GG.Governance#158; the rollout #504 drives was walking every repo onto it).
+#
+# So this leg EXECUTES the real step — lifted out of the YAML, under the shell GitHub would hand it —
+# against a synthetic package folder in each state, and asserts the exit code AND the branch taken. It
+# READS the `shell:` key rather than assuming the default, so the equally-valid fix (naming a shell that
+# genuinely has no `-e`) passes here too: what this pins is the BEHAVIOUR, not the mechanism.
+#
+# No dotnet, no network — the step's only input is a tree of .nupkg.metadata files, and the source it
+# reads from them is a string. Building that tree by hand is what lets the leg assert the ONE state a
+# real restore on this runner cannot produce on demand: a COMPLIANT one.
+STEP="$WORK/report-step.sh"
+REPORT_SHELL=""
+if [ -f "$SYNC_WF" ] && command -v jq >/dev/null 2>&1; then
+  REPORT_SHELL="$(
+    python3 - "$SYNC_WF" "$STEP" <<'PY'
+import shlex, sys, yaml
+wf = yaml.safe_load(open(sys.argv[1]))
+steps = [s for j in wf["jobs"].values() for s in j.get("steps", [])
+         if str(s.get("name", "")).startswith("Report which source served each package")]
+if len(steps) != 1:
+    sys.exit("expected exactly one ADR-0032 report step, found %d" % len(steps))
+step = steps[0]
+script = step["run"]
+# Actions would interpolate `${{ … }}` before bash ever saw it; we cannot, and bash would die on the
+# `${{` with a syntax error that says nothing about why. Refuse with a message that does. (Today the
+# step uses none — its inputs arrive as env vars, which is what keeps it drivable like this.)
+if "${{" in script:
+    sys.exit("the report step now uses a ${{ }} expression; this leg cannot render it — pass the value "
+             "in as an env var, or teach this extractor to substitute it")
+open(sys.argv[2], "w").write(script)
+# GitHub's default shell for `run:` on Linux is `bash -e {0}` — ERREXIT ON — unless the step names one.
+# Reproduce that decision here rather than hard-coding it, so this leg keeps testing what production
+# runs even if someone fixes #639 the other way (by declaring a shell without -e).
+declared = step.get("shell")
+if declared is None:
+    argv = ["bash", "-e"]
+else:
+    toks = shlex.split(declared)
+    if len(toks) < 2 or toks[0] != "bash" or toks[-1] != "{0}":
+        sys.exit("this leg can only drive a `bash … {0}` shell, not %r" % declared)
+    argv = toks[:-1]
+print(" ".join(argv))
+PY
+  )" || REPORT_SHELL=""
+fi
+
+mk_pkgs() {  # mk_pkgs <dir> <source recorded for fsharp.core>   — a NUGET_PACKAGES folder, by hand
+  rm -rf "$1"
+  mkdir -p "$1/fsharp.core/10.1.301" "$1/fsgg.coldprobe/1.0.0"
+  printf '{"version":2,"contentHash":"h1==","source":"%s"}\n' "$2" \
+    > "$1/fsharp.core/10.1.301/.nupkg.metadata"
+  printf '{"version":2,"contentHash":"h2==","source":"https://api.nuget.org/v3/index.json"}\n' \
+    > "$1/fsgg.coldprobe/1.0.0/.nupkg.metadata"
+}
+run_report() {  # run_report <NUGET_PACKAGES>  — step output on stdout, step's exit code as the return
+  # $REPORT_SHELL is an argv ("bash -e"), so it MUST word-split. That is the point of it.
+  # shellcheck disable=SC2086
+  NUGET_PACKAGES="$1" GITHUB_REPOSITORY="FS-GG/FS.GG.Fixture" $REPORT_SHELL "$STEP" 2>&1
+}
+
+if [ -z "$REPORT_SHELL" ]; then
+  bad "LEG 6: the ADR-0032 report step can be driven" \
+      "could not extract it from $SYNC_WF (or jq is missing) — the behavioural legs below did not run"
+else
+  mk_pkgs "$WORK/adr32-compliant" "https://api.nuget.org/v3/index.json"
+  mk_pkgs "$WORK/adr32-regressed" "/usr/share/dotnet/sdk/10.0.301/FSharp/library-packs"
+
+  # 6a. THE LEG #639 WAS MISSING. Every package from a feed = the ADR-0032 invariant holding = PASS.
+  rc=0; out="$(run_report "$WORK/adr32-compliant")" || rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^ok: no package was served by an SDK-bundled folder source\.'; then
+    ok "LEG 6: a COMPLIANT package folder PASSES the report (exit 0, and the ok: branch is REACHED)"
+  else
+    bad "LEG 6: a COMPLIANT package folder PASSES the report (exit 0, and the ok: branch is REACHED)" \
+        "exit=$rc — THE GATE IS RED ON THE GOOD STATE. A repo that adopts ADR-0032 cannot sync a lock
+file, so its Renovate PRs never land (#639). exit=123 means grep's no-match — the SUCCESS signal — is
+being read as a failure again: check that the \`grep -lF\` no-match is tolerated where it happens, and
+that the \`set\` line names every option the step actually runs with. Output:
+$out"
+  fi
+
+  # 6b. ...and the gate still BITES. 6a alone is satisfied by a step that always exits 0.
+  rc=0; out="$(run_report "$WORK/adr32-regressed")" || rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '::error title=lock file is not machine-independent'; then
+    ok "LEG 6: ...and a library-packs resolution still FAILS it (exit $rc, ::error) — #504 intact"
+  else
+    bad "LEG 6: ...and a library-packs resolution still FAILS it (exit $rc, ::error) — #504 intact" \
+        "exit=$rc — a machine-dependent lock file would be COMMITTED (ADR-0032, #504). Output:
+$out"
+  fi
+
+  # 6c. NO EVIDENCE IS NOT A PASS (epic #266). The step's own subject is the package folder; without
+  #     one it cannot see its subject, and a check that cannot fail on its subject is not a check.
+  rc=0; out="$(run_report "$WORK/adr32-absent")" || rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q 'has no evidence to read'; then
+    ok "LEG 6: ...and NO package folder at all FAILS it too — no evidence is not a pass (#266)"
+  else
+    bad "LEG 6: ...and NO package folder at all FAILS it too — no evidence is not a pass (#266)" \
+        "exit=$rc — the gate went GREEN without reading its subject. Output:
+$out"
+  fi
+
+  # 6d. THE TEMPLATES CASE, and it is NOT the same as 6c. A package folder that EXISTS but holds no
+  #     packages is what FS.GG.Templates restores (its lock is `"net10.0": {}`), and lockfile-sync.yml
+  #     says in prose that it "resolves nothing and passes trivially" — a claim nothing executed. The
+  #     distinction is load-bearing: 6c must fail (no folder = no evidence) while this must pass (a
+  #     folder, honestly empty = nothing resolved from library-packs). Anyone hardening 6c's guard into
+  #     "at least one .nupkg.metadata or die" would red Templates on every Renovate PR, and without this
+  #     leg every other assertion here would stay green while they did it.
+  mkdir -p "$WORK/adr32-empty"
+  rc=0; out="$(run_report "$WORK/adr32-empty")" || rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$out" | grep -q '^ok: no package was served by an SDK-bundled folder source\.'; then
+    ok "LEG 6: ...and an EMPTY-but-present folder passes trivially — Templates resolves nothing"
+  else
+    bad "LEG 6: ...and an EMPTY-but-present folder passes trivially — Templates resolves nothing" \
+        "exit=$rc — a repo with NO packages cannot sync its lock file. That is FS.GG.Templates, on every
+Renovate PR it will ever get. An empty package folder is not missing evidence (6c) — it is evidence of
+nothing resolved, which is the ADR-0032 PASS. Output:
+$out"
+  fi
+
+  # 6e. A BROKEN READ IS NOT A PASS EITHER. A folder whose .nupkg.metadata cannot be read must go RED,
+  #     whichever line delivers that — and this leg pins the OUTCOME, deliberately, without asserting
+  #     which one does. Worth being straight about what it does and does not prove: it passes against
+  #     the `xargs … || true` repair too, because a folder grep cannot read also breaks the `jq`
+  #     inventory ABOVE and the step dies there first. So this leg is not the argument for reading
+  #     grep's exit code; the argument is that today's fail-closed here is an accident of ORDERING,
+  #     owed to a step called "report", and a gate should not depend on an unrelated line running
+  #     first. What the leg guarantees is that if anyone ever rearranges that, the red is still red.
+  mk_pkgs "$WORK/adr32-unreadable" "/usr/share/dotnet/sdk/10.0.301/FSharp/library-packs"
+  chmod 000 "$WORK/adr32-unreadable/fsharp.core/10.1.301/.nupkg.metadata"
+  rc=0; out="$(run_report "$WORK/adr32-unreadable")" || rc=$?
+  chmod 644 "$WORK/adr32-unreadable/fsharp.core/10.1.301/.nupkg.metadata"   # so the EXIT trap can rm it
+  if [ "$rc" -ne 0 ]; then
+    ok "LEG 6: ...and a package folder it CANNOT READ fails closed (exit $rc) — not silently 'ok'"
+  else
+    bad "LEG 6: ...and a package folder it CANNOT READ fails closed (exit $rc) — not silently 'ok'" \
+        "THE GATE WENT GREEN WITHOUT READING ITS SUBJECT. A library-packs resolution was sitting in that
+folder and the step reported 'ok'. This is the fails-open shape of #266, and the reason grep's exit code
+must be read (>=2 = could not see) rather than tolerated wholesale. Output:
+$out"
+  fi
 fi
 
 echo "lockfile-cold fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
