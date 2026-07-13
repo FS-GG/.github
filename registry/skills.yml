@@ -150,6 +150,14 @@ skills:
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
   - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: ebf302b8dac1eea2d3edb85da3e133163c1c5c696c3afbabb05a61237ee3cd2a, materializes-when: "profile in [game, sample-pack]" }
+  # fs-gg-audio's predicate is DELIBERATELY WIDER than its three block-mates: it carries `app`, which
+  # game-core/persistence/model-swap do not. Audio rides the APP family too — FS.GG.Game compiled the
+  # app-family launcher (Game#232, and #240 which found the silent launchers were table-only), so the
+  # producer widened the emission condition and this row mirrors the manifest's bytes VERBATIM
+  # (`predicate-matches`, .github#292, asserts equality). Reconciled .github#486.
+  # DO NOT "normalize" it to `profile in [game, sample-pack]` to match the rows around it — that is a
+  # row-shaped optical illusion, and the gate goes red on the correction. (Same trap, same answer, as
+  # the fs-gg-feedback-report / fs-gg-feedback-capture pair below.)
   - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: d1833a673c2a970716e36923f6247253a614b79ddcf7f7c2a482dc0071527420, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: cfb935493f856a2ce4d13bb4966fad57feaaf01c51861c38f91280eb2fcabc64, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, materializes-when: "profile in [game, sample-pack]" }
