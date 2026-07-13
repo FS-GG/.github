@@ -15,9 +15,14 @@ module Options =
 
     /// What the engine was asked to do.
     type Command =
-        /// Decide a batch from a board-state snapshot on stdin. The only command the shadow uses, and
-        /// the only one that exists at Phase 2 — the engine reads NOTHING for itself (see `Snapshot`).
+        /// Decide a batch from a board-state snapshot on stdin. The command the shadow uses — the engine
+        /// reads NOTHING for itself (see `Snapshot`).
         | Decide
+
+        /// Fold the fleet divergence ledger into ADR-0034 §5's cut-over verdict (#634). Reads a ledger
+        /// document on stdin; like `Decide`, it fetches nothing — not the board, not the ledger, and not
+        /// even the clock (see `Fleet`).
+        | FleetVerdict
 
         | Help
         | Version
@@ -35,8 +40,8 @@ module Options =
         { Command: Command
           Render: Render
 
-          /// Read the snapshot from this file instead of stdin. Testing and debugging only; the shadow
-          /// always pipes, because a temp file is one more thing that can be stale.
+          /// Read the snapshot (or the ledger) from this file instead of stdin. Testing and debugging
+          /// only; the shadow always pipes, because a temp file is one more thing that can be stale.
           SnapshotFile: string option }
 
     /// Parse argv. `Error` carries a message already fit to print.

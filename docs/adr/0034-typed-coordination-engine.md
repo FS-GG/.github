@@ -126,6 +126,31 @@ for three consecutive days**. The 4,024 lines of bash comments are an incident l
 into ~60 named regression tests — one per historical defect — happens **before** any production code
 is trusted.
 
+**That criterion is a FUNCTION, not a sentence** ([#634](https://github.com/FS-GG/.github/issues/634)).
+It was neither, at first: the shadow wrote its evidence to a **disposable cache directory** on whichever
+machine ran it, the rows did not record **which worker** produced them, nothing collected them, and no
+code computed the predicate. The flip would have been decided by a human reading one laptop's counters —
+and CI, whose cache dies with the job, was throwing away 100% of what it observed. An empty result
+standing in for a verified negative is epic #266; a surface that runs, reports success and establishes
+nothing is epic #416. The clause gating this ADR's own cut-over was both.
+
+So the evidence aggregates and the criterion is computed:
+
+- Workers publish a per-`(worker, day, engine)` **summary** to a **fleet ledger** — a marker comment on
+  a well-known issue, rewritten in place, idempotent. It is the claim lock's own mechanism, chosen for
+  the reason this ADR already gives for hosting the lock on REST: **GraphQL is the first budget to die
+  under fan-out, and a ledger may never live on the budget that dies first.** The hot scheduling loop
+  pays no network — it still writes locally, and publishes once at the end.
+- `Divergence.evaluate` folds the ledger into `Verdict<Evidence>` in the **typed core**, and
+  `fsgg-coord divergence --fleet` is the gate. It fails closed on evidence that is absent, thin,
+  **single-worker** (a concurrency defect cannot appear in a log one worker wrote alone, so such a log
+  cannot be evidence that there is none), uncovered on any day in the window, or produced by a
+  **different engine build** — agreement by `0.1.0` proves nothing about `0.2.0`, so republishing the
+  engine legitimately restarts the clock.
+- Every condition the per-worker client already calls RED — an outcome divergence, an item only one
+  engine ruled on, a batch the engine refused outright — is blocking in the fleet fold too. Counting
+  only the first would let it report green over a fleet each of whose workers was printing red.
+
 ## Consequences
 
 **What this obliges `.github` to do**

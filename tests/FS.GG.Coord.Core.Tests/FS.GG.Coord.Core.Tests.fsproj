@@ -34,6 +34,7 @@
     <Compile Include="BlockerTests.fs" />
     <Compile Include="SchedulabilityTests.fs" />
     <Compile Include="BatchTests.fs" />
+    <Compile Include="DivergenceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

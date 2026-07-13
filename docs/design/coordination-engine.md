@@ -603,8 +603,35 @@ including a mutation test that removes the containment and watches the tool die)
 > Publishing before flipping is not a compromise. It is the only order in which the flip's evidence can
 > exist.
 
+#### 3a, as built — the evidence had nowhere to go
+
+Publishing the engine made the shadow *able* to run everywhere. It did not make the evidence *count*,
+and [#634](https://github.com/FS-GG/.github/issues/634) is what was left:
+
+> The shadow appended to `$XDG_CACHE_HOME/fsgg-coord/divergence.jsonl` — **a disposable cache directory
+> on one machine**. Nothing collected it. The rows did not say **which worker** wrote them, so a fold
+> could not have counted fleet members even if the logs had been gathered: one worker's 500 runs and 500
+> workers' one run each rendered identically. And **nothing computed the criterion at all** — the clause
+> the whole cut-over is conditional on was a sentence in an ADR, not a function in the codebase.
+>
+> CI was the sharpest case: `touch-set-drift` shells out to the tool on a bare runner whose cache dies
+> with the job, so **100% of everything it ever observed was discarded**, on every run, forever.
+>
+> The client was already scrupulous that an **empty** log is not agreement (`divergence` exits 3 — *"zero
+> EVIDENCE, not zero divergence"*). It had no way to say that a **non-empty LOCAL** log is not the
+> **FLEET**. That is the same substitution one layer up, inside the tool built to end it.
+
+So 3a also ships **the fleet ledger**: workers publish a per-`(worker, day, engine)` summary as a marker
+comment on a well-known issue (REST — *a ledger may never live on the budget that dies first*), and
+`Divergence.evaluate` folds it, **in the typed core**, into the one verdict the flip is gated on. It fails
+closed on evidence that is absent, thin, single-worker, uncovered on a day, or from another engine build.
+
+**The clock cannot start until the evidence has somewhere to accumulate. Now it does.**
+
 ### Phase 3 — flip *(days)*
 
+- **Entry:** `fsgg-coord divergence --fleet` is GREEN — which now means something checkable: three
+  consecutive covered days, ≥2 distinct workers, zero blocking divergences, on the build being flipped.
 - `--engine=fs` becomes the default; `--engine=bash` remains as the escape hatch.
 - One week later, delete the bash implementation. The kit row becomes the shim (§4.4).
 - `fsgg-coord-selftest`'s 46 negative assertions run unchanged against the new engine — they

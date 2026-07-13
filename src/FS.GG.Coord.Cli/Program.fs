@@ -62,11 +62,58 @@ let private renderText (decision: Verdict<Batch.BatchResult>) =
         if result.Truncated then
             eprint "note: the batch was capped, so the candidates after the last one chosen were never evaluated."
 
+let private readInput (opts: Options) =
+    match opts.SnapshotFile with
+    | Some path -> File.ReadAllText path
+    | None -> Console.In.ReadToEnd()
+
+/// Fold the fleet divergence ledger into the cut-over verdict (#634).
+///
+/// The exit code IS the gate. `no-verdict` is 4 and `red` is 3 — neither is 0, so a caller that only
+/// checks `if engine fleet; then flip; fi` cannot flip on an empty ledger, a one-worker ledger, or a
+/// ledger full of somebody else's engine build. That is the whole point: the criterion had no
+/// implementation at all, so it could only ever be met by a human deciding it had been.
+let private fleet (opts: Options) =
+    let json = readInput opts
+
+    if String.IsNullOrWhiteSpace json then
+        // An EMPTY document is not an empty ledger. The client is meant to hand us what it read; if it
+        // handed us nothing, we did not observe a fleet that never diverged — we failed to observe
+        // anything, and the difference between those two is this entire module.
+        eprint
+            "fsgg-coord-engine: the ledger document is empty. That is a failed read, not an empty ledger — refusing to decide."
+
+        ExitError
+    else
+
+    match Fleet.parse json with
+    | Error errors ->
+        eprint "fsgg-coord-engine: the ledger is malformed, so no verdict was reached:"
+
+        for e in errors do
+            eprint $"  %s{e.Path}: %s{e.Message}"
+
+        ExitError
+
+    | Ok query ->
+        let verdict =
+            Divergence.evaluate query.Engine query.RequiredDays query.MinWorkers query.Today query.Reports
+
+        match opts.Render with
+        | Json -> printfn "%s" (Fleet.render verdict)
+        | Text ->
+            for line in Divergence.explain verdict do
+                match verdict with
+                | Green _ -> printfn "%s" line
+                | _ -> eprint line
+
+        match verdict with
+        | Green _ -> ExitGreen
+        | Red _ -> ExitRed
+        | NoVerdict _ -> ExitNoVerdict
+
 let private decide (opts: Options) =
-    let json =
-        match opts.SnapshotFile with
-        | Some path -> File.ReadAllText path
-        | None -> Console.In.ReadToEnd()
+    let json = readInput opts
 
     if String.IsNullOrWhiteSpace json then
         // An EMPTY snapshot is not an empty board. The client is meant to hand us the state it read;
@@ -130,6 +177,8 @@ let main argv =
                 ExitGreen
 
             | Decide -> decide opts
+
+            | FleetVerdict -> fleet opts
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine

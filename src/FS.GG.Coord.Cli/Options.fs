@@ -4,6 +4,7 @@ module Options =
 
     type Command =
         | Decide
+        | FleetVerdict
         | Help
         | Version
 
@@ -30,18 +31,27 @@ Usage:
                                     # read a board-state snapshot (stdin, or FILE) and print the
                                     # scheduling decision for every candidate in it
 
+  fsgg-coord-engine fleet  [--snapshot FILE] [--json|--text]
+                                    # read the fleet divergence LEDGER (stdin, or FILE) and print
+                                    # ADR-0034 §5's cut-over verdict: has the shadow agreed with bash
+                                    # across the live fleet, on THIS engine build, for N consecutive
+                                    # days? (#634)
+
   fsgg-coord-engine --help
   fsgg-coord-engine --version
 
 EXIT CODES — the engine's own, NOT the client's (the client translates them):
-  0   green      a batch was computed
+  0   green      a batch was computed / the cut-over criterion is met
   1   error      bad arguments, or a malformed snapshot
   2   defect     the engine itself broke — a bug, and never the caller's fault
   3   red        the batch is REFUSED. A reservation whose touch-set is unmatchable reserves NOTHING,
                  so scheduling against it would hand a second worker files somebody is standing in.
                  Unschedulable beats mis-scheduled.
+                 For `fleet`: the engines DISAGREED. The flip is blocked.
   4   no-verdict the engine could not reach an answer. NEVER zero, and never silently a "no" —
                  an unreachable answer is not a negative one (#266).
+                 For `fleet`: the evidence is absent, thin, single-worker, or from another build.
+                 An empty ledger is zero EVIDENCE, and it is never zero divergence.
 """
 
     let parse (args: string list) : Result<Options, string> =
@@ -75,5 +85,6 @@ EXIT CODES — the engine's own, NOT the client's (the client translates them):
         | "--version" :: _ -> Ok { defaults with Command = Version }
 
         | "decide" :: rest -> flags { defaults with Command = Decide } rest
+        | "fleet" :: rest -> flags { defaults with Command = FleetVerdict } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"
