@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Decide whether the standing skill-registry PR may be MERGED (.github#642, epic #266).
+
+`skill-registry-autofix.yml` reconciles the mechanical drift and opens a standing PR. #640 fixed the
+reason that PR could never go GREEN (its own coherence check was failed by the judgement findings the
+bot correctly refused to touch). But a green PR that nobody merges lands nothing: #595 went green and
+then SAT there, while `main` stayed red on the eight stale digests it had already fixed. The bot was
+an ornament; #640 only made it a green one.
+
+WHY THIS IS NOT `gh pr merge --auto` (the org's other two propagation arms), MEASURED, NOT ASSUMED
+
+`coordination-propagate.yml` and `build-config-propagate.yml` both arm GitHub's NATIVE auto-merge and
+say why: "push + a red pull-gate is not enforcement". #642 proposed copying that arm a third time. It
+cannot be copied, for two reasons — and the second is the one that matters.
+
+  1. `.github` has `allow_auto_merge: false`. `gh pr merge --auto` fails outright here, so a verbatim
+     copy of the propagate arm would take its `autoMergeAllowed != true` branch and `exit 1` EVERY
+     DAY, telling a human to go flip a repo setting. That is not enforcement either — it is a new
+     permanently-red check, which is precisely what the comment it was copied from says trains
+     everyone to ignore checks. This one is merely a nuisance; a setting could be flipped.
+
+  2. THE DECISIVE ONE. `registry-coherence` — the check that decides whether this PR is CORRECT — is
+     NOT a required check on `main`. The required set is `contract-coherence / coherence`,
+     `projection`, `roster-closure`, `drift`, `reconcile`. GitHub's native auto-merge waits for
+     REQUIRED checks and merges straight past a red NON-required one.
+
+     So native auto-merge would ignore the single check whose redness means "this snapshot is
+     OBSOLETE — merging it writes superseded digests over the registry and REDs the very gate it was
+     opened to green". That is #425's inversion, and arming `--auto` would not fix the bot; it would
+     AUTOMATE the inversion. The one signal that separates a good reconcile from a poisonous one is
+     the one signal `--auto` cannot see.
+
+AND `registry-coherence` MUST NOT SIMPLY BE MADE REQUIRED. Its verdict is a function of OTHER REPOS'
+`main`s (it re-digests producer bodies). Requiring it would mean a producer merging a skill-body edit
+flips it red on every open `.github` PR and BLOCKS them all until the next 06:42 autofix run lands —
+an external repo's merge deadlocking this repo's merges, which is exactly the hazard
+`check-required-contexts.py` (#549) exists to document. It has to stay non-required. Therefore native
+auto-merge can never be safe on this PR, and the mechanism has to be a STRONGER one, not a copied one.
+
+WHAT THIS GATE DOES INSTEAD — a merge that respects EVERY check, not merely the required ones
+
+This is strictly stronger than `--auto`: it needs no repo setting, no branch-protection change, and it
+refuses on a red NON-required check, which is the case `--auto` structurally cannot refuse. Branch
+protection still applies underneath — a direct merge is refused by GitHub exactly as `--auto` would
+be — so this ADDS a gate rather than routing around one.
+
+REFUSE UNLESS ALL FIVE HOLD
+
+  1. THE CHECKS WERE READ AT ALL. No parseable payload => the API read failed => refuse. Same shape as
+     the retire gate: the evidence is the payload, never an exit code.
+
+  2. THE SUBJECT EXISTS. ZERO check runs is a FINDING, not a pass (#606). "Every check passed" and "CI
+     never started" are the same empty set, and only one of them is safe. A conflicted PR gets no
+     `refs/pull/N/merge`, so no workflow ever starts and the head SHA has zero check runs FOREVER —
+     merging on that emptiness is the epic-#266 fail-open in its purest form.
+
+  3. `registry-coherence` IS PRESENT, BY NAME. #606 applied to the one check that actually decides
+     this PR. If the coherence gate did not report — a renamed job, a narrowed `paths:` filter, a
+     workflow that failed to schedule — then the reconcile was NEVER VERIFIED, and the other checks
+     going green says nothing about the digests in the diff. An absent subject reads identically to a
+     passing one in any "are all checks green?" test, which is why it is asserted by NAME and not left
+     to the aggregate. This is the assertion `--auto` cannot make, and the reason this script exists.
+
+  4. NOTHING IS STILL RUNNING. A pending check has not passed. Refuse; the next run re-pushes and
+     re-gates. Latency is not a failure mode — merging early is.
+
+  5. NOTHING IS RED. `success` / `skipped` / `neutral` are green; everything else (`failure`,
+     `cancelled`, `timed_out`, `action_required`, `stale`, a null conclusion on a completed run) is
+     not. A red check is a finding, not an obstacle to route around — INCLUDING a non-required one.
+
+  ...and the PR's own merge state must be CLEAN or HAS_HOOKS. BLOCKED (a required check or review is
+  missing), UNSTABLE (mergeable, but something is red), DIRTY/BEHIND (needs the rebase the next run's
+  force-push provides), and UNKNOWN (GitHub has not computed it) all refuse. Read from the PR rather
+  than from branch protection, for the reason #463 established the hard way: the protection endpoint
+  needs `administration: read`, and a 403 there is neither a verdict nor an absence of one.
+
+SEQUENCING AGAINST THE RETIRE GATE — the part #642 flags as more than copy-paste
+
+They cannot race, and not by luck: MERGE hangs off `steps.diff.outputs.changed == 'true'` and RETIRE
+hangs off `steps.diff.outputs.changed == 'false'`. They are mutually exclusive branches of one
+boolean, so no run can take both, and the `concurrency` group serialises runs so no two runs can
+interleave them. Across runs the two remain disjoint by construction: a PR this gate MERGED is closed,
+so no later run can retire it; a PR a later run RETIRES is one whose diff is empty, which is precisely
+the state in which this gate is never consulted. `tests/skill-registry` case 31 pins the mutual
+exclusion structurally, so a future edit cannot quietly move them onto the same branch.
+
+Exit 0 = merge allowed. Non-zero = do not merge, and the reason is on stderr.
+Emits `merge=` / `checks=` on stdout for $GITHUB_OUTPUT.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import sys
+
+# A completed check run that is not one of these has not passed. `neutral` and `skipped` are green by
+# GitHub's own reckoning (a path-filtered job reports `skipped`), and `coordination-propagate.yml`'s
+# classifier draws the line in exactly the same place — deliberately, so the org has ONE answer to
+# "what counts as green?" rather than two that disagree at the edges (#485).
+GREEN = {"success", "skipped", "neutral"}
+
+# The PR is mergeable and every gate GitHub itself enforces is satisfied. Everything else refuses; see
+# the docstring for why each of the others is a refusal and not a retry.
+MERGEABLE = {"CLEAN", "HAS_HOOKS"}
+
+# The check whose verdict IS the correctness of this PR. Not required on `main` (and must not be — see
+# the docstring), so nothing but this gate will ever look at it.
+SUBJECT = "registry-coherence"
+
+
+def _flatten(payload: object) -> list[dict]:
+    """Accept `gh api .../check-runs --paginate --slurp` (a list of PAGES) or a flat list of runs.
+
+    The slurped shape is `[{"check_runs": [...]}, ...]` — one object per page. Flattening it HERE
+    rather than in a jq expression in the YAML is deliberate: `--paginate` is the difference between
+    reading every check and reading the first 30 of them, and a truncated read does not look truncated
+    — it looks like an answer (#547). The parsing that depends on it belongs somewhere a test can drive
+    it.
+    """
+    if isinstance(payload, dict):  # a single un-slurped page
+        payload = [payload]
+    if not isinstance(payload, list):
+        raise ValueError(f"expected a list of check-run pages, got {type(payload).__name__}")
+    runs: list[dict] = []
+    for page in payload:
+        if isinstance(page, dict) and "check_runs" in page:
+            runs.extend(page["check_runs"])
+        elif isinstance(page, dict):  # already a flat list of check runs
+            runs.append(page)
+        else:
+            raise ValueError(f"not a check run or a page of them: {type(page).__name__}")
+    return runs
+
+
+def decide(raw: str, merge_state: str) -> tuple[bool, str, int]:
+    """-> (merge, reason, n_checks). `merge` is "this PR is safe to land, on every check we can see"."""
+    try:
+        runs = _flatten(json.loads(raw))
+    except Exception as exc:  # noqa: BLE001 — any failure to parse means we did not read the checks
+        return False, (
+            f"the check-run payload did not parse ({exc.__class__.__name__}) — so the checks were "
+            "NOT read. A failed API read is not an absence of red checks; it is an absence of "
+            "evidence, and merging on it would be merging blind."
+        ), 0
+
+    # (2) ZERO CHECKS IS NOT A PASS (#606). This is the same empty set as "everything passed", and the
+    # commonest cause is a CONFLICTED PR: GitHub cannot build `refs/pull/N/merge`, so no workflow ever
+    # starts and this stays empty forever. No amount of waiting fixes it, and merging is catastrophic.
+    if not runs:
+        return False, (
+            "the PR has ZERO check runs — CI never started, so nothing has passed. That is a FINDING, "
+            "not a pass: an empty check list is indistinguishable from a green one to any naive "
+            "aggregate (#606). The usual cause is a conflicted PR (no `refs/pull/N/merge`, so no "
+            "workflow is ever scheduled); the next run force-pushes a rebased branch."
+        ), 0
+
+    names = {r.get("name") for r in runs}
+
+    # (3) THE SUBJECT MUST EXIST, BY NAME. The reason this whole script exists rather than a `--auto`.
+    if SUBJECT not in names:
+        return False, (
+            f"`{SUBJECT}` did not report on this PR — the check that decides whether the reconcile is "
+            f"CORRECT is absent, so the reconcile was never verified. The other {len(runs)} check(s) "
+            "going green says nothing about the digests in this diff. An absent subject reads exactly "
+            "like a passing one in any 'are all checks green?' test (#606), so it is asserted by name. "
+            "Has the job been renamed, or the workflow's `paths:` filter narrowed?"
+        ), len(runs)
+
+    # (4) NOTHING STILL RUNNING. A pending check has not passed.
+    pending = sorted(r.get("name") or "?" for r in runs if r.get("status") != "completed")
+    if pending:
+        return False, (
+            f"{len(pending)} check(s) have not completed ({', '.join(pending)}). A pending check has "
+            "not passed. Refusing to merge; the next run re-pushes and re-gates."
+        ), len(runs)
+
+    # (5) NOTHING RED — INCLUDING THE NON-REQUIRED ONES. This is the case `--auto` cannot refuse, and
+    # `registry-coherence` is the non-required check it would have merged straight past.
+    red = sorted(
+        f"{r.get('name')}={r.get('conclusion') or 'null'}"
+        for r in runs
+        if (r.get("conclusion") or "") not in GREEN
+    )
+    if red:
+        return False, (
+            f"{len(red)} check(s) are not green ({', '.join(red)}). A red check is a finding, not an "
+            f"obstacle to route around — and that holds for the NON-required ones too. If `{SUBJECT}` "
+            "is among them, this snapshot is OBSOLETE: merging it would write superseded digests over "
+            "the registry and RED the gate it was opened to green (#425). GitHub's native auto-merge "
+            "would have landed it anyway, which is why this gate exists."
+        ), len(runs)
+
+    # ...and GitHub's own view of the PR must agree. Asked of the PR, never of branch protection (#463).
+    if merge_state not in MERGEABLE:
+        return False, (
+            f"every check is green, but the PR's mergeStateStatus is '{merge_state}', not CLEAN. "
+            "BLOCKED = a required check or review is missing; UNSTABLE = something is red that the "
+            "rollup above did not show; BEHIND/DIRTY = the branch needs the rebase the next run's "
+            "force-push provides; UNKNOWN = GitHub has not computed mergeability yet. None of these "
+            "is a state to merge in."
+        ), len(runs)
+
+    return True, (
+        f"all {len(runs)} check(s) are green — including `{SUBJECT}`, which is NOT a required check and "
+        f"which GitHub's native auto-merge would therefore have ignored — and the PR is {merge_state}. "
+        "The reconcile is verified against the producers it was computed from. Safe to land."
+    ), len(runs)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--checks", required=True,
+                    help="JSON from `gh api .../check-runs --paginate --slurp`")
+    ap.add_argument("--merge-state", default="",
+                    help="mergeStateStatus from `gh pr view --json mergeStateStatus`")
+    args = ap.parse_args()
+
+    path = pathlib.Path(args.checks)
+    raw = path.read_text() if path.exists() else ""
+    merge, reason, n = decide(raw, args.merge_state.strip().upper())
+
+    print(f"merge={'true' if merge else 'false'}")
+    print(f"checks={n}")
+    print(("MERGE-OK: " if merge else "NOT MERGING: ") + reason, file=sys.stderr)
+
+    return 0 if merge else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
