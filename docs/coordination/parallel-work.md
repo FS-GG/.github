@@ -585,11 +585,24 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
 
 ## Setup
 
-- **Install the coordination engine, once, on any machine that runs a worker:**
+- **Install the coordination engine — and KEEP IT CURRENT:**
 
   ```sh
   dotnet tool install -g FS.GG.Coord.Cli     # provides `fsgg-coord-engine`
+  dotnet tool update  -g FS.GG.Coord.Cli     # ...and run this too. A global tool does NOT self-update.
   ```
+
+  **A stale engine is worse than no engine** (#655). A worker without one contributes no evidence and
+  says so. A worker with a *superseded* one contributes divergences from a build nobody should trust —
+  noise that buries the real findings. `fsgg-coord` carries a floor and simply **refuses** to shadow with
+  an engine below it: the run is recorded as a skip, naming the version and how to fix it. Nothing
+  breaks, and nothing is quietly wrong.
+
+  This is not hypothetical. Engines before `0.1.1` strip the leading dot from every dotfile path, so
+  `.github/workflows/gate.yml` becomes a token that matches no file — it conflicts with nothing, and the
+  engine reports an item as **startable while a live claim is holding it** (#649). The shadow caught that
+  seven times in one day. Bash was authoritative, so nobody was mis-scheduled; that is exactly what
+  shadow mode is for.
 
   This is **optional and safe to skip** — `fsgg-coord` works exactly as before without it. What it
   buys is the SHADOW (ADR-0034): with an engine present, every `batch`/`next`/`take` is decided by
