@@ -476,7 +476,12 @@ jobs:
       - name: Report which source served each package (ADR-0032)
         working-directory: ${{ inputs.working-directory }}
         run: |
-          set -uo pipefail
+          # `-e` IS ON HERE WHETHER OR NOT THIS LINE SAYS SO. This step declares no `shell:`, so GitHub
+          # runs it under its default `bash -e {0}`. This line used to read `set -uo pipefail` — errexit
+          # deliberately omitted — and that omission did nothing except mislead every subsequent reader
+          # about which options were actually in force. Name it, and let the one command whose failure is
+          # EXPECTED say so at the point it happens (see the grep below). (#639)
+          set -euo pipefail
 
           # NO EVIDENCE IS NOT A PASS. While this step merely reported, exiting 0 here was harmless.
           # Now that it GATES the commit below, an empty NUGET_PACKAGES means the one artifact this
@@ -497,10 +502,38 @@ jobs:
           # An SDK-bundled folder source (…/FSharp/library-packs) is the one that makes a lock file
           # machine-dependent: it ships a DIFFERENT .nupkg than nuget.org at the same id+version, and a
           # local folder source BEATS nuget.org when both are offered.
+          #
+          # NO MATCH IS THE PASS, AND `grep` REPORTS IT AS A FAILURE. `grep -l` exits 1 when nothing
+          # matches — which here is the ADR-0032 invariant HOLDING. That "failure" is the success signal,
+          # and with errexit on (it always was — see the `set` line) it killed the step outright, before
+          # the `-z` test below could read the empty result it had just computed correctly. The `ok:`
+          # branch was unreachable: a repo went red precisely for ADOPTING ADR-0032, and its Renovate and
+          # lockfile PRs stopped landing behind it (#639).
+          #
+          # So READ the exit code instead of letting it kill us — all three of them:
+          #     0  a library-packs resolution exists  -> the regression handled below
+          #     1  no match                           -> THE PASS
+          #   >=2  grep itself failed                 -> we cannot see our subject: FAIL CLOSED (#266)
+          #
+          # And this is why the `find … | xargs grep` that used to be here is GONE rather than patched.
+          # `xargs` collapses grep's 1 (no match — the PASS) and its >=2 (grep could not READ) into one
+          # 123, so the obvious repair — tolerate the 123 — would rest this step's entire verdict on an
+          # exit code that means two opposite things. Be precise: that repair is not broken TODAY, because
+          # a folder this step cannot read also breaks the `jq` inventory above and dies there. But that
+          # is an accident of ORDERING, stated nowhere and asserted by nothing, and it evaporates the day
+          # someone treats a step called "report" as cosmetic. A gate should not owe its fail-closed
+          # property to an unrelated line that happens to run first. Read grep's own exit code, here.
+          rc=0
+          hits="$(grep -rlF --include='.nupkg.metadata' 'library-packs' "$NUGET_PACKAGES" 2>/dev/null)" || rc=$?
+          if [ "$rc" -gt 1 ]; then
+            echo "::error title=lockfile-sync: the ADR-0032 source check could not read its evidence::grep exited $rc while scanning \$NUGET_PACKAGES for library-packs resolutions. The gate cannot tell which source served each package, and it must not pass without knowing (FS-GG/.github#266)."
+            exit 1
+          fi
+
           served_by_sdk="$(
-            find "$NUGET_PACKAGES" -name '.nupkg.metadata' -print0 2>/dev/null \
-              | xargs -0 -r grep -lF 'library-packs' 2>/dev/null \
+            printf '%s\n' "$hits" \
               | while IFS= read -r m; do
+                  [ -n "$m" ] || continue
                   v="$(basename "$(dirname "$m")")"
                   p="$(basename "$(dirname "$(dirname "$m")")")"
                   printf '%s %s\n' "$p" "$v"
