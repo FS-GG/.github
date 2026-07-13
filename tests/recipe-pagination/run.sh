@@ -270,6 +270,22 @@ fi
 # NO-VERDICT LEGS — "I could not check" must never be mistaken for "I checked, and it's fine" (#266).
 # ---------------------------------------------------------------------------------------------
 
+# 7j. A COMMENT that merely mentions `gh api` is not a `gh api` command, and must not be COUNTED as
+#     one. The command filter is a regex over the raw text (comments and all); the tokens it then
+#     audits are comment-stripped. So a comment about `gh api` — and these recipes are full of them,
+#     since they spend paragraphs telling workers to prefer REST — was counted as one more audited
+#     command that could never produce a finding. That inflates `audited`, and `audited` is the ONLY
+#     thing standing between a broken fence extractor and a green gate (leg 8, #266): one such
+#     comment is enough to report `OK — 1 gh api command(s)` over a recipe that has none.
+gate_on comment-mentions-gh-api '# kit
+
+```sh
+# Prefer `fsgg-coord issues`; a raw gh api read of a list truncates at 30.
+scripts/fsgg-coord issues <repo>
+```'
+[ "$RC" = 3 ] && ok "a comment ABOUT gh api is not an audited command (audit nothing => rc=3)" \
+              || bad "a comment mentioning gh api must not be counted as a command (got rc=$RC)" "$OUT"
+
 # 8. Auditing zero commands. If the fence extractor breaks, EVERY recipe reads as clean — the gate
 #    would go green across the org while the truncation it exists to catch went right on happening.
 gate_on nothing-to-audit '# kit

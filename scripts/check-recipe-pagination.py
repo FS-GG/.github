@@ -230,6 +230,22 @@ def shell_fences(text: str) -> list[tuple[int, str]]:
     return fences
 
 
+def code_of(cmd: str) -> str:
+    """The command with its shell comments removed, quote state threaded across its lines.
+
+    Tokens are the wrong instrument for "is this a `gh api` call?": `SHA=$(gh api …)` tokenizes as
+    `['SHA=$(gh', 'api', …]`, so no `gh`/`api` token pair exists, and the command-substitution form —
+    which the recipes use to read a head SHA — would go unaudited. The RAW text is wrong too: it
+    still carries the comments. Strip the comments and keep the text.
+    """
+    quote: str | None = None
+    out: list[str] = []
+    for line in cmd.splitlines():
+        quote, code = scan_line(line, quote)
+        out.append(code)
+    return "\n".join(out)
+
+
 def endpoint_of(tokens: list[str]) -> str | None:
     """The first bare (non-flag) token after `api` — the endpoint."""
     try:
@@ -334,7 +350,13 @@ def audit_file(path: Path, rel: str) -> tuple[list[str], int]:
             # recompute it here from the emitted commands: blank lines are not emitted, and the
             # count would drift by one per blank line in the fence.
             here = fence_line + offset
-            if not re.search(r"\bgh\s+api\b", cmd):
+            # Match against the CODE, not the raw text. A comment that merely MENTIONS `gh api` is
+            # not a command, and these recipes are full of such comments — they spend paragraphs
+            # telling workers to prefer REST ("`gh api repos/…` will still open your PR"). Counting
+            # one as a command inflates `audited`, and `audited` is the ONLY thing standing between a
+            # broken fence extractor and a green gate (#266): a single such comment was enough to
+            # report `OK — 1 gh api command(s)` over a recipe that contained none.
+            if not re.search(r"\bgh\s+api\b", code_of(cmd)):
                 continue
             try:
                 tokens = shlex.split(cmd, comments=True)
