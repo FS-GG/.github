@@ -496,6 +496,52 @@ does not backfill the link. `done` now also reads GitHub's own `CLOSED_EVENT` cl
 earned either way; but a red that fires reproducibly on correct work is how a red stamp becomes
 noise, and this stamp's credibility is the entire point of it.
 
+**Never write a closing keyword next to an issue number you do not mean to close — GitHub does not
+read the word "not"** ([#643](https://github.com/FS-GG/.github/issues/643)). GitHub scans the body
+for `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved` followed by an issue ref and
+links the two. It **does not parse the sentence**. A PR that said, in as many words, `It does not
+close #422`, **closed #422** on merge — that string contains `close #422`, and the negation is
+invisible to the parser. The Projects auto-workflow then stamped the item **Done**, so an open,
+unfinished, explicitly-not-done item was closed and stamped with its acceptance criteria unmet, and
+the only thing that caught it was a worker disbelieving the `release` output. There is no second line
+of defence here: `done --flip` refuses to stamp work that is not *merged*, and this work **was**
+merged — it just did not *finish the item*.
+
+**And negation is not the only way to fire a keyword you did not mean.** It needs no negation at all —
+only adjacency to an issue number. Narrative past tense (`On merge, GitHub closed #422`), a quoted
+example, a `fixes #N` copied out of a log, a deferral (`a follow-up will resolve #N`) — none of them
+carries a negator, and every one of them closes an issue. **There is no such thing as a harmless
+closing keyword in a PR body.**
+
+So the rule is not "avoid the word not". It is:
+
+> **Say what you close, on a line that says nothing else. Everywhere else in the body, GitHub must
+> not be able to bind a keyword to a number.**
+
+```
+Closes #643.                     ← a declaration: the whole line, nothing else on it
+Closes #1, closes #2.            ← REPEAT the keyword. `Closes #1, #2` closes only #1 —
+                                   the bare `#2` is bound to nothing and is silently dropped.
+```
+
+Everywhere else, deny GitHub the binding: write it as code (`closed #422`), reword it (*"closed that
+issue"*, *"does NOT complete #422"*), or drop the verb (`Refs #422.`). Writing the offending string
+**as code**, exactly as this paragraph does, is not a typographic nicety — it is the rule applying to
+itself: GitHub does not bind a keyword inside a code span or a fence, which is the only reason this
+document can quote the bug at all.
+
+The `closing-keywords` gate enforces exactly this on every PR, and it is not advisory — it fails the
+PR. It was written against the body of the very change that introduced it, which is how we learned
+that the negation-only version of the rule was too weak: that body narrated `GitHub closed #422` in
+prose and would have re-closed #422, the same issue, in the PR that fixes the bug.
+
+This is the third face of one coin, and the org has now hit all three: a keyword in the **title**,
+where GitHub never looks, so the link is silently *missing*
+([#558](https://github.com/FS-GG/.github/issues/558)); an unclosed code fence that silently *voids* a
+real `Closes #N` ([#616](https://github.com/FS-GG/.github/issues/616)); and a keyword that *fires
+when it was never meant to* (#643). In each, the author's intent and GitHub's parse disagree, and
+nothing tells the author.
+
 **`--pr <n>` overrides WHICH pull request, never WHETHER it closed the issue**
 ([#543](https://github.com/FS-GG/.github/issues/543)). It used to select by number alone, so pointing
 it at any merged PR that merely *mentioned* the issue turned the stamp green — reintroducing

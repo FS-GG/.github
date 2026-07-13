@@ -1,0 +1,129 @@
+# closing-keywords — a PR body must not CLOSE an issue it says it does NOT close.
+#
+# .github#643, epic #266. GitHub scans a PR body for `close|closes|closed|fix|fixes|fixed|resolve|
+# resolves|resolved` followed by an issue ref and links the two. It does not parse the sentence:
+# `does not close #422` contains `close #422`, and the negation is invisible to it.
+#
+# PR #640 said "**It does not close #422.**" and, on merge, closed #422 — after which the Projects
+# auto-workflow stamped the item **Done**. An open, unfinished, explicitly-not-done item was closed
+# and stamped, with its three acceptance criteria unmet, and the only thing that caught it was a
+# worker re-reading the `release` output and disbelieving it. There is no second line of defence:
+# `done --flip` cannot help, because the work WAS merged — it just did not finish the item.
+#
+# The subject of this gate is the PR BODY, not the tree, so there is deliberately NO `paths:` filter:
+# any PR can carry a negated keyword, including one that touches no file this gate knows about. It
+# runs on `edited` (the body changed) and on `synchronize` (so the check is present on the head SHA
+# the merge gate reads — a check that is not on the head SHA is a check the merge gate cannot see).
+#
+# No `schedule:`: the subject is a pull request. There is nothing to re-prove between pushes.
+name: closing-keywords
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: closing-keywords-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes. The
+  # fixture's leg 1 is the real #640 sentence, so a gate that stops catching the bug it was written
+  # for cannot reach the job below.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      # No pip install: the gate is stdlib-only (re, pathlib) on purpose. A lint that reads a PR body
+      # should not need a dependency, and a dependency is one more thing that can fail open on a runner.
+      - name: Run the closing-keywords fixture (no network)
+        run: bash tests/closing-keywords/run.sh
+
+  # Named for what it asserts, not for what it reads. A check run takes the JOB's id as its name, and
+  # in a list of twenty-odd checks a bare `body` says nothing about what went wrong — the same
+  # unreadability `skill-registry-coherence` renamed its job to avoid.
+  declared-closes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: fixture
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      # Through the ENVIRONMENT, never interpolated into the shell. A PR body is attacker-controlled
+      # text: `${{ github.event.pull_request.body }}` pasted into a `run:` block is a script-injection
+      # sink, and this body is, by construction, full of backticks and quotes.
+      - name: Assert the body closes nothing it says it does not close
+        id: check
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > pr-body.md
+          rc=0
+          out="$(python scripts/check-closing-keywords.py --body pr-body.md 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      #
+      # There is deliberately no rc=2 ("no verdict, retryable"): the gate is pure and offline — it
+      # reads text, makes no network call, and has no condition a re-run could resolve. An rc=2 would
+      # mean it grew a failure mode nobody classified, and it lands in INCONCLUSIVE below, which fails.
+      - name: 'OK: the body closes only what it means to'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "closing-keywords: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: this PR closes an issue its body says it does NOT close'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### closing-keywords: this PR will close an issue it says it will not"
+            echo
+            echo 'GitHub scans the body for `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`'
+            echo 'followed by an issue ref, and links the two. **It does not parse the sentence.**'
+            echo '`does not close #422` contains `close #422` — so #422 gets closed, the Projects'
+            echo 'auto-workflow stamps it **Done**, and an unfinished item is silently finished (#643).'
+            echo
+            echo '**Fix the sentence, not the gate.** Say it with a verb GitHub does not scan for:'
+            echo
+            echo '> This does **NOT complete** #422.'
+            echo
+            echo 'or reference the issue with no verb at all: `Refs #422.`'
+            echo
+            echo "See the job log for the line and the reference."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=closing-keywords: the body closes an issue it says it does not::GitHub does not read the word \"not\". This PR will close an issue its own body says it does not close. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the body could not be read'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### closing-keywords: no verdict"
+            echo
+            echo "The gate was handed no PR body it could read. Examining nothing is a failure to"
+            echo "audit, not a clean audit (#266): if the event payload stops carrying the body, every"
+            echo "PR would read as clean and this gate would go green while the silent closes went on"
+            echo "happening. Retrying will not help — fix the wiring."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=closing-keywords: no verdict (permanent)::The gate could not read a PR body. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=closing-keywords: inconclusive::check-closing-keywords.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1
