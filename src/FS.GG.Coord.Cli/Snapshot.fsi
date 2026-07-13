@@ -74,3 +74,13 @@ module Snapshot =
     ///
     /// `candidates` is threaded through only to echo `BashPaths` back beside the engine's own parse.
     val render: candidates: Candidate list -> decision: Verdict<Batch.BatchResult> -> string
+
+    /// Render a lane partition (#428).
+    ///
+    /// THIS IS THE CHORE AGENT'S INPUT, and that is why `unlanable` is a first-class part of the
+    /// document rather than a footnote. An agent reading this to propose touch-sets must be able to tell
+    /// the three states apart — a forgotten `Paths:` (fix it), a deliberate `Paths: none` (never touch
+    /// it), and a declaration whose tokens match nothing (fix it, urgently — it looks declared and
+    /// reserves nothing). Collapsing them is #496, and an agent that "helpfully" declares paths for an
+    /// epic would be making the board worse while reporting that it improved it.
+    val renderLanes: startable: (Item -> bool) -> partition: Lanes.Partition -> string

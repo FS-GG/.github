@@ -61,10 +61,35 @@ module TouchSet =
             if isNoneSentinel raw then
                 DeclaredNone
             else
+                // A LEADING `./` — AND NOTHING MORE.
+                //
+                // This was `TrimStart('.', '/')`, which strips EVERY leading dot and slash. It was
+                // written to normalise `./src/foo` and it also ate the leading dot of every DOTFILE
+                // path: `.github/workflows/**` became `github/workflows/**`, `.agents/skills/` became
+                // `agents/skills/`. In this org that is most of the fabric — `.github/`, `.agents/`,
+                // `.claude/`, `.config/` — so most touch-sets the engine parsed named directories that
+                // do not exist.
+                //
+                // THE SHADOW CANNOT SEE THIS, AND THAT IS THE INTERESTING PART. It compares OUTCOMES,
+                // and a consistent renaming of every token preserves the overlap relation exactly: two
+                // items that conflicted still conflict, two that did not still do not. So both engines
+                // agree on every verdict, the divergence log stays clean, and the parse is wrong the
+                // whole time. A differential test is blind to an error its two sides make identically.
+                //
+                // It becomes a REAL fail-open at the flip, when the engine's tokens are the ones that
+                // meet actual file paths: `.github/workflows/x.yml` (the file) would not match
+                // `github/workflows/**` (the token), so the touch-set would reserve NOTHING — and a
+                // token that matches no file conflicts with nothing, which is #273's lock succeeding
+                // under exactly the conditions it exists to prevent.
+                //
+                // `sed -E 's#^\./##'` is what the bash client does. This is that, and only that.
+                let stripDotSlash (t: string) =
+                    if t.StartsWith "./" then t.Substring 2 else t
+
                 let tokens =
                     raw.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
                     |> Array.toList
-                    |> List.map (fun t -> t.TrimStart('.', '/') |> fun s -> if s = "" then t.Trim() else s)
+                    |> List.map (fun t -> t.Trim() |> stripDotSlash)
                     |> List.filter (fun t -> t <> "")
                     |> List.distinct
 

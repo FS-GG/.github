@@ -5,6 +5,7 @@ module Options =
     type Command =
         | Decide
         | FleetVerdict
+        | LanesView
         | Help
         | Version
 
@@ -36,6 +37,13 @@ Usage:
                                     # ADR-0034 §5's cut-over verdict: has the shadow agreed with bash
                                     # across the live fleet, on THIS engine build, for N consecutive
                                     # days? (#634)
+
+  fsgg-coord-engine lanes  [--snapshot FILE] [--json|--text]
+                                    # partition the board into LANES — connected components of the
+                                    # item-overlap graph. Items in different lanes can NEVER collide,
+                                    # so they are provably safe to run concurrently. Prints the
+                                    # CEILING (how many workers this board can actually absorb) and
+                                    # the items that cannot be laned at all.
 
   fsgg-coord-engine --help
   fsgg-coord-engine --version
@@ -86,5 +94,6 @@ EXIT CODES — the engine's own, NOT the client's (the client translates them):
 
         | "decide" :: rest -> flags { defaults with Command = Decide } rest
         | "fleet" :: rest -> flags { defaults with Command = FleetVerdict } rest
+        | "lanes" :: rest -> flags { defaults with Command = LanesView } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"

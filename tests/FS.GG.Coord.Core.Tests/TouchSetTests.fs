@@ -145,3 +145,53 @@ module TouchSetTests =
             Assert.Equal(2, List.length tokens)
             Assert.Equal<string list>([ "**/bad.json" ], TouchSet.unmatchable (Declared tokens))
         | other -> failwith $"expected a declaration, got %A{other}"
+
+    // ---- the leading dot: `./` is noise, `.github/` is a DIRECTORY ---------------------------------
+
+    [<Fact>]
+    let ``a DOTFILE path keeps its dot — .github is a directory, not a stray prefix`` () =
+        // `TrimStart('.', '/')` ate it, so `.github/workflows/**` parsed as `github/workflows/**` — a
+        // directory that does not exist. In this org that is most of the fabric (.github/, .agents/,
+        // .claude/, .config/), so most touch-sets named nothing.
+        //
+        // The SHADOW cannot catch this: it compares outcomes, and a consistent renaming of every token
+        // preserves the overlap relation, so both engines agree on every verdict while one parses wrong.
+        // It turns into a real fail-open at the flip, when the engine's tokens meet actual file paths
+        // and a token matching no file conflicts with nothing (#273).
+        match TouchSet.parse "x\n\nPaths: .github/workflows/**, .agents/skills/foo/, .claude/skills/" with
+        | Declared tokens ->
+            let names =
+                tokens
+                |> List.map (
+                    function
+                    | Matchable t -> t
+                    | Unmatchable t -> t
+                )
+
+            Assert.Contains(".github/workflows/**", names)
+            Assert.Contains(".agents/skills/foo/", names)
+            Assert.Contains(".claude/skills/", names)
+        | other -> failwith $"expected Declared, got %A{other}"
+
+    [<Fact>]
+    let ``a leading ./ IS stripped — it is noise, and bash strips it too`` () =
+        match TouchSet.parse "x\n\nPaths: ./src/Foo/" with
+        | Declared [ Matchable t ] -> Assert.Equal("src/Foo/", t)
+        | other -> failwith $"expected one Matchable 'src/Foo/', got %A{other}"
+
+    [<Fact>]
+    let ``a dotfile touch-set still CONFLICTS with an overlapping one`` () =
+        // The point of keeping the dot is that the token names a real place. It must still collide.
+        let a = TouchSet.parse "x\n\nPaths: .github/workflows/**"
+        let b = TouchSet.parse "y\n\nPaths: .github/workflows/ci.yml"
+
+        Assert.NotEmpty(TouchSet.conflicts a b)
+
+    [<Fact>]
+    let ``.github and github are DIFFERENT places and must not collide`` () =
+        // The old normalisation collapsed them, so an item touching `.github/` and one touching a
+        // hypothetical `github/` were serialised against each other for no reason.
+        let a = TouchSet.parse "x\n\nPaths: .github/workflows/"
+        let b = TouchSet.parse "y\n\nPaths: github/workflows/"
+
+        Assert.Empty(TouchSet.conflicts a b)

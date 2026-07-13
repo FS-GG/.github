@@ -112,6 +112,43 @@ let private fleet (opts: Options) =
         | Red _ -> ExitRed
         | NoVerdict _ -> ExitNoVerdict
 
+/// Partition the board into lanes (#428). Reads the SAME snapshot `decide` does, so lanes and the
+/// scheduler can never disagree about which items exist or what they reserve — that divergence is #485
+/// (one question, five implementations, agreeing in none) and it is not being rebuilt here.
+let private lanes (opts: Options) =
+    let json = readInput opts
+
+    if String.IsNullOrWhiteSpace json then
+        eprint "fsgg-coord-engine: the snapshot is empty. That is a failed read, not an empty board — refusing to decide."
+        ExitError
+    else
+
+    match Snapshot.parse json with
+    | Error errors ->
+        eprint "fsgg-coord-engine: the snapshot is malformed, so no partition was computed:"
+
+        for e in errors do
+            eprint $"  %s{e.Path}: %s{e.Message}"
+
+        ExitError
+
+    | Ok request ->
+        let items = request.Candidates |> List.map (fun c -> c.Item)
+        let partition = Lanes.partition items
+
+        // STARTABILITY IS THE SCHEDULER'S CALL, NOT THE LANE MODULE'S. `Lanes.free` takes the predicate
+        // rather than deriving one, so "is this item startable?" keeps exactly one implementation.
+        let startable (item: Item) =
+            Schedulability.schedulable request.AllowBacklog [] item = Schedulability.Startable
+
+        match opts.Render with
+        | Json -> printfn "%s" (Snapshot.renderLanes startable partition)
+        | Text ->
+            for line in Lanes.explain startable partition do
+                printfn "%s" line
+
+        ExitGreen
+
 let private decide (opts: Options) =
     let json = readInput opts
 
@@ -179,6 +216,8 @@ let main argv =
             | Decide -> decide opts
 
             | FleetVerdict -> fleet opts
+
+            | LanesView -> lanes opts
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
