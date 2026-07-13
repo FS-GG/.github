@@ -1,0 +1,266 @@
+# Shared-build-config propagation arm (#626) — the AUTHORITY-side PUSH.
+#
+# THE DEFECT THIS EXISTS TO END. Every `receives: build-config` repo runs a drift check in its own
+# `gate.yml` — it checks out `.github` and runs `sync-build-config.sh --check`, so a managed file that
+# diverges from `dist/dotnet/` fails the PR. That enforcement has been live for months. **Nothing ever
+# pushed the update.** There was no channel: `build-config` was a legal word in `repos.sh`'s KNOWN_CAPS
+# that no repo declared, and no workflow propagated.
+#
+# So the fabric was a RATCHET. Any edit to `dist/dotnet/` red-lit every receiver, and stayed red until a
+# human hand-synced each of six repos. It is not hypothetical: #627 added the coordination engine to the
+# shared tool manifest, and a day later FS.GG.SDD's coordination-kit sync PR was STILL red from the
+# resulting drift — so the coordination kit, the one distribution fabric in this org that demonstrably
+# runs, was frozen out of the largest repo. #634 found it stuck there. The enforcement arm had taken the
+# delivery arm hostage.
+#
+# This is the other half, and it is a deliberate mirror of `coordination-propagate.yml`: same roster-driven
+# matrix, same App token, same rolling branch, same auto-merge arming, same fail-closed classifier. The
+# lessons in that file (#463's 403 on branch protection, #266's "propagated" that had not, the confused
+# deputy adopting a fork's branch) were paid for once. They are not re-learned here.
+#
+# CROSS-REPO WRITE — needs the org GitHub App, not GITHUB_TOKEN. Same prerequisites as
+# coordination-propagate: contents:write + pull_requests:write on each receiver, and the org secrets
+# FSGG_DISPATCH_APP_ID / FSGG_DISPATCH_APP_PRIVATE_KEY visible to .github.
+#
+# Like coordination-propagate, this is un-runnable in a fixture (App + cross-repo write). Its roster-driven
+# plan job IS exercisable, and `tests/sync-build-config/` covers the sync script it calls. Review the rest
+# as a privileged-infra change.
+name: build-config-propagate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # A WILDCARD, deliberately — NOT an enumeration of the managed files.
+      #
+      # coordination-propagate has to hand-maintain its path list against `repos.yml`'s `kit:`, and its
+      # own header says what that costs: a kit item missing from the filter "does not fail: it PROPAGATES
+      # NOTHING, silently." There is no reason to re-buy that here. `dist/dotnet/**` cannot drift out of
+      # sync with the script's `FILES` list, because it is a superset of it by construction.
+      #
+      # The cost of the superset is a no-op run: `dist/dotnet/global.json` is NOT in the script's `FILES`
+      # (deliberately — four of five consumers have no `global.json`, and syncing it would merge-freeze
+      # them; that is #536/#561's whole sequencing problem), so editing it triggers this workflow, which
+      # syncs nothing, finds a clean tree, and says so. Over-triggering is the safe direction: the failure
+      # this workflow exists to end is a change that reaches NOBODY.
+      - "dist/dotnet/**"
+      # The syncer itself: a change to WHAT counts as managed, or HOW it is written, must reach the
+      # receivers too — their drift check runs this very script out of `.github@main`, so a script that
+      # changed its mind about a file reddens six repos the moment it lands here.
+      - "scripts/sync-build-config.sh"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      repos: ${{ steps.roster.outputs.repos }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: roster
+        run: |
+          set -euo pipefail
+          repos="$(bash scripts/repos.sh list --receives build-config \
+            | jq -R -s -c 'split("\n") | map(select(length>0)) | map({full:., owner:(split("/")[0]), name:(split("/")[1])})')"
+          echo "repos=$repos" >> "$GITHUB_OUTPUT"
+          echo "build-config receivers: $repos"
+
+          # A ZERO-RECEIVER PLAN IS THE BUG, NOT A QUIET DAY. This capability spent its whole life with
+          # no declared receiver, and the thing that made that survivable was precisely that nothing
+          # ever iterated the empty set and reported success. Refuse to be that.
+          n="$(printf '%s' "$repos" | jq 'length')"
+          if [ "$n" -eq 0 ]; then
+            echo "::error::no repo declares 'receives: build-config' — this workflow would propagate to nobody." >&2
+            echo "::error::That is #626 exactly. Add the capability to registry/repos.yml, do not silence this." >&2
+            exit 1
+          fi
+          echo "build-config: $n receiver(s)"
+
+  propagate:
+    needs: plan
+    if: ${{ needs.plan.outputs.repos != '[]' && needs.plan.outputs.repos != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: build-config-propagate-${{ matrix.repo.full }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false          # one receiver's failure must not block the others
+      matrix:
+        repo: ${{ fromJSON(needs.plan.outputs.repos) }}
+    steps:
+      - name: Checkout FS-GG/.github (canonical dist/dotnet + sync script)
+        uses: actions/checkout@v7
+        with:
+          path: dotgithub
+
+      - name: Mint App installation token (scoped to ${{ matrix.repo.full }})
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: ${{ matrix.repo.owner }}
+          repositories: ${{ matrix.repo.name }}
+
+      - name: Checkout the receiver
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ matrix.repo.full }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: receiver
+          persist-credentials: true
+
+      - name: Sync the build config and open a PR if it changed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          TARGET: ${{ matrix.repo.full }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # `sync-build-config.sh <repo>` writes the managed files. It REFUSES to overwrite a
+          # hand-authored (unmarked) *.props — that is #387's guard, and it is right: a repo that never
+          # adopted the shared config must be onboarded deliberately with `--adopt`, not silently
+          # overwritten by a bot. So a refusal here is a REAL finding about that receiver, and it must
+          # fail this job rather than be swallowed into "nothing to propagate".
+          bash dotgithub/scripts/sync-build-config.sh receiver
+
+          cd receiver
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Build config already coherent in $TARGET — nothing to propagate."
+            exit 0
+          fi
+
+          short="${SOURCE_SHA:0:12}"
+          branch="build-config/sync"
+          git config user.name  'fsgg-dispatch[bot]'
+          git config user.email "${APP_ID}+fsgg-dispatch[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add -A
+          git commit -m "chore: sync shared build config from FS-GG/.github@${short}"
+          git push origin "$branch" --force
+          # The title names the files the SCRIPT manages — which is not everything in `dist/dotnet/`.
+          # `global.json` lives there and is deliberately NOT synced (#536/#561), and a title that
+          # claimed it would be describing a diff this PR does not contain.
+          title="chore: sync shared build config (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json)"
+          # ONE LINE. A multi-line value here would start at column 0 and terminate the `run: |` block
+          # scalar; indenting it to stay inside the block would prepend spaces to every line, which
+          # markdown renders as a code block. coordination-propagate keeps its body on one line for the
+          # same reason.
+          body="Automated, self-updating sync of the org-shared .NET build configuration from FS-GG/.github \`dist/dotnet/\` (last from \`${short}\`). This repo's \`Shared-build-config drift check\` compares its managed files against \`.github@main\` and fails the PR when they differ — so **until this merges, every open PR in this repo is red on that check** (#592). Before [#626](https://github.com/FS-GG/.github/issues/626) there was no channel that ever sent this update at all, and clearing the drift meant a human hand-syncing six repos. This is a **rolling** PR — later build-config changes update it in place. Auto-merge is armed: it lands on its own once **this repo's** required checks pass. Opened by the \`build-config-propagate\` workflow."
+
+          # Select only a PR whose head is THIS repo's own branch. `--head` matches on branch NAME alone,
+          # which also matches a FORK's branch of the same name — adopting one would make this workflow a
+          # confused deputy, re-titling a stranger's PR as an official sync and arming auto-merge on it
+          # with the org App's credentials. (coordination-propagate learned this; it is not re-learned.)
+          prs="$(gh pr list --repo "$TARGET" --head "$branch" --state open \
+            --json number,isCrossRepository,headRefName 2>/dev/null || echo '[]')"
+          pr="$(printf '%s' "$prs" | jq -r --arg b "$branch" \
+            '[ .[] | select(.isCrossRepository == false and .headRefName == $b) ] | .[0].number // empty')"
+          case "$pr" in ''|*[!0-9]*) pr="" ;; esac
+          if [ -z "$pr" ]; then
+            url="$(gh pr create --repo "$TARGET" --base main --head "$branch" --title "$title" --body "$body")"
+            pr="${url##*/}"
+            case "$pr" in ''|*[!0-9]*) echo "::error::could not parse PR number from '$url'." >&2; exit 1 ;; esac
+          else
+            gh pr edit "$pr" --repo "$TARGET" --title "$title" --body "$body"
+          fi
+
+          # ARM AUTO-MERGE. A pushed branch plus a red drift check is not distribution: the receiver stays
+          # drifted, its check stays red, and a permanently-red check trains everyone to ignore it — which
+          # is how SDD sat drifted for a day with its coordination kit stuck behind the same red.
+          #
+          # Failing to land it is an ERROR, not a warning. A green propagate run that reports the config
+          # "propagated" when it is sitting in an unmerged PR is the #266 shape, and it is the shape THIS
+          # capability has been wearing since it was invented.
+          if [ "$(gh pr view "$pr" --repo "$TARGET" --json autoMergeRequest \
+                    --jq '.autoMergeRequest != null' 2>/dev/null)" = "true" ]; then
+            echo "Auto-merge already armed on $TARGET#$pr — nothing to do."
+            exit 0
+          fi
+
+          if gh pr merge "$pr" --repo "$TARGET" --auto --squash; then
+            echo "Auto-merge armed on $TARGET#$pr — lands when $TARGET's required checks pass."
+            exit 0
+          fi
+
+          # Arming can fail for reasons that are not ours. Ask the API which, rather than matching on an
+          # error string. (Same classifier as coordination-propagate, same reasons, same order.)
+          allowed="$(gh api graphql -f query='
+              query($o:String!,$n:String!){ repository(owner:$o,name:$n){ autoMergeAllowed } }' \
+            -f o="${TARGET%%/*}" -f n="${TARGET##*/}" --jq '.data.repository.autoMergeAllowed' 2>/dev/null || echo unknown)"
+          if [ "$allowed" != "true" ]; then
+            echo "::error::Cannot arm auto-merge on $TARGET#$pr (autoMergeAllowed=$allowed)." >&2
+            echo "::error::The build config will NOT land without a human, and every open PR in $TARGET" >&2
+            echo "::error::stays red on the drift check. Enable 'Allow auto-merge' on $TARGET, and confirm" >&2
+            echo "::error::the App has pull_requests:write there." >&2
+            exit 1
+          fi
+
+          squash="$(gh api "/repos/$TARGET" --jq '.allow_squash_merge' 2>/dev/null || echo unknown)"
+          if [ "$squash" != "true" ]; then
+            echo "::error::$TARGET disallows squash merges (allow_squash_merge=$squash) but propagate arms" >&2
+            echo "::error::--squash. Enable squash merging on $TARGET, or change the merge method here." >&2
+            exit 1
+          fi
+
+          # Auto-merge IS allowed, so GitHub refused for the other reason: there is nothing left to WAIT
+          # for. That does NOT mean the PR is safe to merge — ASK THE PULL REQUEST. Reading branch
+          # protection needs `administration: read`, which this App does not have on the receivers; that
+          # 403 is what made #463's classifier fall through and exit 1 on every CLEAN sync PR.
+          #
+          # A FAILED read is not UNKNOWN. Collapsing them would report "GitHub hasn't computed
+          # mergeability, re-run" when the truth is "the App cannot read pull requests here" — and
+          # re-running can never fix that.
+          err="$(mktemp)"
+          state=""
+          for attempt in 1 2 3 4 5; do
+            if ! state="$(gh pr view "$pr" --repo "$TARGET" --json mergeStateStatus \
+                            --jq '.mergeStateStatus' 2>"$err")"; then
+              echo "::error::Cannot read the merge state of $TARGET#$pr. The sync PR is open, and this" >&2
+              echo "::error::workflow cannot tell whether it is safe to merge. gh said:" >&2
+              sed 's/^/::error::  /' "$err" >&2
+              echo "::error::If that is a 403, the dispatch App is missing pull_requests:read on $TARGET." >&2
+              exit 1
+            fi
+            [ "$state" = "UNKNOWN" ] || break
+            echo "mergeStateStatus=UNKNOWN on $TARGET#$pr (attempt $attempt/5) — GitHub is still computing it."
+            [ "$attempt" -eq 5 ] || sleep 5
+          done
+
+          rollup() { gh pr view "$pr" --repo "$TARGET" --json statusCheckRollup --jq "$1" 2>/dev/null || true; }
+
+          case "$state" in
+            CLEAN|HAS_HOOKS) ;;
+            *)
+              echo "::error::Auto-merge was refused on $TARGET#$pr and its mergeStateStatus is '$state'," >&2
+              echo "::error::not CLEAN — so its gates are NOT satisfied and this workflow will not merge it." >&2
+              red="$(rollup '[.statusCheckRollup[]? | select(((.conclusion // .state // "") | ascii_upcase)
+                              | IN("SUCCESS","NEUTRAL","SKIPPED") | not) | (.name // .context)] | join(", ")')"
+              [ -z "$red" ] || echo "::error::  not passing: $red" >&2
+              echo "::error::The build config will NOT land in $TARGET without a human. Look at $TARGET#$pr:" >&2
+              echo "::error::  BLOCKED  = a required check or review is missing/failing." >&2
+              echo "::error::  UNSTABLE = a check is red. Fix the check; do not merge past it — the red may" >&2
+              echo "::error::             be THIS config breaking $TARGET, and merging would land it." >&2
+              echo "::error::  BEHIND/DIRTY = needs a rebase; the next propagate run force-pushes the branch." >&2
+              echo "::error::  UNKNOWN  = GitHub never computed mergeability after 5 looks. Re-run this workflow." >&2
+              exit 1
+              ;;
+          esac
+
+          if [ "$(rollup '(.statusCheckRollup // []) | length')" = "0" ]; then
+            echo "::warning::$TARGET#$pr ran NO checks at all — nothing gated this build-config merge." >&2
+            echo "::warning::Protect $TARGET/main so the receiver's own CI gates the sync." >&2
+          fi
+
+          if ! gh pr merge "$pr" --repo "$TARGET" --squash; then
+            echo "::error::$TARGET#$pr is $state but could not be merged. The config will NOT land without a human." >&2
+            exit 1
+          fi
+          echo "Merged $TARGET#$pr ($state)."

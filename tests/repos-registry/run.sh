@@ -485,6 +485,68 @@ uncovered="$(uncovered_for ".github/workflows/coordination-propagate.yml" "push"
 if [ -z "$uncovered" ]; then ok "every kit source is covered by the propagate paths: filter"
 else bad "kit source unpropagated — an edit to it never reaches the receivers (#463)" "$uncovered"; fi
 
+# ---- build-config: the capability that was a legal word nobody said (#626) ------------------------
+# FOUR repos (sdd, rendering, governance, game) run a `Shared-build-config drift check` against
+# `.github@main`'s dist/dotnet/. The ENFORCEMENT shipped; the DISTRIBUTION never did — `build-config` sat
+# in repos.sh's KNOWN_CAPS with zero `receives:` rows and no propagate arm. So every edit to dist/dotnet/
+# red-lit those four until a human hand-synced each, and the red landed on the coordination kit's own
+# delivery vehicle: #627 added the engine to the tool manifest, and a day later SDD's kit-sync PR was
+# STILL blocked by the drift it caused (#634 found it stuck).
+#
+# THE INVARIANT: a repo receives build-config IFF it enforces build-config.
+#
+# Both directions are a real defect, and they fail in opposite ways:
+#   enforces + does not receive -> it goes red on drift and NOTHING ever sends it a fix. The ratchet.
+#   receives + does not enforce -> a bot writes build files into a repo that never adopted them. Templates
+#                                  has no Directory.Build.props at all; Audio's is hand-authored, and
+#                                  #387's guard exists to REFUSE overwriting it. Onboarding either is a
+#                                  deliberate `--adopt`, not a propagation.
+#
+# The fixture cannot reach the receivers' CI to check the symmetry itself — that needs network, and it is
+# repos-audit's job (#628, still open: its mandate covers only capabilities wired by a REUSABLE workflow,
+# and this one is wired by an inline `run:`). What IS assertable here is the reviewed claim: the declared
+# set is exactly the four adopters, so silently adding a fifth trips this test and has to be argued for.
+bc_receivers="$(bash "$REPOS_SH" list --receives build-config --field id | sort | tr '\n' ',')"
+if [ "$bc_receivers" = "game,governance,rendering,sdd," ]; then
+  ok "build-config: the four ADOPTERS receive it — and templates/audio, which never adopted, do not (#626, #628)"
+else
+  bad "build-config: the receiver set does not match the repos that actually enforce it (#626)" \
+      "declared: $bc_receivers
+expected: game,governance,rendering,sdd,
+A repo that ENFORCES but does not RECEIVE can only go red and stay red.
+A repo that RECEIVES but never ADOPTED gets build files written into it by a bot."
+fi
+
+# THE CHANNEL EXISTS AND IS ROSTER-DRIVEN. A propagate arm with a hardcoded target list is the roster
+# rotting in a second place; a missing arm is the bug itself.
+BCP=".github/workflows/build-config-propagate.yml"
+if [ -f "$REPO_ROOT/$BCP" ]; then ok "build-config: the propagate arm exists — the enforcement has a distribution half"
+else bad "build-config: NO propagate arm — the drift check enforces a config nothing ever sends (#626)"; fi
+
+if grep -q -- "--receives build-config" "$REPO_ROOT/$BCP" 2>/dev/null; then
+  ok "build-config: propagate reads its receivers from the ROSTER, not a hardcoded list"
+else
+  bad "build-config: propagate does not read the roster — a second copy of the receiver list will rot"
+fi
+
+# A ZERO-RECEIVER RUN MUST FAIL, NOT SUCCEED QUIETLY. This capability's entire history is "iterated the
+# empty set and nobody noticed", and #503 is the same lesson one layer up: a guard that sums pairs across
+# capabilities reports green having checked a third of its mandate.
+if grep -q "propagate to nobody" "$REPO_ROOT/$BCP" 2>/dev/null; then
+  ok "build-config: a zero-receiver plan is an ERROR — the empty set may not report success (#503, #626)"
+else
+  bad "build-config: propagate would iterate an empty receiver set and exit 0 — that is the bug, again"
+fi
+
+# The path filter must cover what the syncer actually writes. Unlike the kit's hand-maintained list, this
+# one is a WILDCARD over dist/dotnet/ — so assert it stays a wildcard rather than decaying into an
+# enumeration that a new managed file can silently fall out of.
+if grep -qE '^\s+- "dist/dotnet/\*\*"' "$REPO_ROOT/$BCP" 2>/dev/null; then
+  ok "build-config: the path filter is a WILDCARD over dist/dotnet/ — a new managed file cannot fall out of it"
+else
+  bad "build-config: the propagate path filter enumerates files — a managed file missing from it propagates NOTHING, silently"
+fi
+
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
 echo "repos-registry fixture — OK"
