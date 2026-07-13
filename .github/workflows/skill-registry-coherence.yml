@@ -83,25 +83,47 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          set -euo pipefail
-          git fetch --depth 1 origin "$BASE_SHA"
+          set -uo pipefail
+          out="$RUNNER_TEMP/baseline-skills.yml"
+
+          # EVERY FAILURE HERE FALLS BACK TO THE ABSOLUTE VERDICT, NAMED — never to a red PR nobody can
+          # act on. A force-pushed base, or a SHA that has been garbage-collected, would otherwise kill
+          # this step under `set -e` and fail the PR with a bare `git` error for a reason that has
+          # nothing to do with its contents. That is how an operator learns to ignore a gate, and it is
+          # the same care the `--baseline-registry` error path already takes.
+          if ! git fetch --depth 1 origin "$BASE_SHA" 2>/dev/null; then
+            echo "::warning::could not fetch the merge base ${BASE_SHA:0:12} (force-pushed? gc'd?)."
+            echo "::warning::Falling back to the ABSOLUTE verdict — this PR is judged on the whole world."
+            exit 0
+          fi
+
           # A base that does not carry the registry at all is a legitimate answer — the file is new in
           # this PR, so EVERY finding in it is genuinely introduced here. Emit nothing and let the
           # absolute verdict apply, rather than inventing an empty baseline that would excuse them.
           if git cat-file -e "$BASE_SHA:registry/skills.yml" 2>/dev/null; then
-            git show "$BASE_SHA:registry/skills.yml" > /tmp/baseline-skills.yml
-            echo "path=/tmp/baseline-skills.yml" >> "$GITHUB_OUTPUT"
+            git show "$BASE_SHA:registry/skills.yml" > "$out"
+            echo "path=$out" >> "$GITHUB_OUTPUT"
             echo "baseline: registry/skills.yml @ ${BASE_SHA:0:12}"
           else
             echo "baseline: the merge base has no registry/skills.yml — every finding is NEW here."
           fi
 
-      # On `main` and on the schedule, `--baseline-registry` is absent and the verdict is ABSOLUTE:
-      # any finding is red. That is what keeps a standing frozen-mirror visible instead of forgiven.
+      # On `main` and on the schedule, BASELINE is empty and the verdict is ABSOLUTE: any finding is
+      # red. That is what keeps a standing frozen-mirror visible instead of forgiven.
+      #
+      # The path travels through `env:`, never `${{ }}` interpolated into the shell — the fixture next
+      # door already asserts that of the autofix workflow's stamp, and a value spliced into a `run:`
+      # body is one edit away from being a value somebody else controls.
       - name: Assert registry = manifest = bytes
+        env:
+          BASELINE: ${{ steps.baseline.outputs.path }}
         run: |
-          python scripts/fsgg-skill-registry-check --repos-root .repos \
-            ${{ steps.baseline.outputs.path && format('--baseline-registry {0}', steps.baseline.outputs.path) || '' }}
+          set -euo pipefail
+          if [ -n "$BASELINE" ]; then
+            python scripts/fsgg-skill-registry-check --repos-root .repos --baseline-registry "$BASELINE"
+          else
+            python scripts/fsgg-skill-registry-check --repos-root .repos
+          fi
 
   # The tool's own fixture — offline, temp registry + temp producer trees. Proves it catches a stale
   # digest, a missing source, a diverged frozen mirror, and a malformed digest, and that `--write`

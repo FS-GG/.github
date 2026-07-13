@@ -75,18 +75,32 @@ HERE = pathlib.Path(__file__).resolve().parent
 # suffix, so `spec_from_file_location` cannot infer a loader and returns None — hand it a
 # SourceFileLoader explicitly. A failure here is fatal on purpose: a retire gate that cannot read the
 # definition of "mechanical" must not fall back to a guess of its own.
-_path = HERE / "skill-registry-autofix-body"
-_spec = importlib.util.spec_from_file_location(
-    "autofix_body", _path, loader=SourceFileLoader("autofix_body", str(_path))
-)
-_body = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_body)
-classify = _body.classify
+def _load(name: str):
+    """Import a suffix-less sibling script. `spec_from_file_location` cannot infer a loader without a
+    `.py` suffix and returns None, so hand it a SourceFileLoader. A failure here is fatal on purpose:
+    a retire gate that cannot read a definition it depends on must not fall back to a guess of its own.
+    """
+    path = HERE / name
+    spec = importlib.util.spec_from_file_location(
+        name.replace("-", "_"), path, loader=SourceFileLoader(name.replace("-", "_"), str(path))
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
-# A producer manifest that could not be read. NOT a judgement case, however much it looks like one:
-# it means the world was read wrong, so every verdict derived from it — including the empty diff —
-# is unsound. See condition 2 above.
-BLINDING_CHECKS = {"manifest-found"}
+
+# `--write`'s own classifier, imported rather than re-encoded (#485).
+classify = _load("skill-registry-autofix-body").classify
+
+# A producer manifest that could not be read. NOT a judgement case, however much it looks like one: it
+# means the world was read wrong, so every verdict derived from it — including the empty diff — is
+# unsound. See condition 2 above.
+#
+# Imported from the tool that EMITS the finding, for the same reason `classify` is imported rather than
+# re-encoded (#485). The coherence check's own PR-vs-baseline verdict has to make exactly this call —
+# a blinded read may not be inherited and forgiven — and two copies of "which findings blind us?" is
+# how that question ends up answered differently in two places.
+BLINDING_CHECKS = _load("fsgg-skill-registry-check").BLINDING_CHECKS
 
 
 def decide(raw: str) -> tuple[bool, str, list[dict]]:

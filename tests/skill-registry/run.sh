@@ -803,4 +803,71 @@ assert not intro, f"this registry introduces nothing new: {intro}"
 PYJSON
 echo "   ok"
 
+echo "== 39. --write and --baseline-registry are REFUSED together — a reconcile is not a verdict =="
+# `--write` returns before the baseline logic ever runs, so accepting both would consume the flag and
+# silently ignore it. An argument that is ignored is indistinguishable, from the caller's side, from
+# one that was honoured (the `repos.sh need_val` rule, and the engine's own parser).
+out="$(run --registry "$REG" --repos-root "$ROOT" --write --baseline-registry "$WORK/base.yml" 2>&1 || true)"
+grep -qi "mutually exclusive" <<<"$out" || { echo "FAIL: --write + --baseline-registry must be refused, not half-ignored"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 40. A BLINDED read VOIDS the baseline — it may not be inherited and forgiven (#425) =="
+# `manifest-found` means a producer manifest could not be READ, so that producer's rows were never
+# checked on EITHER side. And because it depends only on producer bytes — which both sides share — it
+# fires identically on base and HEAD, so a (check, id) comparison would ALWAYS class it "inherited".
+# Every PR would then report "introduced NO new incoherence" while the gate was blind to a whole
+# producer: a claim with no evidence behind it, which is the #266/#425 fail-open rebuilt INSIDE the
+# gate that exists to catch it.
+write_registry
+write_manifests
+cp "$REG" "$WORK/blind-base.yml"
+printf 'not json at all\n' > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json"   # blind us
+out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/blind-base.yml" 2>&1 || true)"
+run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/blind-base.yml" >/dev/null 2>&1 \
+  && { echo "FAIL: a blinded check must NOT pass just because the blindness is 'pre-existing'"; echo "$out"; exit 1; }
+grep -qi "BLINDED" <<<"$out" || { echo "FAIL: it must say the comparison is void, and why"; echo "$out"; exit 1; }
+grep -qi "never checked on EITHER side" <<<"$out" || { echo "FAIL: it must name the reason a blinded read cannot be inherited"; echo "$out"; exit 1; }
+write_manifests   # restore
+
+echo "   ok"
+
+echo "== 41. the blinding set has ONE definition, and the retire gate imports it (#485) =="
+python3 - "$HERE/../../scripts/fsgg-skill-registry-check" "$HERE/../../scripts/skill-registry-retire-gate" <<'PYIMP'
+import importlib.util, sys
+from importlib.machinery import SourceFileLoader
+def load(p, n):
+    s = importlib.util.spec_from_file_location(n, p, loader=SourceFileLoader(n, p))
+    m = importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
+check = load(sys.argv[1], "check")
+gate  = load(sys.argv[2], "gate")
+# Object identity cannot hold: the gate loads its OWN instance of the check module. What must hold is
+# that the two AGREE, and that the gate does not carry a literal second copy of the set — which is the
+# thing #485 is actually about.
+assert gate.BLINDING_CHECKS == check.BLINDING_CHECKS, \
+    f"the gate and the emitter disagree about what blinds them: {gate.BLINDING_CHECKS} vs {check.BLINDING_CHECKS}"
+assert "manifest-found" in check.BLINDING_CHECKS
+src = open(sys.argv[2]).read()
+assert '{"manifest-found"}' not in src, \
+    "the retire gate RE-ENCODES the blinding set — import it from the tool that emits it (#485)"
+assert "fsgg-skill-registry-check" in src, \
+    "the retire gate must import the blinding set from fsgg-skill-registry-check (#485)"
+PYIMP
+echo "   ok"
+
+echo "== 42. a REWRITTEN-but-still-wrong digest is NEW, not inherited — the launder this must not allow =="
+# Keyed on (check, id) alone, a PR could change an already-stale digest to a DIFFERENT wrong value and
+# be waved through: the row was broken before and is broken now, so the key matches. But that PR made a
+# real, wrong edit to skills.yml, and this gate is what is supposed to catch it. The DECLARED value is
+# part of the identity.
+write_registry
+write_manifests
+cp "$REG" "$WORK/launder-base.yml"                    # base: `stale` declares $WRONG
+OTHER_WRONG="c0ffee00000000000000000000000000000000000000000000000000000000ff"
+sed -i "s|sha256: $WRONG,|sha256: $OTHER_WRONG,|" "$REG"   # PR: still wrong, but a DIFFERENT wrong
+out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/launder-base.yml" || true)"
+run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/launder-base.yml" >/dev/null 2>&1 \
+  && { echo "FAIL: rewriting a stale digest to another wrong value must NOT inherit the old finding"; echo "$out"; exit 1; }
+grep -q "introduced by this change" <<<"$out" || { echo "FAIL: the rewritten row must be reported as introduced"; echo "$out"; exit 1; }
+echo "   ok"
+
 echo "skill-registry fixture: all checks passed"

@@ -130,6 +130,19 @@ import sys
 # fixture, .github#398) are pure-stdlib and must run on a runner that never installed PyYAML — the
 # skill-union selftest is one. Reading a registry still hard-requires it, with the same message.
 
+# THE CHECKS THAT MEAN "I COULD NOT LOOK" — not "I looked and it is broken".
+#
+# A `manifest-found` finding is a producer manifest this tool could not read or parse. It is NOT a
+# judgement case, however much it looks like one: it means the rows from that producer were never
+# examined at all, so EVERY verdict derived from that run is unsound — including a comparison that
+# concludes nothing changed. `skill-registry-retire-gate` already refuses to reason over one for
+# exactly this reason (#425): *"the resulting empty diff is not evidence of ANYTHING."*
+#
+# It lives HERE, in the tool that EMITS the finding, and the retire gate imports it — the same rule
+# that file already applies to `classify`: re-encoding the set somewhere else is how "which findings
+# blind us?" ends up computed in three places that agree in none (#485). One definition, imported.
+BLINDING_CHECKS = {"manifest-found"}
+
 # Rendering keeps frozen copies of the skills FS.GG.Game owns (ADR-0022 §6, retired at P6).
 FROZEN_MIRROR_OWNER = "fs-gg-game"
 FROZEN_MIRROR_REPO = "FS.GG.Rendering"
@@ -650,6 +663,18 @@ def main() -> int:
             "Check out the producer repos there (see .github/workflows/skill-registry-coherence.yml)."
         )
 
+    # AN IGNORED ARGUMENT IS INDISTINGUISHABLE FROM AN HONOURED ONE. `--write` returns below without
+    # ever reaching the baseline logic, so the two together would accept the flag, consume it, and
+    # silently do nothing with it — and the caller would be told the write was judged against the base
+    # when it was not. The org already enforces this rule in `repos.sh` (`need_val`) and in the engine's
+    # own parser; a reconcile is not a verdict, so refuse the combination rather than ignoring half of it.
+    if args.write and args.baseline_registry:
+        sys.exit(
+            "fsgg-skill-registry-check: --write and --baseline-registry are mutually exclusive. "
+            "--write RECONCILES the registry; --baseline-registry JUDGES a change against its merge "
+            "base. Honouring one would mean silently ignoring the other."
+        )
+
     findings = check(args.registry, args.repos_root)
 
     if args.write:
@@ -694,7 +719,17 @@ def main() -> int:
     # change's doing and does not fail it — it is printed, loudly, and `main` stays RED on it, because
     # `main`/`schedule` never pass a baseline and their verdict is unchanged. Nothing is hidden and no
     # standing problem gets quieter; a correct change simply stops being hostage to it.
-    baseline_keys: set[tuple[str, str]] | None = None
+    # A FINDING'S IDENTITY INCLUDES WHAT THE REGISTRY *SAID*, not just which row it was about.
+    #
+    # Keyed on (check, id) alone, a PR could rewrite an ALREADY-stale digest to a DIFFERENT wrong value
+    # and still be waved through as "inherited" — the row was broken before and is broken now, so the
+    # key matches. But that PR made a real, wrong edit to `skills.yml`, and this gate is the thing that
+    # is supposed to catch it. The declared value is therefore part of the identity: change it and the
+    # finding is NEW, whatever it was before.
+    def key(f: dict) -> tuple[str, str, str]:
+        return (f["check"], f["id"], str(f.get("declared", "")))
+
+    baseline_keys: set[tuple[str, str, str]] | None = None
     if args.baseline_registry:
         if not os.path.isfile(args.baseline_registry):
             # NOT an empty baseline. A baseline we could not read would mark every finding NEW, which
@@ -704,13 +739,39 @@ def main() -> int:
                 f"fsgg-skill-registry-check: --baseline-registry '{args.baseline_registry}' is not a "
                 "file. Refusing to guess what the merge base declared."
             )
-        # The SAME producer bytes for both sides. The baseline differs from HEAD in exactly one thing —
-        # the registry — so a producer that moved between two clones cannot masquerade as a finding
-        # this PR introduced.
-        baseline_keys = {(f["check"], f["id"]) for f in check(args.baseline_registry, args.repos_root)}
+
+        # A BLINDED READ VOIDS THE COMPARISON. It does not get inherited (#425).
+        #
+        # `manifest-found` means a producer manifest could not be read — so the rows from that producer
+        # were never examined on EITHER side. And because that finding depends only on the producer
+        # bytes, which both sides share, it fires identically on base and HEAD and would ALWAYS be
+        # classed "inherited" and forgiven. Every PR would then print "introduced NO new incoherence"
+        # while the gate was blind to an entire producer's rows — a claim with no evidence behind it,
+        # which is the exact fail-open (#266, #425) this gate exists to prevent, rebuilt inside it.
+        #
+        # So: if we could not look, we do not get to say the change was clean. Fall back to the
+        # absolute verdict and name the cause.
+        blinded = [f for f in findings if f["check"] in BLINDING_CHECKS]
+        if blinded:
+            print(
+                f"skill-registry: the check was BLINDED on {len(blinded)} producer(s) — "
+                "the baseline comparison is void:"
+            )
+            for finding in blinded:
+                print(f"  [{finding['check']}] {finding['id']}: {finding['detail']}")
+            print(
+                "  A manifest that could not be READ is not a finding that can be inherited: the rows\n"
+                "  from that producer were never checked on EITHER side, so 'this change introduced\n"
+                "  nothing' would be a claim with no evidence behind it. Judging absolutely instead.\n"
+            )
+        else:
+            # The SAME producer bytes for both sides. The baseline differs from HEAD in exactly one
+            # thing — the registry — so a producer that moved between two clones cannot masquerade as a
+            # finding this PR introduced.
+            baseline_keys = {key(f) for f in check(args.baseline_registry, args.repos_root)}
 
     def is_new(f: dict) -> bool:
-        return baseline_keys is None or (f["check"], f["id"]) not in baseline_keys
+        return baseline_keys is None or key(f) not in baseline_keys
 
     introduced = [f for f in findings if is_new(f)]
     inherited = [f for f in findings if not is_new(f)]
