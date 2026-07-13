@@ -17,6 +17,11 @@ on:
       # guard rot with nothing to say so — the #334 shape: the check is fine, its TRIGGER fails open.
       - "registry/repos.lock"
       - "scripts/apply-labels.sh"
+      # A capability's DETECTOR SUBJECT (#628). `validate` proves the subject exists, so renaming or
+      # deleting it makes the roster invalid — and if this filter does not cover it, that rename never
+      # fires this gate and the roster sits invalid AND green. True of `capabilities[].workflow` (all
+      # of .github/workflows/** is already covered below) and equally of `capabilities[].script`.
+      - "scripts/sync-build-config.sh"
       - "tests/repos-registry/**"
       - ".github/workflows/repos-registry-selftest.yml"
       # kit sources — an edit here changes the content-addressed digest, so re-validate that
@@ -44,6 +49,11 @@ on:
       # guard rot with nothing to say so — the #334 shape: the check is fine, its TRIGGER fails open.
       - "registry/repos.lock"
       - "scripts/apply-labels.sh"
+      # A capability's DETECTOR SUBJECT (#628). `validate` proves the subject exists, so renaming or
+      # deleting it makes the roster invalid — and if this filter does not cover it, that rename never
+      # fires this gate and the roster sits invalid AND green. True of `capabilities[].workflow` (all
+      # of .github/workflows/** is already covered below) and equally of `capabilities[].script`.
+      - "scripts/sync-build-config.sh"
       - "tests/repos-registry/**"
       - ".github/workflows/repos-registry-selftest.yml"
       - "scripts/fsgg-coord"

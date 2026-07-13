@@ -25,8 +25,8 @@ it via `repos.sh list --receives <cap>` instead of hardcoding the repo list.
 (the analog of `fsgg-sdd` for product skills). It is the SOURCE of the coordination kit, so it never
 *receives* `coordination-kit` — an invariant the validator enforces.
 
-**Participation audit.** The fabrics are opt-in (a receiver participates by calling a reusable
-`.github` workflow), so `receives` only *declares* intent. [`scripts/repos-audit.sh`](../../scripts/repos-audit.sh)
+**Participation audit.** The fabrics are opt-in (a receiver participates by *wiring* something in its
+own CI), so `receives` only *declares* intent. [`scripts/repos-audit.sh`](../../scripts/repos-audit.sh)
 — run weekly by [`repos-audit.yml`](../../.github/workflows/repos-audit.yml) — closes the loop in
 **both directions**, for every capability in the `capabilities:` block:
 
@@ -39,6 +39,38 @@ it via `repos.sh list --receives <cap>` instead of hardcoding the repo list.
 The reverse direction is not symmetry for its own sake. The forward check starts from the
 declaration, so it is blind by construction to a repo that adopted a fabric without saying so — and
 the roster is what *every* org fabric iterates, so such a repo is invisible to all of them.
+
+**Every capability declares a DETECTOR** — the answer to *"how would I know, by looking at the
+receiver, that it really participates?"* (#628). Exactly one of:
+
+| detector | how a receiver wires it | how the audit sees it |
+|---|---|---|
+| `workflow: <f>.yml` | calls the authority's reusable workflow | a `uses:` of `FS-GG/.github/.github/workflows/<f>.yml` |
+| `script: <f>.sh` | **inlines a job** that checks `.github` out and runs the script | a reference to `<f>.sh` (matched on the **basename**) |
+| `push: true` | **nothing** — the *authority* writes it into the receiver | nothing to see; not swept. Requires a `reason:` |
+
+The `script:` kind exists because `build-config` is delivered as a script, not a reusable workflow —
+there is nothing to `uses:`, so the workflow detector is **structurally blind** to it. The basename is
+what is stable across receivers: Governance runs `_org-build/scripts/sync-build-config.sh` where SDD,
+Rendering and Game run `.github/scripts/…`, so anchoring on any one prefix would report the others as
+false gaps.
+
+`push:` is the **one honest way to be unauditable at the receiver**. `labels` is pushed:
+[`apply-labels.sh`](../../scripts/apply-labels.sh) reads this roster and creates the labels via the
+API, so the `receives: labels` row is the **input to the push**, not a falsifiable claim about the
+receiver's config — and no receiver-side artifact could ever verify it. It is only honest because it
+must be **written down, with a reason** the validator refuses to leave blank.
+
+**Nothing may be `receives`d that has no detector row.** This closure is what makes the guarantee at
+the top of the registry actually *true*. It was not: `build-config` and `labels` were legal `receives:`
+words with **no row at all**, so they were swept in **neither** direction — findable neither as unwired
+nor as an unrostered adopter — while the header promised the list "can no longer rot without a red
+check". **Four of six repos enforced `build-config` in CI** (SDD's as a *required* status check) **while
+`receives:` said zero**, and the audit reported green over all of them for months.
+[#626](https://github.com/FS-GG/.github/issues/626) then read those empty rows as *"propagates to
+nobody"*, shipped on the conclusion, and four repos went red within twenty minutes. An unaudited
+registry row is not a neutral gap — **it is a false negative that reads like a licence.** Both
+`repos.sh validate` (exit 1) and `repos-audit.sh` (exit 3, a permanent no-verdict) now refuse one.
 
 **Every capability is audited on its own** (#503). The non-vacuity guard used to *sum* the examined
 pairs across capabilities, so one populated leg satisfied it for all of them: `coordination-kit` had

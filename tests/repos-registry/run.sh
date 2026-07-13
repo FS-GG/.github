@@ -31,19 +31,33 @@ printf 'on:\n  workflow_call:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
 # A workflow that is NOT reusable: no `workflow_call:` trigger, so no repo could ever `uses:` it.
 printf 'on:\n  push:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
   > "$ROOT/.github/workflows/not-reusable.yml"
+# A SCRIPT-delivered capability names a script in scripts/, and validate proves it is really there —
+# the audit greps receivers for a reference to it, so a script that does not exist would report every
+# receiver unwired (#628). Same guarantee the `workflow:` detector already gets.
+printf '#!/usr/bin/env bash\necho drift-check\n' > "$ROOT/scripts/sync-build-config.sh"
 SKILL_SHA="$(sha256sum "$ROOT/.claude/skills/demo-skill/SKILL.md" | cut -d' ' -f1)"
 CLIENT_SHA="$(sha256sum "$ROOT/scripts/democlient" | cut -d' ' -f1)"
 
+# EVERY roster in this file rosters `receives: [labels, …]`, and until #628 no `capabilities:` row for
+# `labels` existed anywhere — not here, and not in the real registry. So a capability could be legal to
+# receive and impossible to detect, and was swept in neither direction. That is now a hard failure, so
+# every roster must declare how `labels` is verified; the honest answer is that it is not verifiable at
+# the receiver at all, because the AUTHORITY pushes it (apply-labels.sh reads the roster and creates
+# the labels via the API). `push: true` is how a roster says that out loud, and `validate` refuses it
+# without a reason.
+LABELS_CAP='  - { id: labels, push: true, reason: authority-pushed by apply-labels.sh; nothing is wired at the receiver }'
+
 BASE="$WORK/base.yml"
 cat > "$BASE" <<YAML
-schemaVersion: 3
-updated: 2026-07-04
+schemaVersion: 5
+updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }
   - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
 kit:
   - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }
   - { id: democlient, kind: client, source: scripts/democlient }
@@ -54,14 +68,17 @@ YAML
 capreg() {
   local n="$1" recv="$2"; shift 2
   local f="$WORK/$n.yml"
-  { printf 'schemaVersion: 3\nupdated: 2026-07-04\nauthority: FS-GG/.github\nrepos:\n'
+  { printf 'schemaVersion: 5\nupdated: 2026-07-13\nauthority: FS-GG/.github\nrepos:\n'
     printf '  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }\n'
     printf '  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [%s] }\n' "$recv"
     printf 'kit:\n'
     printf '  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }\n'
     printf '  - { id: democlient, kind: client, source: scripts/democlient }\n'
     printf 'capabilities:\n'
-    printf '  %s\n' "$@"; } > "$f"
+    printf '  %s\n' "$@"
+    # Every roster here rosters `labels`, so every roster here must say how `labels` is DETECTED, or
+    # the #628 closure rejects it — correctly, and for a reason no leg below is trying to test.
+    printf '%s\n' "$LABELS_CAP"; } > "$f"
   relock "$f"
   printf '%s' "$f"
 }
@@ -201,8 +218,51 @@ expect_fail "capability names a workflow that does not exist" 1 "is not in .gith
 expect_fail "capability names a workflow that is not reusable" 1 "no 'workflow_call:' trigger" \
   "$(capreg cap_notreusable "labels, coordination-kit" "- { id: coordination-kit, workflow: not-reusable.yml }")"
 
-expect_fail "capability with no workflow at all" 1 "has no 'workflow'" \
+expect_fail "capability with no detector at all" 1 "declares no detector" \
   "$(capreg cap_nowf "labels, coordination-kit" "- { id: coordination-kit }")"
+
+# --- the #628 detector schema -------------------------------------------------------------------
+# A capability declares EXACTLY ONE detector. Zero is the defect: it is then swept in NEITHER
+# direction while remaining a legal `receives:` word — which is how `build-config` came to be enforced
+# by four repos (SDD's as a REQUIRED check) and audited by nothing.
+
+expect_pass "a script-delivered capability passes on its script detector" \
+  "$(capreg cap_script "labels, build-config" \
+     "- { id: build-config, script: sync-build-config.sh, reason: receivers inline a job that runs it }")"
+
+# Two detectors is ambiguous: repos-audit would have to pick one, and a receiver satisfying the loose
+# one would mask a gap in the strict one.
+expect_fail "capability declaring two detectors" 1 "more than one detector" \
+  "$(capreg cap_twodet "labels, coordination-kit" \
+     "- { id: coordination-kit, workflow: coordination-coherence.yml, script: sync-build-config.sh }")"
+
+# The script detector's subject must EXIST, for the same reason the workflow's must: the audit greps
+# receivers for a reference to it, so a typo'd script reports EVERY receiver unwired — a gate that is
+# confidently wrong about every repo at once.
+expect_fail "capability naming a script that does not exist" 1 "which is not in scripts/" \
+  "$(capreg cap_badscript "labels, build-config" \
+     "- { id: build-config, script: no-such-script.sh, reason: typo }")"
+
+# A path, not a basename, is refused: receivers check .github out wherever they like (governance uses
+# `_org-build/`), so only the basename is stable across them — and the detector matches on it.
+expect_fail "capability naming a script by path rather than basename" 1 "must be a BARE filename" \
+  "$(capreg cap_pathscript "labels, build-config" \
+     "- { id: build-config, script: scripts/sync-build-config.sh, reason: over-specified }")"
+
+# `push:` is the ONE honest way to be unauditable at the receiver, so it is the one place this roster
+# can hold an unfalsifiable claim — it must therefore be a REVIEWED one, never a blank. Same rule the
+# `receivers: none` exemption already lives under.
+expect_fail "a push capability with no reason" 1 "with no 'reason'" \
+  "$(capreg cap_pushnoreason "labels, coordination-kit" \
+     "- { id: coordination-kit, workflow: coordination-coherence.yml }" \
+     "- { id: build-config, push: true }")"
+
+# THE CLOSURE, and the half that makes this a fix rather than a relocation: a capability a repo
+# RECEIVES with no `capabilities:` row is invisible to the audit in both directions. This is the exact
+# state `build-config` was in — and `labels` with it — for as long as either existed.
+expect_fail "a capability that is RECEIVED but has no detector row" 1 "received but NOT detectable" \
+  "$(capreg cap_undetectable "labels, coordination-kit, build-config" \
+     "- { id: coordination-kit, workflow: coordination-coherence.yml }")"
 
 # ...and a COMMENT must not satisfy the reusability check. An unanchored `grep -q workflow_call:`
 # matches the word anywhere in the file, so a workflow whose prose merely mentions it would pass as
@@ -241,12 +301,19 @@ expect_fail "'receivers:' with a value other than none" 1 "is invalid" \
 
 # --- caps query (repos-audit.sh reads its mandate through this) ---
 caps_tsv="$(bash "$REPOS_SH" caps --registry "$BASE")"
-[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t')" ] \
-  && ok "caps -> a TSV row per capability: id, workflow, receivers, reason" \
+[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t\t\t\nlabels\t\t\ttrue\t\tauthority-pushed by apply-labels.sh; nothing is wired at the receiver')" ] \
+  && ok "caps -> a TSV row per capability: id, workflow, script, push, receivers, reason" \
   || bad "caps TSV" "got: $(printf '%s' "$caps_tsv" | cat -A | head -2)"
 caps_ids="$(bash "$REPOS_SH" caps --field id --registry "$BASE")"
-[ "$caps_ids" = "coordination-kit" ] && ok "caps --field id -> the capability ids" \
+[ "$caps_ids" = "$(printf 'coordination-kit\nlabels')" ] && ok "caps --field id -> the capability ids" \
   || bad "caps --field id" "got: $caps_ids"
+
+# `push` is a YAML BOOLEAN, and `.push // ""` cannot blank it — `false // ""` is `false`, not "". A
+# `push: false` row would therefore reach repos-audit.sh as the five characters "false" and be read as
+# a live push detector, muting the capability's entire sweep. Normalized to "true"/"" at the seam.
+[ "$(bash "$REPOS_SH" caps --field push --registry "$BASE")" = "$(printf '\ntrue')" ] \
+  && ok "caps --field push -> 'true' or empty, never the string 'false'" \
+  || bad "caps --field push" "got: $(bash "$REPOS_SH" caps --field push --registry "$BASE")"
 
 # --- list --all (the unrostered-adopter sweep starts from every repo, not from a declaration) ---
 all_repos="$(bash "$REPOS_SH" list --all --field id --registry "$BASE" | tr '\n' ',')"
@@ -470,16 +537,27 @@ for trigger in want:
     if not pats:
         gaps.append(f"{trigger}: paths: is empty — matches nothing")
         continue
+    # A capability's DETECTOR SUBJECT — whichever kind it is. `validate` proves the subject exists, so
+    # renaming or deleting it makes the roster invalid; if the selftest's `paths:` filter does not
+    # cover the subject, that rename never fires this gate and the roster sits invalid AND green.
+    #
+    # The `script:` kind has exactly the same exposure as `workflow:` and must be covered the same way
+    # (#628) — it was `cap['workflow']` here, which both KeyError'd on a script row and, had it been
+    # written as a `.get()`, would have silently skipped it: the fail-open one level up, in the guard
+    # against the fail-open. A `push:` capability has NO subject in this repo (the authority pushes it
+    # via a script that is not the detector), so it has nothing to cover.
     for cap in reg.get("capabilities", []):
-        probe = f".github/workflows/{cap['workflow']}"
+        if "workflow" in cap:  probe = f".github/workflows/{cap['workflow']}"
+        elif "script" in cap:  probe = f"scripts/{cap['script']}"
+        else:                  continue                     # push: nothing detectable to gate
         if not any(matches(probe, p) for p in pats):
-            gaps.append(f"{trigger}: capability '{cap['id']}' workflow {probe}")
+            gaps.append(f"{trigger}: capability '{cap['id']}' subject {probe}")
 print("\n".join(gaps))
 PY
 }
 uncovered="$(caps_uncovered_for ".github/workflows/repos-registry-selftest.yml" "pull_request,push")"
-if [ -z "$uncovered" ]; then ok "every capabilities[].workflow is covered by the selftest paths: filter"
-else bad "capability workflow ungated — renaming it leaves the roster invalid, green" "$uncovered"; fi
+if [ -z "$uncovered" ]; then ok "every capability's detector subject is covered by the selftest paths: filter"
+else bad "capability detector ungated — renaming it leaves the roster invalid, green" "$uncovered"; fi
 
 uncovered="$(uncovered_for ".github/workflows/coordination-propagate.yml" "push")"
 if [ -z "$uncovered" ]; then ok "every kit source is covered by the propagate paths: filter"

@@ -35,9 +35,20 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 # and declaring a capability it roster no receivers for is now a hard failure, which is the whole
 # point. The legs under "every capability is audited on its own" build their own rosters to exercise
 # exactly that; this base one stays minimal and coherent: one capability, two receivers.
+#
+# `labels` MUST be declared too, and that is not bookkeeping — it is #628. Every roster here rosters
+# `receives: [labels, …]`, and until #628 there was no `capabilities:` row for it anywhere, in the
+# fixture OR in the real registry. So the fixture modelled, faithfully and unknowingly, the exact
+# defect: a capability that is legal to receive and impossible to detect, swept in neither direction.
+# It is now a hard failure, so every roster in this file has to say how `labels` is verified — and the
+# honest answer is that it ISN'T, at the receiver, because the authority PUSHES it (apply-labels.sh
+# reads the roster and creates the labels via the API). `push: true` is how a roster says that out
+# loud, and `repos.sh validate` refuses it without a reason.
+LABELS_CAP='  - { id: labels, push: true, reason: authority-pushed by apply-labels.sh; nothing is wired at the receiver }'
+
 mkreg() { cat > "$1" <<YAML
-schemaVersion: 3
-updated: 2026-07-04
+schemaVersion: 5
+updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }
@@ -45,6 +56,7 @@ repos:
   - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [labels, coordination-kit] }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
+$LABELS_CAP
 YAML
 }
 REG="$WORK/repos.yml"; mkreg "$REG"
@@ -113,6 +125,37 @@ wire_wf() { clearfail "$1"; local slug="${1//\//__}"; shift; local i=0 wf
                 printf '  j%s:\n    uses: FS-GG/.github/.github/workflows/%s@main\n' "$i" "$wf"
               done; } > "$FIX/$slug/coord.yml"; }
 wire()   { wire_wf "$1" coordination-coherence.yml; }
+# wire_script <repo> <script-ref> [--no-provenance] — the repo INLINES a job that runs one of the
+# authority's scripts, which is how a `script:` capability is really wired (#628): there is no reusable
+# workflow to `uses:`.
+#
+# It emits the AUTHORITY CHECKOUT too, because that is what the real receivers write and what the
+# detector reads. A `run:` of a script names only a PATH, and a path cannot say where the file came
+# from — so the `repository: FS-GG/.github` line is the provenance, and without it a repo that VENDORED
+# its own copy of the script (a fork — precisely NOT participation) would certify as wired.
+#
+# The ref is passed verbatim so a leg can pin the PATH PREFIX, which is what differs between real
+# receivers — SDD/Rendering/Game run it from `.github/`, Governance from `_org-build/` — and is why the
+# detector keys on the basename and not the prefix.
+#
+# --no-provenance omits the checkout: the fork case.
+wire_script() { clearfail "$1"; local slug="${1//\//__}" ref="$2" prov=1
+                [ "${3:-}" = "--no-provenance" ] && prov=0
+                mkdir -p "$FIX/$slug"; printf '%s\n' "gate.yml" > "$FIX/$slug.list"
+                { printf 'jobs:\n  drift:\n    steps:\n'
+                  printf '      - uses: actions/checkout@v7\n'
+                  [ "$prov" -eq 1 ] && printf '      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.github\n          path: _org-build\n'
+                  printf '      - run: %s --check "$GITHUB_WORKSPACE"\n' "$ref"; } > "$FIX/$slug/gate.yml"; }
+
+# wire_both <repo> <wf> <script-ref> — a receiver that wires a WORKFLOW capability and a SCRIPT
+# capability at once. This is the real state of every build-config receiver (SDD wires
+# coordination-kit + lockfile-sync by `uses:` AND build-config by an inlined script job), and no leg
+# covered it: a regression that made the two detector kinds mutually exclusive in repo_calls — an
+# early `return` after the `uses:` grep, say — would pass the whole fixture and break only on the org.
+wire_both() { clearfail "$1"; local slug="${1//\//__}"
+              mkdir -p "$FIX/$slug"; printf '%s\n%s\n' "coord.yml" "gate.yml" > "$FIX/$slug.list"
+              printf 'jobs:\n  j1:\n    uses: FS-GG/.github/.github/workflows/%s@main\n' "$2" > "$FIX/$slug/coord.yml"
+              printf 'jobs:\n  drift:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.github\n          path: _org-build\n      - run: %s --check\n' "$3" > "$FIX/$slug/gate.yml"; }
 unwired(){ clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"; printf '%s\n' "ci.yml" > "$FIX/$slug.list";
            printf 'jobs:\n  build:\n    runs-on: ubuntu-latest\n' > "$FIX/$slug/ci.yml"; }
 noflows(){ clearfail "$1"; local slug="${1//\//__}"; rm -f "$FIX/$slug.list"; rm -rf "$FIX/$slug"; }
@@ -198,15 +241,19 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$EMPTYREG" --repos-sh "$REPO
 # (2a) the aggregate backstop still exists underneath the per-capability guard. Every capability can
 #      individually and honestly record `receivers: none` — and the audit then examines no repo at
 #      all, which is a gate reporting on the org's participation without looking at the org.
-ALLNONE="$WORK/allnone.yml"; cat > "$ALLNONE" <<'YAML'
-schemaVersion: 3
-updated: 2026-07-04
+#      `labels` is `push:`, so it contributes no receiver-capability pairs either — which is the point:
+#      a roster whose every capability is unsweepable, whether by `receivers: none` or by `push:`, is a
+#      gate reporting on participation without looking at a single repo.
+ALLNONE="$WORK/allnone.yml"; cat > "$ALLNONE" <<YAML
+schemaVersion: 5
+updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }
   - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels] }
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml, receivers: none, reason: nobody receives it in this fixture }
+$LABELS_CAP
 YAML
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$ALLNONE" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q 'audited 0 receiver-capability pair' \
@@ -275,7 +322,7 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 #     into a plain variable dies with the subshell and the diagnostic silently comes back blank.
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'could not determine' \
     && printf '%s' "$out" | grep -q 'HTTP 403' \
-    && ! printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but no workflow calls' \
+    && ! printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but nothing in its workflows references' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "unreachable receiver -> exit 2 'could not determine', not a fabricated gap" \
   || bad "unreachable receiver must not be reported as unwired" "rc=$rc: $out"
@@ -284,7 +331,7 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 #     (exit 1), not an outage — otherwise every genuine gap would hide behind "could not determine".
 wire FS-GG/FS.GG.SDD; noflows FS-GG/FS.GG.Rendering
 out="$(run 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but no workflow calls' \
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but nothing in its workflows references' \
     && ! printf '%s' "$out" | grep -q 'could not determine'; } \
   && ok "404 (no workflows dir) is still a genuine gap, not an outage" \
   || bad "404 must stay a gap" "rc=$rc: $out"
@@ -314,7 +361,7 @@ out="$(TRIES=3 run 2>&1)" && rc=0 || rc=$?
 unwired FS-GG/FS.GG.SDD; unreachable FS-GG/FS.GG.Rendering
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'the audit is incomplete' \
-    && printf '%s' "$out" | grep -q 'FS.GG.SDD receives .* but no workflow calls'; } \
+    && printf '%s' "$out" | grep -q 'FS.GG.SDD receives .* but nothing in its workflows references'; } \
   && ok "undetermined outranks a gap -> exit 2, but the gap is still reported" \
   || bad "undetermined must outrank a gap" "rc=$rc: $out"
 
@@ -324,7 +371,7 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 wire FS-GG/FS.GG.SDD; invisible FS-GG/FS.GG.Rendering
 out="$(run 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'FS.GG.Rendering is not readable' \
-    && ! printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but no workflow calls'; } \
+    && ! printf '%s' "$out" | grep -q 'FS.GG.Rendering receives .* but nothing in its workflows references'; } \
   && ok "invisible repo -> exit 2 'not readable', not a fabricated gap" \
   || bad "invisible repo must not be reported as unwired" "rc=$rc: $out"
 
@@ -342,14 +389,18 @@ out="$(run 2>&1)" && rc=0 || rc=$?
 # wires a capability it never declared must be REPORTED rather than silently believed absent.
 
 # helper: a roster declaring <caps-yaml> over the two-receiver repo set, with `receives` overridable.
+# Every roster it builds rosters `labels`, so every roster it builds must declare how `labels` is
+# detected — see LABELS_CAP. Appended here rather than at each call site so a new leg cannot forget it
+# and get an exit-3 closure failure it did not mean to test.
 mkreg2() { # $1 = file, $2 = sdd receives, $3 = rendering receives, $4… = capability rows
   local f="$1" sdd="$2" rend="$3"; shift 3
-  { printf 'schemaVersion: 3\nupdated: 2026-07-04\nauthority: FS-GG/.github\nrepos:\n'
+  { printf 'schemaVersion: 5\nupdated: 2026-07-13\nauthority: FS-GG/.github\nrepos:\n'
     printf '  - { id: .github,   full: FS-GG/.github,         role: authority, receives: [labels] }\n'
     printf '  - { id: sdd,       full: FS-GG/FS.GG.SDD,       role: framework, receives: [%s] }\n' "$sdd"
     printf '  - { id: rendering, full: FS-GG/FS.GG.Rendering, role: framework, receives: [%s] }\n' "$rend"
     printf 'capabilities:\n'
-    printf '  %s\n' "$@"; } > "$f"
+    printf '  %s\n' "$@"
+    printf '%s\n' "$LABELS_CAP"; } > "$f"
 }
 
 # (16) THE REGRESSION. Two capabilities; only one has rostered receivers. Under the summed guard this
@@ -386,7 +437,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --repos-sh "$REPOS
 #      wrote a reason down.
 wire FS-GG/FS.GG.SDD; wire_wf FS-GG/FS.GG.Rendering coordination-coherence.yml contract-coherence.yml
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NONEREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Rendering calls' \
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Rendering references' \
     && printf '%s' "$out" | grep -qi 'claim is now FALSE' \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "'receivers: none' + a real adopter -> exit 1: the recorded claim is falsified, not trusted" \
@@ -403,7 +454,7 @@ mkreg2 "$DRIFTREG" "labels, coordination-kit, lockfile-sync" "labels, coordinati
 wire_wf FS-GG/FS.GG.SDD       coordination-coherence.yml lockfile-sync.yml
 wire_wf FS-GG/FS.GG.Rendering coordination-coherence.yml lockfile-sync.yml   # adopted, never rostered
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
-{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS.GG.Rendering calls .*lockfile-sync\.yml" \
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS.GG.Rendering references .*lockfile-sync\.yml" \
     && printf '%s' "$out" | grep -q "does not declare 'receives: lockfile-sync'" \
     && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
   && ok "an adopted-but-unrostered capability -> exit 1, naming the repo and the capability" \
@@ -426,7 +477,7 @@ for q in '"' "'"; do
   qwire FS-GG/FS.GG.Rendering "$q" coordination-coherence.yml lockfile-sync.yml
   out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "does not declare 'receives: lockfile-sync'" \
-      && ! printf '%s' "$out" | grep -q 'FS.GG.SDD receives .* but no workflow calls'; } \
+      && ! printf '%s' "$out" | grep -q 'FS.GG.SDD receives .* but nothing in its workflows references'; } \
     && ok "a quoted ($q) uses: is still matched — no false gap, and the drift check still sees it" \
     || bad "the uses: matcher has a quoting blind spot" "quote=$q rc=$rc: $out"
 done
@@ -657,6 +708,185 @@ step '2:::error::repos-audit: the API said no' '0:repos-audit: OK — every decl
 step '127:'
 { [ "$STEP_RC" = 127 ] && [ "$PASSES" -eq 1 ]; } \
   && ok "step: an unplanned exit code is published verbatim for the catch-all" || bad "crash rc" "rc=$STEP_RC passes=$PASSES: $STEP_OUT"
+
+# ---------------------------------------------------------------------------------------------------
+# (17) THE #628 REGRESSION: a SCRIPT-delivered capability is audited, in both directions.
+#
+# `build-config` is not wired by `uses:` — receivers INLINE a job that checks .github out and runs
+# `sync-build-config.sh`. The `uses:` detector is structurally blind to that, so the capability simply
+# had no `capabilities:` row, and was therefore swept in NEITHER direction: four repos enforced it (in
+# SDD's case as a REQUIRED status check) while `receives:` said zero, and this audit reported green
+# over all of them for months. #626 then read those empty rows as "propagates to nobody", shipped on
+# it, and four repos went red within twenty minutes.
+SCRIPTCAP="- { id: build-config, script: sync-build-config.sh, reason: script-delivered; receivers inline a job }"
+
+# (17a) declared + really wired -> ok. The two receivers reference the script through DIFFERENT path
+#       prefixes, which is the real state of the org and the reason the detector matches the basename:
+#       anchoring on either prefix would report the other as a false gap.
+SCRIPTREG="$WORK/script.yml"
+mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
+wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
+wire_script FS-GG/FS.GG.Rendering "_org-build/scripts/sync-build-config.sh"
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
+  && ok "script capability: both receivers wired -> ok, whatever path prefix they run it from" \
+  || bad "script detector must match on the basename" "rc=$rc: $out"
+
+# (17b) declared + NOT wired -> a GAP. A receiver that quietly drops the drift job is the thing this
+#       detector exists to catch, and before #628 nothing could see it.
+wire_script FS-GG/FS.GG.SDD ".github/scripts/sync-build-config.sh"; unwired FS-GG/FS.GG.Rendering
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
+    && printf '%s' "$out" | grep -q '1 wired, 1 gap(s)'; } \
+  && ok "script capability: a declared receiver that does not run the script -> a gap (exit 1)" \
+  || bad "an unwired script receiver must be a gap" "rc=$rc: $out"
+
+# (17c) wired + NOT declared -> DRIFT. THIS IS #628 ITSELF: the repo really enforces build-config and
+#       the roster does not say so. It is the direction that would have stopped #626 being written.
+DRIFTSCRIPT="$WORK/driftscript.yml"
+mkreg2 "$DRIFTSCRIPT" "labels, build-config" "labels" "$SCRIPTCAP"
+wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
+wire_script FS-GG/FS.GG.Rendering ".github/scripts/sync-build-config.sh"
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTSCRIPT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering references .* does not declare 'receives: build-config'" \
+    && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
+  && ok "script capability: an unrostered repo that really runs it -> drift (exit 1) — #628 itself" \
+  || bad "an unrostered script adopter must be reported" "rc=$rc: $out"
+
+# (17d) a receiver's OWN fork of the script is NOT the authority's. The detector compares the whole
+#       basename, so `my-sync-build-config.sh` must not satisfy `sync-build-config.sh` — otherwise a
+#       repo that forked the script (i.e. deliberately stopped participating) would audit as wired,
+#       which is a fail-open in the detector guarding against fail-open.
+mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
+wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
+wire_script FS-GG/FS.GG.Rendering "scripts/my-sync-build-config.sh"
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'"; } \
+  && ok "script capability: a receiver's own fork of the script does not count as wiring it" \
+  || bad "a forked script must not satisfy the authority's detector" "rc=$rc: $out"
+
+# (18) THE CLOSURE, and the half that makes this a fix rather than a relocation: a capability a repo
+#      RECEIVES but which has no `capabilities:` row at all is UNAUDITABLE — not findable as unwired,
+#      not findable as an unrostered adopter — while remaining a legal `receives:` word. That silence
+#      is exactly what #626 read as a licence. It must be a permanent no-verdict, not a green.
+NODETECT="$WORK/nodetect.yml"
+mkreg2 "$NODETECT" "labels, coordination-kit, build-config" "labels, coordination-kit" \
+  "- { id: coordination-kit, workflow: coordination-coherence.yml }"
+wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$NODETECT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 3 ] && printf '%s' "$out" | grep -q "receive 'build-config'" \
+    && printf '%s' "$out" | grep -q "no 'capabilities:' row" \
+    && ! printf '%s' "$out" | grep -q 'every declared receiver is wired'; } \
+  && ok "a RECEIVED capability with no detector row -> exit 3, named; never a vacuous green (#628)" \
+  || bad "a received-but-undetectable capability must fail closed" "rc=$rc: $out"
+
+# (19) a PUSH capability is not swept — there IS no receiver-side artifact — and every repo rosters
+#      `labels`, so a sweep would report all of them as gaps. It must be reported, and excluded from
+#      the pair count: the pairs line is a count of what this audit actually LOOKED at, and folding in
+#      something it did not examine would be claiming an examination that never happened.
+mkreg "$REG"; wire FS-GG/FS.GG.SDD; wire FS-GG/FS.GG.Rendering
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$REG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'labels — 3 rostered receiver(s), PUSHED' \
+    && printf '%s' "$out" | grep -q '2 receiver-capability pair(s)' \
+    && ! printf '%s' "$out" | grep -q "receives 'labels' but nothing"; } \
+  && ok "a push capability is reported, not swept, and not counted as pairs it never examined" \
+  || bad "a push capability must not be swept at the receiver" "rc=$rc: $out"
+
+# (20) THE AUTHORITY IS NOT A PHANTOM ADOPTER OF ITS OWN SCRIPT. `.github` owns sync-build-config.sh
+#      and naturally names it in its own workflows. The `uses:` detector dodges this for free (the
+#      authority calls its own workflows by a LOCAL `uses: ./…`, which is deliberately unmatched); a
+#      script reference carries no such tell, so the rule has to be stated. Without it the audit
+#      reports the authority as an adopted-but-unrostered receiver of every script it hosts — which is
+#      exactly the phantom-adopter failure repo_calls already refuses by name. Observed on the real
+#      org on the first run of this detector.
+mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
+wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
+wire_script FS-GG/FS.GG.Rendering ".github/scripts/sync-build-config.sh"
+wire_script FS-GG/.github         "scripts/sync-build-config.sh"     # the authority, using its OWN file
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0 unrostered adopter' \
+    && ! printf '%s' "$out" | grep -q "FS-GG/.github references"; } \
+  && ok "the authority running its OWN script is not adoption — no phantom unrostered adopter" \
+  || bad "the authority must not be a phantom adopter of a script it hosts" "rc=$rc: $out"
+
+# (21) PROVENANCE. A `run:` of a script names only a PATH, and a path cannot say where the file came
+#      from. So a receiver that VENDORED its own copy of `sync-build-config.sh` — committed it, never
+#      checks .github out, runs its own — must NOT audit as wired: that is a FORK, which is precisely
+#      not participation, and precisely what the receivers' own gate ("sync-not-fork drift check")
+#      exists to prevent. The `uses:` detector cannot be fooled this way because it NAMES the
+#      authority; the script detector has to read the receiver's `repository: FS-GG/.github` checkout
+#      to get the same guarantee. Without this the audit certifies the repo that has silently stopped
+#      tracking the org config.
+mkreg2 "$SCRIPTREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
+wire_script FS-GG/FS.GG.SDD       ".github/scripts/sync-build-config.sh"
+wire_script FS-GG/FS.GG.Rendering "scripts/sync-build-config.sh" --no-provenance   # vendored fork
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
+    && printf '%s' "$out" | grep -q '1 wired, 1 gap(s)'; } \
+  && ok "script capability: a VENDORED fork (no authority checkout) is not wiring — provenance is required" \
+  || bad "a vendored script must not satisfy the detector" "rc=$rc: $out"
+
+# (22) PROSE IS NOT WIRING. A receiver that DELETED its drift job and left `# we used to run
+#      sync-build-config.sh here` behind must read as a GAP, not as wired — otherwise the one thing
+#      this detector exists to find reports green. The codebase already refuses this class for
+#      `workflow_call:`: a check whose subject is "does this really run?" must not be satisfiable by
+#      prose about running.
+clearfail FS-GG/FS.GG.Rendering
+mkdir -p "$FIX/FS-GG__FS.GG.Rendering"; printf '%s\n' "gate.yml" > "$FIX/FS-GG__FS.GG.Rendering.list"
+printf 'jobs:\n  build:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.github\n          path: _org-build\n      # we used to run sync-build-config.sh here, but it was removed\n      - run: echo hi\n' \
+  > "$FIX/FS-GG__FS.GG.Rendering/gate.yml"
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$SCRIPTREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
+    && printf '%s' "$out" | grep -q '1 wired, 1 gap(s)'; } \
+  && ok "script capability: a COMMENT naming the script is not wiring — prose cannot satisfy the gate" \
+  || bad "a commented-out script reference must not satisfy the detector" "rc=$rc: $out"
+
+# (23) ONE PASS, BOTH KINDS. Every real build-config receiver wires a workflow capability AND a script
+#      capability at once. Nothing covered that, so a regression making the two detector kinds mutually
+#      exclusive in repo_calls would have passed this whole fixture and broken only on the live org.
+BOTHREG="$WORK/both.yml"
+mkreg2 "$BOTHREG" "labels, coordination-kit, build-config" "labels, coordination-kit, build-config" \
+  "- { id: coordination-kit, workflow: coordination-coherence.yml }" "$SCRIPTCAP"
+wire_both FS-GG/FS.GG.SDD       coordination-coherence.yml ".github/scripts/sync-build-config.sh"
+wire_both FS-GG/FS.GG.Rendering coordination-coherence.yml "_org-build/scripts/sync-build-config.sh"
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BOTHREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '4 receiver-capability pair(s) — 4 wired'; } \
+  && ok "one repo wiring BOTH a workflow and a script capability -> both detected in a single pass" \
+  || bad "the two detector kinds must not be mutually exclusive" "rc=$rc: $out"
+
+# (24) A BIG workflow file must detect exactly like a small one.
+#
+#      `printf '%s' "$body" | grep -qE …` is silently, NON-DETERMINISTICALLY WRONG under `pipefail`:
+#      `grep -q` exits on its first match, and if the writer is still blocked on a full 64KiB pipe
+#      buffer it takes SIGPIPE and dies 141 — which pipefail then reports as the PIPELINE's status, so
+#      the test reads FALSE although grep matched. Measured on FS.GG.Game's real gate.yml (19.5KiB):
+#      the pipeline form returned 141 on SEVEN of ten runs, and the audit called a correctly-wired repo
+#      a GAP, confidently, with `0 undetermined`, on about a third of runs.
+#
+#      Every fixture workflow above is a few hundred bytes — far under the pipe buffer — so the race
+#      never fires and the whole suite passed green over it. This leg makes the file big enough that
+#      the old form fails RELIABLY (padding AFTER the match, so grep exits with the writer still
+#      going), which is what turns a heisenbug into a regression test.
+BIGREG="$WORK/big.yml"
+mkreg2 "$BIGREG" "labels, build-config" "labels, build-config" "$SCRIPTCAP"
+bigwire() { clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"
+            printf '%s\n' "gate.yml" > "$FIX/$slug.list"
+            { printf 'jobs:\n  drift:\n    steps:\n'
+              printf '      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.github\n          path: _org-build\n'
+              printf '      - run: _org-build/scripts/sync-build-config.sh --check\n'
+              # >64KiB of trailing steps, so grep -q matches early and the writer is still going.
+              for i in $(seq 1200); do
+                printf '      - name: padding step %s to outrun the pipe buffer\n        run: echo %s\n' "$i" "$i"
+              done; } > "$FIX/$slug/gate.yml"; }
+bigwire FS-GG/FS.GG.SDD; bigwire FS-GG/FS.GG.Rendering
+big_ok=1
+for _ in 1 2 3 4 5; do
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$BIGREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } || { big_ok=0; break; }
+done
+[ "$big_ok" -eq 1 ] \
+  && ok "a >64KiB workflow detects identically, on 5 consecutive runs (no pipefail/SIGPIPE race)" \
+  || bad "a large workflow must not flip the verdict" "rc=$rc: $(printf '%s' "$out" | tail -4)"
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
