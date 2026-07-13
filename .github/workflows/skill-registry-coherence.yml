@@ -64,8 +64,44 @@ jobs:
             echo "cloned $repo @ $(git -C ".repos/$repo" rev-parse --short HEAD)"
           done
 
+      # THE MERGE BASE'S registry — and ONLY on a pull request (#422).
+      #
+      # A PR is judged on what IT did; `main` and the schedule are judged on the world. Those are
+      # different questions, and collapsing them jammed the fabric shut: a `frozen-mirror` divergence
+      # cannot be fixed from this repo (the mirror lives in FS.GG.Rendering), so once one exists it
+      # stands until a human lands a multi-repo change — and with one all-or-nothing verdict it sat on
+      # the autofix bot's own PR, failing it for the very findings the bot had correctly refused to
+      # touch. The bot ran daily, reconciled the digests, opened its PR, and the PR could never be
+      # green. Eight stale digests accumulated behind it, and #595 sat open and permanently red.
+      #
+      # `git fetch` of the base SHA, not `origin/main`: a PR is merged against the base it was opened
+      # from, and reading today's `main` would let a change that landed *after* this PR branched be
+      # attributed to it — a finding somebody else introduced, failing somebody else's PR.
+      - name: The merge base's registry (pull requests only)
+        if: github.event_name == 'pull_request'
+        id: baseline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin "$BASE_SHA"
+          # A base that does not carry the registry at all is a legitimate answer — the file is new in
+          # this PR, so EVERY finding in it is genuinely introduced here. Emit nothing and let the
+          # absolute verdict apply, rather than inventing an empty baseline that would excuse them.
+          if git cat-file -e "$BASE_SHA:registry/skills.yml" 2>/dev/null; then
+            git show "$BASE_SHA:registry/skills.yml" > /tmp/baseline-skills.yml
+            echo "path=/tmp/baseline-skills.yml" >> "$GITHUB_OUTPUT"
+            echo "baseline: registry/skills.yml @ ${BASE_SHA:0:12}"
+          else
+            echo "baseline: the merge base has no registry/skills.yml — every finding is NEW here."
+          fi
+
+      # On `main` and on the schedule, `--baseline-registry` is absent and the verdict is ABSOLUTE:
+      # any finding is red. That is what keeps a standing frozen-mirror visible instead of forgiven.
       - name: Assert registry = manifest = bytes
-        run: python scripts/fsgg-skill-registry-check --repos-root .repos
+        run: |
+          python scripts/fsgg-skill-registry-check --repos-root .repos \
+            ${{ steps.baseline.outputs.path && format('--baseline-registry {0}', steps.baseline.outputs.path) || '' }}
 
   # The tool's own fixture — offline, temp registry + temp producer trees. Proves it catches a stale
   # digest, a missing source, a diverged frozen mirror, and a malformed digest, and that `--write`

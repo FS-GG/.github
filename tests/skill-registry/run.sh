@@ -729,4 +729,78 @@ JSON
 gate "$WORK/f.json" > "$WORK/out.txt" || { echo "FAIL: a NON-derivable row is a judgement case and must not block the retire"; cat "$WORK/why.txt"; exit 1; }
 echo "   ok"
 
+# ==================================================================================================
+# THE BASELINE VERDICT (#422) — a PR is judged on what IT did, not on whether the world is perfect.
+# ==================================================================================================
+# The findings fall into two classes, and `--write` already knows the difference: MECHANICAL ones it
+# reconciles (a stale sha256, a diverged predicate) and JUDGEMENT ones it refuses (a vanished source; a
+# frozen mirror the canonical has moved past; two producers contradicting each other, #295). A judgement
+# case CANNOT be fixed from this repo — the mirror lives in another one — so once it exists it stands
+# until a human lands a multi-repo change.
+#
+# With one all-or-nothing verdict, that standing red sat on the autofix bot's OWN PR and failed it for
+# the findings the bot had correctly refused to touch. The bot ran daily, reconciled the digests, opened
+# its PR — and the PR could never be green. Eight stale digests accumulated behind it while #595 sat open
+# and permanently red: a daily bot that runs, succeeds, and achieves nothing (epic #416), inside the very
+# gate meant to catch that.
+write_registry
+write_manifests
+printf 'owned body DRIFTED\n' > "$ROOT/Mirror.Repo/template/product-skills/owned/SKILL.md"   # the judgement case
+cp "$REG" "$WORK/base.yml"          # the merge base: a stale digest AND a diverged mirror
+
+echo "== 33. WITHOUT a baseline the verdict is ABSOLUTE — main and the schedule stay red =="
+run --registry "$REG" --repos-root "$ROOT" >/dev/null 2>&1 && { echo "FAIL: an absolute run must exit 1"; exit 1; }
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: the standing mirror divergence must stay visible"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 34. the bot's PR: it fixed what it could, and the judgement case does NOT fail it =="
+# Exactly the autofix's move: --write reconciles the stale digest and refuses the mirror.
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 || true
+grep -q "sha256: $ACTUAL_STALE" "$REG" || { echo "FAIL: --write did not reconcile the stale digest"; exit 1; }
+out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" || true)"
+run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" >/dev/null 2>&1 \
+  || { echo "FAIL: the bot's PR introduced nothing and must be GREEN — this is the jam #422 names"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 35. ...and the pre-existing finding is REPORTED, never hidden =="
+grep -q "PRE-EXISTING" <<<"$out" || { echo "FAIL: the inherited finding must be printed"; echo "$out"; exit 1; }
+grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: it must name the finding it is not failing on"; echo "$out"; exit 1; }
+grep -qi "main" <<<"$out" || { echo "FAIL: it must say main's own run stays RED on it"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 36. A PRE-EXISTING FINDING MAY NOT LAUNDER A NEW ONE — the fail-open this must not become =="
+# The whole risk of a baseline gate: that it becomes a way to smuggle a fresh break in behind a standing
+# one. A NEW finding on a DIFFERENT row must still fail, with the mirror divergence still inherited.
+write_registry                       # `stale` is wrong again — but it is wrong on the BASE too
+sed -i "s|sha256: $GOOD,|sha256: $WRONG,|" "$REG"   # ...and now `good` is wrong, which the base was NOT
+out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" || true)"
+run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" >/dev/null 2>&1 \
+  && { echo "FAIL: a NEWLY broken row must fail the PR even behind a standing judgement case"; echo "$out"; exit 1; }
+grep -q "introduced by this change" <<<"$out" || { echo "FAIL: the new finding must be named as introduced"; echo "$out"; exit 1; }
+grep -q "\[digest-matches\] good" <<<"$out" || { echo "FAIL: the newly-broken row must be the one reported"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 37. an UNREADABLE baseline is refused, never treated as an empty one =="
+# An empty baseline would mark every finding NEW — which fails closed, and is therefore 'safe'. But it
+# would fail every PR for a reason that has nothing to do with the PR, and the operator would learn to
+# ignore this gate. Name the cause instead.
+out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/no-such-file.yml" 2>&1 || true)"
+grep -qi "not a file" <<<"$out" || { echo "FAIL: a missing baseline must be named, not silently empty"; echo "$out"; exit 1; }
+echo "   ok"
+
+echo "== 38. --json separates introduced from inherited, and exits on the introduced =="
+write_registry
+out="$(run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/base.yml" --json || true)"
+python3 - "$out" <<'PYJSON'
+import json, sys
+d = json.loads(sys.argv[1])
+inh = {(f["check"], f["id"]) for f in d["inherited"]}
+intro = {(f["check"], f["id"]) for f in d["introduced"]}
+assert ("frozen-mirror", "owned") in inh, f"mirror divergence should be inherited: {d}"
+assert ("digest-matches", "stale") in inh, f"the stale row is stale on the base too: {d}"
+assert not intro, f"this registry introduces nothing new: {intro}"
+PYJSON
+echo "   ok"
+
 echo "skill-registry fixture: all checks passed"

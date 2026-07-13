@@ -631,6 +631,13 @@ def main() -> int:
         "normalizer against the shell evaluator and the typed Fsgg.Registry validator so the three "
         "cannot silently drift (.github#398). Pure-stdlib: needs no registry, --repos-root, or PyYAML.",
     )
+    parser.add_argument(
+        "--baseline-registry",
+        metavar="PATH",
+        help="the registry as it stands on the MERGE BASE. Turns the verdict from 'is the world "
+        "coherent?' into 'did THIS CHANGE break it?' — a finding that already existed on the base is "
+        "reported but does not fail. For PRs only; `main` and the schedule stay absolute (.github#422).",
+    )
     args = parser.parse_args()
 
     if args.normalize_when is not None:
@@ -665,21 +672,92 @@ def main() -> int:
         print("  remember: set `updated:` and prepend a registry/skills.CHANGELOG.md entry")
         return 0
 
+    # ---- the PR verdict: "did THIS CHANGE break it?", not "is the world perfect?" (#422) ----------
+    #
+    # THE JAM THIS UNDOES. `check` had ONE verdict — any finding, exit 1 — and the findings fall into
+    # two classes that `--write` itself already distinguishes: MECHANICAL ones it reconciles (a stale
+    # sha256, a diverged predicate, a missing row) and JUDGEMENT ones it deliberately refuses (a
+    # vanished source; a frozen mirror the canonical has moved past; two producers contradicting each
+    # other about who is canonical, #295). A judgement case cannot be fixed from `.github` at all —
+    # the mirror lives in FS.GG.Rendering — so once one exists it exists until a HUMAN lands a
+    # multi-repo change.
+    #
+    # With one all-or-nothing verdict, that standing red sat on the autofix bot's own PR. The bot ran
+    # daily, reconciled the stale digests, opened its PR — and the PR's `registry-coherence` check
+    # failed on the judgement findings the bot had correctly refused to touch. So the PR never merged,
+    # the mechanical drift never landed, and it ACCUMULATED behind a red nobody could clear: eight
+    # stale digests on `main` at the time of writing, and #595 open and permanently red. A daily bot
+    # that runs, succeeds, and achieves nothing — which is the ornament this org keeps building
+    # (epic #416), inside the gate that is supposed to catch exactly that.
+    #
+    # So a PR is judged on what it DID. A finding already present on the merge base is not this
+    # change's doing and does not fail it — it is printed, loudly, and `main` stays RED on it, because
+    # `main`/`schedule` never pass a baseline and their verdict is unchanged. Nothing is hidden and no
+    # standing problem gets quieter; a correct change simply stops being hostage to it.
+    baseline_keys: set[tuple[str, str]] | None = None
+    if args.baseline_registry:
+        if not os.path.isfile(args.baseline_registry):
+            # NOT an empty baseline. A baseline we could not read would mark every finding NEW, which
+            # fails closed and is therefore "safe" — but it would fail every PR for a reason that has
+            # nothing to do with the PR, and the operator would learn to ignore this check. Say it.
+            sys.exit(
+                f"fsgg-skill-registry-check: --baseline-registry '{args.baseline_registry}' is not a "
+                "file. Refusing to guess what the merge base declared."
+            )
+        # The SAME producer bytes for both sides. The baseline differs from HEAD in exactly one thing —
+        # the registry — so a producer that moved between two clones cannot masquerade as a finding
+        # this PR introduced.
+        baseline_keys = {(f["check"], f["id"]) for f in check(args.baseline_registry, args.repos_root)}
+
+    def is_new(f: dict) -> bool:
+        return baseline_keys is None or (f["check"], f["id"]) not in baseline_keys
+
+    introduced = [f for f in findings if is_new(f)]
+    inherited = [f for f in findings if not is_new(f)]
+
     if args.json:
-        print(json.dumps({"findings": findings}, indent=2, sort_keys=True))
-    elif findings:
-        print(f"skill-registry: {len(findings)} finding(s) — registry ≠ manifest ≠ bytes")
-        for finding in findings:
+        print(
+            json.dumps(
+                {
+                    "findings": findings,
+                    "introduced": introduced,
+                    "inherited": inherited,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 1 if introduced else 0
+
+    if inherited:
+        print(
+            f"skill-registry: {len(inherited)} PRE-EXISTING finding(s) — already broken on the merge "
+            "base, NOT introduced here:"
+        )
+        for finding in inherited:
+            print(f"  [{finding['check']}] {finding['id']}: {finding['detail']}")
+        print(
+            "  These do NOT fail this PR — you did not break them and, for a frozen-mirror or a\n"
+            "  vanished source, you cannot fix them from this repo. They are still real: `main`'s own\n"
+            "  run of this gate is RED on them and stays red until somebody lands the multi-repo fix.\n"
+        )
+
+    if introduced:
+        verb = "introduced by this change" if baseline_keys is not None else "— registry ≠ manifest ≠ bytes"
+        print(f"skill-registry: {len(introduced)} finding(s) {verb}")
+        for finding in introduced:
             print(f"  [{finding['check']}] {finding['id']}: {finding['detail']}")
         print(
             "\nskills.yml is reconciled FROM the producer manifests (ADR-0017), never hand-authored.\n"
             "Fix: scripts/fsgg-skill-registry-check --write --repos-root <dir>, then set `updated:`\n"
             "and prepend a dated registry/skills.CHANGELOG.md entry naming the producer PR."
         )
+    elif not inherited:
+        print("skill-registry: coherent — registry = manifest = bytes")
     else:
-        print(f"skill-registry: coherent — registry = manifest = bytes")
+        print("skill-registry: this change introduced NO new incoherence.")
 
-    return 1 if findings else 0
+    return 1 if introduced else 0
 
 
 if __name__ == "__main__":
