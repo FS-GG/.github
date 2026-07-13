@@ -4744,40 +4744,48 @@ if [ -x "$ENGINE" ]; then
 
   : >"$LEDGERLOG"
   logrow "$D1" w-alpha 12 0; logrow "$D2" w-beta 9 0; logrow "$D3" w-alpha 7 0
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   assert_eq 'ledger: publish posts one marker per (worker, day, engine)' "3" "$(markers)"
 
   # THE IDEMPOTENCE ASSERTION, AND IT IS THE ONE THAT MATTERS. A worker publishes after every loop. If
   # `--publish` APPENDED, the ledger would double-count its own evidence on every run — and `compared`
   # would climb toward the quorum without a single new verdict having been compared. The clock would be
   # advanced by re-reading the same day.
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   assert_eq 'ledger: re-publishing REWRITES the worker-day row — the ledger is a set of facts, not a log of them' \
     "3" "$(markers)"
 
-  # A NEAR-MISS MAY NOT CLAIM SOMEBODY ELSE'S ROW. The marker is found by capturing its fields and
-  # comparing them for EQUALITY. Matched by regex instead, an engine version's dots are wildcards —
-  # `engine=0.1.0` matches a row reading `engine=0x1x0` — and the failure is not a loud one: it
-  # silently PATCHES the other build's evidence out of existence.
+  # AN ENGINE THAT IS NOT A VERSION NEVER REACHES THE LEDGER AT ALL (#644, #656).
   #
-  # It has to be TWO publish runs, IN THIS ORDER. The ledger is read once per run, before the loop, so
-  # two rows posted by a single run never see each other. And the order is not arbitrary: the wildcard
-  # dots are in the SEARCH pattern, so it is the `0.1.0` lookup that matches a stored `0x1x0` — not the
-  # other way round. Written the other way, this assertion passes with the bug fully in place, which is
-  # exactly what it did on the first attempt.
+  # This started life as a near-miss test: the marker lookup matched by REGEX, so an engine version
+  # `0.1.0` — whose dots are wildcards — would happily claim a stored row reading `0x1x0` and PATCH
+  # somebody else's evidence out of existence. The lookup was fixed to compare captured fields for
+  # EQUALITY, and it still does.
+  #
+  # But the real guard now sits one step earlier and is stronger: a row whose `engine` is not a VERSION
+  # is not published at all. Before #644 the stamp was the engine's whole decision document, and those
+  # rows are still in every worker's local log; folding one emits a marker whose `engine=` is a JSON blob
+  # full of spaces and quotes, and `--fleet` REFUSES to compute a verdict over a marker it cannot parse.
+  # ONE bad marker would make the ledger permanently unreadable for everybody.
+  #
+  # Evidence that cannot be attributed to a build is not evidence. Drop it here, where it can still be
+  # dropped quietly — not in the ledger, where it cannot.
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
-  logrow "$D1" w-alpha 12 0 "0x1x0"                # the row already on the ledger
-  led divergence --publish >/dev/null 2>&1
-  : >"$LEDGERLOG"
-  logrow "$D1" w-alpha 12 0 "0.1.0"                # same worker, same day, a build named a hair apart
-  led divergence --publish >/dev/null 2>&1
-  assert_eq 'ledger: an engine version is matched EXACTLY — regex dots may not let one build overwrite another' \
-    "2" "$(markers)"
+  logrow "$D1" w-alpha 12 0 "0x1x0"                          # not a version. Unattributable.
+  printf '{"ts":"%sT09:00:00Z","mode":"auto","repo":"","worker":"w-blob","engine":[{"schema":"fsgg.coord.decision/1"}],"ran":true,"engineVerdict":"green","compared":9,"outcome":0,"reason":0,"unpaired":0}\n' "$D1" >>"$LEDGERLOG"
+  led divergence --publish >/dev/null 2>&1 || true
+  assert_eq 'ledger: an engine that is not a VERSION never reaches the ledger — one unparseable marker makes it unreadable for everybody' \
+    "0" "$(markers)"
+
+  : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
+  logrow "$D1" w-alpha 12 0 "0.1.0"                          # ...and a real version does
+  led divergence --publish >/dev/null 2>&1 || true
+  assert_eq 'ledger: ...while a row that names a real build publishes normally' "1" "$(markers)"
 
   # ---- the fold ----------------------------------------------------------------------------------
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
   logrow "$D1" w-alpha 12 0; logrow "$D2" w-beta 9 0; logrow "$D3" w-alpha 7 0
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   rc=0; out="$(led divergence --fleet --engine-version 0.1.0 2>&1)" || rc=$?
   assert_eq 'ledger: 3 covered days x 2 workers, zero divergence -> GREEN (exit 0)' "0" "$rc"
   assert_contains 'ledger: ...and it says the criterion is MET' "criterion is MET" "$out"
@@ -4785,7 +4793,7 @@ if [ -x "$ENGINE" ]; then
   # A GAP IS NOT A CLEAN DAY. This is the assertion that a "three consecutive days" rule exists to make.
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
   logrow "$D1" w-alpha 12 0; logrow "$D3" w-beta 9 0          # D2 missing
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   rc=0; out="$(led divergence --fleet --engine-version 0.1.0 2>&1)" || rc=$?
   assert_eq 'ledger: a day nobody compared anything on is NO VERDICT (exit 3), never a clean day' "3" "$rc"
   assert_contains 'ledger: ...and it NAMES the uncovered day' "$D2" "$out"
@@ -4794,7 +4802,7 @@ if [ -x "$ENGINE" ]; then
   # one-worker log cannot be evidence that there is no concurrency defect.
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
   logrow "$D1" w-solo 12 0; logrow "$D2" w-solo 9 0; logrow "$D3" w-solo 7 0
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   rc=0; out="$(led divergence --fleet --engine-version 0.1.0 2>&1)" || rc=$?
   assert_eq 'ledger: three PERFECT days from ONE worker is NO VERDICT — a quorum of one is not a fleet' "3" "$rc"
   assert_contains 'ledger: ...and says why a single worker cannot prove the absence of a race' \
@@ -4804,7 +4812,7 @@ if [ -x "$ENGINE" ]; then
   # shadow exists to prove the build we are about to trust.
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
   logrow "$D1" w-alpha 12 0 0.0.9; logrow "$D2" w-beta 9 0 0.0.9; logrow "$D3" w-alpha 7 0 0.0.9
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   rc=0; out="$(led divergence --fleet --engine-version 0.1.0 2>&1)" || rc=$?
   assert_eq 'ledger: a ledger full of ANOTHER build is NO VERDICT — republishing the engine restarts the clock' \
     "3" "$rc"
@@ -4815,7 +4823,7 @@ if [ -x "$ENGINE" ]; then
   # hard we looked. Thin evidence may never downgrade a disagreement we actually observed.
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
   logrow "$D1" w-alpha 12 0; logrow "$D2" w-beta 9 2; logrow "$D3" w-alpha 7 0
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   rc=0; out="$(led divergence --fleet --engine-version 0.1.0 2>&1)" || rc=$?
   assert_eq 'ledger: an OUTCOME divergence anywhere in the window is RED (exit 1) — the flip is BLOCKED' "1" "$rc"
   assert_contains 'ledger: ...and names the worker and day that disagreed' "w-beta" "$out"
@@ -4825,7 +4833,7 @@ if [ -x "$ENGINE" ]; then
   # fail-open reading of the one signal that may never fail open.
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
   logrow "$D1" w-alpha 12 0; logrow "$D2" w-beta 9 0; logrow "$D3" w-alpha 7 0; logrow "$TODAY" w-c 3 1
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   rc=0; out="$(led divergence --fleet --engine-version 0.1.0 2>&1)" || rc=$?
   assert_eq 'ledger: a divergence TODAY blocks a window that is otherwise three clean days' "1" "$rc"
 
@@ -4834,7 +4842,7 @@ if [ -x "$ENGINE" ]; then
   # is claimed"), reaching the ledger before it can bite.
   : >"$LEDGERLOG"; echo '[]' >"$LEDGER_CF"
   logrow "$D1" w-alpha 12 0; logrow "$D2" w-beta 9 0; logrow "$D3" w-alpha 7 0
-  led divergence --publish >/dev/null 2>&1
+  led divergence --publish >/dev/null 2>&1 || true
   jq '. + [{id: 9999, body: "<!-- fsgg:divergence worker=w-x day=GARBAGE -->", user: {login: "x"}, updated_at: "2026-07-13T00:00:00Z"}]' \
     "$LEDGER_CF" > "$LEDGER_CF.tmp" && mv "$LEDGER_CF.tmp" "$LEDGER_CF"
   rc=0; out="$(led divergence --fleet --engine-version 0.1.0 2>&1)" || rc=$?
@@ -4915,6 +4923,61 @@ if [ -x "$ENGINE" ]; then
     "FS.GG.Governance#202" "$capped"
   assert_eq "lanes: ...and the UNCAPPED batch returns NOTHING — the hazard take's fallback exists for" \
     "0" "$(jq 'length' <<<"${uncapped:-[]}" 2>/dev/null || echo 0)"
+fi
+
+# ==================================================================================================
+# PUBLISHING IS A SIDE EFFECT OF FINISHING, BECAUSE ASKING DID NOT WORK (#656).
+# ==================================================================================================
+# The kit ASKED every worker to run `divergence --publish` at the end of its loop — in the canonical doc
+# and in both skill roots. Measured against a live fleet of 28 workers and 597 compared item-verdicts: it
+# was run ZERO times, by anybody, including by the worker who wrote it. Asking is not a mechanism.
+if [ -x "$ENGINE" ]; then
+  mkissue 700 "FS-GG/.github"
+  PUBLOG="$WORK/pub.jsonl"
+  PUB_CF="$STORE/comments-635.json"
+
+  pub() { PATH="$STUB:$PATH" FSGG_COORD_LEDGER_REPO="FS-GG/.github" FSGG_COORD_LEDGER_ISSUE=635 \
+            FSGG_COORD_DIVERGENCE_LOG="$PUBLOG" FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$COORD" "$@"; }
+  pubmarks() { jq '[ .[] | select(.body | test("^<!--\\s*fsgg:divergence\\s")) ] | length' "$PUB_CF" 2>/dev/null || echo 0; }
+
+  # AN UNATTRIBUTABLE ROW MAY NEVER REACH THE LEDGER — and this is the one that would have poisoned it.
+  #
+  # Before #644 the engine stamp was the engine's whole DECISION DOCUMENT, not a version. Those rows are
+  # still in every worker's local log. Folding one emits a marker whose `engine=` is a JSON blob full of
+  # spaces and quotes — and `--fleet` REFUSES to compute a verdict over a marker it cannot parse (an
+  # unreadable row might be the one that diverged). So a SINGLE bad marker makes the ledger permanently
+  # unreadable, for everybody. Evidence that cannot be attributed to a build is not evidence.
+  : >"$PUBLOG"; echo '[]' >"$PUB_CF"
+  printf '{"ts":"2026-07-13T09:00:00Z","mode":"auto","worker":"w-old","engine":[{"schema":"fsgg.coord.decision/1","verdict":"green"}],"ran":true,"engineVerdict":"green","compared":9,"outcome":0,"reason":0,"unpaired":0}\n' >>"$PUBLOG"
+  printf '{"ts":"2026-07-13T09:05:00Z","mode":"auto","worker":"w-new","engine":"0.1.1.0","ran":true,"engineVerdict":"green","compared":4,"outcome":0,"reason":0,"unpaired":0}\n' >>"$PUBLOG"
+  pub divergence --publish >/dev/null 2>&1 || true
+  assert_eq 'ledger: a PRE-#644 row (engine = the decision document) is NOT published — one bad marker makes the ledger unreadable for everybody' \
+    "1" "$(pubmarks)"
+  assert_contains 'ledger: ...and the row that DID publish names a real build' \
+    "engine=0.1.1.0" "$(jq -r '[.[] | select(.body | test("fsgg:divergence"))][0].body' "$PUB_CF" 2>/dev/null || echo "")"
+
+  # PUBLISHED BY `done`, WITHOUT ANYBODY REMEMBERING TO.
+  : >"$PUBLOG"; echo '[]' >"$PUB_CF"
+  printf '{"ts":"2026-07-13T10:00:00Z","mode":"auto","worker":"w-done","engine":"0.1.1.0","ran":true,"engineVerdict":"green","compared":7,"outcome":0,"reason":0,"unpaired":0}\n' >>"$PUBLOG"
+  rc=0; out="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_LEDGER_REPO="FS-GG/.github" \
+    FSGG_COORD_LEDGER_ISSUE=635 FSGG_COORD_DIVERGENCE_LOG="$PUBLOG" FSGG_COORD_ENGINE_BIN="$ENGINE" \
+    FSGG_WORKER=w-done bash "$COORD" done 'FS.GG.SDD#42' --pr 7 --flip 2>&1)" || rc=$?
+  assert_eq 'done --flip: publishes the shadow evidence as a side effect of finishing — no new step, nothing to remember' \
+    "1" "$(pubmarks)"
+  assert_contains 'done --flip: ...and the DONE-STAMP is still the headline' "FSGG-DONE" "$out"
+
+  # AND IT MAY NEVER COST A WORKER THEIR DONE-STAMP. A publish that fails is bookkeeping that failed; it
+  # is not a verdict on merged, green, rolled-up work. Point the ledger at an issue the stub does not
+  # have: the publish dies, and `done` must not.
+  : >"$PUBLOG"
+  printf '{"ts":"2026-07-13T10:00:00Z","mode":"auto","worker":"w-done2","engine":"0.1.1.0","ran":true,"engineVerdict":"green","compared":7,"outcome":0,"reason":0,"unpaired":0}\n' >>"$PUBLOG"
+  rc=0; out="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_LEDGER_REPO="FS-GG/.github" \
+    FSGG_COORD_LEDGER_ISSUE=999999 FSGG_COORD_DIVERGENCE_LOG="$PUBLOG" FSGG_COORD_ENGINE_BIN="$ENGINE" \
+    FSGG_WORKER=w-done2 bash "$COORD" done 'FS.GG.SDD#42' --pr 7 --flip 2>&1)" || rc=$?
+  assert_eq 'done --flip: a FAILED publish does not take the done-stamp down with it (exit 0)' "0" "$rc"
+  assert_contains 'done --flip: ...the stamp still lands' "FSGG-DONE" "$out"
+  assert_contains 'done --flip: ...and the failure is a NOTE, explicitly not a verdict on the work' \
+    "Your work is DONE and stamped" "$out"
 fi
 
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"

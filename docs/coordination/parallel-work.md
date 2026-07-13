@@ -606,27 +606,29 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   repo with no per-repo setup. (A local `dotnet tool restore` also works — but note a local tool is
   *not* on `PATH`, and `fsgg-coord` reaches it via `dotnet tool run`.)
 
-- **When your loop is done, publish what your shadow saw:**
+- **Your shadow's evidence is published for you.** `done --flip` sends it to the fleet ledger as part
+  of finishing the item — no extra step, nothing to remember (#656).
+
+  This used to be a request: *"when your loop is done, run `fsgg-coord divergence --publish`."* Measured
+  against a live fleet of 28 workers and 597 compared item-verdicts, it was run **zero times**, by
+  anybody, including by the worker who wrote it. **Asking is not a mechanism.** So it happens in the one
+  command every worker already runs when it finishes work.
+
+  It is idempotent (the ledger row is keyed on `(worker, day, engine)` and rewritten in place), it costs
+  one REST call, and **it can never cost you your done-stamp** — it runs after the stamp is earned, and a
+  publish that fails is bookkeeping that failed.
+
+  You can still run it by hand, and should if you are stopping without finishing an item:
 
   ```sh
-  fsgg-coord divergence --publish            # one command, at the END of your run
+  fsgg-coord divergence --publish            # your local log is not evidence until it is published
+  fsgg-coord divergence --fleet              # where the FLEET stands: 0 green · 1 red · 3 no verdict
   ```
 
-  **Your local log is not evidence until you do this.** It lives in a *cache directory* on one
-  machine — `~/.cache/fsgg-coord/divergence.jsonl` — which nothing collects, and which dies with your
-  container. `--publish` sends a per-day **summary** (never your raw log, and never one comment per
-  call) to the fleet ledger, over REST, so it costs nothing from the GraphQL budget the whole fleet
-  shares.
-
-  The cut-over criterion is *"zero divergence across the **live fleet** for three consecutive days"*,
-  and a fleet is the thing you are part of. A worker who shadows and never publishes has moved the
-  clock exactly as far as a worker who never shadowed at all (#634).
-
-  To see where the fleet actually stands — never by reading the ledger by eye:
-
-  ```sh
-  fsgg-coord divergence --fleet              # 0 green · 1 they disagreed · 3 no verdict
-  ```
+  The local log lives in `~/.cache/fsgg-coord/`, a cache directory that dies with your container. The
+  cut-over criterion is *"zero divergence across the **live fleet** for three consecutive days"*, and a
+  worker who shadows and never publishes has moved that clock exactly as far as one who never shadowed
+  at all.
 
 - `Status: In progress` and `Blocked by` already exist on the board — **no schema change is
   required**. A repo may add an optional `Paths` text field if it wants touch-sets filterable
