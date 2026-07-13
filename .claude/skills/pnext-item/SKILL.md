@@ -471,12 +471,32 @@ Merge once — and only once — **every required check is green**:
 
 ```sh
 # Wait for CI over REST — every `gh pr` subcommand is GraphQL, and this is the one you run when the
-# budget is emptiest (#587). `--paginate` is not optional: a failing check on page 2 is invisible
-# without it, and the aggregate then reads as green (#547).
-runs=repos/FS-GG/<repo>/commits/item/<n>-<slug>/check-runs
-pending() { gh api "$runs" --paginate --jq '.check_runs[] | select(.completed_at == null) | .name'; }
-until [ -z "$(pending)" ]; do sleep 20; done
-gh api "$runs" --paginate --jq '.check_runs[] | [.conclusion, .name] | @tsv' | sort
+# budget is emptiest (#587). This loop must not do EITHER of the two things that make a merge gate
+# lie: read only page 1 (a failing check on page 2 is invisible, and the aggregate then reads green
+# — #547), or treat NO checks as GREEN checks (#606). Hence `--paginate`, and an assertion that the
+# subject EXISTS before it asserts the subject is clean.
+runs="repos/FS-GG/<repo>/commits/item/<n>-<slug>/check-runs"
+checks() { gh api "$runs" --paginate --slurp | jq '[.[].check_runs[]]'; }
+
+# 0. A CONFLICTED PR NEVER GETS CI. Look BEFORE you wait — no amount of waiting fixes this one.
+gh api repos/FS-GG/<repo>/pulls/<pr> --jq '"mergeable=\(.mergeable) state=\(.mergeable_state)"'
+
+# 1. Wait for the checks to REGISTER, and then to COMPLETE. A fresh push takes 20-60s to schedule,
+#    so "no checks yet" early is normal; "no checks still" at the end is the finding.
+for _ in $(seq 30); do          # ~10 min ceiling — poll, do not spin forever
+  c=$(checks)
+  total=$(jq 'length' <<<"$c")
+  running=$(jq '[.[] | select(.status != "completed")] | length' <<<"$c")
+  [ "$total" -gt 0 ] && [ "$running" -eq 0 ] && break
+  sleep 20
+done
+
+# 2. ASSERT — exits NON-ZERO on no checks, on pending checks, and on any check that is not green.
+checks | jq -e -r '
+  if   length == 0 then error("NO CHECK RUNS — CI never started, so nothing has passed. Conflicted PR? Rebase. A missing subject is a FINDING, not a pass.")
+  elif ([.[] | select(.status != "completed")]                                     | length) > 0 then error("checks still PENDING — do not merge")
+  elif ([.[] | select(.conclusion != "success" and .conclusion != "skipped")]      | length) > 0 then error("checks FAILED — a red check is a finding, not an obstacle")
+  else "all \(length) checks green" end'
 
 # MERGE over REST. This is the DEFAULT here, not a rate-limit workaround (#564) — see below.
 gh api -X PUT repos/FS-GG/<repo>/pulls/<n>/merge \
@@ -484,6 +504,23 @@ gh api -X PUT repos/FS-GG/<repo>/pulls/<n>/merge \
 
 gh api -X DELETE repos/FS-GG/<repo>/git/refs/heads/item/<n>-<slug>    # the branch, explicitly
 ```
+
+> **ZERO check runs is a FINDING, not a pass** ([#606](https://github.com/FS-GG/.github/issues/606)).
+> The loop this replaced waited `until [ -z "$(pending)" ]` — and `pending` is *also* empty when **no
+> check has ever run**, so on a PR with no checks at all the wait exited **immediately**, the summary
+> printed `checks=0 failed=0`, and the recipe merged an entirely untested PR. It could not tell *"every
+> check passed"* from *"CI never started"*. That is epic [#266](https://github.com/FS-GG/.github/issues/266)'s
+> signature exactly, and it is strictly worse than the #547 pagination hole above: pagination hides
+> *some* checks; this hides *all* of them.
+>
+> **And the trigger is one this very recipe manufactures.** §2 branches you from `origin/main`, then
+> you work the item for an hour while N other workers merge into main — so you are routinely
+> **conflicted**. GitHub builds `pull_request` events against `refs/pull/N/merge` and **cannot create
+> that ref when the merge conflicts**, so no workflow ever starts and the head commit has zero check
+> runs *forever*. It is not a race you can outwait. `mergeable_state: "dirty"` is the tell, which is
+> why step 0 looks: **rebase onto `main`, push, and the checks appear.** The REST merge would refuse a
+> `dirty` PR anyway — but a PR whose checks are merely *late* is indistinguishable to the old loop, and
+> **that one merges.**
 
 **Why not `gh pr merge <n> --squash --delete-branch`?** Because §2 mandates a worktree, and under
 that layout `gh pr merge` **merges the PR and then exits 1**:
@@ -559,10 +596,13 @@ jq -n --arg t "<title>" --rawfile b pr-body.md \
 # and a truncated read reports `pending=0 failed=0` while the checks that would have stopped you sit
 # on page 2. That is a merge gate that greenlights a red PR (#547).
 # `--slurp` cannot be combined with `--jq`, so aggregate in a separate `jq`.
+# And ASSERT rather than PRINT: `checks=0` is CI-never-started, not all-clear (#606). A line a human
+# has to read and judge is a gate that fails open the moment an agent copies it into a loop.
 SHA=$(gh api repos/FS-GG/<repo>/pulls/<n> --jq .head.sha)
 gh api "repos/FS-GG/<repo>/commits/$SHA/check-runs" --paginate --slurp \
-  | jq -r '[.[].check_runs[]]
-           | "checks=\(length) pending=\([.[]|select(.status!="completed")]|length) failed=\([.[]|select(.conclusion!=null and .conclusion!="success")]|length)"'
+  | jq -e -r '[.[].check_runs[]]
+              | if length == 0 then error("NO CHECK RUNS — CI never started (conflicted PR?). NOT a pass.") else . end
+              | "checks=\(length) pending=\([.[]|select(.status!="completed")]|length) failed=\([.[]|select(.conclusion!=null and .conclusion!="success" and .conclusion!="skipped")]|length)"'
 ```
 
 `gh pr checks <n> --watch` itself is fine in a worktree — it is GraphQL, but it reads the API and
