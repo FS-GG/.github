@@ -611,6 +611,29 @@ module Snapshot =
                 w.WriteEndObject()
 
             w.WriteEndArray()
+
+            // THE GLUE — the chore's target list, ranked by what narrowing each token would actually
+            // BUY. Only tokens whose removal splits the lane are emitted: one that splits it into 1 is
+            // load-bearing, the work really is coupled, and an agent that "narrowed" it would reserve
+            // less than the work touches and hand those files to somebody else (#273).
+            w.WritePropertyName "glue"
+            w.WriteStartArray()
+
+            for g in Lanes.glue lane |> List.filter (fun g -> g.SplitsInto > 1) do
+                w.WriteStartObject()
+                w.WriteString("token", g.Token)
+                w.WriteNumber("splitsInto", g.SplitsInto)
+
+                w.WritePropertyName "declaredBy"
+                w.WriteStartArray()
+
+                for r in g.DeclaredBy do
+                    w.WriteStringValue r.Short
+
+                w.WriteEndArray()
+                w.WriteEndObject()
+
+            w.WriteEndArray()
             w.WriteEndObject()
 
         w.WriteEndArray()

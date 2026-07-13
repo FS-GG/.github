@@ -225,3 +225,61 @@ module LanesTests =
         Assert.Empty p.Lanes
         Assert.Empty p.Unlanable
         Assert.Empty(free always p)
+
+    // ---- the glue: WHICH declaration is costing the parallelism, and how much ----------------------
+
+    [<Fact>]
+    let ``the GLUE names the token holding a lane together, and what removing it would buy`` () =
+        // Four items, all glued by one over-broad token. Drop it and they fly apart into four.
+        // This is `scripts/fsgg-coord` in real life (#428) — and until now the only way to find out
+        // WHICH token was doing it was to read forty issue bodies and guess.
+        let items =
+            [ item 1 [ "scripts/coord"; "src/A/" ]
+              item 2 [ "scripts/coord"; "src/B/" ]
+              item 3 [ "scripts/coord"; "src/C/" ]
+              item 4 [ "scripts/coord"; "src/D/" ] ]
+
+        let p = partition items
+        Assert.Equal(1, List.length p.Lanes)
+
+        let g = glue (List.head p.Lanes) |> List.head
+
+        Assert.Equal("scripts/coord", g.Token)
+        Assert.Equal(4, g.SplitsInto) // remove it and one lane becomes four
+        Assert.Equal(4, List.length g.DeclaredBy)
+
+    [<Fact>]
+    let ``a LOAD-BEARING token splits nothing — the work really is coupled, and narrowing it would lie`` () =
+        // Both items touch src/A. Removing `src/A/` from the analysis leaves them still joined by
+        // nothing, so they DO fly apart — but the point of the ranking is that a token whose removal
+        // buys 1 is worthless. Here `docs/` is that: it is declared by one item and glues nobody.
+        let items = [ item 1 [ "src/A/"; "docs/" ]; item 2 [ "src/A/" ] ]
+
+        let p = partition items
+        let ranked = glue (List.head p.Lanes)
+
+        let docs = ranked |> List.find (fun g -> g.Token = "docs/")
+        Assert.Equal(1, docs.SplitsInto) // removing `docs/` buys NOTHING — they still share src/A
+        Assert.Equal(1, List.length docs.DeclaredBy)
+
+        // ...while the real coupling is src/A, and dropping it WOULD separate them.
+        let srcA = ranked |> List.find (fun g -> g.Token = "src/A/")
+        Assert.Equal(2, srcA.SplitsInto)
+
+        // The ranking puts the payoff first.
+        Assert.Equal("src/A/", (List.head ranked).Token)
+
+    [<Fact>]
+    let ``the ranking is DETERMINISTIC — two workers agree on which token to attack`` () =
+        let items =
+            [ item 1 [ "a/"; "z/" ]; item 2 [ "a/"; "y/" ]; item 3 [ "a/" ] ]
+
+        let tokensOf its =
+            (glue (List.head (partition its).Lanes)) |> List.map (fun g -> g.Token)
+
+        Assert.Equal<string list>(tokensOf items, tokensOf (List.rev items))
+
+    [<Fact>]
+    let ``a lane of ONE has no glue — nothing is holding it to anything`` () =
+        let p = partition [ item 1 [ "src/A/" ] ]
+        Assert.Empty(glue (List.head p.Lanes))
