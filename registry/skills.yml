@@ -75,7 +75,7 @@
 # The flip must NOT precede a green skill-registry-coherence on main (epic .github#266, fails-open class).
 
 schemaVersion: 1
-updated: "2026-07-11"
+updated: "2026-07-13"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -112,14 +112,14 @@ skills:
   # fs-gg-rendering. `sha256` + condition authoritative (from the published skill-manifest.json).
   # `source` is the in-template canonical path (the manifest's supplied-by).
   # ------------------------------------------------------------------------------------------------
-  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: f95e1a5677f53785e3575467d746db6d7ee2fde3253c0e0066e0c836902b1287, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
-  - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: 966c46120987bc3e32c8fce857bcd952b54eb0e42e06376a4f1fc16711c0121f, materializes-when: "profile in [app, sample-pack, game]" }
-  - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: a4f1c07febe7985c98c2371af42ab0c36a844badda413b855cd4d9a1a45991d3, materializes-when: "profile in [app, sample-pack, game]" }
-  - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: 6ea4c582cf6d18ac048640af54040d451bfc2dd4b815f859d08963df65028900, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: 12b79ec6eb23ef6a0e2634fbdbcdc50bb7ff006a3ff9b96f97a276f366fac38b, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: 6abd824b616b2796a69a0d03fddaf569083df8061ea319b31f79f243ebe6dd08, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: 4b1fbf4a90f53e453737139bdfc08f4cd0cf33578cc676fa9cf4d586bda3c7f2, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: c567859da9862e713e3905d30f898e0494e3537500e0541272c86b81b48439a8, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-layout,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-layout/SKILL.md,    sha256: 85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62, materializes-when: "profile in [app, game]" }
-  - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: 848c935d87e42aa565c6bcbef1970585b8f82154082327721e000a271d400ce8, materializes-when: "profile in [app, game]" }
+  - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: cb74e2a9b92b5393294bf990fe079c8c727c42844cd7261bb0e08d2b7060ea27, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-styling,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-styling/SKILL.md,   sha256: 24754ec5cb931deb6fcaf7d4b9e5926c42f4325dc4f67cb4852295de8b405ac9, materializes-when: "profile in [app, game]" }
-  - { id: fs-gg-ui-widgets,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-ui-widgets/SKILL.md, sha256: e935367032e1b37ac5bfa4db40656f3b6c48b37a30b0d668545d0688c8e445f7, materializes-when: "profile in [app, game]" }
+  - { id: fs-gg-ui-widgets,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-ui-widgets/SKILL.md, sha256: 6a4b0ba0de19628806079d5c08e6561fb01cceaf8bcf897e50714814bea4c7b6, materializes-when: "profile in [app, game]" }
   # GAME-SIM product skills — Rendering-owned. Authored 2026-07-05 (FS.GG.Rendering#125/#128/#130/
   # #132) and shipped in fs-gg-ui-template 0.1.65-preview.1, but NEVER reconciled into this catalog.
   # They stayed invisible for five days: the skill-registry gate emitted only predicates over rows
@@ -132,7 +132,7 @@ skills:
   # persistence/model-swap rows), so — like the 12 rows above — their predicates rode on the
   # Rendering#77 grammar alignment, which LANDED 2026-07-04 (cf93eabd). Producer and registry have
   # emitted the canonical grammar ever since; nothing is normalized on the way in.
-  - { id: fs-gg-collision,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-collision/SKILL.md, sha256: 0ae0d753e71f76193f1053ec4bc99eb626d4eb72195770db60dc344e3f373aa6, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-collision,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-collision/SKILL.md, sha256: 598f25f8d651110f130e551f2dc76119395dd1c7143fb689b50072958dfed0a4, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-grids,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-grids/SKILL.md, sha256: 6c61e9469c821ba2c91fe8e34ad220288baa12e4a0570c33a5e6eff26d35c541, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-line-drawing,     scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-line-drawing/SKILL.md, sha256: 70da6b04db6ae0204c01e71b4ebd10eb1edb839f19cde1ef2db1cf748b9fd087, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-visibility,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-visibility/SKILL.md, sha256: 74f9d3fb5121f36785e58caf2fb64741922ed3b287c4fc92d9501d2f486031c3, materializes-when: "profile in [game, sample-pack]" }
@@ -149,10 +149,10 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: ffdbc63a546ffbdb7f7141830fb7487a4d3b54eb9dc2de3c5ceed03f75e17e55, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: 9401ccd9ad33a4624e04faacd849ac62a430b8534af5538567967eeeee72acc4, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: e9f471b06cf30e4dd9347c9dd34bfe0b555a94845f5da23c05d82958b9fb935a, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: e6be58c8761466445adf27359289a9c2c111699a45b03e7cd3e4494317465d4c, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: ebf302b8dac1eea2d3edb85da3e133163c1c5c696c3afbabb05a61237ee3cd2a, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: d1833a673c2a970716e36923f6247253a614b79ddcf7f7c2a482dc0071527420, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: cfb935493f856a2ce4d13bb4966fad57feaaf01c51861c38f91280eb2fcabc64, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, materializes-when: "profile in [game, sample-pack]" }
   # The four GAME-ORIGINATED skills. Unlike the four above, these were never an ADR-0022 migration:
   # they were authored in FS.GG.Game and have NO FS.GG.Rendering counterpart, so no frozen mirror
   # exists for them and the `frozen-mirror` arm correctly derives none. Verified against Rendering's
@@ -172,16 +172,16 @@ skills:
   - { id: fs-gg-ai,               scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ai/SKILL.md,         sha256: 612033dce3082b76d861efcb5c15a32fbb56ee98b176c3a8d251587a5298062f, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-effects,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-effects/SKILL.md,    sha256: 8f4b369b19904223d51a2ab338445c90f249f4ce93aa615a89da8cd7330d180b, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-physics,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-physics/SKILL.md,    sha256: cabeed0641815e23776045a57d923d79f52fdc5ba51a2377d26efe97f9581724, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: e225abd4672244034cb9acc97bc15cc58161db069b70e2cb03e6bc3399ca378b, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 0c159485f8a1f8b1897d5424052a9a7b59e0c4b7ea64937b9815b221bd3a5808, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack and lifecycle == spec-kit" }
-  - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: 6c3822b522b0745c6df739153357d64cac08fc9b69a9f2d0d81428aa36de41e6, materializes-when: "feedback == true and lifecycle == spec-kit" }
+  - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: 509a7e89500da7675c90a363c7530d3a20061d8fad3493f953e5df7926763b07, materializes-when: "feedback == true and lifecycle == spec-kit" }
   # Sibling of fs-gg-feedback-capture: same off-convention supplied-by path (template/<feature>/skill/,
   # not template/product-skills/<id>/) — but the predicate is now `always` (Rendering#434), NOT the
   # `feedback` gate its sibling carries: a reporter must ride EVERY lane, because an instruction placed
   # only in the feedback-gated `capture` never reaches a reporter on the `sdd` or `none` lane. Predicate
   # is the manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality — do not
   # "normalize" it to match the row above). Vendored Rendering#248 (PR #251); reconciled .github#298.
-  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: 68626e2408d31b665c7ec7300df51a7e1037f26e9a4b6cc2b2e8e0b522aca5db, materializes-when: "always" }
+  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: e3a4e8e2984deee4e253065f9d89197be9755b0094323f5aba0102018250897c, materializes-when: "always" }
 
   # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
   # fs-gg-project was formerly gated `lifecycle == spec-kit`, so under the `sdd`/`none` lanes NEITHER
