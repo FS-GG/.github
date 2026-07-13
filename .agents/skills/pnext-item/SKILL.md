@@ -485,21 +485,25 @@ gh api repos/FS-GG/<repo>/pulls/<pr> --jq '"mergeable=\(.mergeable) state=\(.mer
 #    so "no checks yet" early is normal; "no checks still" at the end is the finding.
 for _ in $(seq 30); do          # ~10 min ceiling — poll, do not spin forever
   c=$(checks)
-  total=$(jq 'length' <<<"$c")
-  running=$(jq '[.[] | select(.status != "completed")] | length' <<<"$c")
-  [ "$total" -gt 0 ] && [ "$running" -eq 0 ] && break
+  counts=$(jq -r '"\(length) \([.[] | select(.status != "completed")] | length)"' <<<"$c")
+  [ "${counts% *}" -gt 0 ] && [ "${counts#* }" -eq 0 ] && break
   sleep 20
 done
 
-# 2. ASSERT — exits NON-ZERO on no checks, on pending checks, and on any check that is not green.
-checks | jq -e -r '
-  if   length == 0 then error("NO CHECK RUNS — CI never started, so nothing has passed. Conflicted PR? Rebase. A missing subject is a FINDING, not a pass.")
+# 2. ASSERT on the state the loop just read — exits NON-ZERO on no checks, on pending checks, and
+#    on any check that is not green. NOTE the first branch is also where a FAILED API read lands
+#    (empty `$c`), which is why it names that too: it fails CLOSED either way, but the worker needs
+#    to know which one they are looking at before they go rebasing a PR that was never conflicted.
+jq -e -r '
+  if   length == 0 then error("NO CHECK RUNS — CI never started, so nothing has passed. Conflicted PR (rebase), or a failed API read. A missing subject is a FINDING, not a pass.")
   elif ([.[] | select(.status != "completed")]                                     | length) > 0 then error("checks still PENDING — do not merge")
   elif ([.[] | select(.conclusion != "success" and .conclusion != "skipped")]      | length) > 0 then error("checks FAILED — a red check is a finding, not an obstacle")
-  else "all \(length) checks green" end'
+  else "all \(length) checks green" end' <<<"$c"
 
 # MERGE over REST. This is the DEFAULT here, not a rate-limit workaround (#564) — see below.
-gh api -X PUT repos/FS-GG/<repo>/pulls/<n>/merge \
+# `<pr>` is the PULL number; `<n>` is the ITEM/issue number. They are NOT the same, and this fence
+# uses both — the branch is named for the item, the merge endpoint takes the pull.
+gh api -X PUT repos/FS-GG/<repo>/pulls/<pr>/merge \
   -f merge_method=squash -f commit_title="<title> (#<pr>)" --jq '"merged=\(.merged)"'
 
 gh api -X DELETE repos/FS-GG/<repo>/git/refs/heads/item/<n>-<slug>    # the branch, explicitly
@@ -596,13 +600,16 @@ jq -n --arg t "<title>" --rawfile b pr-body.md \
 # and a truncated read reports `pending=0 failed=0` while the checks that would have stopped you sit
 # on page 2. That is a merge gate that greenlights a red PR (#547).
 # `--slurp` cannot be combined with `--jq`, so aggregate in a separate `jq`.
-# And ASSERT rather than PRINT: `checks=0` is CI-never-started, not all-clear (#606). A line a human
-# has to read and judge is a gate that fails open the moment an agent copies it into a loop.
-SHA=$(gh api repos/FS-GG/<repo>/pulls/<n> --jq .head.sha)
+# And ASSERT rather than PRINT — the same three-way assertion as the merge gate above. A line that
+# merely PRINTS `checks=0 failed=1` and exits 0 is a gate that fails open the moment an agent reads
+# the exit code instead of the number (#606, #266). Same semantics in both places, deliberately.
+SHA=$(gh api repos/FS-GG/<repo>/pulls/<pr> --jq .head.sha)
 gh api "repos/FS-GG/<repo>/commits/$SHA/check-runs" --paginate --slurp \
   | jq -e -r '[.[].check_runs[]]
-              | if length == 0 then error("NO CHECK RUNS — CI never started (conflicted PR?). NOT a pass.") else . end
-              | "checks=\(length) pending=\([.[]|select(.status!="completed")]|length) failed=\([.[]|select(.conclusion!=null and .conclusion!="success" and .conclusion!="skipped")]|length)"'
+              | if   length == 0                                                    then error("NO CHECK RUNS — CI never started (conflicted PR? API error?). NOT a pass.")
+                elif ([.[]|select(.status!="completed")]|length) > 0                then error("checks still PENDING — do not merge")
+                elif ([.[]|select(.conclusion!="success" and .conclusion!="skipped")]|length) > 0 then error("checks FAILED — do not merge")
+                else "all \(length) checks green" end'
 ```
 
 `gh pr checks <n> --watch` itself is fine in a worktree — it is GraphQL, but it reads the API and
