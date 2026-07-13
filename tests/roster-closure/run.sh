@@ -19,14 +19,24 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/roster-closure-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 # A two-repo world: the authority plus one framework repo, both rostered, both contract participants.
+#
+# The `capabilities:` block is not incidental here. A capability a repo RECEIVES must declare how it is
+# DETECTED at that receiver, or repos-audit sweeps it in neither direction while it stays a legal
+# `receives:` word — the #628 hole. This roster rosters `labels` and `coordination-kit`, so it has to
+# say how each is verified: `coordination-kit` by the reusable workflow the receiver calls, `labels`
+# not at all, because the AUTHORITY pushes it (apply-labels.sh reads the roster and creates the labels
+# via the API). `push: true` is how a roster says that out loud instead of leaving a blank.
 ROSTER="$WORK/repos.yml"
 cat > "$ROSTER" <<'YAML'
-schemaVersion: 1
-updated: 2026-07-09
+schemaVersion: 5
+updated: 2026-07-13
 authority: FS-GG/.github
 repos:
   - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels] }
   - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, coordination-kit] }
+capabilities:
+  - { id: coordination-kit, workflow: coordination-coherence.yml }
+  - { id: labels, push: true, reason: authority-pushed by apply-labels.sh; nothing is wired at the receiver }
 outside-fabric: []
 YAML
 

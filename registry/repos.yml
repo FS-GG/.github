@@ -20,12 +20,14 @@
 # (shell + jq; kept self-contained in .github, deliberately not the SDD-owned typed validator).
 # Human projection: docs/registry/repos.md.
 #
-# `receives` VOCABULARY (the controlled set the validator admits):
-#   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [migrated: ADR-0019 slice 1]
-#   coordination-kit   — the four coordination skills + the fsgg-coord client        [consumer: slice 2]
-#   build-config       — the org-shared .NET build config (scripts/sync-build-config.sh)  [migrate: later slice]
-#   lockfile-sync      — the reusable lockfile-sync workflow                          [migrated: #503]
-#   contract-coherence — the reusable contract-coherence gate                         [no receiver yet: see capabilities]
+# `receives` VOCABULARY (the controlled set the validator admits). Every word here MUST have a
+# `capabilities:` row declaring how it is DETECTED at a receiver — a word that is legal to receive and
+# impossible to check is a green nobody earned (#628):
+#   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [push:     authority-pushed]
+#   coordination-kit   — the four coordination skills + the fsgg-coord client        [workflow: coordination-coherence.yml]
+#   build-config       — the org-shared .NET build config (scripts/sync-build-config.sh)  [script: sync-build-config.sh]
+#   lockfile-sync      — the reusable lockfile-sync workflow                          [workflow: lockfile-sync.yml]
+#   contract-coherence — the reusable contract-coherence gate                         [workflow: contract-coherence.yml]
 #
 # A `receives` row is a CLAIM ABOUT REALITY, and it goes stale silently. `lockfile-sync` is the
 # proof: six repos really wired the reusable workflow, nobody added the rows, and `repos-audit`
@@ -34,7 +36,7 @@
 # repo that is not rostered is drift — so this list can no longer rot without a red check. Do not
 # hand-maintain it against intent; maintain it against what the callers actually do.
 
-schemaVersion: 4
+schemaVersion: 5
 updated: 2026-07-13
 authority: FS-GG/.github
 
@@ -72,11 +74,11 @@ repos:
 #     is a deliberate call about somebody else's build, and it is not a propagate bot's to make.
 #
 # So the claim this roster makes is falsifiable and exactly as strong as reality: **a repo receives
-# build-config iff it enforces build-config.** Nothing verifies that symmetry yet — repos-audit's mandate
-# covers only capabilities that map to a REUSABLE workflow, and this one is wired by an inline `run:`.
-# That gap is #628, and it is what let "four repos enforce it, the registry says zero" go unnoticed.
-# Whether templates and audio SHOULD adopt is a live question, filed there — it is not answered here by
-# quietly listing them.
+# build-config iff it enforces build-config.** As of #628 that symmetry IS verified: the capability now
+# declares a `script:` detector, so repos-audit sweeps it in both directions like any other — a rostered
+# repo that stopped running the drift check is a GAP, and a repo that starts running it without saying so
+# is DRIFT. Whether templates and audio SHOULD adopt is a live question, filed there — it is not answered
+# here by quietly listing them, and if either one wires the check, the audit will now say so out loud.
 
 # The capabilities that map to a reusable `.github` workflow, and are therefore AUDITED
 # (scripts/repos-audit.sh). This is the ONE place that mapping lives. The audit used to hardcode it
@@ -93,9 +95,50 @@ repos:
 # reviewed claim, exactly like `outside-fabric`. It is NOT a mute button: the audit still scans
 # every rostered repo for a real caller, and a capability that claims no receivers while somebody
 # actually wires it FAILS. The claim is falsifiable, so it cannot quietly become a lie.
+#
+# A row declares EXACTLY ONE DETECTOR — how a receiver's participation is verifiable (#628):
+#   workflow:  the receiver calls .github's reusable workflow (a `uses:` of it)
+#   script:    the receiver INLINES a job that runs .github's script — there is no reusable workflow
+#              to `uses:`, so the workflow detector cannot see it at all
+#   push:      the AUTHORITY writes it into the receiver; nothing is wired receiver-side to detect
+#
+# AND NOTHING MAY BE `receives:`d THAT HAS NO ROW HERE. That closure is what makes the promise above
+# ("this list can no longer rot without a red check") actually TRUE. It was not: `build-config` and
+# `labels` were legal `receives:` words with no row, so they were swept in NEITHER direction — not
+# findable as unwired, not findable as adopted-but-unrostered — and the guarantee held for three of
+# five capabilities while reading, to the next person, as if it held for all five. #626 read exactly
+# that way, shipped `544433a` on it, and four repos went red within twenty minutes.
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
   - { id: lockfile-sync,    workflow: lockfile-sync.yml }
+
+  # SCRIPT-DELIVERED, and therefore invisible to the `uses:` detector until #628 gave it one of its
+  # own. sdd/rendering/governance/game each inline a `Build-config drift check` job in their gate.yml
+  # that checks .github out and runs this script — governance from `_org-build/`, the others from
+  # `.github/`, which is why the detector matches the BASENAME and not a path.
+  - id: build-config
+    script: sync-build-config.sh
+    reason: >-
+      Delivered as a script, not a reusable workflow: receivers wire it by inlining a job that checks
+      FS-GG/.github out and runs `sync-build-config.sh --check`. For as long as that was true it was
+      outside repos-audit's mandate entirely — four repos enforced it (SDD's as a REQUIRED status
+      check) while `receives:` said zero, and the audit reported green over all of them. #628.
+
+  # PUSH. `labels` is not pulled by anybody: scripts/apply-labels.sh reads THIS roster and pushes the
+  # labels into each repo. So the `receives: labels` row is the INPUT to the push, not a claim about
+  # the receiver's config — there is no receiver-side artifact that could falsify it, and there never
+  # will be. That is a real and permanent asymmetry, and the only honest thing to do with it is SAY so
+  # in a row a validator refuses to leave blank, rather than leave it a hole that reads like a licence.
+  - id: labels
+    push: true
+    reason: >-
+      Authority-PUSHED, not receiver-wired: scripts/apply-labels.sh reads this roster and creates the
+      shared labels in each repo via the API (idempotent, --force). A receiver wires nothing, so there
+      is no receiver-side artifact to detect and repos-audit deliberately does not sweep it. The row is
+      what DRIVES the push, so it cannot go stale the way a pull capability's can — add a repo here and
+      it gets labels. Recorded rather than omitted, because an omission is indistinguishable from the
+      build-config hole that #628 exists to close.
+
   # ADOPTED (#519). Was `receivers: none` + a reason, on the grounds that "whether the six
   # framework repos SHOULD adopt it is a live org question". That question was decided YES, and
   # every framework repo's CI now calls it. The claim deleted itself exactly as it said it would:

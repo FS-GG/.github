@@ -12,10 +12,14 @@
 #   repos.sh list (--receives <cap> | --all) [--field id|full] [--registry <file>]
 #                                                           # roster query for consumers (apply-labels …).
 #                                                           # --all: every rostered repo, receives or not.
-#   repos.sh caps [--field id|workflow|receivers|reason] [--registry <file>]
+#   repos.sh caps [--field id|workflow|script|push|receivers|reason] [--registry <file>]
 #                                                           # the AUDITED capabilities (repos-audit.sh).
 #                                                           # No --field: a TSV row per capability —
-#                                                           # id, workflow, receivers, reason.
+#                                                           # id, workflow, script, push, receivers, reason.
+#   repos.sh received [--registry <file>]                   # cap<TAB>the repos that receive it, for
+#                                                           # EVERY capability the roster claims —
+#                                                           # including one with no `capabilities:` row.
+#                                                           # The audit's closure check reads this (#628).
 #   repos.sh kit [--field id|kind|source] [--kind skill|client] [--registry <file>]
 #                                                           # the kit item list, in roster order
 #   repos.sh relock [--registry <file>] [--root <dir>]      # REGENERATE registry/repos.lock from the
@@ -181,13 +185,56 @@ cmd_list() {
   fi
 }
 
-# The AUDITED capabilities: those that map to a reusable .github workflow. repos-audit.sh reads its
-# whole mandate from here — which capabilities exist, which workflow each one is wired by, and which
-# ones claim to have no receiver at all. It used to hardcode that in a `wf_for_cap` case statement,
-# so the roster and the audit could disagree about what the org even has, and did (#503).
+# The AUDITED capabilities. repos-audit.sh reads its whole mandate from here — which capabilities
+# exist, HOW each one is detectable in a receiver, and which ones claim to have no receiver at all. It
+# used to hardcode that in a `wf_for_cap` case statement, so the roster and the audit could disagree
+# about what the org even has, and did (#503).
 #
-# With no --field this emits a TSV row per capability — the audit needs every column at once, and
-# four `--field` passes over the same file is the kind of thing that drifts out of step.
+# A row declares EXACTLY ONE DETECTOR — the answer to "how would I know, by looking at the receiver,
+# that it really participates?" (#628):
+#
+#   workflow: <f>.yml   PULL, by reusable workflow. The receiver calls FS-GG/.github's `<f>.yml`.
+#                       Detected by a `uses:` of the authority's copy.
+#   script:   <f>.sh    PULL, by script. The capability is delivered as a script, and the receiver
+#                       wires it by INLINING a job that checks .github out and runs it. There is no
+#                       reusable workflow to `uses:`, so the workflow detector cannot see it at all —
+#                       which is how `build-config` came to be received by four repos and audited by
+#                       nothing. Detected by a reference to the authority's script.
+#   push:     true      PUSH. The AUTHORITY writes this INTO the receiver (apply-labels.sh reads this
+#                       very roster and pushes the labels in). The receiver wires nothing, so there is
+#                       no receiver-side artifact to detect and the `receives:` row is the INPUT to the
+#                       push rather than a falsifiable claim about the receiver's config. Requires a
+#                       `reason:` — this is a reviewed claim like `receivers: none`, never a blank.
+#
+# The point of naming the PUSH case out loud is that it is the ONLY honest way to be unauditable, and
+# it has to be SAID. Before #628 a capability could simply have no row here, and then it was swept in
+# neither direction while still being a legal `receives:` word — an absence that reads exactly like a
+# licence, and was used as one (#626 concluded the shared tool manifest "propagates to nobody" from
+# `build-config`'s empty rows, and shipped on it; four repos went red within twenty minutes).
+#
+# With no --field this emits a TSV row per capability — the audit needs every column at once, and six
+# `--field` passes over the same file is the kind of thing that drifts out of step.
+# What the roster actually CLAIMS: `cap<TAB>the repos that receive it`, one row per capability any
+# repo declares — INCLUDING one the `capabilities:` block has no row for. That inclusion is the whole
+# point (#628). Every other query here is keyed on the capabilities block, so a capability that is
+# received but undeclared is invisible to all of them — which is exactly how `build-config` stayed
+# invisible while four repos received it. This is the query that can SEE the gap, so it is the one the
+# audit's closure check reads.
+cmd_received() {
+  local reg="$REG_DEFAULT"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --registry) need_val received "$@"; reg="$2"; shift 2 ;;
+      *)          die "received: unknown arg '$1'." ;;
+    esac
+  done
+  [ -f "$reg" ] || die "registry not found: $reg"
+  yaml2json "$reg" | jq -r '
+    [ .repos[] | . as $r | (.receives // [])[] | { cap: ., repo: $r.id } ]
+    | group_by(.cap)[]
+    | [ .[0].cap, ([.[].repo] | join(", ")) ] | @tsv'
+}
+
 cmd_caps() {
   local field="" reg="$REG_DEFAULT"
   while [ $# -gt 0 ]; do
@@ -197,14 +244,21 @@ cmd_caps() {
       *)          die "caps: unknown arg '$1'." ;;
     esac
   done
-  case "$field" in ""|id|workflow|receivers|reason) ;;
-    *) die "caps: --field must be id, workflow, receivers or reason." ;; esac
+  case "$field" in ""|id|workflow|script|push|receivers|reason) ;;
+    *) die "caps: --field must be id, workflow, script, push, receivers or reason." ;; esac
   [ -f "$reg" ] || die "registry not found: $reg"
+  # `push` is a BOOLEAN in YAML, so `// ""` cannot blank it — `false // ""` is `false`, not "".
+  # Normalize it to the string the shell readers compare against ("true" or empty), or a `push: false`
+  # row would reach repos-audit.sh as the four characters "false" and be read as a live push detector.
   if [ -n "$field" ]; then
-    yaml2json "$reg" | jq -r --arg f "$field" '(.capabilities // [])[] | (.[$f] // "")'
+    yaml2json "$reg" | jq -r --arg f "$field" \
+      '(.capabilities // [])[] | (if $f == "push" then (if .push == true then "true" else "" end) else (.[$f] // "") end)'
   else
     yaml2json "$reg" | jq -r \
-      '(.capabilities // [])[] | [.id, (.workflow // ""), (.receivers // ""), (.reason // "")] | @tsv'
+      '(.capabilities // [])[]
+       | [ .id, (.workflow // ""), (.script // ""),
+           (if .push == true then "true" else "" end),
+           (.receivers // ""), (.reason // "") ] | @tsv'
   fi
 }
 
@@ -310,29 +364,71 @@ cmd_validate() {
   local capdups; capdups="$(echo "$json" | jq -r '[(.capabilities // [])[].id] | group_by(.)[] | select(length>1)[0]')"
   [ -z "$capdups" ] || err "duplicate capability id(s): $(echo "$capdups" | tr '\n' ' ')"
 
-  local cid cwf crecv creason
-  while IFS=$'\t' read -r cid cwf crecv creason; do
+  # TAB IS IFS-*WHITESPACE* IN BASH, so `IFS=$'\t' read` collapses runs of tabs and DROPS empty
+  # fields — a row with an empty `workflow` would shift `script` left into it, and this loop would
+  # then report "capability 'build-config' names workflow 'sync-build-config.sh'". The old 4-column
+  # form never had an empty MIDDLE field, so it worked by luck; a 6-column row with three optional
+  # detectors has one on almost every line. Re-delimit with a unit separator, which is NOT IFS
+  # whitespace and therefore preserves empties. (jq's @tsv escapes any literal tab in a value, so the
+  # substitution cannot corrupt a `reason:`.)
+  local cid cwf cscript cpush crecv creason line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    IFS=$'\x1f' read -r cid cwf cscript cpush crecv creason <<< "${line//$'\t'/$'\x1f'}"
     [ -n "$cid" ] || continue
     echo "$KNOWN_CAPS" | jq -e --arg c "$cid" 'index($c)' >/dev/null \
       || err "capability '$cid' is not in the receives vocabulary (known: $(echo "$KNOWN_CAPS" | jq -r 'join(", ")'))."
-    if [ -z "$cwf" ]; then
-      err "capability '$cid' has no 'workflow' — a capability is audited BY a reusable workflow; without one there is nothing to audit."
-    elif [ ! -f "$root/.github/workflows/$cwf" ]; then
-      # A typo'd filename is the fail-open case: every receiver is checked for a `uses:` of a
-      # workflow that cannot exist, so every receiver "is not wired" — or, if the capability has no
-      # receivers, nothing is checked at all and the audit is green about a workflow that is gone.
-      err "capability '$cid' names workflow '$cwf', which is not in .github/workflows/."
-    elif ! grep -qE '^[[:space:]]*workflow_call:' "$root/.github/workflows/$cwf"; then
-      # `receives` means "this repo CALLS the authority's reusable workflow". A workflow without a
-      # workflow_call trigger cannot be called, so no receiver could ever wire it and the audit
-      # would report a gap against every one of them, forever.
-      #
-      # Anchored, so a COMMENT cannot satisfy it. An unanchored `grep -q workflow_call:` matches the
-      # word anywhere in the file — including a line like `# this is not a workflow_call: trigger` —
-      # which would pass a workflow that nothing can `uses:` as reusable. A check whose subject is
-      # "can this really be called?" must not be satisfiable by prose about calling.
-      err "capability '$cid' names workflow '$cwf', which has no 'workflow_call:' trigger — it is not reusable, so no repo can wire it."
+
+    # EXACTLY ONE DETECTOR (#628). Zero is the defect this rule exists to kill: a capability with no
+    # detector is swept in NEITHER direction, so it cannot be found unwired and cannot be found
+    # adopted-but-unrostered — it is simply outside the audit, silently, while remaining a legal
+    # `receives:` word. Two is ambiguous: repos-audit would have to pick one, and a receiver that
+    # satisfies the loose one would mask a gap in the strict one.
+    local ndet=0
+    [ -n "$cwf" ]     && ndet=$((ndet + 1))
+    [ -n "$cscript" ] && ndet=$((ndet + 1))
+    [ "$cpush" = true ] && ndet=$((ndet + 1))
+    if [ "$ndet" -eq 0 ]; then
+      err "capability '$cid' declares no detector — set 'workflow:' (a reusable workflow the receiver calls), 'script:' (an authority script the receiver runs from an inlined job), or 'push: true' with a reason (the authority writes it INTO the receiver; nothing is detectable receiver-side). A capability with no detector is audited in NEITHER direction while still being a legal 'receives' word, which is exactly how build-config came to be received by four repos and checked by nothing (#628)."
+    elif [ "$ndet" -gt 1 ]; then
+      err "capability '$cid' declares more than one detector (workflow/script/push) — a capability is verified ONE way; two lets a receiver satisfy the loose one and mask a gap in the strict one."
     fi
+
+    if [ -n "$cwf" ]; then
+      if [ ! -f "$root/.github/workflows/$cwf" ]; then
+        # A typo'd filename is the fail-open case: every receiver is checked for a `uses:` of a
+        # workflow that cannot exist, so every receiver "is not wired" — or, if the capability has no
+        # receivers, nothing is checked at all and the audit is green about a workflow that is gone.
+        err "capability '$cid' names workflow '$cwf', which is not in .github/workflows/."
+      elif ! grep -qE '^[[:space:]]*workflow_call:' "$root/.github/workflows/$cwf"; then
+        # `receives` means "this repo CALLS the authority's reusable workflow". A workflow without a
+        # workflow_call trigger cannot be called, so no receiver could ever wire it and the audit
+        # would report a gap against every one of them, forever.
+        #
+        # Anchored, so a COMMENT cannot satisfy it. An unanchored `grep -q workflow_call:` matches the
+        # word anywhere in the file — including a line like `# this is not a workflow_call: trigger` —
+        # which would pass a workflow that nothing can `uses:` as reusable. A check whose subject is
+        # "can this really be called?" must not be satisfiable by prose about calling.
+        err "capability '$cid' names workflow '$cwf', which has no 'workflow_call:' trigger — it is not reusable, so no repo can wire it."
+      fi
+    fi
+
+    # The script detector's subject must EXIST, for the same reason the workflow's must: the audit
+    # greps receivers for a reference to `scripts/<f>`, so a typo'd or deleted script means every
+    # receiver "is not wired" — a gate that is confidently wrong about every repo at once.
+    if [ -n "$cscript" ]; then
+      case "$cscript" in
+        */*) err "capability '$cid' script '$cscript' must be a BARE filename, not a path — receivers check .github out under a directory of their own choosing (governance uses '_org-build/'), so only the basename is stable across them." ;;
+      esac
+      [ -f "$root/scripts/$cscript" ] \
+        || err "capability '$cid' names script '$cscript', which is not in scripts/ — the audit greps receivers for a reference to it, so a script that does not exist reports every receiver unwired."
+    fi
+
+    if [ "$cpush" = true ]; then
+      [ -n "$creason" ] \
+        || err "capability '$cid' declares 'push: true' with no 'reason' — a capability that is not verifiable at the receiver is the one place this roster can be unfalsifiable, so it must be a reviewed claim, not a blank."
+    fi
+
     case "$crecv" in
       "") ;;   # the normal case: receivers are whichever repos[] declare the cap in `receives`
       none)
@@ -347,7 +443,31 @@ cmd_validate() {
         ;;
       *) err "capability '$cid' receivers '$crecv' is invalid (omit it, or set it to 'none')." ;;
     esac
-  done < <(echo "$json" | jq -r '(.capabilities // [])[] | [.id, (.workflow // ""), (.receivers // ""), (.reason // "")] | @tsv')
+  done < <(echo "$json" | jq -r '(.capabilities // [])[] | [.id, (.workflow // ""), (.script // ""), (if .push == true then "true" else "" end), (.receivers // ""), (.reason // "")] | @tsv')
+
+  # --- CLOSURE: a capability a repo RECEIVES must be one the audit can detect (#628) ---------------
+  #
+  # THE DEFECT, stated as an invariant: `{caps any repo receives} ⊆ {caps with a detector row}`.
+  #
+  # `build-config` was a legal `receives:` word (it is in KNOWN_CAPS) with NO `capabilities:` row, so
+  # four repos declared it, four repos really enforced it, and repos-audit swept it in neither
+  # direction for as long as it existed. The registry header meanwhile promised, in its own words,
+  # that "this list can no longer rot without a red check" — a guarantee that was true for three of
+  # five capabilities, and the next reader trusted it for all five. #626 did exactly that: it read the
+  # empty `receives` rows as "propagates to nobody", shipped on it, and reddened four repos in twenty
+  # minutes. An unaudited registry row is not a neutral gap; it is a false negative that reads like a
+  # licence.
+  #
+  # Keyed on the ROSTER, not on KNOWN_CAPS: a vocabulary word nobody says is harmless (nothing claims
+  # it, so nothing can rot), whereas a word a repo DOES say and nothing checks is the whole bug.
+  local undetectable
+  undetectable="$(echo "$json" | jq -r '
+    ( [ (.capabilities // [])[].id ] ) as $detected
+    | [ .repos[] | . as $r | (.receives // [])[] | select(. as $c | $detected | index($c) | not)
+        | "\(.) (received by \($r.id))" ]
+    | unique | join("; ")')"
+  [ -z "$undetectable" ] \
+    || err "capability/ies received but NOT detectable — no 'capabilities:' row, so repos-audit sweeps them in NEITHER direction and the roster's claim about them can never go red: $undetectable. Give each a detector row (workflow:/script:/push:)."
 
   # --- kit rows must not collide at the receiver (.github#348) ---
   # Two kit rows that resolve to one destination make the fabric unsatisfiable: coordination-sync
@@ -424,6 +544,7 @@ case "${1:-}" in
   relock)   shift; cmd_relock "$@" ;;
   list)     shift; cmd_list "$@" ;;
   caps)     shift; cmd_caps "$@" ;;
+  received) shift; cmd_received "$@" ;;
   kit)      shift; cmd_kit "$@" ;;
   digest)   shift; [ $# -ge 1 ] || die "digest: <path> required."; digest "$1" ;;
   -h|--help|help|"") usage ;;
