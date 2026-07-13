@@ -133,6 +133,106 @@ else
   bad ".props refusal must be unchanged" "rc=$rc"$'\n'"$OUT"
 fi
 
+# --- #633: the drift message must name a command that EXISTS where the reader is standing ---------
+#
+# The one gate whose entire job is to report "you never re-synced" used to answer with
+# "Re-run: scripts/sync-build-config.sh <repo>" — a repo-relative path that exists in NO receiver.
+# This script lives in FS-GG/.github; every adopter's CI checks THIS repo out into a scratch dir and
+# runs it against a SEPARATE checkout of the repo under test, so the person reading the red gate is
+# standing in a repo where that path is `No such file or directory`.
+#
+# The assertion is behavioural, not a wording match — wording drifts, and a test that pins prose just
+# gets updated to match whatever prose is there. So: TAKE the command the failure prints, RUN it, and
+# require that it turns the gate green. A path that exists nowhere cannot pass that.
+t="$(fresh_target)"
+run "" "$t" || bad "#633 setup: apply must succeed before we can drift it" "$OUT"   # sync it clean...
+printf '%s\n' "$HAND" > "$t/$MANIFEST"                                              # ...then drift it
+rc=0; run "--check" "$t" || rc=$?
+DRIFT_OUT="$OUT"
+
+# The message assertions below only grep text, so without this leg a --check that stopped FAILING —
+# printing the DRIFT lines and the remediation but exiting 0 — would pass every one of them, and the
+# fixture would report green on a gate that no longer gates.
+[ "$rc" -ne 0 ] \
+  && ok "check still exits non-zero on drift (the message legs below are not grepping a green run)" \
+  || bad "check must exit non-zero on drift (#633)" "rc=$rc"$'\n'"$DRIFT_OUT"
+
+if printf '%s' "$DRIFT_OUT" | grep -qE 'Re-run: scripts/sync-build-config\.sh'; then
+  bad "drift remediation must not name a path that exists in no receiver (#633)" \
+      "The receiver-relative path is back. 'scripts/sync-build-config.sh' does not exist in the repo
+being checked — this script is only ever present in FS-GG/.github."
+else
+  ok "drift remediation does not resurrect the receiver-relative path (#633)"
+fi
+
+# The absolute form it prints must be a real, runnable script — not a path assembled from prose.
+#
+# Anchored to `^  /` — a line that IS an absolute command — rather than the first path-shaped match
+# anywhere in the output. The message also contains the clone form, whose script path lives under a
+# scratch dir; an unanchored match would latch onto that the moment the two forms are reordered, and
+# on a machine where that dir happened to exist the fixture would drive a STALE clone as its source
+# of truth and compare it against the working tree. Anchoring keeps the parse pinned to the one line
+# that is meant to be a resolved, runnable path.
+#
+# `|| true`: under `set -e`, a grep that matches nothing would kill the fixture here — which is
+# precisely the regression case — so the remaining legs (and the summary, and the ::error::
+# annotation) would never print. A missing match must be a FAIL, not an abort.
+suggested="$(printf '%s' "$DRIFT_OUT" | grep -oE '^  /[^[:space:]]*/sync-build-config\.sh' | head -n1 | sed 's/^  //' || true)"
+if [ -n "$suggested" ] && [ -f "$suggested" ]; then
+  ok "drift remediation names this script by its resolved, existing path (#633)"
+else
+  bad "drift remediation must name the script's resolved path (#633)" \
+      "parsed: '${suggested:-<none>}'"$'\n'"--- output ---"$'\n'"$DRIFT_OUT"
+fi
+
+# ...and FOLLOWING it must actually re-sync the repo. This is the leg that cannot rot: the message is
+# only correct if the command it prints fixes the very thing it is complaining about.
+# `bash "$suggested"` deliberately runs the path the MESSAGE named, not "$SCRIPT" — that is the whole
+# assertion. The re-check afterwards goes through the usual helper.
+if [ -n "$suggested" ] && [ -f "$suggested" ]; then
+  rc=0; bash "$suggested" "$t" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ] && run "--check" "$t"; then
+    ok "following the printed remediation re-syncs the repo and turns the gate green (#633)"
+  else
+    bad "the command the drift message prints must make --check green (#633)" \
+        "ran: bash '$suggested' '$t' -> rc=$rc"$'\n'"--- re-check ---"$'\n'"$OUT"
+  fi
+fi
+
+# The other reader — staring at a red gate in a receiver's CI, with no .github checkout to hand — is
+# given a form that does not assume one. (The resolved path above is a runner-local scratch dir to
+# them, so it is exactly the reader the original message stranded.)
+if printf '%s' "$DRIFT_OUT" | grep -q 'git clone --depth 1 https://github.com/FS-GG/.github.git'; then
+  ok "drift remediation also gives a form runnable with no .github checkout to hand (#633)"
+else
+  bad "drift remediation must serve the receiver-CI reader, who has no .github checkout (#633)" \
+      "$DRIFT_OUT"
+fi
+
+# ...and that form must survive being run TWICE. `git clone` into a fixed path fails the second time
+# ("destination path already exists and is not an empty directory"), which strands the reader with two
+# drifted repos — or the one who simply retries after a typo. A remediation that works only once is
+# the same defect this item is fixing, one step further along.
+if printf '%s' "$DRIFT_OUT" | grep -q 'mktemp -d' \
+   && ! printf '%s' "$DRIFT_OUT" | grep -qE 'clone .*/tmp/[a-z0-9._-]+ ?\\?$'; then
+  ok "the clone form clones into a fresh dir, so it is re-runnable (#633)"
+else
+  bad "the clone remediation must not hardcode a fixed destination — it fails on the 2nd run (#633)" \
+      "$DRIFT_OUT"
+fi
+
+# The population this message is about to meet is FIRST-TIME ADOPTERS (#561 rolls a managed file out
+# to four repos that never carried one). For them a plain re-sync REFUSES any file they hand-authored
+# before the org managed it, and exits 1 — so a message that names only the plain form sends them into
+# a second wall. It must name --adopt.
+if printf '%s' "$DRIFT_OUT" | grep -q -- '--adopt'; then
+  ok "drift remediation names --adopt, the path a first-time adopter actually needs (#633)"
+else
+  bad "drift remediation must name --adopt for the hand-authored/first-adoption case (#633)" \
+      "A receiver with a hand-authored Directory.Build.props follows this message, hits
+'REFUSING to overwrite hand-authored ...', and is stuck. That is the #561 rollout population."$'\n'"$DRIFT_OUT"
+fi
+
 # --- global.json: distributed, but NOT YET enforced. The ordering rule, as a gate (.github#536) ----
 #
 # `--check` treats a MISSING managed file as DRIFT, and the drift check is REQUIRED in adopting repos.
