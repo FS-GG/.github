@@ -1,4 +1,4 @@
-# ADR-0031: Observed run receipts — a test obligation is satisfied by a run SDD *read*, not by a `pass` an agent *typed*
+# ADR-0035: Observed run receipts — a test obligation is satisfied by a run SDD *read*, not by a `pass` an agent *typed*
 
 - **Status:** Proposed
 - **Date:** 2026-07-11
