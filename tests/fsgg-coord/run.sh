@@ -4980,6 +4980,81 @@ if [ -x "$ENGINE" ]; then
     "Your work is DONE and stamped" "$out"
 fi
 
+# ==================================================================================================
+# A STALE ENGINE IS WORSE THAN NO ENGINE (#655).
+# ==================================================================================================
+# A global `dotnet tool` does not self-update and the kit only ever said INSTALL, so the fleet went on
+# shadowing with 0.1.0 long after it was superseded. And 0.1.0 is not merely old, it is WRONG: it strips
+# the leading dot from every dotfile path (#649), so `.github/workflows/gate.yml` becomes a token that
+# matches no file, conflicts with nothing, and the engine reports STARTABLE on an item a live claim is
+# HOLDING. The shadow caught that 7 times on the live board in a day.
+#
+# A worker with no engine contributes nothing and says so. A worker with a superseded one contributes
+# divergences from a build nobody should trust — noise that buries the real findings.
+
+# THE FLOOR MAY NEVER EXCEED THE ENGINE THIS REPO BUILDS. Otherwise it locks EVERYBODY out of shadowing:
+# every worker skips, the log stays empty forever, and the three-day clock can never start — a gate that
+# fails so closed it can never open. Raising the floor is a deliberate act; shipping one nothing can
+# satisfy is a silent outage.
+FLOOR="$(grep -E '^ENGINE_MIN_VERSION=' "$COORD" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+SHIPPED="$(grep -oE '<Version>[^<]+</Version>' "$HERE/../../src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" \
+           | head -1 | sed -E 's#</?Version>##g')"
+if [ -n "$FLOOR" ] && [ -n "$SHIPPED" ]; then
+  lowest="$(printf '%s\n%s\n' "$FLOOR" "$SHIPPED" | sort -V | head -1)"
+  if [ "$lowest" = "$FLOOR" ] || [ "$FLOOR" = "$SHIPPED" ]; then
+    ok "engine floor: the kit's floor ($FLOOR) is satisfiable by the engine this repo builds ($SHIPPED)"
+  else
+    bad "engine floor: the floor ($FLOOR) EXCEEDS the shipped engine ($SHIPPED) — every worker would skip, forever"
+  fi
+else
+  bad "engine floor: could not read ENGINE_MIN_VERSION or the fsproj <Version>"
+fi
+
+if [ -x "$ENGINE" ]; then
+  # A stale engine is a RECORDED SKIP, not an error — a receiver whose worker has an old tool must not
+  # have its CI redded over it, and the skip must be recorded so that "we did not compare" can never be
+  # mistaken for "they agreed" (#266).
+  STALEBIN="$WORK/bin/fsgg-coord-engine-stale"
+  printf '#!/usr/bin/env bash\nif [ "$1" = "--version" ]; then echo "0.0.9"; exit 0; fi\nexit 1\n' > "$STALEBIN"
+  chmod +x "$STALEBIN"
+
+  : >"$FSGG_COORD_DIVERGENCE_LOG"
+  stale_out="$(FSGG_COORD_ENGINE_BIN="$STALEBIN" GH_BOARD_SET=pw PATH="$STUB:$PATH" \
+    bash "$COORD" next --repo sdd 2>/dev/null)"; stale_rc=$?
+  plain_out="$(FSGG_COORD_ENGINE_BIN=/nonexistent GH_BOARD_SET=pw PATH="$STUB:$PATH" \
+    bash "$COORD" next --repo sdd 2>/dev/null)"; plain_rc=$?
+
+  assert_eq "stale engine: it does NOT change bash's answer" "$plain_out" "$stale_out"
+  assert_eq "stale engine: ...nor its exit code — a receiver's CI may never red over an old tool" \
+    "$plain_rc" "$stale_rc"
+  assert_eq "stale engine: ...and the skip is RECORDED, never silent (#266)" \
+    "false" "$(jq -s -r '.[-1].ran' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null || echo MISSING)"
+  assert_contains "stale engine: ...naming the version, so it cannot be mistaken for agreement" \
+    "STALE" "$(jq -s -r '.[-1].reason // ""' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null)"
+  assert_contains "stale engine: ...and telling the worker exactly how to fix it" \
+    "dotnet tool update -g" "$(jq -s -r '.[-1].reason // ""' <"$FSGG_COORD_DIVERGENCE_LOG" 2>/dev/null)"
+
+  # LANES IS DIFFERENT, AND STRICTER. In the shadow a stale engine merely produces evidence nobody should
+  # count; in `lanes` its answer is USED. A mis-parsed dotfile token puts an item in the wrong lane, and a
+  # wrong lane is not a bad suggestion — it is a corrupted lock, telling a worker two items are safe to
+  # run together when they are not (#649, #273).
+  rc=0; out="$(FSGG_COORD_ENGINE_BIN="$STALEBIN" GH_BOARD_SET=pw PATH="$STUB:$PATH" \
+    bash "$COORD" lanes --repo sdd 2>&1)" || rc=$?
+  assert_eq "stale engine: lanes REFUSES to partition the board (exit 3) — a wrong lane is a corrupted lock" \
+    "3" "$rc"
+  assert_contains "stale engine: ...and says why, rather than printing a partition nobody should trust" \
+    "STALE" "$out"
+
+  # An engine that cannot say what it is CANNOT be known to be current. "I could not tell" is not "it is
+  # fine" (#266).
+  MUTEBIN="$WORK/bin/fsgg-coord-engine-mute"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$MUTEBIN"; chmod +x "$MUTEBIN"
+  rc=0; FSGG_COORD_ENGINE_BIN="$MUTEBIN" GH_BOARD_SET=pw PATH="$STUB:$PATH" \
+    bash "$COORD" lanes --repo sdd >/dev/null 2>&1 || rc=$?
+  assert_eq "stale engine: an engine that cannot report a version is treated as STALE, not as current" \
+    "3" "$rc"
+fi
+
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::fsgg-coord fixture FAILED"; exit 1; }
 echo "fsgg-coord fixture — OK"
