@@ -167,8 +167,12 @@ discipline, managed for you.
   scripts/fsgg-coord widen <issue> --paths "<what you are ACTUALLY touching>"
   ```
 
-  **A narrowing can never be refused** — a subset collides with nothing its superset did not — so
-  there is never a reason to sit on one. Two triggers fire in practice:
+  **A narrowing can never collide** — a subset reserves nothing its superset did not — so it will
+  never cost you an `OVERLAP`, and there is never a reason to sit on one. (It can still exit
+  non-zero for a reason that is not yours: `widen` refuses to report `DISJOINT` when some *other*
+  live claim declares unmatchable tokens, because it cannot see that claim's files to check against.
+  That fires in either direction and means "fix theirs", not "your narrowing was rejected" — your
+  re-declaration has already landed.) Two triggers fire in practice:
 
   - **A file you find you cannot edit.** A distributed or generated file whose CI gate fails on a
     consumer edit is not yours to author. You read it and moved on; give it back.
@@ -179,8 +183,9 @@ discipline, managed for you.
   using. Both triggers are one real item: FS.GG.Rendering#618 declared
   `Directory.Build.props src/ .github/workflows/`, merged a **one-file** diff, and never touched
   `Directory.Build.props` (a distributed file a consumer may not edit) or `src/` (the whole source
-  tree). `src/` alone held #619 — whose real touch-set is a single `.fsi` — off the board for the
-  life of the claim, and its holder had `widen` in hand the whole time with no reason to think of it
+  tree). That unused `src/` alone held #619 off the board for the life of the claim — an entire
+  source tree reserved, colliding on **one `.fsi` file** — and #618's holder had `widen` in hand the
+  whole time with no reason to think of it
   ([#601](https://github.com/FS-GG/.github/issues/601)).
 - **Heartbeat long work.** A claim goes stale after `FSGG_CLAIM_LEASE_MIN` (default 120m) without
   one, and the next claimant collects it.
