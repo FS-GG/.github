@@ -4856,8 +4856,15 @@ if [ -x "$ENGINE" ]; then
     PATH="$STUB:$PATH" bash "$COORD" next --repo sdd >/dev/null 2>&1 || true
   assert_eq 'shadow: every row records WHO produced it — the fleet cannot be counted otherwise' \
     "stamped-1" "$(jq -s -r '[.[] | select(.ran)] | .[-1].worker // "MISSING"' <"$FSGG_COORD_DIVERGENCE_LOG")"
-  assert_eq 'shadow: ...and WHICH BUILD produced it — evidence does not transfer across engines' \
-    "true" "$(jq -s -r '[.[] | select(.ran)] | ((.[-1].engine // "") | length > 0)' <"$FSGG_COORD_DIVERGENCE_LOG")"
+  # A VERSION STRING, and the assertion has to SAY so. "non-empty" was the first form of this check, and
+  # it passed for a week over a row stamped with the engine's entire DECISION DOCUMENT — because
+  # `--slurpfile engine` already bound `$engine` and the `--arg engine` beside it silently lost the
+  # collision. A JSON array is non-empty, so the test agreed. `--publish` groups by this field and
+  # `--fleet` counts only the build under test, so the ledger would have matched nothing, forever.
+  # Assert the TYPE and the SHAPE, not merely the presence.
+  assert_eq 'shadow: ...and WHICH BUILD produced it — a version STRING, not the decision document' \
+    "true" "$(jq -s -r '[.[] | select(.ran)] | (.[-1].engine | type == "string" and test("^[0-9]+\\.[0-9]+"))' \
+      <"$FSGG_COORD_DIVERGENCE_LOG")"
 fi
 
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
