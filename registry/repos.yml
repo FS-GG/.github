@@ -35,17 +35,17 @@
 # hand-maintain it against intent; maintain it against what the callers actually do.
 
 schemaVersion: 4
-updated: 2026-07-11
+updated: 2026-07-13
 authority: FS-GG/.github
 
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }
-  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
-  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
-  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
-  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync] }               # NOT build-config — see below.
-  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
-  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync] }               # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
+  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence] }
+  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence] }
+  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence] }
+  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence] }               # NOT build-config — see below.
+  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence] }
+  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence] }               # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
 
 # `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).
 #
@@ -96,19 +96,14 @@ repos:
 capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
   - { id: lockfile-sync,    workflow: lockfile-sync.yml }
-  - id: contract-coherence
-    workflow: contract-coherence.yml
-    receivers: none
-    reason: >-
-      Built to be receiver-wired (its inputs drift-check THE CALLER's build config, and
-      coherence.yml records that "the four product repos call the same reusable workflow with
-      check-build-config: true — their CI adopts it as an H3 follow-up"), but that adoption never
-      landed: as of #503, MEASURED against the caller files, no repo calls it. The authority runs
-      it on ITSELF via coherence.yml — a local `uses: ./.github/workflows/contract-coherence.yml`,
-      which is not roster participation and is deliberately not matched by the audit. So this is
-      "provably no receivers" TODAY, not "never will have any". Whether the six framework repos
-      SHOULD adopt it is a live org question, filed as FS-GG/.github#519. When one wires it, the
-      audit's unrostered-adopter check goes red and tells you to roster it and delete this claim.
+  # ADOPTED (#519). Was `receivers: none` + a reason, on the grounds that "whether the six
+  # framework repos SHOULD adopt it is a live org question". That question was decided YES, and
+  # every framework repo's CI now calls it. The claim deleted itself exactly as it said it would:
+  # "When one wires it, the audit's unrostered-adopter check goes red and tells you to roster it
+  # and delete this claim." The four `build-config` receivers call it with the drift leg ON (its
+  # default); templates and audio pass `check-build-config: false` because they are not
+  # build-config adopters — a value READ OFF the `receives:` rows above, not chosen per repo.
+  - { id: contract-coherence, workflow: contract-coherence.yml }
 
 # Repos that exist in the GitHub org and are DELIBERATELY outside every fabric. The roster is a
 # closed-world assumption, and `scripts/check-roster-closure.py` (.github#269) is what asserts the
