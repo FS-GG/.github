@@ -115,6 +115,52 @@ class Unparseable(Exception):
     """A recipe command that will not tokenize. Never a skip — see the exit-code contract."""
 
 
+def scan_line(line: str, quote: str | None) -> tuple[str | None, str]:
+    """Scan one line's shell quoting. Returns (quote state after it, the line minus any comment).
+
+    COMMENTS ARE NOT CODE, and this is the whole reason this helper exists (#673). A `#` comment in
+    a fence is prose, written in the house voice, and the house voice is full of contractions:
+
+        for _ in $(seq 30); do          # ~10 min ceiling — poll, don't spin forever
+
+    A quote scanner that does not know `don't` is a comment sees that apostrophe OPEN a single quote
+    that nothing ever closes, and every following line is swallowed into one command. Both outcomes
+    are bad, and the fail-open one is the one nobody would have noticed:
+
+      - FAIL-OPEN. The glued blob still tokenizes (shlex strips the comment), and it carries the
+        `--paginate` from the FIRST command — so a later unpaginated list read inside the glue is
+        never audited on its own, and the gate reports `OK`. That is the #266 signature exactly,
+        inside the gate written to close #266.
+      - FAIL-CLOSED, at the wrong line. If the bogus quote is later closed by the OPENING quote of a
+        genuine multi-line jq, the splitter cuts the command in half mid-string, `shlex` raises `No
+        closing quotation`, and the gate blames the line the mis-split STARTED on — an unrelated
+        command, often screenfuls away from the apostrophe that caused it.
+
+    The rule is `shlex`'s own, deliberately: an unquoted, unescaped `#` starts a comment that runs to
+    end of line — even mid-word (`shlex.split('a#b', comments=True) == ['a']`). This function's only
+    job is to hand `shlex` correctly delimited commands, so where the two could disagree about what a
+    comment is, the tokenizer's answer is the one that matters.
+    """
+    esc = False
+    for idx, ch in enumerate(line):
+        if esc:
+            esc = False
+            continue
+        if ch == "\\" and quote != "'":
+            # A backslash escapes inside double quotes and when unquoted; inside SINGLE quotes it is
+            # a literal, which is why jq scripts can carry `\(...)` unmolested.
+            esc = True
+            continue
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch == "#":
+            return quote, line[:idx]  # a comment: the rest of the line is prose, not code
+        elif ch in "'\"":
+            quote = ch
+    return quote, line
+
+
 def logical_commands(block: str) -> list[tuple[int, str]]:
     """Split a code fence into logical shell commands, as (0-based line offset within block, cmd).
 
@@ -129,6 +175,9 @@ def logical_commands(block: str) -> list[tuple[int, str]]:
         of single quotes, with no backslash anywhere. A line-at-a-time reader sees `| jq -r '[...]`
         and the aggregate on the next line as two commands, and would miss the `--paginate` sitting
         on the first of them.
+
+    Neither is continued by anything a COMMENT contains: an apostrophe in one is not a quote, and a
+    trailing backslash in one is not a continuation. See `scan_line`.
     """
     out: list[tuple[int, str]] = []
     buf: list[str] = []
@@ -139,26 +188,12 @@ def logical_commands(block: str) -> list[tuple[int, str]]:
         if not buf:
             start = i
         buf.append(line)
-        esc = False
-        for ch in line:
-            if esc:
-                esc = False
-                continue
-            if ch == "\\" and quote != "'":
-                # A backslash escapes inside double quotes and when unquoted; inside SINGLE quotes
-                # it is a literal, which is why jq scripts can carry `\(...)` unmolested.
-                esc = True
-                continue
-            if quote:
-                if ch == quote:
-                    quote = None
-            elif ch in "'\"":
-                quote = ch
+        quote, code = scan_line(line, quote)
 
         if quote is not None:
             continue  # unclosed quote: the command continues on the next line
-        if line.rstrip().endswith("\\"):
-            continue  # explicit continuation
+        if code.rstrip().endswith("\\"):
+            continue  # explicit continuation — in the CODE, not in a trailing comment
 
         cmd = "\n".join(buf)
         buf = []

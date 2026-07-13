@@ -191,6 +191,64 @@ SHA=$(gh api repos/FS-GG/<repo>/pulls/<n> --jq .head.sha)   # not a list, unlike
 [ "$RC" = 0 ] && ok "a comment mentioning .[] does not make a scalar read a list read" \
               || bad "a shell comment must not trigger a finding (got rc=$RC)" "$OUT"
 
+# 7g. An APOSTROPHE IN A COMMENT must not open a quote (#673). This is the fail-OPEN leg, and it is
+#     the one that matters: the recipes this gate guards are prose-heavy and written in the house
+#     voice, which is full of contractions. A splitter that scans `don't` as code sees that
+#     apostrophe open a single quote nothing closes, swallows every following line into ONE command,
+#     and that glued blob carries the `--paginate` from the FIRST command — so the unpaginated read
+#     below it is never audited on its own and the gate says OK. The #266 fail-open, inside the gate
+#     built to close #266. The corpus was clean by luck when this was found, not by construction.
+#     The FIRST command must be a paginated one, or this leg does not test what it claims: the mask
+#     only happens because the glued blob inherits ITS `--paginate`. Glue an unpaginated read onto an
+#     unpaginated one and the gate still (accidentally) fires — at the wrong line, but it fires.
+gate_on apostrophe-in-comment '# kit
+
+```sh
+gh api "repos/FS-GG/<repo>/commits/$SHA/check-runs" --paginate --jq '"'"'.check_runs[].name'"'"'   # don'"'"'t spin
+gh api repos/FS-GG/<repo>/issues/<parent>/sub_issues --jq '"'"'.[] | .number'"'"'
+```'
+# 1:`# kit` 2:blank 3:fence 4:paginated 5:UNpaginated. Pre-fix: 4 and 5 glued into one command that
+# carries --paginate, so line 5 was never audited and the gate exited 0 — audited=1, not 2.
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'SKILL.md:5:'; then
+  ok "an apostrophe in a comment does not mask the unpaginated read below it (fail-OPEN)"
+else
+  bad "a contraction in a comment must not swallow the next command; expected a finding at SKILL.md:5 (got rc=$RC)" "$OUT"
+fi
+
+# 7h. The same bug's fail-CLOSED face. When the bogus quote opened by `don't` is later closed by the
+#     OPENING quote of a genuine multi-line jq, the splitter cuts that command in half mid-string,
+#     `shlex` raises `No closing quotation`, and the gate exits 3 blaming the line the mis-split
+#     STARTED on — an unrelated command, screenfuls from the apostrophe that caused it. Valid shell,
+#     valid markdown, gate red, wrong line.
+gate_on apostrophe-then-multiline-jq '# kit
+
+```sh
+for _ in $(seq 30); do          # ~10 min ceiling — poll, don'"'"'t spin forever
+  sleep 20
+done
+
+gh api "repos/FS-GG/<repo>/commits/$SHA/check-runs" --paginate --slurp \
+  | jq -r '"'"'[.[].check_runs[]]
+           | "checks=\(length)"'"'"'
+```'
+[ "$RC" = 0 ] && ok "a contraction in a comment does not abort the audit (fail-CLOSED, wrong line)" \
+              || bad "an apostrophe in a comment must not break tokenization (got rc=$RC)" "$OUT"
+
+# 7i. A trailing backslash INSIDE a comment is not a line continuation — the shell never sees it.
+#     Treating it as one glues the next command onto this one, and since this one carries
+#     `--paginate`, the unpaginated read below it is masked. Same fail-open, different trigger.
+gate_on backslash-in-comment '# kit
+
+```sh
+gh api repos/FS-GG/<repo>/pulls/<pr> --paginate --jq .head.sha   # not a continuation \
+gh api repos/FS-GG/<repo>/issues/<parent>/sub_issues --jq '"'"'.[]'"'"'
+```'
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'SKILL.md:5:'; then
+  ok "a trailing backslash in a comment is not a continuation (fail-OPEN)"
+else
+  bad "a backslash inside a comment must not glue the next command; expected SKILL.md:5 (got rc=$RC)" "$OUT"
+fi
+
 # 7f. The roots come from `.agent-skill-roots`, not a copy inside the gate. If the gate kept its own
 #     list, a root added to the declaration would go UNAUDITED while the gate reported green — the
 #     #266 fail-open, reintroduced in the thing built to close it. skill-union-assert.sh reads the
