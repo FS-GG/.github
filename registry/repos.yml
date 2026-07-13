@@ -40,12 +40,43 @@ authority: FS-GG/.github
 
 repos:
   - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }
-  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, lockfile-sync] }
-  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, lockfile-sync] }
-  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, lockfile-sync] }
-  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync] }
-  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, lockfile-sync] }
-  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync] }   # the org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.
+  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
+  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
+  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
+  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync] }               # NOT build-config — see below.
+  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync] }
+  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync] }               # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
+
+# `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).
+#
+# FOUR repos — sdd, rendering, governance, game — run a `Shared-build-config drift check` in their own
+# `gate.yml`: they check out `.github` and run `sync-build-config.sh --check`, so a managed file that
+# diverges from `dist/dotnet/` fails the PR. That ENFORCEMENT has been live for months. Nothing ever
+# PUSHED them an update, because this capability had no receivers and no propagate arm.
+#
+# So the fabric was a RATCHET. Every edit to `dist/dotnet/` red-lit those four until a human hand-synced
+# each one — and because the coordination kit's sync PR is a rolling branch, the red landed on the kit's
+# own delivery vehicle. #627 added the coord engine to the shared tool manifest; a day later FS.GG.SDD's
+# kit-sync PR was STILL blocked by the resulting drift, and the coordination kit — the one distribution
+# fabric in this org that demonstrably runs — was frozen out of the largest repo. #634 found it stuck.
+# The enforcement arm had taken the delivery arm hostage.
+#
+# The four rows above are what `build-config-propagate.yml` iterates. The push arm now exists.
+#
+# TEMPLATES AND AUDIO ARE DELIBERATELY NOT RECEIVERS, and this is a REVIEWED CLAIM, not an oversight:
+#   * templates has NO `Directory.Build.props` at all — it never adopted the shared config, and it does
+#     not enforce it either. A bot that wrote one into it would be changing how it builds.
+#   * audio HAS a `Directory.Build.props`, and it is its OWN — hand-authored and unmarked. `#387`'s guard
+#     exists precisely so a re-sync REFUSES to overwrite that. Onboarding it means running
+#     `sync-build-config.sh --adopt`, which moves the existing file to an imported `*.local.props`. That
+#     is a deliberate call about somebody else's build, and it is not a propagate bot's to make.
+#
+# So the claim this roster makes is falsifiable and exactly as strong as reality: **a repo receives
+# build-config iff it enforces build-config.** Nothing verifies that symmetry yet — repos-audit's mandate
+# covers only capabilities that map to a REUSABLE workflow, and this one is wired by an inline `run:`.
+# That gap is #628, and it is what let "four repos enforce it, the registry says zero" go unnoticed.
+# Whether templates and audio SHOULD adopt is a live question, filed there — it is not answered here by
+# quietly listing them.
 
 # The capabilities that map to a reusable `.github` workflow, and are therefore AUDITED
 # (scripts/repos-audit.sh). This is the ONE place that mapping lives. The audit used to hardcode it

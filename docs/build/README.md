@@ -79,6 +79,33 @@ and repo-specific `PackageVersion` items in the `*.local.props` files. The impor
 repo can override any org default. A package pinned in the org baseline (`FSharp.Core`) must **not** be
 re-declared locally — CPM raises `NU1504`/`NU1011` on a duplicate `PackageVersion`.
 
+## How an update reaches you — the push arm (#626)
+
+`build-config-propagate.yml` opens a rolling `build-config/sync` PR, with auto-merge armed, in every
+`receives: build-config` repo whenever `dist/dotnet/` (or the syncer itself) changes on `.github@main`.
+The receiver list comes from `registry/repos.yml` — no hardcoded targets.
+
+**This did not exist until #626, and its absence was a ratchet.** The drift check has been failing PRs in
+the four adopting repos for months; nothing ever sent them the update. So every edit to `dist/dotnet/`
+red-lit all four until a human hand-synced each one — and because the coordination kit's sync PR is a
+*rolling* branch, that red landed on the kit's own delivery vehicle. #627 added the coordination engine
+to the shared tool manifest, and a day later FS.GG.SDD's kit-sync PR was still blocked by the resulting
+drift: the one distribution fabric in this org that demonstrably runs was frozen out of the largest repo
+([#634](https://github.com/FS-GG/.github/issues/634) found it stuck). The enforcement arm had taken the
+delivery arm hostage.
+
+The invariant the roster now asserts: **a repo receives `build-config` iff it enforces `build-config`.**
+Both directions bite. A repo that enforces without receiving can only go red and stay red. A repo that
+receives without having adopted gets build files written into it by a bot — which is why `templates` (no
+`Directory.Build.props` at all) and `audio` (a hand-authored one, which [#387](https://github.com/FS-GG/.github/issues/387)'s
+guard refuses to overwrite) are **deliberately not receivers**. Onboarding either is a `--adopt`, below —
+a decision about somebody else's build, and not a propagation.
+
+Nothing yet verifies that symmetry automatically: `repos-audit`'s mandate covers only capabilities wired
+by a *reusable workflow*, and this one is wired by an inline `run:` in each receiver's `gate.yml`. That
+gap is [#628](https://github.com/FS-GG/.github/issues/628) — and it is what let *"four repos enforce it,
+the registry says zero"* go unnoticed.
+
 ## Commands
 
 ```sh
