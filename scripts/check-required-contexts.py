@@ -396,7 +396,13 @@ def classic_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
                 f"installation with `administration: read`). The check that DOES run in CI without a "
                 f"credential is reusable-job-id-coherence.yml, which catches the rename in FS-GG/"
                 f".github before it can reach a receiver. See "
-                f"docs/coordination/reusable-workflow-contract.md."
+                f"docs/coordination/reusable-workflow-contract.md.\n"
+                f"NOTE: rulesets were NOT consulted, and reading them would not rescue this run. "
+                f"`rules/branches/<b>` needs only `metadata: read`, so it is tempting to think a "
+                f"ruleset-protected repo can be audited without admin — it cannot, BY THIS TOOL. A "
+                f"403 here does not mean 'there is no classic protection'; it means 'I cannot see "
+                f"whether there is'. The required set is the UNION of both stores, so an unreadable "
+                f"store makes the union unknowable, and a half-read is not a verdict."
             ) from e
         except json.JSONDecodeError as e:
             raise GateError(f"{repo}: branch protection was not valid JSON — {e}") from e
@@ -458,12 +464,19 @@ def ruleset_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
             continue
         params = rule.get("parameters") or {}
         for check in params.get("required_status_checks") or []:
+            context = check.get("context") if isinstance(check, dict) else None
+            if not isinstance(context, str) or not context:
+                # A required check we cannot even name. Coercing it to "" would send an empty
+                # string down the audit and report `REQUIRES the status check ''` — a confident,
+                # WRONG claim that the repo is deadlocked, from a payload we did not understand.
+                raise GateError(
+                    f"{repo}@{branch}: a `required_status_checks` rule names a check with no "
+                    f"readable `context` ({check!r}). Refusing to guess at a required check's "
+                    f"name — an unreadable requirement is no verdict, not a finding."
+                )
             # A ruleset names the producing app as `integration_id`, where classic protection says
             # `app_id`. Same meaning, different spelling; normalise so main() judges them alike.
-            out.append({
-                "context": str(check.get("context", "")),
-                "app_id": check.get("integration_id"),
-            })
+            out.append({"context": context, "app_id": check.get("integration_id")})
     return out
 
 
@@ -487,17 +500,34 @@ def required_contexts(
     Rulesets and classic protection STACK — GitHub enforces both — so the required set is their
     UNION, and "requires nothing" is only true when both sources say so and both were readable.
     """
+    # A saved payload for ONE store is a half-world, and a half-world is how this bug started: the
+    # offline caller would get a confident verdict computed from whichever store they happened to
+    # hand over. Both, or neither.
+    if bool(saved) != bool(saved_rules):
+        given, missing = ("--protection", "--rules") if saved else ("--rules", "--protection")
+        raise GateError(
+            f"{given} was given without {missing}. Required checks live in TWO stores (classic "
+            f"branch protection and rulesets) and the required set is their UNION, so a saved "
+            f"payload for one store alone describes half a world. Pass BOTH (an empty ruleset "
+            f"payload is the JSON list `[]`; an unprotected classic payload is `{{}}`), or pass "
+            f"NEITHER and let the gate read both from the API."
+        )
+
     classic = classic_contexts(repo, branch, saved)
     rules = ruleset_contexts(repo, branch, saved_rules)
 
-    merged: list[dict] = []
-    seen: set[tuple[str, object]] = set()
+    # Dedup on the CONTEXT, not on (context, app_id): the two stores spell the producing app
+    # differently and a ruleset routinely omits it entirely (every one of FS.GG.Governance's five
+    # checks does). Keying on the pair would let one context required by BOTH stores survive twice
+    # — audited twice, printed twice, and, if it is unproducible, reported as two deadlocks when
+    # there is one. Prefer the ATTRIBUTED entry, so a context GitHub pinned to an app is judged by
+    # that app rather than by an unattributed twin.
+    merged: dict[str, dict] = {}
     for check in [*classic, *rules]:
-        key = (str(check.get("context", "")), check.get("app_id"))
-        if key not in seen:
-            seen.add(key)
-            merged.append(check)
-    return merged
+        context = str(check.get("context", ""))
+        if merged.get(context, {}).get("app_id") is None:
+            merged[context] = check
+    return list(merged.values())
 
 
 def main(argv: list[str]) -> int:

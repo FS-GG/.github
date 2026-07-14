@@ -472,6 +472,70 @@ WRU="$WORK/w-rules-500"; mkdir -p "$WRU/protection" "$WRU/rules"
 expect "an unreachable RULES endpoint is exit 2 (RETRYABLE) — not green, not a finding" \
   2 "no verdict" "$WRU" "$RRS" FS-GG/R
 
+# A 403 on CLASSIC is exit 3 even when the repo is RULESET-protected and the rules ARE readable.
+# `rules/branches/<b>` needs only `metadata: read`, so it is tempting to think a non-admin token can
+# audit a ruleset repo. It cannot: a 403 does not say "there is no classic protection", it says "I
+# cannot see whether there is" — and the required set is the UNION, so the union is unknowable.
+WRO="$WORK/w-rules-only-403"; mkdir -p "$WRO/protection" "$WRO/rules"
+: > "$WRO/protection/FS-GG__R__main.forbidden"
+ruleset "$WRO" FS-GG/R main "Deterministic gate"
+expect "a readable RULESET does not rescue an unreadable CLASSIC store — the union is unknowable, so exit 3" \
+  3 "a half-read is not a verdict" "$WRO" "$RRS" FS-GG/R
+
+# The same context required by BOTH stores is ONE requirement, not two. A ruleset routinely omits
+# `integration_id` (all five of Governance's real checks do) while classic sets `app_id`, so keying
+# the dedup on the pair would let one context survive twice — and be reported as two deadlocks.
+WDUP="$WORK/w-dup"
+protect "$WDUP" FS-GG/R main "Deterministic gate"
+ruleset "$WDUP" FS-GG/R main "Deterministic gate"          # same context, unattributed
+expect "a context required by BOTH stores is audited ONCE, not twice" \
+  0 "1 audited" "$WDUP" "$RRS" FS-GG/R
+
+WDUP2="$WORK/w-dup-bad"
+protect "$WDUP2" FS-GG/R main "vanished"
+ruleset "$WDUP2" FS-GG/R main "vanished"
+expect "...and an unproducible context required by both is ONE finding, not two" \
+  1 "1 required context(s) can never report, of 1 audited" "$WDUP2" "$RRS" FS-GG/R
+
+# A ruleset check with no readable `context` is NO VERDICT — never a confident `REQUIRES ''`.
+WNC="$WORK/w-nameless"; mkdir -p "$WNC/protection" "$WNC/rules"
+printf '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"integration_id":15368}]}}]' \
+  > "$WNC/rules/FS-GG__R__main.json"
+expect "a required check with no readable name is exit 3 — the gate does not guess at what a repo requires" \
+  3 "Refusing to guess at a required check's name" "$WNC" "$RRS" FS-GG/R
+
+# The rules payload must be a LIST. Anything else and we do not know what protects the branch.
+WBADJ="$WORK/w-rules-notlist"; mkdir -p "$WBADJ/protection" "$WBADJ/rules"
+printf '{"message":"Not Found"}' > "$WBADJ/rules/FS-GG__R__main.json"
+expect "a rules payload that is not a list is exit 3 — never 'no rules'" \
+  3 "Refusing to guess what protects this branch" "$WBADJ" "$RRS" FS-GG/R
+
+# =============================================================================================
+# 5b. THE SAVED-PAYLOAD FLAGS. A saved payload for ONE store is a HALF-WORLD — and handing the gate
+# half a world is exactly how it came to report green over a protected repo. Both, or neither.
+# =============================================================================================
+SP="$WORK/saved"; mkdir -p "$SP"
+printf '{"required_status_checks":{"strict":false,"checks":[{"context":"Deterministic gate","app_id":15368}]}}' > "$SP/prot.json"
+printf '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"gone"}]}}]' > "$SP/rules.json"
+printf '[]' > "$SP/norules.json"
+
+expect "--protection WITHOUT --rules is refused — a saved half-world is not a verdict" \
+  3 "describes half a world" "$WNONE" "$RRS" FS-GG/R --protection "$SP/prot.json"
+expect "--rules WITHOUT --protection is refused too — the refusal is symmetric" \
+  3 "describes half a world" "$WNONE" "$RRS" FS-GG/R --rules "$SP/rules.json"
+
+# Both saved: a complete offline world, and NO API call is made (the stub would 404 the rules read
+# if it were reached, since this world has no rules/ dir — so a pass here proves it was not).
+expect "BOTH saved payloads audit fully offline, unioning the two stores" \
+  1 "REQUIRES the status check 'gone'" "$WNONE" "$RRS" FS-GG/R \
+  --protection "$SP/prot.json" --rules "$SP/rules.json"
+expect "...and both saved with an EMPTY ruleset list is the classic-only world, still audited" \
+  0 "1 audited" "$WNONE" "$RRS" FS-GG/R --protection "$SP/prot.json" --rules "$SP/norules.json"
+
+expect "an unreadable saved rules payload is exit 3, not a crash" \
+  3 "cannot read the saved rules payload" "$WNONE" "$RRS" FS-GG/R \
+  --protection "$SP/prot.json" --rules "$SP/nonexistent.json"
+
 # =============================================================================================
 # 6. WHY THIS TOOL IS NOT WIRED TO A WORKFLOW — and the regression guard that keeps it that way.
 #

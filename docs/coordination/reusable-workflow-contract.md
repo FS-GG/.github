@@ -150,12 +150,22 @@ cannot run in GitHub Actions — by anyone, in any repo.**
   `administration: read` — that is the whole point)."* Re-verified 2026-07-14 (#574): the App holds
   `contents`, `metadata`, `packages`, `pull_requests` — **no `administration`**.
 
-> **This is true of CLASSIC protection. It is NOT true of rulesets** ([#574](https://github.com/FS-GG/.github/issues/574)).
-> `rules/branches/<b>` needs only `metadata: read`, so a ruleset-protected repo's required contexts
-> *are* readable from a workflow. It does not make the scheduled org-wide gate possible on its own —
-> six of the seven rostered repos are classic-protected, and those still need the credential — but
-> the flat claim *"no workflow can read what a branch requires"* is now only half the picture, and
-> the half that changed is the half GitHub is migrating everyone toward.
+> **This is true of CLASSIC protection. The ruleset store is different — but it does NOT give you a
+> credential-free gate** ([#574](https://github.com/FS-GG/.github/issues/574)).
+>
+> `rules/branches/<b>` needs only `metadata: read`, so it is tempting to conclude that a
+> ruleset-protected repo can be audited from a workflow with no credential. **It cannot**, and the
+> reason is worth stating precisely, because the wrong conclusion here rebuilds the original bug:
+>
+> A required set is the **union** of both stores. A token without `administration: read` gets a
+> **403** on the classic endpoint — and a 403 does not mean *"there is no classic protection"*, it
+> means *"I cannot see whether there is."* So an unreadable classic store makes the union
+> **unknowable**, whatever the ruleset says. `check-required-contexts.py` therefore exits 3 (no
+> verdict) on ANY repo when it cannot read classic protection, ruleset-protected or not — a
+> half-read is not a verdict, and a gate that reported on half the stores is how this whole class
+> of bug started.
+>
+> The credential is still the blocker for a scheduled org-wide gate. Rulesets do not retire it.
 
 So the gate asks a question that needs **no credential**, and it asks it at the **source**: on the PR
 that would cause the outage, rather than in the victim's repo afterwards. That is strictly better —
