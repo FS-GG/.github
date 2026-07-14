@@ -22,12 +22,17 @@ obliges, **in the same change**:
 
 | contract | schema document | validator |
 |---|---|---|
-| `registry-schema` | `.github` — `registry/dependencies.yml` (`schemaVersion`) | **FS.GG.SDD** — `Fsgg.Registry` (`FS.GG.Contracts`) |
-| `skill-registry` | `.github` — `registry/skills.yml` (`schemaVersion`) | **FS.GG.SDD** — the same |
+| `registry-schema` | `.github` — `registry/dependencies.yml` (`schemaVersion`) | **FS.GG.SDD** — `Fsgg.Registry` (`FS.GG.Contracts`), asserting today |
+| `skill-registry` | `.github` — `registry/skills.yml` (`schemaVersion`) | **FS.GG.SDD** — the same `Fsgg.Registry`, which **does not yet assert over `skills.yml` at all** ([FS.GG.SDD#420](https://github.com/FS-GG/FS.GG.SDD/issues/420)) |
 
 No PR spans two repos. And the second bullet is unsatisfiable even on its own terms: the pin cannot
 advance to a CLI that **does not yet exist**. The CLI carrying the new `Fsgg.Registry` has to be
 *published* before `.github` can pin it.
+
+**ADR-0015 was not blind to this — it was inconsistent about it.** Its own Consequences say "SDD's own
+release cadence already publishes the CLI the gate then pins", which is publish-then-pin, in as many
+words. §3 nevertheless words the obligation as *atomic*. The defect is that the procedure and the
+rationale disagree, and the procedure is the half people follow.
 
 **Why nobody has tripped over it.** ADR-0015 was governance, not a behavioural change: it explicitly
 held `schemaVersion` at `1`, and no schema has been bumped since. The procedure has therefore **never
@@ -36,26 +41,32 @@ been executed**. `mirrored:` ([#658](https://github.com/FS-GG/.github/issues/658
 — and it immediately exposed that the procedure is unrunnable, which is why it landed *unbumped* and
 needed [#686](https://github.com/FS-GG/.github/issues/686) to adjudicate.
 
-### The window is not optional — this org's own machinery forces it
+### The window between the two PRs is not optional — the org's own machinery opens it
 
-The tempting reading is that "same PR" is merely *tidy*, and two PRs landed close together are near
-enough. They are not, and the reason is a device ADR-0015 itself installed.
+The tempting reading is that "same change" is merely *tidy*, and two PRs landed close together are
+near enough. They are not, and the reason is a device ADR-0015 itself installed.
 
 ADR-0015 §3 leans on the Renovate annotation manager to keep the validator current *structurally*
 between deliberate bumps, "so the H2 freeze cannot silently recur". That coupling is now also
-**asserted**: `pin-coherence.yml` gates, daily and on every push to `main`, that every annotated pin
-**equals the newest version live on the org feed**. Its own header states the consequence in as many
-words:
+**asserted**: `pin-coherence.yml` hard-fails (not warns) when an annotated pin is behind the newest
+version live on the org feed. A CLI release touches no file in `.github`, so it is the **daily
+schedule** — not the path-filtered push trigger — that catches it. The workflow's own header says so:
 
 > `push to main + schedule` — a CLI release that publishes a newer version turns `.github@main` red.
+> **The schedule is what catches it**, since such a release touches no file in this repo.
 
-So the moment SDD publishes the CLI carrying the new validator, `.github@main` goes **red** until the
-pin advances — and the pin advances **on its own**, by bot, with no human electing to. The
-newly-published validator therefore **will** be pointed at the not-yet-bumped document, on `main`, on
-a required gate, *guaranteed*. The gap between the two PRs is not a window we tolerate; it is a window
-the org drives us through.
+So within a day of SDD publishing the CLI, `.github@main` is **red** and stays red until the pin
+advances. Renovate then opens the bump PR — it does **not** merge it; there is no `automerge` in this
+org's config, so a human still elects to land it. But the choice is only *when*, not *whether*: the
+pin advance is the sole thing that greens `main`, and it is available immediately, while step 2's
+bump may not be.
 
-That is the fact ADR-0015 §3 could not see, because it assumed the pin advanced **as part of** the
+The consequence is what matters, and it does not depend on the bot being autonomous: **the pin
+advances ahead of the schema bump, on its own PR.** The newly-published validator will therefore be
+pointed at the not-yet-bumped document, on `main`, on a required gate. That gap is not a window we
+merely tolerate — it is one the org's own anti-freeze machinery *opens for us*.
+
+This is the fact ADR-0015 §3 could not see, because it assumed the pin advanced **as part of** the
 bump. It does not. It advances **ahead** of the bump, and reds `main` until it is allowed to.
 
 ## Decision
@@ -76,13 +87,28 @@ package the registry claims: publish the artifact, then flip the row that claims
    dropped is an **atomicity requirement the repo topology makes impossible**, and which was never the
    thing being protected.
 
-3. **A new field or a tightened rule is enforced only when the document DECLARES the new
-   `schemaVersion`.** This is an obligation on the **validator**, and it is what makes step 1 safe to
-   land alone. Between the two PRs the pinned validator knows a schema the document has not yet
-   declared; by §Context that state is *forced*, so a validator that enforces its new rule
-   unconditionally would red `.github`'s own required contract-coherence gate on `main` the instant it
-   published — and the only PR that could green it is step 2, now racing a red `main`. Version-gate the
-   rule. Do not merely hope the two PRs land close together; the bot will not let them.
+3. **The validator published in step 1 MUST still accept the document as it stands at `.github` HEAD.**
+   This is an obligation on the **validator**, and it is what makes step 1 safe to land alone. By
+   §Context the pin advances *ahead* of the bump, so between the two PRs the new validator is pointed
+   at the un-bumped document — on `main`, on a gate every consuming repo also runs, since they all call
+   the same reusable `contract-coherence.yml`. Concretely, the new rule may **reject nothing the current
+   document does**; enforce it only once the document *declares* the new `schemaVersion`.
+
+   Be precise about when this bites, because the obvious reading makes it sound vacuous. A **purely
+   additive optional** field enforces nothing, so an ungated validator reds nothing. The rule bites on
+   any validator that would **reject the document it is about to be pinned against**, and there are two
+   such shapes:
+
+   - a **tightening** — a today-optional field made required, or unknown fields rejected; and
+   - the far more tempting one: an additive field implemented as *"`mirrored` requires `schemaVersion`
+     ≥ 2"*. That is the natural way to write it, and it is a **trap that is already armed**:
+     `registry/skills.yml` carries `mirrored` **today, at `schemaVersion: 1`**. A validator asserting
+     that coupling would reject the live document the moment
+     [FS.GG.SDD#420](https://github.com/FS-GG/FS.GG.SDD/issues/420) ships the `skills.yml` assertion —
+     which is step 1 of the very sequence this ADR prescribes.
+
+   So the new field is *known* in step 1 and *required* only in step 2. Do not merely hope the two PRs
+   land close together; the pin will not wait for them.
 
 4. **An OPTIONAL, ADDITIVE, back-compatible field IS schema growth.** Decided in
    [#686](https://github.com/FS-GG/.github/issues/686), folded in here so the canonical source carries
@@ -107,17 +133,27 @@ package the registry claims: publish the artifact, then flip the row that claims
   → 0021, [0032](0032-the-lock-hash-must-not-depend-on-the-machine.md) → 0031,
   [0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) → 0011).
 
-- **The ordering is derived, not chosen — it is the direction that fails safe.** The two states are not
-  symmetric:
+- **The ordering is derived, not chosen — it is the direction whose intermediate state is CHECKED.**
+  The two states are not symmetric, and the asymmetry is not about which one is red:
 
-  - A validator that knows **more** than the document declares is **safe**: by §3 it is asked to enforce
-    nothing new, and the document it validates is one it already accepted.
-  - A document that declares **more** than the pinned validator knows is the **H2/M5 failure itself** —
-    a schema the gate cannot check, which is the entire defect ADR-0015 exists to close.
+  - **Validator ahead of document** (publish-before-flip): the pinned validator knows at least as much
+    as the document declares, so every rule the document is subject to is a rule the gate can actually
+    check. By §3 it enforces nothing new yet. The one red this state does produce — `pin-coherence`,
+    while the pin is behind feed-newest — is **loud, expected, and self-clearing**: Renovate's bump PR
+    greens it, and that PR stands alone, needing nothing from step 2.
+  - **Document ahead of validator** (flip-then-publish): the document declares a schema the pinned
+    validator has never heard of. This is **H2/M5 exactly** — the state ADR-0015 exists to close.
 
-  Flip-then-publish would deliberately enter the second state, and could not be made green: no pin value
-  satisfies a document whose schema no published CLI knows. Publish-before-flip is the only order whose
-  intermediate state is *green by construction*.
+  And the second state does not announce itself. It is tempting to say it "cannot be made green"; that
+  is **wrong**, and wrong in the direction that matters. Under the **additive tolerance** ADR-0015
+  documents (`0015` Context, M5), a stale validator *passes* a grown document — it ignores what it does
+  not know. `pin-coherence` is green too, because the pin still equals feed-newest (the new CLI does not
+  exist yet). So flip-then-publish is **silently green over a schema nothing checks**, which is worse
+  than any red: it is precisely the "typed validator degrades toward a YAML-parses check" failure, now
+  *entered deliberately, by procedure*.
+
+  That is the argument. Publish-before-flip's intermediate state is checked and its red is honest;
+  flip-then-publish's is unchecked and its green is a lie.
 
 - **It is also the only order whose failure modes are recoverable.** Reverting step 2 alone leaves a
   published CLI that knows a field the document does not declare — safe, by §3. Reverting step 1 alone
@@ -140,12 +176,19 @@ package the registry claims: publish the artifact, then flip the row that claims
   itself. Step 1 is [FS.GG.SDD#420](https://github.com/FS-GG/FS.GG.SDD/issues/420). **An unpaid debt
   recorded is honest; a paid-looking one is not.**
 
-- **Nothing enforces §3 today, and we say so rather than claim a guarantee we do not have.** A validator
-  that enforces a new rule without version-gating it is caught only by the red gate it causes — loudly,
-  on `main`, but *after* the fact. The clean tightening would be for the CLI to report the highest
-  `schemaVersion` it knows, letting `contract-coherence.yml` assert `declared ≤ known` directly; that
-  needs an SDD-side surface (`Fsgg.Registry`), so it is a **cross-repo decision, not a fix available
-  here**, and it is left open deliberately rather than half-built.
+- **Nothing enforces §3 today, and for `skill-registry` nothing would even NOTICE. We say so rather than
+  claim a guarantee we do not have.** A validator that violates §3 against `registry/dependencies.yml`
+  is caught by the red gate it causes — loudly, on `main`, but *after* the fact. Against
+  `registry/skills.yml` it is not caught at all: `contract-coherence.yml` invokes
+  `fsgg-sdd registry validate` on **`dependencies.yml` only**, so no gate reads `skills.yml` yet. The
+  §3 obligation therefore lands on the **author of [FS.GG.SDD#420](https://github.com/FS-GG/FS.GG.SDD/issues/420)**,
+  who ships the first `skills.yml` assertion and the gate wiring together — which is exactly why the
+  `mirrored`-at-`schemaVersion: 1` trap in §3 is spelled out rather than left as an exercise.
+
+  The clean tightening would be for the CLI to report the highest `schemaVersion` it knows, letting
+  `contract-coherence.yml` assert `declared ≤ known` directly, for both documents. That needs an
+  SDD-side surface (`Fsgg.Registry`), so it is a **cross-repo decision, not a fix available here**, and
+  it is left open deliberately rather than half-built.
 
 - **The tightening path ADR-0015 kept open is unchanged in kind, and now runnable.** Making a
   today-optional field required, or rejecting unknown fields, still lands as a normal `contract-change`
@@ -175,8 +218,11 @@ unaffected` opt-out applies. -->
   written to close.
 
 - **Flip-then-publish** (bump the document first, publish the validator after). Rejected as the unsafe
-  direction — see Consequences. It knowingly parks the org in the H2/M5 state, and no pin value can green
-  it.
+  direction — see Consequences. It parks the org in the H2/M5 state knowingly, and the damning part is
+  that it does so **silently**: additive tolerance means the stale pinned validator *passes* the grown
+  document, and `pin-coherence` is green because the pin still equals feed-newest. A procedure whose
+  intermediate state is a green gate over a schema nothing checks is not a slower path to the same place;
+  it is the defect, scheduled.
 
 - **Keep "same PR" and satisfy it with a monorepo or a submodule.** Out of scope, and rejected by the
   whole shape of ADR-0001.
