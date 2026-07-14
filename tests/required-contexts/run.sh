@@ -42,11 +42,18 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 
 # ---------------------------------------------------------------------------------------------
 # The `gh` stub. Serves a WORLD directory:
-#   $WORLD/protection/<owner>__<repo>__<branch>.json   branch protection payload
+#   $WORLD/protection/<owner>__<repo>__<branch>.json   CLASSIC branch protection payload
 #   $WORLD/refs/<ref>/<file>.yml                       a callee at a pinned ref
 #   $WORLD/protection/<slug>__<branch>.forbidden       403 — the token may not read protection
 #   $WORLD/protection/<slug>__<branch>.unreachable     rate limit / outage — never a verdict
-# An absent protection file = 404 = "the branch is not protected", which is an ANSWER.
+#   $WORLD/rules/<owner>__<repo>__<branch>.json        RULESET rules that apply to the branch
+#   $WORLD/rules/<slug>__<branch>.forbidden            403 on the rules endpoint
+#   $WORLD/rules/<slug>__<branch>.notfound             404 — no such repo/branch (NOT "no rules")
+#
+# An absent protection file = 404 = "no CLASSIC protection". That is an answer about that STORE,
+# not about the branch — a ruleset may still protect it (#574), so the stub models the two
+# endpoints independently, exactly as GitHub does.
+# An absent rules file = `[]` = "no rulesets apply", which is how the real endpoint answers.
 # ---------------------------------------------------------------------------------------------
 STUB="$WORK/stub"; mkdir -p "$STUB"
 cat > "$STUB/gh" <<'STUB'
@@ -68,6 +75,17 @@ case "$rest" in
     [ -e "$WORLD/protection/$slug.unreachable" ] && apifail
     f="$WORLD/protection/$slug.json"
     [ -f "$f" ] || notfound
+    cat "$f"
+    ;;
+  */rules/branches/*)
+    repo="${rest%%/rules/branches/*}"; branch="${rest#*/rules/branches/}"
+    slug="${repo//\//__}__${branch}"
+    [ -e "$WORLD/rules/$slug.forbidden" ]   && forbidden
+    [ -e "$WORLD/rules/$slug.unreachable" ] && apifail
+    [ -e "$WORLD/rules/$slug.notfound" ]    && notfound
+    f="$WORLD/rules/$slug.json"
+    # The real endpoint answers `[]` for a branch no ruleset touches — it does NOT 404.
+    [ -f "$f" ] || { echo '[]'; exit 0; }
     cat "$f"
     ;;
   */contents/.github/workflows/*)
@@ -109,6 +127,19 @@ protect() {  # protect <world> <repo> <branch> <context…>  — an Actions-prod
   for c in "$@"; do checks="$checks{\"context\":\"$c\",\"app_id\":15368},"; done
   printf '{"required_status_checks":{"strict":false,"checks":[%s]}}' "${checks%,}" \
     > "$world/protection/${repo//\//__}__${branch}.json"
+}
+
+ruleset() {  # ruleset <world> <repo> <branch> <context…>  — the SAME requirement, via a RULESET
+  # The shape GitHub really answers on `rules/branches/<b>`: a flat list of rules, the status-check
+  # one carrying `parameters.required_status_checks[]`, each naming its app as `integration_id`
+  # (not `app_id` — the two stores spell it differently). Non-status rules are present and must be
+  # ignored, exactly as FS.GG.Governance's real payload carries deletion/non_fast_forward/pull_request.
+  local world="$1" repo="$2" branch="$3"; shift 3
+  mkdir -p "$world/rules"
+  local checks=""
+  for c in "$@"; do checks="$checks{\"context\":\"$c\",\"integration_id\":15368},"; done
+  printf '[{"type":"deletion"},{"type":"pull_request","parameters":{}},{"type":"required_status_checks","parameters":{"required_status_checks":[%s]}}]' \
+    "${checks%,}" > "$world/rules/${repo//\//__}__${branch}.json"
 }
 
 # =============================================================================================
@@ -367,7 +398,82 @@ expect "an unparsable workflow is exit 3 — not a finding about a required cont
   3 "not parsable as YAML" "$WN" "$RBAD" FS-GG/R
 
 # =============================================================================================
-# 5. WHY THIS TOOL IS NOT WIRED TO A WORKFLOW — and the regression guard that keeps it that way.
+# 5. RULESETS — the OTHER store, and the vacuous green that reading one store produced (#574).
+#
+# GitHub keeps required status checks in TWO places. `branches/<b>/protection` (classic) does not
+# report ruleset rules; `rules/branches/<b>` (rulesets) does not report classic protection. A branch
+# may be governed by either, both, or neither, and GitHub enforces BOTH.
+#
+# This gate read classic protection alone and took its 404 to mean "not protected, requires
+# nothing". FS.GG.Governance is protected by a repository RULESET requiring five status checks and
+# answers 404 on the classic endpoint — so the gate printed `requires NO status checks` and exited
+# 0 over a fully-protected, deadlockable repo, holding an ADMIN token. Reading the wrong store, not
+# a missing credential. Exactly the #266 fail-open the gate exists to prevent, inside the gate.
+# =============================================================================================
+# THE REGRESSION. A deadlocking context, required by a ruleset, with NO classic protection at all.
+# Before the fix this was exit 0 and "requires NO status checks".
+RRS="$WORK/r-ruleset"; WRS="$WORK/w-ruleset"
+mkwf "$RRS/.github/workflows/g.yml" <<'YML'
+name: g
+on: [pull_request]
+jobs:
+  build:
+    name: Deterministic gate
+    runs-on: ubuntu-latest
+    steps: [{ run: 'true' }]
+YML
+ruleset "$WRS" FS-GG/R main "Deterministic gate" "lock-ranges / renamed-away"
+expect "a RULESET-required context that can never report is a FINDING — not a vacuous green (#574)" \
+  1 "REQUIRES the status check 'lock-ranges / renamed-away'" "$WRS" "$RRS" FS-GG/R
+
+# ...and the same world with the ruleset SATISFIED is green — the fix must not merely fail louder.
+WRS2="$WORK/w-ruleset-ok"
+ruleset "$WRS2" FS-GG/R main "Deterministic gate"
+expect "a RULESET whose every required context IS producible is green" \
+  0 "every required context is producible" "$WRS2" "$RRS" FS-GG/R
+
+# BOTH STORES AT ONCE. They stack, so the required set is their UNION — a repo can be deadlocked by
+# either one, and honouring only the store that happens to be non-empty would still be half-blind.
+WBOTH="$WORK/w-both"
+protect "$WBOTH" FS-GG/R main "Deterministic gate"
+ruleset "$WBOTH" FS-GG/R main "gone-from-the-ruleset"
+expect "classic and ruleset requirements are UNIONED — a ruleset-only deadlock is caught behind a satisfiable classic set" \
+  1 "REQUIRES the status check 'gone-from-the-ruleset'" "$WBOTH" "$RRS" FS-GG/R
+
+WBOTH2="$WORK/w-both-2"
+protect "$WBOTH2" FS-GG/R main "gone-from-the-classic-set"
+ruleset "$WBOTH2" FS-GG/R main "Deterministic gate"
+expect "...and symmetrically: a CLASSIC-only deadlock is caught behind a satisfiable ruleset" \
+  1 "REQUIRES the status check 'gone-from-the-classic-set'" "$WBOTH2" "$RRS" FS-GG/R
+
+# TRULY unprotected: BOTH stores say nothing. Only then is "requires nothing" the truth — and it
+# must say it checked both, so the next reader cannot mistake it for the old half-read.
+WNONE="$WORK/w-neither"; mkdir -p "$WNONE/protection" "$WNONE/rules"
+expect "a branch neither store protects requires nothing — and it says it checked BOTH" \
+  0 "Checked BOTH stores" "$WNONE" "$RRS" FS-GG/R
+
+# FAIL CLOSED on the rules endpoint, exactly as on the classic one. A 403 here means we can see only
+# half of what protects the branch, and a half-read is not a verdict.
+WRF="$WORK/w-rules-403"; mkdir -p "$WRF/protection" "$WRF/rules"
+: > "$WRF/rules/FS-GG__R__main.forbidden"
+expect "a 403 on the RULES endpoint is exit 3 — a half-read of what protects the branch is not a verdict" \
+  3 "half-read is not a verdict" "$WRF" "$RRS" FS-GG/R
+
+# A 404 on the rules endpoint is NOT "no rules" — the real endpoint answers `[]` for that. It means
+# no such repo/branch, and inferring "unprotected" from it would rebuild the very fail-open above.
+WRN="$WORK/w-rules-404"; mkdir -p "$WRN/protection" "$WRN/rules"
+: > "$WRN/rules/FS-GG__R__main.notfound"
+expect "a 404 on the RULES endpoint is exit 3 — it means 'no such branch', never 'no rules'" \
+  3 "Refusing to infer that the branch is unprotected" "$WRN" "$RRS" FS-GG/R
+
+# A rate limit on the rules endpoint is RETRYABLE — never green, never a finding.
+WRU="$WORK/w-rules-500"; mkdir -p "$WRU/protection" "$WRU/rules"
+: > "$WRU/rules/FS-GG__R__main.unreachable"
+expect "an unreachable RULES endpoint is exit 2 (RETRYABLE) — not green, not a finding" \
+  2 "no verdict" "$WRU" "$RRS" FS-GG/R
+
+# =============================================================================================
+# 6. WHY THIS TOOL IS NOT WIRED TO A WORKFLOW — and the regression guard that keeps it that way.
 #
 # This script needs to read `branches/<b>/protection`, which requires `administration: read`. That
 # is NOT a valid `permissions:` scope for a workflow's GITHUB_TOKEN: declaring it is a workflow

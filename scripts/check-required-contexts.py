@@ -56,14 +56,25 @@ WHAT IT DELIBERATELY DOES NOT JUDGE
   derivable from this repo's YAML, and red-lighting them would be a gate crying wolf about a repo it
   cannot see. They are counted and named, never guessed at.
 
-  A branch with NO protection, or none requiring status checks: that is a real answer (a 404 from
-  the protection endpoint is an answer, not a failure to reach it), and the invariant holds
-  vacuously. It is reported as such, loudly enough that "this repo requires nothing" cannot be
-  misread as "everything this repo requires is fine".
+  A branch with NO protection, or none requiring status checks: that is a real answer, and the
+  invariant holds vacuously. It is reported as such, loudly enough that "this repo requires nothing"
+  cannot be misread as "everything this repo requires is fine".
+
+GITHUB KEEPS REQUIRED CHECKS IN TWO SEPARATE STORES, AND READING ONE IS A VACUOUS GREEN (#574)
+  `branches/<b>/protection` (classic) does NOT report ruleset rules, and `rules/branches/<b>`
+  (rulesets) does NOT report classic protection. A branch may be governed by either, both, or
+  neither, and GitHub enforces BOTH — so the required set is their UNION.
+
+  This gate read classic protection alone, and took its 404 to mean "not protected, requires
+  nothing". FS.GG.Governance is protected by a repository RULESET requiring five status checks, and
+  answers 404 on the classic endpoint — so the gate reported `requires NO status checks` and exited
+  0 over a fully-protected repo, holding an admin token. A 404 from ONE store is not an answer
+  about the branch; it is an answer about that store.
 
 Usage:
   check-required-contexts.py --repo <owner/name> [--root <dir>] [--branch main]
-                             [--protection <file>]   # a saved protection payload; skips the API
+                             [--protection <file>]   # a saved classic payload; skips that API call
+                             [--rules <file>]        # a saved ruleset payload; skips that API call
 Exit: 0 = every required context is producible; 1 = at least one can never report; 2 = no verdict,
 RETRYABLE — the API could not be read (rate limit, outage); 3 = no verdict, PERMANENT — protection
 is unreadable for want of permission, a workflow will not parse, a callee is missing, or a matrix
@@ -357,8 +368,9 @@ def producible_contexts(root: str, repo: str) -> tuple[set[str], list[str]]:
     return pr_contexts, non_pr
 
 
-def required_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
-    """The branch's required status checks. A 404 means "not protected" — a real answer."""
+def classic_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
+    """Required checks from CLASSIC branch protection. A 404 means "no classic protection" — which
+    is NOT the same as "requires nothing"; see required_contexts()."""
     if saved:
         try:
             with open(saved, encoding="utf-8") as fh:
@@ -369,7 +381,7 @@ def required_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
         try:
             payload = json.loads(gh_api(f"repos/{repo}/branches/{branch}/protection"))
         except Missing:
-            return []  # the branch is not protected: it requires nothing, and that is an answer
+            return []  # no CLASSIC protection. A ruleset may still protect the branch.
         except Forbidden as e:
             raise GateError(
                 f"cannot read {repo}'s branch protection: {e}\n"
@@ -378,7 +390,8 @@ def required_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
                 f"Do not try to fix that in a workflow: `administration` is NOT a valid "
                 f"`permissions:` scope for a GITHUB_TOKEN — declaring it is a validation error and "
                 f"the run dies at startup, producing no check run at all (the #478 blind spot). The "
-                f"org's dispatch App does not hold the scope either (#463).\n"
+                f"org's dispatch App does not hold the scope either (#463, re-verified 2026-07-14: "
+                f"contents, metadata, packages, pull_requests — no administration).\n"
                 f"Run this tool with a token that has admin rights on {repo} (a PAT, or an App "
                 f"installation with `administration: read`). The check that DOES run in CI without a "
                 f"credential is reusable-job-id-coherence.yml, which catches the rename in FS-GG/"
@@ -398,6 +411,95 @@ def required_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
     return list(checks)
 
 
+def ruleset_contexts(repo: str, branch: str, saved: str | None) -> list[dict]:
+    """Required checks from RULESETS — the other, entirely separate, place GitHub keeps them.
+
+    `branches/<b>/protection` does NOT report ruleset rules, and `rules/branches/<b>` does NOT
+    report classic protection. They are two stores, and a branch may be governed by either, both,
+    or neither. This endpoint reports repository AND organization rulesets that apply to the branch,
+    and — unlike the classic endpoint — it needs only `metadata: read`.
+    """
+    if saved:
+        try:
+            with open(saved, encoding="utf-8") as fh:
+                rules = json.load(fh)
+        except (OSError, json.JSONDecodeError) as e:
+            raise GateError(f"cannot read the saved rules payload {saved}: {e}") from e
+    else:
+        try:
+            rules = json.loads(gh_api(f"repos/{repo}/rules/branches/{branch}"))
+        except Missing as e:
+            # This endpoint answers `[]` for a branch with no rules, so a 404 is NOT "no rules" —
+            # it is "no such repo or branch", and guessing "unprotected" from it would be the very
+            # fail-open this function exists to close.
+            raise GateError(
+                f"cannot read {repo}@{branch}'s rulesets: {e}\n"
+                f"A branch with no rules answers `[]`, not 404 — so this is not 'no rulesets', it "
+                f"is 'no such repo or branch'. Refusing to infer that the branch is unprotected."
+            ) from e
+        except Forbidden as e:
+            raise GateError(
+                f"cannot read {repo}@{branch}'s rulesets: {e}\n"
+                f"This needs only `metadata: read`. A token that cannot read it cannot see half of "
+                f"what protects the branch, and a half-read is not a verdict."
+            ) from e
+        except json.JSONDecodeError as e:
+            raise GateError(f"{repo}: the ruleset rules were not valid JSON — {e}") from e
+
+    if not isinstance(rules, list):
+        raise GateError(
+            f"{repo}@{branch}: expected `rules/branches/{branch}` to answer a list of rules, got "
+            f"{type(rules).__name__}. Refusing to guess what protects this branch."
+        )
+
+    out: list[dict] = []
+    for rule in rules:
+        if not isinstance(rule, dict) or rule.get("type") != "required_status_checks":
+            continue
+        params = rule.get("parameters") or {}
+        for check in params.get("required_status_checks") or []:
+            # A ruleset names the producing app as `integration_id`, where classic protection says
+            # `app_id`. Same meaning, different spelling; normalise so main() judges them alike.
+            out.append({
+                "context": str(check.get("context", "")),
+                "app_id": check.get("integration_id"),
+            })
+    return out
+
+
+def required_contexts(
+    repo: str, branch: str, saved: str | None, saved_rules: str | None
+) -> list[dict]:
+    """Every status check the branch requires — from BOTH places GitHub keeps them.
+
+    THE FAIL-OPEN THIS CLOSES (#574). This gate used to read classic branch protection alone and
+    treat its 404 as the answer "the branch is not protected, so it requires nothing". That is true
+    only in a world without rulesets, and the org left that world: FS.GG.Governance is protected by
+    a REPOSITORY RULESET requiring five status checks, and `branches/main/protection` answers 404
+    for it. So the gate reported
+
+        ok: FS-GG/FS.GG.Governance@main requires NO status checks
+
+    and exited 0 — a VACUOUS GREEN over a fully-protected repo, with an admin token, which is the
+    exact class (#266) this gate's own docstring is written against. The blindness was never a
+    credential problem: it read the wrong store.
+
+    Rulesets and classic protection STACK — GitHub enforces both — so the required set is their
+    UNION, and "requires nothing" is only true when both sources say so and both were readable.
+    """
+    classic = classic_contexts(repo, branch, saved)
+    rules = ruleset_contexts(repo, branch, saved_rules)
+
+    merged: list[dict] = []
+    seen: set[tuple[str, object]] = set()
+    for check in [*classic, *rules]:
+        key = (str(check.get("context", "")), check.get("app_id"))
+        if key not in seen:
+            seen.add(key)
+            merged.append(check)
+    return merged
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
@@ -407,15 +509,18 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--root", default=".", help="that repo's working tree (default: .)")
     ap.add_argument("--branch", default="main", help="the protected branch (default: main)")
     ap.add_argument("--protection", default=None,
-                    help="a saved protection payload; skips the API (for fixtures)")
+                    help="a saved classic-protection payload; skips that API call (for fixtures)")
+    ap.add_argument("--rules", default=None,
+                    help="a saved ruleset-rules payload; skips that API call (for fixtures)")
     args = ap.parse_args(argv)
 
-    required = required_contexts(args.repo, args.branch, args.protection)
+    required = required_contexts(args.repo, args.branch, args.protection, args.rules)
     if not required:
         print(
             f"ok: {args.repo}@{args.branch} requires NO status checks — nothing can deadlock on a "
-            f"context that never reports. (This is not a statement that the repo's gates are green; "
-            f"it is a statement that none of them are required.)"
+            f"context that never reports. (Checked BOTH stores: classic branch protection and "
+            f"rulesets. This is not a statement that the repo's gates are green; it is a statement "
+            f"that none of them are required.)"
         )
         return OK
 
