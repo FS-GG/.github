@@ -805,10 +805,15 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   disagreement is logged (`fsgg-coord divergence`). Nothing about your run changes — not the answer,
   not the exit code, not the timing you would notice.
 
-  It is worth the one command because the shadow is how the port earns its cutover. Bash stays
-  authoritative until the divergence log has been clean across the live fleet for three consecutive
-  days, and that log only fills where an engine exists. A worker without one contributes no evidence,
-  and the clock does not move.
+  It is worth the one command because an engine you have is an engine you can ASK. `--engine=fs` is
+  **open** (ADR-0038) — there, the typed core's answer *is* the answer, and every failure is fatal
+  rather than a quiet fall back to bash. The **default does not move**: with no flag it is `auto`, and
+  `auto` still hands you bash's answer.
+
+  The cut-over gate is the **defect corpus** — `tests/fsgg-coord/cases/`, one case per historical
+  defect, run against **both** engines in CI. It is not a fleet clock: that clock could never tick,
+  because a worker in a per-item worktree resolves no engine and so banks no evidence (#728). The
+  shadow is now **telemetry** — it is how a live fleet is watched, not what the flip waits on.
 
   A global tool lands in `~/.dotnet/tools`, which is already on `PATH`, so it is found in **every**
   repo with no per-repo setup. (A local `dotnet tool restore` also works — but note a local tool is
@@ -845,10 +850,15 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   one of those rows carries `skipped=0`, because the only workers that publish are the ones whose engine
   **resolved** — and that is `.github`, the single repo that builds the engine from source. The five
   receivers, skipping every call for want of a restore, have contributed **nothing, ever**. So the fleet
-  gate is not reading a fleet; it is reading one repo and calling it the fleet, while ADR-0034's cut-over
-  criterion says *"across the **live fleet**."* **A hook on one path is a request that the path be taken.**
-  So the publish now hangs on the *shadow*, which is the only path that has, by construction, just
-  produced evidence.
+  gate was not reading a fleet; it was reading one repo and calling it the fleet, while ADR-0034's
+  cut-over criterion said *"across the **live fleet**."* **A hook on one path is a request that the path
+  be taken.** So the publish now hangs on the *shadow*, which is the only path that has, by construction,
+  just produced evidence.
+
+  That gap is **why the fleet clock is gone**: a criterion no worker in a worktree could ever satisfy is
+  not a slow gate, it is an unreachable one (#728). [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)
+  retired it and made the **defect corpus** the gate. The ledger above is still worth filling — it is how
+  a live fleet is *watched* — but nothing waits on it any more.
 
   It is **throttled** — at most one REST write per 30 minutes per machine, shared across every worker on
   it, because the hot scheduling loop may not pay the network on every call. Missing a window loses
@@ -867,9 +877,9 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   ```
 
   The local log lives in `~/.cache/fsgg-coord/`, a cache directory that dies with your container. The
-  cut-over criterion is *"zero divergence across the **live fleet** for three consecutive days"*, and a
-  worker who shadows and never publishes has moved that clock exactly as far as one who never shadowed
-  at all.
+  cut-over criterion is no longer a fleet clock — it is the **defect corpus** (ADR-0038) — but the
+  ledger is still how a **live** fleet is watched, and a worker who shadows and never publishes has told
+  it exactly as much as one who never shadowed at all.
 
 - `Status: In progress` and `Blocked by` already exist on the board — **no schema change is
   required**. A repo may add an optional `Paths` text field if it wants touch-sets filterable
