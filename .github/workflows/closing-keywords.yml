@@ -10,10 +10,16 @@
 # worker re-reading the `release` output and disbelieving it. There is no second line of defence:
 # `done --flip` cannot help, because the work WAS merged — it just did not finish the item.
 #
-# The subject of this gate is the PR BODY, not the tree, so there is deliberately NO `paths:` filter:
-# any PR can carry a negated keyword, including one that touches no file this gate knows about. It
-# runs on `edited` (the body changed) and on `synchronize` (so the check is present on the head SHA
-# the merge gate reads — a check that is not on the head SHA is a check the merge gate cannot see).
+# The subjects of this gate are the PR BODY and the branch's COMMIT MESSAGES (#684) — not the tree —
+# so there is deliberately NO `paths:` filter: any PR can carry a negated keyword, including one that
+# touches no file this gate knows about. It runs on `edited` (the body changed) and on `synchronize`
+# (the commits changed, AND so the check is present on the head SHA the merge gate reads — a check
+# that is not on the head SHA is a check the merge gate cannot see).
+#
+# Both subjects, because they are different texts with different powers, and only one of them closes:
+# `squash_merge_commit_message` is COMMIT_MESSAGES here, so the squash message is built from the
+# commit messages and the PR body is merely a proxy — exact only on a single-commit branch. A keyword
+# in a non-final commit closes an issue that never appears in the body the gate used to read (#684).
 #
 # No `schedule:`: the subject is a pull request. There is nothing to re-prove between pushes.
 name: closing-keywords
@@ -56,22 +62,51 @@ jobs:
     needs: fixture
     if: github.event_name == 'pull_request'
     steps:
+      # fetch-depth: 0 — the gate's PRIMARY subject is the branch's COMMIT MESSAGES (#684), and a
+      # shallow clone cannot reach the base commit to enumerate them. A depth that cannot see the
+      # base would yield an empty range, and an empty range read as "nothing to audit" is the exact
+      # fail-open this gate exists to close. The gate refuses an empty subject for the same reason.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
-      # Through the ENVIRONMENT, never interpolated into the shell. A PR body is attacker-controlled
-      # text: `${{ github.event.pull_request.body }}` pasted into a `run:` block is a script-injection
-      # sink, and this body is, by construction, full of backticks and quotes.
-      - name: Assert the body closes nothing it says it does not close
+      # THE TEXT THAT ACTUALLY CLOSES. `squash_merge_commit_message` is COMMIT_MESSAGES on this repo,
+      # so the squash message is built from the branch's commit messages, concatenated — NOT from the
+      # PR body. The body is only a proxy for it, and an exact one solely on a single-commit branch
+      # (which is what pnext-item §5's `git log -1 --format=%b` happens to produce). On a two-commit
+      # branch a closing keyword in the FIRST commit reaches the squash message and closes an issue
+      # while never appearing in the body — green gate, closed issue (#684).
+      #
+      # `git cat-file -e` first: an unreachable base must fail LOUD here. If it silently produced an
+      # empty range instead, the gate would be handed an empty subject — and "I read no commits" must
+      # never be able to look like "I read the commits and they were clean" (#266).
+      - name: Collect the commit messages that become the squash message
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git cat-file -e "$BASE^{commit}"
+          git cat-file -e "$HEAD^{commit}"
+          git log --format=%B "$BASE".."$HEAD" > commit-messages.txt
+          echo "collected $(git rev-list --count "$BASE".."$HEAD") commit message(s)"
+
+      # The body goes through the ENVIRONMENT, never interpolated into the shell. A PR body is
+      # attacker-controlled text: `${{ github.event.pull_request.body }}` pasted into a `run:` block
+      # is a script-injection sink, and this body is, by construction, full of backticks and quotes.
+      # The commit messages are read from the tree by git, so they never transit the shell at all.
+      - name: Assert the merge closes nothing the PR did not declare
         id: check
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           printf '%s' "$PR_BODY" > pr-body.md
           rc=0
-          out="$(python scripts/check-closing-keywords.py --body pr-body.md 2>&1)" || rc=$?
+          out="$(python scripts/check-closing-keywords.py \
+                   --commits commit-messages.txt --body pr-body.md 2>&1)" || rc=$?
           [ -z "$out" ] || printf '%s\n' "$out"
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
 
@@ -81,12 +116,12 @@ jobs:
       # There is deliberately no rc=2 ("no verdict, retryable"): the gate is pure and offline — it
       # reads text, makes no network call, and has no condition a re-run could resolve. An rc=2 would
       # mean it grew a failure mode nobody classified, and it lands in INCONCLUSIVE below, which fails.
-      - name: 'OK: the body closes only what it means to'
+      - name: 'OK: the merge closes only what this PR means to close'
         if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
         run: |
           echo "closing-keywords: OK" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 'FINDING: this PR closes an issue its body did not declare'
+      - name: 'FINDING: this PR closes an issue it did not declare'
         if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
         run: |
           {
@@ -103,7 +138,14 @@ jobs:
             echo 'fence closes the issue just as dead as one in prose. This is how #422 came to be'
             echo 'closed a second time, by the very PR that shipped this gate.'
             echo
-            echo '**Fix the body, not the gate.** Declare what you close on a line of its own:'
+            echo '**Check WHICH subject the finding names (#684).** This gate reads two texts:'
+            echo 'the **commit messages**, which are concatenated into the squash message and are'
+            echo 'what actually closes; and the **PR body**, which is what records the PR'"'"'s link.'
+            echo 'A finding in the body you can fix by editing the body. A finding in the commit'
+            echo 'messages you cannot — the body is not that text. **Rewrite the branch**'
+            echo '(`git commit --amend`, or a rebase) and force-push, or the merge will close it.'
+            echo
+            echo '**Fix the text, not the gate.** Declare what you close on a line of its own:'
             echo
             echo '> `Closes #123.`'
             echo
@@ -116,18 +158,22 @@ jobs:
           echo "::error title=closing-keywords: the body closes an issue it did not declare::GitHub does not read the word \"not\", and code is not a defence — the squash commit message is plain text. See the job log."
           exit 1
 
-      - name: 'NO VERDICT (permanent): the body could not be read'
+      - name: 'NO VERDICT (permanent): a subject could not be read'
         if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
         run: |
           {
             echo "### closing-keywords: no verdict"
             echo
-            echo "The gate was handed no PR body it could read. Examining nothing is a failure to"
-            echo "audit, not a clean audit (#266): if the event payload stops carrying the body, every"
-            echo "PR would read as clean and this gate would go green while the silent closes went on"
+            echo "The gate was handed a subject it could not read — no PR body, or no commit messages"
+            echo "(an EMPTY commit-message file counts: every PR has at least one commit, so empty"
+            echo "means the rev range or the clone depth is broken, not that the branch is clean)."
+            echo
+            echo "Examining nothing is a failure to audit, not a clean audit (#266): if the event"
+            echo "payload stops carrying the body, or the base commit stops being reachable, every PR"
+            echo "would read as clean and this gate would go green while the silent closes went on"
             echo "happening. Retrying will not help — fix the wiring."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=closing-keywords: no verdict (permanent)::The gate could not read a PR body. See the job log."
+          echo "::error title=closing-keywords: no verdict (permanent)::The gate could not read one of its subjects. See the job log."
           exit 1
 
       - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
