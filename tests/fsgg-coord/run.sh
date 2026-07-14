@@ -5457,6 +5457,130 @@ if [ -x "$ENGINE" ]; then
     "3" "$rc"
 fi
 
+# ==================================================================================================
+# A MANIFEST IS A DECLARATION, NOT AN INSTALLATION.
+# ==================================================================================================
+# Every receiver carries the engine in `.config/dotnet-tools.json`. NOTHING restored it. `dotnet tool run`
+# on an unrestored manifest prints *Run "dotnet tool restore"...* to STDERR and exits 1 — so the version
+# capture came back EMPTY, became `unknown`, and `unknown` is stale by design (#655). Every scheduling
+# call in all six receivers skipped, blaming a stale engine and telling the worker to `dotnet tool update`
+# a tool they had never installed.
+#
+# Measured on 2026-07-14, against the live divergence log: 187 of 239 shadow runs skipped, 186 of them
+# with this exact reason (`engine unknown is STALE`). The evidence the three-day clock is made of was
+# being thrown away at the source, in every repo except the one that builds from source.
+if [ -x "$ENGINE" ]; then
+  CO_MAN="$(mkcheckout manifest https://github.com/FS-GG/FS.GG.SDD.git)"
+  mkdir -p "$CO_MAN/.config"
+  jq -n '{version:1, isRoot:true, tools:{"fs.gg.coord.cli":{version:"0.1.1", commands:["fsgg-coord-engine"]}}}' \
+    >"$CO_MAN/.config/dotnet-tools.json"
+
+  # The real thing's behaviour, exactly: `tool run` FAILS until `tool restore` has been called, and the
+  # complaint goes to stderr where a stdout capture cannot see it.
+  export DOTNET_RESTORE_MARK="$WORK/restored.mark"
+  export DOTNET_RESTORE_CALLS="$WORK/restore.calls"
+  : >"$DOTNET_RESTORE_CALLS"
+  cat >"$STUB/dotnet" <<EOF
+#!/usr/bin/env bash
+if [ "\$1" = tool ] && [ "\$2" = restore ]; then
+  echo restore >>"\$DOTNET_RESTORE_CALLS"
+  : >"\$DOTNET_RESTORE_MARK"
+  exit 0
+fi
+if [ "\$1" = tool ] && [ "\$2" = run ] && [ "\$3" = fsgg-coord-engine ]; then
+  shift 3
+  if [ ! -f "\$DOTNET_RESTORE_MARK" ]; then
+    echo 'Run "dotnet tool restore" to make the "fsgg-coord-engine" command available.' >&2
+    exit 1
+  fi
+  exec "$ENGINE" "\$@"
+fi
+exit 1
+EOF
+  chmod +x "$STUB/dotnet"
+
+  MANLOG="$WORK/manifest.jsonl"; : >"$MANLOG"
+  rm -f "$DOTNET_RESTORE_MARK"
+  man_out="$(cd "$CO_MAN" && PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_ENGINE_BIN= \
+    FSGG_COORD_DIVERGENCE_LOG="$MANLOG" FSGG_COORD_PUBLISH_EVERY_MIN=0 \
+    bash "$COORD" next --repo sdd 2>/dev/null)" || true
+
+  assert_eq "unrestored manifest: the tool RESTORES the engine it was told to run, rather than skipping and blaming a stale build" \
+    "1" "$(wc -l <"$DOTNET_RESTORE_CALLS" | tr -d ' ')"
+  assert_eq "unrestored manifest: ...and the shadow actually RAN — this is the 139-of-147 that never became evidence" \
+    "true" "$(jq -s -r '.[-1].ran' <"$MANLOG" 2>/dev/null || echo MISSING)"
+  assert_eq "unrestored manifest: ...under the real version, never 'unknown' (which is stale by design, so it skips)" \
+    "0.1.1.0" "$(jq -s -r '.[-1].engine' <"$MANLOG" 2>/dev/null || echo MISSING)"
+
+  # A restore that CANNOT work must not put a network round-trip in the hot loop on every call — and it
+  # must not go quiet either. It skips, and the skip names the REAL failure: declared-but-broken is not
+  # the same fact as absent, and a skip that named the wrong one is what sent this fleet chasing a stale
+  # tool it had never installed.
+  printf '#!/usr/bin/env bash\nif [ "$1" = tool ] && [ "$2" = restore ]; then exit 1; fi\nif [ "$1" = tool ]; then echo "Run \\"dotnet tool restore\\"" >&2; exit 1; fi\nexit 1\n' >"$STUB/dotnet"
+  chmod +x "$STUB/dotnet"
+  BADLOG="$WORK/manifest-bad.jsonl"; : >"$BADLOG"
+  rc=0; (cd "$CO_MAN" && PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_ENGINE_BIN= \
+    FSGG_COORD_CACHE="$WORK/cache-badrestore" FSGG_COORD_DIVERGENCE_LOG="$BADLOG" \
+    FSGG_COORD_PUBLISH_EVERY_MIN=0 bash "$COORD" next --repo sdd >/dev/null 2>&1) || rc=$?
+  assert_eq "unrestored manifest: a restore that fails does NOT red the caller — a receiver's CI may never break over its own bookkeeping" \
+    "0" "$rc"
+  assert_contains "unrestored manifest: ...and the skip names the REAL failure (declared-but-broken), not a stale build the worker never had" \
+    "DECLARED" "$(jq -s -r '.[-1].reason // ""' <"$BADLOG" 2>/dev/null)"
+  rm -f "$STUB/dotnet"
+fi
+
+# ==================================================================================================
+# THE EVIDENCE MUST LEAVE THE MACHINE EVEN WHEN `done` NEVER RUNS.
+# ==================================================================================================
+# #656 bolted the publish to `done` — "the one command every worker runs when it finishes an item". It is
+# not: an item closed by a SQUASH-MESSAGE closing keyword (#681, #685, #693) is merged, closed and
+# board-Done without `done` ever being called, and that worker's evidence never leaves the machine.
+#
+# The ledger is not EMPTY — it held 59 rows when this was written, 11 of them dated 2026-07-14 — so the
+# hook does work for the workers that reach it. It is not COMPLETE. Every one of those rows carries
+# `skipped=0`, because the only workers that publish are the ones whose engine resolved: `.github`, which
+# builds from source. The five receivers contribute nothing. A hook on ONE path is a request that the path
+# be taken, and the fleet gate ends up reading one repo and calling it the fleet.
+if [ -x "$ENGINE" ]; then
+  SHLOG="$WORK/shadowpub.jsonl"; : >"$SHLOG"
+  echo '[]' >"$PUB_CF"
+  SHCACHE="$WORK/cache-shadowpub"
+
+  shpub() { PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_LEDGER_REPO="FS-GG/.github" \
+              FSGG_COORD_LEDGER_ISSUE=635 FSGG_COORD_DIVERGENCE_LOG="$SHLOG" \
+              FSGG_COORD_ENGINE_BIN="$ENGINE" FSGG_COORD_CACHE="$SHCACHE" \
+              FSGG_WORKER=w-shadow bash "$COORD" "$@"; }
+
+  shpub next --repo sdd >/dev/null 2>&1 || true
+  assert_eq 'shadow publish: the SHADOW pushes its own evidence — no `done`, no closing keyword, nothing to remember' \
+    "1" "$(pubmarks)"
+
+  # THROTTLED: the hot scheduling loop may not pay the network on every call (ADR-0034 §5). The second
+  # run inside the window must compare, log, and NOT write.
+  shpub next --repo sdd >/dev/null 2>&1 || true
+  assert_eq 'shadow publish: ...but at most once per window — the hot loop may not pay the network on every call' \
+    "1" "$(pubmarks)"
+
+  # ...and the window EXPIRING lets the next run carry the day up. Late is a property of this ledger;
+  # lost is not.
+  echo 0 >"$SHCACHE/divergence.published"
+  shpub next --repo sdd >/dev/null 2>&1 || true
+  assert_eq 'shadow publish: ...and once the window expires it publishes again, rewriting the row in place (idempotent)' \
+    "1" "$(pubmarks)"
+  assert_contains 'shadow publish: ...naming the worker whose evidence it is' \
+    "worker=w-shadow" "$(jq -r '[.[] | select(.body | test("fsgg:divergence"))][0].body' "$PUB_CF" 2>/dev/null || echo "")"
+
+  # A publish that CANNOT work is bookkeeping that failed. It may never cost a worker their item — the
+  # shadow cannot change bash's answer, its exit code, or its life.
+  echo 0 >"$SHCACHE/divergence.published"
+  rc=0; out="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw FSGG_COORD_LEDGER_REPO="FS-GG/.github" \
+    FSGG_COORD_LEDGER_ISSUE=999999 FSGG_COORD_DIVERGENCE_LOG="$SHLOG" FSGG_COORD_ENGINE_BIN="$ENGINE" \
+    FSGG_COORD_CACHE="$SHCACHE" bash "$COORD" next --repo sdd 2>&1)" || rc=$?
+  assert_eq 'shadow publish: a FAILED publish does not fail the scheduling call that carried it' "0" "$rc"
+  assert_contains 'shadow publish: ...and stays silent — bookkeeping may not clutter the output that carries the verdict' \
+    "FS.GG.SDD#" "$out"
+fi
+
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::fsgg-coord fixture FAILED"; exit 1; }
 echo "fsgg-coord fixture — OK"
