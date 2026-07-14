@@ -23,6 +23,20 @@ namespace FS.GG.Coord.GitHub
 /// budget the declaration was already rewritten when the refusal arrived. Here the re-check PRODUCES the
 /// value the PATCH consumes — `rewrite` returns a `Rewritten`, and `patchBody` accepts nothing else. A
 /// PATCH that precedes its own validation cannot be written down.
+///
+/// WHAT IS HERE, AND WHAT IS NOT — STATED, BECAUSE A MODULE THAT OVERSTATES ITS SCOPE IS A MODULE THAT
+/// GETS TRUSTED FOR THINGS IT DOES NOT DO.
+///
+/// Here: the claim CAS, `verifyHeld`, `widen`, `heartbeat`, `release`, `say`, `child`. These are the
+/// ISSUE-side writes — REST, comment- and body-shaped, and they are where the capability discipline
+/// actually bites.
+///
+/// **NOT here: the BOARD-side writes** — `set-field`, its aliased batch (#448), `done --flip`, and
+/// `epic_rollup`. Those are Projects v2 mutations over GraphQL, they need the field/option id map that
+/// `bootstrap` resolves, and `done --flip` carries its own five-precondition fact query. They are a
+/// coherent second piece of work, and doing them badly to make this file look finished would be worse than
+/// leaving them out and saying so. The deferred-write queue they will need (#510) already exists and is
+/// tested — `Cache.defer`, which takes the failure that licenses it as an argument.
 module Writes =
 
     open FS.GG.Coord.Types

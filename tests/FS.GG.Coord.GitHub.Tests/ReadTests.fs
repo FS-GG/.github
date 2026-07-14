@@ -202,12 +202,39 @@ let ``a blocker we could not READ is Unknown - and Unknown BLOCKS`` () =
 
 [<Fact>]
 let ``one unreadable blocker does not STARVE the board`` () =
-    // The error is deliberately NOT propagated: the item it blocks stays blocked and explains itself, while
-    // every other item on the board is still schedulable. Failing the whole scan on one bad ref would be
-    // fail-closed in the wrong place — it would turn one unreachable issue into a dead queue.
+    // A 502 on ONE issue is local to that issue. The item it blocks stays blocked and explains itself,
+    // while every other item on the board is still schedulable. Failing the whole scan on one bad ref would
+    // be fail-closed in the wrong place — it would turn one unreachable issue into a dead queue.
     let recorder = failing (Http(500, "boom"))
     let result = Reads.blockerState recorder "FS-GG" "FS.GG.SDD" 8
     Assert.True(Result.isOk result)
+
+[<Fact>]
+let ``#534 an EXHAUSTED BUDGET is NOT degraded to 'blocker unknown' - it is propagated`` () =
+    // THE DISTINCTION THE ARM ABOVE DEPENDS ON, AND THE BUG THIS FILE ALMOST SHIPPED.
+    //
+    // "One unreadable blocker must not starve the board" is right for a TRANSIENT — a 502 on one issue. It
+    // is catastrophically wrong for a RATE LIMIT, because a rate limit is not a fact about this ref: it is
+    // a fact about the CLIENT, and the very next resolution fails identically.
+    //
+    // Degrade it, and EVERY blocker on the board resolves `Unknown`; every `Unknown` blocks; the tool
+    // reports "nothing schedulable" over a full queue and exits **0**. That is #534 (the budget-exhausted
+    // message swallowed, the worker told there is nothing to do) wearing #421's clothes (a budget failure
+    // reported as a fact about an item) — and the caller would never back off, because it was never told
+    // to.
+    let recorder = failing (RateLimited None)
+
+    match Reads.blockerState recorder "FS-GG" "FS.GG.SDD" 8 with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"an exhausted budget must not masquerade as an unresolvable blocker — got %A{other}"
+
+[<Fact>]
+let ``#534 ...and prAlive propagates it too - reap must not decide liveness on a read it cannot make`` () =
+    let recorder = failing (RateLimited None)
+
+    match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"an exhausted budget must not masquerade as unknown liveness — got %A{other}"
 
 // ---- #581: the lease is not the life ---------------------------------------------------------------
 

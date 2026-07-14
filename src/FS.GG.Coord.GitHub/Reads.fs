@@ -17,6 +17,8 @@ module Reads =
           PreviousStatus: BoardStatus option
           Raw: string }
 
+    type RateLimitSnapshot = { Remaining: int; Limit: int }
+
     /// Parse a JSON document, or say we could not. There is no third option, and in particular there is no
     /// "return an empty document" — bytes we cannot read are a FAILED READ (#461).
     let private parse (subject: string) (body: string) : IoResult<JsonDocument> =
@@ -288,14 +290,25 @@ module Reads =
             // a dependency on something that does not exist is not a dependency that has been satisfied.
             Ok BlockerUnknown
 
-        | Error e ->
-            // ANY OTHER FAILURE AND WE DID NOT LOOK. `BlockerUnknown` BLOCKS — "I could not look" is not "I
-            // looked and it is fine" (#266, #421). The safe direction on a lock is always to hold it.
+        | Error(RateLimited _ as e) ->
+            // AN EXHAUSTED BUDGET IS NOT A FACT ABOUT THIS REF. It is a fact about the CLIENT, and the very
+            // next resolution will fail identically — so degrading it to `BlockerUnknown` would mark EVERY
+            // blocker unresolvable, report the whole board as blocked, and exit 0 with "nothing
+            // schedulable". That is #534 (the budget-exhausted message swallowed, the worker told to
+            // retry) wearing #421's clothes (a budget failure reported as a fact about an item), and it is
+            // the exact failure this module exists to end — so it must be PROPAGATED, and the caller must
+            // exit EX_RATE.
+            Error e
+
+        | Error _ ->
+            // ANY OTHER FAILURE AND WE DID NOT LOOK AT *THIS ONE*. `BlockerUnknown` BLOCKS — "I could not
+            // look" is not "I looked and it is fine" (#266, #421). The safe direction on a lock is always
+            // to hold it.
             //
-            // The error is NOT propagated here: one unreadable blocker must not starve the whole board.
-            // The item it blocks stays blocked and says so; every other item is still schedulable. Failing
-            // the whole scan on it would be fail-closed in the wrong place.
-            ignore e
+            // This one is deliberately NOT propagated, and the distinction from the arm above is the whole
+            // point: a 502 on one issue is local to that issue, so the item it blocks stays blocked and
+            // says so while every other item on the board is still schedulable. Failing the whole scan on
+            // it would be fail-closed in the wrong place — one unreachable issue turning into a dead queue.
             Ok BlockerUnknown
 
         | Ok response ->
@@ -345,9 +358,16 @@ module Reads =
               Subject = subject }
 
         match transport.Send request with
+        | Error(RateLimited _ as e) ->
+            // PROPAGATED, for the same reason as `blockerState`: an exhausted budget is a fact about the
+            // CLIENT, not about this item's PR. Swallowing it here would hide the one condition the caller
+            // must back off on (EX_RATE), and `reap` would go on making liveness decisions from a read it
+            // was never going to be able to make.
+            Error e
+
         | Error _ ->
-            // WE COULD NOT ASK. `LivenessUnknown` — NOT "no PR". This is the distinction that stops a
-            // transient 5xx from reaping a worker who is visibly still working (#581).
+            // WE COULD NOT ASK ABOUT *THIS ITEM*. `LivenessUnknown` — NOT "no PR". This is the distinction
+            // that stops a transient 5xx from reaping a worker who is visibly still working (#581).
             Ok LivenessUnknown
 
         | Ok response ->
@@ -386,7 +406,7 @@ module Reads =
 
     // ---- the meter --------------------------------------------------------------------------------
 
-    let rateLimit (transport: IGitHubTransport) : IoResult<Budget.Meter> =
+    let rateLimit (transport: IGitHubTransport) : IoResult<RateLimitSnapshot> =
         let request =
             { Method = "GET"
               Path = "rate_limit"
@@ -430,10 +450,7 @@ module Reads =
                         | _ -> None
 
                     match intOf "remaining", intOf "limit" with
-                    | Some remaining, Some limit ->
-                        Ok
-                            { Budget.Cost = limit - remaining
-                              Budget.Remaining = remaining }
+                    | Some remaining, Some limit -> Ok { Remaining = remaining; Limit = limit }
                     | _ ->
                         Error(
                             Malformed(

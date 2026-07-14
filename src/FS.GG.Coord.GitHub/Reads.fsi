@@ -114,12 +114,23 @@ module Reads =
     /// from reaping live work.
     val prAlive: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<Liveness>
 
+    /// What the meter says right now.
+    ///
+    /// DELIBERATELY NOT `Budget.Meter`. That type's `Cost` is *what one query cost*, read off a GraphQL
+    /// response — and the `/rate_limit` endpoint has no such notion. Reusing it here would mean publishing
+    /// a field called `Cost` holding `limit - remaining`, which is a number that reads as one thing and
+    /// means another. In a codebase whose entire thesis is that a value must not be able to masquerade as a
+    /// different fact, that is not a shortcut worth taking.
+    type RateLimitSnapshot =
+        { Remaining: int
+          Limit: int }
+
     /// The rate-limit meter.
     ///
     /// FREE — this read does not spend the budget it reports, which is what makes "back off until the
     /// reset" a strategy rather than a guess. It is billed to NEITHER counter, and the corpus depends on
     /// that.
-    val rateLimit: transport: IGitHubTransport -> IoResult<Budget.Meter>
+    val rateLimit: transport: IGitHubTransport -> IoResult<RateLimitSnapshot>
 
     /// Every OPEN issue in a repo, with its body — the claim-scan candidate set.
     ///

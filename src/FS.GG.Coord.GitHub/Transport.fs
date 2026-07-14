@@ -116,6 +116,14 @@ module Transport =
         with :? JsonException as e ->
             Error $"a page of the response is not JSON: %s{e.Message}"
 
+    /// Build the GraphQL request payload.
+    ///
+    /// EVERY VARIABLE IS A STRING, AND THAT IS A LIMIT THE NEXT PHASE WILL HIT. Projects v2 field mutations
+    /// are typed: a NUMBER field wants `{"value": 42}` and a DATE field wants an ISO date — sending
+    /// `{"value": "42"}` is rejected. Nothing here emits those mutations yet (the board-side writes are not
+    /// ported — see `Writes.fsi`), so this is correct for every document that exists today and a trap for
+    /// the first one that does not. Widen the variable type before adding `set-field`, rather than
+    /// discovering it against the live API.
     let private graphQlPayload (document: string) (variables: (string * string) list) =
         let node = JsonObject()
         node.["query"] <- JsonValue.Create document
@@ -140,6 +148,13 @@ module Transport =
             // GraphQL endpoint ignores it.
             client.DefaultRequestHeaders.UserAgent.ParseAdd "fsgg-coord"
             client.DefaultRequestHeaders.Accept.ParseAdd "application/vnd.github+json"
+
+            // A REQUEST THAT NEVER RETURNS IS WORSE THAN ONE THAT FAILS. The client is invoked once per
+            // scheduling call, on every worker, in a fan-out — and a worker blocked forever on a hung
+            // socket holds its claim, keeps its lease alive, and reserves its touch-set the whole time. It
+            // does not look like a failure to anybody; it looks like slow work. A bounded timeout turns
+            // that into a `Transport` error the caller can actually act on.
+            client.Timeout <- TimeSpan.FromSeconds 30.0
 
             if not (String.IsNullOrWhiteSpace token) then
                 client.DefaultRequestHeaders.Authorization <-
