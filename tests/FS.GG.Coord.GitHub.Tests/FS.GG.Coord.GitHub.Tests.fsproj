@@ -28,6 +28,7 @@
     <Compile Include="ReadTests.fs" />
     <Compile Include="WriteTests.fs" />
     <Compile Include="BoardTests.fs" />
+    <Compile Include="DoneTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
