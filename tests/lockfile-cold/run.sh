@@ -47,9 +47,23 @@
 #                                                 absent (FAIL — no evidence), empty (PASS — Templates
 #                                                 resolves nothing), and unreadable (FAIL — a broken
 #                                                 read is not a pass either).
+#   LEG 7  the ADR-0032 MECHANISM, against    -> the property the whole ADR rests on, EXECUTED against a
+#          the real SDK — and then the           real restore. In the SDK's default state the folder
+#          SHIPPED CONFIG, against a real        serves FSharp.Core (the defect is real, so the test has
+#          restore under it                      a subject); with the property set it is gone from the
+#                                                source list; and a probe that INHERITS the shipped
+#                                                dist/dotnet/Directory.Build.props gets the same
+#                                                exclusion — so the fix is live, not merely present.
+#                                                Legs 5/6 test the REPORTER and fabricate their
+#                                                evidence; nothing tested the property itself.
 #
 # Legs 2 and 3 are the pair. Leg 2 alone would be satisfied by a gate that is merely broken; leg 3
 # shows the SAME lock file passing the moment the restore stops being cold, which is the defect.
+#
+# Leg 7 is the one that grounds the rest. Legs 5 and 6 prove the org REPORTS a library-packs
+# resolution; leg 7 proves the org PREVENTS one — and that the thing it is preventing is real. A suite
+# that only ever fabricates its evidence can be perfectly green about a mechanism that has silently
+# stopped working (.github#473 step 3).
 #
 # Legs 5 and 6 are the other pair, and #639 is why leg 6 exists. Leg 5 GREPS the report step; it went on
 # passing while that step could not pass AT ALL — errexit, which GitHub reimposes on a script that opted
@@ -420,6 +434,169 @@ folder and the step reported 'ok'. This is the fails-open shape of #266, and the
 must be read (>=2 = could not see) rather than tolerated wholesale. Output:
 $out"
   fi
+fi
+
+# ---- LEG 7: the ADR-0032 MECHANISM itself, against the REAL SDK ------------------------------------
+# Everything above tests the REPORTER — the step that reads .nupkg.metadata and says which source
+# served each package. Every one of those legs FABRICATES its evidence (see mk_pkgs: it writes
+# `"contentHash":"h1=="` and a hand-typed `source` string). That is right for testing a reporter, and
+# it is why they are fast and hermetic. But it means that until this leg, NOTHING in the org executed
+# the thing ADR-0032 actually rests on: that DisableImplicitLibraryPacksFolder REMOVES the SDK's
+# bundled folder from the restore source list. The property was asserted in a 50-line comment in
+# dist/dotnet/Directory.Build.props and verified by no test (.github#473 step 3, "verify the invariant,
+# not the hash").
+#
+# It is not a documented public MSBuild property — it is a condition inside the SDK's own
+# Microsoft.FSharp.NetSdk.targets. So the SDK is free to rename it. If it ever does, EVERY existing
+# guard still passes: the drift check passes (the file still contains the string), legs 5/6 pass (they
+# never restore), and a dev box still resolves nuget.org (see the mapping note below). The org would
+# find out when locked-mode restore went NU1403 across six repos at once, with nothing pointing at the
+# SDK. This leg is what turns that into one red assertion naming the cause.
+#
+# THE FIXTURE HAS NO packageSourceMapping, AND THAT IS THE WHOLE DESIGN. library-packs is injected as
+# a RestoreAdditionalProjectSources entry, NOT as a configured source — so under ANY active mapping it
+# matches no pattern and serves nothing, and the folder is excluded whether or not the property is set.
+# A mapping would therefore make leg 7b pass for a reason that has nothing to do with ADR-0032. That is
+# not hypothetical: it is exactly why this bug survived so long. The dev container's user-level
+# NuGet.Config has such a mapping, so the defect REPRODUCES ONLY WHERE THERE IS NONE — i.e. in CI — and
+# a developer who went looking for it locally found a clean restore and moved on (.github#471). An
+# empty <packageSourceMapping/> is the CI configuration, and it is the only one that can see this bug.
+# (Note the fixture above deliberately DOES map — it is testing something else. Do not unify them.)
+#
+# The feed is EMPTY, so the SDK's folder is the only thing that could serve FSharp.Core. That makes the
+# observable a plain yes/no — restore succeeds or it cannot find the package — with no contentHash
+# anywhere in the assertion. Deliberate: the acceptance is the INVARIANT ("one source, on any machine"),
+# not today's hash. A leg pinned to excLf2zM… would go red on the next FSharp.Core bump while the
+# invariant it claims to protect still held.
+#
+# AND THIS IS THE ONE COLD LEG THAT DOES NOT CLEAR THE HTTP CACHE — deliberately, so do not "fix" it.
+# The header above says every cold leg clears it, and every leg that can reach a remote feed must. Leg
+# 7's only sources are two LOCAL folders (the empty feed, and the SDK's library-packs), and the NuGet
+# HTTP cache does not sit in front of a folder source: there is no remote fetch here to serve stale.
+# Coldness is structural in this leg rather than enforced, which is why a fresh NUGET_PACKAGES per
+# restore is all it takes.
+ADR32="$WORK/adr32-mechanism"; mkdir -p "$ADR32/feed" "$ADR32/proj"
+cat > "$ADR32/proj/nuget.config" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources><clear /><add key="empty" value="../feed" /></packageSources>
+  <packageSourceMapping><clear /></packageSourceMapping>
+</configuration>
+EOF
+# FSharp.Core is left IMPLICIT — the SDK injects the reference, which is the code path under test.
+cat > "$ADR32/proj/probe.fsproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup><Compile Include="P.fs" /></ItemGroup>
+</Project>
+EOF
+echo 'module P' > "$ADR32/proj/P.fs"
+
+adr32_restore() {  # adr32_restore <property value>   — 'false' reproduces the SDK's default state
+  # Sets ADR32_RC (restore exit code), ADR32_SRC (the source that served FSharp.Core, if any) and
+  # ADR32_LEAKED (yes/no — did the SDK's bundled folder serve it).
+  #
+  # `|| ADR32_RC=$?` rather than a bare call then `$?`: leg 7b's restore is SUPPOSED to fail, and under
+  # `set -e` a bare failing restore kills the fixture before the assertion can read the code — the
+  # whole leg then vanishes from the output and the suite still exits 0 on the legs that ran.
+  #
+  # The property is always PASSED, never omitted, so there is no empty array to expand: `"${arr[@]}"`
+  # on an empty array is an unbound-variable error under `set -u` before bash 4.4, and a fixture that
+  # dies on the runner's bash version rather than on its subject is worse than no fixture. 'false' is
+  # not an approximation of unset either — the SDK's own guard is `!= 'true'` (Microsoft.FSharp.NetSdk
+  # .targets), so false IS the default code path, exactly.
+  local pkgs
+  pkgs="$(mktemp -d "$WORK/adr32.XXXXXX")"
+  rm -rf "$ADR32/proj/obj"
+  ADR32_RC=0
+  ( cd "$ADR32/proj" && NUGET_PACKAGES="$pkgs" dotnet restore \
+      "-p:DisableImplicitLibraryPacksFolder=$1" >/dev/null 2>&1 ) || ADR32_RC=$?
+  ADR32_SRC="$(jq -r .source "$pkgs"/fsharp.core/*/.nupkg.metadata 2>/dev/null || true)"
+  # `case`, not `printf | grep -q`: under `set -o pipefail` (line 64) grep -q exits on first match and
+  # can SIGPIPE the printf, making the pipeline 141 — a spurious RED in the one suite that has to be
+  # believed. A pattern match needs no pipeline and cannot race.
+  case "$ADR32_SRC" in *library-packs*) ADR32_LEAKED=yes ;; *) ADR32_LEAKED=no ;; esac
+}
+
+# 7a. THE SUBJECT EXISTS. In the SDK's default state the folder really is injected and really does
+#     serve FSharp.Core. This is the anti-#266 half of the pair, and it is not ceremony: without it,
+#     7b passes vacuously on any machine where library-packs is absent or already excluded — a green
+#     tick over a subject that was never there, which is the exact shape of the failure this repo keeps
+#     finding. If THIS leg goes red, the SDK stopped injecting the folder and ADR-0032's fix has become
+#     a no-op that nothing needs; that is a finding, not a pass.
+adr32_restore false
+if [ "$ADR32_RC" -eq 0 ] && [ "$ADR32_LEAKED" = yes ]; then
+  ok "LEG 7: in the SDK's DEFAULT state it serves FSharp.Core from library-packs — the defect is real"
+else
+  bad "LEG 7: in the SDK's DEFAULT state it serves FSharp.Core from library-packs — the defect is real" \
+      "exit=$ADR32_RC source='$ADR32_SRC' — the SDK did NOT resolve FSharp.Core from its bundled folder, so
+this fixture has no subject and leg 7b below proves nothing. Either the SDK stopped injecting
+\$(_FSharpCoreLibraryPacksFolder) (check Microsoft.FSharp.NetSdk.targets — ADR-0032 may now be moot), or
+a packageSourceMapping leaked in and excluded the folder on its own, in which case 7b is passing for the
+wrong reason. Do not silence this leg: it is the one that says the other one means something."
+fi
+
+# 7b. AND THE PROPERTY SHUTS IT OFF. Same project, same empty feed, property set: the folder is gone
+#     from the source list, so nothing can serve FSharp.Core and the restore fails to find it. This is
+#     dist/dotnet/Directory.Build.props's claim, executed — "a restore that can reach no other source
+#     fails NU1101 instead of quietly falling back to the SDK copy".
+adr32_restore true
+if [ "$ADR32_RC" -ne 0 ] && [ "$ADR32_LEAKED" = no ]; then
+  ok "LEG 7: ...and DisableImplicitLibraryPacksFolder REMOVES it — the ADR-0032 mechanism works"
+else
+  bad "LEG 7: ...and DisableImplicitLibraryPacksFolder REMOVES it — the ADR-0032 mechanism works" \
+      "exit=$ADR32_RC source='$ADR32_SRC' — the property did NOT exclude the SDK's bundled folder. ADR-0032
+rests entirely on it, and it is an SDK-INTERNAL condition, not a documented MSBuild property: the most
+likely cause is that the SDK renamed or dropped it. Every other guard in the org is blind to this — the
+drift check only proves the string is still in dist/dotnet/Directory.Build.props, and legs 5/6 above
+fabricate their evidence rather than restoring. Until this is fixed, every repo's lock file is once
+again a function of the SDK patch level, and the divergence will surface as NU1403 on a CORRECT lock
+file (.github#429, #471, ADR-0032)."
+fi
+
+# 7c. ...AND THE FILE WE ACTUALLY SHIP IS WHAT DOES IT. This is the leg that matters, and it is the
+#     reason 7a/7b are not enough on their own: they drive the property with `-p:`, so they prove the
+#     SDK HONOURS it — not that the org SENDS it to anyone. Delete the PropertyGroup from
+#     dist/dotnet/Directory.Build.props and 7a/7b are still perfectly green.
+#
+#     A grep for the element would close that hole only against a literal deletion, and it FAILS OPEN
+#     against every more interesting way to break this: a `Condition` on the PropertyGroup that
+#     evaluates false, a later import that overrides the value, or the block commented out while the
+#     element text survives in the prose around it — this file's comments already name the property
+#     repeatedly, and grep cannot tell a live PropertyGroup from a quoted one. So this leg does not
+#     read the config. It RESTORES UNDER IT, exactly as an adopting repo does: the probe inherits the
+#     shipped Directory.Build.props and Directory.Packages.props, and declares FSharp.Core the way
+#     every real FS-GG project declares it (an explicit PackageReference; central package management
+#     supplies the version, and suppresses the SDK's implicit reference). If the property is set AND
+#     live, the SDK's folder is not a source and FSharp.Core cannot be found. Anything that makes it
+#     inert — however cleverly — puts library-packs back in the source list and reds this leg.
+ADR32C="$WORK/adr32-shipped"; mkdir -p "$ADR32C/feed" "$ADR32C/proj"
+cp "$ROOT/dist/dotnet/Directory.Build.props" "$ROOT/dist/dotnet/Directory.Packages.props" "$ADR32C/proj/"
+cp "$ADR32/proj/nuget.config" "$ADR32C/proj/nuget.config"
+cat > "$ADR32C/proj/probe.fsproj" <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup><Compile Include="P.fs" /></ItemGroup>
+  <ItemGroup><PackageReference Include="FSharp.Core" /></ItemGroup>
+</Project>
+EOF
+echo 'module P' > "$ADR32C/proj/P.fs"
+SHIPPED_PKGS="$(mktemp -d "$WORK/adr32c.XXXXXX")"
+SHIPPED_RC=0
+( cd "$ADR32C/proj" && NUGET_PACKAGES="$SHIPPED_PKGS" dotnet restore >/dev/null 2>&1 ) || SHIPPED_RC=$?
+SHIPPED_SRC="$(jq -r .source "$SHIPPED_PKGS"/fsharp.core/*/.nupkg.metadata 2>/dev/null || true)"
+case "$SHIPPED_SRC" in *library-packs*) shipped_leaked=yes ;; *) shipped_leaked=no ;; esac
+
+if [ "$SHIPPED_RC" -ne 0 ] && [ "$shipped_leaked" = no ]; then
+  ok "LEG 7: ...and a probe INHERITING the shipped org config excludes it too — the fix is live, not just present"
+else
+  bad "LEG 7: ...and a probe INHERITING the shipped org config excludes it too — the fix is live, not just present" \
+      "exit=$SHIPPED_RC source='$SHIPPED_SRC' — a project that inherits dist/dotnet/Directory.Build.props STILL
+resolved FSharp.Core from the SDK's bundled folder. Legs 7a/7b above pass, so the SDK honours the property;
+what is broken is our file. Either the PropertyGroup is gone, or it is INERT — a Condition that evaluates
+false, an override after the import, or the block commented out. Every repo that syncs this config will
+commit a lock file whose contentHash is a function of the SDK patch level, and it will surface as NU1403 on
+a CORRECT lock file, six repos away, with nothing naming the cause (ADR-0032, .github#429, #473)."
 fi
 
 echo "lockfile-cold fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"

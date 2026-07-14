@@ -12,16 +12,22 @@
 # RESTORES warm — #429 reproduced, which is what makes coldness a property rather than a preference.
 name: lockfile-cold-selftest
 
+# Leg 7 (.github#473) adds a SECOND subject: dist/dotnet/Directory.Build.props, the org-shared config
+# that carries ADR-0032's DisableImplicitLibraryPacksFolder. It is in the trigger list below because a
+# guard that does not RUN on an edit to its subject is not a guard — delete the property there and leg
+# 7c is the assertion that goes red, but only if this workflow was woken up to say so.
 on:
   pull_request:
     paths:
       - "tests/lockfile-cold/**"
+      - "dist/dotnet/Directory.Build.props"
       - ".github/workflows/lockfile-sync.yml"
       - ".github/workflows/lockfile-cold-selftest.yml"
   push:
     branches: [main]
     paths:
       - "tests/lockfile-cold/**"
+      - "dist/dotnet/Directory.Build.props"
       - ".github/workflows/lockfile-sync.yml"
       - ".github/workflows/lockfile-cold-selftest.yml"
   workflow_dispatch:
