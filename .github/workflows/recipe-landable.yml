@@ -1,0 +1,71 @@
+# A recipe NAMES the merge-gate command; it never EMBEDS the gate (.github#724).
+#
+# The rollup that answers "is this PR safe to merge?" was wrong FOUR times — #547 (unpaginated: a red
+# check on page 2 was invisible), #606 (zero checks read as green), #698 (a superseded run read as
+# red), #710 (the same, in the autofix bot), #720 (the same, in `pr_landable`, where it made `adopt`
+# refuse the finished work it exists to land). Every fix edited a COPY, because nothing executes a
+# recipe and so nothing tests one. `scripts/check-recipe-landable.py` makes a FIFTH copy unwritable.
+#
+# THE `paths:` FILTER IS PART OF THE GATE. Every entry below is an INPUT, and a gate that cannot fire
+# on its own subject is #508's mistake:
+#
+#   scripts/check-recipe-landable.py  — the rule itself.
+#   tests/recipe-landable/**          — the fixture that proves the rule still fires.
+#   .claude/skills/**, .agents/skills/**, docs/coordination/**
+#                                     — the RECIPES it governs. This is the one that matters: a PR
+#                                       that hand-rolls a merge gate touches ONLY a SKILL.md, and if
+#                                       that did not trigger this workflow the rule would be decorative.
+#   scripts/fsgg-coord                — the one sanctioned implementation. If `landable` is removed or
+#                                       renamed, every recipe's instruction to call it becomes a lie,
+#                                       and this gate should be the thing that says so.
+name: recipe-landable
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-recipe-landable.py"
+      - "tests/recipe-landable/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "scripts/fsgg-coord"
+      - ".github/workflows/recipe-landable.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-recipe-landable.py"
+      - "tests/recipe-landable/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "scripts/fsgg-coord"
+      - ".github/workflows/recipe-landable.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the recipe-landable fixture
+        run: bash tests/recipe-landable/run.sh
+      # The fixture drives the gate against throwaway recipes AND against this repo's real ones. This
+      # step is the plain, unmediated verdict on the tree as it stands — so a PR that hand-rolls a gate
+      # fails on a line that names the file and the remedy, not inside a fixture's output.
+      - name: Assert no recipe hand-rolls the merge gate
+        run: python3 scripts/check-recipe-landable.py
+
+      # `landable` is what every recipe now tells the worker to run. If it stops existing, the
+      # instruction becomes a lie and this gate is where that surfaces (#266: assert the subject, do
+      # not assume it).
+      - name: Assert the command the recipes name still exists
+        run: |
+          scripts/fsgg-coord landable --help >/dev/null 2>&1 || true
+          grep -q '^landable_cmd()' scripts/fsgg-coord \
+            || { echo "::error::scripts/fsgg-coord has no 'landable' command, but every recipe tells workers to call it."; exit 1; }
+          grep -q 'landable)' scripts/fsgg-coord \
+            || { echo "::error::'landable' is not wired into fsgg-coord's command dispatch."; exit 1; }
