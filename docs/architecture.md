@@ -566,7 +566,7 @@ red `skill-registry-coherence` (the fails-open class, epic #266).
 The `coherence:` rows record verified, structurally-enforced invariants — for
 example `lockfile-restore-enforcement` (a stale or silently-substituted dependency
 fails restore in CI in every repo — but **only where that restore is cold**, per
-ADR-0031: validated against a *warm* package folder the row is fails-open — it compares
+ADR-0032 §5: validated against a *warm* package folder the row is fails-open — it compares
 a record against a record and never contacts the feed, #429/epic #266; SDD and the
 `lockfile-sync` generator are cold, Game/Rendering/Audio adoption is in flight. Note
 `FSharp.Core` was **never re-published** (ADR-0032, #471): the SDK bundles a *different*
@@ -651,7 +651,7 @@ install is what keeps the composition honest. See the
   file's `contentHash`, which `--locked-mode` validates against the package **already in
   the package folder**. So the restore that writes (`--force-evaluate`) or enforces
   (`--locked-mode`) a lock file must run against a fresh `NUGET_PACKAGES` with the HTTP
-  cache cleared (ADR-0031); a warm folder compares a record to a record and the gate
+  cache cleared (ADR-0032 §5); a warm folder compares a record to a record and the gate
   becomes a lottery on runner cache state — green on an unrestorable lock file, red on a
   correct one (#429).
 - **Public-API breaking-change gate.** For F# packables the operative detector is

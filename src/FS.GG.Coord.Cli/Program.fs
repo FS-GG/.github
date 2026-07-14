@@ -67,6 +67,34 @@ let private readInput (opts: Options) =
     | Some path -> File.ReadAllText path
     | None -> Console.In.ReadToEnd()
 
+/// THE PROTOCOL, EMITTED (ADR-0034 §4.5). It reads nothing and decides nothing — it states what the
+/// engine already enforces, so `scripts/generate-projections` can render the canonical doc and the four
+/// `SKILL.md` bodies FROM it rather than from somebody's memory of it.
+///
+/// This is the inversion the design doc asks for. `fsgg-coord` was always the model; it just was not the
+/// SOURCE, so every rule was re-typed into six documents and byte-copied into six repos — 54 vendored
+/// copies, and a propagation edge that cost a second issue and a second PR every single time. Now the
+/// rule exists once, and the prose is a build artifact.
+let private facts (opts: Options) =
+    match opts.Render with
+    | Json -> printfn "%s" (Snapshot.renderFacts Protocol.rules Protocol.verdicts)
+    | Text ->
+        for r in Protocol.rules do
+            printfn "## %s" r.Title
+            printfn ""
+            printfn "%s" r.Statement
+            printfn ""
+            printfn "> %s" r.Because
+            printfn ""
+
+        printfn "## The verdicts — what a worker can be told, and nothing else"
+        printfn ""
+
+        for v in Protocol.verdicts do
+            printfn "- **%s** — %s" v.Kind v.Meaning
+
+    ExitGreen
+
 /// Fold the fleet divergence ledger into the cut-over verdict (#634).
 ///
 /// The exit code IS the gate. `no-verdict` is 4 and `red` is 3 — neither is 0, so a caller that only
@@ -218,6 +246,8 @@ let main argv =
             | FleetVerdict -> fleet opts
 
             | LanesView -> lanes opts
+
+            | Facts -> facts opts
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine

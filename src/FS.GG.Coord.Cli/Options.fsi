@@ -28,6 +28,7 @@ module Options =
         /// from the touch-sets, never asserted: safety is computed by the same `TouchSet.conflicts` the
         /// scheduler reserves against, so a lane cannot disagree with the batch about what collides.
         | LanesView
+        | Facts
 
         | Help
         | Version

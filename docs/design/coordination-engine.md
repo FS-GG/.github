@@ -652,12 +652,21 @@ closed on evidence that is absent, thin, single-worker, uncovered on a day, or f
   survives an engine rebuild. Sweeping it under `fs` found three real defects that this clock's own
   taxonomy classifies as REASON divergences — *"not a bug"* — and would have waved through. The shadow is
   now **telemetry**, not a gate.
-- `--engine=fs` becomes the default; `--engine=bash` remains as the escape hatch.
-- One week later, delete the bash implementation. The kit row becomes the shim (§4.4).
+- **What actually landed:** `--engine=fs` is **open** — the engine's answer is the answer, and every
+  failure in that mode is fatal (no fallback: falling back to bash after the caller asked for the typed
+  core is a silent engine substitution). **The default did NOT move.** With no flag and no
+  `FSGG_COORD_ENGINE`, the mode is `auto`, and `auto` still returns **bash's** answer — the engine
+  shadows where one resolves, and its disagreement is logged. `--engine=bash` remains the escape hatch.
+  Making `fs` the default is a **separate** decision on the corpus's evidence; ADR-0038 does not take it.
+- *(future)* `--engine=fs` becomes the default.
+- *(future)* One week later, delete the bash implementation. The kit row becomes the shim (§4.4).
 - `fsgg-coord-selftest`'s 46 negative assertions run unchanged against the new engine — they
   are the contract, and they were written against a call-counting `gh` stub, so they port.
 
-**Exit:** F# is authoritative; every gate in §3 is green; the stdout tokens are byte-identical.
+**Exit *(FUTURE — this is the criterion, not the present tense)*:** F# is authoritative — `fs` is the
+**default** and the bash implementation is gone; every gate in §3 is green; the stdout tokens are
+byte-identical. **What has landed is the OPENING of `fs`, not its imposition:** today the default is
+`auto` and bash is still the answer a caller gets.
 
 ### Phase 4 — take the wins the model enables *(the actual payoff)*
 

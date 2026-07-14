@@ -6,6 +6,10 @@ module Options =
         | Decide
         | FleetVerdict
         | LanesView
+        /// Emit the PROTOCOL — the rules the typed core enforces, as data (ADR-0034 §4.5). The docs and
+        /// the SKILL.md bodies are generated FROM this, so a rule cannot land in the engine and not in
+        /// the prose that tells a worker about it.
+        | Facts
         | Help
         | Version
 
@@ -44,6 +48,14 @@ Usage:
                                     # so they are provably safe to run concurrently. Prints the
                                     # CEILING (how many workers this board can actually absorb) and
                                     # the items that cannot be laned at all.
+
+  fsgg-coord-engine facts  [--json|--text]
+                                    # emit the PROTOCOL the engine enforces — the touch-set grammar, the
+                                    # check order, the blocker rule, the claim lock, the lease, and the
+                                    # verdict a worker can be handed. `scripts/generate-projections`
+                                    # renders the docs and the SKILL.md bodies FROM this, and a gate
+                                    # regenerates and fails on any diff. A rule stated twice is a rule
+                                    # that will disagree with itself (#485).
 
   fsgg-coord-engine --help
   fsgg-coord-engine --version
@@ -95,5 +107,6 @@ EXIT CODES — the engine's own, NOT the client's (the client translates them):
         | "decide" :: rest -> flags { defaults with Command = Decide } rest
         | "fleet" :: rest -> flags { defaults with Command = FleetVerdict } rest
         | "lanes" :: rest -> flags { defaults with Command = LanesView } rest
+        | "facts" :: rest -> flags { defaults with Command = Facts } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"
