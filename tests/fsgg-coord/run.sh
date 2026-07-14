@@ -3126,6 +3126,35 @@ assert_contains "#697: adopt REFUSES an item with no open PR — there is no fin
   "no finished work to adopt" "$nopr"
 assert_eq "#697: ...and leaves the dead claim for reap" "ghost-974" "$(workers_on 974)"
 
+# 4e. A MERGEABLE PR WHOSE CHECKS ARE STILL RUNNING IS NOT ABANDONED — it is one CI run from being
+#     FINISHED. `adopt` must refuse it (a pending check is not a passing one), but `reap` must NOT
+#     tell anyone to close it: that is the same loaded gun this change exists to remove, fired a few
+#     minutes early. "Not green YET" is not "not green".
+cat >"$FIXTURES/pr-705.json" <<'JSON'
+{"number":705,"mergeable":true,"head":{"ref":"item/976-still-running","sha":"pendingsha"}}
+JSON
+cat >"$FIXTURES/checks-pendingsha.json" <<'JSON'
+{"check_runs":[{"name":"build","status":"completed","conclusion":"success"},
+               {"name":"test","status":"in_progress","conclusion":null}]}
+JSON
+seed_issue 976 "Orphaned mid-CI" 'src/Orphan976/**'
+jq -n --arg ts "$stale_ts" '[{id:976, body:"<!-- fsgg:claim worker=ghost-976 lease=120 -->\ndead",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-976.json"
+pend_adopt="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="976:705" \
+  bash "$COORD" --worker heron-697 adopt 'FS.GG.SDD#976' 2>&1 || true)"
+assert_contains "#697: adopt refuses a PR whose checks are still RUNNING — pending is not passing" \
+  "checks RUNNING" "$pend_adopt"
+pend_reap="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="976:705" \
+  bash "$COORD" --worker heron-697 reap --repo sdd --apply 2>&1 || true)"
+case "$pend_reap" in
+  *"close it, then reap"*)
+    bad "#697: reap must NOT advise closing a MERGEABLE PR whose checks are still running" "$pend_reap" ;;
+  *) ok "#697: reap must NOT advise closing a MERGEABLE PR whose checks are still running" ;;
+esac
+assert_contains "#697: ...it says the work is UNFINISHED, not abandoned, and to look again" \
+  "Do NOT close it" "$pend_reap"
+assert_eq "#697: ...and the claim survives" "ghost-976" "$(workers_on 976)"
+
 # 5. `mergeable` IS COMPUTED LAZILY. The first read of an untested PR returns null, and only a later
 #    read carries the truth. A client that believed the first read would call a CONFLICTED PR
 #    "unknown" — or, with jq's `//` operator, would fold `false` into the fallback and call it that

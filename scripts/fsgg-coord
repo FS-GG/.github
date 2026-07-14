@@ -2879,10 +2879,15 @@ adopt_cmd() {
       die "adopt: could NOT determine the state of PR #$pnum on $R_REPO#$R_NUM (rate limit? network? GitHub computes mergeability lazily and may not have done so yet). REFUSING to adopt on a guess — an 'adopt' that lands an unverified PR is exactly the destructive act this command exists to replace. Look at the PR, or re-run in a moment." ;;
   esac
 
-  echo "fsgg-coord: PR #$pnum on 'item/$R_NUM-*' is GREEN and MERGEABLE — worker '$ow' FINISHED this work and died before landing it (idle ${oage}m)." >&2
+  # A PRECONDITION REPORT, NOT A SUCCESS BANNER — and the wording has to say so, because `claim_cmd`
+  # below can still refuse: an unmatchable `Paths:`, a lost CAS race, the holder heartbeating mid-GC,
+  # or #516's one-item-per-worker guard. Announcing "ADOPTED" here and then dying would leave the
+  # operator unable to tell whether the lock was taken.
+  echo "fsgg-coord: PR #$pnum on 'item/$R_NUM-*' is GREEN and MERGEABLE — worker '$ow' FINISHED this work and died before landing it (idle ${oage}m). Taking the claim..." >&2
 
   # 5. Take the lock. `claim` does the transfer: collects the expired marker, tells its worker,
-  #    carries the original `prev` across (#481), and posts ours under the same CAS.
+  #    carries the original `prev` across (#481), and posts ours under the same CAS. It DIES on a lost
+  #    race rather than returning, so nothing below runs unless the lock is really ours.
   claim_cmd "$ref"
 
   # 6. Tell the orphan's worker what actually happened. `claim`'s GC has already told them their
@@ -3375,13 +3380,20 @@ pr_alive() {  # $1=owner $2=repo $3=num
 #
 # Prints exactly one of: green | conflicted | red | pending | unknown
 pr_landable() {  # $1=owner $2=repo $3=pr -> green|conflicted|red|pending|unknown
-  local pr m sha checks total pend bad
-  pr="$(gh api "repos/$1/$2/pulls/$3" 2>/dev/null)"      || { echo unknown; return 0; }
-  m="$(jq -r '.mergeable | tostring' <<<"$pr" 2>/dev/null)" || { echo unknown; return 0; }
-  if [ "$m" = "null" ]; then                 # lazily computed — ask once more, then give up
-    pr="$(gh api "repos/$1/$2/pulls/$3" 2>/dev/null)"       || { echo unknown; return 0; }
+  local pr m sha checks total pend bad try
+  # THE RETRY HAS TO WAIT, OR IT IS NOT A RETRY. GitHub computes mergeability in a BACKGROUND JOB and
+  # returns `null` until it lands; the documented remedy is to poll again *after a delay*. A second
+  # read fired microseconds after the first cannot have observed a job that had not finished when the
+  # first one asked — so a zero-delay retry is a no-op dressed as diligence, and every freshly-touched
+  # PR would collapse to `unknown`. That is the exact case this function exists for: the observed #692
+  # took ~1 minute to resolve from `null` to `dirty`. Bounded (3 tries, ~3s) — this runs on the
+  # interactive path, and `unknown` is a safe answer, so we wait a little and then say we do not know.
+  for try in 1 2 3; do
+    pr="$(gh api "repos/$1/$2/pulls/$3" 2>/dev/null)"         || { echo unknown; return 0; }
     m="$(jq -r '.mergeable | tostring' <<<"$pr" 2>/dev/null)" || { echo unknown; return 0; }
-  fi
+    [ "$m" = "null" ] || break
+    [ "$try" -eq 3 ] || sleep 1
+  done
   if [ "$m" = "false" ]; then echo conflicted; return 0; fi
   if [ "$m" != "true"  ]; then echo unknown;    return 0; fi
 
@@ -3841,7 +3853,11 @@ who_cmd() {
                     | map((.repo // "" | sub("^[^/]+/"; "")) + "#" + (.number | tostring)) | join(", ")' <<<"$claims")"
   if [ -n "$orphans" ]; then
     echo "fsgg-coord: $orphans — the claim is DEAD but the PR is GREEN and MERGEABLE: that work is FINISHED." >&2
-    echo "fsgg-coord:   Do NOT reap or close it. Land it:  fsgg-coord adopt <item>" >&2
+    echo "fsgg-coord:   Do NOT reap or close it. Land it:" >&2
+    # NAME THE ITEM. Every other remedy in this tool interpolates the concrete ref, and friction on
+    # the remedy is exactly what pushes a worker back to the destructive default.
+    jq -r '.[] | select(.state == "stale") | select(.prState == "green")
+           | "fsgg-coord:     fsgg-coord adopt " + (.repo // "" | sub("^[^/]+/"; "")) + "#" + (.number | tostring)' <<<"$claims" >&2
   fi
   [ "$stale" -gt 0 ] && echo "fsgg-coord: $stale claim(s) past their ${CLAIM_LEASE_MIN}m lease — 'fsgg-coord reap --apply' to release (it REFUSES any whose work is still alive)." >&2
   [ "$unclaimed" -gt 0 ] && echo "fsgg-coord: $unclaimed item(s) In progress with NO claim marker — someone is working outside the protocol." >&2
@@ -3910,15 +3926,23 @@ reap_cmd() {
         "$rp" "$num" "$cw" "$age" "$alive" "$aland"
       printf '  A long build outrunning a %sm lease is the systematic false positive here, and reaping\n' "$CLAIM_LEASE_MIN" >&2
       printf '  it destroys live, uncommitted work.\n' >&2
-      if [ "$aland" = "unknown" ]; then
-        # We could not read the PR. That is a fact about US, not about the work — and it is the one
-        # state in which advising a destructive act would be advising it on a guess.
-        printf '  Its state could NOT be determined (rate limit? network?). Do not close it on a guess —\n' >&2
-        printf '  look at PR %s yourself before deciding anything.\n' "$apr" >&2
-      else
-        printf '  If the PR really is abandoned, close it, then reap. (It is %s, so there is nothing to\n' "$aland" >&2
-        printf '  land as it stands — `adopt` only lands work that is green and mergeable.)\n' >&2
-      fi
+      case "$aland" in
+        pending)
+          # A MERGEABLE PR WHOSE CHECKS ARE STILL RUNNING IS NOT ABANDONED — it is one CI run away
+          # from being FINISHED, and telling anyone to close it is the same loaded gun this change
+          # exists to remove, fired a few minutes early. "Not green YET" is not "not green".
+          printf '  Its checks are STILL RUNNING, so it is not abandoned — it is UNFINISHED, and it may be\n' >&2
+          printf '  minutes from green. Do NOT close it. Let CI settle and look again:\n' >&2
+          printf '      fsgg-coord who --repo %s        # green? then: fsgg-coord adopt %s#%s\n' "$rp" "$rp" "$num" >&2 ;;
+        unknown)
+          # We could not read the PR. That is a fact about US, not about the work — and it is the one
+          # state in which advising a destructive act would be advising it on a guess.
+          printf '  Its state could NOT be determined (rate limit? network?). Do not close it on a guess —\n' >&2
+          printf '  look at PR %s yourself before deciding anything.\n' "$apr" >&2 ;;
+        *)
+          printf '  If the PR really is abandoned, close it, then reap. (It is %s, so there is nothing to\n' "$aland" >&2
+          printf '  land as it stands — `adopt` only lands work that is green and mergeable.)\n' >&2 ;;
+      esac
       continue
     fi
     if [ -z "$apply" ]; then
