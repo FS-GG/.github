@@ -15,10 +15,15 @@ module Transport =
         | Rest
         | Free
 
+    type Var =
+        | VString of string
+        | VId of string
+        | VNumber of double
+
     type Payload =
         | NoBody
         | Json of string
-        | Query of document: string * variables: (string * string) list
+        | Query of document: string * variables: (string * Var) list
 
     type Request =
         { Method: string
@@ -116,15 +121,17 @@ module Transport =
         with :? JsonException as e ->
             Error $"a page of the response is not JSON: %s{e.Message}"
 
-    /// Build the GraphQL request payload.
+    /// A variable's JSON, DERIVED FROM ITS TYPE.
     ///
-    /// EVERY VARIABLE IS A STRING, AND THAT IS A LIMIT THE NEXT PHASE WILL HIT. Projects v2 field mutations
-    /// are typed: a NUMBER field wants `{"value": 42}` and a DATE field wants an ISO date — sending
-    /// `{"value": "42"}` is rejected. Nothing here emits those mutations yet (the board-side writes are not
-    /// ported — see `Writes.fsi`), so this is correct for every document that exists today and a trap for
-    /// the first one that does not. Widen the variable type before adding `set-field`, rather than
-    /// discovering it against the live API.
-    let private graphQlPayload (document: string) (variables: (string * string) list) =
+    /// A NUMBER field mutation sending `{"number": "42"}` is rejected by the API, and a DATE field sending a
+    /// quoted number is worse — it is accepted and wrong. GraphQL is typed; so is this.
+    let private varJson (v: Var) : JsonNode =
+        match v with
+        | VString s -> JsonValue.Create s
+        | VId s -> JsonValue.Create s
+        | VNumber n -> JsonValue.Create n
+
+    let private graphQlPayload (document: string) (variables: (string * Var) list) =
         let node = JsonObject()
         node.["query"] <- JsonValue.Create document
 
@@ -132,7 +139,7 @@ module Transport =
             let varsNode = JsonObject()
 
             for (k, v) in variables do
-                varsNode.[k] <- JsonValue.Create v
+                varsNode.[k] <- varJson v
 
             node.["variables"] <- varsNode
 
