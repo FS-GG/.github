@@ -95,8 +95,21 @@ newrepo() {
 seal() { git -C "$1" add -A; git -C "$1" -c commit.gpgsign=false commit -qm fixture; }
 
 # A lock recording ONE project-reference range: <holder> -> <dep> : <range>.
+#
+# SHAPED AS NUGET ACTUALLY WRITES IT, and that is load-bearing rather than cosmetic. NuGet records every
+# project in the restore closure as its OWN top-level `"type": "Project"` entry, so a referenced project
+# appears TWICE: once as <holder>'s dependency, and once as an entry in its own right (see this repo's
+# tests/FS.GG.Coord.Cli.Tests/packages.lock.json, where `fs.gg.coord.core` is both). That second entry is
+# the only thing in the file that distinguishes a project reference from a consumption pin — they are not
+# distinguishable by name — so it is what the gate keys on (.github#545).
+#
+# This builder used to omit it, emitting a lock shape NuGet never produces. Every leg below still passed,
+# because the gate was asking a question the fixture could not pose.
 lockfile() {
   local root="$1" rel="$2" holder="$3" dep="$4" range="$5"
+  # `tr`, not ${dep,,} — the latter is a bash 4 expansion and would fail at PARSE time on macOS's system
+  # bash 3.2, taking the whole fixture down rather than one leg.
+  local depkey; depkey="$(printf '%s' "$dep" | tr '[:upper:]' '[:lower:]')"
   w "$root" "$rel" <<EOF
 {
   "version": 2,
@@ -108,6 +121,17 @@ lockfile() {
           "$dep": "$range",
           "FSharp.Core": "[10.1.301, )"
         }
+      },
+      "$depkey": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.301, )"
+        }
+      },
+      "FSharp.Core": {
+        "type": "Direct",
+        "requested": "[10.1.301, )",
+        "resolved": "10.1.301"
       }
     }
   }
@@ -271,8 +295,13 @@ must_fail "…but +ci does not LAUNDER a real mismatch (0.3.0+ci vs a 0.2.0 lock
 # ---- a consumption pin is NOT a project reference --------------------------------------------------
 # Rendering's locks record `FS.GG.Audio.Core: [0.1.0, )` — the Audio PACKAGE, which Rendering consumes
 # and does not build. Its currency is a different question with a different answer (#263 / pin-coherence),
-# and flagging it here would be a false positive on every consumer in the org. The gate keys on the
-# packages THIS repo's projects PRODUCE, which draws the line exactly.
+# and flagging it here would be a false positive on every consumer in the org.
+#
+# THE TWO ARE NOT DISTINGUISHABLE BY NAME. Both dependencies below are `FS.GG.*`; a package-id-prefix
+# heuristic would flag the Audio pin on every consumer in the org and get the gate deleted. What tells
+# them apart is the lock's own structure: `fs.gg.ui.scene` has a `"type": "Project"` entry of its own
+# (it is in the restore closure — this repo builds it), and `FS.GG.Audio.Core` has a package entry
+# (it came from a feed). This is the real shape NuGet writes, and the discriminator the gate keys on.
 consume="$(newrepo consume)"
 cp -r "$rendering/." "$consume/" 2>/dev/null || true
 rm -rf "$consume/.git"; git -C "$consume" init -q -b main
@@ -289,6 +318,23 @@ w "$consume" samples/CanvasDemo/packages.lock.json <<'EOF'
           "FS.GG.Audio.Core": "[0.1.0, )",
           "FSharp.Core": "[10.1.301, )"
         }
+      },
+      "fs.gg.ui.scene": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.301, )"
+        }
+      },
+      "FS.GG.Audio.Core": {
+        "type": "Transitive",
+        "resolved": "0.1.0",
+        "contentHash": "Zml4dHVyZQ=="
+      },
+      "FSharp.Core": {
+        "type": "Direct",
+        "requested": "[10.1.301, )",
+        "resolved": "10.1.301",
+        "contentHash": "Zml4dHVyZQ=="
       }
     }
   }
@@ -297,6 +343,10 @@ EOF
 seal "$consume"
 must_pass "a consumption pin for a package this repo does not BUILD is ignored" "$consume"
 must_say "…and it is not silently counted as a checked range either" "all 1" "$consume"
+# …and the ignoring is REPORTED, not merely done. A green tick that says nothing about how much it
+# skipped is exactly how a collapsed subject set hides behind one surviving range (.github#545).
+must_say "…and the count it ignored is REPORTED, so a collapse would be legible" \
+  "ignored 3 package dependencies as consumption pins" "$consume"
 
 # ---- FAIL CLOSED (epic #266): nothing-to-check must never share an exit code with all-is-well -------
 
@@ -342,7 +392,8 @@ w "$lonely" tests/Core.Tests/packages.lock.json <<'EOF'
       "fs.gg.solo.core": {
         "type": "Project",
         "dependencies": { "FSharp.Core": "[10.1.301, )" }
-      }
+      },
+      "FSharp.Core": { "type": "Direct", "requested": "[10.1.301, )", "resolved": "10.1.301" }
     }
   }
 }
@@ -351,6 +402,133 @@ seal "$lonely"
 must_fail "FAIL CLOSED: no sibling ranges reds by DEFAULT (min-ranges 1)" \
   "fewer than the 1 this repo declares" "$lonely"
 must_pass "…and passes only when the caller DECLARES zero with --min-ranges 0" "$lonely" --min-ranges 0
+
+# ---- .github#545: A PROJECT REFERENCE THAT DOES NOT RESOLVE IS AN ERROR, NOT A SKIP ---------------
+# The defect this closes, reproduced exactly. `FS.GG.V.Util`'s <PackageId> has been renamed and the locks
+# were not regenerated, so the lock still records a project reference to a package id no project file
+# produces any more.
+#
+# The gate USED TO skip such a dependency in silence — it could not tell "a package we consume" from "a
+# project we build whose id we can no longer resolve", so the range simply stopped being a subject. One
+# reference here still resolves, so the subject count stayed at 1, cleared the --min-ranges floor of 1,
+# and the gate printed `ok: all 1 project-reference range(s) …`. GREEN, over a check that had quietly
+# lost half its subjects. Scale that to Audio's 17 and 16 of them can vanish behind one survivor.
+#
+# min-ranges CANNOT catch this: it is a floor, and a partial collapse never reaches it. The lock's own
+# `"type": "Project"` entry for `fs.gg.v.util` is what proves the reference is a project rather than a
+# pin, and therefore that failing to resolve it is drift.
+vanish="$(newrepo vanish)"
+w "$vanish" Directory.Build.local.props <<'EOF'
+<Project>
+  <PropertyGroup><Version>1.0.0</Version></PropertyGroup>
+</Project>
+EOF
+w "$vanish" src/Core/FS.GG.V.Core.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>FS.GG.V.Core</PackageId></PropertyGroup>
+</Project>
+EOF
+w "$vanish" src/Util/FS.GG.V.Util.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>FS.GG.V.Renamed</PackageId></PropertyGroup>
+</Project>
+EOF
+w "$vanish" src/App/FS.GG.V.App.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>FS.GG.V.App</PackageId></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\FS.GG.V.Core.fsproj" />
+    <ProjectReference Include="..\Util\FS.GG.V.Util.fsproj" />
+  </ItemGroup>
+</Project>
+EOF
+w "$vanish" tests/App.Tests/packages.lock.json <<'EOF'
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "fs.gg.v.app": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.V.Core": "[1.0.0, )",
+          "FS.GG.V.Util": "[1.0.0, )"
+        }
+      },
+      "fs.gg.v.core": { "type": "Project", "dependencies": { "FSharp.Core": "[10.1.301, )" } },
+      "fs.gg.v.util": { "type": "Project", "dependencies": { "FSharp.Core": "[10.1.301, )" } },
+      "FSharp.Core": { "type": "Direct", "requested": "[10.1.301, )", "resolved": "10.1.301" }
+    }
+  }
+}
+EOF
+seal "$vanish"
+must_fail "#545: a project reference whose id resolves to NOTHING is an error, not a silent skip" \
+  "no committed project file produces package id 'FS.GG.V.Util'" "$vanish"
+must_fail "…and it NAMES the entry that referenced it, not just the missing id" \
+  "'fs.gg.v.app' references the PROJECT 'FS.GG.V.Util'" "$vanish"
+# The drift is an error INDEPENDENTLY of the floor — even at --min-ranges 0, where the caller has said in
+# as many words that they expect to inspect nothing. The floor governs how many subjects there should be;
+# it has no opinion on a subject the gate could not classify, and must not be able to switch that off.
+must_fail "…and the drift reds even at --min-ranges 0, so the floor cannot silence it" \
+  "no committed project file produces" "$vanish" --min-ranges 0
+
+# A TOTAL collapse must be blamed on the drift, not on the floor. If the --min-ranges check ran first it
+# would say "fewer than the 1 this repo declares" and invite the receiver to LOWER THE FLOOR — advice that
+# would cement the bug. The subject count is untrustworthy the moment a reference fails to resolve, so the
+# resolution failure is reported first; this leg passes only because it is.
+allgone="$(newrepo allgone)"
+cp -r "$vanish/." "$allgone/" 2>/dev/null || true
+rm -rf "$allgone/.git"; git -C "$allgone" init -q -b main
+git -C "$allgone" config user.email fixture@fs.gg; git -C "$allgone" config user.name fixture
+w "$allgone" src/Core/FS.GG.V.Core.fsproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><PackageId>FS.GG.V.Core.Renamed</PackageId></PropertyGroup>
+</Project>
+EOF
+seal "$allgone"
+must_fail "#545: a TOTAL collapse is blamed on the DRIFT, not on the --min-ranges floor" \
+  "no committed project file produces package id 'FS.GG.V.Core'" "$allgone"
+
+# ---- "package" must be a FINDING, not a fallback ---------------------------------------------------
+# The gate calls a dependency a consumption pin when the lock records it as a package. It must not call
+# one a pin merely because it FAILED to recognise it as a project — that would make the ignore path a
+# catch-all, and an unrecognised dependency would land in it looking exactly like a package we meant to
+# skip. Which is #545 again, one square over, inside the fix for #545.
+#
+# A lock records every dependency it resolves (verified against all four of this repo's real locks: not
+# one dangling dep). So a dependency with no entry of its own is a lock that has drifted, and the gate
+# cannot know whether it is a project to check or a package to ignore. It refuses to guess — and the
+# guess it refuses is the one that would let it stay green.
+dangling="$(newrepo dangling)"
+cp -r "$audio/." "$dangling/" 2>/dev/null || true
+rm -rf "$dangling/.git"; git -C "$dangling" init -q -b main
+git -C "$dangling" config user.email fixture@fs.gg; git -C "$dangling" config user.name fixture
+w "$dangling" tests/Engine.Tests/packages.lock.json <<'EOF'
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "fs.gg.audio.engine": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Audio.Core": "[0.2.0, )",
+          "FS.GG.Audio.Ghost": "[0.2.0, )"
+        }
+      },
+      "fs.gg.audio.core": {
+        "type": "Project",
+        "dependencies": { "FSharp.Core": "[10.1.301, )" }
+      },
+      "FSharp.Core": { "type": "Direct", "requested": "[10.1.301, )", "resolved": "10.1.301" }
+    }
+  }
+}
+EOF
+seal "$dangling"
+must_fail "a dependency the lock does not RECORD is not silently filed as a consumption pin" \
+  "no entry of its own in this framework's block" "$dangling"
+must_fail "…and the gate says out loud that it will not assume the green answer" \
+  "will not assume the answer that lets it stay green" "$dangling"
 
 # A version the gate cannot resolve. It exists to enforce a version; guessing one would be worse than
 # any bug it catches.

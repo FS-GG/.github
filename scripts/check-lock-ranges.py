@@ -34,9 +34,34 @@ range recorded for a project reference is the REFERENCED PROJECT'S OWN effective
 resolves that per project (own PropertyGroup, else the inherited Directory.*.props chain, with `$(Prop)`
 substituted) and needs no per-repo configuration at all.
 
-Keying on "packages THIS repo's projects produce" also draws the line the check actually needs: a range
-naming a package the repo does not build is a CONSUMPTION pin (Rendering pins the FS.GG.Audio.Core
-package), a different question with a different answer, and it is correctly ignored here.
+WHICH DEPENDENCIES ARE SUBJECTS IS THE LOCK'S OWN ANSWER, NOT A GUESS FROM THE NAME. Under a
+`"type": "Project"` entry sit two kinds of dependency, and they must be told apart:
+
+    "fs.gg.ui.canvas": {
+      "type": "Project",
+      "dependencies": {
+        "FS.GG.UI.Scene":   "[0.4.0-preview.1, )",   <-- a PROJECT this repo builds  -> a subject
+        "FS.GG.Audio.Core": "[0.1.0, )",             <-- a PACKAGE it consumes       -> not a subject
+      }
+    }
+
+A consumption pin's currency is a different question with a different answer (#263 / pin-coherence), and
+flagging it here would red every consumer in the org. But the two are NOT distinguishable by name — both
+are `FS.GG.*` — so the discriminator has to come from the lock, and it does: NuGet records every project
+in the restore closure as its own top-level `"type": "Project"` entry. `fs.gg.ui.scene` has one;
+`fs.gg.audio.core` does not (it is a package entry). **A dependency is a project reference IFF it is
+itself a Project entry in the same TFM block.**
+
+THAT IS WHY A PROJECT REFERENCE THAT DOES NOT RESOLVE IS AN ERROR, NOT A SKIP (.github#545). This check
+used to ask only "does this dependency name a package one of my project files produces?" and skip it if
+not — which silently conflated *"a package we consume"* with *"a project we build whose id we can no
+longer resolve"*. So if id resolution ever drifted — a renamed `<PackageId>`, a project the props walker
+stops short of, a lock keyed differently — the affected ranges did not fail. They quietly stopped being
+subjects, and the gate reported green over whatever was left. With `--min-ranges` defaulting to 1, 16 of
+Audio's 17 ranges could vanish and it would still print `ok: all 1 project-reference range(s) ...`: a
+green tick over a check that inspected one subject, which is the epic #416 silent-no-op family reappearing
+inside the guard built to catch it. Now the lock says which dependencies are project references, so a
+project reference that no committed project file produces is DRIFT, and it goes red naming itself.
 
 COMPARES AGAINST THE VERSION NUGET WRITES, not the one you typed. SemVer2 build metadata is not part of
 NuGet version identity, so it is dropped from a range: a declared `0.2.0+ci` lands in the lock as
@@ -50,6 +75,14 @@ must not share an exit code. Every one of these is an ERROR, not a skip:
   * no project files, or not one of them declares a package id;
   * ZERO `"type": "Project"` entries across every lock — the lock schema or this query has drifted,
     and a check that cannot see its own subject must never report green;
+  * a PROJECT REFERENCE that resolves to no committed project file — the lock says this repo builds a
+    project producing that package id and this gate cannot find it, so the id resolution has drifted
+    and the range is UNCHECKABLE. It must not be quietly dropped from the subject set (.github#545);
+  * a dependency with NO entry of its own in its framework's block — a lock records everything it
+    resolves, so a dependency it does not record means the lock has drifted, and "package" is then a
+    GUESS. It is the convenient guess, too: it is the one that keeps the gate green. Both classes above
+    are the same rule — the gate identifies a dependency positively, or it goes red. It never reaches a
+    verdict through a fallback branch, because a fallback branch is precisely what #545 was;
   * fewer than --min-ranges project-reference ranges inspected (default 1);
   * a project that IS referenced by another declares a version this gate cannot resolve (an unexpanded
     `$(Prop)`, or nothing at all) — it must not guess the truth it exists to enforce;
@@ -249,7 +282,9 @@ def check(root: Path, min_ranges: int) -> int:
         )
 
     project_entries = 0
+    pins = 0
     subjects: list[tuple[Path, str, str, str, str]] = []  # file, tfm, project, dependency, range
+    drift: list[str] = []
     for path, doc in locks:
         if not isinstance(doc, dict):
             raise Problem(f"{path}: the lock's top level is not an object — the schema has drifted.")
@@ -261,13 +296,65 @@ def check(root: Path, min_ranges: int) -> int:
                 raise Problem(
                     f"{path}: the '{tfm}' entry is not an object — the lock schema has drifted."
                 )
+            # The lock's own answer to "which of these names is a project?". NuGet records every project
+            # in the restore closure as its own top-level entry, so this is the exact set of projects
+            # visible from this lock — and a dependency naming one of them is a project reference,
+            # whatever it is called. Nothing else can tell FS.GG.UI.Scene (built here) from
+            # FS.GG.Audio.Core (consumed from a feed): they differ in kind, not in name.
+            project_keys = {
+                name.lower()
+                for name, entry in entries.items()
+                if isinstance(entry, dict) and entry.get("type") == "Project"
+            }
+            # Every key in the block, project or package. A lock CLOSES OVER its own dependencies —
+            # everything a Project entry depends on has an entry of its own here — so this is what makes
+            # "is a package" a positive finding rather than a fallback. Without it, `pins` would be a
+            # bucket for everything unrecognised, and a dependency the lock had lost would land in it
+            # looking exactly like a package we meant to ignore. That is the #545 defect again, one
+            # square over: the fix must not reintroduce the shape of the bug it removes.
+            entry_keys = {name.lower() for name in entries}
             for name, entry in entries.items():
                 if not isinstance(entry, dict) or entry.get("type") != "Project":
                     continue
                 project_entries += 1
-                for dep, rng in (entry.get("dependencies") or {}).items():
-                    if dep.lower() in projects:
-                        subjects.append((path, tfm, name, dep, rng))
+                deps = entry.get("dependencies") or {}
+                if not isinstance(deps, dict):
+                    raise Problem(
+                        f"{path} [{tfm}]: the dependencies of project entry '{name}' are not an "
+                        "object — the lock schema has drifted."
+                    )
+                for dep, rng in deps.items():
+                    key = dep.lower()
+                    if key not in project_keys:
+                        if key not in entry_keys:
+                            # The lock does not close over its own dependencies, so we cannot say what
+                            # kind of thing this is — and the one answer we must not reach for is the
+                            # convenient one. Calling it a package would make the fallback branch a
+                            # silent skip, which is the whole defect (.github#545).
+                            drift.append(
+                                f"{path} [{tfm}]: project entry '{name}' depends on '{dep}', which has "
+                                "no entry of its own in this framework's block. A lock records every "
+                                "dependency it resolves, so this one has drifted — and this gate can no "
+                                "longer tell whether '{}' is a project it must check or a package it "
+                                "may ignore. It will not assume the answer that lets it stay "
+                                "green.".format(dep)
+                            )
+                            continue
+                        pins += 1  # the lock records it as a package: consumed, not built here
+                        continue
+                    if key not in projects:
+                        # The lock says this IS one of this repo's projects, and we cannot find the file
+                        # that produces it. Skipping it here is what let 16 of 17 subjects vanish behind
+                        # a green tick (.github#545) — so it is an error, and it names itself.
+                        drift.append(
+                            f"{path} [{tfm}]: '{name}' references the PROJECT '{dep}', but no "
+                            f"committed project file produces package id '{dep}'. Its range cannot be "
+                            "checked, so it must not be silently dropped from the subject set: either "
+                            "a <PackageId> was renamed without regenerating the locks, or a project "
+                            "sits outside --root, or this gate's id resolution has drifted."
+                        )
+                        continue
+                    subjects.append((path, tfm, name, dep, rng))
 
     # The lock records project references at all — if it does not, the schema or this query has moved,
     # and every range below would be vacuously fine. This can never be legitimately zero for a repo with
@@ -278,6 +365,15 @@ def check(root: Path, min_ranges: int) -> int:
             "A repo that pins its restores records its project references; the lock format or this "
             "query has drifted. Refusing to report green off a check with no subject."
         )
+
+    # BEFORE --min-ranges, deliberately. A dependency the gate could not classify makes the subject
+    # count untrustworthy, so a verdict computed from it — green OR red — would be reported off a number
+    # the gate has just proved it cannot stand behind. Blaming the floor would be worse than useless: it
+    # invites the receiver to LOWER the floor, which cements the very drift being reported.
+    if drift:
+        for d in drift:
+            print(f"::error::check-lock-ranges: {d}", file=sys.stderr)
+        return 1
 
     if len(subjects) < min_ranges:
         raise Problem(
@@ -342,6 +438,13 @@ def check(root: Path, min_ranges: int) -> int:
     print(
         f"ok: all {len(subjects)} project-reference range(s) across {len(locks)} lock file(s) track the "
         "version their project declares."
+    )
+    # Print the SHAPE of what was inspected, not just the verdict. A green tick that says nothing about
+    # its subject count is how a collapsed subject set hides (.github#545); the numbers make a collapse
+    # legible in the log even where it is not an error.
+    print(
+        f"    inspected {project_entries} '\"type\": \"Project\"' entr{'y' if project_entries == 1 else 'ies'}; "
+        f"ignored {pins} package dependenc{'y' if pins == 1 else 'ies'} as consumption pins."
     )
     return 0
 
