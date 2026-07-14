@@ -4370,9 +4370,12 @@ engine_resolve() {  # 0 iff an engine was found; the command lands in ENGINE_ARG
       # scheduling call in all six receivers therefore skipped, blaming a stale engine, and telling the
       # worker to `dotnet tool update` a tool they had never installed.
       #
-      # Measured on 2026-07-14: 139 of 147 shadow runs skipped this way. The eight that ran were in
-      # `.github`, which resolves the from-source build below and never touches this branch. The fleet's
-      # evidence was being thrown away at the source, and the three-day clock could not start.
+      # Measured on 2026-07-14, against the live divergence log: 187 of 239 shadow runs skipped, and 186
+      # of those 187 skips were this exact failure — `engine unknown is STALE`. The engine version was
+      # recorded as `unknown` 187 times and `0.1.1.0` 52 times, and those 52 were all in `.github`, which
+      # resolves the from-source build below and never touches this branch. The fleet's evidence was being
+      # thrown away at the source, in every repo except the one that builds it, and the three-day clock
+      # could not start.
       #
       # So PROVE the engine runs before claiming it resolved — and if the only thing missing is the
       # restore, DO the restore. Asking a worker to run it has the hit rate #656 already measured: zero.
@@ -5102,9 +5105,18 @@ divergence_skips_for() {  # $1=worker $2=day -> count
 #
 # #656 bolted the publish to `done` — *"the one command every worker runs when it finishes an item"*. It
 # is not. An item closed by a SQUASH-MESSAGE closing keyword (#681, #685, #693) is merged, closed and
-# board-Done without `done` ever being called, and on 2026-07-14 that was most of them: seven issues
-# closed, 218 item-verdicts compared, ZERO divergence — and not one row reached the ledger. The fleet
-# gate read the day as *"a day nobody looked"* and the three-day clock stayed at zero.
+# board-Done without `done` ever being called, and that worker's evidence never leaves the machine.
+#
+# Be precise about what this did and did not cost, because an earlier draft of this comment was wrong and
+# a comment that lies is the bug we are here to fix. The ledger (#635) is NOT empty: it held 59 rows when
+# this was written, 11 of them dated 2026-07-14. The `done` hook works — for the workers that reach it.
+#
+# What it is not is COMPLETE, and the shape of the gap is the point. Every one of those 59 rows carries
+# `skipped=0`, because the only workers that publish are the ones whose engine RESOLVED — and that is
+# `.github`, the single repo which builds the engine from source. The five receivers, whose engine is
+# declared-but-unrestored and therefore skips every call (see `engine_restore`), have contributed
+# NOTHING, ever. So the fleet gate is not reading a fleet. It is reading one repo, and calling it the
+# fleet — and ADR-0034's cut-over criterion says *"across the LIVE FLEET"*.
 #
 # That is #634 wearing a new coat. The lesson of #656 was that ASKING is not a mechanism; the fix chose a
 # hook, and the hook sits on a path the work does not always take. A hook on ONE path is a request that

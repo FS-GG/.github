@@ -87,8 +87,9 @@ If the work is cross-repo (needs a change/release from *another* FS-GG repo), us
 **In a receiver, nothing.** The engine is already declared in `.config/dotnet-tools.json`, and `fsgg-coord`
 **restores it for you** the first time it needs it. A manifest is a *declaration*, not an *installation* —
 until something runs the restore, `dotnet tool run` fails, the version reads as `unknown`, `unknown` is
-stale by design, and the run SKIPS. That was **139 of 147 shadow runs** on 2026-07-14, in every receiver
-at once. The kit used to ask the worker to run the restore; asking is not a mechanism.
+stale by design, and the run SKIPS. Measured on 2026-07-14: **187 of 239 shadow runs skipped, 186 of them
+for exactly this** — in every receiver at once. The kit used to ask the worker to run the restore; asking
+is not a mechanism.
 
 **Outside a receiver (or to be sure):** `dotnet tool install -g FS.GG.Coord.Cli`
 **And keep it current:** `dotnet tool update -g FS.GG.Coord.Cli` — a global tool does NOT self-update, and
@@ -110,10 +111,13 @@ does not move.
 call that produced it (throttled: at most one REST write per 30 min per machine), and `done --flip`
 publishes immediately too. No extra step, nothing to remember (#656).
 
-It hung on `done` alone until 2026-07-14, when seven issues closed via **squash-message closing keywords**
-— merged, closed and board-Done without `done` ever running. 218 verdicts compared, zero divergence, and
-**not one row reached the ledger**; the fleet gate read the day as *"a day nobody looked."* A hook on one
-path is a request that the path be taken.
+It hung on `done` alone until 2026-07-14. An item closed by a **squash-message closing keyword** is merged,
+closed and board-Done without `done` ever running, and that worker's evidence never leaves the machine. The
+ledger was not empty — 59 rows, 11 of them that day — so the hook worked for the workers that reached it.
+But every one of those rows carries `skipped=0`: the only workers that publish are the ones whose engine
+**resolved**, i.e. `.github`, which builds from source. The five receivers had contributed nothing, ever, so
+the gate was reading one repo and calling it the fleet. A hook on one path is a request that the path be
+taken.
 
 Run it by hand only if you stop without finishing an item:
 

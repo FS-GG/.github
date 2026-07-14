@@ -741,13 +741,14 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   `.config/dotnet-tools.json` — Renovate keeps its version current and the kit distributes the file — and
   `fsgg-coord` now **restores it for you** the first time it needs it.
 
-  It did not, and that cost the fleet a day. A manifest is a *declaration*, not an *installation*: until
-  something runs `dotnet tool restore`, `dotnet tool run fsgg-coord-engine` exits 1 with *Run "dotnet tool
-  restore"…* on **stderr**, so the version came back empty, became `unknown`, and `unknown` is stale by
-  design — every scheduling call in all six receivers skipped, blaming a stale engine and telling the
-  worker to *update* a tool they had never installed. On 2026-07-14 that was **139 of 147 shadow runs**.
-  The kit's answer had been a sentence asking the worker to run the restore, and that sentence had the
-  hit rate every other request in this fabric has: zero.
+  It did not, and that is why the fleet's evidence comes from one repo. A manifest is a *declaration*, not
+  an *installation*: until something runs `dotnet tool restore`, `dotnet tool run fsgg-coord-engine` exits
+  1 with *Run "dotnet tool restore"…* on **stderr**, so the version came back empty, became `unknown`, and
+  `unknown` is stale by design — every scheduling call in all six receivers skipped, blaming a stale engine
+  and telling the worker to *update* a tool they had never installed. Measured on 2026-07-14 against the
+  live divergence log: **187 of 239 shadow runs skipped, 186 of them for exactly this reason**, with the
+  engine version recorded as `unknown` 187 times. The kit's answer had been a sentence asking the worker to
+  run the restore, and that sentence had the hit rate every other request in this fabric has: zero.
 
 - **Your shadow's evidence is published for you.** The shadow pushes it to the fleet ledger itself, from
   the scheduling call that produced it — and `done --flip` publishes immediately as well. No extra step,
@@ -759,11 +760,18 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
 
   The first fix hung the publish on `done` — *"the one command every worker runs when it finishes an
   item."* It is not. An item closed by a **squash-message closing keyword** (#681, #685, #693) is merged,
-  closed and board-Done without `done` ever being called, and on 2026-07-14 that was most of them: seven
-  issues closed, 218 item-verdicts compared, zero divergence — and **not one row reached the ledger**. The
-  fleet gate read the day as *"a day nobody looked."* **A hook on one path is a request that the path be
-  taken.** So the publish now hangs on the *shadow*, which is the only path that has, by construction,
-  just produced evidence.
+  closed and board-Done without `done` ever being called, and that worker's evidence never leaves the
+  machine.
+
+  The ledger is **not empty** — it held 59 rows on 2026-07-14, 11 of them from that day — so the hook does
+  work for the workers that reach it. It is not *complete*, and the shape of the gap is the point: every
+  one of those rows carries `skipped=0`, because the only workers that publish are the ones whose engine
+  **resolved** — and that is `.github`, the single repo that builds the engine from source. The five
+  receivers, skipping every call for want of a restore, have contributed **nothing, ever**. So the fleet
+  gate is not reading a fleet; it is reading one repo and calling it the fleet, while ADR-0034's cut-over
+  criterion says *"across the **live fleet**."* **A hook on one path is a request that the path be taken.**
+  So the publish now hangs on the *shadow*, which is the only path that has, by construction, just
+  produced evidence.
 
   It is **throttled** — at most one REST write per 30 minutes per machine, shared across every worker on
   it, because the hot scheduling loop may not pay the network on every call. Missing a window loses

@@ -5466,8 +5466,9 @@ fi
 # call in all six receivers skipped, blaming a stale engine and telling the worker to `dotnet tool update`
 # a tool they had never installed.
 #
-# Measured on 2026-07-14: 139 of 147 shadow runs skipped this way. The evidence the three-day clock is
-# made of was being thrown away at the source, in every repo except the one that builds from source.
+# Measured on 2026-07-14, against the live divergence log: 187 of 239 shadow runs skipped, 186 of them
+# with this exact reason (`engine unknown is STALE`). The evidence the three-day clock is made of was
+# being thrown away at the source, in every repo except the one that builds from source.
 if [ -x "$ENGINE" ]; then
   CO_MAN="$(mkcheckout manifest https://github.com/FS-GG/FS.GG.SDD.git)"
   mkdir -p "$CO_MAN/.config"
@@ -5533,9 +5534,13 @@ fi
 # ==================================================================================================
 # #656 bolted the publish to `done` — "the one command every worker runs when it finishes an item". It is
 # not: an item closed by a SQUASH-MESSAGE closing keyword (#681, #685, #693) is merged, closed and
-# board-Done without `done` ever being called. On 2026-07-14 that was most of them — seven issues closed,
-# 218 item-verdicts compared, zero divergence, and NOT ONE ROW reached the ledger. The fleet gate read the
-# day as "a day nobody looked". A hook on ONE path is a request that the path be taken.
+# board-Done without `done` ever being called, and that worker's evidence never leaves the machine.
+#
+# The ledger is not EMPTY — it held 59 rows when this was written, 11 of them dated 2026-07-14 — so the
+# hook does work for the workers that reach it. It is not COMPLETE. Every one of those rows carries
+# `skipped=0`, because the only workers that publish are the ones whose engine resolved: `.github`, which
+# builds from source. The five receivers contribute nothing. A hook on ONE path is a request that the path
+# be taken, and the fleet gate ends up reading one repo and calling it the fleet.
 if [ -x "$ENGINE" ]; then
   SHLOG="$WORK/shadowpub.jsonl"; : >"$SHLOG"
   echo '[]' >"$PUB_CF"
