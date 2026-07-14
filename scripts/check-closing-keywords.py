@@ -107,16 +107,46 @@ WHAT IT DELIBERATELY DOES NOT DO
   It does not check the TITLE. GitHub never honours a keyword there (#558), so a title cannot close
   anything, and flagging one would be noise.
 
-  IT DOES NOT READ THE BRANCH'S COMMIT MESSAGES, and under this repo's squash settings
-  (`squash_merge_commit_message: COMMIT_MESSAGES`) those are literally what becomes the squash
-  message. The gate reads the PR BODY as a proxy for them, which is sound here only because the
-  recipe builds the body FROM the commit body. If the two are edited apart, a closing keyword can
-  reach the commit without ever appearing in the body this gate sees. That residual hole is #684.
+TWO SUBJECTS, BECAUSE THE BODY WAS ONLY EVER A PROXY (#684)
+  Under this repo's squash settings (`squash_merge_commit_message: COMMIT_MESSAGES`) the squash
+  message is built from the BRANCH'S COMMIT MESSAGES, concatenated — not from the PR body. So the
+  body is a *stand-in* for the text with the power to close, and it is an exact one only on a
+  single-commit branch, which is what `pnext-item` §5 happens to produce (`git log -1 --format=%b`).
+
+  On a multi-commit branch it is not exact, and the gap is silent: a closing keyword in the body of
+  commit 1 of 3 lands in the squash message and CLOSES the issue, while never appearing in the PR
+  body — so the gate saw a clean text and reported green over a merge that closed an issue nobody
+  declared. That is #266's fail-open shape a third time, and #683's shape one level out: the gate was
+  confidently correct about a text that is not the one with the power to close anything.
+
+  So the gate now takes BOTH, and they are not the same kind of text:
+
+    --commits   The concatenated commit messages: WHAT CLOSES on merge, because they ARE the squash
+                message. An EMPTY subject here is rc=3, never green: every PR has a commit, so empty
+                means the wiring broke, and a gate that reads nothing has audited nothing (#266).
+    --body      The PR body: WHAT LINKS. Still scanned, because it is what builds
+                `closingIssuesReferences` — the PR's visible link, where #616 and #558 live. And it
+                closes too: GitHub honours that link on merge. Keeping it is not belt-and-braces.
+
+  BOTH SUBJECTS CAN CLOSE, by two different routes — the squash message, and the body's recorded
+  link — so what the merge closes is the UNION of what they declare, and that is what is reported.
+
+  AND `strip_code` RUNS OVER BOTH. It is NOT a code exemption; it never was. It detects the text the
+  AUTHOR MARKED AS QUOTED, and a keyword inside code is therefore never a DECLARATION — in either
+  subject. Do not "simplify" it away for the commit messages on the reasoning that a commit message
+  is never rendered: that is true, and it is exactly why the fence cannot save you. A quoted line
+  reading `closes #422` inside a fence is a line that LOOKS like a declaration, and a gate that reads
+  it as one exits 0 over the silent close it exists to stop. Fixture leg 15 pins this; it caught the
+  first draft of #684's own fix doing precisely that. See `audit()`.
+
+  Findings are reported per subject and by name, because the remedies differ: a body finding you fix
+  by editing the body, a commit-message finding you cannot — you must rewrite the branch.
 
 EXIT CODES  (the contract; the workflow greps nothing)
   0  every closing reference is declared (the declared set, if any, is printed)
-  1  FINDING — the merge closes an issue the body did not declare, or declares one it will not link
-  3  NO VERDICT (permanent) — no body was supplied, or it could not be read
+  1  FINDING — the merge closes an issue no subject declared, or declares one it will not link
+  3  NO VERDICT (permanent) — a subject was missing, unreadable, or empty when it cannot honestly
+     be empty (a branch always has a commit message; a PR body legitimately may be blank)
 
   There is no exit 2 ("no verdict, retryable"): this gate is pure and offline. It reads text, makes
   no network call, and has no condition a re-run could resolve.
@@ -327,20 +357,37 @@ def line_text(prose: str, offset: int) -> str:
     return prose[start:end]
 
 
-def audit(body: str) -> tuple[list[str], list[str]]:
-    """(findings, declared closing refs) for one PR body.
+def audit(body: str, *, markdown: bool = True) -> tuple[list[str], list[str]]:
+    """(findings, declared closing refs) for ONE subject.
 
     Two parsers, both modelled (#683):
 
-      - The scan that decides what CLOSES is over the RAW body, because the squash commit message is
+      - The scan that decides what CLOSES is over the RAW text, because the squash commit message is
         plain text. A closing reference is legitimate ONLY on a declaration line; everything else is
         a finding — negated, narrated, quoted, deferred, OR IN CODE. Backticks are not a defence.
 
       - The scan that decides what the PR LINKS is over `strip_code(body)`. A declaration the
         markdown parser cannot see still closes the issue on merge, but the PR records no link for
         it (#616). That is a finding too, in the opposite direction.
+
+    A KEYWORD INSIDE CODE IS NEVER A DECLARATION — in EITHER subject, and this is the one rule that
+    makes the commit-message scan safe (#684). `strip_code` is not an exemption. It detects the text
+    the AUTHOR MARKED AS QUOTED, and quoting is the opposite of declaring:
+
+      - GitHub closes it regardless. Neither parser that can close an issue honours a fence: the
+        squash message is plain text, so ``` is three backticks and nothing more.
+      - But the author fenced it, so they were QUOTING, not declaring — and a line that is nothing
+        but `closes #422` inside a fence is a quotation that looks exactly like a declaration. Trust
+        the fence and you bless the close; that is how #422 died the second time.
+
+    So a fenced keyword is always a FINDING, and never enters `declared`. `markdown` chooses only
+    the EXPLANATION, because the two subjects lose different things:
+
+      - A PR BODY is rendered, so a fenced declaration closes the issue and records NO LINK (#616).
+      - COMMIT MESSAGES are never rendered, so there is no link to lose and nothing to soften the
+        verdict: the fence is literal characters, and the close is unconditional.
     """
-    linkable = strip_code(body)  # what the markdown parser can still see
+    linkable = strip_code(body)  # the text the author MARKED AS CODE — in either subject
     findings: list[str] = []
     declared: list[str] = []
 
@@ -369,16 +416,33 @@ def audit(body: str) -> tuple[list[str], list[str]]:
         in_code = linkable[m.start() : m.end()] != body[m.start() : m.end()]
 
         if DECLARATION_LOOSE.match(line_text(body, m.start())):
-            declared.append(ref)
             if in_code:
-                # The commit still closes it. The PR just never says so.
-                findings.append(
-                    f"line {ln}: `{kw} {ref}` is a declaration INSIDE CODE. The squash commit will "
-                    f"still CLOSE {ref} — a commit message is plain text — but the markdown parser "
-                    f"skips code, so the PR will record no link for it (closingIssuesReferences will "
-                    f"be empty). Move the declaration out of the code block, onto a line of its own."
-                    f"\n      {excerpt(body, m.start())}"
-                )
+                # A declaration-SHAPED line inside code. It closes either way — and because the
+                # author fenced it, it is a quotation, not a declaration. It does NOT enter
+                # `declared`: blessing it is exactly how a quoted `closes #422` reads as a deliberate
+                # close, goes green, and closes #422 for the third time.
+                if markdown:
+                    # The PR body: rendered, so the close happens and the LINK does not (#616).
+                    findings.append(
+                        f"line {ln}: `{kw} {ref}` is a declaration INSIDE CODE. The squash commit "
+                        f"will still CLOSE {ref} — a commit message is plain text — but the markdown "
+                        f"parser skips code, so the PR will record no link for it "
+                        f"(closingIssuesReferences will be empty). Move the declaration out of the "
+                        f"code block, onto a line of its own.\n      {excerpt(body, m.start())}"
+                    )
+                else:
+                    # A commit message: never rendered, so there is no link to lose and no softer
+                    # reading available. The fence is three backticks; the close is unconditional.
+                    findings.append(
+                        f"line {ln}: `{kw} {ref}` sits inside a code block in a COMMIT MESSAGE — and "
+                        f"a commit message is never rendered, so the fence is literal characters and "
+                        f"NOT a defence. GitHub WILL CLOSE {ref} on merge. If you were QUOTING it, "
+                        f"break the adjacency (drop the `#`). If you meant to close it, take it out "
+                        f"of the fence, onto a line of its own."
+                        f"\n      {excerpt(body, m.start())}"
+                    )
+                continue
+            declared.append(ref)
             continue
 
         neg = is_negated(body, m.start("kw"))
@@ -403,29 +467,60 @@ def audit(body: str) -> tuple[list[str], list[str]]:
     return findings, declared
 
 
+def read_subject(path: str, what: str) -> str:
+    p = Path(path)
+    if not p.is_file():
+        raise NoVerdict(f"no {what} to check: '{path}' does not exist")
+    return p.read_text(encoding="utf-8")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--body", help="file holding the PR body (default: read stdin)")
+    ap.add_argument(
+        "--commits",
+        help="file holding the branch's commit messages, concatenated "
+        "(`git log --format=%%B base..head`) — the text that BECOMES the squash message, and so "
+        "the text that actually closes. Scanned as plain text: no markdown, no code exemption.",
+    )
     args = ap.parse_args()
 
+    # (label, text, markdown). ORDER MATTERS: the subject that actually CLOSES comes first, because
+    # it is the one whose declared set the summary reports as "will close".
+    subjects: list[tuple[str, str, bool]] = []
+
     try:
+        if args.commits:
+            commits = read_subject(args.commits, "commit messages")
+            # An EMPTY commit-message subject is a NO VERDICT, never a green. Every pull request has
+            # at least one commit and every commit has a message, so empty here does not mean "clean"
+            # — it means the wiring broke (a bad rev range, a shallow clone that cannot reach the
+            # base, a `git log` that failed into an empty file). Examining nothing is a failure to
+            # audit, not a clean audit (#266), and this is the exact shape that would let the hole
+            # #684 describes reopen SILENTLY: the gate would go green having read no commit at all.
+            if not commits.strip():
+                raise NoVerdict(
+                    f"'{args.commits}' is EMPTY. A pull request always has at least one commit "
+                    "message, so this is broken wiring (a bad rev range, or a clone too shallow to "
+                    "reach the base), not a clean branch. Examining nothing is not a pass (#266)."
+                )
+            subjects.append(("commit messages (what BECOMES the squash message)", commits, False))
+
         if args.body:
-            p = Path(args.body)
-            if not p.is_file():
-                raise NoVerdict(f"no body to check: '{args.body}' does not exist")
-            body = p.read_text(encoding="utf-8")
-        else:
+            subjects.append(("PR body (what records the PR's link)", read_subject(args.body, "body"), True))
+        elif not args.commits:
             if sys.stdin.isatty():
-                raise NoVerdict("no body supplied on stdin and no --body given")
-            body = sys.stdin.read()
+                raise NoVerdict("no body supplied on stdin and no --body/--commits given")
+            subjects.append(("PR body (what records the PR's link)", sys.stdin.read(), True))
     except NoVerdict as e:
         print(f"check-closing-keywords: no verdict: {e}", file=sys.stderr)
         return 3
     except OSError as e:
-        print(f"check-closing-keywords: no verdict: cannot read body: {e}", file=sys.stderr)
+        print(f"check-closing-keywords: no verdict: cannot read subject: {e}", file=sys.stderr)
         return 3
 
-    findings, declared = audit(body)
+    audited = [(label, audit(text, markdown=md)) for label, text, md in subjects]
+    findings = [f for _, (fs, _) in audited for f in fs]
 
     if findings:
         print(
@@ -433,8 +528,15 @@ def main() -> int:
             "GitHub WILL close these on merge:\n",
             file=sys.stderr,
         )
-        for f in findings:
-            print(f"  - {f}", file=sys.stderr)
+        # Per subject, so the author is told WHICH text closes the issue — the body they can edit
+        # after the fact, or the commit message they must rewrite the branch to change.
+        for label, (fs, _) in audited:
+            if not fs:
+                continue
+            if len(audited) > 1:
+                print(f"  IN THE {label.upper()}:", file=sys.stderr)
+            for f in fs:
+                print(f"  - {f}", file=sys.stderr)
         print(
             "\nGitHub scans for `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`"
             "\nfollowed by an issue ref, and links the two. It DOES NOT PARSE THE SENTENCE (#643):"
@@ -454,11 +556,30 @@ def main() -> int:
         )
         return 1
 
-    if declared:
-        uniq = sorted(set(declared), key=declared.index)
+    # THE UNION, because BOTH subjects close, by two different routes. The commit messages become the
+    # squash message and close what it names; the PR body builds `closingIssuesReferences`, and GitHub
+    # honours THAT on merge too (#558). So an issue declared in either text is an issue the merge
+    # closes, and reporting only one subject under-reports the blast radius.
+    #
+    # Reporting only the commit messages here (the first cut of this) told an author who had declared
+    # in the PR body alone — which is the normal thing to do, since the body is the editable one —
+    # that their PR "closes no issue", one line above printing that the body declares it.
+    closing = [ref for _, (_, decl) in audited for ref in decl]
+
+    if closing:
+        uniq = sorted(set(closing), key=closing.index)
         print(f"check-closing-keywords: OK — on merge this PR will close: {', '.join(uniq)}")
     else:
-        print("check-closing-keywords: OK — this PR body closes no issue.")
+        print("check-closing-keywords: OK — this PR closes no issue.")
+
+    # With both subjects in hand, say what each one declares. The two texts are edited independently
+    # and can drift apart — that drift is the whole of #684 — so an author who sees them disagree
+    # here is seeing the thing this gate exists to make visible.
+    if len(audited) > 1:
+        for label, (_, decl) in audited:
+            names = ", ".join(sorted(set(decl), key=decl.index)) if decl else "nothing"
+            print(f"  · {label}: {names}")
+
     return 0
 
 

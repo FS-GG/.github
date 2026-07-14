@@ -341,7 +341,166 @@ set -e
               || bad "a missing --body file must exit 3 (got rc=$RC)" "$OUT"
 
 # ---------------------------------------------------------------------------------------------
-# The subject of this gate is a PR BODY, and nothing else. There is deliberately no leg that runs it
+# THE COMMIT MESSAGES ARE THE SUBJECT THAT CLOSES (#684). The body was only ever a PROXY for them —
+# exact on a single-commit branch, which is all pnext-item §5 produces, and WRONG the moment a branch
+# carries two. These legs are the hole: every one of them is GREEN to a body-only gate.
+# ---------------------------------------------------------------------------------------------
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# usage: gate_on_subjects <commits> <body>   -> sets $RC and $OUT
+gate_on_subjects() {
+  printf '%s' "$1" > "$TMP/commits.txt"
+  printf '%s' "$2" > "$TMP/body.md"
+  set +e
+  OUT="$(python3 "$GATE" --commits "$TMP/commits.txt" --body "$TMP/body.md" 2>&1)"
+  RC=$?
+  set -e
+}
+
+# 14. THE ACCEPTANCE CRITERION, and the leg this whole change exists for. A three-commit branch whose
+#     FIRST commit says `fixes #999`. The PR body is built by pnext-item §5 from `git log -1` — the
+#     LAST commit only — so #999 appears nowhere in it. On merge the squash message concatenates all
+#     three, GitHub reads `fixes #999`, and closes an issue this PR never mentioned.
+COMMITS_HOLE='wip: first cut
+
+This fixes #999 as a side effect.
+
+refactor: extract the parser
+
+third commit subject
+
+Closes #684.'
+BODY_CLEAN='Closes #684.'
+
+gate_on_subjects "$COMMITS_HOLE" "$BODY_CLEAN"
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '#999'; then
+  ok "a keyword in a NON-FINAL commit is a FINDING, and the gate names #999"
+else
+  bad "a keyword in a non-final commit must exit 1 and name #999 (got rc=$RC)" "$OUT"
+fi
+
+# 14a. ...and the finding must say WHICH text closes it. An author who is told only "you close #999"
+#      will go and edit the PR body, which is not the text that closes it, and the gate will still be
+#      red. The body they can edit; the commit message they must rewrite the branch to change.
+printf '%s' "$OUT" | grep -qi 'COMMIT MESSAGES' \
+  && ok "the finding names the COMMIT MESSAGES as the offending subject, not the body" \
+  || bad "a commit-message finding must name which subject it came from" "$OUT"
+
+# 14b. THE PROOF THAT THIS WAS A HOLE. The very same branch, audited the way the gate did before
+#      #684 — body only — is GREEN. This leg is what the fix is FOR, and if it ever starts failing,
+#      the gate has begun reading the body as though it were the commit messages, which it is not.
+set +e
+OUT="$(printf '%s' "$BODY_CLEAN" | python3 "$GATE" 2>&1)"; RC=$?
+set -e
+[ "$RC" = 0 ] && ok "the SAME branch is green to a body-only scan — the #684 hole, pinned" \
+              || bad "the body-only scan of a clean body must still be green (got rc=$RC)" "$OUT"
+
+# 15. CODE IS NOT A DEFENCE, AND IN A COMMIT MESSAGE THERE IS NOT EVEN A MARKDOWN PARSER TO SKIP IT.
+#     A commit message is never rendered: a fence in one is four backtick characters and nothing more.
+#     So a fenced keyword here is not "a declaration that will not link" (#616's shape, which is what
+#     it means in a BODY) — it is a plain, binding, undeclared close.
+gate_on_subjects 'docs: quote the bug
+
+The old recipe told workers to write it as code:
+
+```
+closes #422
+```
+
+Closes #684.' "$BODY_CLEAN"
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '#422'; then
+  ok "a FENCED keyword in a commit message is a FINDING — there is no markdown parser there"
+else
+  bad "a fenced keyword in a commit message must exit 1 and name #422 (got rc=$RC)" "$OUT"
+fi
+
+# 16. THE GREEN LEG. A well-formed multi-commit branch: exactly one declaration, on a line of its
+#     own, in the commit that carries it. A gate that cannot pass this rejects every honest branch,
+#     and an author who cannot get green by doing the right thing will find a way around the gate.
+gate_on_subjects 'gate: read the text that actually closes
+
+The body was a proxy for the squash message. Refs #683.
+
+tests: pin the multi-commit leg
+
+Closes #684.' 'Closes #684.'
+if [ "$RC" = 0 ] && printf '%s' "$OUT" | grep -q 'will close: #684'; then
+  ok "an honest multi-commit branch is GREEN, and the gate says it will close #684"
+else
+  bad "an honest multi-commit branch must exit 0 and report #684 (got rc=$RC)" "$OUT"
+fi
+
+# 16a. ...and it must report what EACH subject declares. The two texts are edited independently, and
+#      showing them side by side is how an author sees them drift apart — which is all #684 ever was.
+printf '%s' "$OUT" | grep -q 'PR body' \
+  && ok "the green report names both subjects and what each declares" \
+  || bad "with both subjects, the report must name each one" "$OUT"
+
+# 17. AN EMPTY COMMIT-MESSAGE SUBJECT IS NO VERDICT, NOT A PASS. Every PR has at least one commit and
+#     every commit has a message, so empty does not mean "clean" — it means the rev range or the
+#     clone depth is broken. This is the fail-open that would reopen #684 SILENTLY: the gate would go
+#     green having read no commit at all, which is #266's signature exactly.
+gate_on_subjects '' "$BODY_CLEAN"
+[ "$RC" = 3 ] && ok "an EMPTY --commits file is rc=3 (no verdict), NOT green" \
+              || bad "an empty --commits file must exit 3 — reading nothing is not a pass (got rc=$RC)" "$OUT"
+
+# 17a. Whitespace is not a commit message either. `git log` on an empty range emits newlines, so this
+#      is the shape the broken-wiring case ACTUALLY takes on a runner — not a zero-byte file.
+gate_on_subjects '
+
+' "$BODY_CLEAN"
+[ "$RC" = 3 ] && ok "a WHITESPACE-only --commits file is rc=3 — the real shape of an empty rev range" \
+              || bad "a whitespace-only --commits file must exit 3 (got rc=$RC)" "$OUT"
+
+# 18. A missing --commits file. The workflow writes it with `git log`; this is "git log failed and
+#     nobody noticed", and it must land in the same no-verdict bucket as a missing body.
+#
+#     The --body file is written HERE rather than inherited from whichever leg ran last. A missing
+#     body is ALSO rc=3, so a leg that let its body go missing would still pass — green for a reason
+#     that has nothing to do with the --commits file it claims to be testing. A fixture whose legs
+#     can pass for the wrong reason is the fail-open this whole file exists to keep out.
+printf '%s' "$BODY_CLEAN" > "$TMP/body.md"
+set +e
+OUT="$(python3 "$GATE" --commits "$HERE/does-not-exist.txt" --body "$TMP/body.md" 2>&1)"; RC=$?
+set -e
+[ "$RC" = 3 ] && ok "a missing --commits file is rc=3 (no verdict), NOT green" \
+              || bad "a missing --commits file must exit 3 (got rc=$RC)" "$OUT"
+
+# 19. THE BODY IS STILL READ. #684 adds a subject; it does not replace one. The body is what builds
+#     `closingIssuesReferences` — the PR's visible link — so #616 and #558 still live there, and a
+#     finding in the body must still fire when the commit messages are spotless.
+gate_on_subjects 'tests: pin the multi-commit leg
+
+Closes #684.' 'This does not close #422.
+
+Closes #684.'
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '#422'; then
+  ok "a body finding still fires when the COMMITS are clean — the body scan was not dropped"
+else
+  bad "the body must still be audited alongside the commits (got rc=$RC)" "$OUT"
+fi
+
+# 20. BOTH SUBJECTS CLOSE, so "will close" is the UNION of them. The body is the editable text, so
+#     declaring there and nowhere else is the normal thing to do — and GitHub honours the body's
+#     `closingIssuesReferences` on merge (#558), so that issue IS closed. Reporting only the commit
+#     messages told such an author their PR "closes no issue", one line above printing that the body
+#     declared it: two adjacent contradictory sentences, and an under-report of what the merge does.
+gate_on_subjects 'gate: read the text that closes
+
+Some prose, and a bare reference. Refs #683.' 'Closes #684.'
+if [ "$RC" = 0 ] && printf '%s' "$OUT" | grep -q 'will close: #684'; then
+  ok "a declaration in the BODY ALONE still reports 'will close: #684' — the union, not just commits"
+else
+  bad "a body-only declaration must still be reported as closing #684 (got rc=$RC)" "$OUT"
+fi
+printf '%s' "$OUT" | grep -q 'closes no issue' \
+  && bad "the gate said 'closes no issue' while the body declares #684 — self-contradicting" "$OUT" \
+  || ok "...and it does NOT also claim the PR closes nothing"
+
+# ---------------------------------------------------------------------------------------------
+# The subjects of this gate are a PR BODY and a branch's COMMIT MESSAGES. There is deliberately no leg that runs it
 # over this repo's docs: a markdown file in the tree is not parsed by GitHub for closing keywords, so
 # a doc that narrates `closed #422` in prose closes nothing and is not a defect. Asserting green over
 # the docs would be asserting a property the gate does not have, and the day someone wrote an honest
