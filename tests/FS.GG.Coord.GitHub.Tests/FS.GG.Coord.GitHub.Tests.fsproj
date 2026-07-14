@@ -25,6 +25,7 @@
     <Compile Include="BudgetTests.fs" />
     <Compile Include="CacheTests.fs" />
     <Compile Include="ReadTests.fs" />
+    <Compile Include="WriteTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

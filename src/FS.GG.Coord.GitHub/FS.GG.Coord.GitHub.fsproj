@@ -42,6 +42,8 @@
     <Compile Include="Fake.fs" />
     <Compile Include="Reads.fsi" />
     <Compile Include="Reads.fs" />
+    <Compile Include="Writes.fsi" />
+    <Compile Include="Writes.fs" />
   </ItemGroup>
 
   <ItemGroup>
