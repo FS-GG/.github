@@ -468,8 +468,13 @@ fix.
   divergence. Zero risk — bash remains authoritative and the fleet is unaffected.
 - Divergence is the acceptance test. It will find real bugs *in both*.
 
-**Exit:** zero divergence across the live fleet for **three consecutive days** under normal
-fan-out.
+**Exit (SUPERSEDED by [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)):** ~~zero divergence
+across the live fleet for **three consecutive days** under normal fan-out.~~ That clock could not tick
+— a worker in a per-item worktree resolved no engine and so banked no evidence (#728) — and its own
+taxonomy classified as *"not a bug"* three real defects the flip would otherwise have shipped. **Phase 2
+exits on the defect corpus**, like Phase 3b: `tests/fsgg-coord/cases/`, green against **both** engines.
+The shadow keeps running as **telemetry** — it is how a live fleet is watched, not what a cut-over waits
+on.
 
 #### Phase 2 as built — what shipped, and the two decisions it forced
 
