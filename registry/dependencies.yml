@@ -372,7 +372,16 @@ contracts:
     #   2. .github THEN bumps this `version` + the top-level schemaVersion and advances the pin to that CLI.
     # And note what counts as growth in the first place: an OPTIONAL, ADDITIVE, back-compatible field IS schema
     # growth (.github#686) — M5 above IS that defect, so "no consumer breaks" is its MECHANISM, not an exemption.
-    # Amending ADR-0015 itself is .github#689 (an Accepted ADR is amended by a NEW ADR, never rewritten in place).
+    #
+    # AMENDED IN THE CANONICAL SOURCE: ADR-0037 (.github#689) supersedes ADR-0015 §3's "same change" clause — an
+    # Accepted ADR is amended by a NEW ADR, never rewritten in place. ADR-0037 also adds the obligation that makes
+    # the two-PR order SAFE, and which is stated nowhere above: the validator published in step 1 MUST still accept
+    # the document as it stands at .github HEAD — the new rule may REJECT NOTHING the current document does, and is
+    # enforced only once the document DECLARES the new schemaVersion. This is not hygiene: pin-coherence.yml
+    # hard-fails when a pin is behind feed-newest, so publishing the CLI reds .github@main (via the daily cron — a
+    # CLI release touches no file here) and the pin advances AHEAD of step 2's bump, on Renovate's own PR. The window
+    # in which the validator knows more than the document declares is therefore OPENED BY THE ORG'S OWN ANTI-FREEZE
+    # MACHINERY, and a validator that rejected the un-bumped document would red the very gate step 2 has to pass.
     surface: >
       registry/dependencies.yml DOCUMENT schema — the top-level `schemaVersion` scalar plus the field-vocabulary
       block (the schema-of-record comment near the head of this file). Modeled + validated by FS.GG.Contracts'
@@ -428,9 +437,16 @@ contracts:
     #   1. FS.GG.SDD teaches Fsgg.Registry the field/rule and PUBLISHES a CLI carrying it.
     #   2. .github THEN bumps skills.yml `schemaVersion` + this `version` and advances the
     #      contract-coherence.yml FS.GG.SDD.Cli pin to that CLI — one .github PR, after the CLI is live.
-    # ADR-0015 itself still carries the unsatisfiable clause: this repo does not rewrite an Accepted ADR
-    # in place (cf. ADR-0027, which amends ADR-0021 §1 with a NEW ADR), so correcting it is its own
-    # change. Tracked: .github#689. The SDD half of step 1 is FS.GG.SDD#420.
+    # ADR-0015 no longer carries the unsatisfiable clause: ADR-0037 (.github#689) amends §3 — this repo
+    # does not rewrite an Accepted ADR in place (cf. ADR-0027, which amends ADR-0021 §1 with a NEW ADR),
+    # so correcting it was its own change. ADR-0037 §3 also binds the VALIDATOR: the CLI published in step 1
+    # must still ACCEPT skills.yml AS IT STANDS — the new rule may reject nothing the current document does,
+    # and is enforced only once the document DECLARES the new schemaVersion. pin-coherence.yml hard-fails on a
+    # pin behind feed-newest, so the pin advances AHEAD of the bump (on Renovate's own PR) and the new validator
+    # meets the un-bumped document on a required gate. NOTE THE TRAP THAT IS ALREADY ARMED: skills.yml carries
+    # `mirrored` TODAY, at schemaVersion 1 — so the natural implementation ("`mirrored` requires schemaVersion
+    # >= 2") would REJECT the live document the moment the skills.yml assertion ships. The SDD half of step 1 is
+    # FS.GG.SDD#420, and that is precisely the PR this obligation lands on.
     surface: >
       registry/skills.yml — the authoritative catalog of every process + product skill ({id, scope,
       owner, source, canonical-body sha256, materializes-when predicate, mirrored}). GENERATED/RECONCILED
