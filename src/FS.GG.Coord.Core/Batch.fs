@@ -27,6 +27,42 @@ module Batch =
           Decisions: Decision list
           Truncated: bool }
 
+    /// THE DECISION'S OWN WORDS — the only place a passed-over item is put into English.
+    ///
+    /// `Schedulability.explain` cannot do this alone: it sees the ITEM and the VERDICT, but a collision's
+    /// holder lives on the DECISION (`CollidedWith`), because "who reserved this path" is a fact about the
+    /// batch, not about the item. Rendering the verdict without it produces "overlaps in-flight work: a ⇄ b"
+    /// — true, useless, and a REGRESSION on bash, which has named the holder and its lease since #428.
+    ///
+    /// The distinction between a LIVE CLAIM and a BATCH MEMBER is the one that matters most and is the one
+    /// a holder-blind renderer destroys. They are the same verdict and two completely different instructions:
+    /// a batch member frees at the end of THIS run and has no lease; a live claim means go and talk to a
+    /// worker, or wait out a window. Collapsing them tells a worker to wait ~12m for a colleague who does
+    /// not exist.
+    let explainDecision (leaseMinutes: int) (d: Decision) : string =
+        let id = d.Item.Ref.Short
+
+        match d.Result, d.CollidedWith with
+        | Schedulability.OverlapsInFlight hits, Some holder ->
+            let where = Schedulability.collisionText hits
+
+            match holder with
+            | LiveClaim(WorkerId w, item, age) ->
+                $"%s{id} — overlaps in-flight work held by %s{w} on %s{item.Short} (%s{Schedulability.leaseWindow leaseMinutes age}): %s{where}"
+
+            | BatchMember item -> $"%s{id} — overlaps batch member %s{item.Short} (%s{where})"
+
+            // IN PROGRESS, NO MARKER. Something is evidently editing those files, so the reservation is
+            // real and must be honoured — but there is no worker to name, no lease to wait out, and
+            // nobody to `say` to. Dressing it up as a holder ("held by — (lease unknown)") would invite a
+            // worker to wait for a marker that is never coming.
+            | Unowned item ->
+                $"%s{id} — overlaps %s{item.Short}, which the board says is In progress with NO claim marker (someone is working outside the protocol — there is no lease to wait out; see: fsgg-coord who): %s{where}"
+
+            | UnknownHolder -> $"%s{id} — overlaps in-flight work: %s{where}"
+
+        | result, _ -> Schedulability.explain leaseMinutes d.Item result
+
     /// Reservations that name files in THIS repo. Tokens are repo-relative (#312, #353).
     let private inRepo (owner: string) (repo: string) (reservations: Reservation list) =
         reservations |> List.filter (fun r -> r.Owner = owner && r.Repo = repo)
@@ -42,12 +78,25 @@ module Batch =
                     | Matchable t -> t = token
                     | Unmatchable _ -> false)
             | Undeclared
-            | DeclaredNone -> false)
+            | DeclaredNone
+            // An unread reservation names no token, so it can never be the holder OF a token. It never
+            // reaches here: `schedule` reds the batch on one before any candidate is compared.
+            | Unreadable _ -> false)
         |> Option.map (fun r -> r.Holder)
 
     /// A reservation that reserves nothing is the one thing this scheduler may not tolerate — see the
     /// `Red` leg on `schedule`. Returns the offending tokens, empty if the reservation is sound.
-    let private unusableReservation (r: Reservation) = TouchSet.unmatchable r.Paths
+    ///
+    /// AN UNREAD SURFACE RESERVES NOTHING, AND THAT IS EXACTLY THE FAIL-OPEN THIS FUNCTION EXISTS TO
+    /// CATCH. `TouchSet.unmatchable` answers `[]` for `Unreadable` — truthfully, because we know of no
+    /// bad tokens for the simple reason that we know of no tokens at all. Reading that `[]` as "the
+    /// reservation is sound" would let every candidate clear a lock over files nobody ever looked at,
+    /// and hand a second worker the tree its holder is standing in. Same shape as #273; different cause.
+    let private unusableReservation (r: Reservation) =
+        match r.Paths with
+        | Unreadable reason ->
+            [ $"the holder's issue body could not be read, so its touch-set is UNKNOWN (%s{reason})" ]
+        | _ -> TouchSet.unmatchable r.Paths
 
     let schedule
         (allowBacklog: bool)

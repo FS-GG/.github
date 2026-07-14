@@ -542,7 +542,7 @@ fi
 if [ "\$sub" = "api" ] && [ "\$sub2" = "rate_limit" ]; then
   expr=""; n=\${#args[@]}
   for ((i=0;i<n;i++)); do [ "\${args[i]}" = "--jq" ] && expr="\${args[i+1]}"; done
-  # Under GH_RATELIMIT the meter reads what the 403s imply — 0 GraphQL, REST untouched. `reset` sits
+  # Under GH_RATELIMIT the meter reads what the 403s imply — 0 GraphQL, REST untouched. \`reset\` sits
   # in the future so \`rate_reset_in\` renders a real countdown instead of clamping to 0m00s.
   if [ -n "\${GH_RATELIMIT:-}" ]; then
     rlreset=\$(( \$(date -u +%s) + 900 ))
@@ -651,8 +651,8 @@ if [ "\$sub" = "api" ]; then
     printf '{"number":%s}' "\$anum" | emit; exit 0
   fi
 
-  # --- sub-issues: the native child edge `child` writes and `epic_rollup` reads -------------------
-  # A real mutable store, so `child` can be observed to be idempotent rather than merely exit 0. The
+  # --- sub-issues: the native child edge \`child\` writes and \`epic_rollup\` reads -------------------
+  # A real mutable store, so \`child\` can be observed to be idempotent rather than merely exit 0. The
   # stub also reproduces the API's two traps: the endpoint keys on the child's REST **id** (not its
   # number), and it 422s when sub_issue_id arrives as a JSON string — i.e. via \`gh api -f\`. A stub
   # that accepted -f would let the client regress to the form the API rejects.
@@ -662,13 +662,13 @@ if [ "\$sub" = "api" ]; then
     printf 'sub-issue-%s %s %s\n' "\$(printf '%s' "\$method" | tr 'A-Z' 'a-z')" "\$snwo" "\$snum" >>"\$GH_LOG"
     sf="\${JF/\/issue-/\/subissues-}"     # parallel to the issue key, so it is repo-qualified too
     [ -f "\$sf" ] || echo '[]' >"\$sf"
-    # GH_FAIL_SUBISSUES_GET=<n>: the existing-links read for <n> fails. `child` must not read that as
+    # GH_FAIL_SUBISSUES_GET=<n>: the existing-links read for <n> fails. \`child\` must not read that as
     # "the edge is absent" and POST anyway — an unreachable subject is not an absent one (#266/#320).
     if [ "\$method" = "GET" ] && injected "\${GH_FAIL_SUBISSUES_GET:-}" "\$snwo" "\$snum"; then
       echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
     fi
     if [ "\$method" = "POST" ]; then
-      # GH_FORCE_SUBISSUE_POST_FAIL=1: the link POST fails the way the real API does. `child` must
+      # GH_FORCE_SUBISSUE_POST_FAIL=1: the link POST fails the way the real API does. \`child\` must
       # relay THIS text, not a guessed cause.
       if [ -n "\${GH_FORCE_SUBISSUE_POST_FAIL:-}" ]; then
         echo 'gh: Validation Failed (HTTP 422): sub_issue_id is not valid' >&2; exit 1
@@ -760,7 +760,7 @@ if [ "\$sub" = "api" ]; then
       jq -e --argjson id "\$cid" 'any(.[]; .id == \$id)' "\$cf" >/dev/null 2>&1 || continue
       found=1
       # A comment id is globally unique, but it is still only reachable through the repo that OWNS
-      # its issue. Marker PATCH/DELETE is how `heartbeat` and `release` touch the lock, so a
+      # its issue. Marker PATCH/DELETE is how \`heartbeat\` and \`release\` touch the lock, so a
       # cross-repo slip here would renew or collect a marker on the wrong repo's item (#494).
       mjf="\${cf/\/comments-/\/issue-}"
       mhome="\$(jq -r '.repo // empty' "\$mjf" 2>/dev/null || true)"
@@ -789,8 +789,8 @@ if [ "\$sub" = "api" ]; then
   # is to say the stub is exactly as repo-blind as the bug in .github#479 was, and would happily serve
   # \`FS.GG.Audio/pulls/48\` from \`.github\`'s PR 48. So the repo cannot be asserted from the payload;
   # it has to be asserted from the REQUEST. That is what this log line is for.
-  # THE LIVENESS PROBE (#581): `pr_alive` lists OPEN pull requests and looks for a head branch
-  # `item/<n>-*`. GH_LIVE_PR="<num>:<pr>" puts an open PR on item <num>. This is the ONLY signal that
+  # THE LIVENESS PROBE (#581): \`pr_alive\` lists OPEN pull requests and looks for a head branch
+  # \`item/<n>-*\`. GH_LIVE_PR="<num>:<pr>" puts an open PR on item <num>. This is the ONLY signal that
   # can tell "the worker died" from "the build took longer than the lease" — and getting that wrong
   # reaped live, uncommitted work twice, once from the worker who was fixing the issue about it.
   if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/pulls\?state=open ]]; then
@@ -807,7 +807,7 @@ if [ "\$sub" = "api" ]; then
     printf 'pr-files %s %s\n' "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}" >>"\$GH_LOG"
     emit <"$FIXTURES/pr-files-\${BASH_REMATCH[2]}.json"; exit 0
   fi
-  # GH_FAIL_PR_GET=<n>: the head-ref read for PR <n> fails. `verify-paths` resolves which issue a PR
+  # GH_FAIL_PR_GET=<n>: the head-ref read for PR <n> fails. \`verify-paths\` resolves which issue a PR
   # implements from its branch name here, and an empty answer would read as "the branch is not
   # item/<n>-…" — i.e. a SKIP verdict invented from an unanswered query (.github#322).
   if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/pulls/([0-9]+)$ ]]; then
@@ -851,7 +851,7 @@ if [ "\$sub" = "api" ]; then
   fi
 
   # --- a single issue: GET (title/body/Paths) or PATCH (widen rewrites the body) ----------------
-  # GH_FAIL_ISSUE_GET=<n>: the body read for <n> fails. `paths_of` reads the touch-set here, and an
+  # GH_FAIL_ISSUE_GET=<n>: the body read for <n> fails. \`paths_of\` reads the touch-set here, and an
   # empty answer would read as "declared nothing" — i.e. disjoint from everything.
   if [[ "\$path" =~ ^repos/([^/]+)/([^/]+)/issues/([0-9]+)$ ]]; then
     inwo="\${BASH_REMATCH[1]}/\${BASH_REMATCH[2]}"; inum="\${BASH_REMATCH[3]}"
@@ -912,7 +912,7 @@ if [ "\$sub" = "api" ]; then
     exit 0
   fi
 
-  # --- the issue LIST (the ETag-revalidated `issues` command) -----------------------------------
+  # --- the issue LIST (the ETag-revalidated \`issues\` command) -----------------------------------
   etag='"issues-etag-v1"'
   if [ -n "\$inm" ] && [ "\$inm" = "\$etag" ]; then
     echo "gh: HTTP 304 Not Modified" >&2; exit 1
@@ -927,7 +927,7 @@ if [ "\$sub" = "api" ]; then
 fi
 
 if [ "\$sub" = "project" ] && [ "\$sub2" = "item-add" ]; then
-  # `add` (#587) — the verb whose ABSENCE is why every recipe reached past the client. It must go
+  # \`add\` (#587) — the verb whose ABSENCE is why every recipe reached past the client. It must go
   # through the same budget classification as every other board write, so the stub speaks the
   # rate-limit here too.
   [ -n "\${GH_RATELIMIT:-}" ] && { echo "gh: API rate limit already exceeded (HTTP 403)" >&2; exit 1; }
@@ -1029,6 +1029,12 @@ seed_issue_in FS-GG/FS.GG.Audio       31 "unmatchable tokens"        "**/package
 seed_issue_in FS-GG/FS.GG.Rendering  200 "Blocked on an open item"   "src/Render/Blocked.fs"
 seed_issue_in FS-GG/FS.GG.Rendering  201 "Blocker already closed"    "src/Render/Clear.fs"
 seed_issue_in FS-GG/FS.GG.Governance 202 "Blocker not on the board"  "src/Gov/Off.fs"
+# #203 (legacy prose in `Blocked by`) had NO issue fixture, and for years nothing noticed: bash
+# short-circuits blocked candidates BEFORE it reads any body, so it never asked for this one. Only the
+# SHADOW reads it — to hand the item to the engine — and a failed read there is a counted `unobserved`,
+# withheld from the comparison. So the engine was never shown the one item in this fixture whose blocker
+# is PROSE, and the prose-blocker path went unexercised on the very board built to exercise it.
+seed_issue_in FS-GG/FS.GG.Governance 203 "Legacy prose in the field"  "src/Gov/Legacy.fs"
 
 # ---- the ADR-0027 parallel-work world -----------------------------------------------------
 cat >"$FIXTURES/board-pw.json" <<'JSON'

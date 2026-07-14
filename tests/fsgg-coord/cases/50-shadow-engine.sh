@@ -26,6 +26,13 @@ CASE_NAME="50-shadow-engine"
 #      the log must record that it RAN and WHAT it compared, and `divergence` must refuse to call an
 #      empty log green. A shadow nobody can prove ran is not evidence, and "zero divergence" would be
 #      the most reassuring possible way to say "we never looked".
+# THIS CASE OWNS ITS MODE. Every run below names the engine mode it means — that is the whole subject:
+# `auto` shadows where an engine exists, `bash` never does, `shadow` insists. So the AMBIENT mode must
+# not leak in. The corpus is also swept end-to-end under `FSGG_COORD_ENGINE=fs` (the cut-over gate), and
+# inheriting that here would silently rewrite the premise of all 96 assertions: "the shadow did not
+# change bash's answer" is not a claim you can even make in the mode where it is supposed to.
+unset FSGG_COORD_ENGINE
+
 export FSGG_COORD_DIVERGENCE_LOG="$WORK/divergence.jsonl"
 : >"$FSGG_COORD_DIVERGENCE_LOG"
 
@@ -496,8 +503,15 @@ if [ -x "$ENGINE" ]; then
   # that is the point: it says out loud that the fallback rests on this, so the assumption cannot rot
   # silently. (The fallback's own coverage is indirect but real: the entire `take` suite above passes
   # only because it is there.)
-  capped="$(PATH="$STUB:$PATH" bash "$COORD" batch --repo governance --ignore-blocked -n 1 --json 2>/dev/null || true)"
-  uncapped="$(PATH="$STUB:$PATH" bash "$COORD" batch --repo governance --ignore-blocked --json 2>/dev/null || true)"
+  #
+  # THE UNREADABLE ITEM IS ARMED ON PURPOSE. It used to be supplied by ACCIDENT: FS.GG.Governance#203 had
+  # no issue fixture at all, so its body read failed and this hazard appeared for free. That was a gap
+  # pretending to be a test — and it hid a real defect, because the engine was consequently never shown
+  # the one item on this board whose blocker is PROSE. #203 is a fixture now, and the hazard this
+  # assertion is actually about is stated rather than stumbled into.
+  gov_run() { PATH="$STUB:$PATH" GH_FAIL_ISSUE_GET=203 bash "$COORD" "$@"; }
+  capped="$(gov_run batch --repo governance --ignore-blocked -n 1 --json 2>/dev/null || true)"
+  uncapped="$(gov_run batch --repo governance --ignore-blocked --json 2>/dev/null || true)"
   assert_contains "lanes: the CAPPED batch returns an item on a board with an unreadable touch-set" \
     "FS.GG.Governance#202" "$capped"
   assert_eq "lanes: ...and the UNCAPPED batch returns NOTHING — the hazard take's fallback exists for" \

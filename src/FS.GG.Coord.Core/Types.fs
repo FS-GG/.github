@@ -43,7 +43,27 @@ module Types =
 
         member this.Short = $"%s{this.Repo}#%d{this.Number}"
 
-    type Blocker = { Ref: Ref; State: BlockerState }
+    /// A `Blocked by` entry.
+    ///
+    /// `Ref` is an OPTION because `BlockerUnparseable` is a real case and prose is not a ref: "Blocked by
+    /// RESOLVED: shipped last week" blocks, and it has no owner, no repo and no number. The record used to
+    /// demand a `Ref` anyway — so the one state the type system was told to expect was the one it could not
+    /// hold, and the client quietly dropped every such blocker on the floor rather than fail to build one.
+    /// An item bash called BLOCKED then reached the engine as unblocked, which under `--engine=fs` is a
+    /// worker being handed blocked work.
+    ///
+    /// `Raw` is what the field actually SAID, and it is always present — it is the only thing there is to
+    /// show a human when the ref did not parse.
+    type Blocker =
+        { Ref: Ref option
+          Raw: string
+          State: BlockerState }
+
+        /// What to call it in a sentence: the canonical ref when we have one, else the prose we were given.
+        member this.Display =
+            match this.Ref with
+            | Some r -> r.Short
+            | None -> this.Raw
 
     type PathToken =
         | Matchable of string
@@ -53,6 +73,8 @@ module Types =
         | Undeclared
         | DeclaredNone
         | Declared of PathToken list
+        /// The body was never read, so the touch-set is UNKNOWN — not absent. See Types.fsi.
+        | Unreadable of reason: string
 
     type Claim =
         { Worker: WorkerId

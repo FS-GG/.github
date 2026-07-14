@@ -76,8 +76,31 @@ module Schedulability =
     /// (#440).
     val schedulable: allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
 
+    /// The touch-set grammar, stated once. A refusal that does not say what WOULD have been accepted
+    /// only moves the worker's confusion one step later.
+    val TouchSetGrammar: string
+
+    /// "Should I wait?" — as a NUMBER (#428).
+    ///
+    /// "nothing schedulable" and "queued behind a claim held by <w>, lease frees in ~96m" are the same
+    /// fact and two completely different instructions: the first reads as an empty queue and sends a
+    /// worker home.
+    ///
+    /// A NEGATIVE age means the age is UNKNOWN and renders as "lease unknown". A marker may be hand-
+    /// written or truncated and carry no timestamp, and inventing "frees in ~120m" out of a missing
+    /// field is the confident-but-unfounded sentence #440 and #488 were both closed for.
+    val leaseWindow: leaseMinutes: int -> ageSeconds: int -> string
+
+    /// The path-collision pairs, as one string.
+    val collisionText: hits: (string * string) list -> string
+
     /// A one-line reason, for the "passed over:" list a worker reads when nothing is startable.
     ///
     /// A queue that shrinks without explanation is #440: `take` reported "no schedulable item" over a
     /// board full of work, and the worker went home.
-    val explain: item: Item -> result: Schedulability -> string
+    ///
+    /// HOLDER-BLIND. It sees the item and the verdict, but a collision's HOLDER is a fact about the
+    /// batch, not the item — so an `OverlapsInFlight` renders here without naming who holds the files.
+    /// `Batch.explainDecision` is the one to call when a decision is in hand; it is the operator-facing
+    /// renderer, and this is its fallback.
+    val explain: leaseMinutes: int -> item: Item -> result: Schedulability -> string
