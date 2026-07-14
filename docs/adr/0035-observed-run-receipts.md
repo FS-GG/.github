@@ -1,6 +1,10 @@
 # ADR-0035: Observed run receipts — a test obligation is satisfied by a run SDD *read*, not by a `pass` an agent *typed*
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-07-14) — decisions (1)–(4) have **landed**; what remains is the *stage-3
+  default flip*, which this ADR itself defers to "once the fleet is green" (see
+  [Migration](#migration--this-is-a-breaking-change-to-the-evidence-contract)). `Accepted` here means
+  **decided and binding**, not fully rolled out — the flip is scheduled work under an accepted
+  decision, not an open question ([#715](https://github.com/FS-GG/.github/issues/715)).
 - **Date:** 2026-07-11
 - **Affects:** **FS.GG.SDD** (owner — the receipt shape, the `evidence` parse/record, the `verify` ladder, the failure-leg test), **FS.GG.Governance** (the enforcement half — receipt *freshness* and whether an unobserved obligation may cross a merge boundary), **.github** (this ADR; instance (j) of epic [#266](https://github.com/FS-GG/.github/issues/266))
 
@@ -104,22 +108,46 @@ What it does is move the bar from **assertion** to **artifact**: from a word an 
 
 - Decide the enforcement policy for `unobserved`, and receipt freshness. SDD ships the fact; Governance ships the verdict. **No Governance runtime is required for SDD to emit the fact** — the dependency stays one-directional, as it is today.
 
-### Registry + architecture-map obligation — **at resolution, not at proposal**
+### Registry + architecture-map obligation — **at resolution, not at proposal** — ✅ PAID
 
 This ADR changes no repo, no boundary, and no on-disk surface: it *applies* the existing
-"SDD reports, Governance enforces" line rather than redrawing it, and it is `Proposed`.
+"SDD reports, Governance enforces" line rather than redrawing it.
 
-But resolving it will touch the §5 contract picture, and that obligation is recorded here so it
-is not lost between the proposal and the patch:
+Resolving it touched the §5 contract picture, and that obligation was recorded here so it would not
+be lost between the proposal and the patch. It was **paid on 2026-07-14** by
+[.github#701](https://github.com/FS-GG/.github/issues/701) / [PR #713](https://github.com/FS-GG/.github/pull/713):
+`registry/dependencies.yml` first (`governance-handoff` → **1.1.0**), then `docs/architecture.md` §5,
+then the `compatibility.md` projection — per
+`docs/coordination/README.md#system-overview--the-architecture-map`, the map is reconciled *after*
+the registry, not instead of it. The implementing feature spec owned both, and **a PR that lands the
+receipt without the registry bump is incomplete**, not a follow-up.
 
-- **`governance-handoff`** (`registry/dependencies.yml`, `version: 1.0.0`, `surface:
-  readiness/<id>/governance-handoff.json`, owner `sdd`, consumer `governance`) gains the
-  `unobserved` disposition. Additive → **minor bump within `1.x`**; no consumer break.
-- `registry/dependencies.yml` is updated **first**, then `docs/architecture.md` §5 is reconciled —
-  per `docs/coordination/README.md#system-overview--the-architecture-map`, the map is reconciled
-  *after* the registry, not instead of it.
-- The implementing feature spec owns both. **A PR that lands the receipt without the registry bump
-  should be treated as incomplete**, not as a follow-up.
+> ⚠️ **This section originally said `governance-handoff` "gains the `unobserved` disposition". That
+> was WRONG, and it is corrected here rather than quietly dropped — the sentence misled the worker who
+> paid the obligation, and an ADR is exactly the wrong place to leave a claim that has been disproved.**
+>
+> `unobserved` is a **`TD-` test-disposition state in `verify.json`**. It is **never persisted** to
+> `readiness/<id>/governance-handoff.json`. The handoff's enums are unmoved — `readiness.shipDisposition`
+> stays `{shipReady, blocked}`, `readiness.verificationReadiness` stays
+> `{verificationReady, needsVerificationCorrection}`, `evidence.nodes[].state` stays
+> `{pending, real, synthetic, failed, skipped}` — and its `schemaVersion` stays `1`.
+>
+> What the contract actually gained is **one blocking diagnostic id**, `ship.unobservedEvidence`,
+> newly reachable in `readiness.blockingDiagnosticIds[]`. Additive, so the **minor bump within `1.x`**
+> the obligation called for was the right bump — for the wrong stated reason.
+>
+> The divergence was deliberate on SDD's side, not an oversight: [FS.GG.SDD#422](https://github.com/FS-GG/FS.GG.SDD/pull/422)
+> withheld the state from the `ED-` ladder *on purpose*, because giving `ED-` an `unobserved` state
+> "would instead change a persisted enum on the governance-handoff surface — a schema change this
+> stage deliberately does not make". This ADR was written at proposal; the code is what shipped.
+
+**Still outstanding, and it is what makes the bump real:** SDD stamps a hardcoded `contractVersion`
+into every emitted handoff and it still reads `1.0.0`, so the registry declares `1.1.0` while the
+artifact self-declares `1.0.0` — and **no gate compares the two**. Tracked as
+[FS.GG.SDD#427](https://github.com/FS-GG/FS.GG.SDD/issues/427) and as coherence id
+`governance-handoff-emitted-version` (`coherent: false`). It is harmless only while the default stays
+off; **it must land before the stage-3 flip below**, or a consumer meets a value its declared contract
+never announced — the precise failure this obligation exists to prevent.
 
 ### Migration — this is a breaking change to the evidence contract
 
@@ -127,9 +155,25 @@ Every existing `evidence.yml` with `result: pass` and no receipt currently reach
 
 Staged, so the org is not stopped dead:
 
-1. **Disclose** — `evidenceSelfAttested: N` (decision 4). Non-breaking. Ship now.
-2. **Warn** — `unobserved` is emitted and reported, but still satisfies. Everyone sees their true number.
-3. **Fail closed** — `unobserved` stops satisfying. Flipped once the fleet is green, on a schema major.
+| | stage | state |
+|---|---|---|
+| 1 | **Disclose** — `evidenceSelfAttested: N` (decision 4). Non-breaking. | ✅ **landed** — [FS.GG.SDD#398](https://github.com/FS-GG/FS.GG.SDD/issues/398) |
+| 2 | **Record** — the `observedRun` receipt; TRX/JUnit parsed, hashed, and checked. | ✅ **landed** — [FS.GG.SDD#415](https://github.com/FS-GG/FS.GG.SDD/issues/415) |
+| 3 | **Fail closed** — `unobserved` stops satisfying. | ⚙️ **mechanism landed, default OFF** — [FS.GG.SDD#422](https://github.com/FS-GG/FS.GG.SDD/pull/422) shipped it opt-in behind `--require-observed` (on **both** `verify` and `ship`), with the failure-leg proof #266 demands. |
+| 3b | **The flip** — `--require-observed` becomes the default. | ⏳ **owed.** A **breaking** change to the evidence contract, on a schema major. |
+
+**The flip is the only thing left, and it is deliberately not scheduled here.** It is gated on
+*"once the fleet is green"* — and the fleet is not: no `evidence.yml` in the org yet carries a
+receipt, so flipping today would turn every ship-ready work item in every FS-GG repo not-ship-ready
+at once, with no remedy available. Accepting this ADR does **not** flip it. What accepting it settles
+is that the flip *is coming* and that work should be planned against it, not that it happens now.
+
+**Two things must land before the flip**, or it lands broken:
+
+- **Receipts must actually be recorded.** The gate is only fair once the fleet can pass it.
+- **[FS.GG.SDD#427](https://github.com/FS-GG/FS.GG.SDD/issues/427)** — the emitted `contractVersion`
+  still says `1.0.0` (see the obligation section above). Flip before that, and Governance meets
+  `ship.unobservedEvidence` under a contract version that never declared it.
 
 ### Rejected alternatives
 
@@ -138,5 +182,10 @@ Staged, so the org is not stopped dead:
 
 ### Open questions
 
-- Which report formats at v1 — TRX + JUnit only, or a neutral `run-receipt.json` SDD defines, with adapters? (Leaning: TRX/JUnit, because the org's runners already emit them and a new format nobody produces is a receipt nobody records.)
+- ~~Which report formats at v1 — TRX + JUnit only, or a neutral `run-receipt.json` SDD defines, with
+  adapters?~~ **Settled by the implementation: TRX + JUnit**, as the leaning predicted — the org's
+  runners already emit them, and a new format nobody produces is a receipt nobody records
+  ([FS.GG.SDD#415](https://github.com/FS-GG/FS.GG.SDD/issues/415)). A report recording **no executed
+  tests** (`passed + failed = 0`) is refused rather than recorded: a run in which nothing executed
+  proves nothing.
 - Does an obligation whose subject is *not* a test (`visual-inspection`, contract impact) get an analogous receipt, or stay authored? (Leaning: stays authored + `synthetic` disclosure — judgement is not observable, and pretending otherwise re-creates the ceremony problem #351 names.)
