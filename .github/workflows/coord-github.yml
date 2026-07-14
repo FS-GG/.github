@@ -1,0 +1,90 @@
+# coord-github — FS.GG.Coord.GitHub, the impure edge (ADR-0034 §4.1, built by ADR-0040 Phase A).
+#
+# THE HALF THAT WAS NEVER PORTED, AND WHERE THE BUGS STILL ARE.
+#
+# ADR-0034 moved the DECISION to a typed core and stopped there. The core is pure — it cannot fail open,
+# because it cannot read anything — and that is precisely why none of epic #266's remaining children live
+# in it. They live out here, in the layer that talks to GitHub: a claim scan that reads a truncated page as
+# an empty lock (#461); a rate-limited item lookup reported as "not on board", with a remediation that
+# CREATES A DUPLICATE (#421); a board write promised to a queue that could never replay it (#510). Every one
+# is an IO or write-path defect, and every one survived the flip untouched.
+#
+# THE TESTS ARE FAILURE-LEG TESTS, AND THAT IS THE POINT. A happy-path test passes against the broken code
+# and proves nothing — that is #266's whole lesson. So almost every assertion in this suite asserts a
+# REFUSAL: that a malformed page is an error and not an empty lock, that an exhausted budget is not an
+# absent item, that a MERGED pull request is not an abandoned one. The bug was never that the good path
+# failed.
+#
+# WHY THIS GATE IS SEPARATE FROM coord-core. The core's suite proves the RULES still hold. This one proves
+# the EDGE still refuses. They fail for different reasons and they are read by different people, and
+# collapsing them would mean a broken adapter and a broken rule print the same red.
+name: coord-github
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Coord.GitHub/**"
+      - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/coord-github.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Coord.GitHub/**"
+      - "tests/FS.GG.Coord.GitHub.Tests/**"
+      - "src/FS.GG.Coord.Core/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
+      - "global.json"
+      - ".github/workflows/coord-github.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coord-github-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Locked restore, like every other project in the org. A silent version SUBSTITUTION fails here
+      # rather than quietly changing what the tests ran against (ADR-0006; NU1603/NU1608 are errors).
+      - name: Restore (locked)
+        run: dotnet restore tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --locked-mode
+
+      - name: Build
+        run: dotnet build tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-restore -c Release
+
+      # Every failure here is a refusal the org paid for once already.
+      - name: Test — the edge must refuse
+        run: dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release --logger "console;verbosity=normal"
+
+      # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). A misconfigured runner that discovers
+      # nothing exits 0, and this gate would then go green over an adapter nobody tested — which is epic
+      # #266's exact shape, in the layer whose entire purpose is to end it. Assert a floor.
+      - name: Non-vacuity — the run must have executed tests
+        run: |
+          set -euo pipefail
+          out="$(dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release 2>&1)"
+          printf '%s\n' "$out"
+          passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
+          if [ "${passed:-0}" -lt 80 ]; then
+            echo "::error title=coord-github: the suite audited nothing::Only ${passed:-0} tests ran. The edge's incident log is ~85 assertions (the read path and the write path); a runner that discovers nothing exits 0, and a green gate over an untested adapter is exactly the fail-open this layer exists to end (#266)."
+            exit 1
+          fi
+          echo "coord-github: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"

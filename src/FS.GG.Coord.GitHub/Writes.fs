@@ -1,0 +1,446 @@
+namespace FS.GG.Coord.GitHub
+
+module Writes =
+
+    open System
+    open System.Text.Json
+    open System.Text.RegularExpressions
+    open FS.GG.Coord
+    open FS.GG.Coord.Types
+    open Errors
+    open Transport
+
+    [<Sealed>]
+    type Held
+        internal (ref: Ref, worker: WorkerId, markerId: int64, previousStatus: BoardStatus option) =
+        member _.Ref = ref
+        member _.Worker = worker
+        member _.MarkerId = markerId
+        member _.PreviousStatus = previousStatus
+
+    type ClaimOutcome =
+        | Won of Held
+        | Lost of WorkerId
+        | Undecided of reason: string
+        | BlockedByUnparseableMarker
+
+    [<Sealed>]
+    type Validated internal (tokens: string list) =
+        member _.Tokens = tokens
+
+    [<Sealed>]
+    type Rewritten internal (body: string) =
+        member _.Body = body
+
+    /// The worker id a marker carries when we could not parse one out of it. A claim held by NOBODY, which
+    /// BLOCKS — see `Reads.parseMarker`.
+    [<Literal>]
+    let private UnparsedMarker = "unparsed-marker"
+
+    // ---- the marker body -------------------------------------------------------------------------
+
+    /// `%` is encoded FIRST, so that decoding can take it LAST. Get this order wrong and a status
+    /// containing a literal `%20` round-trips into a space that was never in it.
+    let private encodeStatus (s: string) =
+        s.Replace("%", "%25").Replace(" ", "%20")
+
+    let private statusName (s: BoardStatus) =
+        match s with
+        | NoStatus -> ""
+        | Backlog -> "Backlog"
+        | Ready -> "Ready"
+        | InProgress -> "In progress"
+        | Blocked -> "Blocked"
+        | InReview -> "In review"
+        | Done -> "Done"
+
+    /// THE MARKER. `worker=` MUST stay the first key — the parser anchors on it, and the anchor is what
+    /// stops a `say` message that merely QUOTES a marker from forging a lock.
+    let private markerBody
+        (worker: WorkerId)
+        (session: SessionId option)
+        (leaseMinutes: int)
+        (previousStatus: BoardStatus option)
+        =
+        let sessionPart =
+            match session with
+            | Some(SessionId s) -> $" session=%s{s}"
+            | None -> ""
+
+        let prevPart =
+            match previousStatus with
+            | Some s -> $" prev=%s{encodeStatus (statusName s)}"
+            // A COLUMN NOBODY RECORDED CANNOT BE RESTORED (#481). Emitting `prev=` with an empty value
+            // would be a recorded decision to restore nothing, which is a different claim from having made
+            // no observation at all.
+            | None -> ""
+
+        $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes}%s{sessionPart}%s{prevPart} -->"
+
+    // ---- comment primitives ----------------------------------------------------------------------
+
+    let private postComment (transport: IGitHubTransport) (ref: Ref) (body: string) : IoResult<int64> =
+        let payload =
+            let o = Nodes.JsonObject()
+            o.["body"] <- Nodes.JsonValue.Create body
+            o.ToJsonString()
+
+        let request =
+            { Method = "POST"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}/comments"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            try
+                use doc = JsonDocument.Parse response.Body
+
+                match doc.RootElement.TryGetProperty "id" with
+                | true, v when v.ValueKind = JsonValueKind.Number -> Ok(v.GetInt64())
+                | _ ->
+                    // WE POSTED SOMETHING AND CANNOT NAME IT. This is the worst shape available to the CAS:
+                    // a marker exists on the issue and we do not know its id, so we can neither win with it
+                    // nor delete it. It must be loud.
+                    Error(
+                        Malformed(
+                            ref.Short,
+                            "the comment was posted but the response carried no id — we cannot identify our own marker, and therefore cannot win or withdraw it"
+                        )
+                    )
+            with :? JsonException as e ->
+                Error(Malformed(ref.Short, $"the comment-post response is not JSON: %s{e.Message}"))
+
+    /// Delete a comment. **A 404 IS SUCCESS.**
+    ///
+    /// "Already gone" is the goal state. Two workers collecting the same expired marker must not turn the
+    /// loser's benign 404 into a hard error — and, more sharply, a CAS backing off must be able to withdraw
+    /// its own marker even if somebody else got there first.
+    ///
+    /// Non-zero means the comment IS STILL THERE, and that is the only thing a caller cares about.
+    let private deleteComment (transport: IGitHubTransport) (ref: Ref) (commentId: int64) : IoResult<unit> =
+        let request =
+            { Method = "DELETE"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/comments/%d{commentId}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+
+        match transport.Send request with
+        | Ok _ -> Ok()
+        | Error(NotFound _) -> Ok()
+        | Error e -> Error e
+
+    let private patchComment
+        (transport: IGitHubTransport)
+        (ref: Ref)
+        (commentId: int64)
+        (body: string)
+        : IoResult<unit> =
+        let payload =
+            let o = Nodes.JsonObject()
+            o.["body"] <- Nodes.JsonValue.Create body
+            o.ToJsonString()
+
+        let request =
+            { Method = "PATCH"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/comments/%d{commentId}"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+
+        transport.Send request |> Result.map ignore
+
+    // ---- THE CAS ---------------------------------------------------------------------------------
+
+    let claim
+        (transport: IGitHubTransport)
+        (leaseMinutes: int)
+        (worker: WorkerId)
+        (session: SessionId option)
+        (ref: Ref)
+        (previousStatus: BoardStatus option)
+        : IoResult<ClaimOutcome> =
+
+        // 1. READ THE LIVE MARKERS. A failed read here is fatal and we have posted nothing, so there is no
+        //    marker to clean up — this is the only cheap place to fail, and it is why the read comes first.
+        match Reads.markers transport ref.Owner ref.Repo ref.Number with
+        | Error e -> Error e
+        | Ok before ->
+
+        let liveBefore = Reads.winner leaseMinutes before
+
+        match liveBefore with
+        // A MARKER HELD BY NOBODY BLOCKS. A half-written lock fails CLOSED — if it vanished, the item would
+        // read as free and a second worker would be handed files somebody may be standing in.
+        | Some m when m.Worker = WorkerId UnparsedMarker -> Ok BlockedByUnparseableMarker
+
+        // Somebody else holds a LIVE lock. Refuse before we post anything: a marker we post and then
+        // withdraw is a comment somebody has to read, and the item is not ours regardless.
+        | Some m when m.Worker <> worker -> Ok(Lost m.Worker)
+
+        // A live marker that is ALREADY OURS. Re-claiming is a no-op, and running the CAS again would post
+        // a SECOND marker of ours with a higher id — which we would then lose to our own first one.
+        | Some m -> Ok(Won(Held(ref, worker, m.Id, m.PreviousStatus)))
+
+        | None ->
+
+        // 2. POST OUR MARKER.
+        let body = markerBody worker session leaseMinutes previousStatus
+
+        match postComment transport ref body with
+        | Error e -> Error e
+        | Ok myId ->
+
+        // 3. RE-READ, AND TAKE THE LOWEST LIVE ID AS THE WINNER.
+        //
+        // FROM HERE ON, OUR MARKER IS POSTED. Every exit below must either KEEP it (we won) or REMOVE it
+        // (we lost, or we cannot tell) — never abort in between and leave it orphaned. An orphaned marker
+        // is a lock held by a worker who does not know they hold it, and nothing will ever release it.
+        let withdraw (reason: string) =
+            match deleteComment transport ref myId with
+            | Ok() -> Ok(Undecided reason)
+            | Error e ->
+                // WE CANNOT WIN AND WE CANNOT WITHDRAW. This is the one genuinely bad outcome, and it must
+                // be reported as itself: the marker is on the issue, we do not hold the item, and a human
+                // has to reap it.
+                Error(
+                    Transport
+                        $"%s{reason} — AND our own marker (comment %d{myId}) could not be removed: %s{explain e}. It is orphaned on %s{ref.Short} and must be reaped."
+                )
+
+        match Reads.markers transport ref.Owner ref.Repo ref.Number with
+        | Error e -> withdraw $"the re-read failed (%s{explain e})"
+        | Ok after ->
+
+        match Reads.winner leaseMinutes after with
+        // OUR MARKER IS NOT IN THE RE-READ AT ALL. We cannot tell who holds this, and **"we cannot tell" is
+        // a LOSS**. Reading it as a win would be a lock granted on the strength of an observation we did
+        // not make.
+        | None -> withdraw "our marker vanished from the re-read"
+
+        | Some w when w.Id = myId ->
+            // WE WON. The lowest live marker id is ours, and every racer computing the same total order
+            // reaches the same conclusion.
+            Ok(Won(Held(ref, worker, myId, previousStatus)))
+
+        | Some w ->
+            // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
+            match deleteComment transport ref myId with
+            | Ok() -> Ok(Lost w.Worker)
+            | Error e ->
+                Error(
+                    Transport
+                        $"lost the claim race on %s{ref.Short} to %s{w.Worker.Value}, AND could not remove our own marker (comment %d{myId}): %s{explain e}. It is orphaned and must be reaped."
+                )
+
+    let verifyHeld
+        (transport: IGitHubTransport)
+        (leaseMinutes: int)
+        (worker: WorkerId)
+        (ref: Ref)
+        : IoResult<Held option> =
+
+        // FAILS CLOSED. An unreadable marker set yields an ERROR, never a `Held` and never `None` — because
+        // `None` says "we looked, and this worker does not hold it", which is a claim a failed read is not
+        // entitled to make. Manufacturing a capability from a failed read would be the fail-open this whole
+        // type exists to prevent, sitting inside its own constructor.
+        match Reads.markers transport ref.Owner ref.Repo ref.Number with
+        | Error e -> Error e
+        | Ok markers ->
+            match Reads.winner leaseMinutes markers with
+            | Some m when m.Worker = worker -> Ok(Some(Held(ref, worker, m.Id, m.PreviousStatus)))
+            | _ -> Ok None
+
+    // ---- the touch-set -----------------------------------------------------------------------------
+
+    let validate (tokens: string list) : Result<Validated, string> =
+        if List.isEmpty tokens then
+            Error
+                "a touch-set with no tokens reserves nothing. Declare `Paths: none` if that is the decision, or name the files."
+        else
+
+        // THE GRAMMAR LIVES IN THE CORE, AND THERE IS ONE OF IT. Re-implementing `classify` here would be a
+        // second place for the touch-set rule to rot — which is #485's shape (one question, five
+        // implementations, agreeing in none) reproduced inside its own remedy.
+        let unmatchable =
+            tokens
+            |> List.choose (fun t ->
+                match TouchSet.classify t with
+                | Unmatchable u -> Some u
+                | Matchable _ -> None)
+
+        if not (List.isEmpty unmatchable) then
+            // AN UNMATCHABLE TOKEN RESERVES NOTHING, so it conflicts with nothing, so it reads as DISJOINT
+            // against every other worker (#273) — a lock that succeeds under exactly the conditions it
+            // exists to prevent. It may not be written to an issue body.
+            //
+            // The refusal names what WOULD have been accepted. A refusal that does not only moves the
+            // worker's confusion one step later.
+            let bad = String.Join(", ", unmatchable)
+
+            Error
+                $"these tokens can never match a file, so they would reserve NOTHING and read as disjoint against every other worker: %s{bad}. %s{Schedulability.TouchSetGrammar}"
+        else
+            Ok(Validated tokens)
+
+    /// A `Paths:` line, at the start of a line, with up to three leading spaces (CommonMark's limit).
+    let private pathsLine = Regex(@"^ {0,3}[Pp]aths:", RegexOptions.Compiled)
+
+    let private fenceLine = Regex(@"^\s*(```|~~~)", RegexOptions.Compiled)
+
+    let rewrite (body: string) (paths: Validated) : Rewritten =
+        let declaration = "Paths: " + String.Join(" ", paths.Tokens)
+
+        let lines =
+            body.Replace("\r\n", "\n").Split('\n') |> List.ofArray
+
+        // FENCE-AWARE. A `Paths:` inside a fenced code block is PROSE — an example, a quoted marker, a
+        // snippet of somebody else's issue — and rewriting it would corrupt documentation into a
+        // reservation. The bash client learned this the hard way, and it is why the fence state is tracked
+        // rather than the line simply grepped for.
+        let mutable inFence = false
+        let mutable replaced = false
+        let out = ResizeArray<string>()
+
+        for line in lines do
+            if fenceLine.IsMatch line then
+                inFence <- not inFence
+                out.Add line
+            elif not inFence && pathsLine.IsMatch line then
+                // THE FIRST DECLARATION IS REPLACED; THE REST ARE DROPPED. Two `Paths:` lines are an
+                // ambiguity, and an ambiguity in a reservation is two workers each reading the one that
+                // suits them.
+                if not replaced then
+                    out.Add declaration
+                    replaced <- true
+            else
+                out.Add line
+
+        if not replaced then
+            // No declaration to replace — append one. An issue that never declared a touch-set is exactly
+            // the item `widen` exists to repair (#496: an OMISSION, not a decision).
+            if out.Count > 0 && not (String.IsNullOrWhiteSpace(out.[out.Count - 1])) then
+                out.Add ""
+
+            out.Add declaration
+
+        // AN UNTERMINATED FENCE IS CLOSED. A body whose fence we opened and never shut would swallow every
+        // heading below it — including, on the next pass, the declaration we just wrote.
+        if inFence then
+            out.Add "```"
+
+        Rewritten(String.Join("\n", out))
+
+    // ---- the writes that need the lock ---------------------------------------------------------------
+
+    let private patchBody (transport: IGitHubTransport) (ref: Ref) (rewritten: Rewritten) : IoResult<unit> =
+        let payload =
+            let o = Nodes.JsonObject()
+            o.["body"] <- Nodes.JsonValue.Create rewritten.Body
+            o.ToJsonString()
+
+        let request =
+            { Method = "PATCH"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+
+        transport.Send request |> Result.map ignore
+
+    let widen (transport: IGitHubTransport) (held: Held) (rewritten: Rewritten) : IoResult<unit> =
+        // #706 AND #523, BOTH GONE, AND NEITHER BY A CHECK.
+        //
+        // The ownership test is the FIRST ARGUMENT: there is no path into this function that does not
+        // already carry proof the caller holds the lock, so "widen never checks that the caller HOLDS the
+        // claim" is not a bug that was fixed — it is a sentence that no longer parses.
+        //
+        // The validation is the SECOND: a `Rewritten` can only come from `rewrite`, which can only take a
+        // `Validated`, which can only come from `validate`. So the PATCH cannot precede its own re-check,
+        // which is #523 — and on an exhausted budget the declaration is not already rewritten when the
+        // refusal arrives, because the refusal happens before the write is even representable.
+        patchBody transport held.Ref rewritten
+
+    let heartbeat (transport: IGitHubTransport) (leaseMinutes: int) (held: Held) : IoResult<Held> =
+        // THE MARKER IS ADDRESSED BY ITS COMMENT ID, never by the worker string. #550 is what happens
+        // otherwise: `release` and `heartbeat` picked a marker by WORKER STRING alone, so a twin — the same
+        // worker id in a different session — could delete a lock it did not hold. The id is the lock.
+        //
+        // A PATCH rewrites the WHOLE body, so every field must be re-emitted from the capability. A claim
+        // that had been beating for two hours used to forget the column it overwrote, because the rewrite
+        // did not carry `prev=` forward and nothing had kept it.
+        let body =
+            markerBody held.Worker None leaseMinutes held.PreviousStatus
+
+        match patchComment transport held.Ref held.MarkerId body with
+        | Error e -> Error e
+        | Ok() -> Ok held
+
+    let release (transport: IGitHubTransport) (held: Held) : IoResult<BoardStatus option> =
+        // DELETE THE MARKER FIRST. Once it is gone the lease is dropped, and NOTHING below may abort the
+        // release: a board we cannot read or write must leave the column alone and REPORT it, rather than
+        // failing and leaving a lock behind that nobody now owns.
+        //
+        // A failed delete, on the other hand, IS fatal — the marker is still there, so the item is still
+        // held, and reporting a release that did not happen would strand the item forever.
+        match deleteComment transport held.Ref held.MarkerId with
+        | Error e -> Error e
+        | Ok() ->
+            // WHAT THE COLUMN BECOMES IS THE CALLER'S DECISION, and this returns the fact it needs rather
+            // than making it. `Some s` is "this claim overwrote column s, and it can be put back";
+            // `None` is "this claim recorded no column" — and a column nobody recorded cannot be restored,
+            // so the caller says so instead of inventing one (#481).
+            Ok held.PreviousStatus
+
+    // ---- the writes that do NOT need the lock ---------------------------------------------------------
+
+    let say
+        (transport: IGitHubTransport)
+        (from: WorkerId)
+        (toWorker: WorkerId)
+        (ref: Ref)
+        (text: string)
+        : IoResult<unit> =
+
+        // NO `Held` REQUIRED, AND THAT IS DELIBERATE. The worker who most needs to speak is often the one
+        // who just LOST the race, or who is warning the holder that their touch-sets overlap. Gating a
+        // message on the lock would silence exactly the worker with something urgent to say.
+        let body =
+            $"<!-- fsgg:msg from=%s{from.Value} to=%s{toWorker.Value} -->\n**%s{from.Value} → %s{toWorker.Value}**\n\n%s{text}"
+
+        postComment transport ref body |> Result.map ignore
+
+    let child (transport: IGitHubTransport) (parent: Ref) (childId: int64) : IoResult<unit> =
+        // A JSON NUMBER, NOT A STRING. `gh api -f sub_issue_id=1047` sent it as a quoted string and
+        // collected a 422; `-F` sent it as a number. `JsonValue.Create` on an int64 emits a number, and the
+        // test asserts the body's TYPE rather than merely its text — the defect is one layer down now, but
+        // it is the same defect.
+        //
+        // And it is the child's REST INTEGER ID, never its number: two repos can each have an issue #7, and
+        // posting a number where an id belongs attaches the wrong issue silently.
+        let payload =
+            let o = Nodes.JsonObject()
+            o.["sub_issue_id"] <- Nodes.JsonValue.Create childId
+            o.ToJsonString()
+
+        let request =
+            { Method = "POST"
+              Path = $"repos/%s{parent.Owner}/%s{parent.Repo}/issues/%d{parent.Number}/sub_issues"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = parent.Short }
+
+        transport.Send request |> Result.map ignore

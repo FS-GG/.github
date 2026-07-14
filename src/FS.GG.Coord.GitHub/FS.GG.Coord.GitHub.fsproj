@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- FS.GG.Coord.GitHub — the impure edge (ADR-0034 §4.1, built by ADR-0040 Phase A).
+
+       THE HALF THAT WAS NEVER PORTED, AND WHERE THE BUGS STILL ARE. ADR-0034 moved the DECISION to a
+       typed core and stopped. The core is pure and cannot fail open because it cannot read anything —
+       which is exactly why none of epic #266's remaining children live in it. They live out here, in the
+       layer that talks to GitHub: `widen` rewriting a live holder's touch-set because it never checked
+       the claim (#706); a PATCH that precedes its own re-check (#523); a claim scan that reads a
+       truncated page as an empty lock (#461). Every one is a write-path or IO defect, and every one
+       survived the flip untouched.
+
+       ADR-0040 is the decision to finish the job: `scripts/fsgg-coord` makes 32 `gh` calls and performs
+       EVERY write, so "delete the bash implementation" was never reachable — deleting it would delete the
+       only thing that can read a board or post a claim marker.
+
+       THE CORPUS IS THE GATE (ADR-0038, re-affirmed by ADR-0040 C1). `tests/fsgg-coord` drives the client
+       against a call-counting `gh` stub. A tool that reached for HttpClient inline would be INVISIBLE to
+       it, so the IO layer is a PORT, not a set of call sites: an `IGitHubTransport` seam with two
+       implementations — an HTTP adapter behind a configurable API base, and a recording fake that counts
+       calls exactly as the stub does. No step of this port may land that reduces the corpus. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors></WarningsNotAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Errors.fsi" />
+    <Compile Include="Errors.fs" />
+    <Compile Include="Budget.fsi" />
+    <Compile Include="Budget.fs" />
+    <Compile Include="Transport.fsi" />
+    <Compile Include="Transport.fs" />
+    <Compile Include="Cache.fsi" />
+    <Compile Include="Cache.fs" />
+    <Compile Include="Fake.fsi" />
+    <Compile Include="Fake.fs" />
+    <Compile Include="Reads.fsi" />
+    <Compile Include="Reads.fs" />
+    <Compile Include="Writes.fsi" />
+    <Compile Include="Writes.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
+</Project>
