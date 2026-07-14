@@ -46,6 +46,8 @@
     <Compile Include="Writes.fs" />
     <Compile Include="Board.fsi" />
     <Compile Include="Board.fs" />
+    <Compile Include="Done.fsi" />
+    <Compile Include="Done.fs" />
   </ItemGroup>
 
   <ItemGroup>

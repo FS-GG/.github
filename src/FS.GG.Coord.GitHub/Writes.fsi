@@ -36,13 +36,10 @@ namespace FS.GG.Coord.GitHub
 /// dies first. The split is the REST/GraphQL line, and that line is a correctness boundary: **a lock may
 /// never live on the budget that dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 ///
-/// **STILL NOT PORTED: `done --flip` and `epic_rollup`.** They are not more writes — they are a
-/// PRECONDITION ENGINE with a write at the end of it: the closing PR identified by GitHub's own record of
-/// the closing act rather than by prose (#600), a sub-issue truncation check that must refuse rather than
-/// report green on a subject it could not verify, no OPEN sub-issues (#583), and a parent roll-up that
-/// closes what it stamps (#613) without closing a parent whose only child was a PARTIAL fix (#614). Every
-/// one of those is its own incident. They are named here rather than half-built, because a `done` that is
-/// almost right stamps work as finished that is not.
+/// The DONE-STAMP — `done --flip` and `epic_rollup` — lives in `Done`, because it is not more writes: it is
+/// a PRECONDITION ENGINE with a write at the end of it, and its preconditions are PURE (`Done.verify` is a
+/// total function over facts, so it cannot mistake a failed read for a satisfied precondition — which is
+/// how that whole family of bugs was born).
 module Writes =
 
     open FS.GG.Coord.Types
