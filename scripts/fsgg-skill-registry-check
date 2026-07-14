@@ -310,6 +310,17 @@ def when_of(entry: dict) -> str:
     return normalize_when(entry.get("materializes-when", DEFAULT_WHEN))
 
 
+def yaml_bool(value: bool) -> str:
+    """A verdict as YAML writes it: `true`/`false`, never Python's `True`/`False`.
+
+    One helper rather than eight open-coded `str(v).lower()`s. A single missed `.lower()` in
+    `format_row` or `reconcile_mirrored` would write `mirrored: True` into the registry — which PyYAML
+    still reads as a bool, so it round-trips GREEN while silently falling outside
+    `reconcile_mirrored`'s `(true|false)` anchor, and the NEXT reconcile of that row aborts.
+    """
+    return str(value).lower()
+
+
 def mirror_of(entry: dict) -> bool | None:
     """A declarer's ADR-0022 §6 mirror verdict. ABSENT ⇒ None — UNKNOWN, never False (.github#658).
 
@@ -483,6 +494,12 @@ def mirrors(rows: list[dict], declarers: dict[str, list[dict]], repos_root: str)
                         f"`mirrored:` is {row['mirrored']!r}, not a boolean — an unparseable verdict "
                         "reads as UNKNOWN, so this row is not classified at all"
                     ),
+                    # A FINDING'S IDENTITY INCLUDES WHAT THE REGISTRY SAID (#422's `key()`), and this
+                    # one has two wrong values to choose between. Without `declared`, a PR that edits an
+                    # already-malformed `mirrored: "yes"` into a still-malformed `mirrored: "no"` keys
+                    # identically to the merge base, is classed INHERITED, and is forgiven — the launder
+                    # `key()` carries the declared value to prevent (#42 / .github#422).
+                    "declared": str(row["mirrored"]),
                 }
             )
             continue
@@ -522,7 +539,7 @@ def mirrors(rows: list[dict], declarers: dict[str, list[dict]], repos_root: str)
         verdicts = {v for _, v in spoken}
 
         if len(verdicts) > 1:
-            said = ", ".join(f"{repo} says {str(v).lower()}" for repo, v in sorted(spoken))
+            said = ", ".join(f"{repo} says {yaml_bool(v)}" for repo, v in sorted(spoken))
             findings.append(
                 {
                     "id": skill_id,
@@ -551,40 +568,53 @@ def mirrors(rows: list[dict], declarers: dict[str, list[dict]], repos_root: str)
                     "id": skill_id,
                     "check": "mirror-verdict",
                     "detail": (
-                        f"the registry declares `mirrored: {str(registry_verdict).lower()}` but "
+                        f"the registry declares `mirrored: {yaml_bool(registry_verdict)}` but "
                         f"{repos}'s manifest states NO verdict for it — a manifest that does not SAY "
                         "does not KNOW, so this is the producer regressing, not the registry drifting. "
                         "--write will not drop the registry's verdict to match a silence"
                     ),
-                    "declared": str(registry_verdict).lower(),
+                    "declared": yaml_bool(registry_verdict),
                 }
             )
 
         elif manifest_verdict is not None and registry_verdict != manifest_verdict:
             repo = sorted(r for r, _ in spoken)[0]
-            finding = {
-                "id": skill_id,
-                "check": "mirror-matches",
-                "detail": (
-                    f"registry says `mirrored: {str(registry_verdict).lower()}` but {repo}'s manifest "
-                    f"declares `{str(manifest_verdict).lower()}`"
-                    if stated else
-                    f"{repo}'s manifest declares `mirrored: {str(manifest_verdict).lower()}` and the "
-                    "row states no verdict"
-                ),
-                "declared": str(registry_verdict).lower() if stated else "",
-            }
-            # `--write` rewrites a VALUE in place; a row that omits the field has none to rewrite,
-            # and inserting one would re-align the hand-formatted flow map. Same rule, same reason,
-            # as `predicates()` — an APPENDED row gets its `mirrored:` from the manifest (see
-            # `completeness`), so this only bites a row that predates its producer's verdict.
-            if stated:
-                finding["actual"] = manifest_verdict
-            else:
-                finding["detail"] += (
-                    "; --write cannot rewrite it (the row declares no `mirrored:` field) — add it by hand"
+
+            # `--write` rewrites a VALUE in place; a row that OMITS the field has none to rewrite, and
+            # inserting one would re-align the hand-formatted flow map (the rule `predicates()` already
+            # follows). So that case is a JUDGEMENT one — and it must be filed as one.
+            #
+            # `mirror-matches` is in the autofix bot's RECONCILED_CHECKS, and `classify()` splits on the
+            # check NAME alone. File an unreconcilable finding under that name and the bot lists it in
+            # "Reconciled (mechanical — no producer decision)" for a row `--write` never touched: the
+            # bot claiming a fix it did not make (#425), inside the gate that exists to raise exactly
+            # that. Keeping `mirror-matches` STRICTLY reconcilable makes RECONCILED_CHECKS true by
+            # construction rather than by convention — every `mirror-matches` below carries an `actual`.
+            if not stated:
+                findings.append(
+                    {
+                        "id": skill_id,
+                        "check": "mirror-verdict",
+                        "detail": (
+                            f"{repo}'s manifest declares `mirrored: {yaml_bool(manifest_verdict)}` and "
+                            "the row states no verdict — --write cannot insert the field (it would "
+                            "re-align the hand-formatted flow map); add it by hand"
+                        ),
+                    }
                 )
-            findings.append(finding)
+            else:
+                findings.append(
+                    {
+                        "id": skill_id,
+                        "check": "mirror-matches",
+                        "detail": (
+                            f"registry says `mirrored: {yaml_bool(registry_verdict)}` but {repo}'s "
+                            f"manifest declares `{yaml_bool(manifest_verdict)}`"
+                        ),
+                        "declared": yaml_bool(registry_verdict),
+                        "actual": manifest_verdict,
+                    }
+                )
 
         # The verdict we ACT on. The manifest is the source of truth (`registry = manifest`), so it
         # wins where it speaks; any disagreement is already reported above.
@@ -827,7 +857,7 @@ def format_row(row: dict) -> str:
         owner=f"{row['owner']},".ljust(17),
         source=f"{row['source']},",
         sha256=row["sha256"],
-        mirrored="" if mirrored is None else f" mirrored: {str(mirrored).lower()},",
+        mirrored="" if mirrored is None else f" mirrored: {yaml_bool(mirrored)},",
         when=format_when(row["materializes-when"]),
     )
 
@@ -951,7 +981,7 @@ def reconcile_mirrored(registry_path: str, findings: list[dict]) -> int:
         pattern = re.compile(
             rf"(\{{\s*id:\s*{re.escape(skill_id)}\s*,[^}}]*?mirrored:\s*)(true|false)"
         )
-        text, count = pattern.subn(rf"\g<1>{str(actual).lower()}", text, count=1)
+        text, count = pattern.subn(rf"\g<1>{yaml_bool(actual)}", text, count=1)
         if count != 1:
             sys.exit(f"fsgg-skill-registry-check: could not locate the mirrored of row {skill_id}")
         written += 1

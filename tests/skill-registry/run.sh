@@ -1283,4 +1283,64 @@ out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
 grep -q "\[frozen-mirror\] owned" <<<"$out" || { echo "FAIL: a BOM now HIDES a real divergence"; echo "$out"; exit 1; }
 echo "   ok"
 
+echo "== 54. a row with NO \`mirrored:\` whose manifest DECLARES one is a JUDGEMENT case, not a claimed fix =="
+# `--write` rewrites a VALUE in place, and a row that omits the field has none to rewrite (inserting
+# one would re-align the hand-formatted flow map — the rule `predicate-matches` already follows). So
+# this needs a human. It must therefore NOT be filed as `mirror-matches`: that name is in the autofix
+# bot's RECONCILED_CHECKS, and `classify()` splits on the check NAME alone — so a `mirror-matches` the
+# write never touched would appear in the standing PR's "Reconciled (mechanical)" section as a fix the
+# bot did not make (#425), inside the gate that exists to raise exactly that.
+#
+# This is the shape that arrives the day FS.GG.Rendering or SDD starts declaring `mirrored` for rows
+# this registry already carries, so it is not a corner: it is the next migration.
+restore_mirror
+write_two_owned_mirror true
+sed -i 's/\(id: owned,.*\) mirrored: true,/\1/' "$REG"
+grep -q 'id: owned.*mirrored' "$REG" && { echo "FAIL: fixture could not strip the verdict"; exit 1; }
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[mirror-matches\] owned" <<<"$out" && { echo "FAIL: an UNRECONCILABLE finding filed under the bot's 'reconciled' name"; echo "$out"; exit 1; }
+grep -q "\[mirror-verdict\] owned" <<<"$out" || { echo "FAIL: the missing field was not reported at all"; echo "$out"; exit 1; }
+grep -q "add it by hand" <<<"$out" || { echo "FAIL: did not say why --write cannot fix it"; echo "$out"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null 2>&1 && { echo "FAIL: --write must exit 1 while the row cannot be reconciled"; exit 1; }
+grep -q 'id: owned.*mirrored' "$REG" && { echo "FAIL: --write inserted a field it should not have"; exit 1; }
+# EVERY `mirror-matches` carries an `actual` — RECONCILED_CHECKS is true by CONSTRUCTION, not by
+# convention. This is the assertion that keeps case 51's split honest as the code moves.
+json="$(run --registry "$REG" --repos-root "$ROOT" --json || true)"
+python3 -c "
+import json,sys
+d = json.loads(sys.argv[1])
+bad = [f for f in d['findings'] if f['check'] == 'mirror-matches' and 'actual' not in f]
+assert not bad, f'a mirror-matches with no actual would be reported as reconciled: {bad}'
+print('   (every mirror-matches is reconcilable)')
+" "$json"
+echo "   ok"
+
+echo "== 55. the MIRROR HOLDER cannot be obliged to mirror its own canonical =="
+# The one mirror branch with no coverage until now — and structurally unreachable from the cases
+# above, because the shim renames FROZEN_MIRROR_REPO to Mirror.Repo and no row here is owned by it.
+# A row whose owner IS the mirror repo has its `source:` AT the frozen-mirror path, so the "copy" and
+# the canonical are the same file: `mirrored: true` on it is not an obligation, it is a tautology, and
+# byte-comparing a file with itself would report green forever. Say so instead.
+mkdir -p "$ROOT/Mirror.Repo/template/product-skills/selfmirror" "$ROOT/Mirror.Repo/template/skill-manifest"
+printf 'self body\n' > "$ROOT/Mirror.Repo/template/product-skills/selfmirror/SKILL.md"
+SELF="$(sha "$ROOT/Mirror.Repo/template/product-skills/selfmirror/SKILL.md")"
+cat > "$ROOT/Mirror.Repo/template/skill-manifest/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "selfmirror", "scope": "product", "sha256": "$SELF", "mirrored": true, "supplied-by": "template/product-skills/selfmirror/", "materializes-when": "always" }
+] }
+JSON
+cat > "$REG" <<YAML
+schemaVersion: 1
+updated: "2026-07-14"
+skills:
+  - { id: selfmirror, scope: product, owner: mirror-repo, source: Mirror.Repo/template/product-skills/selfmirror/SKILL.md, sha256: $SELF, mirrored: true, materializes-when: always }
+YAML
+out="$(run --registry "$REG" --repos-root "$ROOT" || true)"
+grep -q "\[mirror-verdict\] selfmirror" <<<"$out" || { echo "FAIL: the mirror repo was allowed to mirror its own canonical"; echo "$out"; exit 1; }
+grep -q "own canonical" <<<"$out" || { echo "FAIL: the finding does not name the tautology"; echo "$out"; exit 1; }
+grep -q "\[frozen-mirror\] selfmirror" <<<"$out" && { echo "FAIL: byte-compared a file against ITSELF"; echo "$out"; exit 1; }
+rm -rf "$ROOT/Mirror.Repo/template/skill-manifest" "$ROOT/Mirror.Repo/template/product-skills/selfmirror"
+write_registry
+echo "   ok"
+
 echo "skill-registry fixture: all checks passed"
