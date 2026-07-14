@@ -12,7 +12,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="FSharp.Core" Version="10.1.301" />
+    <PackageVersion Include="FSharp.Core" Version="10.1.302" />
     <PackageVersion Include="Spectre.Console" Version="0.57.2" />
     <!-- FS.GG.Coord.Core tests (ADR-0034 Phase 1). xUnit is the org standard (FS.GG.SDD has 138
          files opening Xunit; Expecto is unused). FsCheck is scoped to round-trip properties, exactly
