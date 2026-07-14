@@ -1,0 +1,47 @@
+<Project>
+
+  <!-- ════════════════════════════════════════════════════════════════════════════
+       .github CONSUMES THE ORG-SHARED BUILD CONFIG IT AUTHORS (.github#609).
+
+       This repo is the SOURCE OF TRUTH for dist/dotnet/Directory.Build.props — the file
+       scripts/sync-build-config.sh distributes to sdd / rendering / governance / templates /
+       game / audio. Until this file existed, .github was the one repo NOT covered by the thing
+       it wrote: none of its own .NET projects consumed it, so ADR-0032's
+       DisableImplicitLibraryPacksFolder never applied here and the F# SDK's library-packs copy
+       of FSharp.Core kept leaking into restores. That is not theoretical — it red CI with
+       NU1403 on the coordination engine's first push (#608), and each of those projects then
+       had to set the property BY HAND to get itself green. Those hand-set copies are gone now:
+       the config is inherited, from one place, exactly as it is in every receiver.
+
+       WHY THIS IMPORTS THE ORG FILE RATHER THAN MIRRORING IT.
+
+       Every other repo receives a byte-identical COPY, kept honest by the drift check
+       (sync-build-config.sh in check mode), which is a required gate there. .github cannot be a
+       plain receiver of that check, because the check covers all three managed files and one of
+       them, .config/dotnet-tools.json, pins fs.gg.coord.cli FROM THE FEED. .github builds that
+       tool from source and deliberately does NOT depend on the feed that ships it (see
+       src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj): a broken feed must never be able to stop the
+       coordination tool being fixed. Adopting the manifest here would trade that property away.
+
+       So a mirrored copy would have no gate keeping it fresh — and a STALE copy of a build
+       config is worse than no copy at all, because it looks adopted. An import cannot drift by
+       construction: it reads the live source of truth, in the repo that owns it. That is the
+       stronger form of the same guarantee, and the honest meaning of "the authority repo is a
+       consumer of its own contract".
+
+       REPO-SPECIFIC OVERRIDES GO BELOW THE IMPORT, in this file. The org file's own
+       Directory.Build.local.props hook resolves against ITS OWN directory
+       ($(MSBuildThisFileDirectory) there is dist/dotnet/), so it is not the hook to reach for
+       from here. MSBuild is last-definition-wins, so a property set after the import overrides
+       the org default — which is the same escape hatch a receiver gets, just spelled locally.
+
+       (Note for editors, inherited from the org file: an XML comment may not contain a double
+       hyphen, so CLI flags are named above without their leading dashes.)
+       ════════════════════════════════════════════════════════════════════════════ -->
+  <Import Project="$(MSBuildThisFileDirectory)dist/dotnet/Directory.Build.props" />
+
+  <!-- No repo-specific overrides today. .github wants the org defaults verbatim: that is the
+       point of the file. Anything added here is a deliberate divergence from what this repo
+       tells every other repo to do, so say why. -->
+
+</Project>

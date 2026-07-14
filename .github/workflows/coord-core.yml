@@ -16,6 +16,13 @@
 # must not report green), #273/#277/#435/#496 (the touch-set grammar), #437/#440/#488 (a full queue is
 # not an empty one), #476/#520 (a MERGED blocker is resolved), #516/#533/#581 (a claim's lifetime is
 # the work's lifetime).
+#
+# The build config is in the trigger list, and BOTH halves of it are (#609). Now that .github consumes
+# the build config it authors, the root Directory.Build.props IMPORTS dist/dotnet/Directory.Build.props
+# — and THAT is the file setting RestoreLockedMode and the ADR-0032 lock-hash fix this job's locked
+# restore leans on. So an edit to the org-shared file changes this build. Listing only the local path
+# would let the file that actually decides the restore move without re-running the gate that checks it:
+# green over untested, which is #266's whole shape.
 name: coord-core
 
 on:
@@ -23,6 +30,8 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/coord-core.yml"
@@ -31,6 +40,8 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "tests/FS.GG.Coord.Core.Tests/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/coord-core.yml"

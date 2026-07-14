@@ -56,16 +56,11 @@
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 
-    <!-- ADR-0032. The F# SDK injects its OWN FSharp.Core from the library-packs folder, and that
-         .nupkg is not byte-identical to the one nuget.org serves at the same id+version — so a lock
-         file's contentHash becomes a function of the SDK patch level of whichever machine wrote it,
-         and a lock written locally then fails NU1403 in CI on a correct lock file. The org-shared
-         dist/dotnet/Directory.Build.props carries this fix; .github does not import its own shared
-         build config (#609), so every project here sets it by hand. -->
-    <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
-    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true'">true</RestoreLockedMode>
+    <!-- RestorePackagesWithLockFile, RestoreLockedMode and DisableImplicitLibraryPacksFolder (ADR-0006,
+         ADR-0032) are INHERITED from the root Directory.Build.props, which imports the org-shared
+         config this repo authors and ships. Every project here used to set them by hand because
+         .github did not consume its own build config (#609). It does now. -->
 
     <!-- The engine is invoked once per scheduling call, on every worker, in a fan-out. Startup cost
          is the whole of its runtime cost, so it takes no dependency it does not need. No
