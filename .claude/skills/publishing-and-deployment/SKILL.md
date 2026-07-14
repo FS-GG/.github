@@ -16,16 +16,32 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 
 ## What ships, and where from
 
-| Product | Artifact(s) | Kind |
+| Component | Artifact(s) | Kind |
 |---|---|---|
 | **SDD** | `FS.GG.SDD.Cli` (`fsgg-sdd` global tool), `FS.GG.Contracts` | tool + contract package |
 | **Rendering** | 17 `FS.GG.UI.*` packages + `FS.GG.UI.Template` (`fs-gg-ui` template) | package coherent set + template |
 | **Governance** | `FS.GG.Governance.Cli` (`fsgg-governance` global tool), `FS.GG.Governance.ReferenceGateSet` | tool + content-only package |
 | **Templates** | `FS.GG.Templates` (`dotnet new` template package) | template |
+| **Game** | `FS.GG.Game.Core`, `FS.GG.Game.Render` | package coherent set |
+| **Audio** | `FS.GG.Audio.{Core,Host,Engine,Elmish}` | package coherent set |
+| **`.github`** | `FS.GG.Coord.Cli` (the ADR-0034 engine), `FS.GG.NewSddWorkspace` (the ADR-0016 scaffolder) | org-level tools |
 
-- **Feed:** the org **GitHub Packages** NuGet feed —
-  `https://nuget.pkg.github.com/FS-GG/index.json`. **Not nuget.org.** Consumers who
-  can't restore add it to their `NuGet.config` (or `--add-source` on a tool install).
+> **`.github` IS a producer** (ADR-0039 §5), and both of its packages are absent from
+> `registry/dependencies.yml` — the org's package inventory is off by two. It owns
+> `release-coord-engine.yml` and `release-new-sdd-workspace.yml`. Do not read the sentence
+> below as excluding it.
+
+- **Feeds — there are two, and they have different jobs (ADR-0012, ADR-0039).**
+  - **Publish path:** the org **GitHub Packages** feed, `https://nuget.pkg.github.com/FS-GG/index.json`.
+    Every release pushes here **first**.
+  - **Read path:** **public nuget.org.** Every `FS.GG.*` package is public there (32 of 32), the
+    byte-identical `.nupkg`. Renovate resolves *all* `FS.GG.*` from nuget.org, and **five of the six
+    receiver repos restore from it** — the org feed needs a credential even to read, and they don't
+    configure one. A package that never reaches nuget.org cannot be consumed by most of the fleet.
+
+  (Older text — in `default.json`, ADR-0007, or an earlier version of this skill — that says
+  "**Not nuget.org**" or calls the feed dormant/deferred **predates #576 and is wrong**. Trust the
+  registry.)
 - **Channel:** FS-GG packages ship on a **stable** channel. `FS.GG.Audio` `0.1.0`
   (2026-07-09, FS.GG.Audio#4) promoted the **last `-preview` producer**, so every
   `FS.GG.*` producer is now stable and the Renovate preset pins to stable
@@ -38,7 +54,8 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
 
 ## How a package gets published
 
-Each **product repo owns its release workflow** (not `.github`). The shape is:
+Each **producer owns its release workflow** — the six components, **and `.github` itself** for its
+two org-level tools (ADR-0039 §5). The shape is:
 
 1. **Tag** the coherent set (e.g. `fs-gg-ui-template/v0.1.58-preview.1`).
 2. **`dotnet pack`** the packables → `.nupkg`.
@@ -49,19 +66,21 @@ Publish gates run **before** the push (see *Gates*). A release publishes the who
 **coherent set together** — the `FS.GG.UI.*` members, their BOM, and the template move
 as one version; don't publish a subset.
 
-### Local-feed fallback (the "done-definition" where feed push is deferred)
+### There is no local-feed fallback. Publish to the feed.
 
-Some producers' done-definition is a consumable artifact via **`dotnet pack` to a
-local feed**, not the org feed push:
+This section used to say that where the org-feed push was blocked, `dotnet pack` to
+`~/.local/share/nuget-local/` was the acceptance bar for a new package, citing ADR-0007.
 
-```sh
-dotnet pack -o ~/.local/share/nuget-local/
-# consumer adds that dir as a NuGet source
-```
+**That was true in June 2026 and is false now.** `.github#21` (the admin block) is closed.
+`FS.GG.Governance.ReferenceGateSet` is live on the org feed at `1.2.1.1`, and
+`scripts/check-feed-coherence.py` **enforces** every `package-version` in the registry against
+the live feed — so a package that exists only in someone's `~/.local` cannot satisfy the gate,
+and "packed locally" is not a done-definition any more.
 
-ADR-0007 sets this for `FS.GG.Governance.ReferenceGateSet`. If you're wiring a new
-package and the org-feed push is blocked, local-feed pack is the acceptance bar —
-and the registry entry must record the deferred-feed status.
+A new package's acceptance bar is: **published to the org feed, and — per ADR-0012 — the
+byte-identical `.nupkg` pushed to nuget.org.** See ADR-0039: five of the six receivers restore
+`FS.GG.*` from public nuget.org, so a package that never reaches it cannot be consumed by most
+of the fleet.
 
 ## Versioning rules
 

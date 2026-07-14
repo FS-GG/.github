@@ -1,7 +1,15 @@
 # ADR-0025: First-class shipped-surface mutation — the governed event + reconcile protocol
 
-- **Status:** Proposed
-- **Date:** 2026-07-07
+- **Status:** Accepted (2026-07-14) — the decision is **ratified**, and the `.github` slice has
+  **shipped**: [`scripts/fsgg-surface-impact`](../../scripts/fsgg-surface-impact), the reconcile
+  checklist [`docs/coordination/shipped-surface-mutation.md`](../coordination/shipped-surface-mutation.md),
+  its fixture `tests/surface-impact/run.sh`, and `.github/workflows/surface-impact-selftest.yml` all
+  exist. **The per-repo slices are NOT claimed as shipped** — SDD's detect+classify and the
+  publishing version-bump prompt remain the open children of epic
+  [#235](https://github.com/FS-GG/.github/issues/235) /
+  [#236](https://github.com/FS-GG/.github/issues/236), where the delivery tracks. `Accepted` here means
+  **decided and binding**, not fully rolled out.
+- **Date:** 2026-07-07 (proposed) · 2026-07-14 (accepted)
 - **Affects:** **FS.GG.SDD** (owner of `fsgg-sdd surface` — detect a changed committed `.fsi` baseline and **classify** the delta additive-vs-breaking), **FS.GG.SDD**/**publishing** (prompt the coherent-set version bump on the repo's version axis, e.g. `$(FsGgAudioVersion)`), **.github** (this ADR; the `registry/dependencies.yml` + compatibility-projection reconcile; and the **consumer-impact enumeration** that turns "who is affected" from prose into a checkable query — `scripts/fsgg-surface-impact`), **coordination** (flag the enumerated consumers onto the `Coordination` board; route boundary-crossing changes through ADR-0001)
 
 ## Context

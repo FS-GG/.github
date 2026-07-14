@@ -4,6 +4,7 @@
 - **Date:** 2026-07-01
 - **Affects:** FS.GG.SDD (orchestrator/CLI + `FS.GG.Contracts`), FS.GG.Rendering (`fs-gg-ui` template), FS.GG.Templates (composition gate), `.github` (this ADR, registry, roadmap)
 - **Relationship:** **Extends and amends [ADR-0011](0011-agent-skill-roots-full-union-orchestrator-owned-mirror.md).** ADR-0011's five *invariants* stand (byte-identical union in every root; single mirror authority; providers confined to `.agents/skills/`; strict `isSddTree`; materialized copies, not symlinks). ADR-0014 replaces its *implementation* — which fragmented into four hand-maintained mirror mechanisms and shipped **no content verification** — with one shared, content-addressed algorithm, and draws the missing product/dev-surface boundary. Where the two disagree on mechanism, ADR-0014 wins.
+- **Extended by:** [ADR-0017](0017-skill-registry-condition-aware-materialization.md) — §Decision 1's manifest entry `{ id, scope, sha256 }` is **no longer the whole schema**: ADR-0017 adds `materializes-when` + `supplied-by`, and the org catalog it introduces ([`registry/skills.yml`](../../registry/skills.yml)) carries `owner`, `source` and `mirrored` on top. See §Decision 1.
 
 ## Context
 
@@ -60,6 +61,26 @@ one shared algorithm across every lane.**
    manifest is the contract; the fan-out reads manifests, never ad-hoc directory scans or
    per-source `template.json` strings. A skill has **exactly one canonical body**; the roots
    are copies of it.
+
+   > **Amendment (2026-07-14, [ADR-0017](0017-skill-registry-condition-aware-materialization.md)).**
+   > **`{ id, scope, sha256 }` is NOT the current manifest schema** — do not build against it as
+   > written. ADR-0017 §1 extends the entry with an optional **`materializes-when`** (a predicate over
+   > the scaffold parameter set — `profile`, `lifecycle`, `feedback`, `designSystem`, …; absent ⇒
+   > `always`) and an optional **`supplied-by`** for a skill that crosses a producer boundary. The
+   > reason is a defect this ADR's superset catalog left open: emission is lifecycle/profile-
+   > conditioned, so "declared ∧ absent from every root" had to be *unconditionally* tolerated — which
+   > made a genuine supply gap (`fs-gg-project`, supplied by **neither** producer under
+   > `lifecycle=sdd`) indistinguishable from a correct off-profile absence. Recording the condition
+   > makes each absence *justified* rather than blanket-tolerated, and lets the union gate fail on the
+   > real one.
+   >
+   > The org-level catalog ADR-0017 also introduces —
+   > [`registry/skills.yml`](../../registry/skills.yml), owned by `.github` and registered as the
+   > governed contract `skill-registry` under
+   > [ADR-0015](0015-register-the-registry-schema-as-a-governed-contract.md) — carries `owner`,
+   > `source` and (since [#658](https://github.com/FS-GG/.github/issues/658)) `mirrored` on top of
+   > those. Everything this section decides — one manifest per producer, one canonical body per skill,
+   > content-addressed, the manifest is the contract — **stands**; only the entry's field set grew.
 
 2. **One `materialize-and-verify` library, in `FS.GG.Contracts`.** Two pure functions —
    `mirror(union, roots) → writes` and `verify(roots, union) → diagnostics` — implemented

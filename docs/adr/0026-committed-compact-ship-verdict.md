@@ -3,6 +3,14 @@
 - **Status:** Proposed
 - **Date:** 2026-07-08
 - **Affects:** **FS.GG.SDD** (owner — emit `ship-verdict.json`; amend the `init` `.gitignore` seed + its drift guard; extend the catalog-derived taxonomy doc), **Rendering / Governance / Templates / Game / Audio** (adopt the amended fragment; no cleanup, the change is additive), **.github** (this ADR)
+- **Depends on:** [ADR-0035](0035-observed-run-receipts.md) (Accepted 2026-07-14) — **this ADR MUST NOT
+  LAND ALONE.** ADR-0035 §"Interaction with ADR-0026" states the hazard directly: *"A verdict that
+  certifies unverifiable claims is worse once it is permanent. **Landing 0026 without this decision
+  durably records green verdicts that mean nothing.**"* Committing the merge-boundary answer to git
+  history is only worth doing if the obligations it certifies were **observed** — satisfied by a run
+  SDD *read*, not by a `pass` an agent *typed*. The compaction below is sound (`sourcesDigest` binds
+  the verdict to its authored inputs); what ADR-0035 supplies is that the inputs were *verified* at
+  all. Sequence 0035 first, or the durability this ADR buys is durability for a lie.
 
 ## Context
 

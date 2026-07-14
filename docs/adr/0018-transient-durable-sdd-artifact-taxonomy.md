@@ -1,8 +1,19 @@
 # ADR-0018: Transient vs durable SDD artifact taxonomy — regenerable process output is gitignored by role, not committed per-feature
 
-- **Status:** Proposed
-- **Date:** 2026-07-04
+- **Status:** Accepted (2026-07-14) — ratified retroactively; it **shipped**, and was still marked
+  `Proposed` while the org depended on it. FS.GG.SDD published **v0.6.0** (2026-07-04) carrying
+  **Feature 073** (transient-artifact taxonomy), which makes `fsgg-sdd` **seed the `.gitignore`** for
+  regenerable output into scaffolded products; `registry/dependencies.yml` therefore advanced
+  `fs-gg-ui-template.minimum-fsgg-sdd.version` **0.4.0 → 0.6.0** — *"0.6.0 is the oldest published CLI
+  that seeds the .gitignore; 0.5.0 did not"* — and Rendering's cleanup removed the **2,053 committed
+  readiness files** this ADR was written about. Recorded in
+  [`registry/CHANGELOG.md`](../../registry/CHANGELOG.md) (2026-07-04).
+- **Date:** 2026-07-04 (proposed) · 2026-07-14 (accepted)
 - **Affects:** SDD (canonical taxonomy + `init` `.gitignore` seed), Rendering (exception-list collapse + tree cleanup), Governance (adopt fragment; keep the audit record), Templates (adopt fragment + cleanup), .github (this ADR)
+- **Extended by:** [ADR-0026](0026-committed-compact-ship-verdict.md) — adds the one class this
+  taxonomy left implicit (**durable generated**: the committed compact ship verdict) **and changes the
+  gitignore pattern this ADR shipped**: the *directory* rule `readiness/*/` becomes a *contents* rule
+  `readiness/*/*`, because a negation under the directory form is **silently inert**. See §Decision 2.
 
 ## Context
 
@@ -65,6 +76,27 @@ are **additive and backward-compatible** — no build, contract, or runtime surf
    the conventional transient path (the `readiness/`-style role) as one positive rule, retiring
    the re-inclusion lists. A specific piece of evidence that must be pinned as a durable proof
    is pinned **explicitly and rarely**; the default is ignore.
+
+   > **Amendment (2026-07-14, [ADR-0026](0026-committed-compact-ship-verdict.md) §2). The pattern this
+   > rule shipped as — `readiness/*/` — makes "pinned explicitly and rarely" FAIL SILENTLY.** Git never
+   > descends into an excluded **directory**, so a negation beneath the directory form (e.g.
+   > `!readiness/*/ship-verdict.json` under `readiness/*/`) is **inert**: the file stays ignored, with
+   > no error and no warning. Exclude the directory's **contents** instead —
+   >
+   > ```gitignore
+   > readiness/*/*
+   > !readiness/*/ship-verdict.json
+   > ```
+   >
+   > — which keeps the parent traversable so the negation can fire. A Spec-Kit-dogfooding tree (SDD's
+   > own, where views land at `specs/<id>/readiness/<work-id>/`) carries the trap verbatim and takes
+   > `specs/*/readiness/*/*`. Nested views (`agent-commands/<target>/…`) remain ignored, because
+   > `readiness/*/*` matches their directory, which git then does not descend into.
+   >
+   > This is a **pattern fix, not a policy change.** The rule this section decides — ignore by *role*,
+   > never a per-feature re-inclusion list — is exactly what ADR-0026 honours: its exception is keyed
+   > on an artifact's **role** and is constant in the number of work items, which is not the
+   > `!specs/<feature>/readiness/**`-per-feature whack-a-mole this ADR retired.
 
 3. **SDD ships the shared gitignore fragment.** `fsgg-sdd init` seeds a **no-clobber**
    `.gitignore` fragment (the same authored-skeleton, `AgentGuidanceTarget` no-clobber class as

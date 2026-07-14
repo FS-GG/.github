@@ -3,6 +3,11 @@
 - **Status:** Accepted
 - **Date:** 2026-07-04
 - **Affects:** FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance, FS.GG.Templates, .github
+- **Amended by:** [ADR-0034](0034-typed-coordination-engine.md) — the `kit:` **row shape**: the
+  `fsgg-coord` `kind: client` row becomes a **shim** that resolves a packaged `dotnet tool`
+  (`FS.GG.Coord.Cli`) from `.config/dotnet-tools.json`, rather than the self-contained bash script §5
+  declares. The roster, the `receives:` vocabulary, the pull fabric, and the coherence gate are
+  unchanged. See §5.
 
 ## Context
 
@@ -49,6 +54,25 @@ participant-side analog of what `skills.yml` is for skills.
    with a `coordination-coherence` gate asserting each holds the current kit bytes. `fsgg-coord`
    stays a **self-contained script carried in the kit** — not an `fsgg-sdd` subcommand — so no
    participant needs `fsgg-sdd` installed to drive the board. *(Kit sync + coherence gate: slice 2.)*
+
+   > **Amendment (2026-07-14). The kit's inventory has grown, and its client's shape is changing.**
+   > It is no longer "the `cross-repo-coordination` skill + the `fsgg-coord` client" but **four skills
+   > + the client** ([`registry/repos.yml`](../../registry/repos.yml) `kit:`): `cross-repo-coordination`,
+   > `intra-repo-parallel-work` (the intra-repo protocol —
+   > [ADR-0021](0021-parallel-intra-repo-work-claim-worktree-touchset.md) /
+   > [ADR-0027](0027-worker-keyed-claim-lock-and-worker-channel.md)), and the two **command skills**
+   > `check-board` and `pnext-item`, which hold no protocol of their own and each cite the skill they
+   > drive — plus `scripts/fsgg-coord`. The per-row `sha256:` that §4's content-addressed kit check
+   > reads also **moved out of `repos.yml` into the generated
+   > [`registry/repos.lock`](../../registry/repos.lock)**
+   > ([#527](https://github.com/FS-GG/.github/issues/527)): a hash sitting in the middle of an authored
+   > roster obliged every kit edit to reserve `repos.yml` in its touch-set, serialising it against
+   > every other kit edit and against anyone authoring a roster row. The content-addressing itself is
+   > unchanged — only where the digest lives. And per
+   > [ADR-0034](0034-typed-coordination-engine.md), `fsgg-coord` stays a `kind: client` row at
+   > `scripts/fsgg-coord` but becomes a **shim** resolving a packaged `dotnet tool`, so
+   > "self-contained script" above names the *mechanism*, not the decision. The rule it protects — **no
+   > participant needs `fsgg-sdd` installed to drive the board** — stands.
 
 ## Consequences
 

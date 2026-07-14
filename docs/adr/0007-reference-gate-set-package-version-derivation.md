@@ -62,9 +62,18 @@ suffix (distinguishable but illegible and not "schema-version derived"); a lossy
 - **templates** ([Templates#14](https://github.com/FS-GG/FS.GG.Templates/issues/14)) consumes the
   package as the authoritative source for its overlay drift gate, pinning exact.
 - The contract is recorded in the registry as `governance-reference-gate-set` (consumed by
-  templates). The **org GitHub Packages feed push is deferred** (admin-blocked,
+  templates). ~~The **org GitHub Packages feed push is deferred** (admin-blocked,
   [.github#21](https://github.com/FS-GG/.github/issues/21)); until it lands, a consumable artifact
   via local/CI `dotnet pack` to `~/.local/share/nuget-local/` is the done-definition. The registry
-  entry records the deferred-feed status.
+  entry records the deferred-feed status.~~
+
+  > **Retired (2026-07-14) — the feed push landed, and this bullet outlived it.** `.github#21` is
+  > closed: the package is **live on the org feed** at `package-version: "1.2.1.1"`
+  > (`registry/dependencies.yml`), and `scripts/check-feed-coherence.py` now **enforces** that
+  > scalar against the live feed on every run. The local-`dotnet pack` fallback was a done-definition
+  > for a blocked feed; there is no blocked feed. It is recorded here because the claim did not stay
+  > in this ADR — the `publishing-and-deployment` skill mirrored it forward as *"the acceptance bar
+  > if you're wiring a new package"*, which is how a stale consequence in an Accepted record becomes
+  > live advice. That section is deleted from the skill in the same change.
 - The version-derivation rule is now a **versioned contract**: changing it (segment order, segment
   count, or source) is a `contract-change` that must update the registry and supersede this ADR.

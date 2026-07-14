@@ -484,9 +484,11 @@ contracts:
     #   1. FS.GG.SDD teaches Fsgg.Registry the field/rule and PUBLISHES a CLI carrying it.
     #   2. .github THEN bumps skills.yml `schemaVersion` + this `version` and advances the
     #      contract-coherence.yml FS.GG.SDD.Cli pin to that CLI — one .github PR, after the CLI is live.
-    # ADR-0015 no longer carries the unsatisfiable clause: ADR-0037 (.github#689) amends §3 — this repo
-    # does not rewrite an Accepted ADR in place (cf. ADR-0027, which amends ADR-0021 §1 with a NEW ADR),
-    # so correcting it was its own change. ADR-0037 §3 also binds the VALIDATOR: the CLI published in step 1
+    # ADR-0015 no longer sends a reader into the unsatisfiable clause unwarned: its header marks §3
+    # SUPERSEDED and §3 itself carries a dated ADR-0037 amendment stating the two-PR procedure above. The
+    # clause's TEXT remains, deliberately — ADR-0037 (.github#689) amends §3, and this repo does not
+    # rewrite an Accepted ADR in place (cf. ADR-0027, which amends ADR-0021 §1 with a NEW ADR), so
+    # correcting it was its own change. ADR-0037 §3 also binds the VALIDATOR: the CLI published in step 1
     # must still ACCEPT skills.yml AS IT STANDS — the new rule may reject nothing the current document does,
     # and is enforced only once the document DECLARES the new schemaVersion. pin-coherence.yml hard-fails on a
     # pin behind feed-newest, so the pin advances AHEAD of the bump (on Renovate's own PR) and the new validator
