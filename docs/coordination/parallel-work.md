@@ -524,23 +524,55 @@ Closes #1, closes #2.            ← REPEAT the keyword. `Closes #1, #2` closes 
                                    the bare `#2` is bound to nothing and is silently dropped.
 ```
 
-Everywhere else, deny GitHub the binding: write it as code (`closed #422`), reword it (*"closed that
-issue"*, *"does NOT complete #422"*), or drop the verb (`Refs #422.`). Writing the offending string
-**as code**, exactly as this paragraph does, is not a typographic nicety — it is the rule applying to
-itself: GitHub does not bind a keyword inside a code span or a fence, which is the only reason this
-document can quote the bug at all.
+Everywhere else, deny GitHub the binding. There are exactly two remedies that work, and a third for
+when you must quote a body verbatim:
+
+- **Reword the verb** — *"does NOT complete"*, *"addresses"*, *"supersedes"*, *"closed that issue"*.
+  GitHub scans a fixed keyword list; a verb outside it binds nothing.
+- **Drop the verb** — `Refs #422.` A bare reference is a link, not a close.
+- **Break the adjacency** — quote the number without its `#`: *"and on merge, GitHub closed 422
+  anyway"*. What binds is a keyword followed by whitespace and then a *ref*; with no `#` there is no
+  ref, so there is nothing to bind.
+  **A newline does not break it.** Whitespace is whitespace: `closes` at the end of one line and
+  `#123` at the start of the next binds exactly as if they were adjacent, both for GitHub and for the
+  gate. Do not reach for a line break to escape a keyword.
+
+> **AND CODE IS NOT A REMEDY. This section used to say it was, and that advice closed an issue**
+> ([#683](https://github.com/FS-GG/.github/issues/683)). It read: *"deny GitHub the binding: write it
+> as code (`closed #422`) …  Writing the offending string as code, exactly as this paragraph does, is
+> not a typographic nicety — it is the rule applying to itself."* It was self-consistent, it was
+> confident, and it was **wrong**, because it modelled the wrong parser.
+>
+> **Two parsers read a PR, and they disagree about code.** The **markdown** parser builds
+> `closingIssuesReferences` — the link shown on the PR — and it really does skip code. But the thing
+> that **closes the issue** on a squash merge is the **commit message**, and a commit message is
+> **plain text**: backticks, fences and indentation are ordinary characters in it. Every reference
+> markdown skipped, the commit parser binds.
+>
+> PR [#681](https://github.com/FS-GG/.github/pull/681) — the PR that *shipped the gate against this
+> bug* — followed this advice, wrote its examples in backticks, and **closed #422 for the second
+> time**. Its `closingIssuesReferences` correctly said `#643` and only `#643`; #422's `CLOSED_EVENT`
+> names the **commit** as the closer. Both records are accurate. They describe different parsers, and
+> the destructive one is the one nobody had modelled.
+>
+> A markdown file **in the tree** — this one — is never parsed for closing keywords, so it may still
+> quote the bug in backticks. **A PR body may not.** That distinction is the whole of it.
 
 The `closing-keywords` gate enforces exactly this on every PR, and it is not advisory — it fails the
-PR. It was written against the body of the very change that introduced it, which is how we learned
-that the negation-only version of the rule was too weak: that body narrated `GitHub closed #422` in
-prose and would have re-closed #422, the same issue, in the PR that fixes the bug.
+PR. It now scans the **raw** body, with no exemption for code, because that is what the commit parser
+does. It was written against the body of the very change that introduced it, which is how we learned
+that the negation-only version of the rule was too weak — and then #681 taught us the same lesson one
+level down, which is why the gate models both parsers and the code exemption is gone.
 
-This is the third face of one coin, and the org has now hit all three: a keyword in the **title**,
+This is the fourth face of one coin, and the org has now hit all four: a keyword in the **title**,
 where GitHub never looks, so the link is silently *missing*
 ([#558](https://github.com/FS-GG/.github/issues/558)); an unclosed code fence that silently *voids* a
-real `Closes #N` ([#616](https://github.com/FS-GG/.github/issues/616)); and a keyword that *fires
-when it was never meant to* (#643). In each, the author's intent and GitHub's parse disagree, and
-nothing tells the author.
+real `Closes #N` ([#616](https://github.com/FS-GG/.github/issues/616)); a keyword that *fires when it
+was never meant to* ([#643](https://github.com/FS-GG/.github/issues/643)); and a keyword written **as
+code** that fires anyway, because the squash commit message is not markdown
+([#683](https://github.com/FS-GG/.github/issues/683)). In each, the author's intent and GitHub's parse
+disagree, and nothing tells the author. Three of the four were found only *after* the merge that
+caused them, and the fourth was found by the PR that shipped the fix for the third.
 
 **`--pr <n>` overrides WHICH pull request, never WHETHER it closed the issue**
 ([#543](https://github.com/FS-GG/.github/issues/543)). It used to select by number alone, so pointing
