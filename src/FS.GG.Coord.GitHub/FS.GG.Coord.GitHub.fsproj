@@ -48,6 +48,8 @@
     <Compile Include="Board.fs" />
     <Compile Include="Done.fsi" />
     <Compile Include="Done.fs" />
+    <Compile Include="Scan.fsi" />
+    <Compile Include="Scan.fs" />
   </ItemGroup>
 
   <ItemGroup>

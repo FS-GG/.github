@@ -83,6 +83,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

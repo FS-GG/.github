@@ -4,6 +4,8 @@ module Options =
 
     type Command =
         | Decide
+        /// THE ONE COMMAND THAT PERFORMS IO. See Options.fsi.
+        | Scan
         | FleetVerdict
         | LanesView
         /// Emit the PROTOCOL — the rules the typed core enforces, as data (ADR-0034 §4.5). The docs and
@@ -20,18 +22,43 @@ module Options =
     type Options =
         { Command: Command
           Render: Render
-          SnapshotFile: string option }
+          SnapshotFile: string option
+          Repo: string option
+          Fresh: bool
+          AllowBacklog: bool
+          Limit: int option
+          LeaseMinutes: int }
+
+    /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
+    [<Literal>]
+    let DefaultLeaseMinutes = 120
 
     let usage =
         """fsgg-coord-engine — the typed coordination engine (ADR-0034).
 
 NOT A USER-FACING TOOL. `scripts/fsgg-coord` is the user-facing client; this is the engine it shells
-out to. It is pure: it reads NOTHING — no board, no issues, no network, no GitHub token. The client
-has already paid for the board scan by the time it decides, so it hands that state over on stdin and
-this decides from it. That is what makes shadow mode free: two engines, one board read, one budget
-(#418).
+out to.
+
+EVERY COMMAND BELOW IS PURE — reads NOTHING, no board, no network, no token — WITH ONE EXCEPTION, and
+it is named: `scan`. The DECISION commands take state on stdin, which is what makes shadow mode free:
+two engines, one board read, one budget (#418). `scan` is the command that goes and GETS that state,
+so that the engine no longer needs bash in order to see the board it decides about (ADR-0034 §4.1,
+built by ADR-0040).
 
 Usage:
+  fsgg-coord-engine scan  [--repo NAME] [--fresh] [--include-backlog] [-n N] [--lease MIN] [--json|--text]
+                                    # THE ONLY COMMAND THAT PERFORMS IO. Scan the board, resolve the
+                                    # blockers, read each candidate's touch-set and claim markers, and
+                                    # emit the snapshot `decide` consumes.
+                                    #
+                                    #   fsgg-coord-engine scan | fsgg-coord-engine decide
+                                    #
+                                    # is a complete scheduling pass with no bash anywhere in it.
+                                    #
+                                    # Board: $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT.
+                                    # Token: $GITHUB_TOKEN (or $GH_TOKEN).
+                                    # API:   $FSGG_GITHUB_API_BASE (default https://api.github.com).
+
   fsgg-coord-engine decide [--snapshot FILE] [--json|--text]
                                     # read a board-state snapshot (stdin, or FILE) and print the
                                     # scheduling decision for every candidate in it
@@ -87,6 +114,33 @@ EXIT CODES — the engine's own, NOT the client's (the client translates them):
             | "--snapshot" :: value :: t -> flags { acc with SnapshotFile = Some value } t
             | [ "--snapshot" ] -> Error "--snapshot needs a value"
 
+            | "--repo" :: value :: _ when value.StartsWith "-" -> Error $"--repo needs a value (got flag '%s{value}')"
+            | "--repo" :: value :: t -> flags { acc with Repo = Some value } t
+            | [ "--repo" ] -> Error "--repo needs a value"
+
+            | "--fresh" :: t -> flags { acc with Fresh = true } t
+            | "--include-backlog" :: t -> flags { acc with AllowBacklog = true } t
+
+            | "-n" :: value :: _ when value.StartsWith "-" -> Error $"-n needs a value (got flag '%s{value}')"
+            | "-n" :: value :: t ->
+                match System.Int32.TryParse value with
+                | true, n when n > 0 -> flags { acc with Limit = Some n } t
+                // A LIMIT OF ZERO IS NOT "no limit" — it is a batch of nothing, and it would report an empty
+                // queue over a full board. Refuse it rather than guess which the caller meant.
+                | true, n -> Error $"-n must be a positive count (got %d{n})"
+                | _ -> Error $"-n needs a number (got '%s{value}')"
+            | [ "-n" ] -> Error "-n needs a value"
+
+            | "--lease" :: value :: _ when value.StartsWith "-" -> Error $"--lease needs a value (got flag '%s{value}')"
+            | "--lease" :: value :: t ->
+                match System.Int32.TryParse value with
+                | true, n when n > 0 -> flags { acc with LeaseMinutes = n } t
+                // A LEASE OF ZERO WOULD MAKE EVERY CLAIM INSTANTLY REAPABLE. That is never what anyone meant,
+                // and it would turn the lock into a no-op under exactly the fan-out it exists for.
+                | true, n -> Error $"--lease must be a positive number of minutes (got %d{n})"
+                | _ -> Error $"--lease needs a number of minutes (got '%s{value}')"
+            | [ "--lease" ] -> Error "--lease needs a value"
+
             | "--json" :: t -> flags { acc with Render = Json } t
             | "--text" :: t -> flags { acc with Render = Text } t
 
@@ -95,7 +149,12 @@ EXIT CODES — the engine's own, NOT the client's (the client translates them):
         let defaults =
             { Command = Decide
               Render = Json
-              SnapshotFile = None }
+              SnapshotFile = None
+              Repo = None
+              Fresh = false
+              AllowBacklog = false
+              Limit = None
+              LeaseMinutes = DefaultLeaseMinutes }
 
         match args with
         | []
@@ -104,6 +163,7 @@ EXIT CODES — the engine's own, NOT the client's (the client translates them):
 
         | "--version" :: _ -> Ok { defaults with Command = Version }
 
+        | "scan" :: rest -> flags { defaults with Command = Scan } rest
         | "decide" :: rest -> flags { defaults with Command = Decide } rest
         | "fleet" :: rest -> flags { defaults with Command = FleetVerdict } rest
         | "lanes" :: rest -> flags { defaults with Command = LanesView } rest
