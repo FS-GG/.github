@@ -132,7 +132,54 @@ contracts:
     surface: ".fsgg/scaffold-provenance.json"
     consumers: [sdd]
   - id: governance-handoff
-    version: "1.0.0"
+    # 1.1.0 (2026-07-14, ADDITIVE — no consumer break): ADR-0035 stage 3, landed by FS.GG.SDD#422
+    # (feature 103, for FS.GG.SDD#350). PRIOR 1.0.0.
+    #
+    # WHAT REACHES THIS SURFACE. A required test obligation whose `result: pass` carries no
+    # `observedRun` receipt now reaches the non-satisfying `unobserved` disposition instead of
+    # `satisfied`. On THIS contract that shows up in exactly one place: the blocking diagnostic id
+    # `ship.unobservedEvidence` becomes reachable in `readiness.blockingDiagnosticIds[]` (and is
+    # counted in `readiness.counts.blocking`), with `readiness.shipDisposition: "blocked"` — an
+    # EXISTING value, for a new reason. Additive: a new member of an open id vocabulary. A consumer
+    # that does not recognise the id ignores it exactly as it ignores any other; nothing it parses
+    # today changes shape, and no field is removed or re-typed.
+    #
+    # WHAT DOES *NOT* CHANGE — AND THE ADR SAYS OTHERWISE. ADR-0035's registry obligation reads
+    # "`governance-handoff` … gains the `unobserved` disposition". Taken literally that is WRONG, and
+    # believing it would send the next reader hunting a handoff enum that does not exist. `unobserved`
+    # is a `TD-` *test*-disposition state in `verify.json`; it is NOT persisted here. The handoff's
+    # two enums are unmoved: `readiness.shipDisposition` stays {shipReady, blocked} and
+    # `evidence.nodes[].state` stays {pending, real, synthetic, failed, skipped}. FS.GG.SDD#422
+    # withheld the state from the `ED-` ladder ON PURPOSE and said so in the code — "giving `ED-` an
+    # `unobserved` STATE would instead change a persisted enum on the governance-handoff surface — a
+    # schema change this stage deliberately does not make". `ED-` keeps saying `supported` and carries
+    # the basis in its `observed` boolean (the #398 disclosure split). So: `schemaVersion` stays 1,
+    # this is a MINOR and not a major, and the bump is earned by the diagnostic id, not by an enum.
+    #
+    # OPT-IN, DEFAULT-OFF. Reachable only under `--require-observed`, accepted by BOTH `verify` and
+    # `ship` (`ship` re-asserts the receipt because a blocked `verify` writes nothing and leaves the
+    # previous green, still-digest-current `verify.json` on disk). With the flag absent the emitted
+    # handoff is byte-identical to 1.0.0, so no Governance consumer can meet the new id today. It is
+    # declared here BEFORE the default flips — the schema major ADR-0035 gates on "once the fleet is
+    # green" — so that a consumer validating against the declared contract never meets an undeclared
+    # value. That ordering is the entire point of the bump.
+    #
+    # GOVERNANCE OWNS THE VERDICT, NOT THE FACT (ADR-0035 §3): SDD reports `unobserved`; what it costs
+    # at a merge boundary, and receipt freshness, are Governance's to decide.
+    #
+    # NOT COHERENT WITH THE EMITTED ARTIFACT YET — see coherence id `governance-handoff-emitted-version`.
+    # SDD stamps a HARDCODED `"contractVersion"` into every handoff, and it is still "1.0.0", so the
+    # artifact self-declares 1.0.0 while this row declares 1.1.0. Nothing gates the two against each
+    # other, which is why it is written down here rather than left to be discovered.
+    #
+    # AND IF YOU ARE THE ONE FIXING IT: the value is hardcoded TWICE, independently. The literal that
+    # actually reaches the file is `GovernanceHandoff.fs:261` (`ContractVersion = "1.0.0"`, written at
+    # :282) — that module does not even `open` FS.GG.Contracts. `Schemas.governanceHandoffContractVersion`
+    # (`src/FS.GG.Contracts/Schemas.fs:174`) is a SEPARATE, hand-kept MIRROR that the emit path never
+    # reads; its `// SOURCE:` comment names GovernanceHandoff.fs as the truth it is copying. Moving the
+    # Schemas constant alone turns its test green and changes NOTHING about the emitted artifact. Move
+    # BOTH.
+    version: "1.1.0"
     range: "1.x"
     owner: sdd
     surface: "readiness/<id>/governance-handoff.json"
@@ -1011,6 +1058,54 @@ coherence:
     resolved_by: "FS-GG/FS.GG.Governance#29 (route-exit wiring) + #33 (publish gate) + tag v1.1.0 (publish) + FS.GG.Governance#34 (profile-aware, 1.2.0) + FS.GG.Templates#29 (descriptor slot, closes #28/#25)"
     impact: "FS.GG.Templates#25 composition stage asserts the full matrix (strict blocks / strict passes / light relaxes) against the installed fsgg-governance — green-by-omission eliminated end-to-end through the composed product."
     tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/29"
+  - id: governance-handoff-emitted-version
+    coherent: false
+    owner: sdd
+    summary: >
+      (2026-07-14) The `governance-handoff` CONTRACT entry above declares 1.1.0 (ADR-0035 stage 3,
+      additive — the `ship.unobservedEvidence` blocking diagnostic id became reachable in
+      `readiness.blockingDiagnosticIds[]`). The EMITTED ARTIFACT still self-declares 1.0.0: SDD stamps
+      a hardcoded `"contractVersion"` into every `readiness/<id>/governance-handoff.json`, and
+      FS.GG.SDD#422 did not move it. So the registry says 1.1.0 and the file on disk says 1.0.0.
+    note: >
+      THE VALUE IS HARDCODED TWICE, INDEPENDENTLY — and only one of the two reaches the file. Anyone
+      repairing this must move BOTH, so the distinction is recorded here rather than rediscovered:
+      `src/FS.GG.SDD.Artifacts/GovernanceHandoff.fs:261` holds `ContractVersion = "1.0.0"` and writes
+      it at :282 — that is the EMITTER, and it does not even `open` FS.GG.Contracts.
+      `Schemas.governanceHandoffContractVersion` (`src/FS.GG.Contracts/Schemas.fs:174`) is a SEPARATE,
+      hand-kept MIRROR the emit path never reads; its own `// SOURCE:` comment names GovernanceHandoff.fs
+      as the truth it copies, and the test that "pins" it (`SchemaVersionConstantTests.fs:53`) asserts
+      the constant against a string literal it ALSO hardcodes — so it cannot fail when the two files
+      drift apart. Bumping the Schemas constant alone turns that test green and changes nothing about
+      the artifact.
+      .
+      NOTHING GATES THESE AGAINST EACH OTHER, which is why this row exists rather than a red check. The
+      contract-coherence workflow asserts the declared `fsgg-contracts` version against the
+      FS.GG.Contracts PACKAGE version; no gate compares a contract's declared `version` against the
+      `contractVersion` its own emitter stamps. The drift is therefore SILENT — instance (j) of epic
+      .github#266's own signature: a green tick over a divergence nobody declared. Recorded, not
+      discovered later.
+    impact: >
+      Bounded today, and unbounded at the flip. A Governance consumer that pins on the artifact's
+      self-declared `contractVersion` reads 1.0.0 and cannot know the new id is reachable — but the id
+      is unreachable in practice while `--require-observed` stays default-off (FS.GG.SDD#422), so no
+      consumer can currently meet an undeclared value. That protection ENDS when the default flips (the
+      schema major ADR-0035 gates on "once the fleet is green"): at that point an unbumped emitter
+      hands Governance a `ship.unobservedEvidence` under a `contractVersion` that never declared it,
+      which is precisely the failure the ADR ordered this bump to prevent.
+    enforcement: >
+      Flips coherent:true when the EMITTED handoff's `contractVersion` reads 1.1.0 — which takes both
+      literals above, not just the Schemas mirror. TWO gates are owed, and they belong in DIFFERENT
+      repos; collapsing them is how this recurs.
+      (a) EMITTER == CONSTANT, inside SDD. It catches the break in the PR that causes it rather than in
+      a downstream repo's CI — the lesson the `fsgg-contracts` entry already records from SDD#387, and
+      the reason it is SDD's gate and not ours.
+      (b) SDD's constant == the `version` THIS registry declares. That one is .github's: nothing in SDD
+      can see this document, so (a) alone would leave `governance-handoff` free to advance here while
+      SDD stamps something older — the same silent drift, one level up. `contract-coherence.yml` already
+      checks out FS.GG.SDD to read its source for exactly this shape of assertion, so it is the natural
+      home. Both are carried on the tracking issue.
+    tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/427"
   - id: agent-skill-mirror
     coherent: true
     owner: sdd

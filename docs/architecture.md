@@ -468,7 +468,7 @@ The contracts that hold the system together:
 | `scaffold-provider` | SDD | `.fsgg/providers.yml` + `dotnet new` wrapper protocol | Templates, Rendering |
 | `fsgg-contracts` | SDD | the `FS.GG.Contracts` package (typed schemas + registry validator) | SDD, Governance, Templates |
 | `scaffold-provenance` | SDD | `.fsgg/scaffold-provenance.json` | SDD |
-| `governance-handoff` | SDD | `readiness/<id>/governance-handoff.json` (optional) | Governance |
+| `governance-handoff` | SDD | `readiness/<id>/governance-handoff.json` (optional) — @`1.1.0`: [ADR-0035](adr/0035-observed-run-receipts.md) stage 3 made the blocking diagnostic id `ship.unobservedEvidence` reachable, additively (no enum moved, `schemaVersion` still 1). SDD reports the unobserved fact; **Governance owns what it costs at a merge boundary**. ⚠️ the emitter still stamps `contractVersion: "1.0.0"` — coherence `governance-handoff-emitted-version` | Governance |
 | `governance-policy` / `-capabilities` / `-tooling` / `-descriptor` | Governance | the four `.fsgg/*.yml` slots | Templates |
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
