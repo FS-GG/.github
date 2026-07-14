@@ -80,13 +80,28 @@ the org is already moving by lifting checks into reusable workflows.
 > **Renaming — or removing — a job in a `workflow_call` workflow is a BREAKING CONTRACT CHANGE.**
 > Treat it like any other: it is not a refactor, and "the CI here is green" does not mean it is safe.
 
-Before you rename one, find out who requires it:
+Before you rename one, find out who requires it — **from BOTH places GitHub keeps required checks.**
 
 ```sh
 # Which repos require a context whose right-hand half is this job?
+# CLASSIC branch protection (needs `administration: read`):
 gh api repos/FS-GG/<repo>/branches/main/protection \
   --jq '.required_status_checks.checks[].context'
+
+# RULESETS — a SEPARATE store the line above does not report (needs only `metadata: read`):
+gh api repos/FS-GG/<repo>/rules/branches/main \
+  --jq '.[] | select(.type == "required_status_checks")
+            | .parameters.required_status_checks[].context'
 ```
+
+**Asking only the first is how you get a confident, wrong "nobody requires it".** The two endpoints
+read different stores and neither reports the other's rules; a branch may be governed by either,
+both, or neither, and GitHub enforces both. **FS.GG.Governance is protected by a ruleset and answers
+404 on the classic endpoint** — so the first command alone reports *nothing* for a repo that requires
+five status checks. That is not a hypothetical: it is precisely how
+[`check-required-contexts.py`](../../scripts/check-required-contexts.py) came to report
+`requires NO status checks` over it, holding an admin token
+([#574](https://github.com/FS-GG/.github/issues/574)).
 
 If any receiver requires `<something> / <the job you are renaming>`, the rename must be sequenced:
 land the receiver's protection change first, or do not rename it.
@@ -132,7 +147,25 @@ cannot run in GitHub Actions — by anyone, in any repo.**
   accessible by integration` on every receiver, fell through to the fail-closed arm, and stopped the
   kit landing anywhere. It was rewritten to ask the *pull request* instead of branch protection —
   and its code still carries the comment *"We deliberately cannot see branch protection (no
-  `administration: read` — that is the whole point)."*
+  `administration: read` — that is the whole point)."* Re-verified 2026-07-14 (#574): the App holds
+  `contents`, `metadata`, `packages`, `pull_requests` — **no `administration`**.
+
+> **This is true of CLASSIC protection. The ruleset store is different — but it does NOT give you a
+> credential-free gate** ([#574](https://github.com/FS-GG/.github/issues/574)).
+>
+> `rules/branches/<b>` needs only `metadata: read`, so it is tempting to conclude that a
+> ruleset-protected repo can be audited from a workflow with no credential. **It cannot**, and the
+> reason is worth stating precisely, because the wrong conclusion here rebuilds the original bug:
+>
+> A required set is the **union** of both stores. A token without `administration: read` gets a
+> **403** on the classic endpoint — and a 403 does not mean *"there is no classic protection"*, it
+> means *"I cannot see whether there is."* So an unreadable classic store makes the union
+> **unknowable**, whatever the ruleset says. `check-required-contexts.py` therefore exits 3 (no
+> verdict) on ANY repo when it cannot read classic protection, ruleset-protected or not — a
+> half-read is not a verdict, and a gate that reported on half the stores is how this whole class
+> of bug started.
+>
+> The credential is still the blocker for a scheduled org-wide gate. Rulesets do not retire it.
 
 So the gate asks a question that needs **no credential**, and it asks it at the **source**: on the PR
 that would cause the outage, rather than in the victim's repo afterwards. That is strictly better —
