@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The IO layer's regression corpus (ADR-0040 Phase A).
+
+       ONE TEST PER HISTORICAL DEFECT, CARRYING ITS NUMBER — the same rule ADR-0034 Phase 1 imposed on the
+       core, for the same reason: the 7,000 lines of bash this replaces are an incident log, and the only
+       way to port hard-won knowledge rather than merely re-typing code is to port the INCIDENTS.
+
+       These are FAILURE-LEG tests. A happy-path test passes against the broken code and proves nothing —
+       that is #266's whole lesson, and it is why almost every test in here asserts a REFUSAL: that a
+       malformed page is an error and not an empty lock, that an exhausted budget is not an absent item,
+       that a merged PR is not an abandoned one. The bug was never that the good path did not work. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors></WarningsNotAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="TransportTests.fs" />
+    <Compile Include="BudgetTests.fs" />
+    <Compile Include="CacheTests.fs" />
+    <Compile Include="ReadTests.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+</Project>
