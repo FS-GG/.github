@@ -84,7 +84,13 @@ If the work is cross-repo (needs a change/release from *another* FS-GG repo), us
 
 ## The loop
 
-**Once per machine, first:** `dotnet tool install -g FS.GG.Coord.Cli`
+**In a receiver, nothing.** The engine is already declared in `.config/dotnet-tools.json`, and `fsgg-coord`
+**restores it for you** the first time it needs it. A manifest is a *declaration*, not an *installation* —
+until something runs the restore, `dotnet tool run` fails, the version reads as `unknown`, `unknown` is
+stale by design, and the run SKIPS. That was **139 of 147 shadow runs** on 2026-07-14, in every receiver
+at once. The kit used to ask the worker to run the restore; asking is not a mechanism.
+
+**Outside a receiver (or to be sure):** `dotnet tool install -g FS.GG.Coord.Cli`
 **And keep it current:** `dotnet tool update -g FS.GG.Coord.Cli` — a global tool does NOT self-update, and
 **a stale engine is worse than no engine** (#655). `fsgg-coord` carries a floor and REFUSES to shadow
 below it (a recorded skip, never an error), because engines before `0.1.1` mis-parse every dotfile path
@@ -100,9 +106,14 @@ authoritative until that log has been clean across the live fleet for three cons
 log only fills where an engine exists. A worker without one contributes no evidence, and the clock
 does not move.
 
-**Your evidence is published for you.** `done --flip` sends it to the fleet ledger as part of finishing
-the item — no extra step, nothing to remember (#656). This used to be a request, and across 28 workers and
-597 compared verdicts it was run **zero times**. Asking is not a mechanism.
+**Your evidence is published for you.** The **shadow** pushes it to the fleet ledger from the scheduling
+call that produced it (throttled: at most one REST write per 30 min per machine), and `done --flip`
+publishes immediately too. No extra step, nothing to remember (#656).
+
+It hung on `done` alone until 2026-07-14, when seven issues closed via **squash-message closing keywords**
+— merged, closed and board-Done without `done` ever running. 218 verdicts compared, zero divergence, and
+**not one row reached the ledger**; the fleet gate read the day as *"a day nobody looked."* A hook on one
+path is a request that the path be taken.
 
 Run it by hand only if you stop without finishing an item:
 

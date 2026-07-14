@@ -737,17 +737,42 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   repo with no per-repo setup. (A local `dotnet tool restore` also works — but note a local tool is
   *not* on `PATH`, and `fsgg-coord` reaches it via `dotnet tool run`.)
 
-- **Your shadow's evidence is published for you.** `done --flip` sends it to the fleet ledger as part
-  of finishing the item — no extra step, nothing to remember (#656).
+  **In a receiver you no longer have to do either.** Every receiver already declares the engine in
+  `.config/dotnet-tools.json` — Renovate keeps its version current and the kit distributes the file — and
+  `fsgg-coord` now **restores it for you** the first time it needs it.
+
+  It did not, and that cost the fleet a day. A manifest is a *declaration*, not an *installation*: until
+  something runs `dotnet tool restore`, `dotnet tool run fsgg-coord-engine` exits 1 with *Run "dotnet tool
+  restore"…* on **stderr**, so the version came back empty, became `unknown`, and `unknown` is stale by
+  design — every scheduling call in all six receivers skipped, blaming a stale engine and telling the
+  worker to *update* a tool they had never installed. On 2026-07-14 that was **139 of 147 shadow runs**.
+  The kit's answer had been a sentence asking the worker to run the restore, and that sentence had the
+  hit rate every other request in this fabric has: zero.
+
+- **Your shadow's evidence is published for you.** The shadow pushes it to the fleet ledger itself, from
+  the scheduling call that produced it — and `done --flip` publishes immediately as well. No extra step,
+  nothing to remember (#656).
 
   This used to be a request: *"when your loop is done, run `fsgg-coord divergence --publish`."* Measured
   against a live fleet of 28 workers and 597 compared item-verdicts, it was run **zero times**, by
-  anybody, including by the worker who wrote it. **Asking is not a mechanism.** So it happens in the one
-  command every worker already runs when it finishes work.
+  anybody, including by the worker who wrote it. **Asking is not a mechanism.**
 
-  It is idempotent (the ledger row is keyed on `(worker, day, engine)` and rewritten in place), it costs
-  one REST call, and **it can never cost you your done-stamp** — it runs after the stamp is earned, and a
-  publish that fails is bookkeeping that failed.
+  The first fix hung the publish on `done` — *"the one command every worker runs when it finishes an
+  item."* It is not. An item closed by a **squash-message closing keyword** (#681, #685, #693) is merged,
+  closed and board-Done without `done` ever being called, and on 2026-07-14 that was most of them: seven
+  issues closed, 218 item-verdicts compared, zero divergence — and **not one row reached the ledger**. The
+  fleet gate read the day as *"a day nobody looked."* **A hook on one path is a request that the path be
+  taken.** So the publish now hangs on the *shadow*, which is the only path that has, by construction,
+  just produced evidence.
+
+  It is **throttled** — at most one REST write per 30 minutes per machine, shared across every worker on
+  it, because the hot scheduling loop may not pay the network on every call. Missing a window loses
+  nothing permanently: the publish folds your **whole** log, keyed on `(worker, day, engine)` and
+  rewritten in place, so the next one carries the missed day up with it. Late is a property of this
+  ledger; lost is not.
+
+  It is idempotent, it costs one REST call, and **it can never cost you your done-stamp or your item** —
+  it runs after the stamp is earned, and a publish that fails is bookkeeping that failed.
 
   You can still run it by hand, and should if you are stopping without finishing an item:
 
