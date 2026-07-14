@@ -83,8 +83,8 @@ jobs:
           out="$(dotnet test tests/FS.GG.Coord.GitHub.Tests/FS.GG.Coord.GitHub.Tests.fsproj --no-build -c Release 2>&1)"
           printf '%s\n' "$out"
           passed="$(printf '%s' "$out" | grep -oE 'Passed:[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1 || echo 0)"
-          if [ "${passed:-0}" -lt 122 ]; then
-            echo "::error title=coord-github: the suite audited nothing::Only ${passed:-0} tests ran. The edge's incident log is ~130 assertions (the read path, the issue-side writes, the board-side writes, and the done-stamp); a runner that discovers nothing exits 0, and a green gate over an untested adapter is exactly the fail-open this layer exists to end (#266)."
+          if [ "${passed:-0}" -lt 155 ]; then
+            echo "::error title=coord-github: the suite audited nothing::Only ${passed:-0} tests ran. The edge's incident log is ~164 assertions, INCLUDING the real HttpTransport against a live HttpListener (pagination, ETag/304, typed GraphQL, status classification), the scan's cursor loop and cache codec, and the done-stamp's GraphQL read. A runner that discovers nothing exits 0, and a green gate over an untested adapter is exactly the fail-open this layer exists to end (#266)."
             exit 1
           fi
           echo "coord-github: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"

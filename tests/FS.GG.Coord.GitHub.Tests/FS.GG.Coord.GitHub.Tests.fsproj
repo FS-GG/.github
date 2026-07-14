@@ -29,6 +29,9 @@
     <Compile Include="WriteTests.fs" />
     <Compile Include="BoardTests.fs" />
     <Compile Include="DoneTests.fs" />
+    <Compile Include="HttpTransportTests.fs" />
+    <Compile Include="ScanBoardTests.fs" />
+    <Compile Include="DoneFactsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
