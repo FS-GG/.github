@@ -86,26 +86,34 @@ jobs:
         run: |
           echo "closing-keywords: OK" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 'FINDING: this PR closes an issue its body says it does NOT close'
+      - name: 'FINDING: this PR closes an issue its body did not declare'
         if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
         run: |
           {
-            echo "### closing-keywords: this PR will close an issue it says it will not"
+            echo "### closing-keywords: this PR will close an issue it did not declare"
             echo
-            echo 'GitHub scans the body for `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`'
+            echo 'GitHub scans for `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`'
             echo 'followed by an issue ref, and links the two. **It does not parse the sentence.**'
-            echo '`does not close #422` contains `close #422` — so #422 gets closed, the Projects'
-            echo 'auto-workflow stamps it **Done**, and an unfinished item is silently finished (#643).'
+            echo 'A body saying it does *not* close an issue closes it anyway — the negation is'
+            echo 'invisible to the parser (#643), and so is a past tense, a quotation or a deferral.'
             echo
-            echo '**Fix the sentence, not the gate.** Say it with a verb GitHub does not scan for:'
+            echo '**And code is NOT a defence (#683).** The markdown parser skips code, but what'
+            echo 'actually CLOSES the issue on a squash merge is the **commit message**, and that is'
+            echo 'plain text — backticks and fences are ordinary characters in it. A keyword in a'
+            echo 'fence closes the issue just as dead as one in prose. This is how #422 came to be'
+            echo 'closed a second time, by the very PR that shipped this gate.'
             echo
-            echo '> This does **NOT complete** #422.'
+            echo '**Fix the body, not the gate.** Declare what you close on a line of its own:'
             echo
-            echo 'or reference the issue with no verb at all: `Refs #422.`'
+            echo '> `Closes #123.`'
+            echo
+            echo 'and everywhere else deny the parser its binding — reword the verb (**does NOT'
+            echo 'complete**, *addresses*, *supersedes*), drop the verb (`Refs #123.`), or quote the'
+            echo 'number without its `#`. A newline does **not** help: whitespace is whitespace.'
             echo
             echo "See the job log for the line and the reference."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::error title=closing-keywords: the body closes an issue it says it does not::GitHub does not read the word \"not\". This PR will close an issue its own body says it does not close. See the job log."
+          echo "::error title=closing-keywords: the body closes an issue it did not declare::GitHub does not read the word \"not\", and code is not a defence — the squash commit message is plain text. See the job log."
           exit 1
 
       - name: 'NO VERDICT (permanent): the body could not be read'

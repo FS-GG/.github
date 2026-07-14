@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Fixture for scripts/check-closing-keywords.py — the negated-closing-keyword gate (.github#643).
+# Fixture for scripts/check-closing-keywords.py — the closing-keyword gate (.github#643, #683).
 #
 # The gate exists because GitHub closes an issue a PR body says it does NOT close: the parser scans
 # for `close|fix|resolve` + a ref and never reads the word "not". So the FAILURE LEGS are the point
 # of this fixture. A gate that cannot say NO is the #266 defect it was written to close, and a
 # fixture that only ever feeds it clean input would never notice.
 #
-# Leg 1 is the REAL INSTANCE, byte-for-byte: the sentence PR #640 actually shipped, which actually
-# closed #422. Leg 2 is the body #640 was actually remediated TO. Between them they pin the gate to
-# the bug it was written for and to the fix the recipe prescribes — not to strings invented here.
+# TWO LEGS ARE REAL BODIES THAT REALLY CLOSED AN ISSUE, and they are the spine of this file:
+#
+#   leg 1 — the sentence PR #640 shipped in prose.  It closed #422.
+#   leg 9 — the body PR #681 shipped in BACKTICKS.  It closed #422 AGAIN — and #681 is the PR that
+#           shipped this very gate, whose guidance told workers that backticks were the remedy.
+#
+# Between them they pin both halves of the bug: the markdown parser skips code, the commit parser
+# does not, and the commit parser is the one that closes the issue. Legs 9-10c hold that line. If any
+# of them goes green, the gate is back to certifying the merge that re-closed #422.
 #
 # Every leg asserts the EXIT CODE (the gate's contract). No leg greps the gate's prose for a verdict.
 
@@ -194,30 +200,55 @@ printf '%s' "$OUT" | grep -q 'not a declaration' \
   && ok "an UNDECLARED finding says it is not a declaration (no bogus negation claim)" \
   || bad "the undeclared finding must say 'not a declaration'" "$OUT"
 
-# 9. CODE IS NOT PROSE. GitHub does not link inside a fence, so neither may the gate — a body that
-#    QUOTES the bug (as #643's own issue body does, and as this repo's docs now do) must not be a
-#    finding. Without this, the skill that documents the rule would fail the gate that enforces it.
+# ---------------------------------------------------------------------------------------------
+# CODE IS NOT A DEFENCE (#683). These four legs were INVERTED by #683 — they used to assert that a
+# keyword in code is green, and that assertion was the bug.
+#
+# The reasoning that produced them was sound about the wrong parser. The MARKDOWN parser does skip
+# code, and `closingIssuesReferences` really is empty for a backticked ref. But the thing that CLOSES
+# the issue on a squash merge is the COMMIT MESSAGE, and a commit message is PLAIN TEXT: backticks,
+# fences and indentation are ordinary characters in it. So every one of these bodies closes an issue,
+# and the gate used to certify all four of them green.
+#
+# If any of these goes green again, the fail-open is back — and it is the one that has already
+# happened twice.
+# ---------------------------------------------------------------------------------------------
+
+# 9. THE SECOND REAL INSTANCE, and the loudest leg in this file. This is PR #681's body — the PR that
+#    shipped the first version of this gate. It wrote its dangerous examples as code, exactly as its
+#    own guidance told workers to. `closingIssuesReferences` said #643 and only #643; the squash
+#    commit closed #422 for the SECOND time, and #422'"'"'s CLOSED_EVENT names the commit as the closer.
+#
+#    The gate that let this through was green, correct about markdown, and wrong about what happened.
+gate_on 'PR #640 said, in as many words, `It does not close #422`. On merge, GitHub `closed #422`;
+the board then stamped it Done.
+
+Closes #643.'
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q '#422'; then
+  ok "the real #681 body is a FINDING, and it names #422 — a backticked keyword still closes"
+else
+  bad "#681's backticked 'closed #422' must exit 1 and name #422 (got rc=$RC)" "$OUT"
+fi
+
+# 9a. A FENCED block. The form a body uses to quote the bug it is fixing — and the form that reads as
+#     most obviously safe, because markdown really does ignore it. The commit parser does not.
 gate_on 'The bug, quoted:
 
 ```
 It does not close #422.
 ```
 
-Refs #422.'
-[ "$RC" = 0 ] && ok "a negated keyword inside a fence does NOT fire (GitHub ignores code)" \
-              || bad "a fenced negated keyword must exit 0 (got rc=$RC)" "$OUT"
+Refs #416.'
+[ "$RC" = 1 ] && ok "a negated keyword inside a FENCE is a FINDING — the commit message is plain text" \
+              || bad "a fenced keyword must exit 1 (got rc=$RC)" "$OUT"
 
-# 10. ...and the same for an inline code span, which is how the rule gets written in a sentence.
+# 10. An INLINE code span — which is precisely how the old recipe told workers to write it. The
+#     remedy was the bug.
 gate_on 'Never write `does not close #422` — GitHub does not read the word "not".'
-[ "$RC" = 0 ] && ok "a negated keyword in an inline code span does NOT fire" \
-              || bad "an inline-code negated keyword must exit 0 (got rc=$RC)" "$OUT"
+[ "$RC" = 1 ] && ok "a negated keyword in an INLINE SPAN is a FINDING — the old remedy was the bug" \
+              || bad "an inline-code keyword must exit 1 (got rc=$RC)" "$OUT"
 
-# 10a. ...and an INDENTED code block, which GitHub also honours as code. A body that quotes a log or
-#      a gate's own output this way has done nothing wrong, and must not be failed for it.
-#
-#      THE BLOCK IS MULTI-LINE ON PURPOSE. The first cut of the indent rule keyed off "the previous
-#      line was blank", which blanked the block's FIRST line and scanned every line after it — green
-#      on a one-line fixture, and a false finding on the two-line block a real body actually contains.
+# 10a. An INDENTED block — a quoted log, or the gate's own output pasted back in.
 gate_on 'The first draft reported:
 
     check-closing-keywords: OK
@@ -225,20 +256,64 @@ gate_on 'The first draft reported:
     ...which was not what anyone wanted.
 
 Neither was intended.'
-[ "$RC" = 0 ] && ok "a MULTI-LINE indented code block does NOT fire (every line of it is code)" \
-              || bad "a multi-line indented code block must exit 0 (got rc=$RC)" "$OUT"
+[ "$RC" = 1 ] && ok "an INDENTED code block is a FINDING — indentation is not a defence either" \
+              || bad "an indented code block must exit 1 (got rc=$RC)" "$OUT"
 
-# 10b. THE FAIL-OPEN THIS GATE MUST NEVER TAKE. A list item'"'"'s continuation is indented four spaces
-#      and is ORDINARY PROSE — GitHub parses it, and closes the issue. If leg 10a'"'"'s indent rule ever
-#      grows careless enough to blank this, the gate goes green on a real, silent close. That is the
-#      #266 fail-open, inside the gate written to close one.
+# 10b. A LIST CONTINUATION — indented four spaces, but ordinary prose to markdown. It fired before
+#      #683 and it fires after, for a different reason: it is now scanned because EVERYTHING is
+#      scanned. Kept because it pins the raw scan's floor — if this ever goes green, the raw scan has
+#      stopped happening at all.
 gate_on '- the mirror lands first
 
     and then this closes #123
 
 - the second item'
-[ "$RC" = 1 ] && ok "a LIST CONTINUATION is prose, not code — an undeclared close in it still FIRES" \
-              || bad "a list continuation must NOT be treated as code (got rc=$RC)" "$OUT"
+[ "$RC" = 1 ] && ok "a LIST CONTINUATION still FIRES (it always did, and now everything does)" \
+              || bad "a list continuation must exit 1 (got rc=$RC)" "$OUT"
+
+# 10c. THE OTHER DIRECTION — #616, and the check that dropping strip_code entirely would have LOST.
+#      A declaration inside a fence is bound by the COMMIT parser (the issue closes) but skipped by
+#      the MARKDOWN parser (the PR records no link). The issue closes with nothing on the PR saying
+#      so. The gate must model both parsers, not swap one blindness for the other.
+gate_on 'Summary of the change.
+
+```
+Closes #643.
+```'
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'no link'; then
+  ok "a DECLARATION inside code is a FINDING — it closes, but the PR records no link (#616)"
+else
+  bad "a fenced declaration must exit 1 and warn about the missing link (got rc=$RC)" "$OUT"
+fi
+
+# ---------------------------------------------------------------------------------------------
+# THE REMEDIES THAT SURVIVE A SQUASH. The gate tells authors to do these, so they must be green —
+# a gate that rejects the fix it prescribes teaches workers to ignore it.
+# ---------------------------------------------------------------------------------------------
+
+# 10d. REWORD THE VERB. A verb outside GitHub's keyword list binds nothing, in code or out of it.
+gate_on 'This does NOT complete #422, and it supersedes #416. A follow-up addresses #295.'
+[ "$RC" = 0 ] && ok "REWORDING the verb is green ('does NOT complete' / 'supersedes' / 'addresses')" \
+              || bad "the reworded remedy must exit 0 (got rc=$RC)" "$OUT"
+
+# 10e. BREAK THE ADJACENCY. Quoting the number without its `#` leaves nothing for the keyword to bind
+#      to — the only way to narrate this bug verbatim without re-committing it.
+gate_on 'PR #640 said it does not close 422 — and on merge, GitHub closed 422 anyway.'
+[ "$RC" = 0 ] && ok "BREAKING THE ADJACENCY is green (the number quoted without its '#')" \
+              || bad "a keyword with no bindable ref must exit 0 (got rc=$RC)" "$OUT"
+
+# 10f. ...but a NEWLINE does NOT break the adjacency, and this leg exists because a draft of this very
+#      change said it did. The separator between keyword and ref is `\s+`, and a newline is
+#      whitespace — so `closes` ending one line and `#123` opening the next binds exactly as if they
+#      were side by side, for GitHub and for this gate alike.
+#
+#      Had the bad advice shipped, the gate would have REJECTED a body it had just told the author to
+#      write — the "gate rejects the fix it prescribes" failure leg 6 guards in the other direction.
+#      Review caught it; this leg is what stops it coming back.
+gate_on 'The body said it does not close
+#422, and GitHub closed it anyway.'
+[ "$RC" = 1 ] && ok "a NEWLINE does NOT break the binding — keyword/ref across lines still FIRES" \
+              || bad "keyword+ref across a newline must exit 1 (got rc=$RC)" "$OUT"
 
 # 11. A body with no reference at all.
 gate_on 'A tidy-up with no issue behind it.'

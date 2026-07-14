@@ -1,87 +1,103 @@
 #!/usr/bin/env python3
-"""Assert a PR closes exactly the issues its body DECLARES — no more.
+# The docstring is RAW: it quotes regex fragments (`\s+`) and escape sequences (`\n`) as literal
+# text. Without the r-prefix Python reads them as escapes — `\n` became a real newline in the
+# rendered help, and `\s` raised a SyntaxWarning on every single run, which the workflow captures
+# into the gate's output and shows on every PR.
+r"""Assert a PR closes exactly the issues its body DECLARES — no more, and none of them silently.
 
-.github#643, epic #266 (coherence gates that fail open). Found the hard way on PR #640/#422.
+.github#643 and #683, epic #266 (coherence gates that fail open). Found the hard way on PR #640,
+then again on PR #681 — the PR that shipped the first version of this gate.
 
-GitHub scans a PR body for `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`
-followed by an issue reference, and links the two. **It does not parse the sentence.** The string
-`does not close #422` contains `close #422`, and the negation is invisible to it.
+TWO PARSERS READ THIS BODY, AND ONLY ONE OF THEM WAS EVER MODELLED (#683)
+  A PR body is consumed twice, by two different parsers with two different rules, and they disagree
+  about code:
 
-PR #640 said, in as many words:
+    1. THE MARKDOWN PARSER, while the PR is open, builds `closingIssuesReferences` — the link
+       GitHub shows on the PR itself. It honours markdown: a keyword inside a fence, an inline span
+       or an indented block is NOT linked.
 
-    **It does not close #422.** A producer PR that breaks the mirror still cannot be failed [...]
+    2. THE COMMIT PARSER, on merge, is what actually CLOSES the issue. The squash commit message is
+       PLAIN TEXT. Backticks, fences and indentation are ordinary characters in it. Every reference
+       the markdown parser skipped, this one binds.
 
-On merge, GitHub closed #422. The Projects auto-workflow then flipped Status to Done, and `release`
-reported "board: Done (preserved)" — correctly, since it only resets the claim set. So an open,
-unfinished, explicitly-not-done item was closed and stamped Done, and the only reason it was caught
-is that the worker re-read the release output and disbelieved it. Left alone, #422 would have sat
-closed and Done with its three acceptance criteria unmet.
+  The first version of this gate modelled (1) faithfully and was blind to (2). So it certified as
+  green a body whose merge closed an issue — which is the exact fail-open of #266, inside the gate
+  written to close one.
 
-This is the third face of one coin, and the org has now hit all three:
-  - #558 — a keyword in the TITLE, where GitHub never looks: the link is silently MISSING.
-  - #616 — an unclosed code fence: a real `Closes #N` is silently VOIDED.
-  - #643 — this one: a keyword fires when it was never meant to.
-In each, the author's intent and GitHub's parse disagree, and nothing tells the author.
+  It did it to its own PR. #681 argued about this bug for forty lines and, following the guidance
+  #681 itself shipped ("if you did not mean to close it, write it as code"), wrote every dangerous
+  example in backticks. `closingIssuesReferences` for #681 was `#643` and only `#643` — correct. The
+  squash commit message contained, in backticks, a closing keyword next to #422, and GitHub closed
+  #422 for the second time. Its CLOSED_EVENT closer is the commit, not the PR. Both records are
+  accurate; they describe different parsers, and the destructive one is the one nobody modelled.
+
+  So the remedy the recipe taught WAS the bug, and the gate certified the result green.
 
 WHAT IT ASSERTS
-  **The set of issues GitHub will close must be the set the author DECLARED.** Reading the body
-  exactly as GitHub does, every closing reference must sit on a declaration line — a line that is
-  nothing but `Closes #N` (`Closes:`/`Fixes`/`Resolves`, one or more refs, optional bullet, optional
-  full stop). Any other closing keyword bound to an issue ref is a FINDING.
+  **The set of issues the MERGE will close must be the set the author DECLARED.** Every closing
+  reference must sit on a declaration line — a line that is nothing but `Closes #N` (`Closes:`/
+  `Fixes`/`Resolves`, one or more refs, optional bullet, optional full stop).
 
-  A NEGATED reference gets a specifically-worded finding, because that is the case whose author is
-  most certain they are safe. But negation is not the test, and it must not be:
+  The scan is over the RAW body, because the destructive parser reads raw text. A closing keyword
+  bound to an issue ref is a FINDING **wherever it appears — including inside code**. There is no
+  code exemption in the commit parser, so there is none here.
+
+  And the reverse: a declaration the MARKDOWN parser cannot see — one inside a fence, or after an
+  unclosed one — still closes the issue on merge but leaves the PR with no recorded link. That is
+  #616, and it is also a finding. The two scans together are the only honest model.
 
 WHY NOT JUST DETECT THE NEGATION (the first draft of this gate, and why it was wrong)
   Because a closing keyword does not need a negation to fire when it was not meant to. It only needs
   to be adjacent to an issue number.
 
   The first draft of this gate flagged only negated references. Run against the body of the very PR
-  that introduced it — a body that argues, at length, about how GitHub mis-parses `close #422` — it
+  that introduced it — a body that argues, at length, about how GitHub mis-parses a closing ref — it
   reported "OK: on merge this PR will close #422, #123, #643". The offenders were not negations:
-
-      On merge, GitHub closed #422; the Projects auto-workflow stamped it Done
-                       ^^^^^^^^^^^ narrative past tense. GitHub binds it. #422 closes AGAIN.
-
-      ...fires on "Nothing was skipped and this closes #123"
-                                               ^^^^^^^^^^^^ an EXAMPLE, quoted in prose.
-
-  So the negation-only gate would have passed the PR that fixes negation, and silently re-closed the
-  exact issue whose wrongful closure is the bug (#422). Narrative past tense, a quoted example, a
-  deferral (`a follow-up will resolve #N`), a `fixes #N` copied out of a log — none carries a
-  negator, and every one of them closes an issue.
+  narrative past tense ("On merge, GitHub closed the issue"), an EXAMPLE quoted in prose, a deferral
+  ("a follow-up will resolve it"), a keyword copied out of a log. None carries a negator, and every
+  one of them closes an issue.
 
   There is no such thing as a harmless closing keyword in a PR body. The only rule that holds is:
   say what you close, on a line that says nothing else, and let the gate check the rest is quiet.
 
-  The cost is real and it is small: prose that narrates a close must write it as code
-  (`closed #422`), reword it ("closed that issue"), or use `Refs #422`. That is the same discipline
-  the platform already forces on anyone who has been bitten once — this gate just makes it before
-  the merge instead of after.
+THE REMEDIES THAT SURVIVE A SQUASH (and the one that does not)
+  Writing the offending string AS CODE does NOT work, and this gate no longer says it does. It is
+  the remedy that closed #422 twice. The two that survive, because they deny the parser the binding
+  rather than dressing it up:
 
-MODELLING GITHUB'S PARSE (the whole gate rests on this, so it is deliberately faithful)
+    - REWORD THE VERB.  "does NOT complete", "addresses", "supersedes", "re-closed that issue".
+                        GitHub scans for a fixed keyword list; a verb outside it binds nothing.
+    - DROP THE VERB.    `Refs #422.`  A bare reference is a link, not a close.
+
+  A third, when you must quote a body verbatim: BREAK THE ADJACENCY — quote the number without its
+  `#` (`closed 422`). What binds is a keyword followed by whitespace and then a ref, so removing the
+  ref removes the binding.
+
+  DO NOT reach for a NEWLINE to break it. `closes\n#123` still binds: the separator is `\s+`, and a
+  newline is whitespace — to GitHub and to this gate alike. An earlier draft of this docstring
+  offered "put them on different lines" as a remedy, which would have failed this gate on a body it
+  had just told the author to write. Fixture leg 10f pins it.
+
+MODELLING THE PARSERS (the whole gate rests on this, so it is deliberately faithful)
   - Keywords are case-insensitive; an optional colon is tolerated (`Closes: #10`).
   - A reference is `#123`, `GH-123`, `owner/repo#123`, or a full issue/PR URL.
-  - CODE IS NOT PROSE. GitHub does not link inside a fenced block, an inline code span, or a
-    4-space-INDENTED block, which is precisely what #616 is about. We blank all three out before
-    scanning — preserving line count, so reported line numbers stay true.
-    The one trap there is a LIST CONTINUATION: it is indented four spaces and is ordinary prose, so
-    GitHub parses it and closes the issue. Blanking it would make this gate fail OPEN, which is the
-    one direction #266 forbids, so an indented run counts as code only outside a list.
-  - An UNCLOSED fence swallows the rest of the body (that IS #616's mechanism), so we model it: no
-    closing reference can be found after it. That is not this gate's bug to fix, but pretending
-    otherwise would make it lie about what GitHub does.
+  - The COMMIT parser has no notion of code. We scan the body raw. This is the scan that decides
+    what closes, and it is deliberately the permissive one: it is a superset of the markdown scan,
+    so it cannot fail open relative to it.
+  - The MARKDOWN parser skips fenced blocks, inline spans and 4-space-INDENTED blocks; an UNCLOSED
+    fence swallows the rest of the body (#616's mechanism). `strip_code` models exactly that, and it
+    is used for ONE question only: will the PR record a link for what the author declared?
+    The trap there is a LIST CONTINUATION — indented four spaces, but ordinary prose, which markdown
+    parses — so an indented run counts as code only outside a list.
 
 WHAT COUNTS AS A NEGATION
   Only an explicit verbal negator, within the FIVE tokens immediately preceding the keyword:
   `not`, any `n't` contraction, `never`, `cannot`, `unable to`, `fail(s|ed) to`, `no longer`.
 
-  The window is tight and the vocabulary is small ON PURPOSE. Every real form puts the negator
-  within a token or two of the keyword — "does not close #N", "cannot close #N", "could not fix
-  #N", "will not resolve #N", "unlike #300, this does not close #N" — while a loose window and a
-  fat negator list (`no`, `nothing`, `neither`) starts firing on innocent prose like "Nothing was
-  skipped and this closes #123". A gate that cries wolf on correct bodies is one authors learn to
-  scroll past, and this gate only gets one chance to be believed.
+  Negation is used to WORD the finding, never to decide it — the negated author is the one most
+  certain they are safe, so their finding names the negator back to them. The window is tight and
+  the vocabulary small on purpose: a loose window starts firing on innocent prose, and a gate that
+  cries wolf is one authors learn to scroll past.
 
 WHAT IT DELIBERATELY DOES NOT DO
   It does not read the network. The body arrives on stdin or in a file; the workflow feeds it from
@@ -89,12 +105,17 @@ WHAT IT DELIBERATELY DOES NOT DO
   NO, which is the only thing that makes a green from it worth anything (#266).
 
   It does not check the TITLE. GitHub never honours a keyword there (#558), so a title cannot close
-  anything, and flagging one would be noise. `done --flip` reads GitHub's own CLOSED_EVENT, which is
-  the fix that direction already got.
+  anything, and flagging one would be noise.
+
+  IT DOES NOT READ THE BRANCH'S COMMIT MESSAGES, and under this repo's squash settings
+  (`squash_merge_commit_message: COMMIT_MESSAGES`) those are literally what becomes the squash
+  message. The gate reads the PR BODY as a proxy for them, which is sound here only because the
+  recipe builds the body FROM the commit body. If the two are edited apart, a closing keyword can
+  reach the commit without ever appearing in the body this gate sees. That residual hole is #684.
 
 EXIT CODES  (the contract; the workflow greps nothing)
   0  every closing reference is declared (the declared set, if any, is printed)
-  1  FINDING — the body closes an issue it did not declare (negated, narrated, quoted, or deferred)
+  1  FINDING — the merge closes an issue the body did not declare, or declares one it will not link
   3  NO VERDICT (permanent) — no body was supplied, or it could not be read
 
   There is no exit 2 ("no verdict, retryable"): this gate is pure and offline. It reads text, makes
@@ -180,11 +201,15 @@ class NoVerdict(Exception):
 
 
 def strip_code(text: str) -> str:
-    """Blank out fenced blocks and inline code spans, preserving line count and offsets.
+    """What the MARKDOWN parser sees: code blanked out, line count and offsets preserved.
 
-    GitHub does not create closing links inside code, so neither do we. Every character we remove is
-    replaced by a space (and newlines are kept), so a finding's line/column still points at the real
-    body — a lint that points at the wrong line is one workers stop believing.
+    This models parser (1) in the docstring — the one that builds `closingIssuesReferences`, the link
+    shown on the PR. It does NOT model what closes the issue. Nothing here may be used to excuse a
+    keyword from the raw scan: that was the #683 bug, and this function's output is now consulted for
+    exactly one question — will the PR record a link for what the author declared?
+
+    Every character removed is replaced by a space (and newlines are kept), so an offset into this
+    string is an offset into the original body, and a finding's line still points at the real line.
 
     An UNCLOSED fence swallows everything after it. That is not a quirk of this implementation; it is
     exactly the mechanism of #616, where an unclosed fence silently VOIDED a real `Closes #N`. We
@@ -305,17 +330,24 @@ def line_text(prose: str, offset: int) -> str:
 def audit(body: str) -> tuple[list[str], list[str]]:
     """(findings, declared closing refs) for one PR body.
 
-    A closing reference is legitimate ONLY on a declaration line. Everything else is a finding —
-    whether it is negated, narrated, quoted or deferred — because GitHub will close it regardless.
+    Two parsers, both modelled (#683):
+
+      - The scan that decides what CLOSES is over the RAW body, because the squash commit message is
+        plain text. A closing reference is legitimate ONLY on a declaration line; everything else is
+        a finding — negated, narrated, quoted, deferred, OR IN CODE. Backticks are not a defence.
+
+      - The scan that decides what the PR LINKS is over `strip_code(body)`. A declaration the
+        markdown parser cannot see still closes the issue on merge, but the PR records no link for
+        it (#616). That is a finding too, in the opposite direction.
     """
-    prose = strip_code(body)
+    linkable = strip_code(body)  # what the markdown parser can still see
     findings: list[str] = []
     declared: list[str] = []
 
     # A declaration line that DROPS a ref: `Closes #1, #2` binds only #1. The author declared two and
     # will close one. Reported per line, before the per-match pass, so the finding names every ref
-    # GitHub is about to ignore.
-    for ln0, line in enumerate(prose.splitlines()):
+    # GitHub is about to ignore. Over the RAW body: both parsers bind left-to-right the same way.
+    for ln0, line in enumerate(body.splitlines()):
         if not DECLARATION_LOOSE.match(line) or DECLARATION.match(line):
             continue
         bound = {m.group("ref") for m in CLOSING.finditer(line)}
@@ -327,17 +359,36 @@ def audit(body: str) -> tuple[list[str], list[str]]:
                 f"Repeat the keyword: `Closes #1, closes #2`.\n      {line.strip()}"
             )
 
-    for m in CLOSING.finditer(prose):
+    for m in CLOSING.finditer(body):
         ref = m.group("ref")
         kw = m.group("kw")
+        ln = line_of(body, m.start())
 
-        if DECLARATION_LOOSE.match(line_text(prose, m.start())):
+        # Was this occurrence blanked by the markdown parser — i.e. is it inside code? The offsets of
+        # `linkable` line up with `body` exactly (strip_code preserves them), so this is a direct read.
+        in_code = linkable[m.start() : m.end()] != body[m.start() : m.end()]
+
+        if DECLARATION_LOOSE.match(line_text(body, m.start())):
             declared.append(ref)
+            if in_code:
+                # The commit still closes it. The PR just never says so.
+                findings.append(
+                    f"line {ln}: `{kw} {ref}` is a declaration INSIDE CODE. The squash commit will "
+                    f"still CLOSE {ref} — a commit message is plain text — but the markdown parser "
+                    f"skips code, so the PR will record no link for it (closingIssuesReferences will "
+                    f"be empty). Move the declaration out of the code block, onto a line of its own."
+                    f"\n      {excerpt(body, m.start())}"
+                )
             continue
 
-        ln = line_of(body, m.start())
-        neg = is_negated(prose, m.start("kw"))
-        if neg:
+        neg = is_negated(body, m.start("kw"))
+        if in_code:
+            why = (
+                f"`{kw} {ref}` is in CODE, and code is NOT a defence. The squash commit message is "
+                f"plain text: backticks, fences and indentation are ordinary characters in it, so "
+                f"GitHub WILL CLOSE {ref} on merge (#683). Reword the verb, or drop it (`Refs {ref}`)."
+            )
+        elif neg:
             why = (
                 f'`{neg} {kw} {ref}` — GitHub does NOT read the word "{neg}". '
                 f"It will CLOSE {ref} on merge."
@@ -385,15 +436,20 @@ def main() -> int:
         for f in findings:
             print(f"  - {f}", file=sys.stderr)
         print(
-            "\nGitHub scans the body for `close|closes|closed|fix|fixes|fixed|resolve|resolves|"
-            "resolved`\nfollowed by an issue ref, and links the two. It DOES NOT PARSE THE SENTENCE"
-            " (#643):\nnot the word \"not\", not a past tense, not a quotation, not a deferral.\n"
-            "\n  IF YOU MEANT TO CLOSE IT — declare it on a line of its own:\n"
+            "\nGitHub scans for `close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved`"
+            "\nfollowed by an issue ref, and links the two. It DOES NOT PARSE THE SENTENCE (#643):"
+            "\nnot the word \"not\", not a past tense, not a quotation, not a deferral."
+            "\n\nAND CODE IS NOT A DEFENCE (#683). The markdown parser skips code, but the thing that"
+            "\nCLOSES the issue is the squash COMMIT MESSAGE, and that is plain text — backticks and"
+            "\nfences are ordinary characters in it. A keyword in a fence closes the issue just as"
+            "\ndead as one in prose. This is how #422 got closed a SECOND time, by the PR that"
+            "\nshipped the gate against closing it.\n"
+            "\n  IF YOU MEANT TO CLOSE IT — declare it on a line of its own, nothing else on it:\n"
             "        Closes #643.\n"
-            "\n  IF YOU DID NOT — GitHub must not be able to bind the keyword to the number:\n"
-            "        write it as code       `closed #422`\n"
-            "        reword it              closed that issue / does NOT complete #422\n"
-            "        drop the verb          Refs #422.\n",
+            "\n  IF YOU DID NOT — deny the parser the binding. Dressing it up does not work:\n"
+            "        reword the verb        does NOT complete / addresses / supersedes\n"
+            "        drop the verb          Refs #422.\n"
+            "        break the adjacency    quote the number without its `#`\n",
             file=sys.stderr,
         )
         return 1
