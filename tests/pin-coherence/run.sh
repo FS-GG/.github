@@ -374,6 +374,25 @@ must_fail "an auth-routed repo whose token names the wrong host fails" "$OTHERHO
 NOCFG="$(make_repo nocfg)"; rm "$NOCFG/renovate.json"; git -C "$NOCFG" add -A
 must_fail "a repo with pins and no Renovate config fails" "$NOCFG" "$FEED" "no Renovate configuration"
 
+# --- prose in a Renovate config is a TEMPLATE, not documentation ---
+#
+# Renovate interpolates {{ }} in EVERY config value, `description` included. A `{{ secrets.X }}` in
+# a description either fails config-validation with "Unknown secrets name" — taking the WHOLE repo
+# config down, so Renovate silently does nothing — or splices a live secret into a non-credential
+# field. `renovate-config-validator` reports such a config as VALID, because it never interpolates.
+#
+# This is the defect the #576 fix itself shipped: it removed the hostRules token and then QUOTED the
+# template in the description explaining why. Only actually running Renovate caught it. The token
+# position stays legal; everywhere else is a bug.
+STRAY="$(make_repo straysecret)"
+edit_json "$STRAY/renovate.json" "d['description'] = 'we removed the {{ secrets.FSGG_PACKAGES_READ_TOKEN }} block'"
+git -C "$STRAY" add -A
+must_fail "a {{ secrets }} template in a DESCRIPTION fails" "$STRAY" "$FEED" \
+  "template outside a hostRules token"
+
+LEGALTOK="$(make_repo legaltok)"; route_to "$LEGALTOK" "https://nuget.pkg.github.com/FS-GG/index.json"
+must_pass "a {{ secrets }} template in a hostRules TOKEN is legal" "$LEGALTOK"
+
 echo
 echo "--- the config file read is the one Renovate would read (resolution order) ---"
 # Renovate resolves .github/renovate.json BEFORE .renovaterc. Reading the wrong one answers a

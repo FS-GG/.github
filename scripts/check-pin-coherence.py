@@ -394,6 +394,52 @@ def routed_hosts(preset_path: str) -> list[str]:
     return hosts or ["api.nuget.org"]
 
 
+SECRET_TEMPLATE = re.compile(r"\{\{\s*secrets\.")
+
+
+def assert_no_stray_secret_templates(cfg: dict, config_path: str) -> None:
+    """A `{{ secrets.X }}` template is only ever legitimate as a hostRules token VALUE.
+
+    Renovate interpolates `{{ }}` in EVERY config value — `description` prose included. Prose in a
+    Renovate config is not inert; it is a template. A `{{ secrets.X }}` sitting in a description
+    therefore either (a) fails config-validation with "Unknown secrets name" and takes the WHOLE
+    repo config down, so Renovate silently does nothing at all, or (b) interpolates a live secret
+    into a string that is not a credential.
+
+    This is not hypothetical. The #576 fix removed the hostRules token and wrote an explanation of
+    WHY into `description` — quoting the very template it had just deleted. The explanation
+    re-introduced a worse version of the bug it was explaining, and `renovate-config-validator`
+    reported the config as valid, because it does not interpolate secrets. Only running Renovate
+    caught it. Hence this check: the declaration is not the subject, and a validator that never
+    interpolates cannot see an interpolation defect.
+    """
+    offenders: list[str] = []
+
+    def walk(node, path: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                walk(v, f"{path}.{k}" if path else str(k))
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                walk(v, f"{path}[{i}]")
+        elif isinstance(node, str) and SECRET_TEMPLATE.search(node):
+            # The one legitimate home: hostRules[N].token
+            if re.fullmatch(r"hostRules\[\d+\]\.token", path):
+                return
+            offenders.append(path)
+
+    walk(cfg, "")
+    if offenders:
+        raise GateError(
+            f"{config_path} contains a `{{{{ secrets.* }}}}` template outside a hostRules token, at: "
+            f"{', '.join(offenders)}. Renovate interpolates {{{{ }}}} in EVERY config value — "
+            f"`description` prose included — so this is not documentation, it is an interpolation "
+            f"target. It will either fail config-validation with 'Unknown secrets name' (taking the "
+            f"whole repo config down, so Renovate silently does NOTHING), or splice a live secret "
+            f"into a field that is not a credential. Name the secret WITHOUT the braces."
+        )
+
+
 def check_bump_mechanism(root: str, preset_path: str) -> tuple[str, list[str]]:
     """Every host the preset routes FS.GG.* to must be one Renovate can actually read.
 
@@ -422,6 +468,8 @@ def check_bump_mechanism(root: str, preset_path: str) -> tuple[str, list[str]]:
             cfg = json.load(fh)
     except (OSError, ValueError) as e:
         raise GateError(f"cannot read this repo's Renovate config {config_path!r}: {e}") from e
+
+    assert_no_stray_secret_templates(cfg, config_path)
 
     hosts = routed_hosts(preset_path)
     ROUTED_HOSTS[:] = hosts  # diagnose_stale_pin() needs to know if a credential is in the path
