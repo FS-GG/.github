@@ -56,6 +56,16 @@ module Board =
     type BoardMap =
         { Number: int
           Id: string
+
+          /// The owner and title this board was resolved FROM.
+          ///
+          /// They are carried because the scan cache is keyed on them, and a write that folds itself into
+          /// the cache must fold into the RIGHT one. `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT` can point
+          /// this client at a different board — so a hardcoded title is not a shortcut, it is a write
+          /// landing in another board's cache file, or in none. Neither is visible to anybody.
+          Owner: string
+          Title: string
+
           Fields: Map<string, Field> }
 
     /// A write to one field.

@@ -32,6 +32,8 @@ type private Sandbox() =
 let private board =
     { Number = 12
       Id = "PVT_coord"
+      Owner = "FS-GG"
+      Title = "Coordination"
       Fields =
         Map.ofList
             [ "Status",
@@ -399,6 +401,31 @@ let ``a stopped flush does NOT RE-QUEUE what it was replaying - the queue must n
 // ---- bootstrap ------------------------------------------------------------------------------------
 
 [<Fact>]
+let ``a landed write folds into the cached scan for THIS board, not a hardcoded one`` () =
+    use _sandbox = new Sandbox()
+
+    // The scan cache is keyed on (owner, title), and `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT` can point
+    // this client at a different board. A hardcoded title would fold the write into ANOTHER board's cache
+    // file — or into none at all — and both are invisible: the write lands on the real board, the cache goes
+    // on serving the old value for the next 90 seconds, and the very next `take` schedules against it.
+    //
+    // Folding rather than INVALIDATING is itself the point: invalidating would send the next `take` back to
+    // a full-board scan, and a claim is ALWAYS followed by a take, so the cache would never survive the loop
+    // it exists for.
+    let scan = """[{"repo":"FS.GG.SDD","number":810,"status":"Ready"}]"""
+    Assert.True(Cache.putScan board.Owner board.Title scan)
+
+    let transport =
+        scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
+
+    match boardWrite transport board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "In progress") "vole-418" with
+    | Ok Written ->
+        match Cache.getScan Cache.Scheduling board.Owner board.Title with
+        | Some folded -> Assert.Contains("In progress", folded)
+        | None -> failwith "the cached scan must still be there, carrying our own write"
+    | other -> failwith $"the write must land — got %A{other}"
+
+[<Fact>]
 let ``bootstrap resolves the field and option ids in TWO GraphQL calls`` () =
     let transport =
         scripted
@@ -412,6 +439,11 @@ let ``bootstrap resolves the field and option ids in TWO GraphQL calls`` () =
         Assert.Equal(2, transport.GraphQlCalls)
         Assert.Equal(12, b.Number)
         Assert.Equal("PVT_coord", b.Id)
+
+        // The board carries the owner and title it was resolved FROM, because the scan cache is keyed on
+        // them and a write that folds itself into the cache must fold into the RIGHT one.
+        Assert.Equal("FS-GG", b.Owner)
+        Assert.Equal("Coordination", b.Title)
 
         match Map.tryFind "Status" b.Fields with
         | Some { Type = SingleSelect options } -> Assert.Equal("opt_ready", options.["Ready"])

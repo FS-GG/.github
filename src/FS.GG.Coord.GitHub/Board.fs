@@ -20,6 +20,8 @@ module Board =
     type BoardMap =
         { Number: int
           Id: string
+          Owner: string
+          Title: string
           Fields: Map<string, Field> }
 
     type FieldWrite =
@@ -198,6 +200,8 @@ module Board =
             Ok
                 { Number = number
                   Id = id
+                  Owner = owner
+                  Title = title
                   Fields = fields }
 
     // ---- the item id -------------------------------------------------------------------------------
@@ -547,9 +551,13 @@ module Board =
                 // FOLD OUR OWN WRITE INTO THE CACHED SCAN rather than invalidating it. Invalidating would
                 // send the very next `take` back to a full-board scan — and a claim is ALWAYS followed by a
                 // take — so the cache would never survive the loop it exists for.
+                // THE BOARD'S OWN NAME, not a hardcoded one. The scan cache is keyed on (owner, title),
+                // and `FSGG_COORD_OWNER`/`PROJECT` can point this client at a different board — so a
+                // hardcoded title would fold the write into another board's cache file, or into none at
+                // all. Both are invisible.
                 Cache.patchScan
-                    owner
-                    "Coordination"
+                    board.Owner
+                    board.Title
                     repo
                     number
                     field
@@ -609,13 +617,21 @@ module Board =
             if stopped.IsNone then
                 let parts = entry.Ref.Split([| '/'; '#' |], StringSplitOptions.RemoveEmptyEntries)
 
-                if parts.Length < 3 then
-                    // A QUEUE ENTRY WE CANNOT PARSE WILL NEVER LAND. Drop it loudly rather than carry it
-                    // forever — but it is dropped, not retried, because retrying it is an infinite loop
-                    // that reports progress.
-                    Cache.dropPending entry
-                else
-                    let owner, repo, number = parts.[0], parts.[1], int parts.[2]
+                // `int parts.[2]` would THROW on a ref whose number is not a number, and an exception here
+                // aborts the whole flush — abandoning every entry after it, on the strength of one bad line.
+                // A queue entry we cannot parse will never land; it is dropped, not retried, because
+                // retrying it is an infinite loop that reports progress.
+                let parsed =
+                    if parts.Length < 3 then
+                        None
+                    else
+                        match Int32.TryParse parts.[2] with
+                        | true, n -> Some(parts.[0], parts.[1], n)
+                        | _ -> None
+
+                match parsed with
+                | None -> Cache.dropPending entry
+                | Some(owner, repo, number) ->
 
                     let write =
                         if entry.Value = "" then Clear else Set entry.Value
