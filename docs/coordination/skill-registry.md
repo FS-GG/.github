@@ -98,8 +98,40 @@ not a mirror of the live catalog. Its `sha256` values and `materializes-when` pr
 moved since (`fs-gg-testing`, shown here as `profile == governed`, was widened to all five profiles
 by FS.GG.Rendering#90 on 2026-07-04). `registry/skills.yml` is authoritative, and
 `scripts/fsgg-skill-registry-check` is what holds it to the producer manifests — bytes
-(`digest-matches`), presence (`declared-completeness`, .github#289), and the predicate itself
-(`predicate-matches`, .github#292). Process-skill `sha256`s come from SDD's published manifest.
+(`digest-matches`), presence (`declared-completeness`, .github#289), the predicate itself
+(`predicate-matches`, .github#292), and the mirror verdict (`mirror-matches` / `mirror-verdict`,
+.github#658). Process-skill `sha256`s come from SDD's published manifest.
+
+## The `mirrored` verdict — ADR-0022 §6's frozen-mirror obligation
+
+`mirrored: true` on a row means **ADR-0022 §6 requires FS.GG.Rendering to ship a byte-identical copy
+of this body**. It is an *obligation the owner asserts*, reconciled verbatim from the producer
+manifest (FS.GG.Game#280 added it) — **not** an observation that Rendering happens to hold a file of
+the same name. The distinction is the whole subtlety of the field:
+
+- Classify on the **obligation** and there are **four**: the ADR-0022 P4 migrations `fs-gg-game-core`,
+  `fs-gg-audio`, `fs-gg-persistence`, `fs-gg-model-swap`, which Rendering still ships frozen from
+  `--profile game`.
+- Classify on the **name collision** and there are eight — because `fs-gg-collision`, `fs-gg-grids`,
+  `fs-gg-line-drawing` and `fs-gg-visibility` exist in both trees too, and are under *no* such
+  obligation: they were rewritten against the `.fsi` and deliberately diverge. FS.GG.Rendering#541 is
+  carrying that wrong set.
+
+**Absent means *not classified*, never `false`.** `select(.mirrored == true)` reads a row with no
+`mirrored` field as false (`null == true` is false), so a manifest predating the field answers "not
+mirrored" for *every* body — confidently — and leaves every real mirror unguarded. That is the trap
+FS.GG.Game#282 nearly shipped, and any new reader of this field (including the typed validator, when
+it learns about it — .github#686) inherits the obligation to refuse the coercion.
+
+So the rows that carry no verdict are not asserting "no obligation"; they are rows for which the
+question does not *arise*, because Rendering holds no second copy of them. `fsgg-skill-registry-check`
+derives the **question** from the tree (is there a copy at the frozen-mirror path that the row's own
+`source:` does not name?) and takes the **answer** only from the owner's declaration. Where a copy
+exists and nobody has declared, it goes red: *undeclared is not `not mirrored`*.
+
+Why here: no producer can verify its own claim — Game declares `mirrored` and cannot check it, because
+Rendering's tree is outside it and its gate is deliberately hermetic. `.github` is the only reader that
+sees every producer tree, so it is the only place the readings can be held together (.github#658).
 
 ## The `materializes-when` predicate
 

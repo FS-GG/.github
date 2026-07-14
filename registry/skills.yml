@@ -74,8 +74,31 @@
 # flip the row and update the `skill-mirror-verified` / `fsgg-sdd-orchestrator-axis` cross-refs.
 # The flip must NOT precede a green skill-registry-coherence on main (epic .github#266, fails-open class).
 
+# THE `mirrored:` FIELD (.github#658, epic #266) — ADR-0022 §6's frozen-mirror obligation, DECLARED.
+#
+# `mirrored: true` means "ADR-0022 §6 REQUIRES FS.GG.Rendering to ship a byte-identical copy of this
+# body". It is an OBLIGATION the OWNER asserts, reconciled verbatim from the producer manifest
+# (FS.GG.Game#280 added it) — never an observation that Rendering happens to hold a same-named file.
+# The distinction is the whole subtlety of the field, and getting it wrong is not hypothetical:
+#
+#   * Classify on the OBLIGATION and there are FOUR — the ADR-0022 P4 migrations (`fs-gg-game-core`,
+#     `fs-gg-audio`, `fs-gg-persistence`, `fs-gg-model-swap`), whose bodies Rendering still ships
+#     frozen from `--profile game`.
+#   * Classify on the NAME COLLISION and there are eight, because `fs-gg-collision`/`fs-gg-grids`/
+#     `fs-gg-line-drawing`/`fs-gg-visibility` also exist in both trees — and are under NO such
+#     obligation: they were rewritten against the `.fsi` and DELIBERATELY diverge.
+#     FS.GG.Rendering#541 is carrying that wrong set.
+#
+# ABSENT IS "NOT CLASSIFIED", NOT `false`. `select(.mirrored == true)` reads an absent field as false
+# (`null == true` is false), so a manifest predating the field answers "not mirrored" for EVERY body,
+# confidently, and every real mirror goes unguarded — the trap FS.GG.Game#282 nearly shipped. So the
+# 33 rows below that carry no `mirrored:` are not asserting "no obligation"; they are rows for which
+# the question does not arise, because FS.GG.Rendering holds no second copy of them. The moment it
+# does, `fsgg-skill-registry-check`'s `mirror-verdict` arm goes RED until the owner declares one:
+# undeclared is not `not mirrored`. Do NOT "tidy" the file by adding `mirrored: false` everywhere —
+# that would manufacture, by hand, exactly the confident default the gate exists to refuse.
 schemaVersion: 1
-updated: "2026-07-13"
+updated: "2026-07-14"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -149,7 +172,7 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: ebf302b8dac1eea2d3edb85da3e133163c1c5c696c3afbabb05a61237ee3cd2a, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: ebf302b8dac1eea2d3edb85da3e133163c1c5c696c3afbabb05a61237ee3cd2a, mirrored: true, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-audio's predicate is DELIBERATELY WIDER than its three block-mates: it carries `app`, which
   # game-core/persistence/model-swap do not. Audio rides the APP family too — FS.GG.Game compiled the
   # app-family launcher (Game#232, and #240 which found the silent launchers were table-only), so the
@@ -158,9 +181,9 @@ skills:
   # DO NOT "normalize" it to `profile in [game, sample-pack]` to match the rows around it — that is a
   # row-shaped optical illusion, and the gate goes red on the correction. (Same trap, same answer, as
   # the fs-gg-feedback-report / fs-gg-feedback-capture pair below.)
-  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: d1833a673c2a970716e36923f6247253a614b79ddcf7f7c2a482dc0071527420, materializes-when: "profile in [app, sample-pack, game]" }
-  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: cfb935493f856a2ce4d13bb4966fad57feaaf01c51861c38f91280eb2fcabc64, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: d1833a673c2a970716e36923f6247253a614b79ddcf7f7c2a482dc0071527420, mirrored: true, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: cfb935493f856a2ce4d13bb4966fad57feaaf01c51861c38f91280eb2fcabc64, mirrored: true, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, mirrored: true, materializes-when: "profile in [game, sample-pack]" }
   # The four GAME-ORIGINATED skills. Unlike the four above, these were never an ADR-0022 migration:
   # they were authored in FS.GG.Game and have NO FS.GG.Rendering counterpart, so no frozen mirror
   # exists for them and the `frozen-mirror` arm correctly derives none. Verified against Rendering's
@@ -176,10 +199,10 @@ skills:
   # ballistics shipped 2026-07-10 (Game#40, PR #58); ai / effects / physics were declared by FS.GG.Game's
   # manifest and never flipped here at all — the `declared-completeness` arm (.github#289) caught all
   # four. All reconciled verbatim from FS.GG.Game's producer manifest by `--write`, never hand-authored.
-  - { id: fs-gg-ballistics,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ballistics/SKILL.md, sha256: 01620e43423d429c1332de30e3d69358c2bf5e2f8fa4fb92d8c7d67ea3de2f77, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-ai,               scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ai/SKILL.md,         sha256: 612033dce3082b76d861efcb5c15a32fbb56ee98b176c3a8d251587a5298062f, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-effects,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-effects/SKILL.md,    sha256: 8f4b369b19904223d51a2ab338445c90f249f4ce93aa615a89da8cd7330d180b, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-physics,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-physics/SKILL.md,    sha256: cabeed0641815e23776045a57d923d79f52fdc5ba51a2377d26efe97f9581724, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-ballistics,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ballistics/SKILL.md, sha256: 01620e43423d429c1332de30e3d69358c2bf5e2f8fa4fb92d8c7d67ea3de2f77, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-ai,               scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ai/SKILL.md,         sha256: 612033dce3082b76d861efcb5c15a32fbb56ee98b176c3a8d251587a5298062f, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-effects,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-effects/SKILL.md,    sha256: 8f4b369b19904223d51a2ab338445c90f249f4ce93aa615a89da8cd7330d180b, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-physics,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-physics/SKILL.md,    sha256: cabeed0641815e23776045a57d923d79f52fdc5ba51a2377d26efe97f9581724, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 0c159485f8a1f8b1897d5424052a9a7b59e0c4b7ea64937b9815b221bd3a5808, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack and lifecycle == spec-kit" }
   - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: 509a7e89500da7675c90a363c7530d3a20061d8fad3493f953e5df7926763b07, materializes-when: "feedback == true and lifecycle == spec-kit" }
