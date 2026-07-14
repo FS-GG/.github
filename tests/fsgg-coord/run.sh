@@ -5579,6 +5579,36 @@ if [ -x "$ENGINE" ]; then
   assert_eq 'shadow publish: a FAILED publish does not fail the scheduling call that carried it' "0" "$rc"
   assert_contains 'shadow publish: ...and stays silent — bookkeeping may not clutter the output that carries the verdict' \
     "FS.GG.SDD#" "$out"
+
+  # A LOCK THAT IS HELD BUT NOT YET STAMPED IS HELD.
+  #
+  # The lock's staleness used to be aged from an `at` file written a moment AFTER the directory appeared.
+  # A racer landing in that window found no file, aged the lock from epoch 0, concluded a LIVE lock was
+  # ancient, deleted it, and published alongside the holder — the exact double-publish the lock exists to
+  # prevent, and two racers folding the same log each CREATE a row for their (worker, day, engine).
+  #
+  # And it was not a rare interleaving: the throttle SYNCHRONISES the machine. Every worker shares one
+  # `divergence.published` stamp, so when the window expires they arrive at the lock together.
+  #
+  # Aged from the directory's own mtime — which the kernel stamps inside `mkdir` — there is no window to
+  # land in. This models the racer exactly: a held lock, freshly made, with nothing written inside it.
+  echo 0 >"$SHCACHE/divergence.published"       # the window is OPEN, so only the lock can hold us back
+  before="$(pubmarks)"
+  mkdir -p "$SHCACHE/.divergence-publish.lock"  # ...held by a worker that has not stamped it yet
+  shpub next --repo sdd >/dev/null 2>&1 || true
+  assert_eq 'shadow publish: a lock held-but-unstamped is NOT stale — the racer backs off instead of publishing twice' \
+    "$before" "$(pubmarks)"
+  assert_eq 'shadow publish: ...and it did not delete the holder’s lock on its way past' \
+    "yes" "$([ -d "$SHCACHE/.divergence-publish.lock" ] && echo yes || echo no)"
+
+  # ...but a lock whose holder DIED must not wedge the ledger for every worker on the machine forever.
+  # Backdate it past the 600s reaper and the next caller collects it and publishes.
+  touch -d '2 hours ago' "$SHCACHE/.divergence-publish.lock" 2>/dev/null \
+    || touch -t "$(date -v-2H +%Y%m%d%H%M 2>/dev/null || echo 202001010000)" "$SHCACHE/.divergence-publish.lock" 2>/dev/null || true
+  echo 0 >"$SHCACHE/divergence.published"
+  shpub next --repo sdd >/dev/null 2>&1 || true
+  assert_eq 'shadow publish: ...while an ABANDONED lock is still collected — a dead holder may not wedge the ledger' \
+    "$(( before + 1 ))" "$(pubmarks)"
 fi
 
 echo "fsgg-coord fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
