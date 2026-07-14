@@ -5,6 +5,14 @@
 # preflight). It pins the .github#388 grammar: --profile/--ref no longer swallow a following flag as a
 # value, and an unknown --profile is refused on the CLI path. `parse` is pure and was previously
 # untested; this guards it the same way the other *-selftest workflows guard their scripts.
+#
+# It also became the gate that PROVES the scaffolder's locked restore (#609). Until .github consumed
+# the build config it authors, this project had no packages.lock.json at all — so the org's
+# lockfile-restore-enforcement rule (ADR-0006) simply did not reach the tool that scaffolds every FS-GG
+# workspace: a silent version substitution in it would have failed nothing. It has a lock now, and the
+# inherited RestoreLockedMode arms it here. Hence the build config in the trigger list, both halves of
+# it: the root Directory.Build.props IMPORTS dist/dotnet/Directory.Build.props, so an edit to the
+# org-shared file changes this build.
 name: new-sdd-workspace-selftest
 
 on:
@@ -12,12 +20,18 @@ on:
     paths:
       - "scripts/NewSddWorkspace/**"
       - "tests/new-sdd-workspace/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
       - ".github/workflows/new-sdd-workspace-selftest.yml"
   push:
     branches: [main]
     paths:
       - "scripts/NewSddWorkspace/**"
       - "tests/new-sdd-workspace/**"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
+      - "Directory.Packages.props"
       - ".github/workflows/new-sdd-workspace-selftest.yml"
   workflow_dispatch:
 

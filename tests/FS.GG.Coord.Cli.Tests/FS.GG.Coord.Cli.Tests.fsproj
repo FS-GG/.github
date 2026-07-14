@@ -4,9 +4,8 @@
     <IsPackable>false</IsPackable>
     <GenerateProgramFile>true</GenerateProgramFile>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
-    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true'">true</RestoreLockedMode>
+    <!-- RestorePackagesWithLockFile, RestoreLockedMode and DisableImplicitLibraryPacksFolder (ADR-0006,
+         ADR-0032) are INHERITED from the root Directory.Build.props (#609). -->
   </PropertyGroup>
 
   <ItemGroup>

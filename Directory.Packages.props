@@ -22,4 +22,19 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="FsCheck.Xunit" Version="3.3.3" />
   </ItemGroup>
+
+  <!-- api-breaking-change-gate (.github#20, #609). The root Directory.Build.props imports the org-shared
+       config, which carries the OPT-IN gate: setting FsggApiGate adds a PackageReference to
+       Microsoft.CodeAnalysis.PublicApiAnalyzers with no inline version, because under CPM the version is
+       expected to come from the org's Directory.Packages.props. .github does NOT adopt that file — it
+       keeps this hand-rolled one (the org baseline's FSharp.Core pin would collide, NU1506) — so without
+       this row the gate is REACHABLE here and BROKEN here: opting in fails restore with NU1010, in the
+       one repo that authored the gate. Pinned to the same 5.6.0 the org file pins.
+
+       This row is lock-neutral by construction, which is why it can sit here unused: a PackageVersion
+       with no matching PackageReference never enters the restore graph or packages.lock.json. It arms
+       nothing on its own; it only makes the documented opt-in work. -->
+  <ItemGroup Label="api-breaking-change-gate">
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
+  </ItemGroup>
 </Project>

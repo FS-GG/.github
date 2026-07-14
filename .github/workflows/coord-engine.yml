@@ -19,6 +19,11 @@
 # FSGG_SHADOW_REQUIRE_ENGINE=1 — which turns "no engine" from a skip into a failure inside the fixture
 # — and the fixture then asserts that the comparison was non-empty. The engine's absence cannot be the
 # reason this gate is green.
+#
+# The build config is in the trigger list, and BOTH halves of it are (#609): the root
+# Directory.Build.props IMPORTS dist/dotnet/Directory.Build.props, which is what sets RestoreLockedMode
+# and the ADR-0032 lock-hash fix behind this job's locked restore. An edit to the org-shared file
+# changes this build, so it must be able to re-run this gate.
 name: coord-engine
 
 on:
@@ -29,6 +34,8 @@ on:
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/coord-engine.yml"
@@ -40,6 +47,8 @@ on:
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
+      - "Directory.Build.props"
+      - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
       - "global.json"
       - ".github/workflows/coord-engine.yml"
