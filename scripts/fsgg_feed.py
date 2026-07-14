@@ -127,6 +127,55 @@ def feed_versions(package: str, token: str) -> list[str]:
     return [str(v) for v in versions]
 
 
+# The public registry the org preset routes FS.GG.* to (default.json). Needs no credential.
+NUGET_ORG = "https://api.nuget.org/v3-flatcontainer"
+
+
+def nuget_org_versions(package: str) -> list[str]:
+    """Every version of `package` public on nuget.org. Anonymous. Any failure raises — never [].
+
+    This is the registry RENOVATE resolves FS.GG.* from (default.json routes them here), so it is
+    the registry a PIN must be compared against. Reading a different one than the bot reads is how
+    a gate ends up demanding a bump the bot cannot see, or blessing a pin the bot could have moved.
+
+    It takes no token, deliberately. Every FS.GG.* package is public here — all 32 of the 32 ids on
+    the GitHub Packages feed, at the same latest version (.github#576). The org feed read below
+    (`feed_versions`) still exists and is still correct for check-feed-coherence, which asks a
+    different question: does the ORG FEED carry what the registry claims it published?
+    """
+    # Flat-container ids are lowercase (NuGet v3 §PackageBaseAddress).
+    url = f"{NUGET_ORG}/{package.lower()}/index.json"
+    req = urllib.request.Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": "fsgg-check-pin-coherence"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise GateError(
+                f"package {package!r} is not on nuget.org (HTTP 404) — but the org Renovate preset "
+                f"routes FS.GG.* there, so the bot can enumerate NO versions for it and its pin can "
+                f"never bump. Either publish it to nuget.org, or stop routing it there."
+            ) from e
+        raise GateError(f"nuget.org read for {package!r} failed: HTTP {e.code} {e.reason}") from e
+    except urllib.error.URLError as e:
+        raise GateError(f"nuget.org unreachable while reading {package!r}: {e.reason}") from e
+    except ValueError as e:
+        raise GateError(f"nuget.org returned unparsable JSON for {package!r}: {e}") from e
+
+    versions = payload.get("versions") if isinstance(payload, dict) else None
+    if not isinstance(versions, list):
+        raise GateError(
+            f"nuget.org's response for {package!r} has no `versions` list — the response shape "
+            f"changed, and an unrecognised response must not read as 'coherent'."
+        )
+    if not versions:
+        raise GateError(f"nuget.org served zero versions for {package!r}")
+    return [str(v) for v in versions]
+
+
 def newest(versions: list[str]) -> str:
     """The greatest version by NuGet order. The feed returns creation order, not version order."""
     return max(versions, key=parse_version)

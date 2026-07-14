@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # Fixture for scripts/check-pin-coherence.py — the gate that compares every Renovate-annotated
-# version pin against the newest version live on the org feed (.github#263, epic #266).
+# version pin against the newest version on THE REGISTRY RENOVATE ACTUALLY READS (#263, #576, #266).
 #
-# The gate exists because the FS.GG.SDD.Cli validator pin froze twice — at 0.2.1 across three minors
-# (#127), and again at 0.5.0 across three more (#263) — while the registry row asserted `coherent:
-# true` on the strength of that pin tracking feed-newest. Both times a human found it, not a gate.
+# The gate exists because the FS.GG.SDD.Cli validator pin froze FOUR times — 0.2.1 (#127), 0.5.0
+# (#263), 0.9.0 (#566), 0.10.0 — while the registry row asserted `coherent: true` on the strength of
+# that pin tracking registry-newest. Every time, a human found it, and every time it was closed by
+# hand-advancing the literal and chasing a credential that was never the problem: the packages are
+# PUBLIC on nuget.org, and the preset was routing them to an auth-required feed instead (#576).
 #
 # So this fixture spends nearly all its length on the FAILURE legs. It proves the gate goes red when
-# the pin is behind the feed, ahead of it, ordered by substring, unbumpable for want of a feed token,
-# invisible to the manager's regex, absent, unresolvable, or pointed at a feed that 404s or is empty.
+# the pin is behind the registry, ahead of it, ordered by substring, routed at a host the bot cannot
+# read, routed at a host the gate cannot classify, invisible to the manager's regex, absent,
+# unresolvable, or pointed at a registry that 404s or is empty — and that it does NOT demand a
+# credential for a public route, which is the demand that hid the defect for four rounds.
 #
 # Every negative leg asserts the REASON, not just a non-zero exit — the .github#266 vacuous-failure
 # defect (SDD#299) was a "must fail" test whose non-zero exit came from a path guard rather than from
@@ -111,6 +115,22 @@ YAML
   printf '%s' "$root"
 }
 
+# route_to <repo> <registry-url> — repoint the preset's FS.GG.* rule at another registry.
+#
+# The gate's invariant is no longer "a token is declared for THE feed" — it is "every host the
+# preset routes FS.GG.* to is one Renovate can read" (.github#576). So the token legs below need a
+# repo that is actually routed at an auth-required host; against the real preset, which now routes
+# to public nuget.org, a missing token is not a defect and must not be failed.
+route_to() {
+  local root="$1" url="$2"
+  edit_json "$root/default.json" "
+for r in d['packageRules']:
+    if any('FS.GG' in str(n) or 'FS\\\\.GG' in str(n) for n in r.get('matchPackageNames', [])) and 'registryUrls' in r:
+        r['registryUrls'] = ['$url']
+"
+  git -C "$root" add -A
+}
+
 # repin <repo> <new-version> — rewrite the pin literal. Refuses a no-op.
 repin() {
   local root="$1" new="$2"
@@ -181,7 +201,7 @@ must_pass "a pin at feed-newest passes" "$BASE"
 echo
 echo "--- a frozen pin is caught (the #127 / #263 defect itself) ---"
 FROZEN="$(make_repo frozen 0.9.0)"; repin "$FROZEN" 0.5.0
-must_fail "pin behind the feed fails" "$FROZEN" "$FEED" "is pinned at '0.5.0' but the org feed's newest is '0.9.0'"
+must_fail "pin behind the feed fails" "$FROZEN" "$FEED" "is pinned at '0.5.0' but the newest on the registry Renovate reads is '0.9.0'"
 must_fail "...and names the freeze, not a generic mismatch" "$FROZEN" "$FEED" "BOT IS BLIND"
 
 AHEAD="$(make_repo ahead 0.9.0)"; repin "$AHEAD" 1.0.0
@@ -190,14 +210,59 @@ must_fail "pin ahead of the feed fails" "$AHEAD" "$FEED" "AHEAD"
 echo
 echo "--- versions are compared by ORDER, never by substring (the #268 defect class) ---"
 PRE="$(make_repo pre 0.9.0)"; repin "$PRE" 0.9.0-preview.1
-must_fail "'0.9.0-preview.1' is not 'equal' to feed-newest '0.9.0'" "$PRE" "$FEED" "is pinned at '0.9.0-preview.1' but the org feed's newest is '0.9.0'"
+must_fail "'0.9.0-preview.1' is not 'equal' to feed-newest '0.9.0'" "$PRE" "$FEED" "is pinned at '0.9.0-preview.1' but the newest on the registry Renovate reads is '0.9.0'"
 must_pass "a release outranks its own prerelease" "$BASE" "$(feed_with onlyrelease '["0.9.0","0.9.0-preview.1"]')"
 must_fail "a pin is AHEAD of a feed serving only its prerelease" "$BASE" "$(feed_with onlypre '["0.9.0-preview.1"]')" "AHEAD"
 
 echo
-echo "--- the bump MECHANISM is gated, not assumed (the #263 root cause) ---"
-NOTOKEN="$(make_repo notoken)"; edit_json "$NOTOKEN/renovate.json" 'del d["hostRules"]'; git -C "$NOTOKEN" add -A
-must_fail "renovate.json without the feed hostRules fails" "$NOTOKEN" "$FEED" "declares no \`hostRules\` token for nuget.pkg.github.com"
+echo "--- the bump MECHANISM is gated, not assumed (the #263 / #576 root cause) ---"
+#
+# The invariant is: EVERY host the preset routes FS.GG.* to must be one Renovate can actually read.
+#
+# It used to be "renovate.json declares a hostRules token for nuget.pkg.github.com", full stop. That
+# demanded a credential unconditionally, and so it could never say the true thing — that the packages
+# are PUBLIC on nuget.org and the credential was never needed. Four freezes were closed by chasing
+# that token (#127, #263, #566, and again at 0.10.0). The legs below therefore assert BOTH halves:
+# an auth-routed repo still needs its token (the #263 protection survives), and a public-routed one
+# does not (the #576 fix is what makes the loop end).
+
+# --- routed at the org feed: the token is still mandatory, exactly as before ---
+NOTOKEN="$(make_repo notoken)"; route_to "$NOTOKEN" "https://nuget.pkg.github.com/FS-GG/index.json"
+edit_json "$NOTOKEN/renovate.json" 'del d["hostRules"]'; git -C "$NOTOKEN" add -A
+must_fail "an auth-routed preset with no hostRules token fails" "$NOTOKEN" "$FEED" \
+  "routes FS.GG.* to nuget.pkg.github.com, which REQUIRES a credential"
+
+# ...and the failure must SAY that the packages may simply be public, so the fifth freeze is not
+# closed by chasing the credential a fifth time. This is the finding, encoded as a test.
+must_fail "...and it points at nuget.org before the credential" "$NOTOKEN" "$FEED" \
+  "check whether these packages are simply PUBLIC on nuget.org"
+
+# --- routed at nuget.org: NO token is required, and demanding one is the bug (#576) ---
+PUBLIC="$(make_repo publicroute)"; edit_json "$PUBLIC/renovate.json" 'del d["hostRules"]'
+git -C "$PUBLIC" add -A
+must_pass "a public-routed preset needs no hostRules token at all" "$PUBLIC"
+
+# --- a host the gate does not know must fail CLOSED, not read as fine ---
+UNKNOWN="$(make_repo unknownhost)"; route_to "$UNKNOWN" "https://packages.example.invalid/v3/index.json"
+must_fail "a preset routed at an UNKNOWN host fails closed" "$UNKNOWN" "$FEED" \
+  "does not know how to read"
+
+# --- an UNNAMED nuget-wide registryUrls reroutes FS.GG.* too, and must NOT be invisible ---
+#
+# A rule with `registryUrls` and NO `matchPackageNames` applies to every nuget package — FS.GG.*
+# included. A gate that only looked for rules NAMING FS.GG would report green while the bot was
+# routed somewhere it cannot read: the #266 fails-open shape, rebuilt inside the fix for it.
+WIDE="$(make_repo widerule)"
+edit_json "$WIDE/default.json" "
+d['packageRules'].append({
+    'description': 'an unnamed nuget-wide route — reaches FS.GG.* without naming it',
+    'matchDatasources': ['nuget'],
+    'registryUrls': ['https://nuget.pkg.github.com/FS-GG/index.json'],
+})
+"
+edit_json "$WIDE/renovate.json" 'del d["hostRules"]'; git -C "$WIDE" add -A
+must_fail "an UNNAMED nuget-wide route to an auth host is still caught" "$WIDE" "$FEED" \
+  "routes FS.GG.* to nuget.pkg.github.com, which REQUIRES a credential"
 
 echo
 echo "--- a STALE pin is DIAGNOSED, not merely reported (#566) --------------------------------------"
@@ -211,16 +276,40 @@ echo "--- a STALE pin is DIAGNOSED, not merely reported (#566) -----------------
 # `hostRules` is PRESENT in every one of these repos. That is the point: presence is not resolution,
 # and the old MECHANISM check reports green in all three.
 
-# (a) BLIND — the bot detected the dep and never opened a PR. The live .github defect.
+# (a) BLIND — the bot detected the dep and never opened a PR.
+BLIND_EV='{"detected": true, "bump_prs": [], "dashboard": 54}'
 must_fail "stale + detected + no bump PR ever ⇒ the bot is BLIND to the feed" \
-  "$FROZEN" "$(feed_evidence blind '{"detected": true, "bump_prs": [], "dashboard": 54}')" \
-  "THE BOT IS BLIND TO THE ORG FEED"
+  "$FROZEN" "$(feed_evidence blind "$BLIND_EV")" \
+  "THE BOT IS BLIND TO THE FEED"
 must_fail "...and says NOT to hand-bump (the .github#127/#263 paper-over)" \
-  "$FROZEN" "$(feed_evidence blind '{"detected": true, "bump_prs": [], "dashboard": 54}')" \
+  "$FROZEN" "$(feed_evidence blind "$BLIND_EV")" \
   "do NOT hand-bump this literal"
-must_fail "...and names the CREDENTIAL, not the config block, as the broken half" \
-  "$FROZEN" "$(feed_evidence blind '{"detected": true, "bump_prs": [], "dashboard": 54}')" \
-  "the CONFIG is right and the CREDENTIAL is not"
+
+# The REMEDIATION must depend on whether a credential is even in the path — naming one that is not
+# there is naming a cause the gate did not check, which is #566 rebuilt inside the fix for #566.
+
+# (a1) routed at the PUBLIC registry (the world after #576): there is no token to blame, and the
+#      gate must not send anyone to the Mend dashboard. It must instead name the causes that remain
+#      — including the CASE-SENSITIVE matcher that let `fs.gg.coord.cli` bump for months while
+#      `FS.GG.SDD.Cli` froze, which is the tell that solved #576.
+must_fail "a BLIND bot on a PUBLIC route is NOT diagnosed as a credential problem" \
+  "$FROZEN" "$(feed_evidence blind "$BLIND_EV")" \
+  "it is NOT a credential problem"
+must_fail "...and it names the CASE-SENSITIVE matcher as a live cause" \
+  "$FROZEN" "$(feed_evidence blind "$BLIND_EV")" \
+  "CASE-SENSITIVE"
+
+# (a2) routed at the AUTH feed (the world before #576): the credential IS the live hypothesis, and
+#      the #263 diagnosis must survive — but it must now be preceded by "check nuget.org first",
+#      because chasing the credential is what closed #127, #263 and #566 without fixing anything.
+FROZEN_AUTH="$(make_repo frozenauth 0.9.0)"; repin "$FROZEN_AUTH" 0.5.0
+route_to "$FROZEN_AUTH" "https://nuget.pkg.github.com/FS-GG/index.json"
+must_fail "a BLIND bot on an AUTH route still names the CREDENTIAL (#263 survives)" \
+  "$FROZEN_AUTH" "$(feed_evidence blind "$BLIND_EV")" \
+  "is not the credential RESOLVING"
+must_fail "...but tells you to check nuget.org BEFORE chasing it (#576)" \
+  "$FROZEN_AUTH" "$(feed_evidence blind "$BLIND_EV")" \
+  "CHECK WHETHER THE PACKAGE IS PUBLIC ON nuget.org"
 
 # (b) BENIGN — the bot works; it opened a PR and nobody merged it. Hand-bumping here would be WRONG,
 #     and the old gate told you to do exactly that.
@@ -269,11 +358,18 @@ printf '%s' "$out" | grep -qE "BOT IS BLIND|bot IS working" \
   && bad "an unverifiable cause is not reported as a verified one" "$out" \
   || ok "an unverifiable cause is not reported as a verified one"
 
-EMPTYTOK="$(make_repo emptytok)"; edit_json "$EMPTYTOK/renovate.json" 'd["hostRules"][0]["token"] = ""'; git -C "$EMPTYTOK" add -A
-must_fail "a hostRules entry with an empty token fails" "$EMPTYTOK" "$FEED" "declares no \`hostRules\` token"
+# These three are all AUTH-routed: an empty token, a token for the wrong host, and a token hidden in
+# a lower-precedence file are only defects when a credential is actually in the path. Routed at
+# public nuget.org they are non-events, and failing them there would be the gate demanding a secret
+# it does not need — which is #576 itself.
+EMPTYTOK="$(make_repo emptytok)"; route_to "$EMPTYTOK" "https://nuget.pkg.github.com/FS-GG/index.json"
+edit_json "$EMPTYTOK/renovate.json" 'd["hostRules"][0]["token"] = ""'; git -C "$EMPTYTOK" add -A
+must_fail "an auth-routed repo with an empty token fails" "$EMPTYTOK" "$FEED" "declares no \`hostRules\` token"
 
-OTHERHOST="$(make_repo otherhost)"; edit_json "$OTHERHOST/renovate.json" 'd["hostRules"][0]["matchHost"] = "nuget.org"'; git -C "$OTHERHOST" add -A
-must_fail "a hostRules token for the wrong host fails" "$OTHERHOST" "$FEED" "declares no \`hostRules\` token"
+OTHERHOST="$(make_repo otherhost)"; route_to "$OTHERHOST" "https://nuget.pkg.github.com/FS-GG/index.json"
+edit_json "$OTHERHOST/renovate.json" 'd["hostRules"][0]["matchHost"] = "nuget.org"'; git -C "$OTHERHOST" add -A
+must_fail "an auth-routed repo whose token names the wrong host fails" "$OTHERHOST" "$FEED" \
+  "declares no \`hostRules\` token"
 
 NOCFG="$(make_repo nocfg)"; rm "$NOCFG/renovate.json"; git -C "$NOCFG" add -A
 must_fail "a repo with pins and no Renovate config fails" "$NOCFG" "$FEED" "no Renovate configuration"
@@ -283,7 +379,10 @@ echo "--- the config file read is the one Renovate would read (resolution order)
 # Renovate resolves .github/renovate.json BEFORE .renovaterc. Reading the wrong one answers a
 # question about a config the bot never uses — and a token-bearing .renovaterc masking a token-less
 # .github/renovate.json would report green while the bot goes on 401'ing.
+# Auth-routed on purpose: against a public route the token is not required, so this leg would pass
+# whether or not the gate ever found it — a green tick over no subject, which is the #266 shape.
 DOTGH="$(make_repo dotgh)"
+route_to "$DOTGH" "https://nuget.pkg.github.com/FS-GG/index.json"
 rm "$DOTGH/renovate.json"
 cat > "$DOTGH/.github/renovate.json" <<'JSON'
 { "extends": ["github>FS-GG/.github"],
@@ -294,6 +393,7 @@ git -C "$DOTGH" add -A
 must_pass "the token in .github/renovate.json is found (it outranks .renovaterc)" "$DOTGH"
 
 MASKED="$(make_repo masked)"
+route_to "$MASKED" "https://nuget.pkg.github.com/FS-GG/index.json"
 rm "$MASKED/renovate.json"
 printf '{ "extends": ["github>FS-GG/.github"] }' > "$MASKED/.github/renovate.json"
 cat > "$MASKED/.renovaterc" <<'JSON'
@@ -346,7 +446,7 @@ echo
 echo "--- an unreadable or unresolvable feed fails closed ---"
 must_fail "a package absent from the feed fails (404)" "$BASE" "$(feed_with empty404 '[]')" "zero versions"
 NOPKG="$WORK/feed-nopkg.json"; printf '{}' > "$NOPKG"
-must_fail "a feed that does not serve the package fails" "$BASE" "$NOPKG" "not on the org feed"
+must_fail "a feed that does not serve the package fails" "$BASE" "$NOPKG" "not on the registry"
 
 echo
 echo "--- a pin this gate cannot resolve is an error, never a skip ---"
@@ -437,20 +537,27 @@ fi
 
 echo
 echo "--- CI guard on the real repo (no network: structure only) ---"
-# Proves REQUIRED_PINS still names a pin that exists here, and that renovate.json still carries the
-# token — the two things a refactor of this repo could quietly break. Feed comparison needs network
-# and is covered by the workflow's live run.
+# Proves REQUIRED_PINS still names a pin that exists here, and that this repo's own routing is one
+# Renovate can actually read — the two things a refactor of this repo could quietly break. Feed
+# comparison needs network and is covered by the workflow's live run.
+#
+# It also asserts the ROUTE itself, because that is the fact #576 turned on: if someone repoints the
+# preset back at nuget.pkg.github.com, this repo needs a credential again and the pin can freeze a
+# fifth time. That must break a test, not a release.
 out="$(python3 - "$REPO_ROOT" "$GATE" <<'PY' 2>&1
 import importlib.util, sys
 root, gate_path = sys.argv[1:3]
 spec = importlib.util.spec_from_file_location("gate", gate_path)
 gate = importlib.util.module_from_spec(spec); spec.loader.exec_module(gate)
-gate.check_bump_mechanism(root)
+cfg, hosts = gate.check_bump_mechanism(root, f"{root}/default.json")
+assert hosts, "the preset routes FS.GG.* nowhere at all"
+unreadable = [h for h in hosts if h not in gate.PUBLIC_HOSTS and h not in gate.AUTH_HOSTS]
+assert not unreadable, f"the preset routes FS.GG.* to unreadable host(s): {unreadable}"
 rx, mp = gate.load_annotation_manager(f"{root}/default.json")
 pins = gate.scan_pins(root, rx, mp)
 gate.assert_required_pins(pins)
 assert pins, "no pins found in the real repo"
-print(f"ok: {len(pins)} pin(s); every REQUIRED_PINS entry present; hostRules token present")
+print(f"ok: {len(pins)} pin(s); every REQUIRED_PINS entry present; FS.GG.* routed to {', '.join(hosts)}")
 PY
 )" && rc=0 || rc=$?
 if [ "${rc:-0}" -eq 0 ]; then ok "real repo: required pins present, bump mechanism configured"; else bad "real repo structure" "$out"; fi

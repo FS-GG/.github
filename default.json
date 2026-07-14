@@ -10,15 +10,21 @@
   ],
   "packageRules": [
     {
-      "description": "All FS.GG.* packages resolve from the org GitHub Packages NuGet feed.",
+      "description": [
+        "All FS.GG.* packages resolve from nuget.org, where every one of them is PUBLIC.",
+        "This rule used to route them to https://nuget.pkg.github.com/FS-GG/index.json on the premise — stated in this repo's renovate.json — that `FS.GG.* are not on nuget.org`. That premise is false, and was false for all 32 of the 32 packages the org publishes: every id on the GitHub Packages feed is also on nuget.org, anonymously readable, at the same latest version (verified id-by-id against api.nuget.org, .github#576).",
+        "The override was therefore forcing every FS.GG.* lookup onto the one registry that needs a credential — a Mend App Secret (FSGG_PACKAGES_READ_TOKEN) that has never resolved. A 401 on a Renovate datasource is not an error; it is an empty version list. So the bot detected the dependency, enumerated no versions, and opened nothing. The FS.GG.SDD.Cli pin froze at 0.2.1 (#127), at 0.5.0 (#263), at 0.9.0 (#566), and at 0.10.0 — four freezes, each hand-advanced, none fixed.",
+        "The confirming experiment was already run, by accident. `matchPackageNames` regexes are CASE-SENSITIVE, and the coordination tool is pinned by its lowercase id `fs.gg.coord.cli` in dist/dotnet/.config/dotnet-tools.json. It therefore MISSES this rule, escapes the override, falls back to nuget.org — and is the only FS.GG.* bump PR Renovate has ever opened in this repo (#660). The packages that match the rule freeze; the one that escapes it bumps. That is the whole defect.",
+        "Renovate needs no credential to read nuget.org, so no hostRules token is required anywhere. CI's own restore is unaffected: it authenticates to GitHub Packages with GITHUB_TOKEN (packages: read), a different credential on a different path, and keeps working."
+      ],
       "matchDatasources": ["nuget"],
-      "matchPackageNames": ["/^FS\\.GG\\./"],
-      "registryUrls": ["https://nuget.pkg.github.com/FS-GG/index.json"]
+      "matchPackageNames": ["/^FS\\.GG\\./i"],
+      "registryUrls": ["https://api.nuget.org/v3/index.json"]
     },
     {
       "description": "The fs-gg-ui coherent set moves as one — group FS.GG.UI.* (members + BOM + template) into a single PR.",
       "matchDatasources": ["nuget"],
-      "matchPackageNames": ["/^FS\\.GG\\.UI($|\\.)/"],
+      "matchPackageNames": ["/^FS\\.GG\\.UI($|\\.)/i"],
       "groupName": "FS.GG.UI coherent set"
     },
     {
@@ -28,9 +34,12 @@
       "groupName": "Expecto/FsCheck test stack"
     },
     {
-      "description": "FS-GG packages now all ship on a STABLE channel (FS.GG.Audio 0.1.0 was the last -preview producer, FS.GG.Audio#4). Prefer stable releases; do not propose prereleases over them.",
+      "description": [
+        "Prefer stable releases for FS.GG.*; do not propose prereleases over them.",
+        "This description used to assert that 'FS-GG packages now all ship on a STABLE channel (FS.GG.Audio 0.1.0 was the last -preview producer)'. That is not true today: FS.GG.NewSddFullstack (0.1.1-preview.1) and FS.GG.NewSddWorkspace (0.3.0-preview.1) publish ONLY prereleases, so `ignoreUnstable` means Renovate can never propose a bump for either. That is pre-existing behaviour and is left unchanged here — but it is recorded rather than asserted away, because a false sentence in this file is what froze the SDD.Cli pin four times (.github#576)."
+      ],
       "matchDatasources": ["nuget"],
-      "matchPackageNames": ["/^FS\\.GG\\./"],
+      "matchPackageNames": ["/^FS\\.GG\\./i"],
       "ignoreUnstable": true,
       "respectLatest": true
     }
