@@ -535,13 +535,14 @@ fi
 if [ "\$sub" = "api" ]; then
   echo r >>"\$GH_REST_COUNT"
   method=""; path=""; inm=""; jqexpr=""; body=""; include=""; hasfield=""; paginate=""
-  subid_f=""; subid_F=""
+  subid_f=""; subid_F=""; slurp=""
   n=\${#args[@]}
   for ((i=1;i<n;i++)); do
     case "\${args[i]}" in
       -X)        method="\${args[i+1]}" ;;
       --include)  include=1 ;;
       --paginate) paginate=1 ;;
+      --slurp)   slurp=1 ;;
       --jq)      jqexpr="\${args[i+1]}" ;;
       -H)        h="\${args[i+1]}"; case "\$h" in "If-None-Match: "*) inm="\${h#If-None-Match: }";; esac ;;
       -f)        hasfield=1; kv="\${args[i+1]}"; case "\$kv" in body=*) body="\${kv#body=}";; sub_issue_id=*) subid_f="\${kv#sub_issue_id=}";; esac ;;
@@ -553,7 +554,16 @@ if [ "\$sub" = "api" ]; then
   # Real \`gh api\` infers POST when fields are supplied and no method is given. A stub that defaults
   # to GET would silently serve a comment LIST where the client expects the created comment's id.
   [ -n "\$method" ] || { [ -n "\$hasfield" ] && method="POST" || method="GET"; }
-  emit() { if [ -n "\$jqexpr" ]; then jq -r "\$jqexpr"; else cat; fi; }
+  # \`--paginate --slurp\` does NOT hand back the page payload — it hands back an ARRAY OF PAGES, one
+  # element per response (#697). A stub that ignored the flag and cat'd the fixture would serve
+  # \`{"check_runs":[…]}\` where real gh serves \`[{"check_runs":[…]}]\`, and every client expression
+  # written against the real shape would come back empty HERE and work in production — or, far worse,
+  # the reverse. \`--slurp\` and \`--jq\` are mutually exclusive in real gh, so they are here too.
+  emit() {
+    if [ -n "\$slurp" ]; then jq -s '.'
+    elif [ -n "\$jqexpr" ]; then jq -r "\$jqexpr"
+    else cat; fi
+  }
   now="\$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   # --- the repo is part of the SUBJECT, and every issue read must PROVE it (#494) ------------------
@@ -783,7 +793,27 @@ if [ "\$sub" = "api" ]; then
     if [ "\${BASH_REMATCH[2]}" = "\${GH_FAIL_PR_GET:-}" ]; then
       echo "gh: HTTP 502 Bad Gateway" >&2; exit 1
     fi
+    # GH_PR_LAZY=<n>: PR <n> reports \`mergeable: null\` on its FIRST read and its real value only on
+    # the SECOND (#697). This is not a quirk of the stub — it is what GitHub does: mergeability is
+    # computed lazily, on demand, so the first read of an untested PR is always null. A client that
+    # believed that first read would call a CONFLICTED PR "unknown", or worse, landable. Observed
+    # live while #697 was being worked: PR #692 read null, then resolved to \`dirty\`.
+    if [ "\${BASH_REMATCH[2]}" = "\${GH_PR_LAZY:-}" ] && [ ! -f "$STORE/lazy-\${BASH_REMATCH[2]}" ]; then
+      : >"$STORE/lazy-\${BASH_REMATCH[2]}"
+      jq '.mergeable = null' <"$FIXTURES/pr-\${BASH_REMATCH[2]}.json" | emit; exit 0
+    fi
     emit <"$FIXTURES/pr-\${BASH_REMATCH[2]}.json"; exit 0
+  fi
+  # THE CHECK-RUNS OF A HEAD SHA (#697). \`pr_landable\` reads this to tell FINISHED work from work
+  # that merely exists. Keyed by SHA, exactly as the real endpoint is — so a fixture cannot answer for
+  # a commit the client never asked about. --slurp'd by the caller, so this serves ONE page shaped as
+  # the real payload: {"check_runs": [...]}. A missing fixture is a hard 404, not an empty list: "CI
+  # never ran" and "I could not ask" must never look alike (#606).
+  if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/commits/([^/]+)/check-runs ]]; then
+    printf 'check-runs %s %s\n' "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}" >>"\$GH_LOG"
+    [ -f "$FIXTURES/checks-\${BASH_REMATCH[2]}.json" ] \
+      || { echo "gh stub: no check-runs fixture for sha \${BASH_REMATCH[2]}" >&2; exit 4; }
+    emit <"$FIXTURES/checks-\${BASH_REMATCH[2]}.json"; exit 0
   fi
 
   # --- a single issue: GET (title/body/Paths) or PATCH (widen rewrites the body) ----------------
@@ -2979,6 +3009,139 @@ case "$who_dead" in
   *"STALE (#"*) bad "#581: with no open PR the row must be a BARE stale" "$who_dead" ;;
   *)            ok  "#581: with no open PR the row must be a BARE stale" ;;
 esac
+
+# ---- #697: the protocol reads WHETHER a PR exists, and never WHAT IT SAYS. ----------------------
+# #581 (above) taught the tools that an open `item/<n>-*` PR is proof of life, and stopped there. So
+# `reap` refuses such a claim — correctly — and then offers exactly ONE exit: *close it, then reap*.
+# For a PR that is green, reviewed and mergeable, that exit DESTROYS the best work on the board, and
+# it is the path of least resistance: a worker who follows the tool's own advice literally does it.
+#
+#   open, still being worked         -> leave it             (#581)
+#   open, abandoned mid-flight       -> close it, then reap  (#581)
+#   open, FINISHED: green+mergeable  -> LAND IT              (this — the row the tool used to bin)
+#
+# The third row is the SUCCESS path of a worker whose harness died between "green" and "merge", and
+# that window is minutes long on EVERY item this protocol produces. FS.GG.Rendering#681 sat done and
+# green for 18 hours behind a dead worker.
+GREEN_SHA=deadbeefcafe
+cat >"$FIXTURES/pr-701.json" <<'JSON'
+{"number":701,"mergeable":true,"head":{"ref":"item/970-finished-work","sha":"deadbeefcafe"}}
+JSON
+cat >"$FIXTURES/checks-deadbeefcafe.json" <<'JSON'
+{"check_runs":[{"name":"build","status":"completed","conclusion":"success"},
+               {"name":"lint","status":"completed","conclusion":"skipped"}]}
+JSON
+seed_issue 970 "Finished, green, and orphaned" 'src/Orphan970/**'
+jq -n --arg ts "$stale_ts" '[{id:970, body:"<!-- fsgg:claim worker=ghost-970 lease=120 -->\ndead",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-970.json"
+
+g() { PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="970:701" \
+      bash "$COORD" --worker heron-697 "$@"; }
+
+# 1. `who` must SAY the work is finished. It is what a human reads immediately before reaping, so it
+#    is exactly where "GREEN: LAND IT" has to appear — a bare `STALE (#701 OPEN)` reads as somebody's
+#    abandoned branch, and the reader reaches for `reap`.
+who697="$(g who --repo sdd 2>&1 || true)"
+assert_contains "#697: who says a stale claim's GREEN PR is FINISHED work, not an abandoned branch" \
+  "STALE (#701 OPEN — GREEN: LAND IT)" "$who697"
+assert_contains "#697: ...and points at the command that lands it, not the one that bins it" \
+  "fsgg-coord adopt" "$who697"
+assert_eq "#697: who carries the PR's STATE on the stale row, not just its existence" "green" \
+  "$(g who --repo sdd --json 2>/dev/null | jq -r '.[] | select(.number == 970) | .prState // ""')"
+
+# 2. THE ONE THAT MATTERS. `reap` must not point the destructive verb at finished work.
+reap697="$(g reap --repo sdd --apply 2>&1 || true)"
+assert_contains "#697: reap REFUSES a claim whose PR is green and mergeable" "REFUSING" "$reap697"
+assert_contains "#697: ...and calls the work FINISHED" "FINISHED" "$reap697"
+assert_contains "#697: ...and names \`adopt\` as the remedy" "fsgg-coord adopt" "$reap697"
+case "$reap697" in
+  *"close it, then reap"*)
+    bad "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun" "$reap697" ;;
+  *) ok "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun" ;;
+esac
+assert_eq "#697: ...and the claim SURVIVES the refusal" "ghost-970" "$(workers_on 970)"
+
+# 3. `adopt` transfers the lock and hands over the merge.
+adopt697="$(g adopt 'FS.GG.SDD#970' 2>&1 || true)"
+assert_contains "#697: adopt confirms the PR is green and mergeable before touching anything" \
+  "GREEN and MERGEABLE" "$adopt697"
+assert_contains "#697: adopt hands the worker the MERGE, and says not to close the PR" \
+  "Do NOT rebuild it, and do NOT close PR #701" "$adopt697"
+assert_eq "#697: adopt TRANSFERS the claim — one marker, one lock, the CAS's total order intact" \
+  "heron-697" "$(workers_on 970)"
+
+# 4. THE GATE. `adopt` lands FINISHED work and NOTHING else. Each refusal below is a state in which
+#    "adopt" would mean something other than *finish somebody's finished work*.
+
+# 4a. A conflicted PR is not finished — rebasing it is AUTHORING, not landing. And note it is exactly
+#     the state the caller is most likely to be staring at, because a conflicted PR gets NO CI at all.
+cat >"$FIXTURES/pr-702.json" <<'JSON'
+{"number":702,"mergeable":false,"head":{"ref":"item/971-conflicted","sha":"c0nflicted"}}
+JSON
+seed_issue 971 "Orphaned but conflicted" 'src/Orphan971/**'
+jq -n --arg ts "$stale_ts" '[{id:971, body:"<!-- fsgg:claim worker=ghost-971 lease=120 -->\ndead",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-971.json"
+conf="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="971:702" \
+  bash "$COORD" --worker heron-697 adopt 'FS.GG.SDD#971' 2>&1 || true)"
+assert_contains "#697: adopt REFUSES a conflicted PR — rebasing is authoring, not landing" \
+  "CONFLICTED" "$conf"
+assert_eq "#697: ...and does NOT take the lock on it" "ghost-971" "$(workers_on 971)"
+
+# 4b. ZERO check runs is NOT green (#606). "Every check passed" and "CI never started" are the SAME
+#     EMPTY SET, and a conflicted PR has zero check runs forever. An absent subject is a finding, not
+#     a pass — so this must refuse, and refusing it is the whole of epic #266 in one assertion.
+cat >"$FIXTURES/pr-703.json" <<'JSON'
+{"number":703,"mergeable":true,"head":{"ref":"item/972-no-checks","sha":"n0checks"}}
+JSON
+cat >"$FIXTURES/checks-n0checks.json" <<'JSON'
+{"check_runs":[]}
+JSON
+seed_issue 972 "Orphaned, mergeable, and never tested" 'src/Orphan972/**'
+jq -n --arg ts "$stale_ts" '[{id:972, body:"<!-- fsgg:claim worker=ghost-972 lease=120 -->\ndead",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-972.json"
+nock="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="972:703" \
+  bash "$COORD" --worker heron-697 adopt 'FS.GG.SDD#972' 2>&1 || true)"
+assert_contains "#697/#606: a mergeable PR with ZERO check runs is NOT green — adopt refuses it" \
+  "NOT green" "$nock"
+assert_eq "#697/#606: ...and does NOT take the lock on untested work" "ghost-972" "$(workers_on 972)"
+
+# 4c. A LIVE claim is not an orphan. Adopting one is a STEAL, and the steal has its own flag.
+seed_issue 973 "Alive and well" 'src/Orphan973/**'
+jq -n --arg ts "$fresh_ts" '[{id:973, body:"<!-- fsgg:claim worker=busy-973 lease=120 -->\nheld",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-973.json"
+livec="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="973:701" \
+  bash "$COORD" --worker heron-697 adopt 'FS.GG.SDD#973' 2>&1 || true)"
+assert_contains "#697: adopt REFUSES a LIVE claim — a worker that is alive is not an orphan" \
+  "held by a LIVE claim" "$livec"
+assert_eq "#697: ...and the live worker keeps its lock" "busy-973" "$(workers_on 973)"
+
+# 4d. No PR at all: nothing to land. The claim is merely DEAD, and `reap` is the right tool — an
+#     `adopt` that fell through to a plain claim here would quietly become a second, unguarded steal.
+seed_issue 974 "Dead, with nothing to show for it" 'src/Orphan974/**'
+jq -n --arg ts "$stale_ts" '[{id:974, body:"<!-- fsgg:claim worker=ghost-974 lease=120 -->\ndead",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-974.json"
+nopr="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+  bash "$COORD" --worker heron-697 adopt 'FS.GG.SDD#974' 2>&1 || true)"
+assert_contains "#697: adopt REFUSES an item with no open PR — there is no finished work to land" \
+  "no finished work to adopt" "$nopr"
+assert_eq "#697: ...and leaves the dead claim for reap" "ghost-974" "$(workers_on 974)"
+
+# 5. `mergeable` IS COMPUTED LAZILY. The first read of an untested PR returns null, and only a later
+#    read carries the truth. A client that believed the first read would call a CONFLICTED PR
+#    "unknown" — or, with jq's `//` operator, would fold `false` into the fallback and call it that
+#    too. Observed live while this item was being worked: PR #692 read null, then resolved to dirty.
+#    GH_PR_LAZY makes the stub do exactly what GitHub does.
+cat >"$FIXTURES/pr-704.json" <<'JSON'
+{"number":704,"mergeable":false,"head":{"ref":"item/975-lazy","sha":"lazysha"}}
+JSON
+seed_issue 975 "Mergeability not computed yet" 'src/Orphan975/**'
+jq -n --arg ts "$stale_ts" '[{id:975, body:"<!-- fsgg:claim worker=ghost-975 lease=120 -->\ndead",
+  user:{login:"bot"}, created_at:$ts, updated_at:$ts}]' >"$STORE/comments-975.json"
+lazy="$(PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_LIVE_PR="975:704" GH_PR_LAZY=704 \
+  bash "$COORD" --worker heron-697 adopt 'FS.GG.SDD#975' 2>&1 || true)"
+assert_contains "#697: a null \`mergeable\` is re-read, and the PR's REAL state (conflicted) is seen" \
+  "CONFLICTED" "$lazy"
+assert_eq "#697: ...and the lock is not taken on a PR we misread as landable" "ghost-975" "$(workers_on 975)"
 
 # ---- #533: a COMPLETED item must not keep its lock. ---------------------------------------------
 # `done --flip` verified the merge, set Status, rolled up the epic — and never touched the marker.
