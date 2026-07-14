@@ -1343,4 +1343,145 @@ rm -rf "$ROOT/Mirror.Repo/template/skill-manifest" "$ROOT/Mirror.Repo/template/p
 write_registry
 echo "   ok"
 
+echo "== 56. the merge gate: a SUPERSEDED run is not a RED one — and the two rules that would fail OPEN =="
+# THE BOT REFUSED TO MERGE THE PR IT HAD JUST PUSHED (#700). `skill-registry-autofix.yml` force-pushes
+# the branch (a `synchronize` event) and then edits the PR body (an `edited` event). Both are
+# `pull_request` events, so `github.ref` is `refs/pull/N/merge` for BOTH — ONE `cancel-in-progress`
+# group — and the `edited` run cancels the still-running `synchronize` run at the SAME head SHA. The
+# gate classified by conclusion alone, `cancelled` is not green, so the standing PR sat unmerged and
+# `main` stayed stale on the very digests the bot had already fixed. It manufactures the trigger on
+# every reconcile after the first, so this was the standing-PR PATH, not an interleaving.
+#
+# The repair is NARROW, because every loose version of it fails OPEN — and the gate must fail CLOSED:
+# a merge lands a commit on `main`. Legs (l) and (m) are the two loose versions, and both are drawn
+# from real workflows in this repo. They are the reason this is not "latest run wins".
+mrgate() { python3 "$MGATE" --checks "$1" --runs "$2" --merge-state "${3-CLEAN}" 2>"$WORK/mwhy.txt"; }
+wruns() { python3 -c 'import json,sys; print(json.dumps([{"workflow_runs": json.loads(sys.argv[1])}]))' "$1"; }
+# A check run carries its suite at `.check_suite.id`; a workflow run carries the same id at
+# `.check_suite_id`. That join is the ONLY way a check run can be told which workflow produced it —
+# `.name` is the JOB name and identifies nothing (leg (m)).
+crun() { printf '{"name":"%s","status":"completed","conclusion":%s,"check_suite":{"id":%s}}' "$1" "$2" "$3"; }
+
+# (i) THE HEADLINE. The bot's own standing-PR state: every check on the head SHA is duplicated — a
+# CANCELLED copy from the killed `synchronize` run, and a GREEN copy from the `edited` run that
+# replaced it, in the same concurrency group. The cancelled copies are corpses, not verdicts. MERGE.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"cancelled"' 1),
+                $(crun drift            '"cancelled"' 3),
+                $(crun registry-coherence '"success"' 2),
+                $(crun drift            '"success"' 4)]}]
+EOF
+wruns '[{"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":10,"status":"completed","conclusion":"cancelled","check_suite_id":1},
+        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2},
+        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":20,"status":"completed","conclusion":"cancelled","check_suite_id":3},
+        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":21,"status":"completed","conclusion":"success","check_suite_id":4}]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  || { echo "FAIL: the bot refused to merge the PR it just pushed — a SUPERSEDED run read as a RED one (#700)"; cat "$WORK/mwhy.txt"; exit 1; }
+grep -q "merge=true" "$WORK/mout.txt" || { echo "FAIL: merge!=true on a PR whose only red checks were superseded"; exit 1; }
+grep -qi "superseded" "$WORK/mwhy.txt" || { echo "FAIL: the drop was not EXPLAINED — a silent drop is indistinguishable from a bug"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (j) A CANCELLED RUN NOBODY RE-RAN IS STILL A FINDING. Same shape, minus the replacement run. Nothing
+# superseded it, so it is a verdict about this PR and it is not green. REFUSE.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun drift '"cancelled"' 3)]}]
+EOF
+wruns '[{"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":20,"status":"completed","conclusion":"cancelled","check_suite_id":3},
+        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: merged past a cancelled run that NOBODY re-ran — supersession was assumed, not proven"; exit 1; }
+grep -q "drift=cancelled" "$WORK/mwhy.txt" || { echo "FAIL: the un-superseded cancelled run was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (k) A FAILURE IS NEVER DROPPED, EVEN OUT OF A SUPERSEDED SUITE. The sharpest one: the workflow RUN
+# concluded `cancelled` and a later run of its group replaced it — so the suite IS superseded — but a
+# job inside it had already FAILED before the cancel landed. The drop is keyed on the CHECK RUN's own
+# conclusion, so the failure stands. Dropping by suite alone would launder a real red check.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun drift '"failure"' 3), $(crun drift '"success"' 4)]}]
+EOF
+wruns '[{"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":20,"status":"completed","conclusion":"cancelled","check_suite_id":3},
+        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":21,"status":"completed","conclusion":"success","check_suite_id":4},
+        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: a FAILED job was dropped because its RUN was cancelled and superseded — a red check was laundered"; cat "$WORK/mwhy.txt"; exit 1; }
+grep -q "drift=failure" "$WORK/mwhy.txt" || { echo "FAIL: the failure inside the superseded suite was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (l) THE `.path`-ALONE TRAP — FAILS OPEN. `cancel-in-progress` keys on `<workflow>-${github.ref}`:
+# same workflow AND SAME REF. A `workflow_dispatch` run on the branch shares the SHA and the path and
+# carries a HIGHER run_number (the counter is per-workflow, across every event) — but a DIFFERENT ref,
+# so it supersedes NOTHING. And it is not academic: `closing-keywords.yml` gates its real job on
+# `if: github.event_name == 'pull_request'`, so the dispatch run SKIPS that job and still concludes
+# `success`. Key on `.path` alone and a vacuous green licenses dropping the PR run that was actually
+# cancelled — merging a PR whose body was never checked. Re-triggering a cancelled workflow by hand is
+# the obvious thing to do about one, which is what makes this reachable.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun closing-keywords '"cancelled"' 5)]}]
+EOF
+wruns '[{"path":".github/workflows/closing-keywords.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":10,"status":"completed","conclusion":"cancelled","check_suite_id":5},
+        {"path":".github/workflows/closing-keywords.yml","event":"workflow_dispatch","head_branch":"b","pull_requests":[],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":6},
+        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: a workflow_dispatch run in a DIFFERENT concurrency group licensed the drop — supersession keyed on .path alone (#698)"; cat "$WORK/mwhy.txt"; exit 1; }
+grep -q "closing-keywords=cancelled" "$WORK/mwhy.txt" || { echo "FAIL: the un-superseded cancelled run was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (m) THE "LATEST PER NAME" TRAP — FAILS OPEN, and it is why supersession is resolved on WORKFLOW RUNS
+# and never on check-run names. Check-run `.name` is the JOB name and job names COLLIDE ACROSS
+# WORKFLOWS: measured on this repo, SEVEN check runs named `fixture`, from SIX workflows. Collapse by
+# name and a genuinely FAILING `fixture` (from pin-coherence) is hidden by another workflow's
+# successful `fixture` (from timeout-coherence) — "all green", merge, red check landed. NOTHING is
+# cancelled here and nothing may be dropped: both `fixture`s are live verdicts.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun fixture '"failure"' 7), $(crun fixture '"success"' 8)]}]
+EOF
+wruns '[{"path":".github/workflows/pin-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":30,"status":"completed","conclusion":"failure","check_suite_id":7},
+        {"path":".github/workflows/timeout-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":31,"status":"completed","conclusion":"success","check_suite_id":8},
+        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: a FAILING \`fixture\` was hidden by another workflow's passing \`fixture\` — supersession keyed on the JOB NAME (#698)"; cat "$WORK/mwhy.txt"; exit 1; }
+grep -q "fixture=failure" "$WORK/mwhy.txt" || { echo "FAIL: the colliding-name failure was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (n) NO SUPERSESSION EVIDENCE => NOTHING IS SUPERSEDED. The workflow-runs read is evidence for DROPPING
+# a check, never for merging one, so losing it can only ever REFUSE a merge — never license one. An
+# absent, empty and unparseable payload are all the same conservative state, and (i)'s checks — which
+# MERGE when the evidence is present — must all three times REFUSE.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"cancelled"' 1), $(crun registry-coherence '"success"' 2)]}]
+EOF
+mgate "$WORK/c.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: a cancelled run was dropped with NO workflow-runs payload at all — supersession was assumed"; exit 1; }
+grep -qi "no workflow-runs payload was read" "$WORK/mwhy.txt" \
+  || { echo "FAIL: the gate refused, but did not say the supersession evidence was MISSING"; cat "$WORK/mwhy.txt"; exit 1; }
+printf 'gh: could not read workflow runs\n' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: a cancelled run was dropped on an UNPARSEABLE workflow-runs payload"; exit 1; }
+echo '[]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: a cancelled run was dropped on an EMPTY workflow-runs payload"; exit 1; }
+
+# (o) A CHECK RUN THAT JOINS TO NO WORKFLOW RUN KEEPS ITS VERDICT. This is what makes a NON-ACTIONS
+# check (a third-party app) safe here: it has no workflow run, so it can never be proven superseded and
+# can never be dropped. The gate reads CHECK RUNS as its subject and workflow runs only as evidence —
+# which is why, unlike the /pnext-item recipe's workflow-runs gate, it needs no "Actions-only" guard to
+# avoid going BLIND the day a third-party check appears.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun some-saas-scanner '"cancelled"' 999)]}]
+EOF
+wruns '[{"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: a NON-ACTIONS cancelled check — which joins to no workflow run — was dropped as superseded"; cat "$WORK/mwhy.txt"; exit 1; }
+grep -q "some-saas-scanner=cancelled" "$WORK/mwhy.txt" || { echo "FAIL: the unjoinable check was not named"; cat "$WORK/mwhy.txt"; exit 1; }
+
+# (p) THE SUBJECT MAY NOT BE SUPERSEDED INTO ABSENCE. Drop `registry-coherence`'s only report as a
+# corpse and the subject is GONE — which the gate must read as "never verified" (#606), not as "no red
+# checks". The replacement run simply has not reported yet; the next poll sees it.
+cat > "$WORK/c.json" <<EOF
+[{"check_runs":[$(crun registry-coherence '"cancelled"' 1), $(crun drift '"success"' 4)]}]
+EOF
+wruns '[{"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":10,"status":"completed","conclusion":"cancelled","check_suite_id":1},
+        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"in_progress","conclusion":null,"check_suite_id":2},
+        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":21,"status":"completed","conclusion":"success","check_suite_id":4}]' > "$WORK/r.json"
+mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
+  && { echo "FAIL: the SUBJECT was superseded into ABSENCE and the PR merged — an absent subject is not a passing one (#606)"; cat "$WORK/mwhy.txt"; exit 1; }
+grep -qi "did not report" "$WORK/mwhy.txt" || { echo "FAIL: the subject dropped to absent was not reported as absent"; cat "$WORK/mwhy.txt"; exit 1; }
+echo "   ok"
+
 echo "skill-registry fixture: all checks passed"

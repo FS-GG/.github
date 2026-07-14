@@ -68,6 +68,54 @@ REFUSE UNLESS ALL FIVE HOLD
      `cancelled`, `timed_out`, `action_required`, `stale`, a null conclusion on a completed run) is
      not. A red check is a finding, not an obstacle to route around — INCLUDING a non-required one.
 
+     ...EXCEPT A SUPERSEDED ONE, AND ONLY A SUPERSEDED ONE (#700). A `cancelled` run that a LATER run
+     of ITS OWN CONCURRENCY GROUP replaced is not a verdict about this PR — it is a run that was
+     stopped so a fresher one could answer. Counting it red refuses the merge on evidence that has
+     already been superseded by evidence we ARE counting.
+
+     THIS BOT MANUFACTURES THAT STATE ON EVERY RECONCILE, so the refusal was not a rare interleaving
+     — it was the standing-PR path. `skill-registry-autofix.yml` force-pushes the branch (a
+     `synchronize` event) and then edits the PR body (an `edited` event). Both are `pull_request`
+     events, so for both `github.ref` is `refs/pull/N/merge` — ONE `cancel-in-progress` concurrency
+     group — and the `edited` run cancels the still-running `synchronize` run at the SAME head SHA.
+     The head SHA is left carrying `cancelled` check runs that a later, successful run of the same
+     workflow already replaced. This gate called them red, so the bot refused to merge the PR it had
+     just pushed, and `main` stayed stale until a human merged by hand — the exact "pushed, then SAT
+     there" failure the header above says this workflow was built to end.
+
+WHAT SUPERSESSION IS KEYED ON, AND WHY NOT THE OBVIOUS THING (#698, measured — do not "simplify" this)
+
+  NOT the check-run NAME. "Latest check run per name" is what branch protection does, and here it
+  FAILS OPEN: check-run `.name` is the JOB name, and job names COLLIDE ACROSS WORKFLOWS. Measured on
+  this repo: SEVEN check runs named `fixture`, from SIX different workflows (`pin-coherence`,
+  `projection-selftest`, `permission-coherence`, `timeout-coherence`, …). Collapse those by name and
+  a genuinely FAILING `fixture`, followed by another workflow's successful `fixture`, reports "all
+  green" and merges. That hides a RED check — #606's signature, in the direction that lands a bad
+  commit.
+
+  NOT the workflow `.path` alone either. `cancel-in-progress` only cancels within
+  `group: <workflow>-${{ github.ref }}` — same workflow AND SAME REF. A `workflow_dispatch` run on
+  the same branch shares the SHA and the path and carries a HIGHER `run_number` (the counter is
+  per-workflow, across every event), but a DIFFERENT `github.ref` — so it supersedes nothing. Key on
+  `.path` alone and it licenses the drop anyway: `closing-keywords.yml` gates its real job on
+  `if: github.event_name == 'pull_request'`, so its dispatch run SKIPS that job and still concludes
+  `success` — dropping a cancelled PR run in its favour would count a vacuous green.
+
+  SO: the CONCURRENCY GROUP — (workflow path, event, head branch, the PR set) — which is the thing
+  `cancel-in-progress` actually keys on. A cancelled run is dropped ONLY when a run with the SAME
+  group and a HIGHER `run_number` exists.
+
+  AND THE DROP RULE IS DELIBERATELY NARROW, so that every way it can be wrong is a REFUSAL:
+    * only `cancelled` is ever dropped. A `failure` is NEVER dropped, whatever it is named and
+      whatever replaced it. A cancelled run that NOBODY re-ran is still a finding.
+    * no workflow-runs payload (absent, unreadable, a failed API read) => NOTHING is superseded =>
+      every cancelled run stays RED. Being unable to read the runs cannot license a merge; it can
+      only refuse one.
+    * a check run that joins to no workflow run keeps its verdict. That is what makes a NON-ACTIONS
+      check (a third-party app) safe here: it has no workflow run, so it can never be dropped. This
+      gate reads CHECK RUNS as its subject and uses workflow runs ONLY as evidence of supersession,
+      which is why it needs no "Actions-only" assertion of the kind the /pnext-item recipe carries.
+
   ...and the PR's own merge state must be CLEAN or HAS_HOOKS. BLOCKED (a required check or review is
   missing), UNSTABLE (mergeable, but something is red), DIRTY/BEHIND (needs the rebase the next run's
   force-push provides), and UNKNOWN (GitHub has not computed it) all refuse. Read from the PR rather
@@ -134,7 +182,81 @@ def _flatten(payload: object) -> list[dict]:
     return runs
 
 
-def decide(raw: str, merge_state: str) -> tuple[bool, str, int]:
+def _flatten_runs(payload: object) -> list[dict]:
+    """Accept `gh api .../actions/runs?head_sha=… --paginate --slurp` (a list of PAGES) or a flat list.
+
+    Same shape and the same reason as `_flatten`: `--paginate` is the difference between reading every
+    workflow run and reading the first 30, and a truncated read does not look truncated (#547). Here a
+    truncated read is merely conservative — a run we never saw cannot supersede anything, so the worst
+    it does is leave a cancelled check RED — but "conservative by accident" is not a property to rely
+    on, so it pages, and this parses what paging produces.
+    """
+    if isinstance(payload, dict):
+        payload = [payload]
+    if not isinstance(payload, list):
+        raise ValueError(f"expected a list of workflow-run pages, got {type(payload).__name__}")
+    runs: list[dict] = []
+    for page in payload:
+        if isinstance(page, dict) and "workflow_runs" in page:
+            runs.extend(page["workflow_runs"])
+        elif isinstance(page, dict):
+            runs.append(page)
+        else:
+            raise ValueError(f"not a workflow run or a page of them: {type(page).__name__}")
+    return runs
+
+
+def _concurrency_group(run: dict) -> tuple:
+    """The group `cancel-in-progress` actually keys on: `<workflow>-${{ github.ref }}`.
+
+    Matching it EXACTLY is what stops the drop rule being a hole — see the docstring. `.path` is the
+    workflow (`.name` is the JOB name and collides across workflows); the event + head branch + PR set
+    stand in for `github.ref`, which the runs API does not hand back directly. A `workflow_dispatch`
+    run on the same branch therefore lands in a DIFFERENT group from the `pull_request` run it would
+    otherwise have been allowed to supersede.
+    """
+    prs = sorted(pr.get("number") for pr in (run.get("pull_requests") or []) if isinstance(pr, dict))
+    return (run.get("path"), run.get("event"), run.get("head_branch"), tuple(prs))
+
+
+def superseded_suites(runs: list[dict]) -> set:
+    """-> the `check_suite_id`s of CANCELLED workflow runs that a later run of their OWN group replaced.
+
+    Narrow on purpose. A run is superseded only if it was `cancelled` AND another run shares its
+    concurrency group AND carries a higher `run_number`. Everything else — a failure, a cancelled run
+    nobody re-ran, a run whose group nothing else touched — is not superseded and keeps its verdict.
+    """
+    highest: dict[tuple, int] = {}
+    for run in runs:
+        number = run.get("run_number")
+        if not isinstance(number, int):
+            continue
+        group = _concurrency_group(run)
+        if number > highest.get(group, -1):
+            highest[group] = number
+
+    suites = set()
+    for run in runs:
+        if (run.get("conclusion") or "") != "cancelled":
+            continue  # a FAILURE is never dropped, whatever replaced it
+        number = run.get("run_number")
+        suite = run.get("check_suite_id")
+        if not isinstance(number, int) or suite is None:
+            continue  # cannot prove it was replaced => it stays red
+        if highest.get(_concurrency_group(run), -1) > number:
+            suites.add(suite)
+    return suites
+
+
+def _suite_of(run: dict):
+    """The check suite a CHECK RUN belongs to — `.check_suite.id`, the join key to a workflow run."""
+    suite = run.get("check_suite")
+    if isinstance(suite, dict) and suite.get("id") is not None:
+        return suite["id"]
+    return run.get("check_suite_id")
+
+
+def decide(raw: str, merge_state: str, runs_raw: str = "") -> tuple[bool, str, int]:
     """-> (merge, reason, n_checks). `merge` is "this PR is safe to land, on every check we can see"."""
     try:
         runs = _flatten(json.loads(raw))
@@ -145,10 +267,47 @@ def decide(raw: str, merge_state: str) -> tuple[bool, str, int]:
             "evidence, and merging on it would be merging blind."
         ), 0
 
+    # SUPERSESSION (#700). Resolved from the WORKFLOW-RUNS payload, because supersession is a fact
+    # about a workflow run and check runs cannot express it. Unreadable or absent => `suites` is empty
+    # => nothing is dropped => every cancelled check stays RED. This read can only ever REFUSE a merge
+    # that would otherwise have happened; it can never license one, which is why its failure is silent
+    # rather than fatal (a gate that goes permanently red is a gate everyone learns to ignore).
+    suites: set = set()
+    runs_read = False
+    if runs_raw.strip():
+        try:
+            suites = superseded_suites(_flatten_runs(json.loads(runs_raw)))
+            runs_read = True
+        except Exception:  # noqa: BLE001 — no supersession evidence; every cancelled run stays red
+            suites = set()
+
+    def is_superseded(r: dict) -> bool:
+        # ONLY `cancelled`, and ONLY into a suite a later run of its own group replaced. Anything else
+        # — a failure, a pending run, a check run that joins to no workflow run (a non-Actions app) —
+        # keeps its verdict and is judged below.
+        return (r.get("conclusion") or "") == "cancelled" and _suite_of(r) in suites
+
+    dropped = sorted(r.get("name") or "?" for r in runs if is_superseded(r))
+    runs = [r for r in runs if not is_superseded(r)]
+    superseded_note = (
+        f" ({len(dropped)} superseded run(s) dropped: {', '.join(dropped)} — cancelled, and re-run by "
+        "a later run of their own concurrency group)" if dropped else ""
+    )
+
     # (2) ZERO CHECKS IS NOT A PASS (#606). This is the same empty set as "everything passed", and the
     # commonest cause is a CONFLICTED PR: GitHub cannot build `refs/pull/N/merge`, so no workflow ever
     # starts and this stays empty forever. No amount of waiting fixes it, and merging is catastrophic.
     if not runs:
+        if dropped:
+            # Every check we had was a superseded one, so the REPLACEMENT runs have not registered
+            # their check runs yet. Refusing is still right — we have nothing green to merge on — but
+            # this is a "come back in 20s", not the conflicted-PR diagnosis below, and saying the wrong
+            # one sends the next reader off rebasing a PR that was never conflicted.
+            return False, (
+                f"every check run on this PR was SUPERSEDED{superseded_note}, and the runs that "
+                "replaced them have not reported yet. Nothing is left to judge, so there is nothing "
+                "green to merge on. Not a conflict — the next poll sees the replacement runs."
+            ), 0
         return False, (
             "the PR has ZERO check runs — CI never started, so nothing has passed. That is a FINDING, "
             "not a pass: an empty check list is indistinguishable from a green one to any naive "
@@ -165,7 +324,7 @@ def decide(raw: str, merge_state: str) -> tuple[bool, str, int]:
             f"CORRECT is absent, so the reconcile was never verified. The other {len(runs)} check(s) "
             "going green says nothing about the digests in this diff. An absent subject reads exactly "
             "like a passing one in any 'are all checks green?' test (#606), so it is asserted by name. "
-            "Has the job been renamed, or the workflow's `paths:` filter narrowed?"
+            f"Has the job been renamed, or the workflow's `paths:` filter narrowed?{superseded_note}"
         ), len(runs)
 
     # (4) NOTHING STILL RUNNING. A pending check has not passed.
@@ -173,7 +332,7 @@ def decide(raw: str, merge_state: str) -> tuple[bool, str, int]:
     if pending:
         return False, (
             f"{len(pending)} check(s) have not completed ({', '.join(pending)}). A pending check has "
-            "not passed. Refusing to merge; the next run re-pushes and re-gates."
+            f"not passed. Refusing to merge; the next run re-pushes and re-gates.{superseded_note}"
         ), len(runs)
 
     # (5) NOTHING RED — INCLUDING THE NON-REQUIRED ONES. This is the case `--auto` cannot refuse, and
@@ -184,12 +343,22 @@ def decide(raw: str, merge_state: str) -> tuple[bool, str, int]:
         if (r.get("conclusion") or "") not in GREEN
     )
     if red:
+        # A `cancelled` still in this list is one we could NOT prove superseded. Say which — "no later
+        # run of its group re-ran it" and "we never read the workflow runs" are different facts, and a
+        # gate that names the wrong one sends the reader hunting a failure that does not exist.
+        blind = (
+            " NOTE: no workflow-runs payload was read, so NO run could be proven superseded — a "
+            "`cancelled` above may be a run this bot's own `edited` event replaced (#700). That read "
+            "is evidence for DROPPING a check, never for merging one, so its absence refuses rather "
+            "than merges; but pass `--runs` and the refusal may resolve on its own."
+            if not runs_read and any(r.endswith("=cancelled") for r in red) else ""
+        )
         return False, (
             f"{len(red)} check(s) are not green ({', '.join(red)}). A red check is a finding, not an "
             f"obstacle to route around — and that holds for the NON-required ones too. If `{SUBJECT}` "
             "is among them, this snapshot is OBSOLETE: merging it would write superseded digests over "
             "the registry and RED the gate it was opened to green (#425). GitHub's native auto-merge "
-            "would have landed it anyway, which is why this gate exists."
+            f"would have landed it anyway, which is why this gate exists.{superseded_note}{blind}"
         ), len(runs)
 
     # ...and GitHub's own view of the PR must agree. Asked of the PR, never of branch protection (#463).
@@ -206,6 +375,7 @@ def decide(raw: str, merge_state: str) -> tuple[bool, str, int]:
         f"all {len(runs)} check(s) are green — including `{SUBJECT}`, which is NOT a required check and "
         f"which GitHub's native auto-merge would therefore have ignored — and the PR is {merge_state}. "
         "The reconcile is verified against the producers it was computed from. Safe to land."
+        f"{superseded_note}"
     ), len(runs)
 
 
@@ -215,11 +385,22 @@ def main() -> int:
                     help="JSON from `gh api .../check-runs --paginate --slurp`")
     ap.add_argument("--merge-state", default="",
                     help="mergeStateStatus from `gh pr view --json mergeStateStatus`")
+    ap.add_argument("--runs", default="",
+                    help="JSON from `gh api .../actions/runs?head_sha=SHA --paginate --slurp`. Evidence "
+                         "of SUPERSESSION, and nothing else: it can only ever DROP a cancelled check "
+                         "run that a later run of its own concurrency group replaced (#700). Omit it "
+                         "and every cancelled run stays RED — never the other way round.")
     args = ap.parse_args()
 
     path = pathlib.Path(args.checks)
     raw = path.read_text() if path.exists() else ""
-    merge, reason, n = decide(raw, args.merge_state.strip().upper())
+    # An absent `--runs` file reads as "" — no supersession evidence — which is the SAME conservative
+    # state as omitting the flag: nothing is dropped, every cancelled run stays red. It is deliberately
+    # not an error, because a failed `gh api` leaves exactly this behind and the safe response to it is
+    # a refusal we can explain, not a crash the workflow reports as an infrastructure failure.
+    runs_path = pathlib.Path(args.runs) if args.runs else None
+    runs_raw = runs_path.read_text() if runs_path and runs_path.exists() else ""
+    merge, reason, n = decide(raw, args.merge_state.strip().upper(), runs_raw)
 
     print(f"merge={'true' if merge else 'false'}")
     print(f"checks={n}")
