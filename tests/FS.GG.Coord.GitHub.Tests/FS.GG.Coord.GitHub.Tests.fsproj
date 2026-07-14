@@ -21,11 +21,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="TransportTests.fs" />
     <Compile Include="BudgetTests.fs" />
     <Compile Include="CacheTests.fs" />
     <Compile Include="ReadTests.fs" />
     <Compile Include="WriteTests.fs" />
+    <Compile Include="BoardTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

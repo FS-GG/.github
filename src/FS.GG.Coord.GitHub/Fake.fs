@@ -36,9 +36,22 @@ module Fake =
     /// An empty value is `--clear`, never `--text ""`. That is a real trap and a real bug: `item-edit
     /// --text ''` is a NO-OP ("no changes to make"), so an empty write silently left the old value in
     /// place, and the board went on showing a `Blocked by` that had been cleared.
-    let private itemEditLine (document: string) (variables: (string * string) list) =
+    /// A variable's value as the `gh` stub would have shown it on the command line. `VNumber` renders
+    /// without a trailing `.0` when it is integral, because `--number 3` is what the corpus greps for and
+    /// `--number 3.0` is a different string.
+    let private varText (v: Var) =
+        match v with
+        | VString s -> s
+        | VId s -> s
+        | VNumber n ->
+            if Double.IsInteger n then
+                string (int64 n)
+            else
+                string n
+
+    let private itemEditLine (document: string) (variables: (string * Var) list) =
         let v name =
-            variables |> List.tryFind (fun (k, _) -> k = name) |> Option.map snd
+            variables |> List.tryFind (fun (k, _) -> k = name) |> Option.map (snd >> varText)
 
         let itemId = v "itemId" |> Option.defaultValue ""
         let projectId = v "projectId" |> Option.defaultValue ""
@@ -46,6 +59,10 @@ module Fake =
 
         let valueFlag =
             if document.Contains "clearProjectV2ItemFieldValue" then
+                // AN EMPTY VALUE IS `--clear`, NEVER `--text ""`. `gh project item-edit --text ''` is a
+                // NO-OP ("no changes to make"), so an empty write silently left the old value in place and
+                // the board went on showing a `Blocked by` that had been cleared. The clear is a DIFFERENT
+                // mutation, and the log has to show that it was the one sent.
                 "--clear"
             else
                 match v "optionId", v "text", v "number", v "date", v "iterationId" with
@@ -73,7 +90,10 @@ module Fake =
                 itemEditLine document variables
             elif document.Contains "addProjectV2ItemById" then
                 let url =
-                    variables |> List.tryFind (fun (k, _) -> k = "contentId") |> Option.map snd |> Option.defaultValue ""
+                    variables
+                    |> List.tryFind (fun (k, _) -> k = "contentId")
+                    |> Option.map (snd >> varText)
+                    |> Option.defaultValue ""
 
                 $"item-add %s{url}"
             else

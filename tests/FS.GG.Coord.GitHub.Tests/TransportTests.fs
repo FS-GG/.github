@@ -88,10 +88,10 @@ let ``the log names a SINGLE_SELECT write in the gh stub's grammar`` () =
             Body =
                 Query(
                     "mutation { updateProjectV2ItemFieldValue(input: {...}) { clientMutationId } }",
-                    [ "itemId", "PVTI_coord123"
-                      "projectId", "PVT_coord"
-                      "fieldId", "PVTSSF_phase"
-                      "optionId", "opt_p2" ]
+                    [ "itemId", VId "PVTI_coord123"
+                      "projectId", VId "PVT_coord"
+                      "fieldId", VId "PVTSSF_phase"
+                      "optionId", VId "opt_p2" ]
                 ) }
     |> ignore
 
@@ -114,7 +114,9 @@ let ``an EMPTY value is --clear, never --text with an empty string`` () =
             Body =
                 Query(
                     "mutation { clearProjectV2ItemFieldValue(input: {...}) { clientMutationId } }",
-                    [ "itemId", "PVTI_coord123"; "projectId", "PVT_coord"; "fieldId", "PVTSSF_blocked" ]
+                    [ "itemId", VId "PVTI_coord123"
+                      "projectId", VId "PVT_coord"
+                      "fieldId", VId "PVTSSF_blocked" ]
                 ) }
     |> ignore
 

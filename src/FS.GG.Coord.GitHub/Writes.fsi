@@ -28,15 +28,21 @@ namespace FS.GG.Coord.GitHub
 /// GETS TRUSTED FOR THINGS IT DOES NOT DO.
 ///
 /// Here: the claim CAS, `verifyHeld`, `widen`, `heartbeat`, `release`, `say`, `child`. These are the
-/// ISSUE-side writes — REST, comment- and body-shaped, and they are where the capability discipline
-/// actually bites.
+/// ISSUE-side writes — REST, comment- and body-shaped, on the budget that survives, and they are where the
+/// capability discipline actually bites.
 ///
-/// **NOT here: the BOARD-side writes** — `set-field`, its aliased batch (#448), `done --flip`, and
-/// `epic_rollup`. Those are Projects v2 mutations over GraphQL, they need the field/option id map that
-/// `bootstrap` resolves, and `done --flip` carries its own five-precondition fact query. They are a
-/// coherent second piece of work, and doing them badly to make this file look finished would be worse than
-/// leaving them out and saying so. The deferred-write queue they will need (#510) already exists and is
-/// tested — `Cache.defer`, which takes the failure that licenses it as an argument.
+/// The BOARD-side writes — `set-field`, its aliased batch (#448), the deferred-write queue — live in
+/// `Board`, because they are Projects v2 mutations over GraphQL and they are metered on the budget that
+/// dies first. The split is the REST/GraphQL line, and that line is a correctness boundary: **a lock may
+/// never live on the budget that dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
+///
+/// **STILL NOT PORTED: `done --flip` and `epic_rollup`.** They are not more writes — they are a
+/// PRECONDITION ENGINE with a write at the end of it: the closing PR identified by GitHub's own record of
+/// the closing act rather than by prose (#600), a sub-issue truncation check that must refuse rather than
+/// report green on a subject it could not verify, no OPEN sub-issues (#583), and a parent roll-up that
+/// closes what it stamps (#613) without closing a parent whose only child was a PARTIAL fix (#614). Every
+/// one of those is its own incident. They are named here rather than half-built, because a `done` that is
+/// almost right stamps work as finished that is not.
 module Writes =
 
     open FS.GG.Coord.Types

@@ -31,6 +31,19 @@ module Transport =
         /// and every count delta after it shift by one if a meter read is billed.
         | Free
 
+    /// A GraphQL variable, WITH ITS TYPE.
+    ///
+    /// Not a string. GraphQL is typed, and Projects v2's field mutations are where that stops being a
+    /// formality: a NUMBER field wants `{"number": 42}` and rejects `{"number": "42"}`. Serialising every
+    /// variable as a string is the kind of shortcut that works for every document you have and fails on the
+    /// first one you write — so the type is carried, and the JSON is derived from it.
+    type Var =
+        | VString of string
+        /// A GraphQL `ID!`. It is a string on the wire, but it is NOT free text — keeping it apart from
+        /// `VString` is what stops a field id being passed where an option id belongs.
+        | VId of string
+        | VNumber of double
+
     /// What travels in the request body.
     type Payload =
         | NoBody
@@ -38,7 +51,7 @@ module Transport =
         /// bash client used `gh api -F` for exactly this reason and a `-f` (string) form collects a 422.
         | Json of string
         /// A GraphQL document plus its variables. ONE document is ONE call, whatever it selects.
-        | Query of document: string * variables: (string * string) list
+        | Query of document: string * variables: (string * Var) list
 
     type Request =
         { Method: string
