@@ -21,10 +21,10 @@ Over each row the registry ALREADY declares:
   1. SOURCE EXISTS   every row's `source:` resolves to a file in its owning repo. A renamed or
                      relocated skill currently goes unnoticed.
   2. DIGEST MATCHES  sha256(canonical body) == the declared `sha256:`.
-  3. FROZEN MIRROR   for a row owned by `fs-gg-game`, FS.GG.Rendering's frozen copy at
+  3. FROZEN MIRROR   for a row the owner DECLARES `mirrored: true`, FS.GG.Rendering's frozen copy at
                      `template/product-skills/<id>/SKILL.md` -- the accepted two-copies cost
-                     (ADR-0022 §6, retired at P6) -- is byte-identical to the canonical body.
-                     Derived, not hardcoded: skipped when Rendering has no such copy.
+                     (ADR-0022 §6, retired at P6) -- exists and is byte-identical to the canonical
+                     body. A declared obligation with NO copy is a finding too: see check 7.
 
 Over the SET of rows -- the converse direction, and the reason this file grew (.github#289, epic
 #266 "coherence gates that fail open"). Checks 1-3 are each a predicate over a row that is already
@@ -69,6 +69,50 @@ neither -- the emission condition:
                      A frozen mirror declares an id twice (ADR-0022 §6); the row's `owner:` picks
                      which manifest is authoritative. If two declarers disagree with EACH OTHER, the
                      row is reported and `--write` refuses to guess.
+
+And over the one field that says WHETHER A ROW IS A MIRROR AT ALL (.github#658, epic #266). The
+producers now DECLARE this -- FS.GG.Game#280 added a `mirrored` boolean per manifest entry -- and
+until this check there were THREE readings of "which skills are frozen mirrors" with nothing
+asserting they agree: Game's manifest (a declaration), Rendering's `check-frozen-mirrors.fsx` (derived
+from this registry's `owner:`), and Rendering's `check-skill-refs.sh` (a hardcoded list). They agreed
+on four; nothing MADE them agree, and the drift is fail-open in every one of them -- a body that
+becomes a mirror and is declared nowhere reads as "not mirrored" everywhere, so bare `[[refs]]` in it
+stay legal and it dangles in the mirror with both repos' gates green (FS.GG.Game#273 /
+FS.GG.Rendering#714).
+
+  7. MIRROR VERDICT   the mirror question is ANSWERED, and answered once.
+  8. MIRROR MATCHES   a row's `mirrored:` equals the declaring manifest's. A pure value rewrite, so
+                      `--write` reconciles it exactly as it does a digest or a predicate.
+
+`mirrored: true` means "ADR-0022 §6 REQUIRES FS.GG.Rendering to ship a byte-identical copy of this
+body" -- an OBLIGATION, asserted by the owner, not an observation about what Rendering happens to
+contain. FS.GG.Game's generator is emphatic about the difference and so is this check, because the
+distinction is the whole subtlety of the field: the P6 four (`fs-gg-collision`, `fs-gg-grids`,
+`fs-gg-line-drawing`, `fs-gg-visibility`) DO have same-named Rendering bodies and are under NO such
+obligation -- they were rewritten against the `.fsi` and deliberately diverge. Classify on the
+obligation and there are four; classify on the name collision and there are eight, which is the wrong
+set FS.GG.Rendering#541 is carrying.
+
+WHY THIS REPO. No producer can verify its own claim: Game declares `mirrored` and cannot check it
+(Rendering's tree is outside it, and its gate is deliberately hermetic). `.github` is the only reader
+that sees every producer tree, so it is the only place the readings CAN be held together.
+
+THE TWO WAYS THIS COULD HAVE FAILED OPEN, and how it does not:
+
+  * AN ABSENT `mirrored` IS UNKNOWN, NEVER FALSE. `select(.mirrored == true)` reads a row with no
+    `mirrored` field as false, because `null == true` is false -- so a manifest that predates the
+    field (a stale artifact, a bad merge, a hand-edit) answers "not mirrored" for EVERY body,
+    confidently, leaving every real mirror unguarded. A row that does not SAY is a row that does not
+    KNOW: an absent verdict is `None` here, it is never coerced to False, and `--write` will not drop
+    a verdict the registry holds to match a manifest that has gone silent.
+
+  * SILENCE WHERE THE QUESTION EXISTS IS RED. A verdict is not demanded of every row -- most rows
+    have no mirror question to answer, and demanding one would just be noise that teaches people to
+    add `mirrored: false` without thinking. It is demanded of every row that HAS a twin: a second
+    copy of the body in FS.GG.Rendering that the row's own `source:` does not name. That is the
+    single case where the default is wrong, and it is therefore the single case that must not have
+    one. `twin_of` derives it from the SOURCE PATH, not from `owner:`, so re-homing a row moves the
+    question with the bytes rather than silently dropping it.
 
 Producers are DERIVED, never hardcoded: the repos named by `source:` prefixes (which MUST carry a
 manifest), plus any other checkout under `--repos-root` that carries one -- so a brand-new producer
@@ -144,7 +188,15 @@ import sys
 BLINDING_CHECKS = {"manifest-found"}
 
 # Rendering keeps frozen copies of the skills FS.GG.Game owns (ADR-0022 §6, retired at P6).
-FROZEN_MIRROR_OWNER = "fs-gg-game"
+#
+# There is deliberately no FROZEN_MIRROR_OWNER any more (.github#658). Keying the mirror set on
+# `owner == fs-gg-game` made the tool ask "does Rendering happen to have a body by this name?" — the
+# name-collision test the Game generator warns against, and the one FS.GG.Rendering#541 got wrong
+# (eight, not four). It gave the right answer only because the registry happens to home the four
+# deliberately-divergent P6 bodies with `owner: fs-gg-rendering`; re-home one and the tool would have
+# started demanding byte-identity of two bodies nobody promises agree. The verdict is DECLARED by the
+# owner and carried on the row (`mirrored:`); what is derived from the tree is only the QUESTION —
+# whether a second copy exists at all (`twin_of`).
 FROZEN_MIRROR_REPO = "FS.GG.Rendering"
 FROZEN_MIRROR_PATH = "template/product-skills/{id}/SKILL.md"
 
@@ -256,6 +308,50 @@ def normalize_when(value: object) -> str:
 def when_of(entry: dict) -> str:
     """A manifest entry's predicate, normalized. Absent ⇒ `always` (ADR-0017)."""
     return normalize_when(entry.get("materializes-when", DEFAULT_WHEN))
+
+
+def yaml_bool(value: bool) -> str:
+    """A verdict as YAML writes it: `true`/`false`, never Python's `True`/`False`.
+
+    One helper rather than eight open-coded `str(v).lower()`s. A single missed `.lower()` in
+    `format_row` or `reconcile_mirrored` would write `mirrored: True` into the registry — which PyYAML
+    still reads as a bool, so it round-trips GREEN while silently falling outside
+    `reconcile_mirrored`'s `(true|false)` anchor, and the NEXT reconcile of that row aborts.
+    """
+    return str(value).lower()
+
+
+def mirror_of(entry: dict) -> bool | None:
+    """A declarer's ADR-0022 §6 mirror verdict. ABSENT ⇒ None — UNKNOWN, never False (.github#658).
+
+    This one-line distinction is the whole point of the field. `entry.get("mirrored") == True` — or
+    jq's `select(.mirrored == true)` — coerces an absent verdict to "not mirrored", so a manifest
+    that never carried the field answers NO for every body, confidently, and every real mirror goes
+    unguarded. That nearly shipped in FS.GG.Game#282. A malformed verdict (`"true"`, `1`) is UNKNOWN
+    for the same reason and is reported by `mirrors()` rather than being quietly believed.
+    """
+    value = entry.get("mirrored")
+    return value if isinstance(value, bool) else None
+
+
+def twin_of(repos_root: str, row: dict) -> str | None:
+    """FS.GG.Rendering's SECOND copy of this row's body, or None — the mirror QUESTION (.github#658).
+
+    A twin is a copy of the body at the frozen-mirror path that the row's own `source:` does not
+    name: the body exists TWICE, so somebody has to say whether the two are obliged to agree. It is
+    derived from the SOURCE PATH and not from `owner:` on purpose — a Rendering-owned row's mirror
+    path IS its source (a repo cannot be obliged to mirror its own canonical), and a row that is
+    re-homed to another producer grows a twin the moment its `source:` moves off that path. Ask the
+    question of the bytes and it follows them; ask it of an owner slug and a re-home drops it.
+
+    A twin does NOT mean `mirrored` — that is exactly the inference this check exists to refuse. It
+    means the verdict may not be left unsaid.
+    """
+    path = os.path.join(repos_root, FROZEN_MIRROR_REPO, FROZEN_MIRROR_PATH.format(id=row["id"]))
+    source = os.path.join(repos_root, str(row.get("source", "")))
+    if os.path.normpath(path) == os.path.normpath(source):
+        return None
+    return path if os.path.isfile(path) else None
 
 
 def manifest_index(repos_root: str, rows: list[dict]) -> tuple[dict[str, list[dict]], list[dict]]:
@@ -371,6 +467,245 @@ def predicates(rows: list[dict], declarers: dict[str, list[dict]]) -> list[dict]
     return findings
 
 
+def mirrors(rows: list[dict], declarers: dict[str, list[dict]], repos_root: str) -> list[dict]:
+    """The ADR-0022 §6 mirror verdict: declared, agreed, and satisfied (.github#658, epic #266).
+
+    Emits `mirror-matches` (registry ≠ manifest — a value `--write` reconciles) and `mirror-verdict`
+    (a question nobody answered, or answers that contradict — judgement cases `--write` refuses), and
+    owns the `frozen-mirror` byte comparison, which is now driven by the DECLARED verdict rather than
+    by whether Rendering happens to hold a file.
+    """
+    findings: list[dict] = []
+    mirror_holder = owner_of(FROZEN_MIRROR_REPO)
+
+    for row in rows:
+        skill_id = row["id"]
+        twin = twin_of(repos_root, row)
+
+        # ---- what the REGISTRY says ----------------------------------------------------------
+        stated = "mirrored" in row
+        registry_verdict = mirror_of(row) if stated else None
+        if stated and registry_verdict is None:
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "mirror-verdict",
+                    "detail": (
+                        f"`mirrored:` is {row['mirrored']!r}, not a boolean — an unparseable verdict "
+                        "reads as UNKNOWN, so this row is not classified at all"
+                    ),
+                    # A FINDING'S IDENTITY INCLUDES WHAT THE REGISTRY SAID (#422's `key()`), and this
+                    # one has two wrong values to choose between. Without `declared`, a PR that edits an
+                    # already-malformed `mirrored: "yes"` into a still-malformed `mirrored: "no"` keys
+                    # identically to the merge base, is classed INHERITED, and is forgiven — the launder
+                    # `key()` carries the declared value to prevent (#42 / .github#422).
+                    "declared": str(row["mirrored"]),
+                }
+            )
+            continue
+
+        # ---- what the OWNING MANIFEST says ---------------------------------------------------
+        # The same rule `predicates()` applies: a frozen mirror re-declares an id it does not own,
+        # and `owner:` says whose word is law. So FS.GG.Game's opinion about a Rendering-owned row
+        # is not consulted, and vice versa.
+        declared_by = declarers.get(skill_id, [])
+        owned = [d for d in declared_by if owner_of(d["repo"]) == row.get("owner")]
+        authoritative = owned or declared_by
+
+        malformed = sorted(
+            d["repo"] for d in authoritative
+            if "mirrored" in d["entry"] and mirror_of(d["entry"]) is None
+        )
+        if malformed:
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "mirror-verdict",
+                    "detail": (
+                        f"{', '.join(malformed)}'s manifest declares a `mirrored` that is not a "
+                        "boolean — an unparseable verdict is UNKNOWN, never `false`; fix the producer"
+                    ),
+                }
+            )
+            continue
+
+        # A LIST over ENTRIES, never a dict keyed by repo. One manifest can declare an id TWICE (a bad
+        # merge, a hand-edit), and if the two rows disagree a repo-keyed dict resolves the
+        # contradiction by overwriting — silently taking whichever came last. FS.GG.Game's generator
+        # refuses to EMIT a duplicate id for exactly this reason; this reader must not re-open the hole
+        # for every producer that has no such guard. `predicates()` sets the precedent: it compares a
+        # set over entries.
+        spoken = [(d["repo"], mirror_of(d["entry"])) for d in authoritative if "mirrored" in d["entry"]]
+        verdicts = {v for _, v in spoken}
+
+        if len(verdicts) > 1:
+            said = ", ".join(f"{repo} says {yaml_bool(v)}" for repo, v in sorted(spoken))
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "mirror-verdict",
+                    "detail": (
+                        f"its declaring manifests disagree on `mirrored` ({said}) — --write cannot "
+                        "reconcile a row against producers that contradict each other; fix the "
+                        "producers first"
+                    ),
+                }
+            )
+            continue
+
+        manifest_verdict = next(iter(verdicts)) if verdicts else None
+
+        # ---- THE REGISTRY MAY NOT KNOW MORE THAN THE MANIFEST --------------------------------
+        # `registry = manifest = bytes`. A row that holds a verdict its owning manifest has stopped
+        # stating is not a row to quietly reconcile DOWN to the silence: the manifest going quiet is
+        # the regression (a stale artifact, a bad merge, a hand-edit), and the verdict it dropped is
+        # load-bearing — this is the pre-#280 manifest that answers "not mirrored" for every body.
+        # Report it, and let `--write` keep its hands off the value.
+        if registry_verdict is not None and manifest_verdict is None and authoritative:
+            repos = ", ".join(sorted(d["repo"] for d in authoritative))
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "mirror-verdict",
+                    "detail": (
+                        f"the registry declares `mirrored: {yaml_bool(registry_verdict)}` but "
+                        f"{repos}'s manifest states NO verdict for it — a manifest that does not SAY "
+                        "does not KNOW, so this is the producer regressing, not the registry drifting. "
+                        "--write will not drop the registry's verdict to match a silence"
+                    ),
+                    "declared": yaml_bool(registry_verdict),
+                }
+            )
+
+        elif manifest_verdict is not None and registry_verdict != manifest_verdict:
+            repo = sorted(r for r, _ in spoken)[0]
+
+            # `--write` rewrites a VALUE in place; a row that OMITS the field has none to rewrite, and
+            # inserting one would re-align the hand-formatted flow map (the rule `predicates()` already
+            # follows). So that case is a JUDGEMENT one — and it must be filed as one.
+            #
+            # `mirror-matches` is in the autofix bot's RECONCILED_CHECKS, and `classify()` splits on the
+            # check NAME alone. File an unreconcilable finding under that name and the bot lists it in
+            # "Reconciled (mechanical — no producer decision)" for a row `--write` never touched: the
+            # bot claiming a fix it did not make (#425), inside the gate that exists to raise exactly
+            # that. Keeping `mirror-matches` STRICTLY reconcilable makes RECONCILED_CHECKS true by
+            # construction rather than by convention — every `mirror-matches` below carries an `actual`.
+            if not stated:
+                findings.append(
+                    {
+                        "id": skill_id,
+                        "check": "mirror-verdict",
+                        "detail": (
+                            f"{repo}'s manifest declares `mirrored: {yaml_bool(manifest_verdict)}` and "
+                            "the row states no verdict — --write cannot insert the field (it would "
+                            "re-align the hand-formatted flow map); add it by hand"
+                        ),
+                    }
+                )
+            else:
+                findings.append(
+                    {
+                        "id": skill_id,
+                        "check": "mirror-matches",
+                        "detail": (
+                            f"registry says `mirrored: {yaml_bool(registry_verdict)}` but {repo}'s "
+                            f"manifest declares `{yaml_bool(manifest_verdict)}`"
+                        ),
+                        "declared": yaml_bool(registry_verdict),
+                        "actual": manifest_verdict,
+                    }
+                )
+
+        # The verdict we ACT on. The manifest is the source of truth (`registry = manifest`), so it
+        # wins where it speaks; any disagreement is already reported above.
+        verdict = manifest_verdict if manifest_verdict is not None else registry_verdict
+
+        # ---- THE QUESTION MUST BE ANSWERED WHERE IT EXISTS -----------------------------------
+        # The fail-open this check was written for: a body that becomes a mirror and is declared
+        # NOWHERE reads as "not mirrored" by every reader, so bare `[[refs]]` in it stay legal and it
+        # dangles in the mirror with both repos' gates green (FS.GG.Game#273 / FS.GG.Rendering#714).
+        # The body nobody classified is, by construction, the body nobody thought about — which is
+        # precisely the body somebody just mirrored.
+        if twin and verdict is None:
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "mirror-verdict",
+                    "detail": (
+                        f"{FROZEN_MIRROR_REPO} ships a SECOND copy of this body at "
+                        f"{FROZEN_MIRROR_PATH.format(id=skill_id)}, and no manifest says whether "
+                        "ADR-0022 §6 obliges it to. UNDECLARED IS NOT `not mirrored`: leave it unsaid "
+                        "and every reader defaults to no-obligation, so a bare [[ref]] in it stays "
+                        f"legal here and dangles there. The owner ({row.get('owner')}) must declare "
+                        "`mirrored` for it"
+                    ),
+                }
+            )
+            continue
+
+        if verdict is not True:
+            continue
+
+        # ---- A LIVE OBLIGATION: the copy must EXIST, and must be byte-identical ---------------
+        if row.get("owner") == mirror_holder:
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "mirror-verdict",
+                    "detail": (
+                        f"owned by {mirror_holder} and declared `mirrored: true` — ADR-0022 §6 obliges "
+                        f"{FROZEN_MIRROR_REPO} to carry frozen copies of bodies it does NOT own, and a "
+                        "repo cannot be obliged to mirror its own canonical"
+                    ),
+                }
+            )
+            continue
+
+        if twin is None:
+            # NOT a skip. Until #658 the byte check was "compare IF Rendering holds a file", so an
+            # obligation whose copy had simply VANISHED — deleted, renamed, never vendored — matched
+            # nothing and reported green. That is the missing subject reporting green (epic #266) in
+            # the arm meant to catch it. A declared obligation with no copy is now the finding it is.
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "frozen-mirror",
+                    "detail": (
+                        f"declared `mirrored: true` — ADR-0022 §6 obliges {FROZEN_MIRROR_REPO} to ship a "
+                        f"byte-identical copy at {FROZEN_MIRROR_PATH.format(id=skill_id)} — and there "
+                        "is NONE. Either the copy was dropped, or the obligation was and the owner's "
+                        "manifest has not been told"
+                    ),
+                }
+            )
+            continue
+
+        raw = read_bytes(os.path.join(repos_root, row["source"]))
+        if raw is None:
+            continue  # `source-exists` already fired; a mirror has nothing to be compared against.
+
+        # Compared on the CANONICAL digest, not on the raw bytes — i.e. on the same BOM-free body text
+        # every other reader of these files hashes (`Fsgg.SkillMirror`, `repos.sh digest`, both producer
+        # generators). The raw-byte comparison this replaces disagreed with the digest it PRINTED: a
+        # copy differing only by a leading BOM was reported as "not byte-identical (d1833a67… vs
+        # d1833a67…)" — the same digest, twice, offered as proof that they differ. A finding that
+        # contradicts its own evidence is one the next reader learns to wave through.
+        copy = read_bytes(twin)
+        if copy is not None and canonical_digest(copy) != canonical_digest(raw):
+            findings.append(
+                {
+                    "id": skill_id,
+                    "check": "frozen-mirror",
+                    "detail": (
+                        f"{FROZEN_MIRROR_REPO}'s frozen copy is not byte-identical to the canonical "
+                        f"body ({canonical_digest(copy)[:8]}… vs {canonical_digest(raw)[:8]}…)"
+                    ),
+                }
+            )
+
+    return findings
+
+
 def completeness(rows: list[dict], declarers: dict[str, list[dict]]) -> list[dict]:
     """Every skill a producer manifest declares must have a row here (.github#289)."""
     declared = {row["id"] for row in rows}
@@ -414,6 +749,11 @@ def completeness(rows: list[dict], declarers: dict[str, list[dict]]) -> list[dic
                 "owner": owner_of(repo),
                 "source": f"{repo}/{supplied_by.rstrip('/')}/SKILL.md",
                 "sha256": digest,
+                # Verbatim from the manifest, and ABSENT when the manifest states none — never
+                # defaulted to `false` (.github#658). A new row is exactly where the undeclared-mirror
+                # fail-open would enter, so an unclassified one arrives unclassified and `mirrors()`
+                # goes red on it the moment Rendering holds a twin.
+                "mirrored": mirror_of(entry),
                 "materializes-when": when,
             }
         else:
@@ -479,24 +819,9 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
                 }
             )
 
-        if row["owner"] == FROZEN_MIRROR_OWNER:
-            mirror = os.path.join(
-                repos_root, FROZEN_MIRROR_REPO, FROZEN_MIRROR_PATH.format(id=skill_id)
-            )
-            mirrored = read_bytes(mirror)
-            # Derived, not declared: a row whose frozen copy has been retired simply has none.
-            if mirrored is not None and mirrored != raw:
-                findings.append(
-                    {
-                        "id": skill_id,
-                        "check": "frozen-mirror",
-                        "detail": (
-                            f"{FROZEN_MIRROR_REPO}'s frozen copy is not byte-identical to "
-                            f"the canonical body ({canonical_digest(mirrored)[:8]}… vs {actual[:8]}…)"
-                        ),
-                    }
-                )
-
+    # The mirror arm owns the `frozen-mirror` byte comparison now: it is driven by the owner's
+    # DECLARED verdict, not by whether Rendering happens to hold a same-named file (.github#658).
+    findings.extend(mirrors(registry["skills"], declarers, repos_root))
     findings.extend(predicates(registry["skills"], declarers))
     findings.extend(manifest_findings)
     findings.extend(completeness(registry["skills"], declarers))
@@ -505,7 +830,13 @@ def check(registry_path: str, repos_root: str) -> list[dict]:
 
 # The separating commas live in the PADDED fields, not the template — a comma in both yields
 # `id: x,   ,` and a YAML parse error, which is how the first draft of this failed.
-ROW_TEMPLATE = "  - {{ id: {id}scope: {scope}owner: {owner}source: {source} sha256: {sha256}, materializes-when: {when} }}"
+#
+# `mirrored` sits between `sha256` and `materializes-when`, mirroring the producer manifests' own
+# field order, and is OMITTED entirely when the manifest states no verdict — an absent field is the
+# honest encoding of "not classified", and writing `mirrored: false` there would be this tool
+# inventing the very default it exists to refuse (.github#658). It must not go LAST:
+# `reconcile_predicates` anchors on `materializes-when` being the row's final field.
+ROW_TEMPLATE = "  - {{ id: {id}scope: {scope}owner: {owner}source: {source} sha256: {sha256},{mirrored} materializes-when: {when} }}"
 
 
 def format_when(when: str) -> str:
@@ -519,12 +850,14 @@ def format_when(when: str) -> str:
 
 def format_row(row: dict) -> str:
     """One hand-aligned YAML flow map, in the shape the surrounding rows are written in."""
+    mirrored = row.get("mirrored")
     return ROW_TEMPLATE.format(
         id=f"{row['id']},".ljust(24),
         scope=f"{row['scope']},".ljust(9),
         owner=f"{row['owner']},".ljust(17),
         source=f"{row['source']},",
         sha256=row["sha256"],
+        mirrored="" if mirrored is None else f" mirrored: {yaml_bool(mirrored)},",
         when=format_when(row["materializes-when"]),
     )
 
@@ -624,6 +957,40 @@ def reconcile_predicates(registry_path: str, findings: list[dict]) -> int:
     return written
 
 
+def reconcile_mirrored(registry_path: str, findings: list[dict]) -> int:
+    """Rewrite only the `mirrored:` of each diverged row, preserving the hand-aligned YAML.
+
+    Only a `mirror-matches` finding carrying an `actual` is touched — i.e. the row already HAS the
+    field and the owning manifest states a different verdict. Everything else in the mirror family is
+    a `mirror-verdict` judgement case (nobody classified a twin; declarers contradict each other; the
+    manifest has gone silent on a verdict the registry holds) and `--write` must keep its hands off
+    it: reconciling a silence would be the tool asserting the default that .github#658 exists to
+    refuse.
+    """
+    stale = {f["id"]: f["actual"] for f in findings if f["check"] == "mirror-matches" and "actual" in f}
+    if not stale:
+        return 0
+
+    with open(registry_path) as handle:
+        text = handle.read()
+
+    written = 0
+    for skill_id, actual in stale.items():
+        # Anchored on the row's own `id:`, as reconcile() and reconcile_predicates() are: `[^}]`
+        # cannot cross the row's closing brace, so this can never rewrite a neighbour's verdict.
+        pattern = re.compile(
+            rf"(\{{\s*id:\s*{re.escape(skill_id)}\s*,[^}}]*?mirrored:\s*)(true|false)"
+        )
+        text, count = pattern.subn(rf"\g<1>{yaml_bool(actual)}", text, count=1)
+        if count != 1:
+            sys.exit(f"fsgg-skill-registry-check: could not locate the mirrored of row {skill_id}")
+        written += 1
+
+    with open(registry_path, "w") as handle:
+        handle.write(text)
+    return written
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(add_help=True, description=__doc__.splitlines()[0])
     parser.add_argument("--registry", default="registry/skills.yml")
@@ -681,14 +1048,16 @@ def main() -> int:
         appended = append_rows(args.registry, findings)
         written = reconcile(args.registry, findings)
         repredicated = reconcile_predicates(args.registry, findings)
+        remirrored = reconcile_mirrored(args.registry, findings)
         print(
-            f"skill-registry: reconciled {written} sha256 row(s) and {repredicated} "
-            f"materializes-when value(s), appended {appended} missing row(s) in {args.registry}"
+            f"skill-registry: reconciled {written} sha256 row(s), {repredicated} "
+            f"materializes-when value(s) and {remirrored} mirrored verdict(s), appended "
+            f"{appended} missing row(s) in {args.registry}"
         )
         # Re-check from disk. --write cannot invent a missing source, resolve a mirror divergence,
-        # append a row the manifest gave no `supplied-by` for, or pick a side when two producers
-        # declare contradictory predicates — and an appended row whose manifest digest disagrees
-        # with the body surfaces here rather than on someone else's CI.
+        # classify a twin no producer declared, append a row the manifest gave no `supplied-by` for,
+        # or pick a side when two producers declare contradictory predicates — and an appended row
+        # whose manifest digest disagrees with the body surfaces here rather than on someone else's CI.
         blocked = check(args.registry, args.repos_root)
         if blocked:
             for finding in blocked:

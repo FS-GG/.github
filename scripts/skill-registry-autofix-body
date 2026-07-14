@@ -50,7 +50,13 @@ import sys
 import yaml
 
 # Pure VALUE rewrites, taken verbatim from the manifest — genuinely no producer decision to make.
-RECONCILED_CHECKS = {"digest-matches", "predicate-matches"}
+#
+# `mirror-matches` is one of these and `mirror-verdict` deliberately is NOT (.github#658). The mirror
+# family splits exactly along this line: a verdict the owner STATES and the registry disagrees with is
+# a value to copy over, but a twin NOBODY classified, or two producers who contradict each other, is a
+# question only a human can answer — and listing one of those under "what I reconciled" would be the
+# bot asserting work it did not do (#425), on the very finding this gate exists to raise.
+RECONCILED_CHECKS = {"digest-matches", "predicate-matches", "mirror-matches"}
 
 # The stamp rides in a marker comment, not in the rendered table, because the table SHORTENS each
 # sha to 8 chars for humans and the next run has to compare FULL commits. Scraping the table would
