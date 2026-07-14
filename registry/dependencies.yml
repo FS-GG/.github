@@ -304,8 +304,25 @@ contracts:
       contract-doc: "FS.GG.Rendering specs/205-scaffold-git-init-chmod/contracts/fs-gg-ui-template-generation.md (Accepted)"
       tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/1 (cross-repo follow-up for the scaffold-path execution)"
   - id: shared-build-config
-    version: "1.0.0"
+    version: "1.1.0"
     owner: github   # the FS-GG/.github org repo is the source of truth
+    # #592 / ADR-0036 (1.0.0 -> 1.1.0): THE DRIFT CHECK NOW COMPARES AGAINST A PIN, NOT AGAINST main.
+    # Every receiver's gate.yml checks .github out at `ref: main` and runs sync-build-config.sh --check,
+    # so the verdict of a REQUIRED check was a function of another repo's moving branch at CI time: a
+    # receiver could not make it green from its own PR, and any edit to dist/dotnet/ red-lit EVERY open
+    # PR in EVERY adopting repo. It fired twice — #499 froze FS.GG.SDD for hours (SDD#379), and #536
+    # then red-lit a green in-flight PR by editing an XML COMMENT (SDD#380). The push arm (#626)
+    # shortened that freeze but left it indefinitely reachable (a sync PR whose own gate is red never
+    # auto-merges). The receiver now commits `.config/fsgg-build-config.sha` — the .github commit its
+    # managed files came from — and --check diffs against THAT commit's dist/dotnet/. Verdict becomes a
+    # pure function of the receiver's own tree: BEHIND is green (bot-remediated, loudly noticed),
+    # HAND-EDITED is red (fixable from the author's branch).
+    # ADDITIVE / backward-compatible, hence minor: an UNPINNED receiver is bit-for-bit unchanged
+    # (absent pin == legacy compare-against-main), so the rollout cannot merge-freeze anyone — which
+    # matters more than usual, a migration that froze the org being this very defect committed by its
+    # own fix. No receiver gate.yml change is needed: the script is distributed from .github@main too,
+    # so --check's semantics are ours to define. Additive growth is still growth (ADR-0015), so the
+    # minor bumps rather than riding along silently.
     # ADR-0006 / .github#19 (H3, Pillar 5): the canonical org-shared .NET build config —
     # Directory.Build.props (determinism, CPM + transitive pinning, lockfile-restore-enforcement
     # gate, NU1603/NU1608->error), Directory.Packages.props (CPM + org FSharp.Core 10.1.301 pin),
