@@ -896,6 +896,19 @@ if [ "\$sub" = "issue" ] && [ "\$sub2" = "edit" ]; then
 fi
 
 if [ "\$sub" = "repo" ] && [ "\$sub2" = "view" ]; then
+  # LOGGED, so a test can assert this GraphQL call was never made (#430): the repo now comes off the
+  # git remote, and "we did not spend the budget" is a claim about the CALL, not about the verdict.
+  printf 'repo-view\n' >>"\$GH_LOG"
+  #   GH_FAIL_REPO_VIEW=rate  the GraphQL budget is gone — the steady state of an N-worker fan-out.
+  #   GH_FAIL_REPO_VIEW=other some other gh failure (auth, network, no default remote).
+  #   GH_FAIL_REPO_VIEW=empty gh SUCCEEDS and names nothing — the one case that really is "no checkout".
+  #   GH_FAIL_REPO_VIEW=rate2 a rate limit that is NOT gh's last word — it must still classify.
+  case "\${GH_FAIL_REPO_VIEW:-}" in
+    rate)  echo "GraphQL: API rate limit already exceeded for user ID 1645484." >&2; exit 1 ;;
+    rate2) printf 'GraphQL: API rate limit already exceeded for user ID 1645484.\ngh: try again later.\n' >&2; exit 1 ;;
+    other) echo "gh: could not determine current repository" >&2; exit 1 ;;
+    empty) exit 0 ;;
+  esac
   printf 'FS-GG/FS.GG.SDD\n'; exit 0
 fi
 
@@ -2272,6 +2285,71 @@ case "$(grep -E '^pr-(get|files) ' "$GH_LOG" || true)" in
                      "read the PR from the checkout's repo, not the issue's: $(cat "$GH_LOG")" ;;
   *)             ok  "verify-paths: ...and the CHECKOUT's repo is never consulted for the PR" ;;
 esac
+
+# ---- #430: the repo comes off the REMOTE, and a rate limit is reported AS a rate limit -----------
+# With neither --repo nor --issue, verify-paths used to derive the repo from `gh repo view` — a
+# GraphQL call — and read its empty result as proof of "not inside a GitHub checkout". But empty did
+# not mean that. It meant the call failed and `2>/dev/null || true` had just discarded the reason.
+# The reason it was usually hiding was an EXHAUSTED budget: the steady state of the N-agents-on-one-
+# account fan-out this kit exists to serve. So at the merge boundary, a worker in a perfectly good
+# checkout was sent to go debug their checkout, over a limit that clears on its own.
+#
+# `pw` runs in the fixture's own cwd; these need to stand somewhere specific, so combine it with run_at.
+pw_at() { local d="$1"; shift; ( cd "$d" && PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 bash "$COORD" "$@" ); }
+# A git checkout with NO remote at all — the only case in which `gh` is still worth asking.
+CO_NOREMOTE="$WORK/co-noremote"; mkdir -p "$CO_NOREMOTE"; git -C "$CO_NOREMOTE" init -q >/dev/null 2>&1
+
+# (a) The remote decides. Assert on the CALL, not the verdict: the stub's `gh repo view` also says
+#     FS.GG.SDD, so both the old code and the new one reach an identical healthy verdict here — the
+#     whole trap. What changed is that no GraphQL was spent to get it.
+: >"$GH_LOG"
+pw_at "$CO_SDD" verify-paths --pr 7 >/dev/null 2>&1 || true
+assert_contains "#430: the repo is derived from the git remote" \
+  "pr-files FS-GG/FS.GG.SDD 7" "$(cat "$GH_LOG")"
+case "$(cat "$GH_LOG")" in
+  *repo-view*) bad "#430: ...and 'gh repo view' is never called for it" \
+                   "spent a GraphQL repo view: $(cat "$GH_LOG")" ;;
+  *)           ok  "#430: ...and 'gh repo view' is never called for it" ;;
+esac
+
+# (b) THE ACCEPTANCE CRITERION: it now reaches a verdict on an exhausted budget, from a good checkout.
+assert_contains "#430: ...so it still reaches a verdict when the GraphQL budget is EXHAUSTED" \
+  "FSGG-PATHS OK" "$(GH_FAIL_REPO_VIEW=rate pw_at "$CO_SDD" verify-paths --pr 7 2>&1 || true)"
+
+# (c) No remote AND a dead budget: `gh` is the honest fallback, and its failure is now EVIDENCE.
+#     A rate limit is named as one and exits EX_RATE (75) — the code a worker loop already backs off
+#     on — rather than being dressed up as a fact about the reader's working directory.
+rc430=0; out430="$(GH_FAIL_REPO_VIEW=rate pw_at "$CO_NOREMOTE" verify-paths --pr 7 2>&1)" || rc430=$?
+assert_eq       "#430: no remote + dead budget exits EX_RATE (75), not a generic 1" "75" "$rc430"
+assert_contains "#430: ...and names the rate limit"    "GraphQL budget EXHAUSTED" "$out430"
+case "$out430" in
+  *"not inside a GitHub checkout"*)
+    bad "#430: ...and NEVER blames the checkout for it" "blamed the checkout for a rate limit: $out430" ;;
+  *) ok "#430: ...and NEVER blames the checkout for it" ;;
+esac
+
+# (c2) …and it classifies on gh's WHOLE output, not just its last line. A rate limit followed by a
+#      trailing hint is still a rate limit. Reading only the tail here would drop the worker onto the
+#      generic arm — exit 1 instead of EX_RATE — and their loop would never back off: the same bug
+#      one level down, a diagnosis built on a PARTIAL error rather than a discarded one.
+# The ( ) is load-bearing: an env prefix on a FUNCTION call can persist in the caller's shell, which
+# would leak `rate2` into every test below. The other arms are already inside a `$( )` subshell.
+rc430c=0; ( GH_FAIL_REPO_VIEW=rate2 pw_at "$CO_NOREMOTE" verify-paths --pr 7 >/dev/null 2>&1 ) || rc430c=$?
+assert_eq "#430: a rate limit that is not gh's LAST line still exits EX_RATE (75)" "75" "$rc430c"
+
+# (d) A gh failure that is genuinely NOT a rate limit says what gh actually said — the other half of
+#     the issue. A diagnosis built on a discarded error is how this bug happened in the first place.
+out430b="$(GH_FAIL_REPO_VIEW=other pw_at "$CO_NOREMOTE" verify-paths --pr 7 2>&1 || true)"
+assert_contains "#430: a non-rate-limit gh failure reports gh's OWN words" \
+  "could not determine current repository" "$out430b"
+assert_contains "#430: ...and points at the explicit remedy" "--repo FS-GG/<repo>" "$out430b"
+
+# (e) And the old message SURVIVES exactly where it was always true: gh succeeded and named nothing.
+#     Only now it is a conclusion this code established, rather than one it inferred from an error it
+#     had thrown away.
+assert_contains "#430: gh SUCCEEDS and names nothing -> 'not inside a checkout' is an EARNED verdict" \
+  "not inside a GitHub checkout" \
+  "$(GH_FAIL_REPO_VIEW=empty pw_at "$CO_NOREMOTE" verify-paths --pr 7 2>&1 || true)"
 
 # ---- the ISSUE side of the boundary: the harness must be able to tell the repos apart (#494) -------
 # Everything above asserts the repo of a PR read, because #479 had to teach the stub to log it. Every
