@@ -97,6 +97,25 @@
 # does, `fsgg-skill-registry-check`'s `mirror-verdict` arm goes RED until the owner declares one:
 # undeclared is not `not mirrored`. Do NOT "tidy" the file by adding `mirrored: false` everywhere —
 # that would manufacture, by hand, exactly the confident default the gate exists to refuse.
+#
+# `schemaVersion` IS 1, AND A BUMP TO 2 IS OWED. Read the scalar below as a DEBT, not as "no growth".
+#
+# Adding `mirrored:` grew this document's schema. .github#686 decided that an OPTIONAL, ADDITIVE,
+# back-compatible field IS schema growth under ADR-0015 — the ADR's own motivating defect (M5) was
+# additive growth under "additive tolerance", so "no reader breaks" is the MECHANISM of that defect,
+# not an exemption from it. So `schemaVersion` 1 → 2 (and `skill-registry.version` 1 → 2 in
+# registry/dependencies.yml) is OWED.
+#
+# It is UNPAID here on purpose. The typed validator (Fsgg.Registry, FS.GG.SDD) does not yet assert over
+# THIS FILE AT ALL — publishing that assertion is what the enforcing flip still waits on. Bumping now
+# would version a schema no validator reads, and pin a CLI that carries nothing: a claim with nothing
+# behind it (the .github#416 ornament). The debt is paid publish-before-flip (FR-007), in this order:
+#   1. FS.GG.SDD#420 teaches Fsgg.Registry the field and PUBLISHES a CLI carrying it;
+#   2. .github THEN bumps this scalar + the contract `version` and advances the contract-coherence.yml
+#      FS.GG.SDD.Cli pin to that CLI.
+# ADR-0015 §3 still says to do both in the SAME PR. That is unsatisfiable — this document lives in
+# .github and its validator lives in FS.GG.SDD, and no PR spans two repos. Correcting the ADR is
+# .github#689.
 schemaVersion: 1
 updated: "2026-07-14"
 

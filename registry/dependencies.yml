@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 1
-updated: "2026-07-11"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-14"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -21,8 +21,13 @@ repos:
 # the intended meaning so a future validator can tighten. This schema is ITSELF a governed contract now
 # (report §6.9 / .github#135 → the `registry-schema` contract below + ADR-0015): growing it — a new field
 # or a tightened rule — is a registered contract-change (bump `registry-schema.version` + the top-level
-# `schemaVersion` in the SAME PR that teaches Fsgg.Registry, and advance the gate's FS.GG.SDD.Cli pin to a
-# CLI carrying that Fsgg.Registry version). This comment remains the schema-of-record for reviewers.
+# `schemaVersion`, and advance the gate's FS.GG.SDD.Cli pin to a CLI carrying that Fsgg.Registry version).
+# An OPTIONAL, ADDITIVE field COUNTS as growth (.github#686): "the validator tolerates unknown fields" is
+# why the drift is SILENT — the mechanism of the M5 defect ADR-0015 exists to stop — not an exemption from
+# it. The two steps happen in TWO ORDERED PRs, not one (publish-before-flip, FR-007): FS.GG.SDD teaches
+# Fsgg.Registry and PUBLISHES a CLI, then .github bumps + pins to it. ADR-0015 §3 says "the SAME PR"; that
+# PR cannot exist, because this document is in .github and Fsgg.Registry is in FS.GG.SDD (.github#689).
+# This comment remains the schema-of-record for reviewers.
 #   contract entries (`contracts:` list):
 #     id            (required) contract id, referenced by dependency edges + coherence rows.
 #     version       (required) SemVer of the contract SURFACE/SOURCE — EXCEPT `fs-gg-ui-template`, where
@@ -337,9 +342,20 @@ contracts:
     # only pays off if the schema is versioned AND the gate's validator pin advances with it. H2 (.github#127) found
     # the pin frozen at FS.GG.SDD.Cli 0.2.1 for three minors while the registry grew one-off fields under additive
     # tolerance (M5), degrading the typed gate toward a YAML-parses check. Registering the schema makes schema growth
-    # a tracked contract-change: bump this `version` (and the file's top-level schemaVersion) in the SAME PR that
-    # teaches Fsgg.Registry a new field/rule, and advance the gate's FS.GG.SDD.Cli pin to a CLI carrying that
-    # Fsgg.Registry version. Decision recorded in ADR-0015; state in coherence id `registry-schema-governed`.
+    # a tracked contract-change: bump this `version` (and the file's top-level schemaVersion), and advance the gate's
+    # FS.GG.SDD.Cli pin to a CLI carrying that Fsgg.Registry version.
+    # Decision recorded in ADR-0015; state in coherence id `registry-schema-governed`.
+    #
+    # NOTE (.github#686): ADR-0015 §3 words that obligation as "in the SAME PR that teaches Fsgg.Registry". THAT PR
+    # CANNOT EXIST — for THIS contract exactly as for `skill-registry`: the schema DOCUMENT is this file (in .github)
+    # and the VALIDATOR (Fsgg.Registry, in FS.GG.Contracts) lives in FS.GG.SDD, and no PR spans two repos. Nor can
+    # the pin advance to a CLI that has not been published yet. It has never bitten only because this schemaVersion
+    # has never been bumped. The real sequence is the org's own publish-before-flip (FR-007), two ORDERED PRs:
+    #   1. FS.GG.SDD teaches Fsgg.Registry the field/rule and PUBLISHES a CLI carrying it;
+    #   2. .github THEN bumps this `version` + the top-level schemaVersion and advances the pin to that CLI.
+    # And note what counts as growth in the first place: an OPTIONAL, ADDITIVE, back-compatible field IS schema
+    # growth (.github#686) — M5 above IS that defect, so "no consumer breaks" is its MECHANISM, not an exemption.
+    # Amending ADR-0015 itself is .github#689 (an Accepted ADR is amended by a NEW ADR, never rewritten in place).
     surface: >
       registry/dependencies.yml DOCUMENT schema — the top-level `schemaVersion` scalar plus the field-vocabulary
       block (the schema-of-record comment near the head of this file). Modeled + validated by FS.GG.Contracts'
@@ -354,21 +370,64 @@ contracts:
 
   - id: skill-registry
     version: "1"            # == registry/skills.yml top-level `schemaVersion` — the skill-catalog document schema.
+                            # A BUMP TO "2" IS OWED AND UNPAID — see "THE OWED BUMP" below. Deliberate, not an omission.
     owner: github
     # ADR-0017 (.github#163/#168): the org's single authoritative skill catalog (process + product),
     # condition-aware. Registered as a governed contract per ADR-0015 (mirrors `registry-schema`): the
-    # typed validator (Fsgg.Registry, SDD CLI) owns it, and schema growth is a tracked contract-change —
-    # bump this `version` + skills.yml `schemaVersion` in the SAME PR that teaches the validator, and
-    # advance the gate's FS.GG.SDD.Cli pin. State in coherence id `skill-registry-published`.
+    # typed validator (Fsgg.Registry, SDD CLI) owns it, and schema growth is a tracked contract-change.
+    # State in coherence id `skill-registry-published`.
+    #
+    # IS AN OPTIONAL, ADDITIVE FIELD "SCHEMA GROWTH"? YES. DECIDED .github#686; do not re-litigate.
+    #
+    # The tempting answer is no — the field is optional, every reader ignores unknown keys, no consumer
+    # breaks. That reasoning is exactly backwards, and ADR-0015 says so in its own Context. Its
+    # motivating defect (M5) WAS additive growth: the registry "grew one-off fields" (`minimum-fsgg-sdd`,
+    # `package-tag`, `profiles`) and, "because the typed validator treats most fields as optional
+    # (ADDITIVE TOLERANCE), a stale validator silently degrades toward a YAML-parses check." Every one of
+    # those was optional, additive and back-compatible. "No consumer breaks" is not an EXEMPTION from
+    # schema growth — it is the MECHANISM of the defect: it is precisely why the drift is SILENT, and
+    # therefore precisely why it must be TRACKED. ADR-0015's Consequences make back-compat the ambient
+    # condition rather than the test, in as many words: "unknown fields are still tolerated".
+    #
+    # So the test is NOT "does a reader break". The test is: DOES THE ON-DISK SCHEMA NOW CARRY A FIELD OR
+    # RULE THE PINNED VALIDATOR DOES NOT KNOW? If yes, it is schema growth, and it bumps. This governs
+    # every future additive field on this contract, not just `mirrored`.
+    #
+    # THE OWED BUMP. `mirrored:` (.github#658, PR #687) grew this schema and landed UNBUMPED. Under the
+    # decision above that was schema growth, so `version` "1" → "2" + skills.yml `schemaVersion` 1 → 2 is
+    # OWED. It is not paid HERE and TODAY on purpose: Fsgg.Registry does not yet assert over skills.yml AT
+    # ALL (see the `validator:` field below — publishing that assertion is what the enforcing flip still
+    # waits on). Bumping now would version a schema that NO validator reads, and advance the pin to a CLI
+    # that carries nothing — a claim with nothing behind it, which is the ornament shape of .github#416,
+    # inside the contract registry itself. An unpaid debt recorded is honest; a paid-looking one is not.
+    #
+    # THE BUMP PROCEDURE, CORRECTED. ADR-0015 §3 obliges the bump "in the SAME PR that teaches the
+    # validator". THAT IS UNSATISFIABLE — for this contract and for `registry-schema` alike — because the
+    # schema DOCUMENT lives in .github (skills.yml / this file) and the VALIDATOR (Fsgg.Registry, in
+    # FS.GG.Contracts) lives in FS.GG.SDD. No PR spans two repos. The clause has never bitten only because
+    # neither schemaVersion has ever been bumped; `mirrored` is the FIRST real schema growth since
+    # ADR-0015 and it exposed that the procedure cannot be run as written. The real sequence is the org's
+    # own publish-before-flip (FR-007), two ORDERED PRs:
+    #   1. FS.GG.SDD teaches Fsgg.Registry the field/rule and PUBLISHES a CLI carrying it.
+    #   2. .github THEN bumps skills.yml `schemaVersion` + this `version` and advances the
+    #      contract-coherence.yml FS.GG.SDD.Cli pin to that CLI — one .github PR, after the CLI is live.
+    # ADR-0015 itself still carries the unsatisfiable clause: this repo does not rewrite an Accepted ADR
+    # in place (cf. ADR-0027, which amends ADR-0021 §1 with a NEW ADR), so correcting it is its own
+    # change. Tracked: .github#689. The SDD half of step 1 is FS.GG.SDD#420.
     surface: >
       registry/skills.yml — the authoritative catalog of every process + product skill ({id, scope,
-      owner, source, canonical-body sha256, materializes-when predicate}). GENERATED/RECONCILED from the
-      producer skill-manifests (Rendering's template/skill-manifest/skill-manifest.json; SDD's emitted
-      process manifest .agents/skills/skill-manifest.json — SDD#111 closing #109), never hand-authored
-      bytes. `materializes-when` is the ADR-0017
+      owner, source, canonical-body sha256, materializes-when predicate, mirrored}). GENERATED/RECONCILED
+      from the producer skill-manifests (Rendering's template/skill-manifest/skill-manifest.json; SDD's
+      emitted process manifest .agents/skills/skill-manifest.json — SDD#111 closing #109), never
+      hand-authored bytes. `materializes-when` is the ADR-0017
       predicate grammar the union gate (scripts/skill-union-assert.sh --params) evaluates against a
-      scaffold's scaffold-provenance.json effectiveParameters. Projected to docs/registry/compatibility.md
-      (§Skill registry); changelog registry/skills.CHANGELOG.md.
+      scaffold's scaffold-provenance.json effectiveParameters. `mirrored` (OPTIONAL boolean, .github#658)
+      is the ADR-0022 §6 frozen-mirror OBLIGATION the owner asserts — "FS.GG.Rendering is required to ship
+      a byte-identical copy of this body" — never an observation that a same-named file exists in both
+      trees. ABSENT MEANS "NOT CLASSIFIED", NEVER `false`: a reader that coerces absent → false answers
+      "not mirrored" for every body of a manifest predating the field, confidently, and leaves every real
+      mirror unguarded — the fail-open .github#658 exists to close. Projected to
+      docs/registry/compatibility.md (§Skill registry); changelog registry/skills.CHANGELOG.md.
     consumers: [github]     # .github's union gate + registry validation; Templates (P4, Templates#49) via provenance.
     validator: >
       Typed Fsgg.Registry validator (fsgg-sdd) — asserts registry = producer manifest = materialized bytes,
@@ -778,9 +837,13 @@ coherence:
       tolerance (M5), degrading the typed gate toward a YAML-parses check. NOW: (1) the `registry-schema` contract
       entry versions the on-disk registry-document schema (== top-level `schemaVersion`, currently 1) with owner
       sdd / consumer github; (2) ADR-0015 makes schema growth a REGISTERED contract-change — a new Fsgg.Registry
-      field/rule bumps this contract `version` + the file's `schemaVersion` in the same PR that teaches the
-      validator, and advances the contract-coherence.yml FS.GG.SDD.Cli pin to a CLI carrying that Fsgg.Registry
-      version; (3) the pin<->feed coupling (org Renovate annotation manager, .github#127) keeps the validator
+      field/rule (INCLUDING an optional, additive, back-compatible one — .github#686: M5 above IS that defect, so
+      "no consumer breaks" is its mechanism, not an exemption) bumps this contract `version` + the file's
+      `schemaVersion`, and advances the contract-coherence.yml FS.GG.SDD.Cli pin to a CLI carrying that
+      Fsgg.Registry version. ADR-0015 §3 asks for both "in the same PR"; that PR CANNOT EXIST — the document is in
+      .github, Fsgg.Registry is in FS.GG.SDD — so it is TWO ORDERED PRs, publish-before-flip (FR-007): SDD teaches
+      + publishes, .github then bumps + pins. Amending the ADR is .github#689;
+      (3) the pin<->feed coupling (org Renovate annotation manager, .github#127) keeps the validator
       current structurally so the additive-tolerance degradation cannot silently recur. The .github
       contract-coherence gate is the consumer and continues to validate this file via `fsgg-sdd registry validate`
       (the typed Fsgg.Registry validator — see [[registry-validator-typed]]). No behavioural gate change lands
