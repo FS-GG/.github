@@ -125,11 +125,22 @@ on:
 # The reconcile branch is pushed, and the standing PR opened/updated, with the APP token (see header)
 # — never with the run-scoped GITHUB_TOKEN, whose pushes would not re-trigger the PR's own checks. So
 # GITHUB_TOKEN is left with only what the steps that still use it actually need: reading this repo,
-# and closing/commenting on the standing PR when a reconcile is retired. `contents: write` is
+# reading this repo's workflow RUNS (the merge gate's supersession evidence, #700), and
+# closing/commenting on the standing PR when a reconcile is retired. `contents: write` is
 # deliberately NOT granted — the push has no GITHUB_TOKEN fallback to silently succeed through.
 permissions:
   contents: read
   pull-requests: write
+  # `actions: read` is what `GET /actions/runs` costs, and it is the evidence the merge gate needs to
+  # tell a SUPERSEDED check run from a RED one (#700). It is granted HERE, to GITHUB_TOKEN, rather than
+  # leaned on from the App token the rest of this job uses — deliberately. The App's installation
+  # permissions are configured OUTSIDE this repo and cannot be asserted from inside it, so if the App
+  # happened to lack Actions:read the read would 403, the payload would be empty, nothing would be
+  # dropped, and the gate would go straight back to refusing the bot's own PR — the fix would be an
+  # ornament, and a silent one. A scope this FILE grants is a scope this file can prove. It is read-only
+  # and grants no new write: the rule above — that no step here can quietly fall back to a GITHUB_TOKEN
+  # push — still holds.
+  actions: read
 
 concurrency:
   # Never let two runs (a schedule and a manual dispatch) race on the standing branch.
@@ -356,10 +367,26 @@ jobs:
         if: steps.pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The `actions: read` token, for the workflow-runs read ONLY — see the permissions block. Bound
+          # through the environment, never `${{ }}` inside the script, which is this workflow's standing
+          # rule: `${{ }}` is substituted textually BEFORE bash parses the line.
+          RO_TOKEN: ${{ github.token }}
           PR: ${{ steps.pr.outputs.number }}
           SHA: ${{ steps.pr.outputs.sha }}
         run: |
           set -uo pipefail
+          # `?head_sha=` IS A FILTER, AND AN EMPTY FILTER MATCHES EVERYTHING (#700, #698).
+          #
+          # The check-runs read below names its subject in the URL PATH (`commits/<sha>/check-runs`),
+          # where an empty SHA 404s and yields `[]` — it fails CLOSED by construction. The workflow-runs
+          # read is a QUERY PARAMETER and does the exact opposite: if `$SHA` is empty because the
+          # `.head.sha` read failed, GitHub IGNORES the filter and hands back the repo's ENTIRE run
+          # history (3,709 runs, measured on this repo). Supersession would then be computed from runs
+          # belonging to OTHER COMMITS — and since the concurrency group does not include the SHA, a
+          # cancelled run on THIS head could be "superseded" by a later run of the same workflow on a
+          # DIFFERENT commit, dropping a real red check. That is a fail-OPEN, so it is asserted, loudly,
+          # before a single byte is fetched.
+          : "${SHA:?the head SHA is empty — refusing to read workflow runs, because an empty head_sha= filter matches EVERY run in the repo and would compute supersession from other commits}"
           echo "gating standing PR #$PR at $SHA"
           # WAIT FOR THE CHECKS TO REGISTER, NOT MERELY TO FINISH. GitHub schedules a PR's workflows
           # over 20-60s, so the rollup GROWS: an early poll can legitimately show "3 checks, 0 pending"
@@ -385,6 +412,29 @@ jobs:
             prev="$n"
             [ "$attempt" -eq 24 ] || sleep 20
           done
+          # THE SUPERSESSION EVIDENCE (#700). Read ONCE, after the wait has settled — this bot cancels
+          # its OWN checks on every reconcile (the force-push's `synchronize` run is killed by the PR
+          # body edit's `edited` run, same `pull_request` ref, so ONE cancel-in-progress group), and
+          # without this the gate reads those corpses as RED and refuses to merge the PR it just pushed.
+          #
+          # GITHUB_TOKEN, not the App token this step otherwise holds: `actions/runs` needs `Actions:
+          # read`, which this workflow GRANTS ITSELF above and can therefore prove it has. See that
+          # block for why an App permission would have been the wrong thing to depend on.
+          #
+          # --paginate, for the same reason as the check-runs read. A run we fail to read can only make
+          # the gate MORE conservative — an unproven cancellation stays RED — never less.
+          if GH_TOKEN="$RO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SHA" \
+               --paginate --slurp > runs.json 2>runs.err; then
+            echo "  workflow runs on $SHA: $(jq '[.[].workflow_runs[]] | length' runs.json)" \
+                 "($(jq '[.[].workflow_runs[] | select(.conclusion == "cancelled")] | length' runs.json) cancelled)"
+          else
+            # A FAILED READ IS NOT AN ABSENCE OF SUPERSEDING RUNS, and it must not pass for one silently.
+            # It cannot merge anything — no evidence means nothing is dropped, so every cancelled check
+            # stays red and the gate refuses — but that refusal IS the #700 bug, restored quietly. The
+            # empty payload keeps it fail-CLOSED; this warning keeps it fail-LOUD.
+            echo "::warning::could not read workflow runs ($(head -1 runs.err)) — supersession cannot be resolved, so a cancelled check run will refuse this merge (#700). Has \`actions: read\` been removed?"
+            echo '[]' > runs.json
+          fi
           # GitHub computes mergeability lazily, so an immediate read is routinely UNKNOWN. Poll it too
           # rather than handing the gate an UNKNOWN it can only refuse on.
           state=""
@@ -415,6 +465,7 @@ jobs:
           # on a slow day), not an error. The merge reads the payload, never the exit code.
           python scripts/skill-registry-merge-gate \
             --checks checks.json \
+            --runs runs.json \
             --merge-state "$MERGE_STATE" >> "$GITHUB_OUTPUT" || true
 
       # LAND IT. The App token merges, for the same reason it pushed (#514): GITHUB_TOKEN is held at
