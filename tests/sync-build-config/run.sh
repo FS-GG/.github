@@ -19,9 +19,13 @@ SRC="$REPO_ROOT/dist/dotnet"
 MANIFEST=".config/dotnet-tools.json"
 PROP="Directory.Build.props"
 
-pass=0; failcount=0
+pass=0; failcount=0; skipcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }
 bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; failcount=$((failcount+1)); }
+# A skip is NOT a pass, and must never be counted as one — it is an assertion that did not run. It is
+# reported in the summary so an environment that quietly cannot check something says so out loud
+# rather than printing an unblemished green (#266). Nothing may skip in CI: see the .NET guard below.
+skip() { echo "SKIP  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | /'; skipcount=$((skipcount+1)); }
 
 echo "sync-build-config fixture — script='$SCRIPT'"
 
@@ -444,6 +448,190 @@ git -C "$ORG" checkout -q -- dist/dotnet/Directory.Packages.props
 
 fi   # git available
 
-echo "sync-build-config fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
+# =================================================================================================
+# THE AUTHORITY REPO CONSUMES THE BUILD CONFIG IT AUTHORS (.github#705, guarding .github#609)
+#
+# #609 gave .github a root Directory.Build.props that IMPORTS dist/dotnet/Directory.Build.props, so
+# the repo that AUTHORS the org build config finally runs under it. Nothing asserted the file was
+# still there — and its absence is silent in the worst possible way: DELETE IT AND CI STAYS GREEN,
+# because every property it carries fails OPEN.
+#
+#   RestorePackagesWithLockFile       unset -> the five committed packages.lock.json are neither
+#                                              written nor checked.
+#   RestoreLockedMode                 unset -> CI restores UNLOCKED, so a silent version substitution
+#                                              stops failing anything. NU1403 does NOT save us: it
+#                                              fires on a lock-hash mismatch during a LOCKED restore,
+#                                              and the failure mode here is that locked restore never
+#                                              runs at all.
+#   DisableImplicitLibraryPacksFolder unset -> ADR-0032 is off again and the F# SDK's library-packs
+#                                              copy of FSharp.Core is back in the source list (#473).
+#
+# An unlocked restore resolves perfectly well, so nothing goes red. That is epic #266's signature
+# exactly — a gate whose SUBJECT can vanish while the gate reports success — and #609 sharpened it:
+# the four .fsproj files used to hand-set these properties, so losing one was LOUD. They now live in
+# one file, and losing it is QUIET.
+#
+# THE ASSERTIONS ARE BEHAVIOURAL, NOT GREPS, and deliberately so. A grep for the <Import> line passes
+# on a file that imports the WRONG path; it also passes on a file that stopped importing and INLINED
+# a copy of the org content instead — which is precisely the mirror #609 rejected, because a mirror
+# can go stale and an import cannot. So: evaluate the properties at a REAL project, and prove the
+# import is LIVE by feeding a sentinel through it.
+# =================================================================================================
+
+ROOT_PROP="$REPO_ROOT/Directory.Build.props"
+CORE_PROJ="$REPO_ROOT/src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
+
+# --- (1) the file exists at all — the deletion this item is named for ----------------------------
+[ -f "$ROOT_PROP" ] \
+  && ok "the repo root carries Directory.Build.props — .github consumes its own build config (#609)" \
+  || bad "the root Directory.Build.props is GONE (#705)" \
+         "Without it .github's projects inherit NONE of the org build config, and CI stays green while
+doing it: lockfiles stop being enforced, CI restores unlocked, and ADR-0032 is off. Restore the file —
+it is an <Import> of dist/dotnet/Directory.Build.props, so it cannot go stale."
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  # A missing SDK must not quietly retire the only legs that prove the config ARRIVES. In CI that is
+  # a red: the selftest workflow installs the SDK, so no dotnet there means the workflow lost its
+  # setup step and this gate has silently stopped gating — the #266 failure, re-entered through the
+  # gate's own environment. Locally it is an honest skip; legs (2)-(4) below need a real MSBuild.
+  if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+    bad "the consumption legs (#705) need the .NET SDK, and this is CI" \
+        "sync-build-config-selftest.yml must install the SDK (actions/setup-dotnet) before running this
+fixture. No dotnet in CI means legs (2)-(4) never ran — so nothing checked that the org build config
+actually reaches this repo's projects, which is the whole subject of #705."
+  else
+    skip "consumption legs (#705): no dotnet on PATH — the file-existence leg above still ran" \
+         "Install the .NET SDK to run them locally; CI always does."
+  fi
+else
+
+# msb <project> <property> -> evaluated value in $MSB_VAL, combined output in $MSB_OUT; rc from MSBuild.
+#
+# A SINGLE -getProperty makes MSBuild print the BARE value (several would make it print JSON), so this
+# needs no jq. Evaluation only: -getProperty short-circuits before build AND before restore, so these
+# legs are seconds, need no packages, and work on a cold checkout.
+#
+# GITHUB_ACTIONS=true is forced because it is the CI semantics we are asserting: RestoreLockedMode is
+# conditioned on it in the org file, so without it that property evaluates empty on a dev box and the
+# leg below would report a false RED locally while CI — the environment that matters — went unchecked.
+#
+# `< /dev/null` is NOT decoration. One caller drives this from a `while read` loop fed by a heredoc, so
+# the child inherits that stdin: a dotnet that ever read a byte of it — a future version, an SDK
+# first-run prompt — would swallow the remaining property lines, and the loop would then run ONE of its
+# three assertions and still print green, with only the count to give it away. An assertion that can
+# vanish while the gate reports success is the exact #266 defect this block exists to close; it must
+# not be re-entered by the block itself. (Today's MSBuild does not read stdin. That is not a guarantee.)
+#
+# DOTNET_NOLOGO / telemetry opt-out: on a cold runner the muxer's first-run banner goes to STDOUT, and
+# the value is parsed with `tail -n1`. When the expected value is EMPTY — leg (4), the negative control
+# — command substitution strips the trailing blank line and `tail -n1` would latch onto the last BANNER
+# line instead, reddening a healthy repo.
+msb() {
+  local proj="$1" prop="$2" rc=0
+  MSB_OUT="$(GITHUB_ACTIONS=true DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+             dotnet msbuild "$proj" -nologo -getProperty:"$prop" 2>&1 < /dev/null)" || rc=$?
+  MSB_VAL="$(printf '%s' "$MSB_OUT" | tr -d '\r' | tail -n1 | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  return "$rc"
+}
+
+# --- (2) the properties actually ARRIVE at a real project in this repo ---------------------------
+# The honest form of "the config is consumed" is not a grep for the import — it is the SDK's own
+# answer to "what is this property, on a project that is really in this repo".
+if [ ! -f "$CORE_PROJ" ]; then
+  bad "#705 setup: the project these legs evaluate is gone" \
+      "Expected $CORE_PROJ. If it was renamed, point CORE_PROJ at another .NET project in this repo —
+do NOT delete these legs: they are the only thing asserting the org build config reaches .github at all."
+else
+  # want=true for all three: each is a property whose ABSENCE is green, which is why each is listed.
+  while IFS='|' read -r prop why; do
+    [ -n "$prop" ] || continue
+    rc=0; msb "$CORE_PROJ" "$prop" || rc=$?
+    if [ "$rc" -eq 0 ] && [ "$MSB_VAL" = "true" ]; then
+      ok "$prop=true reaches this repo's own projects (#705)"
+    else
+      bad "$prop must evaluate to 'true' on this repo's projects (#705)" \
+          "got: '${MSB_VAL:-<empty>}' (rc=$rc)
+$why
+An EMPTY value is exactly what deleting the root Directory.Build.props produces — and CI stays GREEN.
+--- msbuild ---
+$MSB_OUT"
+    fi
+  done <<'PROPS'
+DisableImplicitLibraryPacksFolder|ADR-0032 (#473): unset, the F# SDK re-injects its library-packs copy of FSharp.Core as a restore source, and packages.lock.json's contentHash goes machine-dependent again.
+RestorePackagesWithLockFile|Unset, the five committed packages.lock.json are neither written nor verified — the lockfile-restore-enforcement contract is off.
+RestoreLockedMode|Unset, CI restores UNLOCKED. A silently substituted dependency version stops failing anything, and NU1403 cannot fire because locked restore never runs.
+PROPS
+fi
+
+# --- (3) it IMPORTS the org file live — it does not MIRROR it ------------------------------------
+# The sentinel is added to a throwaway copy of the ORG file only. It can reach the project through
+# ONE mechanism: a live import of that file, resolved by path. A root props that inlined the org
+# content, or that imports some other path, cannot produce it — which is what makes this leg a real
+# check on #609's import-over-mirror choice rather than a restatement of it.
+#
+# The layout mimics .github's own ($probe/Directory.Build.props + $probe/dist/dotnet/), because the
+# root file resolves its import against $(MSBuildThisFileDirectory) — i.e. relative to ITSELF. MSBuild
+# stops walking up at the first Directory.Build.props, so $probe's is the only one in play.
+if [ ! -f "$ROOT_PROP" ]; then
+  skip "#705 import legs: no root Directory.Build.props to probe (already reported above)"
+else
+  probe="$(mktemp -d "$WORK/consume-XXXXXX")"
+  mkdir -p "$probe/dist/dotnet" "$probe/proj"
+  cp "$ROOT_PROP" "$probe/Directory.Build.props"
+  awk '/^<\/Project>/ { print "  <PropertyGroup><FsggConsumesOrgConfig>yes</FsggConsumesOrgConfig></PropertyGroup>" } { print }' \
+    "$SRC/Directory.Build.props" > "$probe/dist/dotnet/Directory.Build.props"
+  # No TargetFramework: we never build, so the probe needs no targeting pack and cannot rot when the
+  # org's TFM moves.
+  printf '%s\n' '<Project Sdk="Microsoft.NET.Sdk">' '</Project>' > "$probe/proj/probe.csproj"
+
+  if ! grep -q 'FsggConsumesOrgConfig' "$probe/dist/dotnet/Directory.Build.props"; then
+    # Without this, a sentinel that failed to insert would make BOTH legs below pass vacuously — the
+    # positive one could not, but the negative control would, and the pair would still read green.
+    bad "#705 probe setup: the sentinel was not inserted into the org file" \
+        "dist/dotnet/Directory.Build.props has no '</Project>' line to insert before; the legs below
+would be vacuous."
+  else
+    rc=0; msb "$probe/proj/probe.csproj" FsggConsumesOrgConfig || rc=$?
+    if [ "$rc" -eq 0 ] && [ "$MSB_VAL" = "yes" ]; then
+      ok "the root Directory.Build.props IMPORTS dist/dotnet/Directory.Build.props live (#609/#705)"
+    else
+      bad "the root Directory.Build.props must IMPORT the org file, not mirror it (#609/#705)" \
+          "got: '${MSB_VAL:-<empty>}' (rc=$rc; want 'yes')
+A property added to dist/dotnet/Directory.Build.props did not reach a project sitting under a copy of
+the root file. So the root file is no longer reading the org config: it imports the wrong path, or it
+has been replaced by an INLINED copy of the org content. A copy is a mirror, and #609 chose an import
+precisely because a mirror can go stale and .github has no drift check to catch it (it cannot adopt
+one — see the .config/dotnet-tools.json note in Directory.Build.props).
+--- msbuild ---
+$MSB_OUT"
+    fi
+
+    # --- (4) NEGATIVE CONTROL: the legs above have a subject ---------------------------------------
+    # Remove the root file from the probe and the same property must VANISH. Without this leg, an SDK
+    # that someday shipped these properties as defaults — or a probe accidentally inheriting some other
+    # Directory.Build.props up the tree — would turn every leg above green for a reason that has
+    # nothing to do with the file #705 exists to guard. That is the failure this whole fixture is
+    # about, so it is checked rather than assumed.
+    rm "$probe/Directory.Build.props"
+    rc=0; msb "$probe/proj/probe.csproj" FsggConsumesOrgConfig || rc=$?
+    if [ "$rc" -eq 0 ] && [ -z "$MSB_VAL" ]; then
+      ok "...and with the root file removed the property vanishes — these legs really are checking it (#266)"
+    else
+      bad "#705 negative control: the property survived deleting the root Directory.Build.props" \
+          "got: '${MSB_VAL:-<empty>}' (rc=$rc; want empty)
+The legs above would pass with the file GONE, which is the exact defect they are supposed to catch.
+Something other than the root file is supplying it: an SDK default, or another Directory.Build.props
+inherited from above the probe dir.
+--- msbuild ---
+$MSB_OUT"
+    fi
+  fi
+fi
+
+fi   # dotnet available
+
+summary="sync-build-config fixture — $((pass + failcount + skipcount)) assertion(s): $pass passed, $failcount failed"
+[ "$skipcount" -eq 0 ] || summary="$summary, $skipcount skipped"
+echo "$summary"
 [ "$failcount" -eq 0 ] || { echo "::error::sync-build-config fixture FAILED"; exit 1; }
 echo "sync-build-config fixture — OK"

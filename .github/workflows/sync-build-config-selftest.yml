@@ -15,6 +15,18 @@
 # dist/dotnet/.config/dotnet-tools.json — the very file #387 armed this fixture for — and it sits in a
 # DOT-directory. GitHub does not document whether `**` descends into one, and this is a gate whose
 # failure mode is silently passing. An explicit entry costs a line; guessing wrong costs the manifest.
+#
+# THE THREE PATHS BELOW ARE THE #705 SUBJECTS, and they are inputs for the same reason dist/dotnet/**
+# is (#508): the fixture now also asserts that .github CONSUMES the build config it authors, so a PR
+# that breaks that must be the PR that reds.
+#
+#   Directory.Build.props  — the subject itself. It imports dist/dotnet/Directory.Build.props, and its
+#                            DELETION is silent: every property it carries fails open, so lockfiles
+#                            stop being enforced and CI restores unlocked while staying GREEN (#705).
+#   global.json            — pins the SDK that evaluates those properties. A bump to an SDK the setup
+#                            step below does not install breaks this fixture, so the bump must run it.
+#   the .fsproj            — the real project the fixture evaluates the properties AT. Renaming or
+#                            removing it reds the fixture; that PR needs to hear about it from itself.
 name: sync-build-config-selftest
 
 on:
@@ -24,6 +36,9 @@ on:
       - "tests/sync-build-config/**"
       - "dist/dotnet/**"
       - "dist/dotnet/.config/**"
+      - "Directory.Build.props"
+      - "global.json"
+      - "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
       - ".github/workflows/sync-build-config-selftest.yml"
   push:
     branches: [main]
@@ -32,6 +47,9 @@ on:
       - "tests/sync-build-config/**"
       - "dist/dotnet/**"
       - "dist/dotnet/.config/**"
+      - "Directory.Build.props"
+      - "global.json"
+      - "src/FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj"
       - ".github/workflows/sync-build-config-selftest.yml"
   workflow_dispatch:
 
@@ -44,5 +62,22 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      # The #705 legs ask the SDK what the properties EVALUATE to on this repo's own projects — the
+      # only honest form of "the org build config is still consumed here" (a grep for the <Import>
+      # line passes on a file importing the wrong path). Evaluation only: `msbuild -getProperty`
+      # short-circuits before restore and before build, so this needs no packages and no feed.
+      #
+      # The fixture FAILS, rather than skipping, if dotnet is absent while GITHUB_ACTIONS=true — so
+      # deleting this step cannot quietly retire those legs and leave a green tick behind (#266).
+      #
+      # global-json-file, NOT a hardcoded dotnet-version: global.json already OWNS this repo's SDK pin,
+      # and restating it here would be a second source of truth that a bump to the first one silently
+      # invalidates — the fixture would then red on an SDK-not-found for a reason that is not a defect
+      # in its subject. Reading the pin is the same de-duplication #609 itself made when it collapsed
+      # four hand-set .fsproj copies of these properties into one file. (Sibling workflows pin the
+      # version literally; this one does not need to, because it is the one that evaluates global.json.)
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
       - name: Run the sync-build-config fixture
         run: bash tests/sync-build-config/run.sh
