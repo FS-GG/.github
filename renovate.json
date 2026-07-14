@@ -2,17 +2,11 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": [
     "This repo dogfoods its own org-shared preset (default.json, consumed elsewhere as `github>FS-GG/.github`) instead of vanilla config:recommended, so the dist/dotnet pins it distributes are managed under the same semantics every product repo gets — dependency dashboard, semantic commits, and FS.GG.* feed/grouping/prerelease routing (review M9, #132).",
-    "This file used to add that 'the FS.GG.* rules are inert here today (no FS.GG.* PackageReferences)', and omitted the feed hostRules on that basis. The claim was false: .github/workflows/contract-coherence.yml pins FS.GG.SDD.Cli through the preset's annotation manager, which resolves from the private org feed. With no token here, every FS.GG.* lookup 401'd, Renovate could enumerate no versions, and no bump PR could ever open — so the validator pin froze at 0.2.1 across three minors (#127), was fixed by hand, and froze again at 0.5.0 across three more (#263). Only third-party bumps (nuget.org, no auth) were ever observed. A PackageReference is not the only kind of FS.GG.* dependency a repo can have. scripts/check-pin-coherence.py now gates both halves — the token below, and the pins it enables."
+    "This file used to carry a `hostRules` block supplying `{{ secrets.FSGG_PACKAGES_READ_TOKEN }}` for nuget.pkg.github.com, on the stated premise that `FS.GG.* are not on nuget.org`. THAT PREMISE WAS FALSE — all 32 of the 32 packages the org publishes to GitHub Packages are also public on nuget.org, anonymously readable, at the same latest version (verified id-by-id against api.nuget.org, #576). The token was never needed; it also never resolved, because it names a Mend App Secret that no CI credential can read or verify.",
+    "The block is REMOVED rather than left inert, because it was not merely redundant — it is the sentence that stopped four people from checking. The FS.GG.SDD.Cli pin froze at 0.2.1 (#127), at 0.5.0 (#263), at 0.9.0 (#566), and again at 0.10.0; each freeze was hand-advanced and closed, because the config 'obviously' already had the token. A 401 on a Renovate datasource is not an error, it is an empty version list, so the bot detected the dependency, enumerated nothing, and opened no PR. The preset now routes FS.GG.* to nuget.org (default.json), which needs no credential at all.",
+    "CI's restore is a DIFFERENT mechanism on a different credential and is untouched: .github/workflows/contract-coherence.yml restores FS.GG.SDD.Cli from GitHub Packages using GITHUB_TOKEN with `packages: read`, which works. Only Renovate's datasource lookups moved."
   ],
   "extends": [
     "github>FS-GG/.github"
-  ],
-  "hostRules": [
-    {
-      "description": "read:packages auth for the private org GitHub Packages NuGet feed (FS.GG.* are not on nuget.org). Lives in this repo's own config — NOT the shared preset — because Renovate does not substitute {{ secrets }} inside presets pulled via extends. Value = org-level Mend App Secret FSGG_PACKAGES_READ_TOKEN. Identical to the block every product repo carries; .github was the one repo that authored the preset and never adopted its own requirement (#263).",
-      "matchHost": "nuget.pkg.github.com",
-      "hostType": "nuget",
-      "token": "{{ secrets.FSGG_PACKAGES_READ_TOKEN }}"
-    }
   ]
 }
