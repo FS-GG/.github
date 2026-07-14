@@ -48,11 +48,17 @@ module Lanes =
         /// making the board worse, not better.
         | DeliberatelyNone of Item
 
+
         /// Declared, but every token is unmatchable — a leading `**/`, a `*` in the middle. It reserves
         /// NOTHING, so it would read as disjoint from every other worker: a lock that succeeds under
         /// exactly the conditions it exists to prevent (#273). **Also the chore**, and a more urgent one
         /// than a missing declaration, because it looks like a declaration.
         | UnusableTokens of item: Item * tokens: string list
+        /// The body was never READ, so the touch-set is UNKNOWN — not absent. It is NOT a chore: nobody
+        /// can fix it by declaring a touch-set, because the item may already have one and we never
+        /// looked. Reporting it as `NoTouchSet` would send an agent to add a `Paths:` line to a body it
+        /// never saw.
+        | Unread of item: Item * reason: string
 
         member Item: Item
 

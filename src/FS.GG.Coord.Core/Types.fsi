@@ -82,9 +82,23 @@ module Types =
 
         member Short: string
 
+    /// A `Blocked by` entry.
+    ///
+    /// `Ref` is an OPTION because `BlockerUnparseable` is a real case and prose is not a ref: "Blocked by
+    /// RESOLVED: shipped last week" blocks, and it has no owner, no repo and no number. The record used to
+    /// demand a `Ref` anyway — so the one state the type was told to expect was the one it could not hold,
+    /// and the client silently dropped every such blocker rather than fail to build one. An item bash
+    /// called BLOCKED then arrived here unblocked, which under `--engine=fs` is a worker being handed
+    /// blocked work.
+    ///
+    /// `Raw` is what the field actually SAID, and it is always present.
     type Blocker =
-        { Ref: Ref
+        { Ref: Ref option
+          Raw: string
           State: BlockerState }
+
+        /// The canonical ref when we have one, else the prose we were given.
+        member Display: string
 
     /// A single `Paths:` token. NOT a glob.
     ///
@@ -115,6 +129,11 @@ module Types =
         /// A real declaration. May still contain unmatchable tokens — that is a third death, and the
         /// scheduler and the linter must agree about it.
         | Declared of PathToken list
+        /// WE DID NOT READ THE BODY. The touch-set is UNKNOWN, which is not the same fact as absent —
+        /// and the difference is this whole codebase. Coercing an unread body to `Undeclared` would
+        /// report a confident OMISSION about an item nobody looked at, and then schedule every other
+        /// item against a surface we cannot see. It yields `Undetermined`: not startable, and said so.
+        | Unreadable of reason: string
 
     /// A live claim on an item.
     type Claim =

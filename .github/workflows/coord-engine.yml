@@ -109,4 +109,4 @@ jobs:
         env:
           FSGG_SHADOW_REQUIRE_ENGINE: "1"
           FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
-        run: bash tests/fsgg-coord/run.sh
+        run: bash tests/fsgg-coord/run-cases.sh

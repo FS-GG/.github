@@ -512,6 +512,15 @@ which order survives is a Phase 3 decision, taken with the live frequency data t
 collecting.** It is recorded here rather than merged silently, because #485 exists precisely because
 five predicates were merged silently.
 
+> **TAKEN — [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md): blockers are checked BEFORE the
+> touch-set.** Bash's order wins. *Semantics:* a blocked item cannot be started whatever its touch-set
+> says, so *"no `Paths:` declared"* sends a worker to fix something that leaves them exactly where they
+> were. *Cost, which settles it:* blockers are **board** facts, already in the scan and free; a touch-set
+> lives in the issue **body**, one REST read per item. Touch-set-first would oblige a body fetch for every
+> blocked item on the board — paying the budget that dies first (#418) to answer a question the board had
+> already answered. It is also why bash never fetched those bodies, why they were never fixtures, and how
+> a swept item with an unreadable body could silently cease to exist for as long as it did.
+
 **Decision 2 — the core's order is not free, and the shadow now measures what it costs.**
 
 Bash's order is *cheaper*, and that is not an accident. Blocker state arrives free in the board scan,
@@ -630,8 +639,19 @@ closed on evidence that is absent, thin, single-worker, uncovered on a day, or f
 
 ### Phase 3 — flip *(days)*
 
-- **Entry:** `fsgg-coord divergence --fleet` is GREEN — which now means something checkable: three
-  consecutive covered days, ≥2 distinct workers, zero blocking divergences, on the build being flipped.
+- **Entry (SUPERSEDED by [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)):** ~~`fsgg-coord
+  divergence --fleet` is GREEN — three consecutive covered days, ≥2 distinct workers, zero blocking
+  divergences, on the build being flipped.~~
+  **That clock could not tick.** Workers run in per-item worktrees; a worktree worker resolved no engine
+  (#728); a worker who banks no evidence can never be one of the "≥2 distinct workers". And because
+  `Divergence.evaluate` partitions by exact engine build, any republish restarts the window — so the
+  engine could not be improved while waiting for the clock that was waiting for the engine.
+- **Entry (actual):** the **defect corpus** — `tests/fsgg-coord/cases/`, one case per historical defect —
+  is green against **both** `--engine=bash` and `--engine=fs`. It covers every path that has actually
+  broken, rather than whatever floated past a live fleet for three days; it needs only a checkout; and it
+  survives an engine rebuild. Sweeping it under `fs` found three real defects that this clock's own
+  taxonomy classifies as REASON divergences — *"not a bug"* — and would have waved through. The shadow is
+  now **telemetry**, not a gate.
 - `--engine=fs` becomes the default; `--engine=bash` remains as the escape hatch.
 - One week later, delete the bash implementation. The kit row becomes the shim (§4.4).
 - `fsgg-coord-selftest`'s 46 negative assertions run unchanged against the new engine — they

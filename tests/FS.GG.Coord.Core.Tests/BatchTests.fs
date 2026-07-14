@@ -166,7 +166,8 @@ module BatchTests =
         let blocked =
             { item 1 [ "src/Scene/Types.fs" ] with
                 Blockers =
-                    [ { Ref = ref 999
+                    [ { Ref = Some(ref 999)
+                        Raw = (ref 999).Short
                         State = BlockerOpen } ] }
 
         let r = run [] [ blocked; item 2 [ "src/Scene/Types.fs" ] ]
@@ -303,7 +304,8 @@ module BatchTests =
         let blocked n =
             { item n [ $"src/%d{n}.fs" ] with
                 Blockers =
-                    [ { Ref = ref 999
+                    [ { Ref = Some(ref 999)
+                        Raw = (ref 999).Short
                         State = BlockerOpen } ] }
 
         let r = run [] [ blocked 1; blocked 2; blocked 3 ]

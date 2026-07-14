@@ -27,7 +27,7 @@ let private eprint (s: string) = Console.Error.WriteLine(s: string)
 
 /// The `--text` projection. A rendering of the SAME answer the JSON carries — it may not add a fact
 /// the contract lacks, and nothing may parse it.
-let private renderText (decision: Verdict<Batch.BatchResult>) =
+let private renderText (leaseMinutes: int) (decision: Verdict<Batch.BatchResult>) =
     match decision with
     | Red reasons ->
         eprint "REFUSED — the batch cannot be scheduled:"
@@ -57,7 +57,7 @@ let private renderText (decision: Verdict<Batch.BatchResult>) =
             eprint "passed over:"
 
             for d in passed do
-                eprint $"  %s{Schedulability.explain d.Item d.Result}"
+                eprint $"  %s{Batch.explainDecision leaseMinutes d}"
 
         if result.Truncated then
             eprint "note: the batch was capped, so the candidates after the last one chosen were never evaluated."
@@ -179,8 +179,8 @@ let private decide (opts: Options) =
                 (request.Candidates |> List.map (fun c -> c.Item))
 
         match opts.Render with
-        | Json -> printfn "%s" (Snapshot.render request.Candidates decision)
-        | Text -> renderText decision
+        | Json -> printfn "%s" (Snapshot.render request.LeaseMinutes request.Candidates decision)
+        | Text -> renderText request.LeaseMinutes decision
 
         match decision with
         | Green _ -> ExitGreen

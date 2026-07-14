@@ -140,7 +140,8 @@ module SchedulabilityTests =
     [<Fact>]
     let ``#476 an item blocked only by a MERGED PR is startable — the work FINISHED`` () =
         let blockers =
-            [ { Ref = { Owner = "FS-GG"; Repo = ".github"; Number = 449 }
+            [ { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 449 }
+                Raw = ".github#449"
                 State = BlockerMerged } ]
 
         Assert.Equal(Startable, ask { item 350 with Blockers = blockers })
@@ -148,17 +149,19 @@ module SchedulabilityTests =
     [<Fact>]
     let ``#476 an OPEN blocker still holds, and the verdict NAMES it`` () =
         let b =
-            { Ref = { Owner = "FS-GG"; Repo = ".github"; Number = 500 }
+            { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 500 }
+              Raw = ".github#500"
               State = BlockerOpen }
 
         match ask { item 8 with Blockers = [ b ] } with
-        | BlockedBy [ holding ] -> Assert.Equal(500, holding.Ref.Number)
+        | BlockedBy [ holding ] -> Assert.Equal(500, holding.Ref.Value.Number)
         | other -> failwith $"expected BlockedBy, got %A{other}"
 
     [<Fact>]
     let ``#266 an UNKNOWN blocker holds — a failed lookup is not a cleared blocker`` () =
         let b =
-            { Ref = { Owner = "FS-GG"; Repo = ".github"; Number = 999 }
+            { Ref = Some { Owner = "FS-GG"; Repo = ".github"; Number = 999 }
+              Raw = ".github#999"
               State = BlockerUnknown }
 
         match ask { item 9 with Blockers = [ b ] } with
@@ -244,7 +247,7 @@ module SchedulabilityTests =
                 State = Closed
                 Claim = Some(claim "heron-b71", LeaseHeld)
                 Blockers =
-                    [ { Ref = ref 99; State = BlockerOpen } ] }
+                    [ { Ref = Some(ref 99); Raw = (ref 99).Short; State = BlockerOpen } ] }
 
         Assert.Equal(IssueClosed, ask it)
 
@@ -262,12 +265,12 @@ module SchedulabilityTests =
               ask { item 22 with TouchSet = Undeclared }
               ask { item 23 with TouchSet = DeclaredNone }
               ask { item 24 with TouchSet = Declared [ Unmatchable "**/x" ] }
-              ask { item 25 with Blockers = [ { Ref = ref 99; State = BlockerOpen } ] }
+              ask { item 25 with Blockers = [ { Ref = Some(ref 99); Raw = (ref 99).Short; State = BlockerOpen } ] }
               ask { item 26 with Claim = Some(claim "w", LeaseHeld) }
               ask { item 27 with Claim = Some(claim "w", LeaseExpiredPrOpen 1) }
               ask { item 28 with Claim = Some(claim "w", LivenessUnknown) }
               schedulable false [ Declared [ Matchable "src/Scene/**" ] ] (item 29) ]
 
         for v in verdicts do
-            let reason = explain (item 1) v
+            let reason = explain 120 (item 1) v
             Assert.False(System.String.IsNullOrWhiteSpace reason, $"%A{v} produced no reason")
