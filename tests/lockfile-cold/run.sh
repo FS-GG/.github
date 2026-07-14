@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Fixture for the COLD locked restore — the failure-leg test ADR-0031 and #429 have been missing.
+# Fixture for the COLD locked restore — the failure-leg test ADR-0032 §5 and #429 have been missing.
 #
-# WHY THIS EXISTS. ADR-0031 ratifies that any restore which WRITES (`--force-evaluate`) or ENFORCES
+# WHY THIS EXISTS. ADR-0032 §5 ratifies that any restore which WRITES (`--force-evaluate`) or ENFORCES
 # (`--locked-mode`) a packages.lock.json must be COLD: an empty NUGET_PACKAGES *and* a cleared HTTP
 # cache. Both halves shipped (FS.GG.SDD's `locked-restore` action; this repo's lockfile-sync.yml,
 # .github#453). NOTHING ASSERTED IT. No test failed if someone reinstated `cache: true`, dropped the
@@ -20,7 +20,7 @@
 #
 # EVERY LEG BELOW STILL HOLDS, and none of them is about FSharp.Core: they are properties of NuGet's
 # warm-vs-cold validation, exercised against a package this fixture builds itself. A warm folder IS a
-# fail-open (leg 3 proves it), and a cold restore IS the fix for that — ADR-0031 §Decision 1 stands.
+# fail-open (leg 3 proves it), and a cold restore IS the fix for that — ADR-0032 §Decision 5 stands.
 # What the old narration got wrong was WHY the org's lock files diverged, and a fixture that teaches a
 # false cause is worse than one that teaches none. Cold is not hermetic: the SDK's library-packs folder
 # is injected by MSBuild and a fresh NUGET_PACKAGES does not bypass it. That is ADR-0032's problem, and
@@ -209,7 +209,7 @@ PY
   else
     bad "LEG 3: the SAME broken lock file passes a WARM restore — #429, reproduced" \
         "the warm path rejected it, so this fixture no longer demonstrates WHY the restore must be cold.
-NuGet's behaviour may have changed — if warm validation now consults the feed, say so in ADR-0031
+NuGet's behaviour may have changed — if warm validation now consults the feed, say so in ADR-0032
 rather than deleting this leg."
   fi
 else
@@ -227,14 +227,14 @@ if [ -f "$SYNC_WF" ]; then
   grep -qE 'NUGET_PACKAGES="\$\(mktemp -d\)"' "$SYNC_WF" \
     && ok "LEG 4: lockfile-sync.yml restores into a FRESH NUGET_PACKAGES" \
     || bad "LEG 4: lockfile-sync.yml restores into a FRESH NUGET_PACKAGES" \
-           "the mktemp -d global-packages folder is gone — the restore is warm again (ADR-0031)"
+           "the mktemp -d global-packages folder is gone — the restore is warm again (ADR-0032 §5)"
   grep -qE 'dotnet nuget locals http-cache --clear' "$SYNC_WF" \
     && ok "LEG 4: ...and CLEARS THE HTTP CACHE (relocating NUGET_PACKAGES alone is not cold)" \
     || bad "LEG 4: ...and CLEARS THE HTTP CACHE (relocating NUGET_PACKAGES alone is not cold)" \
            "without this the HTTP cache serves stale .nupkg bytes — the exact trap #429 hit"
   if grep -qE '^\s*cache:\s*true' "$SYNC_WF"; then
     bad "LEG 4: ...and does NOT re-enable setup-dotnet's package cache" \
-        "'cache: true' is back in lockfile-sync.yml — that restores a warm package folder and undoes ADR-0031"
+        "'cache: true' is back in lockfile-sync.yml — that restores a warm package folder and undoes ADR-0032 §5"
   else
     ok "LEG 4: ...and does NOT re-enable setup-dotnet's package cache"
   fi

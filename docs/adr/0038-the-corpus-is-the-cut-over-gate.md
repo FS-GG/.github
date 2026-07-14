@@ -70,6 +70,23 @@ way:
 **3. An unread body is `Unreadable`, not `Undeclared`.** `TouchSet` grows a case, and the client sends
 `bodyUnreadable` rather than withholding the item. See below for why this was load-bearing.
 
+**4. The flip OPENS `fs`. It does not impose it — the default does not move.** With no `--engine` and no
+`FSGG_COORD_ENGINE`, the mode is `auto`, and **`auto` returns BASH's answer**. There are four modes and
+they mean exactly four things:
+
+| mode | who decides | a failure to run the engine |
+|---|---|---|
+| **`auto`** *(default)* | **bash** — the engine shadows iff one resolves, and its disagreement is *logged* | not an error; bash carries on |
+| `bash` | bash — no shadow at all. The escape hatch, byte-identical to the pre-flip tool | n/a |
+| `shadow` | **bash** — the comparison is insisted on | a **logged skip** (you asked; we could not) |
+| `fs` | **the engine.** Bash still reads the board, assembles the snapshot and performs every write — the **decision** is the typed core's, and there is **no fallback** | **FATAL** |
+
+`auto` may stay on by default *because* it changes nothing: an observer that cannot move an answer,
+an exit code or a lifetime costs its caller nothing, and it is now telemetry (decision 1) rather than a
+gate. **Making `fs` the default is a separate decision, taken on the corpus's evidence, and this ADR
+does not take it.** Until it is, "the default engine" is `auto` and "authoritative" is bash — and a
+document that says otherwise is describing a future, not this branch.
+
 ## What the corpus found that the clock was built to ignore
 
 The shadow's own taxonomy — the one this ADR demotes — reads:

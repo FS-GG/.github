@@ -1,8 +1,13 @@
 # ADR-0015: Register the registry schema as a governed contract
 
-- **Status:** Accepted
+- **Status:** Accepted — **§3 (the "same change" procedure) is superseded by
+  [ADR-0037](0037-schema-growth-is-publish-before-flip.md)**; §1 (`registry-schema` as a governed
+  contract, SDD-owned typed authority) and §2 (`.github` as a first-class registry node) stand.
 - **Date:** 2026-07-02
 - **Affects:** .github (registry + contract-coherence gate), SDD (Fsgg.Registry authority)
+- **Amended by:** [ADR-0037](0037-schema-growth-is-publish-before-flip.md) — §3's atomic
+  "same change" **cannot exist**: the schema document is in `.github`, its validator is in FS.GG.SDD,
+  and no PR spans two repos. Schema growth is **publish-before-flip**, in two ordered PRs. See §3.
 
 ## Context
 
@@ -51,6 +56,33 @@ registry; the registry's *own* schema was the one contract that was not.
    The pin↔feed coupling already in place ([the org Renovate annotation manager][127], `# renovate:
    datasource=nuget depName=FS.GG.SDD.Cli`) keeps the validator current *structurally* between
    deliberate schema bumps, so the H2 freeze cannot silently recur.
+
+   > **Amendment (2026-07-14, [ADR-0037](0037-schema-growth-is-publish-before-flip.md),
+   > [#689](https://github.com/FS-GG/.github/issues/689)). Do not follow the procedure above — the
+   > "same change" it commands CANNOT EXIST.** For *both* contracts this ADR governs, the schema
+   > **document** and its **validator** live in different repos: `registry/dependencies.yml` and
+   > `registry/skills.yml` are here in `.github`; `Fsgg.Registry` is in **FS.GG.SDD**. No PR spans two
+   > repos — and the second bullet is unsatisfiable even on its own terms, because the pin cannot
+   > advance to a CLI that **does not yet exist**. (This ADR was not blind to it, it was *inconsistent*
+   > about it: the Consequences below already say "SDD's own release cadence already publishes the CLI
+   > the gate then pins", which is publish-then-pin in as many words. §3 nevertheless worded the
+   > obligation as atomic, and the procedure is the half people follow.)
+   >
+   > **The procedure is publish-before-flip — two ordered PRs, never one:**
+   >
+   > 1. **FS.GG.SDD** teaches `Fsgg.Registry` the new field or rule and **publishes** an
+   >    `FS.GG.SDD.Cli` carrying it. That validator **must still accept the document as it stands at
+   >    `.github` HEAD** — the new rule may reject nothing the current document does.
+   > 2. **`.github`** *then* bumps the document's `schemaVersion` **and** the contract `version`,
+   >    advances the `contract-coherence.yml` `FS.GG.SDD.Cli` pin to that published CLI, and keeps the
+   >    field-vocabulary comment current — one `.github` PR, after the CLI is live.
+   >
+   > The invariant §3 exists to protect — *the schema and its validator must not drift apart* — is
+   > preserved exactly. What is dropped is an **atomicity requirement the repo topology makes
+   > impossible**, and which was never the thing being protected. The pin↔feed coupling below is why
+   > step 1 must be safe alone: `pin-coherence.yml` hard-fails on a pin behind feed-newest, so the pin
+   > advances **ahead** of the schema bump, on Renovate's own PR — pointing the new validator at the
+   > un-bumped document, on `main`, on a required gate. §1 and §2 stand.
 
 This registration is **governance, not a behavioural gate change**: `schemaVersion` stays `1`, and
 `fsgg-sdd registry validate` stays valid / 0 diagnostics over the current file. What changes is that

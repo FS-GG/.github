@@ -13,8 +13,9 @@ name: release-coord-engine
 # itself gated on Phase 2 exiting. The clock could never start (.github#617).
 #
 # So publishing comes BEFORE flipping, and it is the only order in which the flip's evidence can exist.
-# Bash stays authoritative. The `fs` engine mode stays refused. The one thing this changes is that a
-# worker in a receiver repo now HAS an engine to shadow with.
+# This publish does not change WHO DECIDES. The default mode is `auto`, and `auto` returns BASH'S answer;
+# `--engine=fs` is open since ADR-0038 but it is never the default. The one thing this changes is that a
+# worker in a receiver repo now HAS an engine to shadow with — an instrument, not a new authority.
 #
 # `.github` builds the engine FROM SOURCE and never restores it from the feed — the asymmetry ADR-0034
 # §4.4 relies on. A broken feed therefore cannot prevent the coordination tool from being fixed.
@@ -205,9 +206,10 @@ jobs:
             if [ "${{ steps.v.outputs.push }}" = "true" ]; then
               echo "Published \`FS.GG.Coord.Cli\` **${{ steps.v.outputs.version }}** to the org feed."
               echo ""
-              echo "This is **not** the flip. Bash stays authoritative and the \`fs\` engine mode stays refused."
+              echo "This is **not** the flip. The default mode is \`auto\`, and \`auto\` returns BASH's answer;"
+              echo "\`--engine=fs\` is open (ADR-0038) but never the default."
               echo "What it changes: a worker in a receiver repo now has an engine to SHADOW with, so the"
-              echo "divergence log can start filling — which is the evidence Phase 3b's flip is gated on."
+              echo "divergence log — now TELEMETRY, not the cut-over gate — can start filling."
             else
               echo "Pack-only dry run — nothing pushed."
             fi

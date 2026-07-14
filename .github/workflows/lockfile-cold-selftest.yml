@@ -1,4 +1,4 @@
-# The failure leg of the cold locked restore (.github#460, absorbing #459; ADR-0031; epic #266).
+# The failure leg of the cold locked restore (.github#460, absorbing #459; ADR-0032 §5; epic #266).
 #
 # lockfile-sync.yml regenerates lock files COLD, and each repo's `locked-restore` enforces them COLD.
 # Nothing asserted either — so a future edit could reinstate `cache: true`, drop the fresh

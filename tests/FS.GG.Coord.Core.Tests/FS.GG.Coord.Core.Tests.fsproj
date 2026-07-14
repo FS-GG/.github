@@ -22,6 +22,7 @@
     <Compile Include="BlockerTests.fs" />
     <Compile Include="SchedulabilityTests.fs" />
     <Compile Include="BatchTests.fs" />
+    <Compile Include="ProtocolTests.fs" />
     <Compile Include="LanesTests.fs" />
     <Compile Include="DivergenceTests.fs" />
   </ItemGroup>

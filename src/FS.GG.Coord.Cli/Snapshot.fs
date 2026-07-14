@@ -635,6 +635,46 @@ module Snapshot =
         Text.Encoding.UTF8.GetString(stream.ToArray())
 
     // ================================================================================================
+    // THE PROTOCOL (ADR-0034 §4.5) — the rules, as a document nobody authors.
+    // ================================================================================================
+
+    [<Literal>]
+    let private FactsSchema = "fsgg.coord.protocol/1"
+
+    let renderFacts (rules: Protocol.Rule list) (verdicts: Protocol.VerdictDoc list) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
+
+        w.WriteStartObject()
+        w.WriteString("schema", FactsSchema)
+
+        w.WriteStartArray("rules")
+
+        for r in rules do
+            w.WriteStartObject()
+            w.WriteString("id", r.Id)
+            w.WriteString("title", r.Title)
+            w.WriteString("statement", r.Statement)
+            w.WriteString("because", r.Because)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+
+        w.WriteStartArray("verdicts")
+
+        for v in verdicts do
+            w.WriteStartObject()
+            w.WriteString("kind", v.Kind)
+            w.WriteString("meaning", v.Meaning)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+        w.WriteEndObject()
+        w.Flush()
+
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    // ================================================================================================
     // LANES (#428) — the partition, as the chore agent's input document.
     // ================================================================================================
 
