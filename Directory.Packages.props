@@ -17,7 +17,7 @@
     <!-- FS.GG.Coord.Core tests (ADR-0034 Phase 1). xUnit is the org standard (FS.GG.SDD has 138
          files opening Xunit; Expecto is unused). FsCheck is scoped to round-trip properties, exactly
          as SDD scopes it. -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="FsCheck.Xunit" Version="3.3.3" />
