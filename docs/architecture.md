@@ -468,7 +468,7 @@ The contracts that hold the system together:
 | `scaffold-provider` | SDD | `.fsgg/providers.yml` + `dotnet new` wrapper protocol | Templates, Rendering |
 | `fsgg-contracts` | SDD | the `FS.GG.Contracts` package (typed schemas + registry validator) | SDD, Governance, Templates |
 | `scaffold-provenance` | SDD | `.fsgg/scaffold-provenance.json` | SDD |
-| `governance-handoff` | SDD | `readiness/<id>/governance-handoff.json` (optional) | Governance |
+| `governance-handoff` | SDD | `readiness/<id>/governance-handoff.json` (optional). **@`1.1.0`** — ADR-0035 stage 3 (FS.GG.SDD#422) made the blocking diagnostic id `ship.unobservedEvidence` reachable in `readiness.blockingDiagnosticIds[]`; additive, so a minor within `1.x`. Note what did *not* change: `unobserved` is a `verify.json` **test**-disposition state and is **not** persisted here — the handoff's enums (`readiness.shipDisposition`, `evidence.nodes[].state`) are unmoved and `schemaVersion` stays 1. Reachable only under the default-off `--require-observed`, so no consumer meets it today; it is declared *before* the default flips (the schema major ADR-0035 gates on "once the fleet is green"). **The emitter still stamps `contractVersion: "1.0.0"` into the artifact** and nothing compares it to the declared version — coherence id `governance-handoff-emitted-version`, [FS.GG.SDD#427](https://github.com/FS-GG/FS.GG.SDD/issues/427) | Governance |
 | `governance-policy` / `-capabilities` / `-tooling` / `-descriptor` | Governance | the four `.fsgg/*.yml` slots | Templates |
 | `governance-reference-gate-set` | Governance | the content-only `FS.GG.Governance.ReferenceGateSet` package | Templates |
 | `fs-gg-ui-template` | Rendering | `dotnet new fs-gg-ui` + `FS.GG.UI.*` packages | Templates, SDD |
