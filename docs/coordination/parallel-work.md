@@ -168,11 +168,37 @@ resurrect it underneath whoever claimed next, and two workers would hold one ite
 ```sh
 scripts/fsgg-coord reap --repo <r>          # dry run: which claims outlived their lease?
 scripts/fsgg-coord reap --repo <r> --apply  # release them — and TELL the reaped worker (§4)
+scripts/fsgg-coord adopt <issue>            # a DEAD claim whose PR is GREEN: land it, don't bin it
 ```
 
 `reap` re-checks each claim's freshness immediately before releasing it, so a holder that heartbeats
 mid-reap keeps its lock. `say` and `widen` renew a *live* lease implicitly — a worker talking about its
 item is a worker still working it — but they never revive a stale one.
+
+**An orphan is not garbage** ([#697](https://github.com/FS-GG/.github/issues/697)). `reap` refuses a
+stale claim whose `item/<n>-*` PR is open — the lease lapsed, the *work* did not (#581) — but for a
+long time its only offered exit was *"close it, then reap"*, and that sentence was a loaded gun
+pointed at the best work on the board. There are **three** states here, not two, and the tool now
+tells them apart by reading what the PR **says** rather than merely that it exists:
+
+| the PR on a stale claim | what it means | what to do |
+|---|---|---|
+| open, still being worked | proof of life (#581) | leave it |
+| open, abandoned mid-flight | genuinely dead | close it, then `reap` |
+| **open, green and mergeable** | **FINISHED work whose worker died between "green" and "merge"** | **`adopt` it** |
+
+That third row is not a corner case: it is the **success path** of a worker whose harness died in a
+window that is minutes long on every single item this protocol produces, and the better the work, the
+more expensive the loss. `adopt` verifies the PR is green **and** mergeable, transfers the claim marker
+to you (so the lock stays a total order and two workers never both drive one PR), and hands you the
+merge. The original author's commits keep their author and their `FSGG-Worker:` trailer — **you are the
+lander, not the author.**
+
+`adopt` refuses everything that is not finished work, because each of those is a different act wearing
+the same word: a **live** claim (that is a steal — talk to its worker, or `claim --force` and own it),
+an item with **no PR** (nothing to land — `reap` it and claim normally), and any PR that is **not green
+and mergeable** (rebasing a conflicted PR or fixing a red one is *authoring*, not landing). It refuses
+on an **unreadable** PR too: adopting on a guess is how a verified command launders an unverified one.
 
 ### 2. Isolate → one branch + one git worktree per item
 
@@ -420,6 +446,9 @@ branch, worktree. It reports every item holding a live marker, **including one t
 of**, and flags two states the board cannot show:
 
 - **`STALE`** — a claim past its lease. Its worker probably died; `reap` collects it.
+- **`STALE (#<pr> OPEN — GREEN: LAND IT)`** — the claim is dead and the work is **finished**. Do not
+  reap it and do not close the PR: `adopt` it (#697). `who` reads the PR's state, not just its
+  existence, precisely because `who` is what a human reads *immediately before deciding to reap*.
 - **`UNCLAIMED`** — an item the board calls `In progress` that carries **no claim marker**. Someone is
   working outside the protocol, and nothing records who. This is detection, not prevention: nothing
   compels a worker to claim. What changed is that skipping it is now loud.
@@ -464,6 +493,17 @@ name is this protocol's own artifact (§2), not a heuristic.
 "Workers should heartbeat" is true and insufficient. ADR-0027's argument is that **the lock**, not
 worker diligence, prevents collisions — so a lock that releases itself while its holder is
 demonstrably still working is a lock with a liveness bug, and the fix belongs in the scheduler.
+
+**And proof of life is only half of it** ([#697](https://github.com/FS-GG/.github/issues/697)). #581
+taught the tools to read *whether* a PR exists and stop there; #651 taught `take` not to hand out an
+item whose PR is already open. Neither ever reads **what the PR says** — so the protocol could see
+that work was in flight and never that it was **done**. The blind spot is one idea, and its worst face
+is the friendliest-looking one: a stale claim whose PR is green, reviewed and mergeable was protected
+from `reap` (#581, correctly) and thereby *guaranteed to rot* — the claim reserves its touch-set for
+the rest of the lease, `main` moves underneath it, and the PR eventually conflicts and dies. Nothing
+ever landed it. The only documented exit was to **close it**, which threw the work away. `adopt` is
+that exit, and reading the PR's state — `mergeable`, plus its head's check runs — is what makes it
+safe to take.
 
 The CAS is keyed on the **item**, which is why it guarantees at most one worker per item and nothing
 guaranteed the converse. That asymmetry is #419/ADR-0027 turned inside out: that family is N workers
