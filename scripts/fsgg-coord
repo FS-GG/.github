@@ -273,7 +273,26 @@ EX_OFFBOARD=3     # the issue is not an item on the board at all. A different fa
 # words. It is never queued: replaying a document whose failing half can never succeed would rewrite
 # the half that already did.
 EX_PARTIAL=4
-trap 'exit $(cat "$RC_FILE" 2>/dev/null || echo 1)' TERM
+# AN EMPTY RC_FILE IS NOT A ZERO (#344, reopened through the shadow).
+#
+# `exit $(cat "$RC_FILE" || echo 1)` guards only the case where `cat` FAILS — a missing file. It does
+# not guard an EMPTY one, and `soft_run` truncates RC_FILE (`: >"$RC_FILE"`) before every attempt, so
+# empty is a state this trap actually reaches. `cat` then succeeds with no output, the `|| echo 1`
+# never fires, and the trap degenerates to a BARE `exit` — which exits with `$?` of whatever command
+# ran last, not with the code the fatal die meant to report.
+#
+# That is a fail-OPEN, and the shadow makes it reachable on the hot path: when
+# `divergence_publish_throttled` fires (once per window — so, on the FIRST call in any fresh cache: a
+# new worktree, a fresh container, a CI runner), the last thing to run before the trap is the publish
+# lock's own `rm -rf`, which succeeds. A rate-limited `next` — an unreadable board, i.e. exactly what
+# #418 makes routine — then exits 0 with no verdict, and a worker reads "nothing to do" off a board it
+# never managed to read. #344 is the rule that a read which did not happen must never render as a
+# confident empty answer; this is that same fail-open, one layer down, and it defeats the surface's own
+# first rule: the observer may not change bash's answer, its exit code, or its life.
+#
+# So: unknown code => 1. Fail CLOSED. (Found by the tiered fixture — the monolith could not see it, as
+# it only ever reached the #344 assertions after hundreds of prior calls had spent the publish window.)
+trap 'rc_at_term="$(cat "$RC_FILE" 2>/dev/null)"; exit "${rc_at_term:-1}"' TERM
 
 # Scratch files this process owns, swept on ANY exit — including the TERM a fatal `die` raises, which
 # is how a rate-limited scan used to strand them in $CACHE. It tracks PATHS, not a `$CACHE/.foo.*`
@@ -1738,7 +1757,7 @@ resolve_offboard_blockers() {
 # This map is EMBEDDED, not read from registry/repos.yml at run time, because fsgg-coord is a
 # `kind: client` kit item mirrored into every receiver repo (the four skills + this script) WITHOUT
 # the roster — a worker in FS.GG.Rendering running `--repo game` has no registry/repos.yml to read.
-# So the roster short-ids are duplicated here, and tests/fsgg-coord/run.sh carries a coherence check
+# So the roster short-ids are duplicated here, and tests/fsgg-coord/ carries a coherence check
 # that reads repos.yml (present in the .github checkout where CI runs) and FAILS if this case handles
 # fewer ids than the roster rosters — turning "added a repo, forgot this map" from a silent empty
 # queue (.github#381) into a red check. Adding a repo is a data change to repos.yml PLUS a one-line

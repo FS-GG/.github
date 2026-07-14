@@ -234,7 +234,7 @@ fsgg-coord issues rendering --label cross-repo \
 
 ## Guardrail
 
-[`tests/fsgg-coord/run.sh`](../../tests/fsgg-coord/run.sh) drives the client against a `gh` stub that
+[`tests/fsgg-coord/run-cases.sh`](../../tests/fsgg-coord/run-cases.sh) drives the client against a `gh` stub that
 **counts calls** and asserts the levers actually fire (bootstrap-then-cache adds zero GraphQL calls;
 item lookup is one narrow call then cached; `set-field` routes by `dataType`; `issues` 304s to
 cache; `ready`/`next` paginate a two-page board in exactly two calls and filter client-side). It
