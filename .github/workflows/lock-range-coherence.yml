@@ -25,6 +25,14 @@
 # ways (a $(FsGgAudioVersion) property in Audio, a per-project literal in Rendering, an inherited
 # Directory.Build.local.props value in Game). A gate keyed on one central property would be a gate only
 # Audio could call. See the script's docstring.
+#
+# WHICH RANGES ARE SUBJECTS COMES OUT OF THE LOCK, NOT OUT OF THE NAMES. A `"type": "Project"` entry's
+# dependencies mix projects this repo BUILDS with packages it CONSUMES, and `FS.GG.UI.Scene` does not
+# look any different from `FS.GG.Audio.Core` — so the gate keys on the fact that NuGet gives every project
+# in the restore closure its own `"type": "Project"` entry. A dependency that has one is a project
+# reference and is checked; one that does not is a consumption pin (#263's question, not this gate's) and
+# is ignored. A project reference that resolves to none of your project files is DRIFT and goes red: it
+# used to be skipped in silence, which let subjects vanish one at a time behind a green tick (.github#545).
 name: lock-range-coherence
 
 on:
@@ -40,6 +48,18 @@ on:
           fail-closed floor from epic #266: a check that inspects nothing and reports green is the
           defect, not the guard. Pass 0 ONLY for a repo whose projects genuinely do not reference each
           other, so that "zero" is a decision someone made rather than an omission nobody noticed.
+
+          This floor is NO LONGER the only thing standing between you and a silent collapse of the
+          subject set (.github#545). It never could be: a floor catches a fall to zero, and the way
+          subjects vanish is one at a time. The gate now reads which dependencies are project references
+          out of the lock's own `"type": "Project"` entries, so a reference it cannot resolve to one of
+          your project files is an ERROR that names itself, not a range that quietly stops being checked.
+          You therefore do NOT need to declare your true range count to be safe on that.
+
+          Declaring it is still worth doing, for the one thing a floor is actually good at: catching a
+          DELIBERATE reduction. Set it to the count the gate reports and a removed ProjectReference has
+          to be an explicit decision rather than a number nobody looked at. It cannot cry wolf on growth
+          — adding a project, a reference or a TFM only raises the count.
         type: number
         default: 1
       github-ref:
