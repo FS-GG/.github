@@ -116,12 +116,20 @@
         "type": "Project",
         "dependencies": {
           "FS.GG.Coord.Core": "[1.0.0, )",
+          "FS.GG.Coord.GitHub": "[1.0.0, )",
           "FSharp.Core": "[10.1.301, )"
         }
       },
       "fs.gg.coord.core": {
         "type": "Project",
         "dependencies": {
+          "FSharp.Core": "[10.1.301, )"
+        }
+      },
+      "fs.gg.coord.github": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coord.Core": "[1.0.0, )",
           "FSharp.Core": "[10.1.301, )"
         }
       }

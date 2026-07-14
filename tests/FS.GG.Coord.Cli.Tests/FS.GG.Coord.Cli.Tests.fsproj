@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="SnapshotTests.fs" />
+    <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="FleetTests.fs" />
     <Compile Include="OptionsTests.fs" />
   </ItemGroup>
