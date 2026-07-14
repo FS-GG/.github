@@ -21,7 +21,12 @@
 # before a content-changing overwrite, while --adopt keeps a *.local.json backup (not re-imported).
 #
 # --check is the hook the reusable coherence workflow (.github#18) calls in every repo's CI:
-# a repo that has hand-edited a managed file (or never re-synced) fails the gate.
+# a repo that has hand-edited a managed file fails the gate.
+#
+# --check compares against THE COMMIT THE RECEIVER IS PINNED TO, not against main (.github#592). A
+# receiver that is merely BEHIND is green; only a hand-edited managed file is red. See the PIN_REL
+# block below for why — it is the whole point of that change, and reading it before touching --check
+# will save you from re-introducing a race that merge-froze this org twice.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../dist/dotnet" && pwd)"
@@ -63,6 +68,152 @@ FILES=(
 
 # A canonical synced file carries this marker; a hand-authored repo file does not.
 MARKER="Source of truth: FS-GG/.github"
+
+# ------------------------------------------------------------------------------------------------
+# THE PROVENANCE PIN (.github#592) — why --check does NOT compare against main.
+#
+# Every receiver's `gate.yml` checks THIS repo out at `ref: main` and runs `--check`. So while --check
+# compared the receiver's files against `dist/dotnet/` AS OF MAIN, its verdict was a function of
+# ANOTHER REPO'S MOVING BRANCH, evaluated at whatever moment CI happened to run. Two things followed,
+# and both are worse than they sound:
+#
+#   * A receiver could not make the check green FROM ITS OWN PR. Nothing in the PR's tree determined
+#     the answer.
+#   * The instant anything landed in dist/dotnet/ here, EVERY open PR in EVERY adopting repo went red
+#     on a REQUIRED check, through no fault of its own and with no change to its branch.
+#
+# That is not a drift check, it is a race — and it fired twice. #499 moved Directory.Build.props and
+# FS.GG.SDD could merge NOTHING for hours (FS.GG.SDD#379). #536 then edited the same file's XML
+# COMMENT — no MSBuild element changed — and red-lit a green, in-flight PR (FS.GG.SDD#380). A comment
+# was enough.
+#
+# So the receiver now records WHICH .github commit its managed files came from, and --check compares
+# against THAT commit's dist/dotnet/. The verdict becomes a pure function of the receiver's own tree —
+# its files and its pin, both of which arrive together on the PR's own merge ref. Nothing .github does
+# to main can move it. The race is gone BY CONSTRUCTION, not by being faster than it.
+#
+# What the two outcomes now mean — this is the entire point of the change:
+#
+#   files == dist/dotnet@pin  -> GREEN. The copy is faithful. It may be BEHIND main, and that is FINE:
+#                                being behind is not a defect in the PR, and build-config-propagate.yml
+#                                (#626) already has a rolling, auto-merging sync PR open to fix it.
+#   files != dist/dotnet@pin  -> RED. A managed file was hand-edited. That IS a defect in the PR, and
+#                                the author can fix it from their own branch — which is what a required
+#                                check is for.
+#
+# Staleness is therefore VISIBLE (the pin is a committed file you can read) and remediated by a bot,
+# rather than "enforced" by freezing everyone's merges. #592 chose that inversion deliberately: for a
+# REQUIRED check, stale-until-someone-merges beats merge-frozen-by-default.
+#
+# THIS FILE IS NOT IN `FILES`, AND MUST NEVER BE ADDED TO IT. FILES is the byte-identity set, and the
+# pin is per-receiver by construction (it holds a SHA), so byte-identity is meaningless for it. Worse,
+# `--check` treats a MISSING member of FILES as DRIFT — see the FILES warning above — so listing it
+# would red-light every receiver that has not been pinned yet. That is the exact merge-freeze this
+# change exists to END.
+#
+# An ABSENT pin is legal, and means LEGACY MODE: compare against main, exactly as before. That is what
+# makes this rollout incapable of freezing anyone. A receiver behaves EXACTLY as it does today until
+# the propagate bot's next sync PR writes its pin — at which point it stops racing. No receiver
+# gate.yml change, no flag day, no per-repo adoption item, no coordinated rollout.
+PIN_REL=".config/fsgg-build-config.sha"
+
+# The git checkout THIS SCRIPT lives in — i.e. FS-GG/.github. That is where a pinned commit's
+# dist/dotnet/ has to be read from, and it is NOT $TARGET (the receiver never carries .github history).
+GITROOT="$(git -C "$(dirname "$SELF")" rev-parse --show-toplevel 2>/dev/null || true)"
+
+# read_pin <repo> -> prints the pinned SHA, or nothing.
+# The file is self-describing for humans (see write_pin), so take the first bare 40-hex line and
+# ignore comments/blanks. A malformed pin prints nothing and lands in legacy mode — fail-open, which
+# is the whole safety posture here: a pin we cannot read must never be able to FAIL a receiver's PR.
+read_pin() {
+  local f="$1/$PIN_REL"
+  [[ -f "$f" ]] || return 0
+  grep -oE '^[0-9a-f]{40}$' "$f" 2>/dev/null | head -n1 || true
+}
+
+# write_pin <repo> <sha> — record which .github commit these managed files were taken from.
+write_pin() {
+  local repo="$1" sha="$2"
+  mkdir -p "$(dirname "$repo/$PIN_REL")"
+  cat > "$repo/$PIN_REL" <<EOF
+# The FS-GG/.github commit whose dist/dotnet/ this repo's managed build files were synced from.
+#
+# The shared-build-config drift check compares those files against THIS commit — not against
+# .github@main — so the check's answer depends only on this repo's own tree, and a change landing in
+# .github can never red-light an open PR here (.github#592). Being behind main is not a failure: the
+# build-config-propagate bot (.github#626) opens a rolling, auto-merging PR that bumps these files and
+# this pin together.
+#
+# Written by scripts/sync-build-config.sh. Do not hand-edit: editing the pin without re-syncing the
+# files is how you would tell the gate to check your work against the wrong baseline.
+$sha
+EOF
+  echo "pinned: $PIN_REL -> $sha"
+}
+
+# source_sha -> prints the .github commit to record in a receiver's pin, or nothing.
+#
+# The propagate workflow passes the exact commit it is distributing; a human running the script from a
+# checkout gets that checkout's HEAD. If neither is available (no git, a tarball, a detached source
+# tree) we print nothing and simply do not write a pin — apply still syncs the files, and the receiver
+# stays in legacy mode. Refusing to sync over a missing pin would be a self-inflicted outage.
+#
+# A DIRTY dist/dotnet/ YIELDS NO PIN, and this is the subtle one. `apply` copies the WORKING TREE, but
+# a pin names a COMMIT — so syncing from a checkout with uncommitted changes under dist/dotnet/ would
+# hand the receiver files that match no commit, stamped with a pin claiming they match HEAD. --check
+# would then resolve HEAD, diff it against files that were never in it, and report DRIFT — accusing an
+# innocent receiver of a hand-edit that the operator made HERE. The pin is a factual claim about
+# provenance; when we cannot make it truthfully, we make none.
+source_sha() {
+  if [[ -n "${FSGG_BUILD_CONFIG_SHA:-}" ]]; then
+    printf '%s' "$FSGG_BUILD_CONFIG_SHA"; return 0
+  fi
+  [[ -n "$GITROOT" ]] || return 0
+  git -C "$GITROOT" diff --quiet HEAD -- dist/dotnet 2>/dev/null || return 0
+  git -C "$GITROOT" rev-parse HEAD 2>/dev/null || true
+}
+
+# have_commit <sha> — is that commit present in this .github checkout?
+have_commit() { [[ -n "$GITROOT" ]] && git -C "$GITROOT" cat-file -e "${1}^{commit}" 2>/dev/null; }
+
+# materialize_pin <sha> <destdir> — write dist/dotnet/<FILES> AS OF <sha> into <destdir>.
+#
+# Every receiver's CI checks .github out at depth 1, so the pinned commit is usually NOT in the local
+# object store and must be fetched. GitHub serves a bare SHA on request, and a depth-1 fetch of one
+# commit brings its trees and blobs with it — which is all we read.
+#
+# Returns non-zero if the commit cannot be obtained, or if ANY managed file is unreadable at it (e.g. a
+# pin predating a file's addition to dist/dotnet/). A PARTIALLY resolved baseline is not a baseline, so
+# this is all-or-nothing: the caller falls back to main and says so, rather than silently checking half
+# the files against one commit and half against another.
+materialize_pin() {
+  local sha="$1" dest="$2" rel attempt
+
+  [[ -n "$GITROOT" ]] || return 1
+
+  if ! have_commit "$sha"; then
+    # Only worth a network round-trip if there is somewhere to fetch FROM. In the fixture (a bare
+    # `git init` with no remote) there is not, and `git fetch origin` would just fail slowly.
+    git -C "$GITROOT" remote get-url origin >/dev/null 2>&1 || return 1
+
+    # RETRY. This fetch is the one part of the check that is not a function of the receiver's tree, and
+    # a failure here costs more than a slow run: it drops us into the degraded path below. Three tries
+    # with a short backoff turns "GitHub blinked" from an outcome into a non-event. It cannot fix a pin
+    # that names a commit which does not exist — nothing can — and that case still exits non-zero after
+    # three quick, cheap failures.
+    for attempt in 1 2 3; do
+      git -C "$GITROOT" fetch --quiet --depth 1 origin "$sha" 2>/dev/null && break
+      [[ "$attempt" -eq 3 ]] && return 1
+      sleep $(( attempt * 2 ))
+    done
+    have_commit "$sha" || return 1
+  fi
+
+  for rel in "${FILES[@]}"; do
+    mkdir -p "$dest/$(dirname "$rel")"
+    git -C "$GITROOT" show "$sha:dist/dotnet/$rel" > "$dest/$rel" 2>/dev/null || return 1
+  done
+}
 
 # XML well-formedness guard (.github#29). The drift check compares files byte-for-byte,
 # so a malformed-but-verbatim source (e.g. a `--` inside an XML comment) passes --check
@@ -126,16 +277,105 @@ if [[ -z "$TARGET" ]]; then
 fi
 TARGET="$(cd "$TARGET" && pwd)"
 
+# ---- Which baseline does --check measure this receiver against? (.github#592) --------------------
+#
+# BASE is the directory of canonical files to compare with, and BASE_DESC names the commit it came
+# from so a red gate can state its own yardstick. Two modes, and the difference is the whole item:
+#
+#   PINNED  — BASE is dist/dotnet/ AS OF the receiver's pin. The verdict then depends only on the
+#             receiver's own tree, so a change landing in .github@main cannot touch it. No race.
+#   LEGACY  — no pin: BASE is dist/dotnet/ as checked out (main). Exactly today's behaviour, race and
+#             all. This is the state every receiver is in until the propagate bot pins it, and keeping
+#             it working is what makes this rollout unable to freeze anybody.
+#
+# apply/adopt ALWAYS distribute from $SRC — a sync writes what .github ships NOW. Only --check reads
+# the pin, so BASE is deliberately consulted in the check arm alone.
+BASE="$SRC"
+BASE_DESC="dist/dotnet/ as checked out here"
+PIN=""
+PINDIR=""
+BEHIND=""
+PIN_UNRESOLVED=""
+cleanup() { [[ -z "$PINDIR" ]] || rm -rf "$PINDIR"; }
+trap cleanup EXIT
+
+if [[ "$mode" == "check" ]]; then
+  PIN="$(read_pin "$TARGET")"
+  if [[ -z "$PIN" ]]; then
+    echo "NOTE: no $PIN_REL here, so this repo is checked against .github as currently checked out."
+    echo "      That answer depends on .github's main AT CI TIME, so an unrelated change there can red-"
+    echo "      light this repo's open PRs (.github#592). It is not a fault in this repo and there is"
+    echo "      nothing to do: build-config-propagate (#626) writes the pin on its next sync PR, and"
+    echo "      this stops. Until then, legacy behaviour is preserved exactly."
+  else
+    PINDIR="$(mktemp -d "${TMPDIR:-/tmp}/fsgg-build-config-pin.XXXXXX")"
+    if materialize_pin "$PIN" "$PINDIR"; then
+      BASE="$PINDIR"
+      BASE_DESC="FS-GG/.github@${PIN:0:12} dist/dotnet/ (this repo's pin)"
+
+      # Is the receiver behind? Answer it ONLY with real history. Every receiver's CI clones .github at
+      # depth 1 and materialize_pin then fetches the pinned commit as a SECOND, disconnected shallow
+      # root — so ancestry and commit counts are literally unanswerable there. Asking anyway would
+      # print a confident lie ("your pin is not an ancestor of main!") about every correctly-pinned
+      # repo in the org, on every run. A gate that cries wolf by construction is one nobody reads.
+      head_sha="$(git -C "$GITROOT" rev-parse HEAD 2>/dev/null || true)"
+      shallow="$(git -C "$GITROOT" rev-parse --is-shallow-repository 2>/dev/null || echo true)"
+      if [[ -n "$head_sha" && "$PIN" != "$head_sha" ]]; then
+        BEHIND="the pin is not the .github commit this check is running from (${head_sha:0:12})"
+        if [[ "$shallow" == "false" ]]; then
+          n="$(git -C "$GITROOT" rev-list --count "$PIN..$head_sha" -- dist/dotnet scripts/sync-build-config.sh 2>/dev/null || true)"
+          [[ -z "$n" || "$n" == "0" ]] || BEHIND="$n build-config change(s) behind ${head_sha:0:12}"
+        fi
+      fi
+    else
+      # FAIL OPEN, AND MEAN IT.
+      #
+      # We know this repo INTENDS to be pinned — it committed a pin — but we cannot read the baseline it
+      # names. So we cannot tell "behind" from "hand-edited", and the two have opposite verdicts. The
+      # only honest thing is to REFUSE TO JUDGE: warn loudly, and do not fail.
+      #
+      # This branch used to just fall back to comparing against main, and that was WRONG in the precise
+      # way this whole item is about. A receiver that is merely BEHIND does not match main — so the
+      # fallback RED-LIT it. One transient `git fetch` blip in CI was therefore enough to re-create the
+      # merge freeze (#499/#536) on an innocent PR that changed nothing, on a REQUIRED check, while the
+      # comment above it claimed to be failing open. A gate that reddens people for a network hiccup is
+      # the defect wearing a new hat.
+      #
+      # The residual, stated plainly: a receiver that BOTH corrupts its pin AND hand-edits a managed file
+      # goes green. That is accepted. It requires a deliberate, conspicuous edit to a file whose only
+      # content is a bot-written SHA — visible in any review — and the propagate bot rewrites both halves
+      # on its next run, after which the check bites again. Weigh that against the alternative, which is
+      # freezing four repos because GitHub's git endpoint blinked.
+      PIN_UNRESOLVED=1
+      echo "WARN: $PIN_REL pins FS-GG/.github@${PIN:0:12}, which could not be resolved (unknown commit," >&2
+      echo "      unfetchable after 3 tries, or a managed file did not exist at it)." >&2
+      echo "      This check CANNOT be evaluated: without that baseline there is no way to tell a repo" >&2
+      echo "      that is merely BEHIND from one with a HAND-EDITED file, and those have opposite" >&2
+      echo "      verdicts. Refusing to guess — reporting ADVISORY and passing (.github#592)." >&2
+      echo "      Re-sync to rewrite the pin; the propagate bot will also do it on its next run." >&2
+      # Drop OUR scratch dir by name. Never glob the tmp prefix: a parallel run of this script owns a
+      # sibling directory matching the same pattern, and a bulk rm would delete a baseline out from
+      # under it mid-diff.
+      rm -rf "$PINDIR"; PINDIR=""
+    fi
+  fi
+fi
+
 drift=0
 for rel in "${FILES[@]}"; do
+  # apply/adopt DISTRIBUTE from $SRC — a sync writes what .github ships now, always.
+  # check COMPARES against $BASE — the receiver's pinned commit when it has one, else $SRC.
+  # These are different questions and they must not collapse back into one variable: diffing against
+  # $SRC in the check arm is precisely the race #592 removed.
   src="$SRC/$rel"
+  base="$BASE/$rel"
   dst="$TARGET/$rel"
 
   case "$mode" in
     check)
       if [[ ! -f "$dst" ]]; then
         echo "DRIFT (missing): $rel"; drift=1
-      elif ! diff -q "$src" "$dst" >/dev/null 2>&1; then
+      elif ! diff -q "$base" "$dst" >/dev/null 2>&1; then
         echo "DRIFT (differs): $rel"; drift=1
       else
         echo "ok: $rel"
@@ -207,6 +447,47 @@ for rel in "${FILES[@]}"; do
   esac
 done
 
+# ---- Record the provenance pin (.github#592) -----------------------------------------------------
+#
+# ONLY on a fully clean sync. `drift` is non-zero here when a file was REFUSED (a hand-authored .props,
+# or an adopt whose *.local target was taken), and in that case the receiver's managed files are NOT
+# the content of any single .github commit. A pin written over that state would be a false claim, and
+# --check would then measure a half-synced repo against a baseline it never matched — turning a loud,
+# actionable refusal into a silent, permanent red. So the pin is earned by a complete sync, or not
+# written at all.
+#
+# A missing source_sha (no git, a tarball, an exported tree) is NOT fatal: the files still sync and the
+# receiver stays in legacy mode. Refusing to distribute over an unknowable pin would be an outage we
+# inflicted on ourselves for a provenance note.
+if [[ "$mode" != "check" && "$drift" -eq 0 ]]; then
+  pin_sha="$(source_sha)"
+  if [[ "$pin_sha" =~ ^[0-9a-f]{40}$ ]]; then
+    write_pin "$TARGET" "$pin_sha"
+  else
+    echo "WARN: no $PIN_REL written — the FS-GG/.github commit being distributed is not knowable here." >&2
+    echo "  Either this is not a git checkout, or dist/dotnet/ has UNCOMMITTED changes (so the files just" >&2
+    echo "  written match no commit, and any pin would be a false claim). The sync itself is complete and" >&2
+    echo "  correct; the receiver simply stays on the pre-#592 compare-against-main drift check." >&2
+    echo "  Commit dist/dotnet/, or pass FSGG_BUILD_CONFIG_SHA=<sha>, to pin it." >&2
+  fi
+fi
+
+# UNEVALUATABLE, NOT FAILED (.github#592). The pin named a baseline we could not read, so the DRIFT
+# lines above were produced against main — which a merely-BEHIND receiver never matches. Reporting them
+# as a failure would red-light an innocent PR on a required check, which is the freeze this item exists
+# to end. Print them as ADVISORY and pass; the pin, once resolvable again, gives a real verdict.
+if [[ "$mode" == "check" && -n "$PIN_UNRESOLVED" ]]; then
+  if [[ "$drift" -ne 0 ]]; then
+    echo ""
+    echo "ADVISORY (not a failure): the file(s) above differ from .github as currently checked out."
+    echo "  Because $PIN_REL could not be resolved, this is NOT evidence of a hand-edit — a repo that is"
+    echo "  simply BEHIND the org baseline differs from it in exactly this way, and that is green"
+    echo "  (.github#592). Re-sync to rewrite the pin and get a real verdict."
+  fi
+  echo "Done ($mode; pin unresolved — check reported ADVISORY, see WARN above)."
+  exit 0
+fi
+
 if [[ "$mode" == "check" && "$drift" -ne 0 ]]; then
   # Name a runnable command, not a relative path that exists only in .github (#633). Both forms are
   # printed because there are two readers of this failure and they are standing in different places:
@@ -223,7 +504,21 @@ if [[ "$mode" == "check" && "$drift" -ne 0 ]]; then
   # that only works once is the same defect as one that never works.
   {
     echo ""
-    echo "Build-config drift detected: the file(s) marked DRIFT above differ from the org source of truth."
+    echo "Build-config drift detected: the file(s) marked DRIFT above differ from $BASE_DESC."
+    if [[ -n "$PIN" && "$BASE" != "$SRC" ]]; then
+      # The pinned reading of a red gate, and it is a genuinely different accusation from the old one.
+      # Pre-#592 a red here often meant "somebody else changed .github and you have not caught up yet" —
+      # not your fault, not fixable from your branch. It cannot mean that any more: the baseline IS the
+      # commit this repo says its files came from. So a difference is a LOCAL EDIT, every time, and the
+      # author reading this can fix it from the branch they are already on. Say so, or they will go
+      # looking for the upstream change that is no longer there.
+      echo ""
+      echo "This repo is PINNED to FS-GG/.github@${PIN:0:12}, and the files above do not match what that"
+      echo "commit distributes. So this is NOT 'you are behind main' — being behind main is green now"
+      echo "(.github#592). A managed file has been HAND-EDITED in this repo. Re-sync to restore it, and"
+      echo "put any repo-specific settings in Directory.Build.local.props / Directory.Packages.local.props,"
+      echo "which the sync never touches."
+    fi
     echo ""
     echo "This script lives in FS-GG/.github and is NOT checked into the repo being checked, so there is"
     echo "no 'scripts/sync-build-config.sh' in $TARGET. Re-sync with whichever fits where you are:"
@@ -245,5 +540,24 @@ if [[ "$mode" == "check" && "$drift" -ne 0 ]]; then
 fi
 if [[ "$mode" != "check" && "$drift" -ne 0 ]]; then
   exit 1
+fi
+
+# GREEN, BUT BEHIND — and that is a NOTICE, not a failure (.github#592).
+#
+# This is the case the whole item turns on. The receiver's files faithfully match the commit it is
+# pinned to; .github has simply moved on since. Nobody did anything wrong, nothing in this PR can or
+# should fix it, and failing here would re-create the merge freeze the pin exists to end. The bot
+# (#626) already has a rolling, auto-merging PR open to close the gap.
+#
+# Deliberately NOT bounded ("fail if more than N commits / N days behind"). A staleness bound would
+# reintroduce a failure that depends on time and on .github's commit rate rather than on this repo's
+# tree — which is the exact class of defect being removed. Currency is the bot's job to enforce, and
+# this line's job is to make the gap visible while it does it.
+if [[ "$mode" == "check" && -n "$BEHIND" ]]; then
+  echo ""
+  echo "NOTICE: build config is coherent with its pin, and BEHIND the org baseline ($BEHIND)."
+  echo "        This is GREEN on purpose. Being behind is not a defect in this PR and is not yours to"
+  echo "        fix here: build-config-propagate (.github#626) keeps a rolling, auto-merging sync PR"
+  echo "        open in this repo that bumps the managed files and $PIN_REL together."
 fi
 echo "Done ($mode)."

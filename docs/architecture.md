@@ -166,7 +166,9 @@ Reading one repo teaches you all of them. The conventions are consistent:
   are byte-identical copies distributed from this repo's
   [`dist/dotnet/`](../dist/dotnet/) by
   [`scripts/sync-build-config.sh`](../scripts/sync-build-config.sh); repo-specific
-  settings live in `*.local.props`. A drift check fails the PR (see §7).
+  settings live in `*.local.props`. A drift check fails the PR — but it measures
+  against the commit the receiver **pinned**, not against `.github@main`, so being
+  behind is green and only a hand-edit is red (ADR-0036; see §7).
 
 ---
 
@@ -474,7 +476,7 @@ The contracts that hold the system together:
 | `game-scene-adapter` | Game | the `FS.GG.Game.Render` package (projects sim state onto `FS.GG.UI.Scene` drawables — the one edge back down) | Rendering |
 | `fs-gg-audio` | Audio | the `FS.GG.Audio.Core`/`.Host`/`.Engine`/`.Elmish` packages (BCL-only audio bottom layer, `$(FsGgAudioVersion)` axis) | Rendering (template `game`/`sample-pack`, gated) |
 | `keyboard-input` | Rendering | the `FS.GG.UI.KeyboardInput` `Keymap` surface (value type + rebind + `Keymap.resolve`/conflict diagnostics; ships in the fs-gg-ui coherent set @ `0.5.0`, [ADR-0028](adr/0028-keyboard-input-config-mechanism-policy-boundary.md)) | Game (`FS.GG.Game.Render` default command→key keymap) |
-| `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` | all component repos |
+| `shared-build-config` | **.github** | `dist/dotnet/*` + `sync-build-config.sh` (+ the receiver's `.config/fsgg-build-config.sha` pin, ADR-0036) | all component repos |
 | `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
 | `skill-registry` | **.github** | [`registry/skills.yml`](../registry/skills.yml) — the org's authoritative skill catalog (process + product; `id`, `scope`, `owner`, `source`, canonical-body `sha256`, `materializes-when`, and the optional `mirrored` frozen-mirror obligation — absent means *not classified*, never `false`), reconciled from the producer skill-manifests (ADR-0017). An OPTIONAL, ADDITIVE field **is** schema growth under ADR-0015 (decided [#686](https://github.com/FS-GG/.github/issues/686)), so `mirrored` owes a `schemaVersion` 1→2 bump — paid publish-before-flip, once `Fsgg.Registry` learns the field ([FS.GG.SDD#420](https://github.com/FS-GG/FS.GG.SDD/issues/420)) | **.github** (the union gate + registry validation) |
 
@@ -603,7 +605,9 @@ Composition happens **at scaffold time**, not by vendoring:
                                                                applied via         (FS.GG.Templates)
 
  FS.GG.Contracts ── validates ──▶ registry/dependencies.yml   (FS-GG/.github)
- dist/dotnet/*  ── sync-build-config.sh ──▶ Directory.Build.props in all component repos
+ dist/dotnet/*  ── sync-build-config.sh ──▶ Directory.Build.props + .config/fsgg-build-config.sha
+                                            in all component repos  (the pin the drift gate
+                                            is judged against — ADR-0036, NOT .github@main)
 ```
 
 The result is a real, windowed F# UI app plus a `.fsgg/` lifecycle skeleton you
@@ -622,8 +626,23 @@ install is what keeps the composition honest. See the
   `.config/dotnet-tools.json`, distributed verbatim by
   [`sync-build-config.sh`](../scripts/sync-build-config.sh). Each repo imports a
   `*.local.props` for repo-specific settings. A `--check` mode is the drift gate,
-  run by the reusable `contract-coherence.yml` workflow (ADR-0006). See
-  [`docs/build/README.md`](build/README.md).
+  run by the reusable `contract-coherence.yml` workflow (ADR-0006) and by each
+  receiver's own `gate.yml`. See [`docs/build/README.md`](build/README.md).
+- **The drift gate compares against a PIN, not against `main`** (ADR-0036,
+  [#592](https://github.com/FS-GG/.github/issues/592)). Each receiver commits
+  `.config/fsgg-build-config.sha` — the `.github` commit its managed files came from —
+  and `--check` diffs against **that** commit's `dist/dotnet/`. This is a **load-bearing
+  shape rule**, not a detail: the receivers check `.github` out at `ref: main`, so while
+  the gate compared against `main` the verdict of a *required* check was a function of
+  **another repo's moving branch at CI time**. A receiver could not make it green from its
+  own PR, and any edit here red-lit **every open PR in every adopting repo** — twice, once
+  for a change to an **XML comment**. Now: **behind → green** (a loud notice; the
+  `build-config-propagate` bot's rolling PR bumps files+pin together), **hand-edited →
+  red**. An absent pin means legacy mode, so unpinned receivers are unchanged.
+- **Distribution edges must not make the consumer's gate depend on the producer's `main`.**
+  ADR-0036 generalises past build config: any org→repo distribution whose *enforcement* runs
+  in the consumer's CI has to be judged against something in the consumer's own tree, or the
+  producer's every commit becomes a merge freeze downstream.
 - **Locked restore everywhere, and it must be COLD.** Every project commits
   `packages.lock.json`; CI restores `--locked-mode` (gated on `GITHUB_ACTIONS`), and
   `NU1603`/`NU1608` are promoted to errors so a silent version *substitution* fails the

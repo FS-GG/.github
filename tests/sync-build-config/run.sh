@@ -260,6 +260,190 @@ else
   ok "global.json: correctly NOT in FILES yet — adding it before the receivers adopt would freeze 4 repos"
 fi
 
+# =================================================================================================
+# THE PROVENANCE PIN (.github#592) — --check measures against the receiver's PIN, not against main.
+#
+# The defect: every receiver's gate.yml checks .github out at `ref: main` and runs --check, so the
+# verdict was a function of ANOTHER REPO'S MOVING BRANCH at the moment CI happened to run. A receiver
+# could not make the check green from its own PR, and any edit to dist/dotnet/ red-lit every open PR
+# in every adopting repo. It fired twice: #499 (froze FS.GG.SDD for hours) and #536 — where a change
+# to an XML COMMENT was enough to redden a green, in-flight PR.
+#
+# These legs need a .github whose history the fixture CONTROLS — the real one cannot be moved forward
+# under a test. So make_org() builds a throwaway one carrying the REAL script and the REAL dist/dotnet/,
+# and commits it. The script under test is therefore still the real script, driven against a source of
+# truth that can be made to move exactly as #536 moved it.
+# =================================================================================================
+
+if ! command -v git >/dev/null 2>&1; then
+  bad "pin legs (#592) need git" "git is not on PATH; the pin is resolved out of .github's object store"
+else
+
+# make_org -> prints a fresh throwaway FS-GG/.github (real script + real dist/dotnet/), committed.
+make_org() {
+  local org; org="$(mktemp -d "$WORK/org-XXXXXX")"
+  mkdir -p "$org/scripts" "$org/dist/dotnet"
+  cp "$SCRIPT" "$org/scripts/sync-build-config.sh"
+  cp -R "$SRC/." "$org/dist/dotnet/"
+  git -C "$org" init -q
+  git -C "$org" config user.email 'fixture@example.invalid'
+  git -C "$org" config user.name  'sync-build-config fixture'
+  git -C "$org" config commit.gpgsign false
+  git -C "$org" add -A
+  git -C "$org" commit -q -m 'org baseline'
+  printf '%s' "$org"
+}
+
+# org_run <org> <flag-or-empty> <target> -> rc; combined output in $OUT.
+# Runs the copy of the script INSIDE that org checkout, so it resolves its pin from that history.
+org_run() {
+  local org="$1" flag="$2" target="$3" rc=0
+  if [ -n "$flag" ]; then OUT="$(bash "$org/scripts/sync-build-config.sh" "$flag" "$target" 2>&1)" || rc=$?
+  else                    OUT="$(bash "$org/scripts/sync-build-config.sh"        "$target" 2>&1)" || rc=$?; fi
+  return "$rc"
+}
+
+# upstream_comment_edit <org> — reproduce #536: change an XML COMMENT in a managed file, nothing else.
+# Inserted before the closing root tag so the file stays well-formed; the script REFUSES to distribute
+# malformed XML (#29), which would make these legs vacuous in a way that still looked like a pass.
+upstream_comment_edit() {
+  local props="$1/dist/dotnet/Directory.Build.props" tmp; tmp="$(mktemp)"
+  awk '/^<\/Project>/ { print "  <!-- upstream comment-only edit: this is .github#536 -->" } { print }' \
+    "$props" > "$tmp"
+  cmp -s "$props" "$tmp" && { rm -f "$tmp"; return 1; }   # a no-op edit would make every leg below vacuous
+  mv "$tmp" "$props"
+  git -C "$1" add -A
+  git -C "$1" commit -q -m 'comment-only edit to the shared build config (#536)'
+}
+
+PIN_REL=".config/fsgg-build-config.sha"
+
+# --- a clean sync records the pin ----------------------------------------------------------------
+ORG="$(make_org)"; A="$(git -C "$ORG" rev-parse HEAD)"
+t="$(fresh_target)"; rc=0; org_run "$ORG" "" "$t" || rc=$?
+if [ "$rc" -eq 0 ] && [ -f "$t/$PIN_REL" ] && grep -qx "$A" "$t/$PIN_REL"; then
+  ok "apply records the .github commit it distributed in $PIN_REL (#592)"
+else
+  bad "apply must pin the receiver to the commit it synced from (#592)" \
+      "rc=$rc; want $A"$'\n'"pin: $(cat "$t/$PIN_REL" 2>&1)"$'\n'"$OUT"
+fi
+
+# --- THE REGRESSION: .github moves, and the receiver's PR stays GREEN -----------------------------
+# This is #592 in one assertion. Pre-fix, this comment-only upstream edit turned the receiver RED on a
+# required check it could not make green from its own branch — which is what froze FS.GG.SDD twice.
+if upstream_comment_edit "$ORG"; then
+  B="$(git -C "$ORG" rev-parse HEAD)"
+  rc=0; org_run "$ORG" "--check" "$t" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "an upstream dist/dotnet/ change does NOT red-light a pinned receiver (#592 — the whole item)"
+  else
+    bad "a pinned receiver must stay GREEN when .github@main moves (#592)" \
+        "This is the merge freeze: #499 and #536 both red-lit finished, green PRs in repos that had
+changed nothing. The receiver's files still match its pin ($A); .github merely moved to $B.
+rc=$rc"$'\n'"$OUT"
+  fi
+
+  # ...and it must SAY it is behind. Green-and-silent would hide staleness completely; the deal #592
+  # strikes is that staleness becomes visible and bot-remediated, not that it becomes invisible.
+  if [ "$rc" -eq 0 ] && printf '%s' "$OUT" | grep -qi "BEHIND the org baseline"; then
+    ok "a behind-but-coherent receiver is told so, loudly, while staying green (#592)"
+  else
+    bad "being behind must be reported, not silently tolerated (#592)" "$OUT"
+  fi
+
+  # --- ...while a REAL hand-edit is still RED, and is now named correctly -------------------------
+  # The check keeps the only job it can honestly do: catching a defect the PR author can actually fix.
+  printf '%s\n' '<Project><!-- hand-edited by the receiver --></Project>' > "$t/Directory.Build.props"
+  rc=0; org_run "$ORG" "--check" "$t" || rc=$?
+  if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q "DRIFT (differs): Directory.Build.props"; then
+    ok "a hand-edited managed file is still RED against the pin (#592 does not gut the check)"
+  else
+    bad "a hand-edited managed file must fail the check (#592)" "rc=$rc"$'\n'"$OUT"
+  fi
+
+  # The accusation must be the RIGHT one. Pre-#592 a red here usually meant "you are behind"; it cannot
+  # mean that any more, and a message that still says so sends the author hunting an upstream change
+  # that is not the cause.
+  if printf '%s' "$OUT" | grep -qi "HAND-EDITED"; then
+    ok "the red names a hand-edit — not 'you are behind', which is now green (#592)"
+  else
+    bad "a pinned red must tell the author it is a LOCAL edit they can fix from their branch (#592)" "$OUT"
+  fi
+else
+  bad "#592 fixture setup: the upstream comment edit was a no-op" \
+      "Directory.Build.props has no '</Project>' line to insert before — the legs above would be vacuous."
+fi
+
+# --- LEGACY MODE: an UNPINNED receiver behaves exactly as it did before ---------------------------
+# This is what makes the rollout incapable of freezing anyone: until the propagate bot writes a pin,
+# every receiver keeps today's semantics. If this leg ever flips green, the migration has silently
+# stopped checking the repos that have not been pinned yet.
+t2="$(fresh_target)"
+cp "$SRC/Directory.Build.props" "$t2/"; cp "$SRC/Directory.Packages.props" "$t2/"
+mkdir -p "$t2/.config"; cp "$SRC/$MANIFEST" "$t2/$MANIFEST"      # synced content, but NO pin file
+rc=0; org_run "$ORG" "--check" "$t2" || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q "DRIFT (differs): Directory.Build.props"; then
+  ok "an UNPINNED receiver still compares against main — legacy behaviour preserved (#592 rollout)"
+else
+  bad "an unpinned receiver must keep the pre-#592 compare-against-main behaviour" \
+      "Otherwise the not-yet-pinned repos stop being checked at all. rc=$rc"$'\n'"$OUT"
+fi
+
+# --- an UNRESOLVABLE pin FAILS OPEN, loudly — ON A RECEIVER THAT IS BEHIND -------------------------
+#
+# THE SETUP IS THE ASSERTION. An earlier version of this leg synced the receiver to B (== the org's
+# current baseline) and THEN corrupted its pin — so the degraded comparison happened to find the files
+# identical to main and exited 0 for a reason that had nothing to do with failing open. It asserted the
+# property without ever exercising it.
+#
+# The case that actually bites is a receiver that is BEHIND (files at A, org at B) whose pin cannot be
+# resolved — because a merely-behind receiver does NOT match main, so a fallback that compares against
+# main RED-LIGHTS it. One transient `git fetch` blip in CI is enough to reach this state, and reddening
+# an innocent PR on a required check is the exact merge freeze (#499/#536) this whole item removes.
+#
+# So: pin a BEHIND receiver to a commit that never existed, and require GREEN.
+t3="$(fresh_target)"
+cp "$SRC/Directory.Build.props" "$t3/"; cp "$SRC/Directory.Packages.props" "$t3/"
+mkdir -p "$t3/.config"; cp "$SRC/$MANIFEST" "$t3/$MANIFEST"
+# ^ the REAL dist/dotnet, i.e. the org baseline BEFORE the fixture's upstream edit -> this receiver is
+#   coherent-but-behind relative to $ORG's HEAD (B), which carries the extra comment.
+printf '%s\n' "$(printf '0%.0s' $(seq 40))" > "$t3/$PIN_REL"   # a 40-hex SHA that is not a commit
+rc=0; org_run "$ORG" "--check" "$t3" || rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$OUT" | grep -qi "could not be resolved"; then
+  ok "an unresolvable pin on a BEHIND receiver passes with a warning — a fetch blip cannot freeze a repo (#592)"
+else
+  bad "an unresolvable pin must fail OPEN, even when the receiver is BEHIND (#592)" \
+      "The receiver is coherent-but-behind and its pin cannot be read. Falling back to a compare against
+main reddens it — which is the merge freeze this item exists to end, re-entered through a network blip.
+Without a readable baseline, BEHIND and HAND-EDITED are indistinguishable and have opposite verdicts:
+refuse to guess, and pass. rc=$rc (want 0)"$'\n'"$OUT"
+fi
+
+# ...and it must be honest that it did not actually check anything, rather than printing a green that
+# looks like a pass. An unevaluated gate reporting an ordinary success is #266's whole family.
+if printf '%s' "$OUT" | grep -qi "ADVISORY"; then
+  ok "the unevaluatable check says so — it does not pass itself off as a clean verdict (#592)"
+else
+  bad "an unresolvable pin must report ADVISORY, not a silent pass (#592)" "$OUT"
+fi
+
+# --- a DIRTY dist/dotnet/ must not be pinned ------------------------------------------------------
+# apply copies the WORKING TREE; a pin names a COMMIT. Syncing from a checkout with uncommitted changes
+# under dist/dotnet/ and stamping it with HEAD would hand the receiver files that match no commit — and
+# --check would then accuse that innocent receiver of the hand-edit the OPERATOR made upstream.
+printf '%s\n' '  <!-- uncommitted -->' >> "$ORG/dist/dotnet/Directory.Packages.props"   # never committed
+t4="$(fresh_target)"; rc=0; org_run "$ORG" "" "$t4" || rc=$?
+if [ "$rc" -eq 0 ] && [ ! -f "$t4/$PIN_REL" ]; then
+  ok "a sync from a DIRTY dist/dotnet/ writes no pin — a pin must not be a false claim (#592)"
+else
+  bad "syncing from an uncommitted dist/dotnet/ must not write a pin (#592)" \
+      "It would claim these files came from HEAD when they did not, and --check would then report the
+receiver as hand-edited. rc=$rc; pin: $(cat "$t4/$PIN_REL" 2>&1)"$'\n'"$OUT"
+fi
+git -C "$ORG" checkout -q -- dist/dotnet/Directory.Packages.props
+
+fi   # git available
+
 echo "sync-build-config fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::sync-build-config fixture FAILED"; exit 1; }
 echo "sync-build-config fixture — OK"

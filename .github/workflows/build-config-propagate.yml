@@ -18,6 +18,25 @@
 # lessons in that file (#463's 403 on branch protection, #266's "propagated" that had not, the confused
 # deputy adopting a fork's branch) were paid for once. They are not re-learned here.
 #
+# WHAT #592 CHANGED, AND WHY THIS WORKFLOW IS NO LONGER LOAD-BEARING FOR *UNBLOCKING* ANYONE.
+#
+# Shipping the push arm shortened the freeze; it could not remove it. The receivers' drift check still
+# compared their files against `.github@main` AT CI TIME, so between an edit landing here and the sync
+# PR landing there, every open PR in that repo was red on a required check. Worse, the freeze was still
+# REACHABLE INDEFINITELY: if the sync PR's own `gate` job went red (a config change that moves the
+# restore graph needs a lockfile regen in the same PR), auto-merge never fired and the repo stayed
+# frozen — see the fail-closed classifier at the bottom of this file, which exists to shout about
+# exactly that.
+#
+# So the receiver now carries a PIN — `.config/fsgg-build-config.sha`, written by `sync-build-config.sh`
+# and bumped by THIS workflow alongside the files — and its drift check measures against that commit
+# rather than against main. The check's verdict became a function of the receiver's own tree, being
+# behind became GREEN, and the freeze became structurally impossible instead of merely brief.
+#
+# This workflow's job is therefore CURRENCY, not rescue: it keeps the receivers up to date. A run that
+# fails now means a repo is drifting out of date, which is a real problem — it is no longer a repo that
+# cannot merge.
+#
 # CROSS-REPO WRITE — needs the org GitHub App, not GITHUB_TOKEN. Same prerequisites as
 # coordination-propagate: contents:write + pull_requests:write on each receiver, and the org secrets
 # FSGG_DISPATCH_APP_ID / FSGG_DISPATCH_APP_PRIVATE_KEY visible to .github.
@@ -121,6 +140,16 @@ jobs:
           APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
           TARGET: ${{ matrix.repo.full }}
           SOURCE_SHA: ${{ github.sha }}
+          # The provenance pin (#592). The receiver's drift check compares its managed files against
+          # dist/dotnet/ AS OF THIS COMMIT rather than against whatever main happens to be when its CI
+          # runs — which is what stops an edit here from red-lighting every open PR over there. So the
+          # sync PR must carry the files and the pin TOGETHER, and this is what tells the script which
+          # commit it is distributing.
+          #
+          # Passed explicitly even though the `dotgithub` checkout's HEAD *is* github.sha: the script's
+          # fallback derives the pin from the checkout, and a fallback that silently produces the right
+          # answer here is one nobody notices has broken. Say which commit we are shipping.
+          FSGG_BUILD_CONFIG_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
@@ -147,13 +176,20 @@ jobs:
           git push origin "$branch" --force
           # The title names the files the SCRIPT manages — which is not everything in `dist/dotnet/`.
           # `global.json` lives there and is deliberately NOT synced (#536/#561), and a title that
-          # claimed it would be describing a diff this PR does not contain.
-          title="chore: sync shared build config (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json)"
+          # claimed it would be describing a diff this PR does not contain. `.config/fsgg-build-config.sha`
+          # IS in the diff (it is the provenance pin, #592) and so it is named.
+          title="chore: sync shared build config (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json, .config/fsgg-build-config.sha)"
           # ONE LINE. A multi-line value here would start at column 0 and terminate the `run: |` block
           # scalar; indenting it to stay inside the block would prepend spaces to every line, which
           # markdown renders as a code block. coordination-propagate keeps its body on one line for the
           # same reason.
-          body="Automated, self-updating sync of the org-shared .NET build configuration from FS-GG/.github \`dist/dotnet/\` (last from \`${short}\`). This repo's \`Shared-build-config drift check\` compares its managed files against \`.github@main\` and fails the PR when they differ — so **until this merges, every open PR in this repo is red on that check** (#592). Before [#626](https://github.com/FS-GG/.github/issues/626) there was no channel that ever sent this update at all, and clearing the drift meant a human hand-syncing six repos. This is a **rolling** PR — later build-config changes update it in place. Auto-merge is armed: it lands on its own once **this repo's** required checks pass. Opened by the \`build-config-propagate\` workflow."
+          #
+          # THIS BODY USED TO SAY "until this merges, every open PR in this repo is red on that check",
+          # and as of #592 that is FALSE — which is exactly the kind of confidently-stale prose that
+          # gets a bot's PRs skim-read and ignored. The drift check now compares against the pin this
+          # PR carries, so a repo that is merely BEHIND is GREEN. Nothing is frozen while this sits.
+          # It should still land promptly — but the reason is currency, not a hostage situation.
+          body="Automated, self-updating sync of the org-shared .NET build configuration from FS-GG/.github \`dist/dotnet/\` (last from \`${short}\`), including \`.config/fsgg-build-config.sha\` — the provenance pin recording which \`.github\` commit these files came from. **Nothing in this repo is blocked while this PR is open.** Since [#592](https://github.com/FS-GG/.github/issues/592) the \`Shared-build-config drift check\` compares the managed files against **the commit named in that pin**, not against \`.github@main\`, so its verdict depends only on this repo's own tree: being behind is green, and only a hand-edited managed file is red. It did not always work that way — the check used to race \`.github@main\`, and an edit there (once, merely to an XML *comment*) red-lit every open PR in this repo on a required check nobody here could make green. Merging this simply brings the build config current. This is a **rolling** PR — later build-config changes update it in place. Auto-merge is armed: it lands on its own once **this repo's** required checks pass. Opened by the \`build-config-propagate\` workflow."
 
           # Select only a PR whose head is THIS repo's own branch. `--head` matches on branch NAME alone,
           # which also matches a FORK's branch of the same name — adopting one would make this workflow a
