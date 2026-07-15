@@ -21,6 +21,7 @@ module Options =
         | SetField
         | Child
         | Widen
+        | Overlap
         | Say
         | DoneCmd
         | VerifyPaths
@@ -72,7 +73,11 @@ module Options =
           Batch: bool
           /// `lint --strict` — a NOTE (not just an error) is fatal. Off, a note is advisory and lint still
           /// exits 0; on, any note fails the gate too (the pedantic board-health pass).
-          Strict: bool }
+          Strict: bool
+          /// `overlap <ref> --active` — check the item's touch-set against the LIVE claims in its own repo,
+          /// rather than against a second named item. Repo-scoped: a same-named token in another repo is not
+          /// a collision (#353).
+          Active: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -111,6 +116,7 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   set-field --batch <ref> Field=Value ...    write N fields in ONE aliased mutation (#448)
   child  <parent-ref> <child-ref>            attach a child issue to a parent
   widen  <ref> --paths T...                  widen a HELD item's touch-set
+  overlap <ref> --active | <a> <b>           does an item's touch-set collide? (repo-scoped, #353)
   say    <ref> --to W --message M            message another worker
   done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up
   verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
@@ -198,6 +204,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--all" :: t -> flags { acc with All = true } t
             | "--batch" :: t -> flags { acc with Batch = true } t
             | "--strict" :: t -> flags { acc with Strict = true } t
+            | "--active" :: t -> flags { acc with Active = true } t
 
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
@@ -254,7 +261,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Status = None
               All = false
               Batch = false
-              Strict = false }
+              Strict = false
+              Active = false }
 
         match args with
         | []
@@ -284,6 +292,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "set-field" :: rest -> flags { defaults with Command = SetField } rest
         | "child" :: rest -> flags { defaults with Command = Child } rest
         | "widen" :: rest -> flags { defaults with Command = Widen } rest
+        | "overlap" :: rest -> flags { defaults with Command = Overlap; Render = Text } rest
         | "say" :: rest -> flags { defaults with Command = Say } rest
         | "done" :: rest -> flags { defaults with Command = DoneCmd } rest
         | "verify-paths" :: rest -> flags { defaults with Command = VerifyPaths } rest

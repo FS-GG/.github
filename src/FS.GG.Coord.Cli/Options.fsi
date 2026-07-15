@@ -51,6 +51,9 @@ module Options =
         | Child
         /// Widen a held item's touch-set (`widen <ref> --paths T...`).
         | Widen
+        /// Report whether an item's touch-set overlaps another's, or the repo's live claims
+        /// (`overlap <ref> --active` | `overlap <ref-a> <ref-b>`). Repo-scoped (#353).
+        | Overlap
         /// Message another worker (`say <ref> --to W --message M`).
         | Say
         /// Stamp an item done, optionally rolling the parent up (`done <ref> [--flip] [--evidence E]`).
@@ -134,7 +137,11 @@ module Options =
           Batch: bool
 
           /// `--strict` (`lint`) — a NOTE is fatal too, not just an error (the pedantic board-health pass).
-          Strict: bool }
+          Strict: bool
+
+          /// `--active` (`overlap`) — check the item's touch-set against the LIVE claims in its own repo,
+          /// rather than against a second named item. Repo-scoped (#353).
+          Active: bool }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

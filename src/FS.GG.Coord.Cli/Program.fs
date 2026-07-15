@@ -366,6 +366,7 @@ let main argv =
             | SetField
             | Child
             | Widen
+            | Overlap
             | Say
             | DoneCmd
             | VerifyPaths

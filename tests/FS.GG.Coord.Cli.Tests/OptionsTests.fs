@@ -158,3 +158,24 @@ module OptionsTests =
     [<Fact>]
     let ``--strict is off by default - a note is advisory unless asked otherwise`` () =
         Assert.False((parse [ "lint" ] |> ok).Strict)
+
+    // ---- overlap (the #353 repo-scoped touch-set diagnostic) --------------------------------------
+
+    [<Fact>]
+    let ``overlap parses to its command and defaults to the text projection`` () =
+        let o = parse [ "overlap"; "FS.GG.SDD#401"; "--active" ] |> ok
+        Assert.Equal(Overlap, o.Command)
+        Assert.Equal(Text, o.Render)
+        Assert.True(o.Active)
+        Assert.Equal<string list>([ "FS.GG.SDD#401" ], o.Args)
+
+    [<Fact>]
+    let ``overlap takes two positional refs for the pairwise form`` () =
+        let o = parse [ "overlap"; "FS.GG.SDD#401"; "FS-GG/FS.GG.Rendering#402" ] |> ok
+        Assert.Equal(Overlap, o.Command)
+        Assert.False(o.Active)
+        Assert.Equal<string list>([ "FS.GG.SDD#401"; "FS-GG/FS.GG.Rendering#402" ], o.Args)
+
+    [<Fact>]
+    let ``--active is off by default`` () =
+        Assert.False((parse [ "overlap"; "FS.GG.SDD#401"; "FS.GG.SDD#403" ] |> ok).Active)

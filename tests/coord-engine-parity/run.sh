@@ -2051,6 +2051,69 @@ if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
   kill "$DP_SRV" 2>/dev/null
 fi
 
+# case 34 (xrepo-touchset-353) — the `overlap` command (#353). `Paths:` tokens are repo-relative, so a
+# touch-set comparison is only meaningful WITHIN a repo. `overlap` scopes to ONE repo: a same-named token in
+# ANOTHER repo is not a collision (two files in two repositories), and its holder is never named — while a
+# GENUINE same-repo overlap is still caught (scoping narrowed the set, not the test). Two shapes:
+# `overlap <ref> --active` (the item vs its repo's live claims) and `overlap <a> <b>` (the two items, or
+# DISJOINT-by-construction across a repo boundary). The engine already has `TouchSet.conflicts` repo-scoped
+# (case 35); this ports the command surface bash's #353 fixed.
+#
+# DISPOSED ON THE RECORD (ADR-0040 §5): the OVERLAP exit is the engine's `ExitContended=6`; the corpus's
+# `assert_fails` is the PROPERTY (a real overlap exits NON-ZERO), not bash's literal code. `widen`'s
+# collision-DETECT-and-notify half (case 34's second block) needs a notify write and is deferred as
+# 34-remainder — this slice ports the read-only `overlap` diagnostic.
+OV_OUT="$(mktemp)"; python3 "$HERE/overlap_server.py" >"$OV_OUT" 2>/dev/null & OV_SRV=$!; OV_PORT=""
+for _ in $(seq 1 50); do OV_PORT="$(head -n1 "$OV_OUT" 2>/dev/null)"; [ -n "$OV_PORT" ] && break; sleep 0.1; done
+rm -f "$OV_OUT"
+if [ -z "$OV_PORT" ]; then bad "overlap fixture bound a port"; else
+  ov() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$OV_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" overlap "$@" 2>&1; }
+
+  # --active: the cross-repo namesake (Rendering#402, same bare token) is NOT a collision.
+  oa="$(ov 'FS.GG.SDD#401' --active)"; oarc=$?
+  printf '%s' "$oa" | grep -q 'DISJOINT' \
+    && ok "case34: overlap --active — a same-named path in ANOTHER repo is not a collision (#353)" || bad "case34: 401 --active should be DISJOINT" "$oa"
+  case "$oa" in
+    *OVERLAP*|*Rendering*|*402*) bad "case34: overlap --active must never invent a cross-repo overlap (#353)" "$oa" ;;
+    *) ok "case34: overlap --active names no cross-repo holder (#353)" ;;
+  esac
+  [ "$oarc" -eq 0 ] \
+    && ok "case34: overlap --active exits 0 when the only namesake claim is in another repo (#353)" || bad "case34: 401 --active exit 0" "rc=$oarc"
+
+  # pairwise: different repos are DISJOINT by construction (no body read, no invented collision).
+  op="$(ov 'FS.GG.SDD#401' 'FS-GG/FS.GG.Rendering#402')"; oprc=$?
+  printf '%s' "$op" | grep -q 'different repos' \
+    && ok "case34: overlap a b — different repos are DISJOINT even on a same-named token (#353)" || bad "case34: cross-repo pair" "$op"
+  case "$op" in
+    *OVERLAP*) bad "case34: overlap a b must never invent a cross-repo overlap (#353)" "$op" ;;
+    *) ok "case34: overlap a b names no cross-repo collision (#353)" ;;
+  esac
+  [ "$oprc" -eq 0 ] \
+    && ok "case34: overlap a b exits 0 for a cross-repo pair (#353)" || bad "case34: cross-repo pair exit 0" "rc=$oprc"
+
+  # POSITIVE CONTROL (pairwise): a REAL same-repo overlap is STILL detected — scoping narrowed the set.
+  os="$(ov 'FS.GG.SDD#403' 'FS.GG.SDD#405')"; osrc=$?
+  printf '%s' "$os" | grep -q 'OVERLAP' \
+    && ok "case34: overlap a b — a real SAME-repo overlap is STILL detected (#353)" || bad "case34: same-repo pair overlap" "$os"
+  [ "$osrc" -ne 0 ] \
+    && ok "case34: ...and a real same-repo overlap exits NON-ZERO (engine ExitContended=6; bash's code disposed)" || bad "case34: same-repo pair non-zero" "rc=$osrc"
+
+  # POSITIVE CONTROL (--active): a real same-repo LIVE CLAIM is caught, and its holder named.
+  oac="$(ov 'FS.GG.SDD#405' --active)"; oacrc=$?
+  printf '%s' "$oac" | grep -q 'OVERLAP' \
+    && ok "case34: overlap --active — a genuine same-repo live claim is STILL detected (#353)" || bad "case34: 405 --active overlap" "$oac"
+  printf '%s' "$oac" | grep -q 'FS.GG.SDD#403' \
+    && ok "case34: ...and names the colliding same-repo item (#403)" || bad "case34: names colliding item" "$oac"
+  printf '%s' "$oac" | grep -q 'sdd-sib' \
+    && ok "case34: ...and names the holder it queues behind (sdd-sib) (#353)" || bad "case34: names holder" "$oac"
+  [ "$oacrc" -ne 0 ] \
+    && ok "case34: ...and exits NON-ZERO (engine ExitContended=6; bash's code disposed on the record)" || bad "case34: 405 --active non-zero" "rc=$oacrc"
+
+  kill "$OV_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
