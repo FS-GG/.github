@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **17 of 27 corpus cases** (~152 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **18 of 27 corpus cases** (~161 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -23,14 +23,15 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~152 assertions across **17 of 27 corpus cases**, 15 fixture
+`tests/coord-engine-parity/` harness (~161 assertions across **18 of 27 corpus cases**, 15 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
 `claim`'s column restore, the honest empty-queue reason, the git-remote repo scope, the `verify-paths`
-touch-set gate (OK/DRIFT/SKIP, #322's "I could not check is never a verdict", and the `--issue`
-repo-boundary refusals — #479 cross-repo straddle, #494 the repo-qualified issue read), and the full
-`take` exit-code contract. **Eight real defects the port was *for* have been closed in the engine along the
+touch-set gate (OK/DRIFT/SKIP, #322's "I could not check is never a verdict", the `--issue`
+repo-boundary refusals — #479 cross-repo straddle, #494 the repo-qualified issue read — the #430
+git-remote repo default when neither `--repo` nor `--issue` is given, and the cross-repo closing-ref
+SKIP), and the full `take` exit-code contract. **Eight real defects the port was *for* have been closed in the engine along the
 way**, each proven with a parity slice: [#516](https://github.com/FS-GG/.github/issues/516) (one item per
 worker), [#585](https://github.com/FS-GG/.github/issues/585) (distinct `take` exit codes),
 [#533](https://github.com/FS-GG/.github/issues/533) (`done` drops the worker's own claim),
@@ -112,26 +113,33 @@ fail-closed assertions re-expressed at the HTTP layer.
 
 **Progress (as of the `--issue` slice, 2026-07-15).** The harness is grown one defect/case at a time — each
 PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or `fix(engine): … (#NNN)`
-(a real port gap — fix the engine, then prove it). **15 of 27 cases fully covered, plus 3 partial (13, 23,
+(a real port gap — fix the engine, then prove it). **16 of 27 cases fully covered, plus 2 partial (13,
 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which are the differential
 harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 11, 12, 15, 20, 21, 22, 32, 33, 35, 40, 41, 42, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+| ✓ | 11, 12, 15, 20, 21, 22, 23, 32, 33, 35, 40, 41, 42, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `lint`/`issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
-| ◑ | 23 (core verdicts + `--issue` boundary) | `verify-paths` OK/DRIFT/SKIP + #322 fail-closed, and now the `--issue` port gap: #479 cross-repo straddle refusal (fail-closed both ways), #494 the repo-qualified issue read, `--repo` reduction + bare-repo `--issue` agreement, `--issue`-decides-repo, head-ref-read bypass; the SKIP-exit divergence + cross-repo closing-ref + #430-remote legs deferred on the record (see the remaining table) |
-| ◑ | 24 (`--issue` boundary, shared with 23) | the #479/#494 `verify-paths --issue` legs; the lock's adversarial interleavings (`reap`/`overlap`/`heartbeat` resurrection, forged/malformed markers) deferred — they need `reap`/`overlap` commands the engine lacks (see the remaining table) |
+| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`overlap`/`heartbeat` resurrection, forged/malformed markers) deferred — they need `reap`/`overlap` commands the engine lacks (see the remaining table) |
 
-**Remaining (11 full + the rest of 13), each classified as a port gap or a deliberate divergence:**
+Case **23 is now FULL**: `verify-paths` OK/DRIFT/SKIP + #322 fail-closed, the `--issue` boundary (#479
+straddle, #494 repo-qualified read, `--repo` reduction / bare-repo `--issue` agreement, `--issue`-decides-repo,
+head-ref-read bypass), the **#430 git-remote repo default** (repo off the checkout's remote when neither
+`--repo` nor `--issue` is given, resolved FREE/offline with no GraphQL — so a dead budget is never blamed on
+the checkout; no remote → an earned refusal), and the **cross-repo CLOSING-ref SKIP** (a PR closing another
+repo's issue → SKIP naming the other repo, no verdict across the boundary). The SKIP-exit divergence and
+bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
+EX_RATE-vs-checkout failure modes are structurally absent).
+
+**Remaining (10 full + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
 
 | case | what it needs | class |
 |---|---|---|
 | 10 (cache-and-budget) | re-express ETag-304 / "costs N `gh` calls" as HTTP request counts | the §3 "one hard problem" — the call-counting transformation |
-| 13-remainder | the epic-rollup / NO-TOUCH-SET `lint` rules (#496), `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — all deferred on the record when the #480 scope slice landed | new `lint`/`issues`/`reap` commands |
+| 13-remainder | the epic-rollup / NO-TOUCH-SET `lint` rules (#496), `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — all deferred on the record when the #480 scope slice landed (`gitRemoteRepo` is now shared with verify-paths' #430 default) | new `lint`/`issues`/`reap` commands |
 | 14 (no-touch-set-and-done) | `lint` NO-TOUCH-SET/epic-rollup rules | new `lint` command |
-| 23-remainder | the cross-repo CLOSING-ref (a PR closing another repo's issue → SKIP; the SKIP-exit divergence disposition again) and the #430 git-remote repo default for verify-paths (repo from the git remote when neither `--repo` nor `--issue` is given; an exhausted budget reported AS EX_RATE(75), not blamed on the checkout) — the `--issue` + #479/#494 legs are now DONE | remote-scope shares case 13's `gitRemoteRepo`; closing-ref shares the SKIP disposition |
-| 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`overlap`/`say --to` normalization — the `--issue`/#479/#494 legs are now DONE | needs `reap`/`overlap` commands the engine lacks (larger) |
+| 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`overlap`/`say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are now DONE | needs `reap`/`overlap` commands the engine lacks (larger) |
 | 25 (offboard-claims) | paginated open-issue scan for `who` (off-board markers) + starved `batch` prose | port gap (larger) |
 | 26 (expired-lease) | `reap` / expired-lease-vs-open-PR (#581) | new `reap` command |
 | 30 (pr-existence-697) | `who`/`adopt` land-the-finished-PR path (#697) | new `adopt` command |
@@ -142,8 +150,9 @@ harness D.4 disposes of, not engine-behaviour cases:
 
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
 into **new commands** (`lint`, `reap`, `adopt`/`landable`, `overlap`), **larger port gaps** (paginated
-off-board `who`, twin-session), the **call-counting transformation** (case 10), and a handful of
-**deliberate divergences** to dispose of on the record (case 23).
+off-board `who`, twin-session), and the **call-counting transformation** (case 10). The verify-paths
+repo-boundary divergences (case 23's SKIP-exit code and the absent `gh repo view` fallback) are now
+disposed on the record in the harness.
 
 ### D.2 — Cut the shim
 
@@ -196,9 +205,10 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 17 of 27 cases** ported to `tests/coord-engine-parity/` (~152 assertions); the rest
+      **In progress: 18 of 27 cases** ported to `tests/coord-engine-parity/` (~161 assertions); the rest
       remain (see the §5 D.1 ledger). Eight engine defects the port was *for* closed along the way, plus the
-      `verify-paths --issue` repo-boundary port gap (#479/#494) closed in the `--issue` slice.
+      `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
+      together close case 23 in full (the cross-repo closing-ref SKIP ported alongside).
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the

@@ -1080,6 +1080,52 @@ module Client =
             | -1 -> raw
             | i -> raw.Substring(i + 1)
 
+    // ---- #480/#430: the repo a command scopes to — the checkout you are STANDING IN ------------------
+    // Defined ABOVE verify-paths (and the worker-command `scopedRepo` below) because BOTH read the same
+    // signal: the git remote of the checkout. verify-paths' #430 default (neither `--repo` nor `--issue`)
+    // resolves the repo exactly the way `next`/`take`/`batch`/`who` do — one shared reader, one behaviour.
+
+    /// A GitHub remote URL → its `owner/repo`, or `None` when the URL is not a GitHub remote naming
+    /// exactly one owner/repo. Handles every form `git config remote.origin.url` yields:
+    /// `https://github.com/FS-GG/x(.git)`, `git@github.com:FS-GG/x(.git)`, `ssh://…/FS-GG/x.git`. A bare
+    /// host or a nested path is NOT a scope — bash's `*/*/*|*/` guard, held here as an exact one-slash
+    /// requirement — so a malformed remote can never be silently read as a repo.
+    let parseGitHubSlug (url: string) : string option =
+        match url.IndexOf("github.com", StringComparison.OrdinalIgnoreCase) with
+        | -1 -> None
+        | idx ->
+            let mutable s = url.Substring(idx + "github.com".Length).TrimStart(':', '/')
+
+            if s.EndsWith(".git", StringComparison.OrdinalIgnoreCase) then
+                s <- s.Substring(0, s.Length - 4)
+
+            s <- s.TrimEnd('/')
+            // owner/repo EXACTLY — one slash, both sides non-empty.
+            let parts = s.Split('/')
+
+            if parts.Length = 2 && parts.[0] <> "" && parts.[1] <> "" then
+                Some s
+            else
+                None
+
+    /// scope_repo (#480): the current checkout's `owner/repo`, read from `git config --get
+    /// remote.origin.url`. FREE and offline — deliberately NOT `gh repo view` — so resolving the scope
+    /// cannot burn GraphQL budget, and an exhausted budget can never be misreported as "you are not in a
+    /// checkout" (#430). `None` when there is no readable `origin` that parses as `owner/repo`.
+    let private gitRemoteRepo () : string option =
+        try
+            let psi = ProcessStartInfo("git", "config --get remote.origin.url")
+            psi.RedirectStandardOutput <- true
+            psi.RedirectStandardError <- true
+            psi.UseShellExecute <- false
+            use p = Process.Start psi
+            let url = p.StandardOutput.ReadToEnd().Trim()
+            p.WaitForExit()
+
+            if p.ExitCode <> 0 then None else parseGitHubSlug url
+        with _ ->
+            None
+
     // ---- verify-paths ----------------------------------------------------------------------------------
 
     /// Check a PR's changed files against the touch-set declared by the issue it implements.
@@ -1122,7 +1168,13 @@ module Client =
 
             // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
             // way every worker command reduces it — case 13's resolve_repo), else the `--issue`'s repo (the
-            // issue decides when no `--repo` is given). #430's git-remote default (neither flag) is deferred.
+            // issue decides when no `--repo` is given), else #430's git-remote default — the repo of the
+            // checkout you are standing in, read FREE and offline from `git config remote.origin.url`, the
+            // same signal `next`/`take`/`batch`/`who` scope to (#480). Deliberately NOT `gh repo view`
+            // (bash's fallback): repo resolution must never spend GraphQL, so an exhausted budget can never
+            // be dressed up as "not inside a checkout" — the exact fail this whole command guards against.
+            // With no remote either, there is no subject to check, so it refuses (an earned verdict, since
+            // `git config` failing is not a rate limit dressed up as one).
             let repo =
                 match opts.Repo with
                 | Some r -> Ok(resolveRepo r)
@@ -1130,10 +1182,13 @@ module Client =
                     match issueRef with
                     | Some ir -> Ok ir.Repo
                     | None ->
-                        eprint
-                            "fsgg-coord-engine: verify-paths needs --repo <name> (the repo the PR is in) or --issue <ref>."
+                        match gitRemoteRepo () with
+                        | Some slug -> Ok(resolveRepo slug)
+                        | None ->
+                            eprint
+                                "fsgg-coord-engine: verify-paths is not inside a GitHub checkout (no git remote), and neither --repo nor --issue names the repo the PR is in. Name it with --repo FS-GG/<repo>, or the issue with --issue <ref>."
 
-                        Result.Error ExitError
+                            Result.Error ExitError
 
             match repo with
             | Result.Error rc -> rc
@@ -1301,47 +1356,8 @@ module Client =
             )
 
     // ---- #480: the repo a WORKER command scopes to — the one you are STANDING IN --------------------
-
-    /// A GitHub remote URL → its `owner/repo`, or `None` when the URL is not a GitHub remote naming
-    /// exactly one owner/repo. Handles every form `git config remote.origin.url` yields:
-    /// `https://github.com/FS-GG/x(.git)`, `git@github.com:FS-GG/x(.git)`, `ssh://…/FS-GG/x.git`. A bare
-    /// host or a nested path is NOT a scope — bash's `*/*/*|*/` guard, held here as an exact one-slash
-    /// requirement — so a malformed remote can never be silently read as a repo.
-    let parseGitHubSlug (url: string) : string option =
-        match url.IndexOf("github.com", StringComparison.OrdinalIgnoreCase) with
-        | -1 -> None
-        | idx ->
-            let mutable s = url.Substring(idx + "github.com".Length).TrimStart(':', '/')
-
-            if s.EndsWith(".git", StringComparison.OrdinalIgnoreCase) then
-                s <- s.Substring(0, s.Length - 4)
-
-            s <- s.TrimEnd('/')
-            // owner/repo EXACTLY — one slash, both sides non-empty.
-            let parts = s.Split('/')
-
-            if parts.Length = 2 && parts.[0] <> "" && parts.[1] <> "" then
-                Some s
-            else
-                None
-
-    /// scope_repo (#480): the current checkout's `owner/repo`, read from `git config --get
-    /// remote.origin.url`. FREE and offline — deliberately NOT `gh repo view` — so resolving the scope
-    /// cannot burn GraphQL budget, and an exhausted budget can never be misreported as "you are not in a
-    /// checkout" (#430). `None` when there is no readable `origin` that parses as `owner/repo`.
-    let private gitRemoteRepo () : string option =
-        try
-            let psi = ProcessStartInfo("git", "config --get remote.origin.url")
-            psi.RedirectStandardOutput <- true
-            psi.RedirectStandardError <- true
-            psi.UseShellExecute <- false
-            use p = Process.Start psi
-            let url = p.StandardOutput.ReadToEnd().Trim()
-            p.WaitForExit()
-
-            if p.ExitCode <> 0 then None else parseGitHubSlug url
-        with _ ->
-            None
+    // `parseGitHubSlug` + `gitRemoteRepo` are defined above verify-paths (its #430 default reads the same
+    // remote); only the worker-command wrapper lives here.
 
     /// The repo a worker command (`next`/`take`/`batch`/`who`) scopes to. An explicit `--repo` wins and is
     /// resolved through `resolveRepo`; otherwise the scope defaults to the checkout you are standing in

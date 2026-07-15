@@ -1434,22 +1434,104 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths --issue bypass fixture bound a port
   kill "$VP_SRV" 2>/dev/null
 fi
 
-# DISPOSITION ON THE RECORD (not silently skipped): case 23's remaining legs are separate work —
-#   * SKIP EXIT CODE is a DELIBERATE DIVERGENCE. bash FAILS non-zero on an unlinked/undeclared PR without
-#     `--warn` (case 23 line 59: `assert_fails "…an unlinked PR fails without --warn"`); the engine makes
-#     SKIP always exit 0 — a PR with genuinely nothing to check is not a merge-blocking failure. Ported
-#     here as the engine's certified behaviour (SKIP is green both ways), NOT as bash's rc. The verdict
-#     TEXT (SKIP vs OK) still carries the distinction the gate needs.
-#   * the cross-repo CLOSING-REF (case 24 lines 148-165) — a PR that legitimately closes ANOTHER repo's
-#     issue via GitHub's cross-repo close (no --issue flag). The engine already reaches its cross-repo
-#     branch there and SKIPs (green, naming the other repo owner-qualified); bash fails it without --warn.
-#     Same SKIP-exit divergence as above, disposed the same way — the closing-ref fixture leg (a GraphQL
-#     nodes payload naming a foreign repo) is deferred, not the behaviour.
-#   * #430 — deriving the repo from the git REMOTE when neither `--repo` nor `--issue` is given, and
-#     reporting an exhausted GraphQL budget AS a rate limit (EX_RATE 75) rather than blaming the checkout.
-#     The engine's verify-paths REQUIRES `--repo` today (usage error when absent) — the #480 git-remote
-#     scoping already landed for `next`/`take`/`batch`/`who` (case 13), but is not yet wired into
-#     verify-paths. Tracked alongside cases 24 / 13-remainder.
+# ---- case 23-remainder: #430 — the repo comes off the git REMOTE (neither --repo nor --issue) --------
+#
+# With neither --repo nor --issue, verify-paths derives the PR's repo from the checkout you are standing
+# in — `git config remote.origin.url`, the same FREE/offline signal `next`/`take`/`batch`/`who` scope to
+# (#480), now wired into verify-paths. The corpus (case 23 lines 145-208) certifies this against
+# `gh repo view`; the engine deliberately does NOT call `gh repo view` (the disposition below), so the
+# property that survives the transport is: the PR is read from the repo the REMOTE names, and resolving it
+# spends NO GraphQL — asserted on the REQUEST, because the verdict is identical from either repo (the whole
+# trap: the fixtures would serve a healthy OK from the wrong repo too — case 23 lines 158-169).
+VP_REQLOG="$(mktemp)"; VP_CO="$(mktemp -d)"
+vpsrv FSGG_PARITY_REQLOG="$VP_REQLOG" -- verifypaths
+if [ -z "$VP_PORT" ]; then bad "verify-paths #430 fixture bound a port"; else
+  # A fake checkout whose ONLY signal is its remote; and a checkout with NO remote (bash's CO_NOREMOTE).
+  mkdir -p "$VP_CO/sdd" && git -C "$VP_CO/sdd" init -q && git -C "$VP_CO/sdd" remote add origin https://github.com/FS-GG/FS.GG.SDD.git
+  mkdir -p "$VP_CO/noremote" && git -C "$VP_CO/noremote" init -q
+  vpco() { local dir="$1"; shift; ( cd "$dir" \
+      && FSGG_GITHUB_API_BASE="http://127.0.0.1:$VP_PORT" FSGG_COORD_CACHE="$(mktemp -d)" \
+         "$ENGINE" verify-paths "$@" 2>&1 ); }
+
+  # (a) THE ACCEPTANCE: a bare verify-paths from an FS.GG.SDD checkout reaches a verdict — repo off the
+  #     remote, no flag given.
+  : >"$VP_REQLOG"
+  r7="$(vpco "$VP_CO/sdd" --pr 7)"; r7rc=$?
+  { [ "$r7rc" -eq 0 ] && printf '%s' "$r7" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "#430: a bare verify-paths (no --repo/--issue) from an SDD checkout reaches OK — repo off the remote (case 23)" \
+    || bad "#430 git-remote default OK parity" "rc=$r7rc: $r7"
+  # (a') …and the PR was read from THE REMOTE's repo — assert on the request, not the identical verdict.
+  grep -q 'GET /repos/FS-GG/FS.GG.SDD/pulls/7' "$VP_REQLOG" \
+    && ok "#430: ...and the PR is read from FS.GG.SDD — the repo the git remote named (case 23)" \
+    || bad "#430 PR read must hit the remote's repo" "$(cat "$VP_REQLOG")"
+  # (a'') …and resolving that repo spent NO GraphQL — the #430 acceptance re-expressed at the transport.
+  #       bash's bug was reading `gh repo view`'s empty result (a spent GraphQL call that had FAILED, its
+  #       reason `2>/dev/null || true`-d away) as "not inside a checkout". The engine reads `git config` —
+  #       offline, free — so a dead budget can never be misreported as a checkout problem: no /graphql.
+  grep -q 'POST /graphql' "$VP_REQLOG" \
+    && bad "#430: resolving the repo must spend NO GraphQL" "spent a /graphql call: $(cat "$VP_REQLOG")" \
+    || ok "#430: ...and resolved the repo with NO GraphQL — a dead budget can never be blamed on the checkout (case 23)"
+
+  # (b) No remote AND no flag: there is no subject to check, so it REFUSES — an EARNED refusal, since
+  #     `git config` failing is not a rate limit dressed up as one (the engine never spends budget to
+  #     resolve the repo, so the EX_RATE-vs-checkout ambiguity bash's `gh repo view` fallback risks — case
+  #     23 lines 171-208 — cannot arise here at all; see the disposition below).
+  nr="$(vpco "$VP_CO/noremote" --pr 7)"; nrrc=$?
+  { [ "$nrrc" -ne 0 ] \
+      && printf '%s' "$nr" | grep -q 'not inside a GitHub checkout' \
+      && printf '%s' "$nr" | grep -q -- '--repo FS-GG/<repo>'; } \
+    && ok "#430: no remote + no flag REFUSES with the earned 'not inside a checkout' + the --repo remedy (case 23)" \
+    || bad "#430 no-remote refusal parity" "rc=$nrrc: $nr"
+  case "$nr" in
+    *"FSGG-PATHS"*) bad "#430: a refusal is NOT a verdict" "printed a verdict with no subject: $nr" ;;
+    *) ok "#430: ...and reaches NO FSGG-PATHS verdict — a repo it could not name is a subject it never looked at (case 23)" ;;
+  esac
+  kill "$VP_SRV" 2>/dev/null
+fi
+rm -f "$VP_REQLOG"; rm -rf "$VP_CO"
+
+# ---- case 24: the cross-repo CLOSING-ref — a PR closing ANOTHER repo's issue (lines 148-165) ---------
+#
+# GitHub lets a PR close an issue in a DIFFERENT repo, so the closing-ref fallback can hand back a
+# cross-repo ref all on its own — no --issue flag involved. PR 11's branch is not item/<n>-…, so
+# resolution falls through to the GraphQL query, which answers FS-GG/FS.GG.Rendering#70. A touch-set there
+# says nothing about the files changed in SDD, so the only safe outcome is SKIP, naming the other repo —
+# never a verdict across the boundary. (The closing-ref answer is keyed to the PR in the query variables,
+# so the pre-existing unlinked SKIP — PR 9, which closes NOTHING — must survive the new arm untouched.)
+vpsrv -- verifypaths
+if [ -z "$VP_PORT" ]; then bad "verify-paths closing-ref fixture bound a port"; else
+  vpx() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$VP_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" verify-paths "$@" 2>&1; }
+  x11="$(vpx --pr 11 --repo FS.GG.SDD)"; x11rc=$?
+  printf '%s' "$x11" | grep -q 'FSGG-PATHS SKIP' \
+    && ok "verify-paths: a PR closing ANOTHER repo's issue is SKIP, not a verdict (case 24)" \
+    || bad "cross-repo closing-ref SKIP parity" "rc=$x11rc: $x11"
+  printf '%s' "$x11" | grep -q 'FS.GG.Rendering#70' \
+    && ok "verify-paths: ...and names the other repo it would have straddled (case 24)" \
+    || bad "cross-repo closing-ref must name the other repo" "$x11"
+  case "$x11" in
+    *"FSGG-PATHS OK"*|*"FSGG-PATHS DRIFT"*) bad "verify-paths: a cross-repo close reaches NO verdict" "printed a verdict across the boundary: $x11" ;;
+    *) ok "verify-paths: ...reaching no OK/DRIFT across the repo boundary (case 24)" ;;
+  esac
+  x9="$(vpx --pr 9 --repo FS.GG.SDD)"
+  printf '%s' "$x9" | grep -q 'FSGG-PATHS SKIP' \
+    && ok "verify-paths: a PR that closes NOTHING is still the unlinked SKIP — the PR-keyed arm did not swallow it (case 24)" \
+    || bad "unlinked SKIP must survive the closing-ref arm" "$x9"
+  kill "$VP_SRV" 2>/dev/null
+fi
+
+# DISPOSITION ON THE RECORD (not silently skipped): what verify-paths' repo boundary still leaves —
+#   * SKIP EXIT CODE is a DELIBERATE DIVERGENCE. bash FAILS non-zero on an unlinked/undeclared PR (and on a
+#     cross-repo close) without `--warn` (case 23 line 59; case 24 line 164); the engine makes SKIP always
+#     exit 0 — a PR with genuinely nothing to check is not a merge-blocking failure. Ported throughout as
+#     the engine's certified behaviour (SKIP is green both ways), NOT as bash's rc. The verdict TEXT (SKIP
+#     vs OK, naming the other repo) still carries the distinction the touch-set-drift gate needs.
+#   * #430's `gh repo view` FALLBACK is a DELIBERATE DIVERGENCE the engine does not implement. When there is
+#     no git remote, bash asks `gh repo view` (a GraphQL call) and must classify its FAILURE — a rate limit
+#     is EX_RATE(75), any other failure reports gh's own words, and only a clean empty answer is the earned
+#     "not inside a checkout" (case 23 lines 171-208). The engine resolves the repo ONLY from `git config`
+#     (free, offline) and has no gh-repo-view leg at all — so those failure modes are structurally absent:
+#     repo resolution can never touch the budget, which is the very property #430 exists to guarantee. The
+#     no-remote case is a plain refusal (leg (b) above), not a rate-limit classification.
 
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
