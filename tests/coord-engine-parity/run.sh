@@ -1400,15 +1400,18 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
     || bad "#494 Rendering DRIFT parity" "rc=$q2rc: $q2"
 
   # 4. --repo reductions and a bare-repo --issue are not false conflicts (case 24 lines 134-142).
-  printf '%s' "$(vpi --pr 7 --repo sdd --issue FS-GG/FS.GG.SDD#70)" | grep -q 'FSGG-PATHS OK' \
+  s1="$(vpi --pr 7 --repo sdd --issue FS-GG/FS.GG.SDD#70)"
+  printf '%s' "$s1" | grep -q 'FSGG-PATHS OK' \
     && ok "verify-paths --issue: a registry short-id --repo agrees with the issue's repo (case 24)" \
-    || bad "short-id --repo agreement" "$(vpi --pr 7 --repo sdd --issue FS-GG/FS.GG.SDD#70)"
-  printf '%s' "$(vpi --pr 7 --repo FS-GG/fs.gg.sdd --issue FS-GG/FS.GG.SDD#70)" | grep -q 'FSGG-PATHS OK' \
+    || bad "short-id --repo agreement" "$s1"
+  s2="$(vpi --pr 7 --repo FS-GG/fs.gg.sdd --issue FS-GG/FS.GG.SDD#70)"
+  printf '%s' "$s2" | grep -q 'FSGG-PATHS OK' \
     && ok "verify-paths --issue: a differently-cased --repo is not a conflict (case 24)" \
-    || bad "case-insensitive --repo agreement" "$(vpi --pr 7 --repo FS-GG/fs.gg.sdd --issue FS-GG/FS.GG.SDD#70)"
-  printf '%s' "$(vpi --pr 7 --repo FS.GG.SDD --issue FS.GG.SDD#70)" | grep -q 'FSGG-PATHS OK' \
+    || bad "case-insensitive --repo agreement" "$s2"
+  s3="$(vpi --pr 7 --repo FS.GG.SDD --issue FS.GG.SDD#70)"
+  printf '%s' "$s3" | grep -q 'FSGG-PATHS OK' \
     && ok "verify-paths --issue: a bare-repo --issue (owner defaults) is not a conflict (case 24)" \
-    || bad "bare-repo --issue agreement" "$(vpi --pr 7 --repo FS.GG.SDD --issue FS.GG.SDD#70)"
+    || bad "bare-repo --issue agreement" "$s3"
 
   # 5. --issue decides the repo when --repo is ABSENT — the issue, not the checkout (case 23 line 132-135).
   n1="$(vpi --pr 7 --issue FS-GG/FS.GG.SDD#70)"; n1rc=$?
