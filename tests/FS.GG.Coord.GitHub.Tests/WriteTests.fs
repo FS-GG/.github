@@ -53,7 +53,7 @@ let ``the CAS WINS when our marker is the lowest live id`` () =
               ok """{"id":901}""" // 2. post our marker
               ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we are the lowest
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Won held) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Equal(me, held.Worker)
@@ -71,7 +71,7 @@ let ``the CAS LOSES to a lower id, and WITHDRAWS its own marker`` () =
               ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 3. re-read: 901 beat us
               ok "" ] // 4. DELETE our 902
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
     | other -> failwith $"we should have lost to the lower id — got %A{other}"
 
@@ -90,7 +90,7 @@ let ``'we cannot tell' is a LOSS - our marker missing from the re-read withdraws
               ok "[]" // the re-read does not contain our marker at all
               ok "" ] // so we withdraw it
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Undecided _) -> ()
     | other -> failwith $"an unobservable outcome is a LOSS, never a win — got %A{other}"
 
@@ -105,7 +105,7 @@ let ``a FAILED re-read withdraws the marker and refuses - it never wins by defau
               Error(Http(502, "bad gateway")) // the re-read failed
               ok "" ] // withdraw
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Undecided _) -> ()
     | other -> failwith $"a failed re-read must not win the lock — got %A{other}"
 
@@ -123,7 +123,7 @@ let ``a marker we can neither win with NOR withdraw is reported LOUDLY - it is o
               Error(Http(502, "bad gateway"))
               Error(Http(500, "delete failed")) ]
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Error(Transport detail) -> Assert.Contains("orphaned", detail)
     | other -> failwith $"an orphaned marker must be loud — got %A{other}"
 
@@ -133,7 +133,7 @@ let ``the CAS refuses BEFORE posting when somebody else already holds a live loc
     // ours. Refuse cheaply.
     let transport = scripted [ ok (comments [ marker 901 "kite-461" "" ]) ]
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Lost w) -> Assert.Equal(them, w)
     | other -> failwith $"a live rival lock must be refused — got %A{other}"
 
@@ -149,7 +149,7 @@ let ``an UNPARSEABLE marker blocks the item - it is a claim held by nobody`` () 
 
     let transport = scripted [ ok (comments [ unparseable ]) ]
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok BlockedByUnparseableMarker -> ()
     | other -> failwith $"an unparseable marker must block — got %A{other}"
 
@@ -162,7 +162,7 @@ let ``re-claiming an item we ALREADY hold does not post a second marker`` () =
     // stop working on the thing it is holding the lock for.
     let transport = scripted [ ok (comments [ marker 901 "vole-418" "" ]) ]
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Won held) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"re-claiming our own live lock is a no-op win — got %A{other}"
 
@@ -175,7 +175,7 @@ let ``a failed FIRST read is fatal, and nothing is posted`` () =
     // do.
     let transport = scripted [ Error(RateLimited None) ]
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Error(RateLimited _) -> ()
     | other -> failwith $"a failed lock read must refuse — got %A{other}"
 
@@ -188,7 +188,7 @@ let ``#481 the claim RECORDS the column it overwrote, so release can put it back
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) ]
 
-    match claim transport 120 me None aRef (Some InReview) with
+    match claim transport 120 me None aRef (fun () -> Some InReview) with
     | Ok(Won held) ->
         // The marker we POST carries `prev=`, percent-encoded — and the capability carries it forward, so
         // `release` restores the column somebody chose rather than guessing `Ready`.
@@ -201,7 +201,7 @@ let ``#481 a column NOBODY recorded is not restored - release says so rather tha
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" "" ]); ok "" ]
 
-    match claim transport 120 me None aRef None with
+    match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Won held) ->
         match release transport held with
         | Ok None -> ()

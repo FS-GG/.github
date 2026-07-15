@@ -31,6 +31,7 @@ namespace FS.GG.Coord.GitHub
 /// mutations, which are pinned to the floor.)
 module Board =
 
+    open FS.GG.Coord.Types
     open Errors
     open Transport
 
@@ -99,6 +100,24 @@ module Board =
         repo: string ->
         number: int ->
             IoResult<string option>
+
+    /// Read ONE item's `Status` column — the pre-claim column of #481, so `release`/`reap` can restore what
+    /// a claim overwrote instead of guessing `Ready`.
+    ///
+    /// It is a `fieldValueByName` RESOLVER read — one point, one item, no node multiplication — and NOT a
+    /// board scan, deliberately: this sits on `take` → `claim`, the hottest path on the budget that dies
+    /// first (#418), so a full-board read here would be the regression #481 is written to avoid.
+    ///
+    /// `Ok None` is a definite answer with two shapes — the issue is not on THIS board, or it is but its
+    /// `Status` is unset — both meaning "no column to restore", which a claim records as none and `release`
+    /// then puts back as `Ready`. A failed read is `Error`, never `Ok None`: absence may not be manufactured.
+    val itemStatus:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+            IoResult<BoardStatus option>
 
     /// Write ONE field. Routes by the field's declared type; an empty `Set` is refused.
     ///

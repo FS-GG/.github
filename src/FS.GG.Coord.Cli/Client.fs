@@ -570,25 +570,45 @@ module Client =
                     eprint "  If you genuinely mean to hold two, say so:  fsgg-coord-engine claim <issue> --force"
                     ExitRed
                 | Ok [] ->
-                    // The claim records the column it OVERWRITES, so `release` can restore it (#481). Read
-                    // the current board Status for this item first — from the fresh reconciler scan is
-                    // overkill for one item, so we pass None and let the CAS record what the marker's own
-                    // prev carries on a re-claim.
-                    match Writes.claim ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref None with
+                    // #481: the claim records the column it OVERWRITES, so `release` (and `reap`) can put it
+                    // back rather than guess `Ready`. The pre-claim column is knowable at exactly one instant
+                    // — before the `In progress` write below overwrites it — so it rides into the marker here.
+                    //
+                    // The board is read at most ONCE: `board` is a `lazy` shared between the pre-claim column
+                    // read and the `In progress` write, so a winning claim bootstraps a single time. And the
+                    // pre-claim read is spent ONLY when we win and post: `readPreviousStatus` is the CAS's
+                    // post-path thunk, never called on a lost race or an idempotent re-claim. That is what
+                    // keeps this off the losing side of the hottest path in the org, on the budget that dies
+                    // first under fan-out (#418).
+                    let board = lazy (Board.bootstrap ctx.Transport ctx.Owner ctx.Title)
+
+                    let readPreviousStatus () =
+                        // BEST-EFFORT. A pre-claim column we cannot read is recorded as NONE — the same as a
+                        // marker minted before #481 — and it NEVER blocks the lock: the lease matters more
+                        // than the courtesy of a restorable column, and `release` falling back to `Ready` is
+                        // the safe, pre-existing behaviour for "nothing recorded".
+                        match board.Force() with
+                        | Ok b ->
+                            match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
+                            | Ok s -> s
+                            | Error _ -> None
+                        | Error _ -> None
+
+                    match Writes.claim ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref readPreviousStatus with
                     | Error e -> fail e
                     | Ok(Writes.Won held) ->
                         // Move the board column to In progress — the ONE board write, through the
                         // queue-aware path so an exhausted budget defers rather than drops (#510).
-                        match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+                        match board.Force() with
                         | Error e ->
                             // The LOCK is held (the marker is posted); a board-write failure does not
                             // un-hold it. Report the claim, note the board.
                             printfn "claimed %s by worker %s" ref.Short w.Id
                             eprint $"fsgg-coord-engine: note — the lock is held, but the board column could not be moved: %s{Errors.explain e}"
                             ExitGreen
-                        | Ok board ->
+                        | Ok b ->
                             match
-                                Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                                Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
                             with
                             | Ok _
                             | Error _ ->
@@ -629,8 +649,12 @@ module Client =
                         // and is reported, never fatal: the lock is already released.
                         let restoreTo =
                             match previousStatus with
-                            | Some s -> s
+                            // A recorded `In progress` is the claim's OWN footprint, not a column anybody
+                            // chose — restoring it would leave the item looking claimed with no claim on it.
+                            // It falls back to `Ready`, exactly as an unrecorded column does (#481).
+                            | Some InProgress
                             | None -> BoardStatus.Ready
+                            | Some s -> s
 
                         let name = statusName restoreTo
 

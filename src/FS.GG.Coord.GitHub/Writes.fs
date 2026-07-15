@@ -167,7 +167,7 @@ module Writes =
         (worker: WorkerId)
         (session: SessionId option)
         (ref: Ref)
-        (previousStatus: BoardStatus option)
+        (readPreviousStatus: unit -> BoardStatus option)
         : IoResult<ClaimOutcome> =
 
         // 1. READ THE LIVE MARKERS. A failed read here is fatal and we have posted nothing, so there is no
@@ -194,6 +194,12 @@ module Writes =
         | None ->
 
         // 2. POST OUR MARKER.
+        //
+        // THIS is the linearisation point, and the only place the pre-claim column is worth a point (#481):
+        // we have decided to post, no live marker stood in the way, and one line further on the board will
+        // say `In progress` and the answer will be gone. A lost race or a re-claim never reaches here, so
+        // neither pays the read.
+        let previousStatus = readPreviousStatus ()
         let body = markerBody worker session leaseMinutes previousStatus
 
         match postComment transport ref body with

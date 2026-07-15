@@ -1010,6 +1010,140 @@ if [ -z "$SF_PORT" ]; then bad "set-field rate-limit fixture bound a port"; else
 fi
 rm -rf "$RLCACHE"
 
+# ---- CLAIM RECORDS THE COLUMN IT OVERWRITES (case 21): #481 ---------------------------------------
+#
+# The corpus (`tests/fsgg-coord/cases/21-claim-restores-column.sh`, #481) certifies that undoing a claim
+# RESTORES the board column the claim overwrote — it does not guess `Ready`. The column is knowable at
+# exactly one instant, before the `In progress` write erases it, so the claim reads it and records it in
+# its own marker (`prev=<column>`); `release` reads that back and puts the column where it was.
+#
+# This was a PORT GAP, not a divergence. The engine's marker machinery — `prev=` encode/decode, the release
+# restore, the heartbeat carry-forward — all EXISTED, but `Client.claim` passed `None` for the pre-claim
+# column: the originating read was stubbed out, so a fresh claim recorded nothing and every release fell
+# back to `Ready`. This slice lands with the fix (`Board.itemStatus` — the `fieldValueByName` resolver read
+# — wired into `claim`), and holds the engine to the corpus's answer over HTTP: `restore_server.py` records
+# every posted/patched marker body so the `prev=` key can be read back, records which Status OPTION each
+# board write carried (bash asserts `opt_backlog`/`opt_review` in its `GH_LOG`), and counts GraphQL by
+# category so the cost pin can be re-expressed at the HTTP layer.
+#
+# The corpus's cost assertion (§j, "a claim spends 2 GraphQL reads") is BASH's absolute count under its own
+# board-metadata caching; the engine's bootstrap/itemId read plan differs, so this re-expresses the property
+# #481 actually protects (ADR-0040 §5): the pre-claim column is exactly ONE item-scoped read, spent ONLY on
+# the winning post path — a lost race pays ZERO — and it is NEVER the seven-point board SCAN that #418
+# forbids on this, the hottest path in the org.
+#
+# DISPOSED ON THE RECORD, not silently skipped (the engine lacks the surface, or the leg is a distinct
+# defect from #481):
+#   • §d/§e (`reap` restores / re-claim-over-dead-lease inherits) — the engine has no `reap` command yet
+#     (the same disposition as case 41 §3's `lint`); the marker-inheritance path they exercise is covered
+#     at the CAS by the live re-claim, which returns the existing marker's recorded column.
+#   • §f (a `--force` steal inherits the EVICTED claim's column) — the engine's `--force` overrides the #516
+#     self-hold check; it does not evict another worker's LIVE lease, so there is no steal to inherit
+#     through. That is a separate matter from #481.
+#   • §i/§h2 (#331: a column set DURING the lease is preserved; the unreadable-column repair advice) — the
+#     engine's `release` does not yet read-and-preserve the current column; #331 is a distinct defect with
+#     its own read (bash's "release spends 1"), ported separately. #481 changes what release restores TO,
+#     not WHETHER it first reads the live column.
+#   • the human wording (`board: Backlog`, `restored`) is asserted here at the HTTP layer (the board write's
+#     option id), not on stdout — the engine's `release` reports `released <ref>` without naming the column.
+rsrv() {  # rsrv <env-kv...> --  ; sets globals RS_PORT and RS_SRV for a FRESH restore fixture
+  local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
+  local out; out="$(mktemp)"
+  env ${envs[@]+"${envs[@]}"} python3 "$HERE/restore_server.py" >"$out" 2>/dev/null &
+  local srv=$! port=""
+  for _ in $(seq 1 50); do port="$(head -n1 "$out" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
+  rm -f "$out"; RS_PORT="$port"; RS_SRV="$srv"
+}
+rget() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+sys.argv[2]).read().decode())' "$1" "$2" 2>/dev/null; }
+renv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$RS_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+rbodies() { rget "$RS_PORT" "/repos/FS-GG/FS.GG.SDD/issues/$1/comments" | jq -r '.[].body'; }
+rlastopt() { rget "$RS_PORT" /_writes | jq -r '.last.optionId'; }
+
+# (a) THE DEFECT. A claim over a Backlog item records `prev=Backlog`; release must put Backlog back, not Ready.
+rsrv FSGG_PARITY_STATUS=Backlog --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (a) bound a port"; else
+  renv claim FS.GG.SDD#350 --force --worker pika-r01 >/dev/null 2>&1; crc=$?
+  rbodies 350 | grep -q 'prev=Backlog' \
+    && ok "#481: the claim RECORDS the column it overwrote (prev=Backlog) in its own marker, over HTTP" \
+    || bad "#481: the claim must record prev=Backlog" "rc=$crc bodies=$(rbodies 350)"
+  [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "1" ] \
+    && ok "#481/#418: a winning claim spends EXACTLY ONE item-scoped Status read (fieldValueByName), not a board scan" \
+    || bad "#481: the pre-claim read must be exactly one item read" "gql=$(rget "$RS_PORT" /_gql)"
+  renv release FS.GG.SDD#350 --worker pika-r01 >/dev/null 2>&1
+  [ "$(rlastopt)" = "opt_backlog" ] \
+    && ok "#481: release RESTORES Backlog (writes opt_backlog), instead of promoting it to Ready" \
+    || bad "#481: release must restore Backlog" "last write=$(rlastopt)"
+  [ -z "$(rbodies 350)" ] \
+    && ok "#481: ...and the lease is dropped (the marker is deleted)" \
+    || bad "#481: release must drop the marker" "bodies=$(rbodies 350)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (b) A Status name with a SPACE must survive the round trip — percent-encoded in the marker, decoded back
+#     to the real column on release. An encoding that lost at the space would truncate `In review` to `In`.
+rsrv FSGG_PARITY_STATUS="In review" --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (b) bound a port"; else
+  renv claim FS.GG.SDD#351 --force --worker pika-r01 >/dev/null 2>&1
+  rbodies 351 | grep -q 'prev=In%20review' \
+    && ok "#481: a Status with a space is percent-encoded into the marker (prev=In%20review)" \
+    || bad "#481: the space must be percent-encoded" "bodies=$(rbodies 351)"
+  renv release FS.GG.SDD#351 --worker pika-r01 >/dev/null 2>&1
+  [ "$(rlastopt)" = "opt_review" ] \
+    && ok "#481: ...and decodes back to the real column, resolving opt_review (not a no-op, not 'In')" \
+    || bad "#481: release must restore In review" "last write=$(rlastopt)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (c) A heartbeat REWRITES the whole marker body; anything it does not carry forward is destroyed. A claim
+#     that beats for hours must still know the column it overwrote.
+rsrv FSGG_PARITY_STATUS=Backlog --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (c) bound a port"; else
+  renv claim FS.GG.SDD#352 --force --worker pika-r01 >/dev/null 2>&1
+  renv heartbeat FS.GG.SDD#352 --worker pika-r01 >/dev/null 2>&1
+  rbodies 352 | grep -q 'prev=Backlog' \
+    && ok "#481: a heartbeat rewrites the marker and CARRIES the recorded column forward (prev=Backlog)" \
+    || bad "#481: heartbeat must carry prev= forward" "bodies=$(rbodies 352)"
+  renv release FS.GG.SDD#352 --worker pika-r01 >/dev/null 2>&1
+  [ "$(rlastopt)" = "opt_backlog" ] \
+    && ok "#481: ...so a long-running claim still restores Backlog" \
+    || bad "#481: release after heartbeat must restore Backlog" "last write=$(rlastopt)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (g) BACKWARD COMPATIBILITY. A marker minted before #481 carries no `prev=` key. It must keep releasing to
+#     `Ready` — the old behaviour, now scoped to the one case where there is genuinely nothing to restore.
+rsrv 'FSGG_PARITY_MARKERS=[{"n":356,"id":856,"worker":"pika-r01"}]' --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (g) bound a port"; else
+  renv release FS.GG.SDD#356 --worker pika-r01 >/dev/null 2>&1
+  [ "$(rlastopt)" = "opt_ready" ] \
+    && ok "#481: a marker minted BEFORE #481 (no prev=) still falls back to Ready (opt_ready)" \
+    || bad "#481: a pre-#481 marker must restore Ready" "last write=$(rlastopt)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (h) A claim that recorded `In progress` recorded its OWN footprint, not a column anybody chose. Restoring
+#     it would leave the item looking claimed with no claim on it — so it, too, falls back to Ready.
+rsrv 'FSGG_PARITY_MARKERS=[{"n":357,"id":857,"worker":"pika-r01","prev":"In%20progress"}]' --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (h) bound a port"; else
+  renv release FS.GG.SDD#357 --worker pika-r01 >/dev/null 2>&1
+  [ "$(rlastopt)" = "opt_ready" ] \
+    && ok "#481: a recorded 'In progress' is a footprint, not a column — release falls back to Ready" \
+    || bad "#481: a recorded In progress must not be restored" "last write=$(rlastopt)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (j') THE #418 PROPERTY, re-expressed. The pre-claim read must sit on the WINNING post path only: a claim
+#      that loses the CAS to a live holder must spend ZERO item-Status reads — otherwise every losing `take`
+#      round would pay a GraphQL point on the budget that dies first under fan-out.
+rsrv 'FSGG_PARITY_MARKERS=[{"n":360,"id":860,"worker":"finch-a3f"}]' --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (j') bound a port"; else
+  renv claim FS.GG.SDD#360 --force --worker pika-r01 >/dev/null 2>&1; lrc=$?
+  { [ "$lrc" -ne 0 ] && [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "0" ]; } \
+    && ok "#418: a claim that LOSES to a live holder spends ZERO pre-claim reads — the read is on the win path only" \
+    || bad "#418: a losing claim must not pay the pre-claim read" "rc=$lrc gql=$(rget "$RS_PORT" /_gql)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

@@ -108,13 +108,20 @@ module Writes =
     ///
     /// The protocol: read the live markers; refuse if another holds one; post ours; RE-READ; take the
     /// lowest live id as the winner; if that is not us, delete ours and back off.
+    ///
+    /// `readPreviousStatus` is the pre-claim board column (#481), and it is a THUNK, not a value, for one
+    /// reason: the read costs a GraphQL point, and it may be spent ONLY when we are actually about to post a
+    /// fresh marker. A lost race and an idempotent re-claim NEVER call it — a lost race because the item is
+    /// already someone else's, a re-claim because it inherits the column the superseded marker recorded. The
+    /// claim is the hottest path on the scarcest budget in the org (#418), so paying this read on every
+    /// losing attempt would be the exact regression #481 is careful not to introduce.
     val claim:
         transport: IGitHubTransport ->
         leaseMinutes: int ->
         worker: WorkerId ->
         session: SessionId option ->
         ref: Ref ->
-        previousStatus: BoardStatus option ->
+        readPreviousStatus: (unit -> BoardStatus option) ->
             IoResult<ClaimOutcome>
 
     /// Re-read the markers and confirm the live winner is US.

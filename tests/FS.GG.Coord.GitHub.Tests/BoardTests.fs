@@ -3,6 +3,7 @@ module FS.GG.Coord.GitHub.Tests.BoardTests
 open System
 open System.IO
 open Xunit
+open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
 open FS.GG.Coord.GitHub.Transport
@@ -106,6 +107,54 @@ let ``the item lookup narrows to OUR board - an issue can sit on several`` () =
     match itemId transport board "FS-GG" "FS.GG.SDD" 42 with
     | Ok(Some id) -> Assert.Equal("PVTI_coord123", id)
     | other -> failwith $"the item on OUR board must be the one chosen — got %A{other}"
+
+// ---- the pre-claim column (#481) -------------------------------------------------------------------
+
+[<Fact>]
+let ``itemStatus reads the item's current Status column, narrowed to OUR board`` () =
+    // #481's pre-claim read: the column a claim is about to overwrite. The wrong-board node is ignored, and
+    // the Status name comes back through the ONE `statusOfName` parser as the typed column.
+    let transport =
+        serving
+            """{"data":{"repository":{"issue":{"projectItems":{"nodes":[
+                 {"project":{"number":99},"fieldValueByName":{"name":"Ready"}},
+                 {"project":{"number":12},"fieldValueByName":{"name":"In progress"}}]}}}}}"""
+
+    match itemStatus transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok(Some InProgress) -> ()
+    | other -> failwith $"the Status on OUR board is In progress — got %A{other}"
+
+[<Fact>]
+let ``itemStatus is Ok None when the item is on the board with NO Status set`` () =
+    // `fieldValueByName` is null — on the board, no column. A definite "nothing to restore", which a claim
+    // records as none and `release` puts back as Ready.
+    let transport =
+        serving """{"data":{"repository":{"issue":{"projectItems":{"nodes":[{"project":{"number":12},"fieldValueByName":null}]}}}}}"""
+
+    match itemStatus transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok None -> ()
+    | other -> failwith $"an unset Status is Ok None — got %A{other}"
+
+[<Fact>]
+let ``itemStatus is Ok None when the issue is not on this board`` () =
+    let transport =
+        serving """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}"""
+
+    match itemStatus transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok None -> ()
+    | other -> failwith $"not on board is Ok None — got %A{other}"
+
+[<Fact>]
+let ``itemStatus fails CLOSED - a failed read is Error, never the definite Ok None`` () =
+    // The same discipline `itemId` keeps (#421): a read that FAILED may not be manufactured into "there is
+    // no column". `claim` treats the error as "recorded no column" and falls back to Ready, but it does so
+    // from an Error it was handed, not an absence it invented.
+    let transport = failing (RateLimited None)
+
+    match itemStatus transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Error(RateLimited _) -> ()
+    | Ok None -> failwith "a failed status read reported the column ABSENT — absence may not be manufactured"
+    | other -> failwith $"expected RateLimited — got %A{other}"
 
 // ---- the empty-value trap --------------------------------------------------------------------------
 

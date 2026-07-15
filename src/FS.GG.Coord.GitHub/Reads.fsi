@@ -44,6 +44,12 @@ module Reads =
           /// forgetting a field it never parsed (#550).
           Raw: string }
 
+    /// The `BoardStatus` for a Projects v2 Status option NAME (case-insensitive), or for a marker's decoded
+    /// `prev=` value — the two callers that turn a column's human name back into the type. A name we do not
+    /// recognise, or the empty string, is `None`: "this records no restorable column" (#481), never a guess.
+    /// It is ONE parser so the claim that records a column and the read that restores it cannot drift.
+    val statusOfName: name: string -> BoardStatus option
+
     /// The claim markers on an issue, in comment-id order (lowest first — the winner is `List.head`).
     ///
     /// **NEVER CONDITIONAL, AND NEVER CACHED.** This is the one read that may not carry an `If-None-Match`
