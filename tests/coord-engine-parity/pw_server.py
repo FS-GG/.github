@@ -14,11 +14,17 @@ transport over.
 """
 
 import json
+import os
 import re
 import sys
 import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# FSGG_PARITY_MALFORMED_COMMENTS=<item> makes that item's claim-marker read return non-JSON bytes with
+# HTTP 200 — the corpus's `GH_ISSUE_LIST_MALFORMED` (#461), one transport over: a truncated page / proxy
+# error body that a naive client folds into an EMPTY claim set. The engine must fail CLOSED on it.
+MALFORMED_COMMENTS = os.environ.get("FSGG_PARITY_MALFORMED_COMMENTS")
 
 RATE = {"cost": 1, "remaining": 4980}
 
@@ -153,7 +159,16 @@ class H(BaseHTTPRequestHandler):
         p = self.path.split("?", 1)[0]
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p)
         if m:
-            return self._send(200, comments(int(m.group(1))))
+            n = int(m.group(1))
+            if MALFORMED_COMMENTS and n == int(MALFORMED_COMMENTS):
+                # A 200 with a NON-JSON body — the failed read wearing an empty set's clothes (#461).
+                body = b"<html><body>502 Bad Gateway</body></html>"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            return self._send(200, comments(n))
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))
