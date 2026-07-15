@@ -604,6 +604,72 @@ module Board =
                 // REPORTED, NEVER SWALLOWED. A refusal nobody can read is a refusal that did not happen.
                 Error e
 
+    /// The batch sibling of `boardWrite` (#448): resolve the item, emit N fields in ONE aliased document,
+    /// and carry the SAME deferral policy the single write does.
+    ///
+    /// The policy differs from `boardWrite`'s in exactly one way, and it is forced by the transport: a batch
+    /// can fail HALF-WAY. So there are three post-conditions, not two:
+    ///   • an exhausted budget refused the WHOLE document — nothing landed — so EVERY pair is queued, the
+    ///     batch replays intact, and nothing is lost;
+    ///   • a `Partial` means some aliases DID land — it is NEVER queued (replaying rewrites the half that
+    ///     took effect), and it surfaces unchanged for the caller to render field-by-field;
+    ///   • any other permanent failure is reported, never swallowed.
+    let boardWriteBatch
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        (writes: (string * FieldWrite) list)
+        (worker: string)
+        : IoResult<WriteOutcome> =
+
+        // QUEUE EVERY PAIR. This is reached ONLY on `isQueueable e` (an exhausted budget), where the document
+        // was refused outright — nothing landed — so the whole batch is deferrable and the queue replays it
+        // pair by pair. `Cache.defer` re-checks the licence per entry; the loop stops on the first queue error.
+        let queueAll (e: IoError) : IoResult<WriteOutcome> =
+            let rec go remaining =
+                match remaining with
+                | [] -> Ok Deferred
+                | (field, write) :: rest ->
+                    let entry: Cache.Deferred =
+                        { Ref = $"%s{owner}/%s{repo}#%d{number}"
+                          Field = field
+                          Value =
+                            match write with
+                            | Set v -> v
+                            | Clear -> ""
+                          At = DateTimeOffset.UtcNow.ToString("o")
+                          Worker = worker }
+
+                    match Cache.defer e entry with
+                    | Ok() -> go rest
+                    | Error queueError -> Error queueError
+
+            go writes
+
+        match itemId transport board owner repo number with
+        | Error e -> if isQueueable e then queueAll e else Error e
+        | Ok None -> Ok NotOnBoard
+        | Ok(Some item) ->
+            match setFieldBatch transport board item writes with
+            | Ok() ->
+                // FOLD OUR OWN WRITES INTO THE CACHED SCAN, one per field — the same reason the single write
+                // does it (a claim is always followed by a take, and invalidating would send it to a full scan).
+                for field, write in writes do
+                    Cache.patchScan
+                        board.Owner
+                        board.Title
+                        repo
+                        number
+                        field
+                        (match write with
+                         | Set v -> v
+                         | Clear -> "")
+
+                Ok Written
+            | Error e -> if isQueueable e then queueAll e else Error e
+
     let flush (transport: IGitHubTransport) (board: BoardMap) : IoResult<int> =
         match Cache.pending () with
         | Error e -> Error e

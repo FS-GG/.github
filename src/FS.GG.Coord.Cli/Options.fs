@@ -57,7 +57,10 @@ module Options =
           Status: string option
           /// `ready --all` — widen past the "not Done" default without naming a column (#520: `ready` is a
           /// TRUTH read, so `--all` shows the whole board, Done and closed items and all).
-          All: bool }
+          All: bool
+          /// `set-field --batch` — the remaining `Field=Value` args are written in ONE aliased mutation
+          /// document (#448): N fields, one GraphQL request, one point at the floor.
+          Batch: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -93,6 +96,7 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   heartbeat <ref> [--worker W]               renew the lease
 
   set-field <ref> <field> <value>            write one board field (empty value clears)
+  set-field --batch <ref> Field=Value ...    write N fields in ONE aliased mutation (#448)
   child  <parent-ref> <child-ref>            attach a child issue to a parent
   widen  <ref> --paths T...                  widen a HELD item's touch-set
   say    <ref> --to W --message M            message another worker
@@ -163,6 +167,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | [ "--status" ] -> Error "--status needs a value"
 
             | "--all" :: t -> flags { acc with All = true } t
+            | "--batch" :: t -> flags { acc with Batch = true } t
 
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             | "--include-backlog" :: t -> flags { acc with AllowBacklog = true } t
@@ -213,7 +218,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Pr = None
               Warn = false
               Status = None
-              All = false }
+              All = false
+              Batch = false }
 
         match args with
         | []

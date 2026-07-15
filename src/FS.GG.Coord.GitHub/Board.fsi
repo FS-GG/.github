@@ -161,6 +161,22 @@ module Board =
         worker: string ->
             IoResult<WriteOutcome>
 
+    /// **THE ONE BATCH BOARD WRITE (#448).** `boardWrite` for N fields in one aliased document.
+    ///
+    /// Carries the SAME deferral policy — an exhausted budget QUEUES every pair, so the whole batch replays
+    /// intact — with one addition the transport forces: a batch can land HALF-WAY. A `Partial` (some aliases
+    /// took effect) is NEVER queued, because replaying the document would rewrite what already landed; it
+    /// surfaces as `Error(Partial …)` for the caller to render field-by-field.
+    val boardWriteBatch:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+        writes: (string * FieldWrite) list ->
+        worker: string ->
+            IoResult<WriteOutcome>
+
     /// Replay the deferred queue.
     ///
     /// An entry that succeeds is DROPPED. An exhausted budget STOPS the flush — the rest would fail
