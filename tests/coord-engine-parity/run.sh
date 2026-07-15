@@ -1305,16 +1305,20 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths fixture bound a port"; else
   # 4. A PR that implements no tracked item is SKIP, never a silent OK — and it must not leak an OK
   #    verdict into a SKIP (case 23: "SKIP is not mistaken for OK"). PR 9's branch is not item/<n>-… and
   #    it closes nothing, so resolution falls through to SKIP.
+  #    The reason is pinned too (not just "some SKIP"): the SKIP must be the CANNOT-IDENTIFY one, so a
+  #    right-verdict-wrong-reason SKIP cannot pass — the fidelity the corpus keeps (case 23 line 55).
   v9="$(vp --pr 9 --repo FS.GG.SDD)"
-  { printf '%s' "$v9" | grep -q 'FSGG-PATHS SKIP' && ! printf '%s' "$v9" | grep -q 'FSGG-PATHS OK'; } \
-    && ok "verify-paths: an unlinked PR is SKIP, not OK (case 23)" \
+  { printf '%s' "$v9" | grep -q 'FSGG-PATHS SKIP' && printf '%s' "$v9" | grep -q 'cannot tell which issue' \
+      && ! printf '%s' "$v9" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "verify-paths: an unlinked PR is SKIP (cannot tell which issue), not OK (case 23)" \
     || bad "verify-paths unlinked-SKIP parity" "$v9"
 
   # 5. An item that declares no 'Paths:' is SKIP too — nothing to verify against (case 23). PR 10
-  #    implements #72, which declares no touch-set.
+  #    implements #72, which declares no touch-set. The reason is pinned to the DECLARES-NONE SKIP (case
+  #    23 line 57), so a SKIP for any OTHER reason (e.g. a mis-resolved issue) would not pass here.
   v10="$(vp --pr 10 --repo FS.GG.SDD)"
-  printf '%s' "$v10" | grep -q 'FSGG-PATHS SKIP' \
-    && ok "verify-paths: an undeclared touch-set is SKIP (case 23)" \
+  { printf '%s' "$v10" | grep -q 'FSGG-PATHS SKIP' && printf '%s' "$v10" | grep -q "declares no 'Paths:'"; } \
+    && ok "verify-paths: an undeclared touch-set is SKIP (declares no 'Paths:') (case 23)" \
     || bad "verify-paths undeclared-SKIP parity" "$v10"
 
   kill "$VP_SRV" 2>/dev/null

@@ -111,13 +111,13 @@ fail-closed assertions re-expressed at the HTTP layer.
 
 **Progress (as of #795, 2026-07-15).** The harness is grown one defect/case at a time — each PR titled
 `parity: … (case N)` (the engine already matched bash — port the slice) or `fix(engine): … (#NNN)` (a real
-port gap — fix the engine, then prove it). **16 of 27 cases covered** — the 27 being the full corpus's 29
-minus `50-shadow-engine`/`51-fs-flip`, which are the differential harness D.4 disposes of, not
-engine-behaviour cases:
+port gap — fix the engine, then prove it). **15 of 27 cases fully covered, plus 2 partial (13, 23)** — the
+27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which are the differential harness
+D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 11, 12, 15, 20, 21, 22, 23, 32, 33, 35, 40, 41, 42, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+| ✓ | 11, 12, 15, 20, 21, 22, 32, 33, 35, 40, 41, 42, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `lint`/`issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
 | ◑ | 23 (core verdicts) | `verify-paths` OK/DRIFT/SKIP + #322 fail-closed; the SKIP-exit divergence is disposed on the record, `--issue`/#479/#494 + #430-remote legs deferred (see the remaining table) |
 
