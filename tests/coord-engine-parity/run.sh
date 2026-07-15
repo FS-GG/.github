@@ -2321,6 +2321,84 @@ if [ -z "$OB_PORT" ]; then bad "off-board who fixture bound a port"; else
   kill "$OB_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 25 (offboard-claims) — BATCH RESERVES an off-board claim's touch-set (#461/#581). The `who` legs
+# above prove the engine can READ a lock off the board; this proves the SCHEDULER honours it. Disjointness
+# is only sound if the reserved set is complete, and a claim lives off the board too: a marker on an issue
+# whose column flip failed (the board says Ready), or on one the board never listed. bash's `active_claims`
+# scans the repo's OPEN ISSUES (arm B) for exactly this; the engine's scan now does too, or `batch` hands
+# out a double-book. World (case 25's `seed_offboard_world`, batch slice, one transport over): #211 Ready
+# but HELD by wren-c22, #212 genuinely free, #213 Ready declaring `src/Off/Sub`, #215 an OFF-BOARD claim
+# held by puffin-h11 on `src/Off`. Only #212 has files no live marker touches.
+# ==================================================================================================
+OBB_OUT="$(mktemp)"; python3 "$HERE/offboardbatch_server.py" >"$OBB_OUT" 2>/dev/null & OBB_SRV=$!; OBB_PORT=""
+for _ in $(seq 1 50); do OBB_PORT="$(head -n1 "$OBB_OUT" 2>/dev/null)"; [ -n "$OBB_PORT" ] && break; sleep 0.1; done
+rm -f "$OBB_OUT"
+if [ -z "$OBB_PORT" ]; then bad "off-board batch fixture bound a port"; else
+  obbenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$OBB_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+               "$ENGINE" "$@"; }
+
+  # THE MACHINE CONTRACT: only the item no live marker touches. #211 is held (the board says Ready, the lock
+  # disagrees), #213 overlaps the OFF-BOARD #215's `src/Off`, and #210 is In progress — so #212 alone is free.
+  obbj="$(obbenv batch --repo FS.GG.Rendering --json 2>/dev/null)"; rc=$?
+  if [ "$rc" -eq 0 ] && [ "$obbj" = '["FS.GG.Rendering#212"]' ]; then
+    ok "batch: schedules only the item no live marker touches — reserves the off-board claim (case 25)"
+  else
+    bad "batch off-board --json" "expected [\"FS.GG.Rendering#212\"], got (rc=$rc): $obbj"
+  fi
+
+  obberr="$(obbenv batch --repo FS.GG.Rendering 2>&1 >/dev/null)"
+
+  # A BOARD ITEM WHOSE COLUMN LIES: #211 is Ready on the board, but its live marker HOLDS it. Reading the
+  # column instead of the lock would schedule an item a worker is standing in.
+  printf '%s' "$obberr" | grep -q 'FS.GG.Rendering#211 — already claimed by worker wren-c22' \
+    && ok "batch: skips a Ready item a marker actually holds — names the worker (case 25)" \
+    || bad "batch: #211 held-not-free" "$obberr"
+  # #428: the skip carries the LEASE WINDOW — 'should I wait?' is a number, not just 'it's taken'.
+  printf '%s' "$obberr" | grep -q 'already claimed by worker wren-c22 (lease frees in ~' \
+    && ok "batch: ...and names the lease window, not just the holder (#428)" \
+    || bad "batch: #211 lease window" "$obberr"
+
+  # THE OFF-BOARD RESERVATION: #213 declares `src/Off/Sub`, a subtree of the off-board #215's `src/Off`. A
+  # board-only scan never sees #215, so #213 would be handed puffin-h11's tree. The reservation must name the
+  # HOLDER, its ITEM, and the colliding paths — everything a blocked worker needs to act.
+  o213="$(printf '%s' "$obberr" | grep 'FS.GG.Rendering#213')"
+  printf '%s' "$o213" | grep -q 'overlaps in-flight work' \
+    && ok "batch: refuses to schedule over an OFF-BOARD claim's touch-set (case 25)" \
+    || bad "batch: #213 overlap" "$o213"
+  printf '%s' "$o213" | grep -q 'held by puffin-h11 on FS.GG.Rendering#215' \
+    && ok "batch: ...and names the OFF-BOARD holder and its item (#428, #461)" \
+    || bad "batch: #213 names off-board holder" "$o213"
+  printf '%s' "$o213" | grep -q 'held by puffin-h11 on FS.GG.Rendering#215 (lease frees in ~' \
+    && ok "batch: ...and the off-board claim's lease window (#428)" \
+    || bad "batch: #213 off-board lease window" "$o213"
+  printf '%s' "$o213" | grep -q 'src/Off/Sub  ⇄  src/Off' \
+    && ok "batch: ...and still shows WHICH paths collided (case 25)" \
+    || bad "batch: #213 collision paths" "$o213"
+
+  # #480/case 25: `next` shares batch's scan, so it reserves the off-board claim too — capped at one, the
+  # free item is what it hands out, never #213's double-book.
+  obbnext="$(obbenv next --repo FS.GG.Rendering 2>/dev/null)"
+  [ "$obbnext" = "FS.GG.Rendering#212" ] \
+    && ok "next: shares batch's off-board reservation — hands out the free item, not the collision (case 25)" \
+    || bad "next off-board" "expected FS.GG.Rendering#212, got: $obbnext"
+
+  # THE SCAN ITSELF (case 25, lines 156–165): had the candidate scan reused the ETag'd `issues` command, a
+  # live claim on the repo's 101st open issue would be invisible and `batch` would hand its touch-set away. So
+  # the off-board scan PAGINATES (page 2 fetched) and is NEVER conditional (a 304 could serve a pre-marker
+  # `comments: 0`). The SAME `Reads.openIssues` `who` uses, proven again at the SCHEDULER's surface.
+  obbreqs="$(curl -s "http://127.0.0.1:$OBB_PORT/_requests")"
+  printf '%s' "$obbreqs" | jq -e 'any(.[]; .page=="2")' >/dev/null 2>&1 \
+    && ok "batch: the candidate scan PAGINATES — page 2 is fetched, so a claim past page 1 is not missed (case 25)" \
+    || bad "batch scan must paginate" "issue-list requests: $obbreqs"
+  printf '%s' "$obbreqs" | jq -e 'all(.[]; .inm==false)' >/dev/null 2>&1 \
+    && ok "batch: ...and is NEVER conditional — no 304 may serve a pre-marker comments:0 (case 25)" \
+    || bad "batch scan must be unconditional (inm=none)" "issue-list requests: $obbreqs"
+
+  kill "$OBB_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

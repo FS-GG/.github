@@ -118,6 +118,13 @@ class H(BaseHTTPRequestHandler):
             return self._send(404, {"message": "Not Found"})
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4970, "limit": 5000}}})
+        # THE OFF-BOARD OPEN-ISSUE SCAN (case 25). `batch`/`next`/`take` reserve off-board claims too, so
+        # every scheduling call fetches this list (bash's `active_claims` arm B) — per repo, since the touch-set
+        # comparison is repo-scoped (#312). This world's claims are all ON the board, so there is nothing
+        # off-board to reserve — an empty list is the honest answer.
+        if re.match(r"^/repos/[^/]+/[^/]+/issues/?$", p):
+            return self._send(200, [])
+
         self._send(500, {"message": f"unhandled GET {p}"})
 
 
