@@ -276,7 +276,12 @@ python3 "$HERE/xbatch_server.py" >"$XB_OUT" 2>/dev/null &
 XB=$!
 XBPORT=""; for _ in $(seq 1 50); do XBPORT="$(head -n1 "$XB_OUT" 2>/dev/null)"; [ -n "$XBPORT" ] && break; sleep 0.1; done
 if [ -n "$XBPORT" ]; then
-  xbenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$XBPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  # Org-wide (cross-repo) batch is what you get OUTSIDE a checkout: with no detectable git remote,
+  # `scope_repo` yields nothing and the scan spans the whole org (#480). The corpus reaches this by
+  # running from its non-checkout `$WORK`; mirror that with a scopeless CWD, so a bare `batch` here is
+  # org-wide rather than scoped to `.github` (this harness's own checkout).
+  XB_NOGIT="$(mktemp -d)"
+  xbenv() { ( cd "$XB_NOGIT" && FSGG_GITHUB_API_BASE="http://127.0.0.1:$XBPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@" ); }
   # The machine contract: both cross-repo namesakes ride together, byte for byte (the corpus's answer).
   xbj="$(xbenv batch -n 9 --json 2>/dev/null)"
   [ "$xbj" = '["FS.GG.Templates#420","FS.GG.Governance#421"]' ] \
@@ -1143,6 +1148,102 @@ if [ -z "$RS_PORT" ]; then bad "restore fixture (j') bound a port"; else
     || bad "#418: a losing claim must not pay the pre-claim read" "rc=$lrc gql=$(rget "$RS_PORT" /_gql)"
   kill "$RS_SRV" 2>/dev/null
 fi
+
+# ==================================================================================================
+# CASE 13 (#480): a WORKER command scopes to the repo you are STANDING IN; a reconciler stays org-wide
+# ==================================================================================================
+# The corpus certifies that `next`/`take`/`batch`/`who` default to the current checkout — resolved from
+# the git remote, FREE and offline (never `gh repo view`, so it cannot burn budget or misread an
+# exhausted one as "not in a checkout", #430) — while `ready`/`lint` stay org-wide RECONCILERS that
+# /check-board runs BARE over the whole board. bash's own bug was the opposite: a bare command
+# initialised `repo=""`, which every board read treats as the whole org, so a `.github` worker was
+# handed another repo's item and a worktree command against the WRONG `origin`. This drives the ENGINE
+# from FAKE CHECKOUTS (temp dirs whose `origin` names one repo) against a small multi-repo board, over
+# HTTP — the scope resolved from `git config remote.origin.url`, exactly as bash resolves it, one
+# transport under. Items are Ready (not Backlog) so the property under test is SCOPE, not the engine's
+# `--include-backlog` divergence (case 41 §4). The board's three repos make a leak visible: a bare SDD
+# scope that picked Templates or Game would be the org-wide default #480 deletes.
+SC_OUT="$(mktemp)"; SC_CACHE="$(mktemp -d)"; CO="$(mktemp -d)"
+python3 "$HERE/scope_server.py" >"$SC_OUT" 2>/dev/null &
+SC_SRV=$!
+SC_PORT=""; for _ in $(seq 1 50); do SC_PORT="$(head -n1 "$SC_OUT" 2>/dev/null)"; [ -n "$SC_PORT" ] && break; sleep 0.1; done
+if [ -z "$SC_PORT" ]; then
+  bad "#480: scope fixture bound a port"
+else
+  # Fake checkouts — the git remote is the ONLY signal `scope_repo` reads. Two URL forms (https, ssh)
+  # prove the parser handles both; `nogit` is deliberately NOT a git repo (an undetectable scope).
+  mkdir -p "$CO/sdd"  && git -C "$CO/sdd"  init -q && git -C "$CO/sdd"  remote add origin https://github.com/FS-GG/FS.GG.SDD.git
+  mkdir -p "$CO/tmpl" && git -C "$CO/tmpl" init -q && git -C "$CO/tmpl" remote add origin git@github.com:FS-GG/FS.GG.Templates.git
+  mkdir -p "$CO/nogit"
+  # A per-invocation runner: from a chosen directory, pointed at the scope server with a fresh cache.
+  scoped() { local dir="$1"; shift; ( cd "$dir" \
+      && FSGG_GITHUB_API_BASE="http://127.0.0.1:$SC_PORT" FSGG_COORD_CACHE="$SC_CACHE" \
+         FSGG_COORD_SCAN_TTL_SEC=0 "$ENGINE" "$@" ); }
+
+  # (1) A bare worker command takes the checkout's repo — and ONLY that repo.
+  n_sdd="$(scoped "$CO/sdd" next 2>/dev/null)"
+  [ "$n_sdd" = "FS.GG.SDD#127" ] \
+    && ok "#480: a bare 'next' from an FS.GG.SDD checkout picks THAT repo's item (FS.GG.SDD#127)" \
+    || bad "#480: bare next scopes to the checkout" "expected FS.GG.SDD#127, got: $n_sdd"
+  case "$n_sdd" in
+    *Templates*|*Game*) bad "#480: a bare SDD-checkout next must not reach another repo" "$n_sdd" ;;
+    *) ok "#480: ...and never reaches into Templates or Game — the org-wide default is gone" ;;
+  esac
+
+  # (2) An explicit --repo SPELLS OUT the scope and wins over the checkout — and a registry short-id
+  #     (`templates`) resolves to the repo name board rows carry, exactly as bash's resolve_repo maps it.
+  n_expl="$(scoped "$CO/sdd" next --repo templates 2>/dev/null)"
+  [ "$n_expl" = "FS.GG.Templates#99" ] \
+    && ok "#480: an explicit '--repo templates' wins over the SDD checkout AND resolves the short-id (#381)" \
+    || bad "#480: explicit --repo wins + short-id resolves" "expected FS.GG.Templates#99, got: $n_expl"
+
+  # (3) The default is READ from the remote, not hard-wired: the same bare command in a Templates
+  #     checkout picks Templates. (An ssh-form origin, so the parser is exercised on both URL shapes.)
+  n_tmpl="$(scoped "$CO/tmpl" next 2>/dev/null)"
+  [ "$n_tmpl" = "FS.GG.Templates#99" ] \
+    && ok "#480: a bare 'next' from a Templates checkout (ssh remote) picks Templates#99 — the scope is the remote" \
+    || bad "#480: bare next reads the actual remote" "expected FS.GG.Templates#99, got: $n_tmpl"
+
+  # (4) `batch` — the engine `take` schedules from — scopes the same way, so the two cannot disagree.
+  b_sdd="$(scoped "$CO/sdd" batch --json 2>/dev/null)"
+  [ "$b_sdd" = '["FS.GG.SDD#127"]' ] \
+    && ok "#480: a bare 'batch --json' from the SDD checkout schedules only SDD's item" \
+    || bad "#480: bare batch scopes to the checkout" "expected [\"FS.GG.SDD#127\"], got: $b_sdd"
+
+  # (5) `take` ACTS, so an UNDETECTABLE scope is a hard error — never a quiet widen to the whole org,
+  #     which is the failure that handed a `.github` worker another repo's item. The refusal precedes
+  #     any network read (no budget spent), so it needs no board at all.
+  t_nogit="$(scoped "$CO/nogit" take 2>&1)"; t_rc=$?
+  { printf '%s' "$t_nogit" | grep -q -- '--repo required' && [ "$t_rc" -ne 0 ]; } \
+    && ok "#480: 'take' outside a checkout REFUSES ('--repo required'), never scans the whole org" \
+    || bad "#480: take must refuse an undetectable scope" "rc=$t_rc: $t_nogit"
+
+  # (6) THE REGRESSION GUARD. `ready` is an org-wide RECONCILER — /check-board runs a bare
+  #     `ready --all --json` to reconcile the WHOLE board. Defaulting it to the checkout would silently
+  #     shrink the reconciler to one repo, trading this scope bug for a strictly worse one. It must stay
+  #     org-wide even from inside a checkout.
+  r_repos="$(scoped "$CO/sdd" ready --all --json 2>/dev/null | jq -r '[.[].repo] | unique | length')"
+  [ "$r_repos" = "3" ] \
+    && ok "#480: a bare 'ready --all' from a checkout stays ORG-WIDE (all 3 repos) — /check-board depends on it" \
+    || bad "#480: ready must not be scoped to the checkout" "expected 3 repos, got: $r_repos"
+
+  # (7) An unknown --repo has nothing schedulable — and, crucially, does NOT fall back to another repo's
+  #     queue. bash prints "no startable item"; the engine re-expresses #440 (case 41 §4) as the honest
+  #     "nothing schedulable right now." with NO item ref — the same property, the engine's own words.
+  n_nope="$(scoped "$CO/sdd" next --repo nope 2>/dev/null)"
+  { printf '%s' "$n_nope" | grep -q 'nothing schedulable' && ! printf '%s' "$n_nope" | grep -qE '#[0-9]'; } \
+    && ok "#480: 'next --repo nope' reports nothing schedulable and names no item — never another repo's queue" \
+    || bad "#480: an unknown repo must not borrow another's queue" "$n_nope"
+
+  kill "$SC_SRV" 2>/dev/null
+fi
+rm -f "$SC_OUT"; rm -rf "$SC_CACHE" "$CO"
+# DISPOSITION ON THE RECORD (not silently skipped): case 13's remaining legs are separate work —
+#   * `reap` scopes to the checkout too (#480, the destructive one): NO `reap` command in the engine yet
+#     (the case 21 §d/§e / case 26 mold).
+#   * resolve_repo across the full roster + `issues` short-id (#381/#446), the `Blocked by`
+#     canonicalization gate, and the epic-rollup / NO-TOUCH-SET `lint` rules (#496): a `lint`/`issues`
+#     command the engine does not have. Tracked for cases 13-remainder / 14.
 
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"

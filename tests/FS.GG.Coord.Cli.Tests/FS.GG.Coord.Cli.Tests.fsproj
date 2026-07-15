@@ -13,6 +13,7 @@
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="FleetTests.fs" />
     <Compile Include="OptionsTests.fs" />
+    <Compile Include="RepoScopeTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
