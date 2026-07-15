@@ -716,10 +716,11 @@ kill "$WHO" 2>/dev/null
 # 422s) is re-expressed at the HTTP layer: the fixture records the POST body and serves it on `/_posts`, so
 # the assertion is that `sub_issue_id` arrives as a JSON NUMBER — the same property, one transport over.
 # Each leg spawns a FRESH server (a POST mutates the edge set), exactly as the #516/#533 mutating legs do.
-childsrv() {  # childsrv <env-kv...> -- <engine args...>  ; echoes "PORT<TAB>rc<TAB>stdout+stderr"
+childsrv() {  # childsrv <env-kv...> --  ; sets globals CHILD_PORT and CHILD_SRV for the spawned fixture
   local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
   local out; out="$(mktemp)"
-  env "${envs[@]}" python3 "$HERE/child_server.py" >"$out" 2>/dev/null &
+  # `${envs[@]+…}` so an empty env list is not an unbound-variable error under `set -u` (bash < 4.4).
+  env ${envs[@]+"${envs[@]}"} python3 "$HERE/child_server.py" >"$out" 2>/dev/null &
   local srv=$! port=""
   for _ in $(seq 1 50); do port="$(head -n1 "$out" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
   rm -f "$out"
