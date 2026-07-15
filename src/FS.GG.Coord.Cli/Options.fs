@@ -29,6 +29,7 @@ module Options =
         | FieldId
         | OptionId
         | ItemId
+        | LintCmd
         | Help
         | Version
 
@@ -68,7 +69,10 @@ module Options =
           All: bool
           /// `set-field --batch` — the remaining `Field=Value` args are written in ONE aliased mutation
           /// document (#448): N fields, one GraphQL request, one point at the floor.
-          Batch: bool }
+          Batch: bool
+          /// `lint --strict` — a NOTE (not just an error) is fatal. Off, a note is advisory and lint still
+          /// exits 0; on, any note fails the gate too (the pedantic board-health pass).
+          Strict: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -121,6 +125,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   field-id <field>                           the resolved id of a board field (from cache)
   option-id <field> <option>                 the resolved id of a single-select option (from cache)
   item-id <ref>                              the board item id for an issue (1 GraphQL, then cached)
+
+  lint   [--repo NAME] [--json] [--strict]   board-health gate: a Ready/Backlog item that no worker can
+                                             ever pick up (no `Paths:`, or every token unmatchable) is an
+                                             error (#496); --strict makes notes fatal too
 
   --help    --version
 
@@ -189,6 +197,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--all" :: t -> flags { acc with All = true } t
             | "--batch" :: t -> flags { acc with Batch = true } t
+            | "--strict" :: t -> flags { acc with Strict = true } t
 
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
@@ -244,7 +253,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Issue = None
               Status = None
               All = false
-              Batch = false }
+              Batch = false
+              Strict = false }
 
         match args with
         | []
@@ -282,5 +292,6 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "field-id" :: rest -> flags { defaults with Command = FieldId } rest
         | "option-id" :: rest -> flags { defaults with Command = OptionId } rest
         | "item-id" :: rest -> flags { defaults with Command = ItemId } rest
+        | "lint" :: rest -> flags { defaults with Command = LintCmd; Render = Text } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"

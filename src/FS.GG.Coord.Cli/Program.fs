@@ -373,7 +373,8 @@ let main argv =
             | BoardCmd
             | FieldId
             | OptionId
-            | ItemId -> Client.run opts
+            | ItemId
+            | LintCmd -> Client.run opts
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
