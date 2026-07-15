@@ -470,6 +470,64 @@ else
 fi
 kill "$S585" 2>/dev/null; rm -f "$S585_OUT"
 
+# ---- COMPLETED ITEM DROPS ITS LOCK (case 32): #533 — `done --flip` releases the worker's own claim ---
+#
+# `done --flip` verified the merge, set Status Done, and rolled the epic up — and, before #533, never
+# touched the CLAIM MARKER. `release` was the only path that dropped it, and `release` REWRITES Status, so
+# running it on an item you just stamped clobbers the stamp you just earned — so on the success path
+# nothing dropped the lock. It stayed live for the rest of the 120m lease, and a live marker's `Paths:`
+# keep reserving its touch-set: the item most likely to overlap a just-finished one is its own FOLLOW-UP
+# findings, and the recipe reliably produced an item its own author had locked out. Bash carries the fix
+# (case 32); the engine's `done` never dropped the marker — the ADR-0040 "half that was never ported."
+# Each mutating leg gets a FRESH server (done DELETEs a marker; the state must not leak between legs).
+# Read #42's live markers straight off the fixture (python3 is already the fixture runtime, so this adds
+# no dependency) — the machine fact this slice turns on is "is the claim marker still there after done?".
+dclaims() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/repos/FS-GG/FS.GG.SDD/issues/42/comments").read().decode())' "$1" 2>/dev/null; }
+
+# 1. vole-533 stamps #42 (closed by merged PR #7) and DROPS its OWN marker — a finished item stops
+#    reserving its files. The stamp is still earned; the lock is gone.
+D1_OUT="$(mktemp)"; DONE_HOLDER=vole-533 python3 "$HERE/done_server.py" >"$D1_OUT" 2>/dev/null & DP1=$!
+dp1=""; for _ in $(seq 1 50); do dp1="$(head -n1 "$D1_OUT" 2>/dev/null)"; [ -n "$dp1" ] && break; sleep 0.1; done
+rm -f "$D1_OUT"
+if [ -n "$dp1" ]; then
+  d1="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$dp1" FSGG_COORD_CACHE="$(mktemp -d)" \
+    "$ENGINE" done 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"; d1rc=$?
+  [ "$d1rc" -eq 0 ] && printf '%s' "$d1" | grep -q 'FSGG-DONE   FS.GG.SDD#42' \
+    && ok "#533: the stamp is still earned (green, FSGG-DONE) — dropping the lock does not touch the verdict" \
+    || bad "#533: done --flip stamps the item green" "rc=$d1rc: $d1"
+  # The machine fact: after `done`, the claim marker is GONE. A live marker's `Paths:` keep reserving.
+  printf '%s' "$(dclaims "$dp1")" | grep -q 'worker=vole-533' \
+    && bad "#533: a finished item must NOT keep its claim — the marker is still live after done" "$(dclaims "$dp1")" \
+    || ok "#533: done --flip DROPS the worker's own claim — the finished item stops reserving its files"
+  kill "$DP1" 2>/dev/null
+else
+  bad "#533 fixture (own marker) bound a port"
+fi
+
+# 2. It drops ONLY OUR OWN marker. Deleting another worker's claim is `reap`'s job, and it is destructive
+#    — `done` must not do it silently just because the item is finished. Here other-999 holds #42; vole-533
+#    stamps it Done, and the guarantee is structural: a `Held` is obtainable only by confirming the live
+#    winner is US (verifyHeld), so `release` here CANNOT touch a marker that is not ours. FRESH server.
+D2_OUT="$(mktemp)"; DONE_HOLDER=other-999 python3 "$HERE/done_server.py" >"$D2_OUT" 2>/dev/null & DP2=$!
+dp2=""; for _ in $(seq 1 50); do dp2="$(head -n1 "$D2_OUT" 2>/dev/null)"; [ -n "$dp2" ] && break; sleep 0.1; done
+rm -f "$D2_OUT"
+if [ -n "$dp2" ]; then
+  d2="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$dp2" FSGG_COORD_CACHE="$(mktemp -d)" \
+    "$ENGINE" done 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"
+  printf '%s' "$(dclaims "$dp2")" | grep -q 'worker=other-999' \
+    && ok "#533: ...but it must NOT delete a claim that is not ours — other-999's marker is left intact" \
+    || bad "#533: done deleted a stranger's claim" "$(dclaims "$dp2")"
+  printf '%s' "$d2" | grep -q 'still holds its claim' \
+    && ok "#533: ...it says so instead — names the other holder, drops only your own lock" \
+    || bad "#533: done names the claim it left" "$d2"
+  printf '%s' "$d2" | grep -qi 'reap' \
+    && ok "#533: ...and points at reap — the destructive path a stranger's claim actually needs" \
+    || bad "#533: done points at reap for another's claim" "$d2"
+  kill "$DP2" 2>/dev/null
+else
+  bad "#533 fixture (stranger's marker) bound a port"
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
