@@ -388,6 +388,15 @@ module Scan =
         | BlockerUnknown -> "unknown"
         | BlockerUnparseable -> "unparseable"
 
+    /// WHO A RESERVATION IS HELD BY, as the assembler knows it. A marker-backed claim (live OR stale — a
+    /// lock is a lock, #461) names its worker and item; a MARKERLESS In-progress board row (arm A of
+    /// bash's `active_claims`) reserves too — something is evidently editing those files — but has no
+    /// worker to name and no lease to wait out, so it is `Unowned`. It is written to the wire as the
+    /// codec's `live-claim` / `unowned` holder, which `Snapshot.parse` already reads.
+    type private Reserved =
+        | RClaim of worker: WorkerId * holder: Ref * ageSeconds: int
+        | RUnowned of holder: Ref
+
     let snapshot
         (transport: IGitHubTransport)
         (rows: Row list)
@@ -513,8 +522,9 @@ module Scan =
         // The HOLDER travels with it. A reservation that does not name who holds it can tell a worker that
         // their files are taken but not by whom — and "queued behind a claim held by W, lease frees in ~96m"
         // and "nothing schedulable" are the same fact and two completely different instructions (#428). The
-        // first sends the worker to talk to W; the second sends them home.
-        let inFlight = ResizeArray<string * string * string list * WorkerId * Ref * int>()
+        // first sends the worker to talk to W; the second sends them home. A markerless In-progress row has
+        // no W to name (`RUnowned`), which is a different instruction again: there is no lease to wait out.
+        let inFlight = ResizeArray<string * string * string list * Reserved>()
 
         // THE ARRAY IS CALLED `items` ON THE WIRE. Not `candidates` — that is what the parser reads, and a
         // writer that invented its own name would produce a document that refuses to parse on every single
@@ -564,7 +574,11 @@ module Scan =
                 | Error e -> failure <- Some e
                 | Ok markers ->
 
-                let holder = Reads.winner leaseMinutes markers
+                // THE LOCK, NOT JUST THE LIVE WINNER. A stale-but-unreaped marker still holds the item (a
+                // lease is a clock; a lock is broken only by `reap`), so the RESERVATION reads `reserver`.
+                // The candidate's own `claim` block below is written from the same marker — its liveness
+                // then decides whether the item is offered (#581), while the reservation stands regardless.
+                let holder = Reads.reserver leaseMinutes markers
 
                 w.WriteStartObject()
 
@@ -645,25 +659,37 @@ module Scan =
                     w.WriteEndObject()
                     w.WriteEndObject()
 
-                    // A LIVE CLAIM RESERVES ITS TOUCH-SET. That reservation is what stops a second worker
-                    // being handed the same files, and it comes from the body we ALREADY read — one read,
-                    // two uses.
-                    match body with
-                    | Ok text ->
-                        match TouchSet.parse text with
-                        | Declared tokens ->
-                            let names =
-                                tokens
-                                |> List.map (fun t ->
-                                    match t with
-                                    | Matchable s -> s
-                                    | Unmatchable s -> s)
-
-                            inFlight.Add(row.Ref.Owner, row.Ref.Repo, names, m.Worker, row.Ref, m.AgeSeconds)
-                        | _ -> ()
-                    | Error _ -> ()
-
                 w.WriteEndObject()
+
+                // THE RESERVATION (arm A of bash's `active_claims`, plus the lock #461). It comes from the
+                // body we ALREADY read — one read, two uses — and it is what stops a second worker being
+                // handed the same files. Two kinds hold a touch-set here:
+                //   • a MARKER (live or stale): named by its worker/item — a lock is a lock (#461/#581).
+                //   • a MARKERLESS `In progress` row: something is evidently editing those files, so it
+                //     reserves too — but there is no worker to name and no lease to wait out, so it is
+                //     `Unowned`. Dressing it up as a holder would send a worker to wait for a marker that is
+                //     never coming (#428). Only the `In progress` COLUMN licenses this: a Ready/Backlog row
+                //     with no marker reserves nothing, because nobody is working it.
+                let reserveAs =
+                    match holder with
+                    | Some m -> Some(RClaim(m.Worker, row.Ref, m.AgeSeconds))
+                    | None when row.Status = InProgress -> Some(RUnowned row.Ref)
+                    | None -> None
+
+                match reserveAs, body with
+                | Some held, Ok text ->
+                    match TouchSet.parse text with
+                    | Declared tokens ->
+                        let names =
+                            tokens
+                            |> List.map (fun t ->
+                                match t with
+                                | Matchable s -> s
+                                | Unmatchable s -> s)
+
+                        inFlight.Add(row.Ref.Owner, row.Ref.Repo, names, held)
+                    | _ -> ()
+                | _ -> ()
 
         w.WriteEndArray()
 
@@ -702,11 +728,12 @@ module Scan =
                             match Reads.markers transport o r n with
                             | Error e -> failure <- Some e
                             | Ok markers ->
-                                match Reads.winner leaseMinutes markers with
-                                // No LIVE claim — a chatty issue, or a stale marker whose lease has lapsed.
-                                // A stale claim reserves too (only `reap` may break a lock), but that rides
-                                // with the starved-queue slice; here, as in the board loop, only a live
-                                // holder reserves.
+                                match Reads.reserver leaseMinutes markers with
+                                // No claim at all — a chatty issue somebody merely commented on. A comment is
+                                // not a lock, so it reserves nothing. A STALE marker, on the other hand, DOES
+                                // reach `Some m` (via `reserver`, not `winner`): a lapsed lease is still a
+                                // lock, broken only by `reap`, so its touch-set is reserved with its true
+                                // (expired) age — the starved-queue slice's whole point (#428, case 25).
                                 | None -> ()
                                 | Some m ->
                                     // The touch-set rides in on the SAME list read (one read, two uses),
@@ -725,15 +752,13 @@ module Scan =
                                             o,
                                             r,
                                             names,
-                                            m.Worker,
-                                            { Owner = o; Repo = r; Number = n },
-                                            m.AgeSeconds
+                                            RClaim(m.Worker, { Owner = o; Repo = r; Number = n }, m.AgeSeconds)
                                         )
                                     | _ -> ()
 
         w.WriteStartArray("inFlight")
 
-        for (owner, repoName, paths, holder, holderRef, age) in inFlight do
+        for (owner, repoName, paths, held) in inFlight do
             w.WriteStartObject()
             w.WriteString("owner", owner)
             w.WriteString("repo", repoName)
@@ -744,12 +769,23 @@ module Scan =
 
             w.WriteEndArray()
             w.WriteStartObject "holder"
-            w.WriteString("kind", "live-claim")
-            w.WriteString("worker", holder.Value)
-            w.WriteString("owner", holderRef.Owner)
-            w.WriteString("repo", holderRef.Repo)
-            w.WriteNumber("number", holderRef.Number)
-            w.WriteNumber("ageSeconds", age)
+
+            match held with
+            | RClaim(worker, holderRef, age) ->
+                w.WriteString("kind", "live-claim")
+                w.WriteString("worker", worker.Value)
+                w.WriteString("owner", holderRef.Owner)
+                w.WriteString("repo", holderRef.Repo)
+                w.WriteNumber("number", holderRef.Number)
+                w.WriteNumber("ageSeconds", age)
+            | RUnowned holderRef ->
+                // A MARKERLESS In-progress reserver — the codec's `unowned` holder, which carries only the
+                // ref (there is no worker, and no age, because there is no lease).
+                w.WriteString("kind", "unowned")
+                w.WriteString("owner", holderRef.Owner)
+                w.WriteString("repo", holderRef.Repo)
+                w.WriteNumber("number", holderRef.Number)
+
             w.WriteEndObject()
             w.WriteEndObject()
 

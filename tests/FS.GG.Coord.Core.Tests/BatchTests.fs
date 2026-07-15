@@ -330,3 +330,141 @@ module BatchTests =
 
         Assert.Empty(r.Chosen)
         Assert.Empty(r.Decisions)
+
+    // ================================================================================================
+    // #428 — THE STARVED-QUEUE BANNER. A busy queue that hands out nothing is not an empty one.
+    // ================================================================================================
+    // The chokepoint: in a repo where one file is nearly every item's touch-set, ONE claim serialises the
+    // whole queue. `batch` correctly schedules nothing — and "nothing schedulable" reads exactly like an
+    // empty backlog, so a worker goes home from a repo with work in it. The banner is the difference: it
+    // names the holders (who to talk to) and the soonest lease (whether to wait), and an EXPIRED lease is
+    // a reap, not a wait. A markerless reserver reserves, but it is NOT a holder — no worker, no lease.
+
+    let private resv repo paths holder : Reservation =
+        { Owner = "FS-GG"
+          Repo = repo
+          Paths = Declared(paths |> List.map Matchable)
+          Holder = holder }
+
+    let private anyLine (needle: string) (lines: string list) =
+        lines |> List.exists (fun (l: string) -> l.Contains needle)
+
+    /// The corpus's starved world, one layer down: #221 queued behind a fresh off-board claim (tern-y99),
+    /// #222 held by its own fresh marker (kite-z01), #224 queued behind an EXPIRED claim (ghost-222), and
+    /// #225 overlapping a MARKERLESS In-progress reserver (#226) — reserved, but no holder to name.
+    let private starvedResult () =
+        let inFlight =
+            [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 0))
+              resv "FS.GG.SDD" [ "src/Dead" ] (LiveClaim(WorkerId "ghost-222", ref 216, 99999))
+              resv "FS.GG.SDD" [ "src/Ghostly" ] (Unowned(ref 226)) ]
+
+        let candidates =
+            [ item 221 [ "src/Starve/Sub" ]
+              item 222 [ "src/Solo" ] |> held "kite-z01" 0
+              item 224 [ "src/Dead/Sub" ]
+              item 225 [ "src/Ghostly/Sub" ] ]
+
+        run inFlight candidates
+
+    [<Fact>]
+    let ``#428 a starved queue is BUSY, names every holder, and gives the soonest lease`` () =
+        let r = starvedResult ()
+        Assert.Empty(r.Chosen)
+
+        let banner = starvedBanner 120 r
+
+        // THREE items queued behind live claims — the markerless #225 is NOT one of them.
+        Assert.True(
+            anyLine "3 item(s) are QUEUED BEHIND LIVE CLAIMS held by: ghost-222, kite-z01, tern-y99" banner,
+            $"expected the queued-behind-claims line naming the three holders, got %A{banner}"
+        )
+
+        Assert.True(anyLine "this queue is BUSY, not empty" banner, $"expected the BUSY line, got %A{banner}")
+
+    [<Fact>]
+    let ``#428 an EXPIRED lease is the soonest to free, and it is a REAP not a wait`` () =
+        let banner = starvedBanner 120 (starvedResult ())
+
+        // ghost-222's lease has lapsed, so it frees NOW — the soonest of all — and the advice points at
+        // `reap`, the one blocker a worker clears themselves. Exactly one lease has expired.
+        Assert.True(anyLine "soonest: lease EXPIRED — reapable" banner, $"expected the EXPIRED soonest line, got %A{banner}")
+
+        Assert.True(
+            anyLine "1 of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo FS.GG.SDD --apply" banner,
+            $"expected the reap advice for the one expired lease, got %A{banner}"
+        )
+
+    [<Fact>]
+    let ``#428 a markerless In-progress reserver is never dressed up as a holder named '—'`` () =
+        // It reserves (something is editing those files), so #225 is not scheduled over it — but it has no
+        // worker and no lease, so it must NOT inflate the queued-behind-claims count nor appear as "held by —".
+        let banner = starvedBanner 120 (starvedResult ())
+
+        Assert.False(anyLine "held by —" banner, $"a markerless reserver must never be a holder named '—', got %A{banner}")
+        Assert.False(anyLine "4 item(s)" banner, $"the markerless #225 must not be counted as queued behind a claim, got %A{banner}")
+
+    [<Fact>]
+    let ``#428 a queue that HANDED OUT WORK prints no starved banner`` () =
+        // A BUSY banner on a schedule that worked is noise that trains workers to skip stderr (#440). The
+        // banner is silent whenever anything was chosen.
+        let r = run [] [ item 1 [ "src/A.fs" ]; item 2 [ "src/B.fs" ] ]
+        Assert.NotEmpty(r.Chosen)
+        Assert.Empty(starvedBanner 120 r)
+
+    [<Fact>]
+    let ``#428 a queue starved by BLOCKERS alone gets no banner — that is #440's per-item business`` () =
+        // The banner is for queues starved BY CLAIMS — a worker waiting on a lease. A blocked or wrong-column
+        // queue has no holder to name and no lease to wait out; its emptiness is explained per item (#440),
+        // and a BUSY banner over it would be a lie.
+        let blocked n =
+            { item n [ $"src/%d{n}.fs" ] with
+                Blockers =
+                    [ { Ref = Some(ref 999)
+                        Raw = (ref 999).Short
+                        State = BlockerOpen } ] }
+
+        let r = run [] [ blocked 1; blocked 2 ]
+        Assert.Empty(r.Chosen)
+        Assert.Empty(starvedBanner 120 r)
+
+    [<Fact>]
+    let ``#428 when every lease is FRESH the soonest is a countdown, and no reap advice fires`` () =
+        // No expired lease means nothing to reap — the advice must not appear (there is nothing to collect),
+        // and the soonest lease is a real countdown a worker can decide against.
+        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60)) ]
+        let r = run inFlight [ item 221 [ "src/Starve/Sub" ] ]
+        Assert.Empty(r.Chosen)
+
+        let banner = starvedBanner 120 r
+        Assert.True(anyLine "soonest: lease frees in ~" banner, $"expected a countdown, got %A{banner}")
+        Assert.False(anyLine "EXPIRED" banner, $"no lease has expired, so no EXPIRED line, got %A{banner}")
+        Assert.False(anyLine "collect them: fsgg-coord reap" banner, $"no reap advice when nothing expired, got %A{banner}")
+
+    [<Fact>]
+    let ``#428 a lease over its clock but with a live PR is NOT reapable — no phantom EXPIRED, no reap advice`` () =
+        // #581. A `HeldByLiveWork` claim is past its lease by the clock, yet its open PR proves the work is
+        // alive — so it is not a reap. The banner must NOT print "lease EXPIRED — reapable" (there is no
+        // reap advice to match it) nor advertise a collection that would break a lock over live work.
+        let liveWork =
+            { item 1 [ "scripts/fsgg-coord" ] with
+                Claim =
+                    Some(
+                        { Worker = WorkerId "w-alice"
+                          Session = None
+                          AgeSeconds = 99999
+                          PreviousStatus = None },
+                        LeaseExpiredPrOpen 4242
+                    ) }
+
+        // The item is HELD by its own live work — the ONLY thing queued. (A separate candidate OVERLAPPING
+        // it would see a plain `LiveClaim` reservation, which carries no PR-liveness; that case is the
+        // accepted disposition where the banner advises `reap`, and `reap` re-probes and refuses the live
+        // one. This test isolates the verdict the engine CAN know is live-work: the item's own.)
+        let r = run [] [ liveWork ]
+        Assert.Empty(r.Chosen)
+
+        let banner = starvedBanner 120 r
+        Assert.True(anyLine "this queue is BUSY, not empty" banner, $"still BUSY, got %A{banner}")
+        Assert.False(anyLine "EXPIRED" banner, $"a live-work over-run is not reapable, so no EXPIRED line, got %A{banner}")
+        Assert.False(anyLine "collect them: fsgg-coord reap" banner, $"no reap advice for live work, got %A{banner}")
+        Assert.True(anyLine "soonest: lease unknown" banner, $"no live lease to wait on, so 'lease unknown', got %A{banner}")

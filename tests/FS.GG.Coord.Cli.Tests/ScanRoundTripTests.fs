@@ -376,3 +376,101 @@ let ``an OFF-BOARD claim reserves its touch-set - the board scan misses it, the 
             | other -> failwith $"an overlap with an off-board claim is not schedulable — got %A{other}"
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"scan failed: %A{e}"
+
+[<Fact>]
+let ``a STALE off-board claim still RESERVES its touch-set - a lock is broken only by reap, never a clock`` () =
+    // #461/#581, case 25 (the starved-queue slice). A lapsed lease is EVIDENCE of abandonment, never
+    // proof — and until `reap` collects it, the marker still holds the item and its files. The scheduler
+    // reserves it exactly as it reserves a live claim, or it hands a second worker the tree a stale-but-
+    // unreaped holder is standing in. The off-board scan reads it via `reserver` (not `winner`, which
+    // drops stale), and carries its TRUE, expired age so the collision reads "lease EXPIRED — reapable".
+    let stale =
+        """[{"id":701,"body":"<!-- fsgg:claim worker=ghost-222 lease=120 -->","updated_at":"2020-01-01T00:00:00Z"}]"""
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok """[{"number":99,"title":"off-board, stale","state":"open","body":"Paths: src/Dead"}]"""
+            elif req.Path.EndsWith "/99/comments" then
+                ok stale
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // the board candidate #42 carries no marker of its own
+            else
+                ok (issueBody "Paths: src/Dead/Sub")) // #42's body — a subtree of the stale claim's reservation
+
+    match Scan.snapshot transport [ aRow ] None false None 120 with
+    | Ok(document, _) ->
+        match Snapshot.parse document with
+        | Ok request ->
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                | Batch.LiveClaim(WorkerId w, ref, age) ->
+                    Assert.Equal("ghost-222", w)
+                    Assert.Equal(99, ref.Number)
+                    // The EXPIRED age survives — it is what turns the collision into a reap, not a wait.
+                    Assert.True(age > 120 * 60, $"a stale claim must carry its expired age, got {age}s")
+                | other -> failwith $"the stale off-board claim must still reserve, named — got %A{other}"
+            | other -> failwith $"exactly one reservation expected — got %A{other}"
+
+            // AND THE OVERLAPPING CANDIDATE IS REFUSED: a stale lock is not scheduled over, only reaped.
+            match
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+            with
+            | Green result -> Assert.Empty(result.Chosen)
+            | other -> failwith $"an overlap with a stale-but-unreaped claim is not schedulable — got %A{other}"
+        | Error e -> failwith $"parse failed: %A{e}"
+    | Error e -> failwith $"scan failed: %A{e}"
+
+[<Fact>]
+let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of active_claims`` () =
+    // Case 25 (starved). The board's In-progress column is a claim signal in its own right: something is
+    // evidently editing those files, so the row reserves — but there is no marker, hence no worker to name
+    // and no lease to wait out. It is `Unowned`, deliberately distinct from a live claim, so a colliding
+    // candidate is told "In progress with NO claim marker" rather than sent to wait for a marker that is
+    // never coming (#428). A Ready row with no marker, by contrast, reserves nothing — nobody is on it.
+    let inProgress = { aRow with Status = InProgress }
+
+    // #43 is a Ready candidate declaring a SUBTREE of the In-progress #42's touch-set, so it must be refused.
+    let candidate43 =
+        { aRow with
+            Ref = { aRow.Ref with Number = 43 }
+            Status = Ready }
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]" // no OFF-board claim; the reservation comes from the board's In-progress column
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // NEITHER row carries a marker
+            elif req.Path.Contains "/issues/43" then
+                ok """{"number":43,"body":"Paths: src/Audio/Sub"}"""
+            else
+                ok (issueBody "Paths: src/Audio")) // #42's body
+
+    match Scan.snapshot transport [ inProgress; candidate43 ] None false None 120 with
+    | Ok(document, _) ->
+        match Snapshot.parse document with
+        | Ok request ->
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                | Batch.Unowned ref -> Assert.Equal(42, ref.Number)
+                | other -> failwith $"a markerless In-progress row reserves as Unowned — got %A{other}"
+            | other -> failwith $"exactly one reservation expected — got %A{other}"
+
+            // AND THE OVERLAPPING Ready CANDIDATE IS REFUSED, its collision naming the Unowned reserver.
+            match
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+            with
+            | Green result ->
+                Assert.DoesNotContain(43, result.Chosen |> List.map (fun i -> i.Ref.Number))
+
+                let d43 = result.Decisions |> List.find (fun d -> d.Item.Ref.Number = 43)
+
+                match d43.CollidedWith with
+                | Some(Batch.Unowned ref) -> Assert.Equal(42, ref.Number)
+                | other -> failwith $"#43 must collide with the Unowned reserver #42 — got %A{other}"
+            | other -> failwith $"an overlap with an In-progress reserver is not schedulable — got %A{other}"
+        | Error e -> failwith $"parse failed: %A{e}"
+    | Error e -> failwith $"scan failed: %A{e}"

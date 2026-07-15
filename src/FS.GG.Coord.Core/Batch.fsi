@@ -126,3 +126,16 @@ module Batch =
     /// this run and has no lease; a LIVE CLAIM means wait out a window or go and talk to a worker. Same
     /// verdict, opposite instructions.
     val explainDecision: leaseMinutes: int -> d: Decision -> string
+
+    /// THE STARVED-QUEUE BANNER (#428) — the AGGREGATE `explainDecision` cannot give.
+    ///
+    /// `explainDecision` speaks per-item; this speaks about the QUEUE. When a batch hands out nothing over a
+    /// board full of items queued behind live claims, "nothing schedulable" reads as an empty backlog and
+    /// sends a worker home from a repo with work in it. The banner says the queue is BUSY, names every
+    /// holder (who to talk to), gives the soonest lease (whether waiting is worth it), and — for a lease
+    /// already expired — points at `reap`, the one blocker a worker clears alone.
+    ///
+    /// Returns [] whenever the queue is not STARVED-BY-CLAIMS: work was handed out, or the queue is empty /
+    /// starved by blockers or columns (that is #440's per-item business). A banner on a healthy queue is
+    /// noise, so there is deliberately none. Each string is one stderr line.
+    val starvedBanner: leaseMinutes: int -> result: BatchResult -> string list

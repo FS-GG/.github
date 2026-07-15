@@ -177,6 +177,21 @@ module Reads =
         |> List.sortBy (fun m -> m.Id)
         |> List.tryHead
 
+    /// THE MARKER THAT HOLDS THE LOCK, REGARDLESS OF LEASE — the live CAS `winner` if there is one, else
+    /// the lowest-id marker whose lease has lapsed.
+    ///
+    /// `winner` decides IDENTITY: only a live marker can answer a heartbeat or lose a CAS. This decides
+    /// RESERVATION, and the two are not the same question. A lease is a clock; a lock is a lock, and it is
+    /// broken only by `reap`, never by the clock running out (#461/#581, case 25). So the SCHEDULER must
+    /// reserve a stale-but-unreaped claim's touch-set exactly as it reserves a live one — scheduling over
+    /// it would hand a second worker the very tree its holder is standing in, the double-book this whole
+    /// scheduler exists to prevent. This is the same choice `who` makes when it classifies a row Held (a
+    /// live winner) or Stale (a lapsed marker still holding the lock).
+    let reserver (leaseMinutes: int) (markers: Marker list) : Marker option =
+        match winner leaseMinutes markers with
+        | Some m -> Some m
+        | None -> markers |> List.sortBy (fun m -> m.Id) |> List.tryHead
+
     let markers
         (transport: IGitHubTransport)
         (owner: string)

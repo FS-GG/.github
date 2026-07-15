@@ -195,6 +195,12 @@ module Client =
             for d in passed do
                 eprint $"  %s{Batch.explainDecision leaseMinutes d}"
 
+        // #428 — a queue that hands out NOTHING but is full of items queued behind live claims is BUSY, not
+        // empty. Say so, or the honest "nothing schedulable" reads as an empty backlog and sends a worker
+        // home from a repo with work in it. Silent on a healthy queue (the banner is []).
+        for line in Batch.starvedBanner leaseMinutes result do
+            eprint line
+
     let batch (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
@@ -221,6 +227,11 @@ module Client =
 
                     for d in passed do
                         eprint $"  %s{Batch.explainDecision opts.LeaseMinutes d}"
+
+                    // The starved-queue banner rides on stderr too (#428) — stdout is the machine array a
+                    // `take` parses, stderr the "why nothing", exactly as bash splits them.
+                    for line in Batch.starvedBanner opts.LeaseMinutes result do
+                        eprint line
                 | Text ->
                     if not (List.isEmpty result.Chosen) then
                         printfn "schedulable in parallel (%d):" (List.length result.Chosen)
