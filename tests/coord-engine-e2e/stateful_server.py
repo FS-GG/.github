@@ -261,6 +261,12 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 return self._send(200, list(COMMENTS.get(int(m.group(1)), [])))
 
+        # The existing-sub-issues read `child` now makes before it POSTs (#320 — an unreachable read is not
+        # an absent edge). No pre-existing edges here, so an empty array: `child` proceeds to link.
+        m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/sub_issues$", path)
+        if m:
+            return self._send(200, [])
+
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", path)
         if m:
             n = int(m.group(1))

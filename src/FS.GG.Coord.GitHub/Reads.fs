@@ -434,6 +434,51 @@ module Reads =
                 | true, v when v.ValueKind = JsonValueKind.Number -> Ok(v.GetInt64())
                 | _ -> Error(Malformed(subject, "the issue response carried no numeric `id`"))
 
+    /// The REST ids of an issue's EXISTING sub-issues (`issues/{n}/sub_issues`).
+    ///
+    /// FAILS CLOSED (#320): an unreadable list is an ERROR, never an empty one. `child` reads this to be
+    /// idempotent — re-linking a child that is already attached is a no-op, not a 422 — and folding a
+    /// failed read into "the edge is absent" would make it POST, collect a 422, and blame the token. An
+    /// unreachable subject is not an absent one.
+    let subIssueIds
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<int64 list> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} sub-issues"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/sub_issues"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the sub-issues response is not a JSON array"))
+                else
+                    let ids =
+                        doc.RootElement.EnumerateArray()
+                        |> Seq.choose (fun i ->
+                            match i.TryGetProperty "id" with
+                            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
+                            | _ -> None)
+                        |> List.ofSeq
+
+                    Ok ids
+
     // ---- the meter --------------------------------------------------------------------------------
 
     let rateLimit (transport: IGitHubTransport) : IoResult<RateLimitSnapshot> =

@@ -751,11 +751,27 @@ module Client =
                 match Reads.restId ctx.Transport childRef.Owner childRef.Repo childRef.Number with
                 | Error e -> fail e
                 | Ok childId ->
-                    match Writes.child ctx.Transport parent childId with
-                    | Error e -> fail e
-                    | Ok() ->
-                        printfn "attached %s as a child of %s" childRef.Short parent.Short
+                    // #320: the existing-links read must FAIL CLOSED. Swallowing it would make "I could not
+                    // reach the API" look exactly like "the edge is not there" — `child` would POST, collect
+                    // a 422, and blame the token. Idempotency is BY ID, not by number: two repos can each
+                    // have an issue #7, so a re-run of a worker's close-out never has to reason about the edge.
+                    match Reads.subIssueIds ctx.Transport parent.Owner parent.Repo parent.Number with
+                    | Error e ->
+                        eprint
+                            $"fsgg-coord-engine: child: cannot read %s{parent.Short}'s sub-issues (%s{Errors.explain e}) — refusing to guess whether %s{childRef.Short} is already linked."
+                        ExitError
+                    | Ok existing when List.contains childId existing ->
+                        printfn "%s is already a sub-issue of %s — nothing to do" childRef.Short parent.Short
                         ExitGreen
+                    | Ok _ ->
+                        match Writes.child ctx.Transport parent childId with
+                        // A failed link surfaces the API's OWN diagnosis — a 422 (already linked, or a
+                        // cross-repo link GitHub refuses) and a 403 (no `issues: write`) are different
+                        // problems with different fixes, and guessing one would send the worker at the wrong.
+                        | Error e -> fail e
+                        | Ok() ->
+                            printfn "linked %s as a sub-issue of %s" childRef.Short parent.Short
+                            ExitGreen
         | _ ->
             eprint "fsgg-coord-engine: child takes <parent-ref> <child-ref>."
             ExitError

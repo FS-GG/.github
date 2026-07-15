@@ -98,7 +98,7 @@ sfx="$(run set-field FS.GG.SDD#43 Nonexistent x 2>&1)"; sfxrc=$?
 
 # ---- child attaches by id --------------------------------------------------------------------------
 ch="$(run child FS.GG.SDD#99 FS.GG.SDD#43 2>&1)"; chrc=$?
-[ "$chrc" -eq 0 ] && printf '%s' "$ch" | grep -q 'attached FS.GG.SDD#43 as a child of FS.GG.SDD#99' \
+[ "$chrc" -eq 0 ] && printf '%s' "$ch" | grep -q 'linked FS.GG.SDD#43 as a sub-issue of FS.GG.SDD#99' \
   && ok "child attaches the sub-issue" \
   || bad "child attaches the sub-issue" "rc=$chrc: $ch"
 
