@@ -1245,6 +1245,113 @@ rm -f "$SC_OUT"; rm -rf "$SC_CACHE" "$CO"
 #     canonicalization gate, and the epic-rollup / NO-TOUCH-SET `lint` rules (#496): a `lint`/`issues`
 #     command the engine does not have. Tracked for cases 13-remainder / 14.
 
+# ---- VERIFY-PATHS: DID THE PR STAY INSIDE ITS TOUCH-SET? (case 23) --------------------------------
+#
+# The corpus (`tests/fsgg-coord/cases/23-verify-paths-boundary.sh`) certifies `verify-paths` as the merge
+# boundary's touch-set gate, and — the property this whole command exists for — that "I could not check"
+# is NEVER one of its verdicts (#322). It resolves the issue a PR implements from its `item/<n>-…` branch
+# (else what it closes), reads that issue's `Paths:` touch-set, and diffs the PR's changed files against
+# it, reaching exactly one of:
+#   OK      every changed file is inside the touch-set (exit 0).
+#   DRIFT   a file falls outside it (named); by DEFAULT this exits NON-ZERO — the `touch-set-drift.yml`
+#           gate greps this line — and `--warn` downgrades it to advisory (exit 0), the CI advisory mode.
+#   SKIP    nothing to verify against (the PR implements no tracked item, or the item declared no
+#           touch-set). GREEN — a PR with nothing to check is not a failure.
+#   (error) the head ref / body / files could not be READ (#322): NO verdict, non-zero, EVEN under --warn.
+# `verifypaths_server.py` is that world one transport over — #70's touch-set is the SAME Scene one case 22
+# seeds, so PR 7 (Scene files) is OK and PR 8 (an Audio file + README) is DRIFT: the corpus's certified
+# pair. The DRIFT-names-the-count wording ("touches 2 file(s) outside") is bash's; the engine names the
+# files themselves, so parity holds the PROPERTY (a DRIFT verdict that NAMES the offending file and exits
+# non-zero), not bash's literal sentence — the ADR-0040 §5 re-expression, as everywhere else.
+vpsrv() {  # vpsrv <env-kv...> --  ; sets globals VP_PORT and VP_SRV for the spawned fixture
+  local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
+  local out; out="$(mktemp)"
+  env ${envs[@]+"${envs[@]}"} python3 "$HERE/verifypaths_server.py" >"$out" 2>/dev/null &
+  local srv=$! port=""
+  for _ in $(seq 1 50); do port="$(head -n1 "$out" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
+  rm -f "$out"
+  VP_PORT="$port"; VP_SRV="$srv"
+}
+
+vpsrv -- verifypaths
+if [ -z "$VP_PORT" ]; then bad "verify-paths fixture bound a port"; else
+  vp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$VP_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" verify-paths "$@" 2>&1; }
+
+  # 1. INSIDE the touch-set → OK, exit 0 (case 23's certified "a PR inside its touch-set is OK").
+  v7="$(vp --pr 7 --repo FS.GG.SDD)"; v7rc=$?
+  { [ "$v7rc" -eq 0 ] && printf '%s' "$v7" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "verify-paths: a PR inside its touch-set is OK and exits 0 (case 23)" \
+    || bad "verify-paths OK parity" "rc=$v7rc: $v7"
+
+  # 2. DRIFT names the offending file(s) and, by default, exits NON-ZERO — the gate the drift workflow
+  #    greps. The corpus counts ("2 file(s) outside"); the engine names them — same property, re-expressed.
+  v8="$(vp --pr 8 --repo FS.GG.SDD)"; v8rc=$?
+  { [ "$v8rc" -ne 0 ] && printf '%s' "$v8" | grep -q 'FSGG-PATHS DRIFT'; } \
+    && ok "verify-paths: drift is reported and exits non-zero by default (case 23)" \
+    || bad "verify-paths DRIFT exit parity" "rc=$v8rc: $v8"
+  printf '%s' "$v8" | grep -q 'src/Audio/Mixer.fs' \
+    && ok "verify-paths: DRIFT names the offending file (src/Audio/Mixer.fs) (case 23)" \
+    || bad "verify-paths must name the drifting file" "$v8"
+  printf '%s' "$v8" | grep -q 'widen' \
+    && ok "verify-paths: DRIFT points at the remedy (widen) (case 23)" \
+    || bad "verify-paths must point at the widen remedy" "$v8"
+
+  # 3. --warn downgrades the DRIFT verdict to advisory: SAME verdict, exit 0 (the advisory CI gate).
+  v8w="$(vp --pr 8 --repo FS.GG.SDD --warn)"; v8wrc=$?
+  { [ "$v8wrc" -eq 0 ] && printf '%s' "$v8w" | grep -q 'FSGG-PATHS DRIFT'; } \
+    && ok "verify-paths --warn: reports the drift but exits 0 (case 23)" \
+    || bad "verify-paths --warn downgrade parity" "rc=$v8wrc: $v8w"
+
+  # 4. A PR that implements no tracked item is SKIP, never a silent OK — and it must not leak an OK
+  #    verdict into a SKIP (case 23: "SKIP is not mistaken for OK"). PR 9's branch is not item/<n>-… and
+  #    it closes nothing, so resolution falls through to SKIP.
+  v9="$(vp --pr 9 --repo FS.GG.SDD)"
+  { printf '%s' "$v9" | grep -q 'FSGG-PATHS SKIP' && ! printf '%s' "$v9" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "verify-paths: an unlinked PR is SKIP, not OK (case 23)" \
+    || bad "verify-paths unlinked-SKIP parity" "$v9"
+
+  # 5. An item that declares no 'Paths:' is SKIP too — nothing to verify against (case 23). PR 10
+  #    implements #72, which declares no touch-set.
+  v10="$(vp --pr 10 --repo FS.GG.SDD)"
+  printf '%s' "$v10" | grep -q 'FSGG-PATHS SKIP' \
+    && ok "verify-paths: an undeclared touch-set is SKIP (case 23)" \
+    || bad "verify-paths undeclared-SKIP parity" "$v10"
+
+  kill "$VP_SRV" 2>/dev/null
+fi
+
+# 6. #322: "I COULD NOT CHECK" IS NEVER A VERDICT. The PR read 503s, so the head ref is unreadable and
+#    the engine cannot tell which issue the PR implements. It must reach NO verdict and fail closed — and
+#    --warn, which downgrades a DRIFT to advisory, cannot license a verdict on a subject nobody read.
+#    A fresh server (the toggle changes what /pulls/7 answers).
+vpsrv FSGG_PARITY_HEADREF_FAIL=7 -- verifypaths
+if [ -z "$VP_PORT" ]; then bad "verify-paths #322 fixture bound a port"; else
+  vpf() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$VP_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" verify-paths "$@" 2>&1; }
+  vf="$(vpf --pr 7 --repo FS.GG.SDD)"; vfrc=$?
+  { [ "$vfrc" -ne 0 ] && ! printf '%s' "$vf" | grep -q 'FSGG-PATHS'; } \
+    && ok "#322: an unreadable head ref reaches NO verdict and fails closed by default (case 23)" \
+    || bad "#322: verify-paths must not invent a verdict from an unread PR" "rc=$vfrc: $vf"
+  vfw="$(vpf --pr 7 --repo FS.GG.SDD --warn)"; vfwrc=$?
+  { [ "$vfwrc" -ne 0 ] && ! printf '%s' "$vfw" | grep -q 'FSGG-PATHS'; } \
+    && ok "#322: ...and it fails closed under --warn too — --warn cannot downgrade a read that never happened (case 23)" \
+    || bad "#322: verify-paths must fail closed under --warn" "rc=$vfwrc: $vfw"
+  kill "$VP_SRV" 2>/dev/null
+fi
+# DISPOSITION ON THE RECORD (not silently skipped): case 23's remaining legs are separate work —
+#   * SKIP EXIT CODE is a DELIBERATE DIVERGENCE. bash FAILS non-zero on an unlinked/undeclared PR without
+#     `--warn` (case 23 line 59: `assert_fails "…an unlinked PR fails without --warn"`); the engine makes
+#     SKIP always exit 0 — a PR with genuinely nothing to check is not a merge-blocking failure. Ported
+#     here as the engine's certified behaviour (SKIP is green both ways), NOT as bash's rc. The verdict
+#     TEXT (SKIP vs OK) still carries the distinction the gate needs.
+#   * `--issue` — verify-paths against an explicitly-named issue, and the repo-boundary refusals it enables
+#     (#479 same-number/other-repo, #494 the issue-side repo-qualified read, the cross-repo closing-ref).
+#     The engine's `verifyPaths` has no `--issue` path at all: a port gap, shared with case 24.
+#   * #430 — deriving the repo from the git REMOTE when neither `--repo` nor `--issue` is given, and
+#     reporting an exhausted GraphQL budget AS a rate limit (EX_RATE 75) rather than blaming the checkout.
+#     The engine's verify-paths REQUIRES `--repo` today (usage error when absent) — the #480 git-remote
+#     scoping already landed for `next`/`take`/`batch`/`who` (case 13), but is not yet wired into
+#     verify-paths. Tracked alongside cases 24 / 13-remainder.
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
