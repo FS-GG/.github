@@ -1001,7 +1001,7 @@ module Client =
                     match Done.facts ctx.Transport board ref with
                     | Error e -> fail e
                     | Ok facts ->
-                        let verdict = Done.verify opts.Evidence facts
+                        let verdict = Done.verify opts.Pr opts.Evidence facts
                         printfn "%s" (Done.render ref verdict)
 
                         match verdict with

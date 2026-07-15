@@ -53,7 +53,10 @@ module Done =
         /// squash commit still closes the issue, so a correct, merged, green PR stamped RED — permanently,
         /// because editing a merged PR's body does not backfill the reference. The `CLOSED_EVENT`'s
         /// `closer` is what actually records the act, and it is checked too.
-        | ClosedByPullRequest of pr: int
+        ///
+        /// Carries the merge commit's abbreviated `oid` and the merge `day` (`mergedAt[0:10]`), so the stamp
+        /// names WHICH commit landed the work (#342): `merged PR #92 @ 09c836e (2026-01-15)`.
+        | ClosedByPullRequest of pr: int * oid: string * day: string
 
         /// Resolved with no PR, and with EVIDENCE (#600). Obsolete, duplicate, resolved-elsewhere, a
         /// decision item whose deliverable lives in another repo.
@@ -93,6 +96,17 @@ module Done =
         /// This child is a PARTIAL fix. **The parent stays open even if this is its only child.**
         | Partial of why: string
 
+    /// A pull request GitHub associates with closing this issue (`closedByPullRequestsReferences`), with the
+    /// facts `verify` needs to tell a real closer from a mere mention (#342): its merge state and time (the
+    /// latest-merged among true closers wins), its merge-commit oid (named in the stamp), and whether its own
+    /// body names THIS issue (`ClosesThis` — the `Closes #N` a mention does not carry).
+    type ClosingPr =
+        { Number: int
+          Merged: bool
+          MergedAt: string
+          Oid: string
+          ClosesThis: bool }
+
     /// Everything the stamp needs, read in ONE query.
     ///
     /// One query, because eight separate reads is eight chances for one of them to fail and be mistaken for
@@ -100,10 +114,12 @@ module Done =
     type Facts =
         { Ref: Ref
           State: IssueState
-          /// PRs whose body carries a closing keyword for this issue (`closingIssuesReferences`).
-          ClosingPrs: int list
-          /// The PR named by the issue's own `CLOSED_EVENT` — the record of the closing ACT.
-          ClosedByEvent: int option
+          /// Every PR GitHub associates with closing this issue — a SUPERSET that also lists mere mentions.
+          /// Which one closed it is decided by `ClosesThis` OR `CloserPrs`, latest-merged first (#342).
+          ClosingPrs: ClosingPr list
+          /// The PR numbers the issue's own `CLOSED_EVENT` names as the closer — a PullRequest directly, or
+          /// the PR(s) associated with the closing Commit (#558, a commit-subject keyword). The record of the ACT.
+          CloserPrs: int list
           Children: Children
           BoardStatus: BoardStatus
           Parent: Ref option }
@@ -121,7 +137,11 @@ module Done =
     /// ORDER IS LOAD-BEARING. Truncation is checked first: an unverifiable subject must not report green,
     /// and a truncated page that happened to show only closed children would otherwise pass every test
     /// below it.
-    val verify: resolvedWithoutPr: string option -> facts: Facts -> Verdict<Closure>
+    ///
+    /// `prOverride` is the operator's `--pr N` — it names WHICH pull request the stamp should attest, and is
+    /// held to the SAME closer predicate as the no-`--pr` path: it can override which PR, never WHETHER it
+    /// closed the issue (#543). `None` selects the latest-merged among the issue's true closers (#342).
+    val verify: prOverride: int option -> resolvedWithoutPr: string option -> facts: Facts -> Verdict<Closure>
 
     /// The one-line stamp a worker reads. Green stamps and red stamps do not look alike, on purpose.
     val render: ref: Ref -> verdict: Verdict<Closure> -> string
