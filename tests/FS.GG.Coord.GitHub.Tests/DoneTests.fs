@@ -290,6 +290,10 @@ let ``#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other`
     let transport =
         scripted
             [ ok parentAllDone // the parent's facts
+              // The EPIC-UNLINKED-CHILD check re-reads the body + graph (#325): a body declaring no
+              // extra children clears it, so the roll-up proceeds.
+              ok """{"number":350,"body":"Paths: none"}""" // the parent's body
+              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // its graph, with refs
               ok itemOnBoard // boardWrite: resolve the item
               ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" // the Status write
               ok """{"number":350,"state":"closed"}""" ] // the ISSUE close
@@ -303,6 +307,31 @@ let ``#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other`
         Assert.True(transport.Logged "issue-patch FS-GG/FS.GG.SDD 350")
 
     | other -> failwith $"a rolled-up parent must be stamped AND closed — got %A{other}"
+
+[<Fact>]
+let ``#325 a parent whose BODY declares an unlinked child is left open, and names it`` () =
+    use _sandbox = new Sandbox()
+
+    // "All children resolved" is a claim about the sub-issue GRAPH. #350's graph holds only #398 (closed) —
+    // but its BODY declares #399, which the graph does not contain. Closing the parent here would close it
+    // over a criterion split out and never linked, so the roll-up must REFUSE and name #399.
+    let transport =
+        scripted
+            [ ok parentAllDone // facts: graph {#398 closed}, AllResolved
+              ok """{"number":350,"body":"- [ ] #398 the linked half\n- [ ] #399 the UNLINKED half"}""" // body declares #399
+              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // graph {#398}
+              ok """{"number":399,"body":"a plain issue"}""" ] // the PR-probe for #399 -> not a PR -> KEPT
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen(p, reasons) ] ->
+        Assert.Equal(parentRef, p)
+        let joined = String.concat " " reasons
+        Assert.Contains("FS.GG.SDD#399", joined)
+        Assert.Contains("fsgg-coord child", joined)
+        // It must NOT have written the board or closed the issue.
+        Assert.False(transport.Logged "--single-select-option-id opt_done")
+        Assert.False(transport.Logged "issue-patch FS-GG/FS.GG.SDD 350")
+    | other -> failwith $"a body-unlinked parent must be left open, naming the child — got %A{other}"
 
 [<Fact>]
 let ``a parent with an OPEN sibling is left open, and says which`` () =

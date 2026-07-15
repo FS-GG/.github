@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **20 full + 3 partial of 27 corpus cases** (~230 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **20 full + 3 partial of 27 corpus cases** (~242 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -129,7 +129,7 @@ which are the differential harness D.4 disposes of, not engine-behaviour cases:
 |---|---|---|
 | ✓ | 10, 11, 12, 15, 20, 21, 22, 23, 32, 33, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `lint`(epic-graph)/`issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
-| ◑ | 14 (`lint` FULL — all rules; `done --flip` rollup deferred) | the new `lint` command with EVERY rule: the schedulability pair (NO-TOUCH-SET / BAD-TOUCH-SET, #496) AND the epic-ROLL-UP-graph rules (EPIC-NO-CHILDREN, EPIC-CHILDREN-TRUNCATED, EPIC-DONE-OPEN-CHILD, DONE-STATUS-OPEN-ISSUE note, and the PR-probing/fail-closed EPIC-UNLINKED-CHILD — #325/#346/#266) + `--repo`/`--json`/`--strict`/exit-codes; only the `done --flip` epic rollup (a separate `done` concern) is deferred (see the remaining table) |
+| ◑ | 14 (`lint` FULL + `done --flip` ROLLUP; only PR-provenance deferred) | the new `lint` command with EVERY rule (schedulability #496 + epic-graph #325/#346/#266) AND the `done --flip` epic ROLLUP — HOLDS while a sibling is open (#235/#583), FLIPS when every child is Done+closed (#613), REFUSES when the body declares an unlinked child (#325, reusing the shared `Done.bodyUnlinkedChildren`), and flips over a body-cited PR ref (#346). Only the PR-**provenance** legs (which PR closed the child: #342 latest-merged-among-closers, #558 commit-subject closer) are deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`overlap`/`heartbeat` resurrection, forged/malformed markers) deferred — they need `reap`/`overlap` commands the engine lacks (see the remaining table) |
 
 Case **23 is now FULL**: `verify-paths` OK/DRIFT/SKIP + #322 fail-closed, the `--issue` boundary (#479
@@ -146,7 +146,7 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 | case | what it needs | class |
 |---|---|---|
 | 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, now shipped in the case-14 slices) | new `issues`/`reap` commands |
-| 14-remainder | the `done --flip` epic rollup (#235/#558/#543/#583, #342 provenance) — a `done`-command concern, NOT `lint`; the whole `lint` command (schedulability + all epic-graph rules) is DONE. The `EpicBody.childRefs` + `Reads.subIssues` this needs already landed with the lint epic-graph slice | `done --flip` rollup (reuses `EpicBody`/`subIssues`) |
+| 14-remainder | the `done` PR-**provenance** legs: #342 (the closer is the LATEST-merged among true closers, not `ClosingPrs.head`) and #558 (a COMMIT-subject closer resolves through to its PR). The engine's `verify` picks `ClosingPrs.head` and reads only `PullRequest` CLOSED_EVENT closers today. #543 (`--pr` must not launder a mention) is structurally absent — the engine ignores `--pr` for provenance and reads GitHub's own record. The `done --flip` ROLLUP itself (holds/flips/refuses-unlinked/PR-ref) is DONE | `done` provenance: add merge timestamps + commit-closer resolution to `Done.facts`/`verify` |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`overlap`/`say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are now DONE | needs `reap`/`overlap` commands the engine lacks (larger) |
 | 25 (offboard-claims) | paginated open-issue scan for `who` (off-board markers) + starved `batch` prose | port gap (larger) |
 | 26 (expired-lease) | `reap` / expired-lease-vs-open-PR (#581) | new `reap` command |
@@ -198,12 +198,20 @@ sub-issue, #346) and an **unresolvable ref KEPT** (fail closed, #266). New engin
 home": Core `EpicBody.childRefs` (task-list child refs — all three bullets, first-ref-wins, canonicalized +
 sorted) and `Reads.subIssues` (the graph with Total + per-child state) / `Reads.refIsPullRequest` (the probe).
 18 + 16 parity assertions + 3 Options + 7 EpicBody + 4 Reads tests. **The whole `lint` command is now DONE.**
-**Deferred on the record (14-remainder):** only the `done --flip` epic rollup (#235/#558/#543/#583, #342
-provenance) — a `done`-command concern that will REUSE `EpicBody`/`subIssues`.
+
+A third slice then closed the **`done --flip` epic ROLLUP**: it HOLDS the parent while a sibling is open
+(#235/#583), FLIPS when every child is Done + closed (stamped Done AND closed, #613), REFUSES when the
+epic's body declares a child the sub-issue graph does not contain (#325 — naming the child and pointing at
+`fsgg-coord child`), and flips over a body-cited PR ref (#346). The unlinked check reuses `EpicBody` and a
+new **shared `Done.bodyUnlinkedChildren`** (the #485 one-home the lint EPIC-UNLINKED-CHILD rule was
+refactored onto — one definition, both surfaces). 12 parity assertions + 1 Done rollup test. **Deferred on
+the record (14-remainder):** only the `done` PR-**provenance** legs — #342 (the LATEST-merged closer, not
+`ClosingPrs.head`) and #558 (a commit-subject closer resolving to its PR); #543 (`--pr` may not launder a
+mention) is structurally absent, the engine ignoring `--pr` for provenance and reading GitHub's own record.
 
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`reap`, `adopt`/`landable`, `overlap`, `issues`), the **`done --flip` epic rollup**,
-and **larger port gaps** (paginated off-board `who`). The verify-paths repo-boundary divergences (case 23's
+into **new commands** (`reap`, `adopt`/`landable`, `overlap`, `issues`), the **`done` PR-provenance legs**
+(#342/#558), and **larger port gaps** (paginated off-board `who`). The verify-paths repo-boundary divergences (case 23's
 SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
 the call-counting transformation is demonstrated end-to-end by case 10.
 
@@ -258,10 +266,10 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 20 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~230
-      assertions); the rest remain (see the §5 D.1 ledger). The whole `lint` command (schedulability +
-      epic-ROLL-UP-graph rules) landed as case 14's slices; only its `done --flip` rollup leg is deferred.
-      Ten engine defects the port was *for* closed along the way, plus the
+      **In progress: 20 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~242
+      assertions); the rest remain (see the §5 D.1 ledger). Case 14's whole `lint` command (schedulability +
+      epic-graph) AND its `done --flip` epic rollup landed; only the `done` PR-provenance legs (#342/#558)
+      are deferred. Ten engine defects the port was *for* closed along the way, plus the
       `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
       together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419
       twin-session refusal + shared-id warning, which closes case 44 in full, and the #418 resolver cache

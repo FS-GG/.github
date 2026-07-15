@@ -126,6 +126,20 @@ module Done =
     /// The one-line stamp a worker reads. Green stamps and red stamps do not look alike, on purpose.
     val render: ref: Ref -> verdict: Verdict<Closure> -> string
 
+    /// The children an epic's BODY declares that its sub-issue GRAPH does not contain — the
+    /// EPIC-UNLINKED-CHILD set, shared by `lint` and the `done --flip` rollup so the rule is defined ONCE
+    /// (#485). Takes the already-read body and the graph's refs, so a caller that has them pays no re-read.
+    /// A body-cited ref that resolves to a PULL REQUEST is dropped (a PR can never be a sub-issue, #346); a
+    /// ref the probe cannot resolve is KEPT (fail closed, #266 — "I could not check" is not "it is a PR").
+    /// Returns the canonical `owner/repo#n` refs, sorted.
+    val bodyUnlinkedChildren:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        body: string ->
+        graphRefs: string list ->
+            IoResult<string list>
+
     /// What happened to a parent when we climbed to it.
     type RollUp =
         /// Stamped Done AND CLOSED (#613 — the board and the issue must not disagree about the same work).
