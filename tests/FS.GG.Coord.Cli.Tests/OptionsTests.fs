@@ -139,3 +139,22 @@ module OptionsTests =
     let ``bootstrap --refresh sets the fresh flag - the drop-the-day-cache remedy`` () =
         Assert.True((parse [ "bootstrap"; "--refresh" ] |> ok).Fresh)
         Assert.False((parse [ "bootstrap" ] |> ok).Fresh)
+
+    // ---- lint (the board-health gate, #496) -------------------------------------------------------
+
+    [<Fact>]
+    let ``lint parses to its command and defaults to the text projection`` () =
+        let o = parse [ "lint" ] |> ok
+        Assert.Equal(LintCmd, o.Command)
+        Assert.Equal(Text, o.Render)   // FSGG-LINT lines by default; --json opts into the array
+
+    [<Fact>]
+    let ``lint --json / --repo / --strict are all captured`` () =
+        let o = parse [ "lint"; "--repo"; "sdd"; "--json"; "--strict" ] |> ok
+        Assert.Equal(Some "sdd", o.Repo)
+        Assert.Equal(Json, o.Render)
+        Assert.True(o.Strict)
+
+    [<Fact>]
+    let ``--strict is off by default - a note is advisory unless asked otherwise`` () =
+        Assert.False((parse [ "lint" ] |> ok).Strict)

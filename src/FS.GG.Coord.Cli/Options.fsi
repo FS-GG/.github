@@ -67,6 +67,8 @@ module Options =
         | OptionId
         /// The board item id for an issue (`item-id <ref>`) — 1 GraphQL, then cached forever.
         | ItemId
+        /// Board-health gate: flag Ready/Backlog items no worker can pick up (`lint [--repo] [--strict]`, #496).
+        | LintCmd
 
         | Help
         | Version
@@ -129,7 +131,10 @@ module Options =
 
           /// `--batch` (`set-field`) — write the remaining `Field=Value` args in ONE aliased mutation
           /// document (#448): N fields, one GraphQL request, one point at the floor.
-          Batch: bool }
+          Batch: bool
+
+          /// `--strict` (`lint`) — a NOTE is fatal too, not just an error (the pedantic board-health pass).
+          Strict: bool }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

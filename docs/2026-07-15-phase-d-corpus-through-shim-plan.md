@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **20 of 27 corpus cases** (~196 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **20 full + 3 partial of 27 corpus cases** (~214 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -119,16 +119,17 @@ fail-closed assertions re-expressed at the HTTP layer.
 - **Exit:** the corpus is green driving the engine (through the shim) locally, with call counts intact,
   and `50-shadow-engine` / `51-fs-flip` still green (bash still present, still agreeing).
 
-**Progress (as of the `#418 resolver-cache` slice, 2026-07-15).** The harness is grown one defect/case at a
-time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
+**Progress (as of the `#496 lint schedulability` slice, 2026-07-15).** The harness is grown one defect/case
+at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
 `fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **18 of 27 cases fully covered,
-plus 2 partial (13, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which
-are the differential harness D.4 disposes of, not engine-behaviour cases:
+plus 3 partial (13, 14, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
+which are the differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
 | ✓ | 10, 11, 12, 15, 20, 21, 22, 23, 32, 33, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
-| ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `lint`/`issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
+| ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `lint`(epic-graph)/`issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
+| ◑ | 14 (`lint` NO-TOUCH-SET/BAD-TOUCH-SET only, #496) | the new `lint` command + the schedulability rules (Ready/Backlog OPEN item no worker can pick up: no `Paths:`, or every token unmatchable) + `--repo`/`--json`/`--strict`/exit-codes; the epic-ROLL-UP-graph rules (EPIC-*, DONE-STATUS-OPEN-ISSUE, the PR-probing EPIC-UNLINKED-CHILD) and the `done --flip` rollup deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`overlap`/`heartbeat` resurrection, forged/malformed markers) deferred — they need `reap`/`overlap` commands the engine lacks (see the remaining table) |
 
 Case **23 is now FULL**: `verify-paths` OK/DRIFT/SKIP + #322 fail-closed, the `--issue` boundary (#479
@@ -144,8 +145,8 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 
 | case | what it needs | class |
 |---|---|---|
-| 13-remainder | the epic-rollup / NO-TOUCH-SET `lint` rules (#496), `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — all deferred on the record when the #480 scope slice landed (`gitRemoteRepo` is now shared with verify-paths' #430 default) | new `lint`/`issues`/`reap` commands |
-| 14 (no-touch-set-and-done) | `lint` NO-TOUCH-SET/epic-rollup rules | new `lint` command |
+| 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope, and the `lint` epic-ROLL-UP-graph rules — all deferred on the record when the #480 scope slice landed (the NO-TOUCH-SET/BAD-TOUCH-SET `lint` rules now shipped in the case-14 slice) | new `issues`/`reap` commands + `lint` epic-graph rules |
+| 14-remainder | the `lint` epic-ROLL-UP-graph rules (EPIC-NO-CHILDREN, EPIC-CHILDREN-TRUNCATED, EPIC-DONE-OPEN-CHILD, DONE-STATUS-OPEN-ISSUE note, and the PR-probing/fail-closed EPIC-UNLINKED-CHILD #325/#346/#266) + the `done --flip` epic rollup (#235/#558/#543/#583, #342 provenance); the NO-TOUCH-SET/BAD-TOUCH-SET schedulability rules are DONE | `lint` epic-graph (sub-issue graph + body-child-ref parse + PR probe) + `done --flip` rollup |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`overlap`/`say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are now DONE | needs `reap`/`overlap` commands the engine lacks (larger) |
 | 25 (offboard-claims) | paginated open-issue scan for `who` (off-board markers) + starved `batch` prose | port gap (larger) |
 | 26 (expired-lease) | `reap` / expired-lease-vs-open-PR (#581) | new `reap` command |
@@ -179,11 +180,24 @@ subcommands expose the resolver the corpus counts. `--refresh` drops the day-cac
 `Snapshot.fs` already pointed at but no command backed). 23 parity assertions + 7 Board/Cache tests + 3
 Options tests.
 
+Case **14 is PARTIAL** (#496): the new `lint` command ships with its SCHEDULABILITY rules — **NO-TOUCH-SET**
+(a Ready/Backlog OPEN issue that declares no `Paths:` at all, fence-aware so a quoted-only declaration is
+none, #277) and **BAD-TOUCH-SET** (one that declared a touch-set every token of which is unmatchable). Both
+are the same condition — "no worker can ever pick this up" — and both are errors; the `Paths: none` sentinel
+suppresses them (a deliberate touch-set-less epic/decision item is legitimate but must SAY so), and In
+progress / closed / real-Paths items are clean. The command is a reconciler read (fresh, never the cache),
+scopes on `--repo` (short-ids resolved), renders the `FSGG-LINT <SEV>  <CODE>  <short-id>  — <detail>` text
+projection or a `--json` array (`code`/`severity`/`id`/`status`/`url`/`detail` — no scratch field leaks),
+and is a gate (`--strict` makes a note fatal too). It reuses the engine's `TouchSet.parse`/`unmatchable`
+(one grammar, both surfaces — #485) and fails closed on an unreadable body (#266). 18 parity assertions + 3
+Options tests. **Deferred on the record (14-remainder):** the epic-ROLL-UP-graph rules and the `done --flip`
+rollup — they need the sub-issue graph + body-child-ref parse + PR probe this slice does not.
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`lint`, `reap`, `adopt`/`landable`, `overlap`) and **larger port gaps** (paginated
-off-board `who`). The verify-paths repo-boundary divergences (case 23's SKIP-exit code and the absent
-`gh repo view` fallback) are now disposed on the record in the harness, and the call-counting
-transformation is demonstrated end-to-end by case 10.
+into **new commands** (`reap`, `adopt`/`landable`, `overlap`, `issues`), **the `lint` epic-graph rules**,
+and **larger port gaps** (paginated off-board `who`). The verify-paths repo-boundary divergences (case 23's
+SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
+the call-counting transformation is demonstrated end-to-end by case 10.
 
 ### D.2 — Cut the shim
 
@@ -236,8 +250,10 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 20 of 27 cases** ported to `tests/coord-engine-parity/` (~196 assertions); the rest
-      remain (see the §5 D.1 ledger). Ten engine defects the port was *for* closed along the way, plus the
+      **In progress: 20 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~214
+      assertions); the rest remain (see the §5 D.1 ledger). The `lint` command's #496 schedulability rules
+      (NO-TOUCH-SET/BAD-TOUCH-SET) landed as case 14's partial slice. Ten engine defects the port was *for*
+      closed along the way, plus the
       `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
       together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419
       twin-session refusal + shared-id warning, which closes case 44 in full, and the #418 resolver cache

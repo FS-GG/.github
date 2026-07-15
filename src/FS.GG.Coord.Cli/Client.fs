@@ -1493,6 +1493,154 @@ module Client =
             eprint "fsgg-coord-engine: item-id takes <ref>."
             ExitError
 
+    // ---- lint: the board-health gate (#496) -----------------------------------------------------------
+    //
+    // The rule whose absence let `lint` report `0 error(s)` over a DEAD queue. A Ready/Backlog item that
+    // declares no schedulable touch-set is refused by `batch`/`take` — correctly, an undeclared touch-set
+    // cannot be proven disjoint — and then sits on the board looking like work no worker can ever pick up.
+    // NO-TOUCH-SET names the omission; BAD-TOUCH-SET names the item that DECLARED a touch-set the scheduler
+    // cannot use (every token unmatchable). Both are the same condition — "no worker can ever pick this up"
+    // — so both are errors. `Paths: none` is the deliberate out (an epic, a decision item), and it is the
+    // whole point: "deliberately undeclared" must be sayable, or no gate can tell it from "somebody forgot".
+    // A RECONCILER read: always fresh, never the cache.
+    //
+    // The epic ROLL-UP-graph rules (EPIC-*, DONE-STATUS-OPEN-ISSUE, the PR-probing EPIC-UNLINKED-CHILD) are
+    // deferred to a later slice — they need the sub-issue graph + body-child-ref parsing this one does not.
+
+    type private LintFinding =
+        { Code: string
+          Severity: string
+          Id: string
+          Short: string
+          Status: string
+          Url: string
+          Detail: string }
+
+    let private renderLintJson (findings: LintFinding list) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        w.WriteStartArray()
+
+        for f in findings do
+            w.WriteStartObject()
+            w.WriteString("code", f.Code)
+            w.WriteString("severity", f.Severity)
+            w.WriteString("id", f.Id)
+            w.WriteString("status", f.Status)
+            w.WriteString("url", f.Url)
+            w.WriteString("detail", f.Detail)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    let lint (ctx: Context) (opts: Options) : int =
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+        | Error e -> fail e
+        | Ok board ->
+            match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+            | Error e -> fail e
+            | Ok rows ->
+                let repoFilter = opts.Repo |> Option.map resolveRepo
+                // Scoped to the items a worker could be asked to pick up: OPEN, on the board as Ready or
+                // Backlog, and an ISSUE — a PR is not work (#641). An In progress item is already claimed
+                // and a CLOSED one needs nobody, so neither is a candidate.
+                let candidates =
+                    rows
+                    |> List.filter (fun r -> not r.IsPullRequest)
+                    |> List.filter (fun r ->
+                        match repoFilter with
+                        | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
+                        | None -> true)
+                    |> List.filter (fun r -> r.State = IssueState.Open)
+                    |> List.filter (fun r -> r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+
+                let mk code severity (r: Scan.Row) detail =
+                    { Code = code
+                      Severity = severity
+                      Id = $"%s{r.Ref.Owner}/%s{r.Ref.Repo}#%d{r.Ref.Number}"
+                      Short = r.Ref.Short
+                      Status = statusName r.Status
+                      Url = $"https://github.com/%s{r.Ref.Owner}/%s{r.Ref.Repo}/issues/%d{r.Ref.Number}"
+                      Detail = detail }
+
+                // Read each candidate's body and classify its touch-set. FAIL CLOSED (#266): a board-health
+                // gate that could not read an item must not report it clean — one unreadable body fails the
+                // whole pass, exactly as a failed board scan does.
+                let rec classify (acc: LintFinding list) (rows: Scan.Row list) : Errors.IoResult<LintFinding list> =
+                    match rows with
+                    | [] -> Ok(List.rev acc)
+                    | r :: rest ->
+                        match Reads.issueBody ctx.Transport r.Ref.Owner r.Ref.Repo r.Ref.Number with
+                        | Error e -> Error e
+                        | Ok body ->
+                            let finding =
+                                match TouchSet.parse body with
+                                | Undeclared ->
+                                    Some(
+                                        mk
+                                            "NO-TOUCH-SET"
+                                            "error"
+                                            r
+                                            $"%s{statusName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)."
+                                    )
+                                | Declared tokens when
+                                    (not (List.isEmpty tokens))
+                                    && tokens
+                                       |> List.forall (function
+                                           | Unmatchable _ -> true
+                                           | Matchable _ -> false)
+                                    ->
+                                    let bad =
+                                        tokens
+                                        |> List.map (function
+                                            | Unmatchable t -> t
+                                            | Matchable t -> t)
+                                        |> String.concat ", "
+
+                                    Some(
+                                        mk
+                                            "BAD-TOUCH-SET"
+                                            "error"
+                                            r
+                                            $"%s{statusName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+                                    )
+                                | _ -> None
+
+                            classify
+                                (match finding with
+                                 | Some f -> f :: acc
+                                 | None -> acc)
+                                rest
+
+                match classify [] candidates with
+                | Error e -> fail e
+                | Ok findings ->
+                    let errors = findings |> List.filter (fun f -> f.Severity = "error") |> List.length
+                    let notes = findings |> List.filter (fun f -> f.Severity = "note") |> List.length
+
+                    match opts.Render with
+                    | Json -> printfn "%s" (renderLintJson findings)
+                    | Text ->
+                        for f in findings do
+                            printfn "FSGG-LINT %s  %s  %s  — %s" (f.Severity.ToUpperInvariant()) f.Code f.Short f.Detail
+
+                        let repoSuffix =
+                            match repoFilter with
+                            | Some r -> $" for repo '%s{r}'"
+                            | None -> ""
+
+                        eprint $"fsgg-coord-engine: %d{errors} error(s), %d{notes} note(s)%s{repoSuffix}"
+
+                    // A gate: any error fails it; `--strict` makes a note fatal too. (No note rule ships in
+                    // this slice — the epic-graph rules that emit them are deferred — so `notes` is 0 here.)
+                    if errors > 0 || (opts.Strict && notes > 0) then
+                        ExitError
+                    else
+                        ExitGreen
+
     let run (opts: Options) : int =
         // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
         // reconciler stays org-wide. `take` ACTS — it claims an item and prints a worktree command against
@@ -1541,4 +1689,5 @@ module Client =
             | FieldId -> fieldId ctx opts
             | OptionId -> optionId ctx opts
             | ItemId -> itemIdCmd ctx opts
+            | LintCmd -> lint ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

@@ -1754,6 +1754,90 @@ if [ -z "$C10_PORT" ]; then bad "cache-and-budget fixture bound a port"; else
   kill "$C10_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 14 (no-touch-set-and-done) — the `lint` SCHEDULABILITY rules (#496). NO-TOUCH-SET / BAD-TOUCH-SET
+# are the rule whose absence let `lint` report `0 error(s)` over a DEAD queue: a Ready/Backlog OPEN issue
+# no worker can ever pick up (no `Paths:`, or every token unmatchable) is an error — while the `Paths:
+# none` sentinel, a fenced-only declaration (#277), a real touch-set, an In progress item, and a closed
+# one are all clean. The epic ROLL-UP-graph rules (EPIC-*, DONE-STATUS, EPIC-UNLINKED-CHILD) + the
+# done --flip rollup are a later slice — this ports case 14's NO-TOUCH-SET block (lines 16-57).
+LINT_OUT="$(mktemp)"; python3 "$HERE/lint_server.py" >"$LINT_OUT" 2>/dev/null & LINT_SRV=$!; LINT_PORT=""
+for _ in $(seq 1 50); do LINT_PORT="$(head -n1 "$LINT_OUT" 2>/dev/null)"; [ -n "$LINT_PORT" ] && break; sleep 0.1; done
+rm -f "$LINT_OUT"
+if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
+  lt() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$LINT_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" lint "$@"; }
+  ljson="$(lt --json 2>/dev/null)"
+  nts() { jq -r "[.[] | select(.code==\"NO-TOUCH-SET\") | .id | sub(\"^[^/]+/\";\"\")] | sort | join(\",\")" <<<"$ljson"; }
+
+  # NO-TOUCH-SET fires on EXACTLY the unschedulable items — #420 (no Paths) and #421 (fenced-only, #277).
+  [ "$(nts)" = "FS.GG.SDD#420,FS.GG.SDD#421" ] \
+    && ok "case14: NO-TOUCH-SET fires on EXACTLY the unschedulable items (#420, #421)" \
+    || bad "case14: NO-TOUCH-SET must fire on exactly 420,421" "$(nts)"
+  d420="$(jq -r '.[] | select(.code=="NO-TOUCH-SET" and (.id|test("420"))) | .detail' <<<"$ljson")"
+  printf '%s' "$d420" | grep -q 'no worker can ever pick it up' \
+    && ok "case14: NO-TOUCH-SET says nobody can ever pick it up (#420)" \
+    || bad "case14: NO-TOUCH-SET detail must say nobody can pick it up" "$d420"
+  printf '%s' "$d420" | grep -q 'Paths: none' \
+    && ok "case14: NO-TOUCH-SET offers the 'Paths: none' sentinel by name" \
+    || bad "case14: NO-TOUCH-SET must offer the sentinel" "$d420"
+  case "$(nts)" in *421*) ok "case14: a FENCED-only Paths: line is no declaration at all (fails closed, #277)" ;;
+                   *)     bad "case14: a fenced-only Paths: must still be NO-TOUCH-SET" "$(nts)" ;; esac
+
+  # The negatives — the rule must NOT fire on any of these, or a gate always-red is a gate nobody reads.
+  case "$(nts)" in *400*) bad "case14: must NOT fire on an epic declaring 'Paths: none'" "$(nts)" ;;
+                   *)     ok "case14: 'Paths: none' suppresses NO-TOUCH-SET — the sentinel is the whole point" ;; esac
+  case "$(nts)" in *422*) bad "case14: must NOT fire on a decision item declaring 'Paths: none'" "$(nts)" ;;
+                   *)     ok "case14: a decision item declaring 'Paths: none' is clean" ;; esac
+  case "$(nts)" in *407*) bad "case14: must NOT fire on an item with a real Paths: line" "$(nts)" ;;
+                   *)     ok "case14: an item with a real touch-set is clean" ;; esac
+  case "$(nts)" in *423*) bad "case14: must NOT fire on an In progress item" "$(nts)" ;;
+                   *)     ok "case14: NO-TOUCH-SET is scoped to Ready/Backlog — not items in flight" ;; esac
+  case "$(nts)" in *424*) bad "case14: must NOT fire on a CLOSED issue" "$(nts)" ;;
+                   *)     ok "case14: NO-TOUCH-SET does not fire on a closed issue" ;; esac
+
+  # BAD-TOUCH-SET (#496, reopened for the unmatchable case): a declared touch-set the scheduler cannot use
+  # is just as dead. #430 declares only `**/only-unmatchable`.
+  bts="$(jq -r '[.[] | select(.code=="BAD-TOUCH-SET") | .id | sub("^[^/]+/";"")] | sort | join(",")' <<<"$ljson")"
+  [ "$bts" = "FS.GG.SDD#430" ] \
+    && ok "case14: BAD-TOUCH-SET fires on the item whose every token is unmatchable (#430)" \
+    || bad "case14: BAD-TOUCH-SET must fire on exactly 430" "$bts"
+  d430="$(jq -r '.[] | select(.code=="BAD-TOUCH-SET") | .detail' <<<"$ljson")"
+  printf '%s' "$d430" | grep -q 'only-unmatchable' \
+    && ok "case14: BAD-TOUCH-SET names the unmatchable token" \
+    || bad "case14: BAD-TOUCH-SET must name the token" "$d430"
+  printf '%s' "$d430" | grep -q 'no worker can ever pick this up' \
+    && ok "case14: BAD-TOUCH-SET says nobody can ever pick it up" \
+    || bad "case14: BAD-TOUCH-SET detail" "$d430"
+
+  # The --json scratch field of the (deferred) EPIC-UNLINKED-CHILD rule must never leak — a finding schema
+  # with an `unlinked` key is the internal probe list, not the contract.
+  [ "$(jq -r '[.[] | select(has("unlinked"))] | length' <<<"$ljson")" = "0" ] \
+    && ok "case14: no scratch field leaks into --json (schema is code/severity/id/status/url/detail)" \
+    || bad "case14: --json must not expose an 'unlinked' scratch field" "$ljson"
+
+  # The text projection: `FSGG-LINT <SEV>  <CODE>  <short-id>  — <detail>` (owner stripped from the id).
+  ltext="$(lt 2>/dev/null)"
+  printf '%s' "$ltext" | grep -q '^FSGG-LINT ERROR  NO-TOUCH-SET  FS.GG.SDD#420  — ' \
+    && ok "case14: the text line is 'FSGG-LINT <SEV>  <CODE>  <short-id>  — <detail>'" \
+    || bad "case14: text line format" "$ltext"
+
+  # Exit codes: a board with errors fails the gate (1); a clean repo scope passes (0). --repo resolves a
+  # short-id, and scopes the scan.
+  lt >/dev/null 2>&1; erc=$?
+  [ "$erc" -eq 1 ] && ok "case14: lint over a board with errors fails the gate (exit 1)" || bad "case14: errors must exit 1" "rc=$erc"
+  lt --repo sdd >/dev/null 2>&1; src=$?
+  [ "$src" -eq 1 ] && ok "case14: lint --repo sdd (has errors) exits 1 — the short-id resolves and scopes" || bad "case14: --repo sdd exit" "rc=$src"
+  lt --repo game >/dev/null 2>&1; grc=$?
+  [ "$grc" -eq 0 ] && ok "case14: lint --repo game (clean) exits 0 — scoped away from the SDD errors" || bad "case14: --repo game exit" "rc=$grc"
+  # game's clean scope really is scanned (not just empty): its one Ready item declares a real touch-set.
+  [ "$(lt --repo game --json 2>/dev/null | jq -c '.')" = "[]" ] \
+    && ok "case14: ...and that clean scope produced zero findings (a real item, really scanned)" \
+    || bad "case14: --repo game must be clean+empty" "$(lt --repo game --json 2>/dev/null)"
+
+  kill "$LINT_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
