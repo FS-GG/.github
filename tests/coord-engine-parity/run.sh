@@ -324,6 +324,40 @@ else
 fi
 kill "$PW4" 2>/dev/null; rm -f "$PW4_OUT"
 
+# ---- FENCED DECLARATION (case 33): #277 — a quoted `Paths:` line is not a declaration -------------
+#
+# #273's token was UNMATCHABLE; this one is FABRICATED — every token is well-formed, so a naive parser
+# reserves the WRONG files with confidence. A `Paths:` line inside a ``` fence (a repro, a suggested
+# widen) must not be ACQUIRED. board-pw5: #317's ONLY `Paths:` line is fenced (reserves nothing); #311
+# declares the same file for real. The engine must schedule ONLY #311 and pass over #317 as an OMISSION
+# — NOT as an overlap, which would mean the fenced quote was read (the #277 fail-open).
+PW5_OUT="$(mktemp)"
+python3 "$HERE/pw5_server.py" >"$PW5_OUT" 2>/dev/null &
+PW5=$!
+PW5PORT=""; for _ in $(seq 1 50); do PW5PORT="$(head -n1 "$PW5_OUT" 2>/dev/null)"; [ -n "$PW5PORT" ] && break; sleep 0.1; done
+if [ -n "$PW5PORT" ]; then
+  pw5env() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$PW5PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  pw5j="$(pw5env batch --repo FS.GG.SDD -n 9 --json 2>/dev/null)"
+  [ "$pw5j" = '["FS.GG.SDD#311"]' ] \
+    && ok "#277: only the honestly-declared item schedules — a fenced quote is not a declaration" \
+    || bad "#277: fenced-declaration batch parity" "expected [\"FS.GG.SDD#311\"], got: $pw5j"
+  printf '%s' "$pw5j" | grep -q 'FS.GG.SDD#317' \
+    && bad "#277: an item whose only 'Paths:' is fenced must never be scheduled on a fabricated touch-set" "$pw5j" \
+    || ok "#277: the fenced-only item is never offered"
+  pw5err="$(pw5env batch --repo FS.GG.SDD -n 9 2>&1 >/dev/null)"
+  # THE distinguishing signal: #317 is an OMISSION (declares nothing), NOT an overlap. Had the fence been
+  # read, #317 would declare scripts/fsgg-coord — the very file #311 declares — and skip as a batch-mate.
+  printf '%s' "$pw5err" | grep -q "FS.GG.SDD#317 — no 'Paths:' declared" \
+    && ok "#277: ...and #317 is passed over as an OMISSION — the fence was NOT read" \
+    || bad "#277: fenced-only item must read as no-declaration" "$pw5err"
+  printf '%s' "$pw5err" | grep -qE 'FS.GG.SDD#317 —.*overlaps' \
+    && bad "#277: #317 must NOT skip as an overlap — that means the fenced quote WAS read (the fail-open)" "$pw5err" \
+    || ok "#277: #317 does not skip as an overlap — it reserved nothing, so it clashed with nothing"
+else
+  bad "fenced-declaration fixture bound a port"
+fi
+kill "$PW5" 2>/dev/null; rm -f "$PW5_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
