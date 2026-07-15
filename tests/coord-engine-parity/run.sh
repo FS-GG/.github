@@ -1341,15 +1341,107 @@ if [ -z "$VP_PORT" ]; then bad "verify-paths #322 fixture bound a port"; else
     || bad "#322: verify-paths must fail closed under --warn" "rc=$vfwrc: $vfw"
   kill "$VP_SRV" 2>/dev/null
 fi
+
+# ---- case 23-remainder / case 24: `verify-paths --issue` and the repo boundary (#479 / #494) --------
+# The core-verdicts slice (#797) deferred `--issue` — checking a PR against an EXPLICITLY named issue's
+# touch-set, bypassing the branch/closing-ref resolution — and the repo-boundary refusals it enables. That
+# was a real PORT GAP: `verifyPaths` had no `--issue` path at all. It is closed here. `--issue`'s repo is
+# authoritative, which gives three certified properties (case 23 lines 85-89, case 24 lines 56-142):
+#   * #479 — a `--issue` in a DIFFERENT repo than `--repo` is a STRADDLE the tool refuses: a touch-set
+#     there says nothing about the files changed here, so it reaches NO verdict (no OK/DRIFT on stdout for
+#     the drift gate to grep) and FAILS CLOSED — by default AND under --warn (--warn downgrades a real
+#     DRIFT to advisory; it cannot license a verdict on a subject that was never compared).
+#   * #494 — the issue read is REPO-QUALIFIED: SDD#494 (Scene) and Rendering#494 (Audio) share a NUMBER
+#     but are different touch-sets, so the same PR 7 (Scene files) is OK against one and DRIFT against the
+#     other. A store keyed by number alone could not tell them apart — the fixture keys issues by repo.
+#   * `--repo` is reduced the way every worker command reduces it (a registry short-id, a differently-cased
+#     owner/repo), and a bare-repo `--issue` (owner defaults) is not a FALSE conflict.
+# Re-expressed at the HTTP layer (ADR-0040 §5): bash counts `gh` reads and logs each read's repo; here the
+# fixture serves repo-keyed issue bodies and the PROPERTY (right verdict per repo, refusal across the
+# boundary) is what parity holds — the boundary is enforced by the ANSWER, not by a call count.
+vpsrv -- verifypaths
+if [ -z "$VP_PORT" ]; then bad "verify-paths --issue fixture bound a port"; else
+  vpi() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$VP_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" verify-paths "$@" 2>&1; }
+
+  # 1. --issue agreeing with --repo names the issue directly → OK (case 24 line 134-136).
+  i1="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/FS.GG.SDD#70)"; i1rc=$?
+  { [ "$i1rc" -eq 0 ] && printf '%s' "$i1" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "verify-paths --issue: a same-repo named issue is checked directly → OK (case 24)" \
+    || bad "verify-paths --issue OK parity" "rc=$i1rc: $i1"
+
+  # 2. #479: --repo and --issue in DIFFERENT repos reach NO verdict, name the other repo, say the
+  #    touch-set was NOT checked, and fail closed — by default (case 23 lines 110-117).
+  m="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/FS.GG.Rendering#70)"; mrc=$?
+  { [ "$mrc" -ne 0 ] && ! printf '%s' "$m" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#479: a cross-repo --repo/--issue straddle reaches NO verdict and fails by default (case 23)" \
+    || bad "#479 straddle parity" "rc=$mrc: $m"
+  printf '%s' "$m" | grep -q 'FS-GG/FS.GG.Rendering' \
+    && ok "#479: ...and names the other repo it was asked to straddle (case 23)" \
+    || bad "#479 must name the other repo" "$m"
+  printf '%s' "$m" | grep -q 'touch-set was NOT checked' \
+    && ok "#479: ...and says the touch-set was NOT checked (case 23)" \
+    || bad "#479 must say the touch-set was not checked" "$m"
+  # ...and --warn does not downgrade a straddle to advisory: a verdict on the wrong subject is never
+  #    licensed (case 23 lines 120-125).
+  mw="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/FS.GG.Rendering#70 --warn)"; mwrc=$?
+  { [ "$mwrc" -ne 0 ] && ! printf '%s' "$mw" | grep -qE 'FSGG-PATHS (OK|DRIFT)'; } \
+    && ok "#479: ...and it fails closed under --warn too — a straddle is never advisory (case 23)" \
+    || bad "#479 --warn fail-closed parity" "rc=$mwrc: $mw"
+
+  # 3. #494: the issue read is repo-qualified — same PR, same issue NUMBER, opposite verdict by repo
+  #    (case 24 lines 56-62). SDD#494 (Scene) → OK; Rendering#494 (Audio) → DRIFT on PR 7's Scene files.
+  q1="$(vpi --pr 7 --repo FS.GG.SDD --issue FS-GG/FS.GG.SDD#494)"; q1rc=$?
+  { [ "$q1rc" -eq 0 ] && printf '%s' "$q1" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "#494: SDD#494 (Scene) declares the PR's files → OK (case 24)" \
+    || bad "#494 SDD OK parity" "rc=$q1rc: $q1"
+  q2="$(vpi --pr 7 --repo FS.GG.Rendering --issue FS-GG/FS.GG.Rendering#494)"; q2rc=$?
+  { [ "$q2rc" -ne 0 ] && printf '%s' "$q2" | grep -q 'FSGG-PATHS DRIFT'; } \
+    && ok "#494: Rendering#494 — same number, other repo — does NOT: DRIFT (case 24)" \
+    || bad "#494 Rendering DRIFT parity" "rc=$q2rc: $q2"
+
+  # 4. --repo reductions and a bare-repo --issue are not false conflicts (case 24 lines 134-142).
+  printf '%s' "$(vpi --pr 7 --repo sdd --issue FS-GG/FS.GG.SDD#70)" | grep -q 'FSGG-PATHS OK' \
+    && ok "verify-paths --issue: a registry short-id --repo agrees with the issue's repo (case 24)" \
+    || bad "short-id --repo agreement" "$(vpi --pr 7 --repo sdd --issue FS-GG/FS.GG.SDD#70)"
+  printf '%s' "$(vpi --pr 7 --repo FS-GG/fs.gg.sdd --issue FS-GG/FS.GG.SDD#70)" | grep -q 'FSGG-PATHS OK' \
+    && ok "verify-paths --issue: a differently-cased --repo is not a conflict (case 24)" \
+    || bad "case-insensitive --repo agreement" "$(vpi --pr 7 --repo FS-GG/fs.gg.sdd --issue FS-GG/FS.GG.SDD#70)"
+  printf '%s' "$(vpi --pr 7 --repo FS.GG.SDD --issue FS.GG.SDD#70)" | grep -q 'FSGG-PATHS OK' \
+    && ok "verify-paths --issue: a bare-repo --issue (owner defaults) is not a conflict (case 24)" \
+    || bad "bare-repo --issue agreement" "$(vpi --pr 7 --repo FS.GG.SDD --issue FS.GG.SDD#70)"
+
+  # 5. --issue decides the repo when --repo is ABSENT — the issue, not the checkout (case 23 line 132-135).
+  n1="$(vpi --pr 7 --issue FS-GG/FS.GG.SDD#70)"; n1rc=$?
+  { [ "$n1rc" -eq 0 ] && printf '%s' "$n1" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "verify-paths --issue: the issue decides the repo when --repo is absent (case 23)" \
+    || bad "--issue decides repo parity" "rc=$n1rc: $n1"
+  kill "$VP_SRV" 2>/dev/null
+fi
+
+# 6. --issue BYPASSES the head-ref read entirely (case 23 lines 85-89): even when the PR read 503s — so
+#    the branch could not be resolved — a run that NAMED its issue still reaches a verdict. The fix guards
+#    the CALL (prHeadRef), not the whole resolution step. A fresh server with the head-ref fail toggle.
+vpsrv FSGG_PARITY_HEADREF_FAIL=7 -- verifypaths
+if [ -z "$VP_PORT" ]; then bad "verify-paths --issue bypass fixture bound a port"; else
+  vpb() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$VP_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" verify-paths "$@" 2>&1; }
+  b1="$(vpb --pr 7 --repo FS.GG.SDD --issue FS-GG/FS.GG.SDD#70)"; b1rc=$?
+  { [ "$b1rc" -eq 0 ] && printf '%s' "$b1" | grep -q 'FSGG-PATHS OK'; } \
+    && ok "verify-paths --issue: bypasses the head-ref read — OK even when the PR read fails (case 23)" \
+    || bad "--issue head-ref bypass parity" "rc=$b1rc: $b1"
+  kill "$VP_SRV" 2>/dev/null
+fi
+
 # DISPOSITION ON THE RECORD (not silently skipped): case 23's remaining legs are separate work —
 #   * SKIP EXIT CODE is a DELIBERATE DIVERGENCE. bash FAILS non-zero on an unlinked/undeclared PR without
 #     `--warn` (case 23 line 59: `assert_fails "…an unlinked PR fails without --warn"`); the engine makes
 #     SKIP always exit 0 — a PR with genuinely nothing to check is not a merge-blocking failure. Ported
 #     here as the engine's certified behaviour (SKIP is green both ways), NOT as bash's rc. The verdict
 #     TEXT (SKIP vs OK) still carries the distinction the gate needs.
-#   * `--issue` — verify-paths against an explicitly-named issue, and the repo-boundary refusals it enables
-#     (#479 same-number/other-repo, #494 the issue-side repo-qualified read, the cross-repo closing-ref).
-#     The engine's `verifyPaths` has no `--issue` path at all: a port gap, shared with case 24.
+#   * the cross-repo CLOSING-REF (case 24 lines 148-165) — a PR that legitimately closes ANOTHER repo's
+#     issue via GitHub's cross-repo close (no --issue flag). The engine already reaches its cross-repo
+#     branch there and SKIPs (green, naming the other repo owner-qualified); bash fails it without --warn.
+#     Same SKIP-exit divergence as above, disposed the same way — the closing-ref fixture leg (a GraphQL
+#     nodes payload naming a foreign repo) is deferred, not the behaviour.
 #   * #430 — deriving the repo from the git REMOTE when neither `--repo` nor `--issue` is given, and
 #     reporting an exhausted GraphQL budget AS a rate limit (EX_RATE 75) rather than blaming the checkout.
 #     The engine's verify-paths REQUIRES `--repo` today (usage error when absent) — the #480 git-remote

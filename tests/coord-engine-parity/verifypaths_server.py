@@ -44,11 +44,18 @@ PRS = {
     10: {"ref": "item/72-no-touch-set-declared", "files": ["src/Whatever.fs"]},
 }
 
-# Issue bodies — the touch-sets the PRs are checked against. #70 is case 22's seeded Scene touch-set;
-# #72 declares none, so a PR that implements it is SKIP (nothing to verify against).
+# Issue bodies — the touch-sets the PRs are checked against, keyed by (repo, number). #70 is case 22's
+# seeded Scene touch-set; #72 declares none, so a PR that implements it is SKIP (nothing to verify against).
+#
+# #494 is the issue-side repo boundary (case 24): SDD#494 and Rendering#494 share a NUMBER but are
+# different issues with DIVERGING touch-sets — SDD#494 covers Scene (so PR 7's Scene files are OK),
+# Rendering#494 covers Audio (so the same PR 7 DRIFTs). A store keyed by number alone could not tell
+# them apart, and a repo-confused read would come back confident and wrong — so the fixture keys by repo.
 BODIES = {
-    70: "Paths: src/Scene/**, tests/Scene/**",
-    72: "",  # no touch-set declared
+    ("FS.GG.SDD", 70): "Paths: src/Scene/**, tests/Scene/**",
+    ("FS.GG.SDD", 72): "",  # no touch-set declared
+    ("FS.GG.SDD", 494): "Paths: src/Scene/**, tests/Scene/**",
+    ("FS.GG.Rendering", 494): "Paths: src/Audio/**",
 }
 
 
@@ -80,11 +87,15 @@ class H(BaseHTTPRequestHandler):
                 return self._send(503, {"message": "PR read unavailable"})
             ref = PRS.get(pr, {}).get("ref", "")
             return self._send(200, {"number": pr, "head": {"ref": ref}})
-        # The issue body (`Reads.issueBody` reads .body → the `Paths:` touch-set).
-        m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
+        # The issue body (`Reads.issueBody` reads .body → the `Paths:` touch-set). Keyed by REPO and
+        # number (#494): the same number in two repos is two different touch-sets, and the read is
+        # addressed to the one the caller named — the repo segment is not decoration.
+        m = re.match(r"^/repos/[^/]+/([^/]+)/issues/(\d+)$", p)
         if m:
-            n = int(m.group(1))
-            return self._send(200, {"number": n, "body": BODIES.get(n, "")})
+            repo, n = m.group(1), int(m.group(2))
+            if (repo, n) not in BODIES:
+                return self._send(404, {"message": f"no issue {repo}#{n}"})
+            return self._send(200, {"number": n, "body": BODIES[(repo, n)]})
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4960, "limit": 5000}}})
         self._send(500, {"message": f"unhandled GET {p}"})

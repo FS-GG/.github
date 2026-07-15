@@ -103,6 +103,11 @@ module Options =
           /// `--warn` (`verify-paths`) — downgrade a DRIFT/INVALID verdict to advisory (exit 0). "I could
           /// not check" is never downgraded — only a real verdict is.
           Warn: bool
+          /// `--issue <ref>` (`verify-paths`) — check the PR against an EXPLICITLY named issue's touch-set,
+          /// bypassing the branch/closing-ref resolution (#479). Its repo is authoritative: a `--issue` in a
+          /// different repo than the PR's is a straddle the tool refuses (a touch-set there says nothing about
+          /// the files changed here), and when `--repo` is absent the issue decides the repo.
+          Issue: string option
 
           /// `--status <name>` (`ready`) — show only that board Status column, matched by NAME the way
           /// bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is OFF: asking to
