@@ -125,6 +125,12 @@ module Reads =
         { Remaining: int
           Limit: int }
 
+    /// An issue's REST INTEGER ID — `.id`, not its number.
+    ///
+    /// `child` attaches by this id, never by the number: two repos can each have an issue #7, and posting a
+    /// number where an id belongs attaches the wrong issue silently.
+    val restId: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<int64>
+
     /// The rate-limit meter.
     ///
     /// FREE — this read does not spend the budget it reports, which is what makes "back off until the

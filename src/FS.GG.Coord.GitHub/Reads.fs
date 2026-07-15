@@ -404,6 +404,36 @@ module Reads =
                     // all.
                     | None -> Ok LeaseExpiredNoPr
 
+    let restId
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<int64> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number}"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "id" with
+                | true, v when v.ValueKind = JsonValueKind.Number -> Ok(v.GetInt64())
+                | _ -> Error(Malformed(subject, "the issue response carried no numeric `id`"))
+
     // ---- the meter --------------------------------------------------------------------------------
 
     let rateLimit (transport: IGitHubTransport) : IoResult<RateLimitSnapshot> =
