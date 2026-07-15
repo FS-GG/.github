@@ -183,10 +183,31 @@ module Client =
             match renderDecision opts doc with
             | Error code -> code
             | Ok result ->
-                if not (List.isEmpty result.Chosen) then
-                    printfn "schedulable in parallel (%d):" (List.length result.Chosen)
+                match opts.Render with
+                | Json ->
+                    // THE MACHINE CONTRACT — the array of chosen ids `take` consumes, byte-identical to the
+                    // bash client's `batch --json`: `["FS.GG.SDD#70","FS.GG.SDD#74"]`, short form, sorted as
+                    // the scheduler chose them. This is the one output where byte-parity is not a nicety: a
+                    // `take` that parses it must read the same array from either engine.
+                    let ids =
+                        result.Chosen
+                        |> List.map (fun item -> "\"" + item.Ref.Short + "\"")
+                        |> String.concat ","
 
-                printChosen opts.LeaseMinutes result
+                    printfn "[%s]" ids
+                    // The skip reasons still go to stderr — a caller reads the array on stdout, the "why
+                    // nothing / why less" on stderr, exactly as bash does.
+                    let passed =
+                        result.Decisions |> List.filter (fun d -> d.Result <> Schedulability.Startable)
+
+                    for d in passed do
+                        eprint $"  %s{Batch.explainDecision opts.LeaseMinutes d}"
+                | Text ->
+                    if not (List.isEmpty result.Chosen) then
+                        printfn "schedulable in parallel (%d):" (List.length result.Chosen)
+
+                    printChosen opts.LeaseMinutes result
+
                 ExitGreen
 
     let next (ctx: Context) (opts: Options) : int =
