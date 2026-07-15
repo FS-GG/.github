@@ -62,6 +62,44 @@ nxt="$("$ENGINE" next --repo FS.GG.SDD 2>/dev/null)"
   && ok "next returns the first schedulable item (FS.GG.SDD#70)" \
   || bad "next parity" "expected FS.GG.SDD#70, got: $nxt"
 
+# ---- take: pick + claim in one step (case 22 certifies "claimed FS.GG.SDD#70 by worker smew-f31") --
+tk="$("$ENGINE" take --repo FS.GG.SDD --worker smew-f31 2>&1)"; tkrc=$?
+if [ "$tkrc" -eq 0 ] && printf '%s' "$tk" | grep -q 'claimed FS.GG.SDD#70 by worker smew-f31'; then
+  ok "take claims the first schedulable item and names the holder (case 22's certified line)"
+else
+  bad "take parity" "rc=$tkrc: $tk"
+fi
+
+# ---- BLOCKED (case 46): the #476 blocker rule, on its own board ------------------------------------
+BLK_OUT="$(mktemp)"
+python3 "$HERE/blocked_server.py" >"$BLK_OUT" 2>/dev/null &
+BLK=$!
+BPORT=""; for _ in $(seq 1 50); do BPORT="$(head -n1 "$BLK_OUT" 2>/dev/null)"; [ -n "$BPORT" ] && break; sleep 0.1; done
+if [ -n "$BPORT" ]; then
+  bjson="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" batch --repo FS.GG.SDD -n 9 --json 2>/dev/null)"
+  # #476: a MERGED blocker (#701) and a closed-UNMERGED one (#705) resolve; an OPEN one (#703) blocks.
+  printf '%s' "$bjson" | grep -q 'FS.GG.SDD#700' \
+    && ok "#476: a MERGED-PR blocker no longer blocks — #700 is offered" \
+    || bad "#476: #700 startable" "got: $bjson"
+  printf '%s' "$bjson" | grep -q 'FS.GG.SDD#704' \
+    && ok "#476: a closed-UNMERGED-PR blocker resolves too — #704 is offered" \
+    || bad "#476: #704 startable" "got: $bjson"
+  printf '%s' "$bjson" | grep -q 'FS.GG.SDD#702' \
+    && bad "#476: an OPEN-PR blocker still blocks — #702 must NOT be offered" "got: $bjson" \
+    || ok "#476: an OPEN-PR blocker still blocks — #702 is NOT offered"
+  # #520: a CLOSED issue with a Ready column must NOT be schedulable, and the reason must name the state.
+  printf '%s' "$bjson" | grep -q 'FS.GG.SDD#799' \
+    && bad "#520: a CLOSED-but-Ready issue must NOT be offered" "got: $bjson" \
+    || ok "#520: a CLOSED-but-Ready issue is NOT offered"
+  berr="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" batch --repo FS.GG.SDD -n 9 2>&1 >/dev/null)"
+  printf '%s' "$berr" | grep -qi 'closed' \
+    && ok "#520: ...and the reason names the issue state (closed)" \
+    || bad "#520: the reason names the closed state" "stderr: $berr"
+else
+  bad "blocked fixture bound a port"
+fi
+kill "$BLK" 2>/dev/null; rm -f "$BLK_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

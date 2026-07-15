@@ -226,7 +226,16 @@ module Snapshot =
             | Some v ->
                 asString $"%s{path}.bodyUnreadable" v
                 |> Result.map (fun reason -> Unreadable reason)
-            | None -> stringField path "body" el |> Result.map TouchSet.parse
+            | None ->
+                match optProp "body" el, state with
+                | None, Ok Closed ->
+                    // A CLOSED item is SWEPT: the client short-circuits it off the board scan and never
+                    // reads its body, exactly as bash's own scheduler does. Its touch-set is never
+                    // consulted — `Schedulability` answers `Closed -> IssueClosed` as its FIRST question,
+                    // before the touch-set — so an absent body here is a fact, not a malformed item. (A
+                    // shadow that pays to read the closed body still sends one; that parses too.)
+                    Ok(TouchSet.parse "")
+                | _ -> stringField path "body" el |> Result.map TouchSet.parse
 
         let blockers =
             match optProp "blockers" el with

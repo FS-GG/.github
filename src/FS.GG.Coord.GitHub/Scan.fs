@@ -397,14 +397,18 @@ module Scan =
         (leaseMinutes: int)
         : IoResult<string * Receipt> =
 
-        // THE CANDIDATES. Pull requests are excluded (#641 — a PR is an issue in REST and it is not work),
-        // and so are CLOSED issues: #520 handed a closed issue to a worker two hours after it was completed,
-        // because candidate selection read the board COLUMN and nothing else.
+        // THE CANDIDATES. Pull requests are excluded (#641 — a PR is an issue in REST and it is not work).
+        // CLOSED issues are NOT excluded here, and that is deliberate: #520 handed a closed issue to a
+        // worker because candidate selection read the board COLUMN and nothing else, so the fix is to make
+        // `decide` answer "is the issue closed?" FIRST (Schedulability check #1) — which it can only do if
+        // the closed item reaches it. Excluding it here would get the right answer (never scheduled) with no
+        // WORDS: the worker asking "why isn't #502 offered?" would get nothing for it, when bash names it
+        // "the issue is closed". A closed candidate is SWEPT below with no body/marker/blocker read, exactly
+        // as bash sweeps it — so the reason survives at zero extra cost.
         let candidates =
             rows
             |> List.filter (fun r ->
                 not r.IsPullRequest
-                && r.State = Open
                 && (match repo with
                     | None -> true
                     | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)))
@@ -521,6 +525,24 @@ module Scan =
 
         for row in candidates do
             if failure.IsNone then
+                match row.State with
+                // A CLOSED ISSUE IS SWEPT, NOT READ (#520, and case 51's "the issue is closed"). It stays a
+                // candidate so `decide` can name it — `Schedulability` answers `Closed -> IssueClosed` as its
+                // FIRST question, before column, blockers, touch-set or lock — but it needs none of those
+                // reads to do so. Fetching its body/markers would pay the budget that dies first (#418) for a
+                // verdict `state` alone already settles, and bash never fetches them either.
+                | Closed ->
+                    w.WriteStartObject()
+                    w.WriteString("owner", row.Ref.Owner)
+                    w.WriteString("repo", row.Ref.Repo)
+                    w.WriteNumber("number", row.Ref.Number)
+                    w.WriteString("status", statusName row.Status)
+                    w.WriteString("state", "CLOSED")
+                    w.WriteStartArray("blockers")
+                    w.WriteEndArray()
+                    w.WriteEndObject()
+                | Open ->
+
                 let blockers = blockersOf row
 
                 match blockers with
