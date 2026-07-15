@@ -1,6 +1,9 @@
 # ADR-0040: The IO layer is ported too — "delete the bash implementation" was never executable, and the half that was left behind is where the bugs still are
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-07-15) — the Phase D self-contradiction (#756) is resolved below: C1 stays
+  absolute, the five `51-fs-flip.sh` differential assertions are disposed of on the record (1–2 subsumed,
+  3–5 retired), and Phase D is now schedulable. Phases A+B have landed (#754, #758, #759); the engine reads
+  its own board (#760).
 - **Date:** 2026-07-14
 - **Affects:** `.github` (the engine, the client, the kit row, ten workflows), and every `receives: coordination-kit` repo — sdd, rendering, governance, templates, game, audio
 - **Amends:** [ADR-0034](0034-typed-coordination-engine.md) §5 (the exit criterion) and §4.4 (the shim's preconditions). ADR-0034's *decision* stands entirely; this is about what it takes to finish it.
@@ -140,8 +143,10 @@ produces the value the PATCH consumes (#523).
 **Phase D — the shim, and the deletion.** `scripts/fsgg-coord` becomes the ~40-line resolver of §4.4. The
 `kind: client` row still digests, still byte-copies, still byte-compares — none of that machinery
 changes, which is why Option D was chosen.
-**Exit:** the corpus is green **through the shim**, in all six receivers. `--engine=bash` is removed
-because there is no bash left to be.
+**Exit:** the corpus is green **through the shim**, in all six receivers; `--engine=bash` is removed
+because there is no bash left to be; and the five differential assertions of `51-fs-flip.sh` are disposed
+of **on the record** per *"The Phase D contradiction, and its resolution"* below — 1–2 subsumed by the
+ADR-0038 corpus-against-`fs`, 3–5 retired with the escape hatch. Not silently absent.
 
 ## The exit criterion, stated so it can be met
 
@@ -152,6 +157,61 @@ Not *"one week later"*. ADR-0034 §5 named a **date**, and a date is not a crite
 calendar attached. This is the same correction ADR-0038 made to the three-day clock, and it is being made
 for the same reason: **an exit criterion that no one can compute will be met by someone deciding it has
 been.**
+
+## The Phase D contradiction, and its resolution ([#756](https://github.com/FS-GG/.github/issues/756))
+
+This ADR contradicted itself, and it is fitting that the ADR which names the *"a decision that does not
+name its preconditions produces a plan that stops"* pattern would produce a fifth instance of it. C1 says,
+absolutely:
+
+> **No step of this port may land that reduces the corpus.**
+
+Phase D deletes bash. And `tests/fsgg-coord/cases/51-fs-flip.sh` carries assertions that exist *only* to
+compare the two engines against each other — one of the two things they compare is what Phase D removes.
+So the corpus cannot survive Phase D **verbatim**, and C1 read literally forbids the deletion the whole
+ADR is for.
+
+**The resolution turns on a distinction C1 elides: "reduce" is not "retire".** To *reduce* the corpus is
+to drop a live assertion — to stop checking a property that still holds, silently, so the gate covers less
+than it appears to. That is the failure this org keeps paying for, and C1 stays **absolute** against it. To
+*retire* an assertion is to remove it because **its subject no longer exists** — and an assertion about a
+thing that is gone does not cover anything. Deleting it reduces nothing; keeping it would be theatre.
+
+There are **five** such assertions (the issue said six; it over-counted — the honest number is five, and
+saying so is the point), and they do not all retire for the same reason. Naming them exactly:
+
+| # | assertion (`51-fs-flip.sh`) | disposition |
+|---|---|---|
+| 1 | *"on a board the engines AGREE about, `fs` returns bash's items"* (:55) | **SUBSUMED** |
+| 2 | *"...and the same exit code"* (:57) | **SUBSUMED** |
+| 3 | *"`--engine bash` is byte-identical to the pre-flip answer"* (:163) | **RETIRED** |
+| 4 | *"...and its exit code too — the rollback is exact"* (:164) | **RETIRED** |
+| 5 | *"`--engine bash` never consults the engine at all"* (:170) | **RETIRED** |
+
+- **1–2 are SUBSUMED, not lost.** They assert *fs is correct*, by equating it to bash — but "is fs
+  correct?" is exactly the question [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md) already answers by
+  running the defect corpus **against `fs` directly**. When bash is gone the equivalence form has no
+  right-hand side, but the property it checked is checked more directly by the gate ADR-0038 built. The
+  coverage moves; it does not shrink. That is why the corpus-against-`fs`, green, is a **precondition** of
+  Phase D and not an afterthought.
+- **3–5 are RETIRED.** They assert the **escape hatch** is exact and cannot be broken by a stale engine.
+  When bash is deleted there is no escape hatch — `--engine=bash` is the thing being removed — so these
+  have no subject at all. There is no more direct form to move them to; the property genuinely ceases to
+  exist, because the feature does.
+
+**So C1 is affirmed, not scoped.** The rule against *reducing* the corpus stands exactly as written; this
+is not a reduction. What Phase D must not do is drop these five **silently** — a corpus that shrinks
+without a record is indistinguishable from one that rotted. Therefore:
+
+> **Phase D lands a `tests/fsgg-coord/cases/51-fs-flip.sh` (or a sibling manifest) that RECORDS the five
+> assertions and their disposition** — 1–2 subsumed by the ADR-0038 corpus-against-`fs`, 3–5 retired with
+> the escape hatch — so the drop is a decision on the record, reviewable in the diff, and not a silent
+> gap. **A silently shrinking gate is the failure; a documented retirement is not.**
+
+The alternatives were **scoping C1** (rejected — it narrows a rule doing real work, and "a property of the
+thing being deleted" is a soft edge the next shortcut leans on) and **keeping bash as a frozen reference**
+(rejected — it preserves five assertions at the cost of the 4,000-line substrate whose deletion is the
+entire point of Phase D).
 
 ## Consequences
 
