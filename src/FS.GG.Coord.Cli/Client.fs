@@ -1543,14 +1543,6 @@ module Client =
         | i when i >= 0 -> ref.Substring(i + 1)
         | _ -> ref
 
-    let private ownerRepoNum (ref: string) =
-        let m = Text.RegularExpressions.Regex.Match(ref, @"^([^/]+)/([^#]+)#(\d+)$")
-
-        if m.Success then
-            Some(m.Groups.[1].Value, m.Groups.[2].Value, int m.Groups.[3].Value)
-        else
-            None
-
     let lint (ctx: Context) (opts: Options) : int =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
@@ -1610,21 +1602,6 @@ module Client =
                     else
                         []
 
-                // A body-declared "child" that resolves to a PR is not an unlinked child — GitHub refuses to
-                // link a PR as a sub-issue (#346). Re-resolve the otherwise-unlinked refs and drop the PRs;
-                // a ref we CANNOT resolve is KEPT (#266 — "I could not check" is not "it is a PR").
-                let rec prunePrs (kept: string list) (refs: string list) : Errors.IoResult<string list> =
-                    match refs with
-                    | [] -> Ok(List.rev kept)
-                    | ref :: rest ->
-                        match ownerRepoNum ref with
-                        | None -> prunePrs (ref :: kept) rest
-                        | Some(o, rp, n) ->
-                            match Reads.refIsPullRequest ctx.Transport o rp n with
-                            | Ok true -> prunePrs kept rest
-                            | Ok false -> prunePrs (ref :: kept) rest
-                            | Error _ -> prunePrs (ref :: kept) rest
-
                 // The epic ROLL-UP-graph rules. Only epics pay the sub-issue read.
                 let epicFindings (r: Scan.Row) (body: string) : Errors.IoResult<LintFinding list> =
                     match Reads.subIssues ctx.Transport r.Ref.Owner r.Ref.Repo r.Ref.Number with
@@ -1665,13 +1642,16 @@ module Client =
                         // known to be short (#266); EPIC-CHILDREN-TRUNCATED covers that case instead.
                         let unlinkedResult =
                             if graph.Total = visible then
-                                let graphRefs = graph.Children |> List.map (fun c -> c.Ref) |> Set.ofList
-
-                                let declared =
-                                    EpicBody.childRefs r.Ref.Owner r.Ref.Repo body
-                                    |> List.filter (fun d -> not (graphRefs.Contains d))
-
-                                match prunePrs [] declared with
+                                // The shared EPIC-UNLINKED-CHILD set (#485: same definition the `done --flip`
+                                // rollup uses). Only reason when the graph is WHOLE (Total == visible).
+                                match
+                                    Done.bodyUnlinkedChildren
+                                        ctx.Transport
+                                        r.Ref.Owner
+                                        r.Ref.Repo
+                                        body
+                                        (graph.Children |> List.map (fun c -> c.Ref))
+                                with
                                 | Error e -> Error e
                                 | Ok [] -> Ok []
                                 | Ok kept ->

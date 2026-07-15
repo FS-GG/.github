@@ -373,10 +373,56 @@ module Done =
 
         transport.Send request |> Result.map ignore
 
+    // ---- the EPIC-UNLINKED-CHILD set (shared with `lint`, #485) --------------------------------------
+
+    let bodyUnlinkedChildren
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (body: string)
+        (graphRefs: string list)
+        : IoResult<string list> =
+
+        let inGraph = Set.ofList graphRefs
+
+        // The body declares these; the graph contains those; the difference is the candidate unlinked set.
+        let declared =
+            FS.GG.Coord.EpicBody.childRefs owner repo body
+            |> List.filter (fun d -> not (inGraph.Contains d))
+
+        let ownerRepoNum (r: string) =
+            let m = Text.RegularExpressions.Regex.Match(r, @"^([^/]+)/([^#]+)#(\d+)$")
+
+            if m.Success then
+                Some(m.Groups.[1].Value, m.Groups.[2].Value, int m.Groups.[3].Value)
+            else
+                None
+
+        // Drop the refs GitHub confirms are PRs (#346); KEEP one the probe cannot resolve (#266).
+        let rec prune (kept: string list) (refs: string list) : IoResult<string list> =
+            match refs with
+            | [] -> Ok(List.rev kept)
+            | r :: rest ->
+                match ownerRepoNum r with
+                | None -> prune (r :: kept) rest
+                | Some(o, rp, n) ->
+                    match Reads.refIsPullRequest transport o rp n with
+                    | Ok true -> prune kept rest
+                    | Ok false -> prune (r :: kept) rest
+                    | Error _ -> prune (r :: kept) rest
+
+        prune [] declared
+
     // ---- the climb ----------------------------------------------------------------------------------
 
     [<Literal>]
     let private MaxHops = 10
+
+    /// Strip the owner from an `owner/repo#n` ref → `repo#n`, the form a reason NAMES a ref in.
+    let private shortRef (r: string) =
+        match r.IndexOf '/' with
+        | i when i >= 0 -> r.Substring(i + 1)
+        | _ -> r
 
     let rollUp
         (transport: IGitHubTransport)
@@ -464,6 +510,43 @@ module Done =
                 Ok()
 
             | AllResolved _ ->
+
+            // THE EPIC-UNLINKED-CHILD RULE, APPLIED TO THE ROLL-UP (#325). "All children resolved" is a
+            // claim about the sub-issue GRAPH — but if the parent's BODY declares a child the graph does not
+            // contain, that claim is about a set the body itself says is incomplete, and the roll-up would
+            // close the parent over a criterion it split out and lost track of. So the same check `lint`
+            // makes is made here: a body-cited PR ref is dropped (#346), an unresolvable one is kept (#266).
+            // (`facts`' graph is summarised to counts, so the refs are re-read; a parent about to flip is rare.)
+            match Reads.issueBody transport current.Owner current.Repo current.Number with
+            | Error e -> Error e
+            | Ok parentBody ->
+
+            match Reads.subIssues transport current.Owner current.Repo current.Number with
+            | Error e -> Error e
+            | Ok graph ->
+
+            match
+                bodyUnlinkedChildren
+                    transport
+                    current.Owner
+                    current.Repo
+                    parentBody
+                    (graph.Children |> List.map (fun c -> c.Ref))
+            with
+            | Error e -> Error e
+            | Ok unlinked when not (List.isEmpty unlinked) ->
+                let named = unlinked |> List.map shortRef |> String.concat ", "
+
+                results.Add(
+                    ParentLeftOpen(
+                        current,
+                        [ $"the epic body declares %d{List.length unlinked} child(ren) the sub-issue graph does not contain: %s{named}. Link them with `fsgg-coord child`, or drop them from the body, before it can roll up (#325)." ]
+                    )
+                )
+
+                Ok()
+
+            | Ok _ ->
 
             // BOARD *AND* ISSUE, TOGETHER. #613: the roll-up stamped the parent `Done` on the board and
             // never CLOSED THE ISSUE — so the upward climb died at the next hop (which reads an OPEN child),

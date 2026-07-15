@@ -1926,6 +1926,61 @@ if [ -z "$LE_PORT" ]; then bad "lint-epic fixture bound a port"; else
   kill "$LE_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 14 (no-touch-set-and-done) — the `done --flip` EPIC ROLLUP (#235/#583/#325/#346). Stamping a child
+# with --flip climbs to its parent and rolls it up ONLY when genuinely finished: HOLDS while a sibling is
+# open (#235/#583), FLIPS when every child is Done + closed, REFUSES when the epic BODY declares a child
+# the sub-issue graph does not contain (#325) — the EpicBody/subIssues check landed for lint, now reused —
+# while a body-cited PR ref does NOT block the flip (#346). bash's "1/2 children Done+closed — holding"
+# wording is re-expressed (ADR-0040 §5) as the engine's own rollup rendering: the PROPERTY (held vs flipped,
+# names the blocker) is what is held.
+DF_OUT="$(mktemp)"; python3 "$HERE/doneflip_server.py" >"$DF_OUT" 2>/dev/null & DF_SRV=$!; DF_PORT=""
+for _ in $(seq 1 50); do DF_PORT="$(head -n1 "$DF_OUT" 2>/dev/null)"; [ -n "$DF_PORT" ] && break; sleep 0.1; done
+rm -f "$DF_OUT"
+if [ -z "$DF_PORT" ]; then bad "done-flip fixture bound a port"; else
+  df() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$DF_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" done "$@" 2>&1; }
+
+  # A — HOLD (#235/#583): #42 stamps DONE, but its parent #301 is HELD because sibling #44 is still open.
+  a="$(df 'FS.GG.SDD#42' --worker w-df --flip)"
+  printf '%s' "$a" | grep -q 'FSGG-DONE   FS.GG.SDD#42' \
+    && ok "case14: done --flip stamps the child DONE (#42)" || bad "case14: child not stamped" "$a"
+  printf '%s' "$a" | grep -q 'FS.GG.SDD#301 left OPEN' \
+    && ok "case14: rollup HOLDS the parent while a sibling is open (#235/#583)" || bad "case14: parent must hold" "$a"
+  printf '%s' "$a" | grep -q 'still OPEN: #44' \
+    && ok "case14: ...and names the open sibling (#44)" || bad "case14: names open sibling" "$a"
+  printf '%s' "$a" | grep -q '301 stamped Done and closed' \
+    && bad "case14: a held parent must NOT be flipped" "$a" || ok "case14: a held parent is not flipped"
+
+  # B — FLIP: #62 stamps DONE and its parent #302 flips (every child Done + closed, body clean).
+  b="$(df 'FS.GG.SDD#62' --worker w-df --flip)"
+  { printf '%s' "$b" | grep -q 'FSGG-DONE   FS.GG.SDD#62' && printf '%s' "$b" | grep -q 'FS.GG.SDD#302 stamped Done and closed'; } \
+    && ok "case14: rollup FLIPS when every child is Done + closed (parent stamped Done AND closed, #613)" \
+    || bad "case14: parent must flip" "$b"
+
+  # C — REFUSE (#325): #72 stamps DONE, but #303's BODY declares #74, absent from the graph -> held, named.
+  c="$(df 'FS.GG.SDD#72' --worker w-df --flip)"
+  printf '%s' "$c" | grep -q 'FSGG-DONE   FS.GG.SDD#72' \
+    && ok "case14: the child still stamps DONE even when the parent will refuse (#72)" || bad "case14: child stamp" "$c"
+  printf '%s' "$c" | grep -q 'FS.GG.SDD#303 left OPEN' \
+    && ok "case14: rollup REFUSES when the body declares an unlinked child (#325)" || bad "case14: must refuse" "$c"
+  printf '%s' "$c" | grep -q 'does not contain: FS.GG.SDD#74' \
+    && ok "case14: ...and names the unlinked child (#74)" || bad "case14: names unlinked child" "$c"
+  printf '%s' "$c" | grep -q 'fsgg-coord child' \
+    && ok "case14: ...and points at the verb that fixes it (fsgg-coord child)" || bad "case14: points at child verb" "$c"
+  printf '%s' "$c" | grep -q '303 stamped Done and closed' \
+    && bad "case14: a body-unlinked parent must NOT be flipped" "$c" || ok "case14: a body-unlinked parent is not flipped"
+
+  # D — FLIP over a body-cited PR ref (#346): #304's body cites PR #920, which is not an unlinked child.
+  d="$(df 'FS.GG.SDD#82' --worker w-df --flip)"
+  printf '%s' "$d" | grep -q 'FS.GG.SDD#304 stamped Done and closed' \
+    && ok "case14: rollup FLIPS over a body-cited PR ref — a PR is not an unlinked child (#346)" || bad "case14: PR ref must not block flip" "$d"
+  printf '%s' "$d" | grep -q 'does not contain' \
+    && bad "case14: a body-cited PR must not read as an unlinked child" "$d" || ok "case14: a body-cited PR does not block the rollup"
+
+  kill "$DF_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
