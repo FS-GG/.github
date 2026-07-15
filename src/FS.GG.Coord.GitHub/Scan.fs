@@ -667,6 +667,70 @@ module Scan =
 
         w.WriteEndArray()
 
+        // OFF-BOARD CLAIMS RESERVE TOO (#461/#581, case 25). The loop above read every BOARD candidate's
+        // marker — but a lock lives OFF the board: a claim on an issue whose column flip failed (the board
+        // says Ready, the lock says held), or on one that never reached the board at all. The board scan is
+        // blind to it, so a candidate declaring the same files would be handed a tree another worker is
+        // standing in — the exact double-claim this scheduler exists to prevent.
+        //
+        // So scan the in-scope repos' OPEN ISSUES — the SAME paginated, unconditional read `who`/`reap`
+        // run (a lock has no hundred-issue limit, and a 304 could serve a `comments: 0` captured before a
+        // marker was posted) — and reserve every LIVE claim on an issue the board did NOT already list.
+        // This is bash's `active_claims` arm B; arm A (the board's In-progress rows) is the candidate loop
+        // above, whose claims are already in `inFlight`.
+        let boardRefs =
+            rows |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number) |> Set.ofList
+
+        // The repos an off-board claim can live in are the in-scope board's repos (bash derives them the
+        // same way). No candidate names a repo → no repo to scan, and no board item means nothing off the
+        // board could contradict — so a fixture with no schedulable candidates pays no issue-list read.
+        let repos =
+            candidates |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo) |> List.distinct
+
+        for (o, r) in repos do
+            if failure.IsNone then
+                // FAILS CLOSED (#461): an unreadable scan is never an empty one — batch would schedule over
+                // a lock it could not see, the precise fail-open the whole scheduler prevents.
+                match Reads.openIssues transport o r with
+                | Error e -> failure <- Some e
+                | Ok issues ->
+                    for (n, body) in issues do
+                        // A BOARD ITEM IS NOT OFF THE BOARD: its marker was already read (and reserved, if
+                        // held) by the candidate loop, so re-reading it here would pay the same budget twice
+                        // and risk double-reserving. Only issues the board never listed reach the marker read.
+                        if failure.IsNone && not (boardRefs.Contains(o, r, n)) then
+                            match Reads.markers transport o r n with
+                            | Error e -> failure <- Some e
+                            | Ok markers ->
+                                match Reads.winner leaseMinutes markers with
+                                // No LIVE claim — a chatty issue, or a stale marker whose lease has lapsed.
+                                // A stale claim reserves too (only `reap` may break a lock), but that rides
+                                // with the starved-queue slice; here, as in the board loop, only a live
+                                // holder reserves.
+                                | None -> ()
+                                | Some m ->
+                                    // The touch-set rides in on the SAME list read (one read, two uses),
+                                    // exactly as the board loop reuses the candidate body. A claim declaring
+                                    // no touch-set reserves no files — the board loop's own rule (line above).
+                                    match TouchSet.parse body with
+                                    | Declared tokens ->
+                                        let names =
+                                            tokens
+                                            |> List.map (fun t ->
+                                                match t with
+                                                | Matchable s -> s
+                                                | Unmatchable s -> s)
+
+                                        inFlight.Add(
+                                            o,
+                                            r,
+                                            names,
+                                            m.Worker,
+                                            { Owner = o; Repo = r; Number = n },
+                                            m.AgeSeconds
+                                        )
+                                    | _ -> ()
+
         w.WriteStartArray("inFlight")
 
         for (owner, repoName, paths, holder, holderRef, age) in inFlight do

@@ -146,6 +146,13 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             return self._send(200, ISSUE_COMMENTS.get(int(m.group(1)), []))
 
+        # THE OFF-BOARD OPEN-ISSUE SCAN (case 25). `scan`/`batch` reserve off-board claims too, so the
+        # scheduling pass fetches the repo's open issues (bash's `active_claims` arm B). Every issue here is
+        # ON the board, so the scan finds nothing off-board to reserve — the list is served faithfully.
+        if re.match(r"^/repos/[^/]+/[^/]+/issues/?$", path):
+            return self._send(200, [{"number": n, "state": "open", "body": b}
+                                    for n, b in ISSUE_BODIES.items()])
+
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", path)
         if m:
             n = int(m.group(1))

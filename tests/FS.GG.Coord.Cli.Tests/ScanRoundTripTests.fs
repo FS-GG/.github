@@ -39,10 +39,13 @@ let private aRow: Scan.Row =
       IsPullRequest = false }
 
 /// A transport that answers by ENDPOINT, so one fake can serve a body read and a marker read differently —
-/// which is what the snapshot assembler actually does.
+/// which is what the snapshot assembler actually does. The off-board open-issue scan (case 25) rides on the
+/// bare `/issues` list; these worlds have no off-board claim, so it answers empty — the honest scan result.
 let private routed (body: string) (comments: string) =
     Fake.Recorder(fun req ->
-        if req.Path.EndsWith "/comments" then
+        if req.Path.EndsWith "/issues" then
+            ok "[]"
+        elif req.Path.EndsWith "/comments" then
             ok comments
         else
             ok body)
@@ -159,7 +162,9 @@ let ``an unreadable BODY does not drop the item - it arrives UNREADABLE, and is 
     // looked at (#496).
     let transport =
         Fake.Recorder(fun req ->
-            if req.Path.EndsWith "/comments" then
+            if req.Path.EndsWith "/issues" then
+                ok "[]" // the off-board scan finds no claim here; only the candidate BODY is the 502
+            elif req.Path.EndsWith "/comments" then
                 ok "[]"
             else
                 Error(Errors.Http(502, "bad gateway")))
@@ -206,9 +211,15 @@ let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueC
     // needs neither a body read nor a marker read, and the reason survives to `decide`.
     let closed = { aRow with State = Closed; Status = Ready }
 
-    // A transport that FAILS on EVERY call — so a green here is proof the closed sweep read nothing at all.
+    // A transport that FAILS on every BODY and MARKER read — so a green here is proof the closed sweep read
+    // no body and no lock. The off-board open-issue scan (case 25) still runs (a lock lives off the board),
+    // and it finds none: the bare `/issues` list answers empty, which is the one endpoint allowed to succeed.
     let transport =
-        Fake.Recorder(fun _ -> Error(Errors.Transport "the closed sweep must read nothing"))
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]"
+            else
+                Error(Errors.Transport "the closed sweep must read no body and no marker"))
 
     match Scan.snapshot transport [ closed ] None false None 120 with
     | Error e -> failwith $"a swept closed item reads nothing, so the scan cannot fail — got %A{e}"
@@ -311,5 +322,57 @@ let ``a live claim survives the round trip, and RESERVES its touch-set`` () =
             // A LIVE CLAIM RESERVES ITS TOUCH-SET. That reservation is what stops a second worker being
             // handed the same files, and it comes from the body we already read — one read, two uses.
             Assert.Equal(1, List.length request.InFlight)
+        | Error e -> failwith $"parse failed: %A{e}"
+    | Error e -> failwith $"scan failed: %A{e}"
+
+[<Fact>]
+let ``an OFF-BOARD claim reserves its touch-set - the board scan misses it, the off-board scan catches it`` () =
+    // #461/#581, case 25. A lock lives OFF the board: a marker on an issue whose column flip failed, or one
+    // the board never listed. The board scan reads only board rows, so a candidate declaring the same files
+    // would be handed a tree its holder is standing in — the exact double-book the scheduler exists to
+    // prevent. The off-board open-issue scan (bash's `active_claims` arm B) reserves it. Here the board
+    // candidate #42 declares `src/Audio/Sub`, a SUBTREE of the OFF-BOARD #99's `src/Audio`, so #42 is refused.
+    let now = System.DateTimeOffset.UtcNow.ToString("o")
+
+    let marker99 =
+        $"""[{{"id":701,"body":"<!-- fsgg:claim worker=puffin-h11 lease=120 -->","updated_at":"%s{now}"}}]"""
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                // the off-board list — #99 is the claim the board never listed; its body rides along.
+                ok """[{"number":99,"title":"off-board","state":"open","body":"Paths: src/Audio"}]"""
+            elif req.Path.EndsWith "/99/comments" then
+                ok marker99
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // the board candidate #42 carries no marker of its own
+            else
+                ok (issueBody "Paths: src/Audio/Sub")) // #42's body — a subtree of #99's reservation
+
+    match Scan.snapshot transport [ aRow ] None false None 120 with
+    | Ok(document, _) ->
+        match Snapshot.parse document with
+        | Ok request ->
+            // The off-board claim is reserved, named by its holder and its item — a board scan never saw it.
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                | Batch.LiveClaim(WorkerId w, ref, _) ->
+                    Assert.Equal("puffin-h11", w)
+                    Assert.Equal(99, ref.Number)
+                | other -> failwith $"the off-board reservation must name its holder — got %A{other}"
+            | other -> failwith $"exactly one off-board reservation expected — got %A{other}"
+
+            // AND THE OVERLAPPING CANDIDATE IS REFUSED, not scheduled over the lock the board could not see.
+            let decision =
+                Batch.schedule
+                    request.AllowBacklog
+                    request.Limit
+                    request.InFlight
+                    (request.Candidates |> List.map (fun c -> c.Item))
+
+            match decision with
+            | Green result -> Assert.Empty(result.Chosen)
+            | other -> failwith $"an overlap with an off-board claim is not schedulable — got %A{other}"
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"scan failed: %A{e}"
