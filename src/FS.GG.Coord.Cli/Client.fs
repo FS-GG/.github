@@ -694,6 +694,44 @@ module Client =
                                             | Done.NoParent -> ()
                                 | None -> ()
 
+                            // #533 — A FINISHED ITEM MUST NOT KEEP ITS LOCK. `done` verified the merge, set
+                            // the column Done, and rolled the parent up — and, until here, left the claim
+                            // marker live for the rest of the 120m lease. A live marker's `Paths:` keep
+                            // reserving its touch-set, so the item most likely to overlap a just-finished one
+                            // — its own follow-up findings, filed BECAUSE you were standing in those files —
+                            // is the one its own author is locked out of. This is the port's half of #533:
+                            // `done --flip` set Status and never touched the marker, and `release` was the
+                            // only path that dropped it — but `release` REWRITES Status, so running it on an
+                            // item you just stamped clobbers the stamp you just earned.
+                            //
+                            // Drop OUR OWN lock, and only ours. A `Held` is obtainable only by confirming the
+                            // live winner is us (`verifyHeld`), so `release` here CANNOT touch another
+                            // worker's marker — deleting a claim that is not ours is `reap`'s job, and the
+                            // "only your own" rule is the capability type, not a forgettable `if`. And unlike
+                            // the `release` command, we do NOT restore the column: the item is Done, and Done
+                            // is what stands.
+                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) ref with
+                            | Ok(Some held) ->
+                                match Writes.release ctx.Transport held with
+                                | Ok _ -> ()
+                                | Error e ->
+                                    eprint
+                                        $"fsgg-coord-engine: the stamp is GREEN, but %s{w.Id}'s claim on %s{ref.Short} could not be dropped: %s{Errors.explain e}. Run `release` (or `reap`) so it stops reserving its touch-set (#533)."
+                            | Ok None ->
+                                // We do not hold it. If ANOTHER worker's lock is live, this engine leaves it
+                                // alone and says so — it never silently deletes a claim that is not ours.
+                                match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
+                                | Ok markers ->
+                                    match Reads.winner opts.LeaseMinutes markers with
+                                    | Some m when m.Worker <> WorkerId w.Id ->
+                                        eprint
+                                            $"fsgg-coord-engine: %s{ref.Short} is stamped Done, but %s{m.Worker.Value} still holds its claim — `done` drops only your own lock; run `reap` to clear another worker's (#533)."
+                                    | _ -> ()
+                                | Error _ -> ()
+                            | Error e ->
+                                eprint
+                                    $"fsgg-coord-engine: the stamp is GREEN, but %s{w.Id}'s claim on %s{ref.Short} could not be checked: %s{Errors.explain e}. If it is still held, run `release` so it stops reserving its touch-set (#533)."
+
                             ExitGreen
 
     // ---- verify-paths ----------------------------------------------------------------------------------
