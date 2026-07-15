@@ -489,6 +489,144 @@ module Reads =
                             )
                         )
 
+    let prHeadRef
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : IoResult<string> =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr}"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "head" with
+                | true, head when head.ValueKind = JsonValueKind.Object ->
+                    match str head "ref" with
+                    | Some r -> Ok r
+                    // #322: the API answered, but with no head ref we can name. That is a malformed answer,
+                    // not "no branch" — refusing beats guessing which issue the PR implements.
+                    | None -> Error(Malformed(subject, "the PR response carried no head.ref"))
+                | _ -> Error(Malformed(subject, "the PR response carried no `head`"))
+
+    let prFiles
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : IoResult<string list> =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr} files"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}/files"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the PR files response is not a JSON array"))
+                else
+                    Ok(
+                        doc.RootElement.EnumerateArray()
+                        |> Seq.choose (fun f -> str f "filename")
+                        |> List.ofSeq
+                    )
+
+    [<Literal>]
+    let private ClosingRefDoc =
+        "query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { closingIssuesReferences(first: 5) { nodes { number repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
+
+    let prClosingRef
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : IoResult<Ref option> =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr} closing refs"
+
+        let request =
+            { Method = "POST"
+              Path = "graphql"
+              Query = []
+              Body =
+                Transport.Query(
+                    ClosingRefDoc,
+                    [ "owner", Transport.VString owner
+                      "repo", Transport.VString repo
+                      "pr", Transport.VNumber(double pr) ]
+                )
+              Budget = GraphQl
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                try
+                    let nodes =
+                        doc.RootElement
+                            .GetProperty("data")
+                            .GetProperty("repository")
+                            .GetProperty("pullRequest")
+                            .GetProperty("closingIssuesReferences")
+                            .GetProperty("nodes")
+
+                    match nodes.EnumerateArray() |> Seq.tryHead with
+                    | None -> Ok None
+                    | Some n ->
+                        let number =
+                            match n.TryGetProperty "number" with
+                            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                            | _ -> None
+
+                        let nwo =
+                            match n.TryGetProperty "repository" with
+                            | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
+                            | _ -> None
+
+                        match number, nwo with
+                        | Some num, Some nwo when nwo.Contains "/" ->
+                            let parts = nwo.Split('/')
+
+                            Ok(Some { Owner = parts.[0]; Repo = parts.[1]; Number = num })
+                        | _ -> Ok None
+                with
+                | :? System.Collections.Generic.KeyNotFoundException
+                | :? System.NullReferenceException -> Ok None
+
     // ---- the claim-scan candidate set --------------------------------------------------------------
 
     let openIssues

@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Compile Include="TouchSetTests.fs" />
+    <Compile Include="CoversTests.fs" />
     <Compile Include="BlockerTests.fs" />
     <Compile Include="SchedulabilityTests.fs" />
     <Compile Include="BatchTests.fs" />

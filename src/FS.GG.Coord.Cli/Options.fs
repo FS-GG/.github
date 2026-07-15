@@ -23,6 +23,7 @@ module Options =
         | Widen
         | Say
         | DoneCmd
+        | VerifyPaths
         | Help
         | Version
 
@@ -47,7 +48,9 @@ module Options =
           Evidence: string option
           ToWorker: string option
           Message: string option
-          Paths: string list }
+          Paths: string list
+          Pr: int option
+          Warn: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -133,6 +136,15 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 else
                     flags { acc with Paths = t } []
 
+            | "--pr" :: value :: _ when value.StartsWith "-" -> Error $"--pr needs a value (got flag '%s{value}')"
+            | "--pr" :: value :: t ->
+                match System.Int32.TryParse value with
+                | true, n when n > 0 -> flags { acc with Pr = Some n } t
+                | _ -> Error $"--pr needs a positive PR number (got '%s{value}')"
+            | [ "--pr" ] -> Error "--pr needs a value"
+
+            | "--warn" :: t -> flags { acc with Warn = true } t
+
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             | "--include-backlog" :: t -> flags { acc with AllowBacklog = true } t
             | "--force" :: t -> flags { acc with Force = true } t
@@ -178,7 +190,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Evidence = None
               ToWorker = None
               Message = None
-              Paths = [] }
+              Paths = []
+              Pr = None
+              Warn = false }
 
         match args with
         | []
@@ -208,5 +222,6 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "widen" :: rest -> flags { defaults with Command = Widen } rest
         | "say" :: rest -> flags { defaults with Command = Say } rest
         | "done" :: rest -> flags { defaults with Command = DoneCmd } rest
+        | "verify-paths" :: rest -> flags { defaults with Command = VerifyPaths } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"

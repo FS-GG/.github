@@ -55,6 +55,8 @@ module Options =
         | Say
         /// Stamp an item done, optionally rolling the parent up (`done <ref> [--flip] [--evidence E]`).
         | DoneCmd
+        /// Check a PR's changed files against the touch-set its issue declared (`verify-paths --pr N [--warn]`).
+        | VerifyPaths
 
         | Help
         | Version
@@ -94,7 +96,13 @@ module Options =
           /// `--message <text>` (`say`).
           Message: string option
           /// `--paths <token>...` (`widen`) — the new touch-set.
-          Paths: string list }
+          Paths: string list
+
+          /// `--pr <n>` (`verify-paths`) — the pull request to check.
+          Pr: int option
+          /// `--warn` (`verify-paths`) — downgrade a DRIFT/INVALID verdict to advisory (exit 0). "I could
+          /// not check" is never downgraded — only a real verdict is.
+          Warn: bool }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

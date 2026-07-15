@@ -138,6 +138,22 @@ module Reads =
     /// that.
     val rateLimit: transport: IGitHubTransport -> IoResult<RateLimitSnapshot>
 
+    /// A pull request's HEAD ref (`.head.ref`), e.g. `item/42-the-thing`.
+    ///
+    /// FAILS CLOSED (#322): an unreadable head ref is an ERROR, never an empty string. verify-paths uses
+    /// it to decide WHICH issue a PR implements, and guessing that from a failed read would stamp a
+    /// touch-set verdict on a subject nobody identified.
+    val prHeadRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string>
+
+    /// A pull request's changed files (`pulls/{n}/files`), paginated.
+    val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
+
+    /// The FIRST issue a pull request declares it closes (`closingIssuesReferences`), if any.
+    ///
+    /// `Ok None` means it closes nothing by that record — a real answer (the PR may implement an item by
+    /// its branch name instead). It is distinct from a failed read, which is an `Error`.
+    val prClosingRef: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<Ref option>
+
     /// Every OPEN issue in a repo, with its body — the claim-scan candidate set.
     ///
     /// PAGINATED, AND UNCONDITIONAL. A lock has no hundred-issue limit: a first page read as the whole set
