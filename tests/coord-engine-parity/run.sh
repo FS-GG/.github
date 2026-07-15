@@ -424,6 +424,30 @@ else
   bad "one-item-per-worker fixture (2) bound a port"
 fi
 
+# ---- BUDGET BACK-OFF (case 40): #418 — an exhausted GraphQL budget makes `take` exit EX_RATE (75) ---
+#
+# The GraphQL budget is the first to die under fan-out (#418 — the reason this client exists), and its
+# exhaustion is a DISTINCT outcome: not an empty queue (0), not a lost race, not an unreadable board — a
+# BACK-OFF signal (75). `/pnext-item` teaches a worker to key on it. The board items read (the one that
+# spends the budget) 403s with a rate-limit body; the engine must NOT retry it and must exit 75.
+RL_OUT="$(mktemp)"
+python3 "$HERE/ratelimit_server.py" >"$RL_OUT" 2>/dev/null &
+RL=$!
+RLPORT=""; for _ in $(seq 1 50); do RLPORT="$(head -n1 "$RL_OUT" 2>/dev/null)"; [ -n "$RLPORT" ] && break; sleep 0.1; done
+if [ -n "$RLPORT" ]; then
+  rlout="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$RLPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" take --repo FS.GG.SDD --worker vole-418 2>&1)"; rlrc=$?
+  [ "$rlrc" -eq 75 ] \
+    && ok "#418: take on an exhausted GraphQL budget exits EX_RATE (75) — the back-off signal (case 40)" \
+    || bad "#418: take must exit 75 on an exhausted budget" "rc=$rlrc: $rlout"
+  # ...and it is NOT confused with the other non-zero take outcomes (a lost race, an unreadable board).
+  printf '%s' "$rlout" | grep -qi 'budget' \
+    && ok "#418: ...and it names the budget, not a protocol error or a lost race" \
+    || bad "#418: the message must name the exhausted budget" "$rlout"
+else
+  bad "rate-limit fixture bound a port"
+fi
+kill "$RL" 2>/dev/null; rm -f "$RL_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
