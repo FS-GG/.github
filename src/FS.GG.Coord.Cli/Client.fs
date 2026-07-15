@@ -33,6 +33,19 @@ module Client =
     [<Literal>]
     let ExitNoVerdict = 4
 
+    // #585 — `take`'s exit code must tell "I claimed you an item" (0) apart from the ways it can claim
+    // NOTHING, so a worker loop (`take && work_it`) never proceeds on nothing. EX_NONE (5) is "looked,
+    // nothing startable" (empty or all-blocked); EX_CONTENDED (6) is "lost every race — the board is
+    // contended, back off and retry"; a read failure keeps its own non-zero (`fail`, never EX_NONE, so
+    // "could not look" ≠ "empty" — #266); EX_RATE (75) is the budget. The values dodge the engine's
+    // reserved codes (1 error, 2 defect, 3 red, 4 no-verdict). This reverses #480's "the empty queue
+    // exits cleanly (0)", by decision on #585.
+    [<Literal>]
+    let ExitNone = 5
+
+    [<Literal>]
+    let ExitContended = 6
+
     /// Board status → its name, qualified against BoardStatus (bare `Ready` would resolve to the
     /// `Command.Ready` opened below). One place, so every render agrees.
     let private statusName (s: BoardStatus) =
@@ -485,6 +498,11 @@ module Client =
         | Error c -> c
         | Ok w ->
             match scanAndDecide ctx { opts with Limit = Some 1 } Cache.Scheduling with
+            // #585: a board we could not read is NOT an empty queue — but that distinction is already
+            // carried by the code `fail` returns (EX_RATE for a budget, a non-zero read error otherwise),
+            // and it is never EX_NONE, so "I could not look" and "I looked, and it is empty" keep
+            // different codes (#266). bash's hard board-read failure exits the same way (#344's fatal
+            // die), so the two engines agree.
             | Error e -> fail e
             | Ok(_, doc, _) ->
                 match renderDecision { opts with Limit = Some 1 } doc with
@@ -492,13 +510,22 @@ module Client =
                 | Ok result ->
                     match result.Chosen with
                     | [] ->
+                        // #585: looked, nothing startable — NOT a claim. Exit EX_NONE so `take && work_it`
+                        // does not proceed on nothing. (`printChosen` still prints the per-item WHY.)
                         printfn "no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared"
                         printChosen opts.LeaseMinutes result
-                        ExitGreen
+                        ExitNone
                     | item :: _ ->
                         // Claim the chosen item. `claim` re-reads and runs the CAS, so a stale scan cannot
                         // cost a double-claim: the loser backs off and the caller retries.
-                        claim ctx { opts with Args = [ item.Ref.Short ] }
+                        // #585: translate the claim's verdict into `take`'s contract — a win is 0, an
+                        // exhausted budget passes through as EX_RATE (back off until reset), and any other
+                        // failure is a LOST RACE (EX_CONTENDED): the item was startable when we picked it,
+                        // so a failure to take it means someone else got there first.
+                        match claim ctx { opts with Args = [ item.Ref.Short ] } with
+                        | code when code = ExitGreen -> ExitGreen
+                        | code when code = Errors.ExRate -> code
+                        | _ -> ExitContended
 
     // ---- the writes ------------------------------------------------------------------------------------
 
