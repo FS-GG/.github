@@ -49,6 +49,14 @@ module TouchSet =
 
     val tokensOverlap: a: string -> b: string -> bool
 
+    /// Is `file` covered by `token`? THE verify-paths containment rule, matching the bash client byte for
+    /// byte: strip the trailing `/**`, `/*`, or `/` (the grammar's only wildcard), then the file is covered
+    /// iff it EQUALS that directory prefix or lies under it (`prefix/…`).
+    ///
+    /// An `Unmatchable` token reserves nothing, so it covers nothing (#273): a token that can match no file
+    /// cannot vouch for one either. This is the same asymmetry the scheduler relies on, in one place.
+    val covers: token: PathToken -> file: string -> bool
+
     /// The tokens two touch-sets share. Empty = they may run in parallel.
     ///
     /// CONTRACT: both token lists must come from the SAME repo. Tokens are repo-relative, so handing

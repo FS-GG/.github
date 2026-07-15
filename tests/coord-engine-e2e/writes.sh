@@ -134,6 +134,24 @@ dn="$(run done FS.GG.SDD#42 2>&1)"; dnrc=$?
   && ok "done stamps an item closed by a merged PR" \
   || bad "done stamps a completed item" "rc=$dnrc: $dn"
 
+# ---- verify-paths: a PR inside its touch-set is OK -------------------------------------------------
+vp="$("$ENGINE" verify-paths --pr 500 --repo FS.GG.SDD 2>&1)"; vprc=$?
+[ "$vprc" -eq 0 ] && printf '%s' "$vp" | grep -q 'FSGG-PATHS OK' \
+  && ok "verify-paths: a PR inside its touch-set is OK (exit 0)" \
+  || bad "verify-paths OK" "rc=$vprc: $vp"
+
+# ---- verify-paths: a PR that DRIFTS names the file and fails ---------------------------------------
+vd="$("$ENGINE" verify-paths --pr 501 --repo FS.GG.SDD 2>&1)"; vdrc=$?
+[ "$vdrc" -ne 0 ] && printf '%s' "$vd" | grep -q 'FSGG-PATHS DRIFT' && printf '%s' "$vd" | grep -q 'docs/x.md' \
+  && ok "verify-paths: a drifting PR names the out-of-bounds file and fails" \
+  || bad "verify-paths DRIFT" "rc=$vdrc: $vd"
+
+# ---- verify-paths --warn downgrades DRIFT to advisory (exit 0) -------------------------------------
+vw="$("$ENGINE" verify-paths --pr 501 --repo FS.GG.SDD --warn 2>&1)"; vwrc=$?
+[ "$vwrc" -eq 0 ] && printf '%s' "$vw" | grep -q 'FSGG-PATHS DRIFT' \
+  && ok "verify-paths --warn downgrades DRIFT to advisory (exit 0)" \
+  || bad "verify-paths --warn is advisory" "rc=$vwrc: $vw"
+
 # ---- report ----------------------------------------------------------------------------------------
 echo
 echo "coord-engine writes: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"

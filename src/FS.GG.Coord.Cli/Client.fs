@@ -589,6 +589,124 @@ module Client =
 
                             ExitGreen
 
+    // ---- verify-paths ----------------------------------------------------------------------------------
+
+    /// Check a PR's changed files against the touch-set declared by the issue it implements.
+    ///
+    /// THE VERDICT VOCABULARY IS THE BASH CLIENT'S, because the shim will run one where the other ran:
+    ///   OK      — every changed file is inside the declared touch-set.
+    ///   DRIFT   — a file falls outside it (named), and the PR should widen or split.
+    ///   SKIP    — nothing to verify against (no touch-set, or the issue can't be identified). Green.
+    ///   INVALID — the declared touch-set has only unmatchable tokens (#273).
+    ///
+    /// "I COULD NOT CHECK" IS NEVER A VERDICT (#322). An unreadable head ref, body, or file list is an
+    /// ERROR — even under --warn, which downgrades a real DRIFT/INVALID to advisory but cannot downgrade a
+    /// read that never happened. Stamping "stays inside its touch-set" on a subject nobody looked at is the
+    /// exact fail-open this command exists to prevent.
+    let verifyPaths (ctx: Context) (opts: Options) : int =
+        match opts.Pr with
+        | None ->
+            eprint "fsgg-coord-engine: verify-paths needs --pr <n>."
+            ExitError
+        | Some pr ->
+            let owner = ctx.Owner
+
+            let repo =
+                match opts.Repo with
+                | Some r -> r
+                | None ->
+                    eprint "fsgg-coord-engine: verify-paths needs --repo <name> (the repo the PR is in)."
+                    ""
+
+            if repo = "" then
+                ExitError
+            else
+
+            // The issue a PR implements: its `item/<n>-*` branch, else what it declares it closes.
+            let resolveIssue () : Result<Ref option, Errors.IoError> =
+                match Reads.prHeadRef ctx.Transport owner repo pr with
+                | Error e -> Result.Error e
+                | Ok head ->
+                    let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
+
+                    if m.Success then
+                        Ok(Some { Owner = owner; Repo = repo; Number = int m.Groups.[1].Value })
+                    else
+                        // Not an item branch — ask what it closes.
+                        Reads.prClosingRef ctx.Transport owner repo pr
+
+            match resolveIssue () with
+            | Error e -> fail e
+            | Ok None ->
+                // Can't tell which issue this PR implements. SKIP — not a verdict, and green: a PR that
+                // implements no tracked item has no touch-set to drift from.
+                printfn
+                    "FSGG-PATHS SKIP — cannot tell which issue PR #%d implements (branch is not item/<n>-…, and it closes no issue)."
+                    pr
+
+                ExitGreen
+            | Ok(Some issue) ->
+                // Repo-relative touch-sets: a PR in repo A that closes an issue in repo B cannot be checked
+                // against B's paths — those say nothing about A's files (#353).
+                if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
+                    printfn
+                        "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s, in another repo — a touch-set there says nothing about the files changed here."
+                        pr
+                        owner
+                        repo
+                        issue.Short
+
+                    ExitGreen
+                else
+
+                match Reads.issueBody ctx.Transport issue.Owner issue.Repo issue.Number with
+                | Error e -> fail e
+                | Ok body ->
+                    match TouchSet.parse body with
+                    | Undeclared
+                    | DeclaredNone ->
+                        printfn "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against." issue.Short
+                        ExitGreen
+                    | Unreadable reason ->
+                        // Should not happen (we just read the body), but the type demands it be handled, and
+                        // "I could not read the body" is an error, never a SKIP.
+                        eprint $"fsgg-coord-engine: could not read %s{issue.Short}'s touch-set: %s{reason}"
+                        ExitError
+                    | Declared tokens ->
+                        let unmatchable =
+                            tokens
+                            |> List.choose (function
+                                | Unmatchable u -> Some u
+                                | Matchable _ -> None)
+
+                        if List.length unmatchable = List.length tokens then
+                            // EVERY token is unmatchable — the declaration reserves nothing (#273). That is
+                            // INVALID, not "everything drifts": the touch-set is the broken thing.
+                            let bad = String.Join(", ", unmatchable)
+                            printfn "FSGG-PATHS INVALID — %s declares only unmatchable tokens: %s" issue.Short bad
+                            eprint $"  %s{Schedulability.TouchSetGrammar}"
+                            if opts.Warn then ExitGreen else ExitRed
+                        else
+
+                        match Reads.prFiles ctx.Transport owner repo pr with
+                        | Error e -> fail e
+                        | Ok files ->
+                            let drift =
+                                files
+                                |> List.filter (fun f -> not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
+
+                            if List.isEmpty drift then
+                                printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
+                                ExitGreen
+                            else
+                                printfn "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:" pr issue.Short
+
+                                for f in drift do
+                                    printfn "    %s" f
+
+                                eprint "  Widen the touch-set (fsgg-coord-engine widen), or split the PR."
+                                if opts.Warn then ExitGreen else ExitRed
+
     // ---- identity --------------------------------------------------------------------------------------
 
     let whoami (opts: Options) : int =
@@ -657,4 +775,5 @@ module Client =
             | Widen -> widen ctx opts
             | Say -> say ctx opts
             | DoneCmd -> doneCmd ctx opts
+            | VerifyPaths -> verifyPaths ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

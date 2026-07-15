@@ -29,9 +29,10 @@ ISSUES = {
     42: {"body": "A schedulable item.\n\nPaths: src/Thing/**", "state": "OPEN", "status": "Ready"},
     43: {"body": "Another item.\n\nPaths: src/Other/**", "state": "OPEN", "status": "Ready"},
     99: {"body": "A parent epic.\n\nPaths: none", "state": "OPEN", "status": "In progress"},
+    44: {"body": "A verify-paths subject.\n\nPaths: src/Verify/**", "state": "OPEN", "status": "In progress"},
 }
 
-COMMENTS = {42: [], 43: [], 99: []}      # issue -> [{"id", "body", "updated_at"}]
+COMMENTS = {42: [], 43: [], 99: [], 44: []}      # issue -> [{"id", "body", "updated_at"}]
 NEXT_COMMENT_ID = [900]
 def now_iso():
     # REAL current time, so a just-posted marker is fresh — a fixed timestamp would land it at the
@@ -132,6 +133,20 @@ def graphql(query: str, variables: dict):
         return {
             "data": {
                 "repository": {"issue": {"projectItems": {"nodes": [{"id": "PVTI_item", "project": {"number": 12}}]}}},
+                "rateLimit": RATE_LIMIT,
+            }
+        }
+    if "closingIssuesReferences" in query:
+        # PR #500 declares it closes issue #43.
+        return {
+            "data": {
+                "repository": {
+                    "pullRequest": {
+                        "closingIssuesReferences": {
+                            "nodes": [{"number": 44, "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"}}]
+                        }
+                    }
+                },
                 "rateLimit": RATE_LIMIT,
             }
         }
@@ -253,6 +268,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, {"message": "Not Found"})
             with LOCK:
                 return self._send(200, {"number": n, "id": n + 1000, "body": ISSUES[n]["body"], "state": ISSUES[n]["state"].lower()})
+
+        m = re.match(r"^/repos/[^/]+/[^/]+/pulls/(\d+)/files$", path)
+        if m:
+            pr = int(m.group(1))
+            # PR #500: changes only files under issue #43's touch-set (src/Other/**) → OK.
+            # PR #501: also touches docs/x.md, OUTSIDE src/Other/** → DRIFT.
+            files = [{"filename": "src/Verify/Foo.fs"}]
+            if pr == 501:
+                files.append({"filename": "docs/x.md"})
+            return self._send(200, files)
+
+        m = re.match(r"^/repos/[^/]+/[^/]+/pulls/(\d+)$", path)
+        if m:
+            pr = int(m.group(1))
+            return self._send(200, {"number": pr, "head": {"ref": "item/44-the-work"}})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls$", path)
         if m:

@@ -367,7 +367,8 @@ let main argv =
             | Child
             | Widen
             | Say
-            | DoneCmd -> Client.run opts
+            | DoneCmd
+            | VerifyPaths -> Client.run opts
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine

@@ -137,6 +137,14 @@ module TouchSet =
     /// a RESERVATION: `Batch.schedule` refuses the whole batch on one (see `unusableReservation`), and
     /// the scheduler rejects it as a CANDIDATE before disjointness is ever asked. This function is total
     /// because the type demands it, not because an unreadable surface is safe to compare.
+    let covers (token: PathToken) (file: string) : bool =
+        match token with
+        // #273: reserves nothing, covers nothing.
+        | Unmatchable _ -> false
+        | Matchable t ->
+            let s = stem t
+            file = s || file.StartsWith(s + "/", System.StringComparison.Ordinal)
+
     let conflicts (a: TouchSet) (b: TouchSet) : (string * string) list =
         let tokensOf =
             function
