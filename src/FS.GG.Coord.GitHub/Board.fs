@@ -5,6 +5,7 @@ module Board =
     open System
     open System.Collections.Generic
     open System.Text.Json
+    open FS.GG.Coord.Types
     open Errors
     open Transport
 
@@ -274,6 +275,88 @@ module Board =
 
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item lookup response is missing `repository.issue.projectItems`"))
+
+    // ---- the pre-claim column (#481) ----------------------------------------------------------------
+
+    [<Literal>]
+    let private ItemStatusDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { projectItems(first: 20) { nodes { project { number } fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } } } rateLimit { cost remaining } }"
+
+    /// Read ONE item's `Status` column — the column a `claim` is about to overwrite, so `release` can put it
+    /// back rather than guess `Ready` (#481).
+    ///
+    /// **THIS IS A RESOLVER READ, NOT A SCAN.** `fieldValueByName` returns one value per item with no node
+    /// multiplication — the same thrifty selection `Scan` uses — so it costs one point for one item. Reaching
+    /// for `Scan.board` here instead would put a seven-point full-board read on the hottest path in the org
+    /// (`take` → `claim`, every worker, every round), against the one budget that dies first under fan-out.
+    /// That regression is exactly what #481 (with #418) is written not to cause, so it is a resolver read.
+    ///
+    /// `Ok None` is a real answer with two shapes: the issue is not on THIS board, or it is but its `Status`
+    /// is unset. Both mean "there is no column to record", and a claim that records none releases to `Ready`
+    /// — the pre-#481 behaviour, now scoped to the one case where there is genuinely nothing to restore. A
+    /// FAILED read is `Error`, never `Ok None`: the caller (`claim`) treats it as "recorded no column" too,
+    /// but it may not be manufactured into the definite absence that `None` asserts.
+    let itemStatus
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<BoardStatus option> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} Status"
+
+        let request =
+            query
+                ItemStatusDoc
+                [ "owner", VString owner
+                  "repo", VString repo
+                  "number", VNumber(double number) ]
+                subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+
+        match graphQlData subject response.Body with
+        | Error e -> Error e
+        | Ok data ->
+
+        try
+            let issue = data.GetProperty("repository").GetProperty("issue")
+
+            if issue.ValueKind = JsonValueKind.Null then
+                // The issue itself does not exist — a real, definite answer, and there is no column to record.
+                Ok None
+            else
+
+            // NARROW TO OUR BOARD, exactly as `itemId` does. An issue can sit on several boards, and the
+            // Status on another one is not the column this claim overwrites here.
+            let ourNode =
+                issue.GetProperty("projectItems").GetProperty("nodes").EnumerateArray()
+                |> Seq.tryFind (fun n ->
+                    match n.TryGetProperty "project" with
+                    | true, p when p.ValueKind = JsonValueKind.Object ->
+                        match p.TryGetProperty "number" with
+                        | true, num when num.ValueKind = JsonValueKind.Number -> num.GetInt32() = board.Number
+                        | _ -> false
+                    | _ -> false)
+
+            match ourNode with
+            // NOT ON THIS BOARD. A successful read with a definite answer — nothing to restore.
+            | None -> Ok None
+            | Some node ->
+                match node.TryGetProperty "fieldValueByName" with
+                // `fieldValueByName` is null when the item is on the board with NO Status set. On board, no
+                // column — the same "nothing to restore" answer, reached the other way.
+                | true, fv when fv.ValueKind = JsonValueKind.Object ->
+                    match fv.TryGetProperty "name" with
+                    | true, nm when nm.ValueKind = JsonValueKind.String -> Ok(Reads.statusOfName (nm.GetString()))
+                    | _ -> Ok None
+                | _ -> Ok None
+
+        with :? KeyNotFoundException ->
+            Error(Malformed(subject, "the item-status response is missing `repository.issue.projectItems`"))
 
     // ---- one field write ----------------------------------------------------------------------------
 

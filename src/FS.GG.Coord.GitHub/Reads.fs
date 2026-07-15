@@ -72,8 +72,8 @@ module Reads =
     /// guess. `release` then puts back `Ready`, which is what it did before anyone recorded anything, and
     /// says so. A value nobody recorded cannot be restored (#481), and inventing one would overwrite a
     /// column somebody chose deliberately.
-    let private boardStatusOf (s: string) =
-        match s.Trim().ToLowerInvariant() with
+    let statusOfName (name: string) =
+        match name.Trim().ToLowerInvariant() with
         | "" -> None
         | "backlog" -> Some Backlog
         | "ready" -> Some Ready
@@ -123,7 +123,7 @@ module Reads =
             let p = prevRe.Match body
 
             if p.Success then
-                boardStatusOf (decodeStatus p.Groups.["p"].Value)
+                statusOfName (decodeStatus p.Groups.["p"].Value)
             else
                 None
 
