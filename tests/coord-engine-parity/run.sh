@@ -290,6 +290,40 @@ else
 fi
 kill "$XB" 2>/dev/null; rm -f "$XB_OUT"
 
+# ---- UNMATCHABLE TOUCH-SET (case 33): #273 — a token that matches nothing is REFUSED, never cleared -
+#
+# The docs once promised globs; the matcher does exact paths + subtree containment. A token that keeps a
+# wildcard (`**/x`, `src/*/x`) matches NO file — and a token that matches nothing CONFLICTS WITH NOTHING.
+# So the failure was OPEN: the scheduler read it as DISJOINT and handed two workers the same real files.
+# board-pw4: #300 declares `**/packages.lock.json` (unmatchable); #301 declares a real lockfile path. The
+# engine must schedule ONLY #301 and pass over #300 with its reason — never offer it, never clear it.
+PW4_OUT="$(mktemp)"
+python3 "$HERE/pw4_server.py" >"$PW4_OUT" 2>/dev/null &
+PW4=$!
+PW4PORT=""; for _ in $(seq 1 50); do PW4PORT="$(head -n1 "$PW4_OUT" 2>/dev/null)"; [ -n "$PW4PORT" ] && break; sleep 0.1; done
+if [ -n "$PW4PORT" ]; then
+  pw4env() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$PW4PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  pw4j="$(pw4env batch --repo FS.GG.SDD -n 9 --json 2>/dev/null)"
+  # The machine contract: only the honest item. A fail-open would clear #300 and offer BOTH.
+  [ "$pw4j" = '["FS.GG.SDD#301"]' ] \
+    && ok "#273: only the honestly-declared item schedules — the unmatchable one is not cleared into a double-book" \
+    || bad "#273: unmatchable-token batch parity" "expected [\"FS.GG.SDD#301\"], got: $pw4j"
+  printf '%s' "$pw4j" | grep -q 'FS.GG.SDD#300' \
+    && bad "#273: an item whose only token matches NOTHING must never be offered" "$pw4j" \
+    || ok "#273: the unmatchable item is never offered"
+  pw4err="$(pw4env batch --repo FS.GG.SDD -n 9 2>&1 >/dev/null)"
+  printf '%s' "$pw4err" | grep -q "unmatchable 'Paths:' token(s): \*\*/packages.lock.json" \
+    && ok "#273: ...and it is passed over WITH its reason — the token that matches nothing is NAMED" \
+    || bad "#273: names the unmatchable token" "$pw4err"
+  # The fail-open, in one word: an unmatchable token must never read as DISJOINT (that is the clear).
+  printf '%s' "$pw4err" | grep -qi 'disjoint' \
+    && bad "#273: an unmatchable token must NEVER be reported DISJOINT — that is the fail-open (#273)" "$pw4err" \
+    || ok "#273: the unmatchable token is not reported DISJOINT — 'unschedulable beats mis-scheduled'"
+else
+  bad "unmatchable-token fixture bound a port"
+fi
+kill "$PW4" 2>/dev/null; rm -f "$PW4_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
