@@ -1,0 +1,145 @@
+# adr-coherence — the ADR corpus must agree with itself.
+#
+# .github#266 (gates that fail open), ADR-0034 §4 (the projection family).
+#
+# THE LAST UNGATED REGISTRY. This org gates everything — contract-coherence, pin-coherence,
+# skill-registry-coherence, timeout-coherence, coordination-coherence, reusable-job-id-coherence.
+# Every registry (repos.yml, skills.yml, dependencies.yml) has a schemaVersion, a validator and a
+# generated projection. The ADR corpus had none: 37 hand-typed records plus a hand-typed index,
+# with nothing comparing them. It drifted exactly the way an ungated registry always drifts —
+# five records `Accepted` in the file and `Proposed` in the table (commit c08ebce advanced the
+# bodies and never touched the index), and seven of sixteen amendment links one-sided, so the
+# correction lived only in the row and the reader who opened the RECORD was the one misled.
+#
+# ADR-0034 line 32 lists the six places a rule gets restated. The list begins with "the ADR".
+# Its §4 made the docs and skills generated projections to kill that drift class by construction,
+# and left the ADR layer — the first item on its own list — hand-written. This is that decision,
+# applied to the layer it forgot.
+#
+# `paths:` IS deliberate here, and it is narrow: the subject is the corpus and its index, and
+# nothing else in the tree can make them disagree. (Contrast closing-keywords, whose subject is a
+# PR body and therefore has no paths filter at all.) The `schedule:` is likewise absent on purpose
+# — the corpus is a set of files in this repo, not a remote feed, so there is nothing to re-prove
+# between pushes. A record cannot go stale while nobody edits it.
+name: adr-coherence
+
+on:
+  pull_request:
+    paths:
+      - "docs/adr/**"
+      - "scripts/check-adr-coherence.py"
+      - "tests/adr-coherence/**"
+      - ".github/workflows/adr-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/adr/**"
+      - "scripts/check-adr-coherence.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: adr-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO before believing it when it says yes.
+  # The fixture's legs are the real defects this gate was written for — a status the index and the
+  # record disagree about, and a one-sided amendment link. A gate that stops catching them cannot
+  # reach the job below.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      # No pip install: the gate is stdlib-only (re, pathlib) on purpose. A check that reads
+      # markdown should not need a dependency, and a dependency is one more thing that can fail
+      # open on a runner.
+      - name: Run the adr-coherence fixture (no network)
+        run: bash tests/adr-coherence/run.sh
+
+  # Named for what it asserts, not for what it reads.
+  corpus-agrees:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Assert the index agrees with the records, and every amendment has two ends
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-adr-coherence.py 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked,
+      # and it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      # `run:` is a BLOCK scalar, not a plain one: the `: ` inside `"adr-coherence: OK"` makes a
+      # plain scalar an invalid mapping, and the workflow fails to parse at all — which is a gate
+      # that never runs, reported as no gate rather than as a red one.
+      - name: 'OK: the corpus agrees with itself'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "adr-coherence: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: the corpus contradicts itself'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### adr-coherence: the ADR corpus contradicts itself"
+            echo
+            echo 'Two shapes of finding, and the fix differs:'
+            echo
+            echo '**A status DISAGREES** between a record and its row in `docs/adr/README.md`.'
+            echo 'Neither end is authoritative — they must simply agree. Decide which is true and'
+            echo 'fix the other. (This is the c08ebce defect: five records were advanced to'
+            echo '`Accepted` in the files, the table was never touched, and for weeks the index told'
+            echo 'every reader that the records for the FS.GG.Game extraction and the FS.GG.Audio'
+            echo 'onboarding were unratified proposals.)'
+            echo
+            echo '**A ONE-SIDED LINK** — ADR-A says it amends ADR-B, and ADR-B never mentions ADR-A.'
+            echo 'Add the marker to **B**, in ADR-0021'"'"'s house form: a `**Status:**` banner *and*'
+            echo 'a dated note at the section that actually went stale. This matters more than it'
+            echo 'looks: when the correction lives only in the index row, the reader who opens the'
+            echo 'RECORD — the one doing the right thing — is exactly the one who gets misled.'
+            echo 'ADR-0015 sat for twelve days telling readers to follow a procedure ADR-0037 had'
+            echo 'already proved **cannot exist**.'
+            echo
+            echo 'See the job log for the file, the line, and which end is missing.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=adr-coherence: the corpus contradicts itself::A status disagrees, or an amendment has only one end. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the corpus could not be read'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### adr-coherence: no verdict"
+            echo
+            echo 'The gate could not read its subject — no ADR files, or zero rows parsed out of the'
+            echo 'index table (its shape changed).'
+            echo
+            echo '**An empty corpus is a broken parse, not a clean corpus.** This repo has had ADRs'
+            echo 'since 2026-06-27. If this gate ever finds none, the path or the table format moved'
+            echo 'underneath it — and a gate that read nothing and reported green would certify the'
+            echo 'whole corpus as coherent without opening a single file. That is the #266 fail-open,'
+            echo 'inside the gate written to close one. Retrying will not help — fix the wiring.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=adr-coherence: no verdict (permanent)::The gate could not read the corpus. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=adr-coherence: inconclusive::check-adr-coherence.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

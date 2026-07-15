@@ -850,10 +850,15 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   one of those rows carries `skipped=0`, because the only workers that publish are the ones whose engine
   **resolved** — and that is `.github`, the single repo that builds the engine from source. The five
   receivers, skipping every call for want of a restore, have contributed **nothing, ever**. So the fleet
-  gate is not reading a fleet; it is reading one repo and calling it the fleet, while ADR-0034's cut-over
-  criterion says *"across the **live fleet**."* **A hook on one path is a request that the path be taken.**
-  So the publish now hangs on the *shadow*, which is the only path that has, by construction, just
-  produced evidence.
+  gate was not reading a fleet; it was reading one repo and calling it the fleet, while ADR-0034's
+  cut-over criterion said *"across the **live fleet**."* **A hook on one path is a request that the path
+  be taken.** So the publish now hangs on the *shadow*, which is the only path that has, by construction,
+  just produced evidence.
+
+  That gap is **why the fleet clock is gone**: a criterion no worker in a worktree could ever satisfy is
+  not a slow gate, it is an unreachable one (#728). [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)
+  retired it and made the **defect corpus** the gate. The ledger above is still worth filling — it is how
+  a live fleet is *watched* — but nothing waits on it any more.
 
   It is **throttled** — at most one REST write per 30 minutes per machine, shared across every worker on
   it, because the hot scheduling loop may not pay the network on every call. Missing a window loses

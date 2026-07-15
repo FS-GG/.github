@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-14
+- **Affects:** `.github` (`dist/dotnet/`, `scripts/sync-build-config.sh`, `build-config-propagate.yml`), and every repo that `receives: shared-build-config` — FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance, FS.GG.Game, FS.GG.Audio, FS.GG.Templates (each commits a `.config/fsgg-build-config.sha` pin)
 - **Amends:** [ADR-0006](0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md) (the org-shared .NET build config)
 - **Issue:** [.github#592](https://github.com/FS-GG/.github/issues/592) · filed from FS.GG.SDD while working FS.GG.SDD#379
 - **Related:** [#499](https://github.com/FS-GG/.github/issues/499), [#536](https://github.com/FS-GG/.github/issues/536), [#561](https://github.com/FS-GG/.github/issues/561), [#626](https://github.com/FS-GG/.github/issues/626) (the push arm), [ADR-0032](0032-the-lock-hash-must-not-depend-on-the-machine.md)

@@ -1,8 +1,8 @@
 # ADR-0012: Dual-publish FS-GG packages to nuget.org (public) alongside the org GitHub Packages feed
 
-- **Status:** Accepted — **§6 (push authentication / admin gate) superseded by [ADR-0013](0013-trusted-publishing-oidc-for-nuget-org.md)** (2026-07-01): the nuget.org push authenticates via **Trusted Publishing (OIDC)**, not a long-lived `NUGET_ORG_API_KEY` secret; login+push live in each producer's own workflow (no cross-repo reusable workflow). §1–§5 (dual-publish, scope, byte-identical, gated ordering, listing metadata) stand.
+- **Status:** Accepted — **§6 (push authentication / admin gate) superseded by [ADR-0013](0013-trusted-publishing-oidc-for-nuget-org.md)** (2026-07-01): the nuget.org push authenticates via **Trusted Publishing (OIDC)**, not a long-lived `NUGET_ORG_API_KEY` secret; login+push live in each producer's own workflow (no cross-repo reusable workflow). **§1's "the org feed stays the coherence source of truth" is amended by [ADR-0039](0039-nuget-org-is-the-read-path.md)** (2026-07-14): the READ path moved to nuget.org (#576) — Renovate resolves every `FS.GG.*` there, and five of six receivers restore from it. §2–§5 (scope, byte-identical, gated ordering, listing metadata) stand.
 - **Date:** 2026-07-01
-- **Affects:** `.github` (registry, org provisioning), FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance (producer release workflows)
+- **Affects:** `.github` (registry, org provisioning, **and — since #624 — its own two producer workflows, which §2's scope does not yet name**), FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance (producer release workflows)
 
 ## Context
 
@@ -38,6 +38,17 @@ rename anything.
    contract-coherence gate, and the registry `package-version` fields continue to read
    from it. nuget.org is an **additional public distribution target**, not a
    replacement.
+
+   > **Amended by [ADR-0039](0039-nuget-org-is-the-read-path.md) (2026-07-14) — the READ path moved,
+   > and this paragraph is now false of Renovate.** `default.json` routes **every** `FS.GG.*` lookup
+   > to `api.nuget.org`, and `renovate.json` **removed** the GitHub Packages token outright (#576):
+   > the org feed needs a credential even to *read*, and a 401 on a Renovate datasource is not an
+   > error — it is an **empty version list**. So the bot enumerated no versions and opened no PR, and
+   > the `FS.GG.SDD.Cli` pin froze four times (#127, #263, #566, and again at 0.10.0) while the config
+   > "obviously" already had the token. Nor is nuget.org merely "additional" for consumers: only **1
+   > of 6** receivers configures the org feed, so the other five restore every `FS.GG.*` package from
+   > public nuget.org. **nuget.org is the road into the fleet.** ADR-0039 ratifies that split — read
+   > path nuget.org, publish path the org feed — and §2–§5 below are untouched by it.
 
 2. **Scope: everything currently published.** The two global tools (`FS.GG.SDD.Cli`,
    `FS.GG.Governance.Cli`), `FS.GG.Contracts`, the `FS.GG.UI.*` coherent set + the

@@ -45,6 +45,12 @@ the org **Coordination** board (Projects v2 #1).
    repo ships the F# lifecycle constitution (Rendering vs SDD) is resolved as a P0 decision
    item and reflected in P2 once settled.
 
+   > **Amendment (2026-07-14). This gate is CLOSED — it is no longer an open P0.**
+   > [ADR-0004](0004-constitution-ownership-for-lifecycle-sdd-products.md) took the decision:
+   > **SDD owns the lifecycle constitution for `lifecycle=sdd` products, shipped at
+   > `.fsgg/constitution.md`.** ADR-0004 says so in as many words — *"ADR-0002 Decision 4 is hereby
+   > resolved"* — and marks the P0 board card `Done`.
+
 5. **Versioning is hardened so the staleness bug class is structurally impossible.** Consumer
    products and composition tests commit `packages.lock.json` and restore with `--locked-mode`
    in CI, and promote `NU1603` to an error (the silent nearest-version float that broke

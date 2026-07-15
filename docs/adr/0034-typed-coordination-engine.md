@@ -1,15 +1,24 @@
 # ADR-0034: The coordination engine is a typed core; the tool is the model, and the docs are its projection
 
-- **Status:** Accepted
+- **Status:** Accepted — **§5's cut-over criterion (the three-day shadow clock) is superseded by
+  [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md)**; §1–4 stand.
 - **Date:** 2026-07-12 (proposed) · 2026-07-12 (accepted)
 - **Affects:** `.github` (authority), and every `receives: coordination-kit` repo — sdd, rendering, governance, templates, game, audio
 - **Design doc:** [docs/design/coordination-engine.md](../design/coordination-engine.md)
 - **Amends:** [0019](0019-org-repo-roster-registry-and-coordination-kit.md) (the `kit:` row shape), [0027](0027-worker-keyed-claim-lock-and-worker-channel.md) (implementation only — the CAS stands)
+- **Amended by:** [0038](0038-the-corpus-is-the-cut-over-gate.md) — the cut-over gate is the **defect
+  corpus** (`tests/fsgg-coord/cases/`, green against **both** engines), not §5's three-day shadow
+  clock, which **could never tick**. The shadow is demoted to **telemetry**. See §5.
+- **Amended by:** [0040](0040-port-the-io-layer.md) — §5's *"delete the bash implementation"* was **not
+  reachable** (the typed core reads nothing, so the write-path defects live at the impure edge the port
+  deferred). The **IO layer is ported** to F# with each write's precondition in its type, and §4.4's shim
+  preconditions are named. See §5.
 - **Contract-change under:** [0015](0015-register-the-registry-schema-as-a-governed-contract.md) — `registry/repos.yml` `schemaVersion` bump
 
 ## Context
 
-`scripts/fsgg-coord` is 4,024 lines of bash whose state model is jq regex captures over prose:
+`scripts/fsgg-coord` is 4,024 lines of bash *(as of 2026-07-12; 7,029 by the Phase 3b flip)* whose
+state model is jq regex captures over prose:
 claims are HTML comments matched with `capture("^<!--\\s*fsgg:claim\\s+worker=(?<w>[^\\s>]+)")`,
 touch-sets are a bare `Paths:` line read by an awk/grep/sed pipeline, and dependency edges are a
 free-text field — as the tool itself records, *"`Blocked by` is TEXT only because Projects v2 has
@@ -121,10 +130,11 @@ A rule then cannot land in one tier and not the others, because there are no lon
 **5. Migration is shadow-mode. Bash stays authoritative until divergence is zero.**
 
 The engine ships behind `--engine=fs`, defaulting off. Both engines run on every invocation; bash's
-answer is returned; divergence is logged. Cut-over requires **zero divergence across the live fleet
-for three consecutive days**. The 4,024 lines of bash comments are an incident log, and porting them
-into ~60 named regression tests — one per historical defect — happens **before** any production code
-is trusted.
+answer is returned; divergence is logged. **Cut-over criterion (SUPERSEDED by
+[ADR-0038](0038-the-corpus-is-the-cut-over-gate.md) — see the amendment at the end of this section):**
+~~Cut-over requires **zero divergence across the live fleet for three consecutive days**.~~ The 4,024
+lines of bash comments are an incident log, and porting them into ~60 named regression tests — one per
+historical defect — happens **before** any production code is trusted.
 
 **That criterion is a FUNCTION, not a sentence** ([#634](https://github.com/FS-GG/.github/issues/634)).
 It was neither, at first: the shadow wrote its evidence to a **disposable cache directory** on whichever
@@ -150,6 +160,35 @@ So the evidence aggregates and the criterion is computed:
 - Every condition the per-worker client already calls RED — an outcome divergence, an item only one
   engine ruled on, a batch the engine refused outright — is blocking in the fleet fold too. Counting
   only the first would let it report green over a fleet each of whose workers was printing red.
+
+> **Amendment (2026-07-14, [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md),
+> [#730](https://github.com/FS-GG/.github/issues/730),
+> [#728](https://github.com/FS-GG/.github/issues/728)). The shadow clock is retired as the cut-over
+> gate: it could never tick.** Workers run in per-item git worktrees
+> ([ADR-0027](0027-worker-keyed-claim-lock-and-worker-channel.md)) and a worktree worker resolved no
+> engine (#728) — a worker who banks no evidence can never be one of the "≥2 distinct workers" the
+> criterion requires, so the gate read *"NO VERDICT — the shadow compared nothing"* and would have gone
+> on reading it. And because `Divergence.evaluate` partitions evidence by **exact engine build**, any
+> republish restarted the window: the engine could not be improved while waiting for the clock that was
+> waiting for the engine.
+>
+> **The gate is now the defect corpus** — `tests/fsgg-coord/cases/`, one case per historical defect,
+> green against **both** `--engine=bash` and `--engine=fs`. It covers every path that has *actually
+> broken* (not whatever floated past a live fleet for three days), it needs only a checkout, and it
+> survives an engine rebuild. The shadow is **demoted to telemetry**: it still runs, still logs, still
+> partitions divergences into OUTCOME and REASON, and is still the right instrument for watching a
+> live fleet — it simply no longer decides whether the flip may happen.
+>
+> This section's other instinct was right, and is what replaced it: the ~60 named regression tests
+> **became** the corpus. Sweeping them under `--engine=fs` produced 15 failures across 8 cases, **every
+> one of which the shadow's own taxonomy classifies as REASON — i.e. as expected noise** — and three
+> were real defects the flip would have shipped: a prose blocker that vanished into an empty `jq
+> capture`, so an item bash had just called BLOCKED arrived at the engine UNBLOCKED (epic #266's exact
+> shape, arriving through the one door built to prove #266 was over); a candidate whose unreadable body
+> made it **silently cease to exist** rather than be passed over with a reason; and a dropped lease
+> window and holder, which collapsed *"wait out a window, or go talk to a worker"* and *"a batch member
+> frees at the end of this run"* into one true, useless sentence. A gate that cannot fail on a real
+> defect is not a gate. Read the struck criterion above as history.
 
 ## Consequences
 

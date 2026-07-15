@@ -1,9 +1,20 @@
 # ADR-0027: The parallel-work lock is keyed on the worker, not the account — plus identity, visibility, scheduling, and a channel
 
-- **Status:** Accepted
+- **Status:** Accepted — **§6's schedulability evaluation order is amended by
+  [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md) §2**; the comment-order CAS (§2) and everything
+  else here stand.
 - **Date:** 2026-07-09
 - **Affects:** all FS-GG repos (amends [ADR-0021](0021-parallel-intra-repo-work-claim-worktree-touchset.md) §1; `.github` owns the protocol)
 - **Fixes:** [FS-GG/.github#255](https://github.com/FS-GG/.github/issues/255)
+- **Amended by:**
+  - [ADR-0034](0034-typed-coordination-engine.md) — **implementation only.** The coordination domain
+    moves to a typed F# core (`FS.GG.Coord.Core`) and `fsgg-coord` becomes a shim over a packaged
+    `dotnet tool`. The **comment-order CAS, the REST-hosted lock, and the `fsgg:claim` marker format
+    of §2 are preserved unchanged** — ADR-0034 says so in as many words, and rejects a git-ref CAS for
+    replacing a mechanism that is already correct. The bugs were in worker *identity* and *fail-open
+    scanning*, not in the lock.
+  - [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md) §2 — **blockers are now checked BEFORE the
+    touch-set**, which changes how §6's `batch`/`take` evaluate schedulability. See §6.
 
 ## Context
 
@@ -151,6 +162,28 @@ read the lock rather than the board.
    candidate overlapping held work is never scheduled. Items with no `Paths:` are unschedulable and
    are **reported**, never silently dropped. `take` picks and claims in one step and **re-schedules on
    a lost race**, where ADR-0021's `next || exit 0; claim || exit 0` sent a losing worker home.
+
+   > **Amendment (2026-07-14, [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md) §2,
+   > [#730](https://github.com/FS-GG/.github/issues/730)). `batch`/`take` check BLOCKERS BEFORE the
+   > touch-set.** Bash always did; the typed core checked the touch-set first; both were right about
+   > the item, and only one can be the sentence a worker reads. Bash's order wins, on semantics and on
+   > cost. *Semantics:* a blocked item cannot be started whatever its touch-set says, so telling a
+   > worker *"no `Paths:` declared"* about an item they still could not start afterwards sends them to
+   > fix the wrong thing and come back to the same queue. *Cost:* blockers are **board facts** the scan
+   > already holds and are free, while a touch-set lives in the issue **body** — one REST read per item
+   > — so touch-set-first would oblige the client to fetch a body for every blocked item on the board,
+   > paying the budget that dies first ([#418](https://github.com/FS-GG/.github/issues/418)) to answer
+   > a question the board had already answered.
+   >
+   > Two consequences for the text above. The *reason* reported for a blocked-and-pathless item is now
+   > `BlockedBy`, not "no `Paths:` declared". And a body that **cannot be read** is `Unreadable`, not
+   > absent: such a candidate used to be counted and silently withheld — harmless while bash owned the
+   > answer, but once the engine owns it the item ceases to exist, offered to nobody and **passed over
+   > with no reason**. It now travels as `Undetermined` — not startable, and *said so* — and because
+   > blockers are checked first, a blocked item still decides correctly with no body at all, so one
+   > unreadable issue cannot starve the board. The rules above are otherwise unchanged: a claimed
+   > item's touch-set is still **reserved**, and items with no `Paths:` are still **reported**, never
+   > silently dropped.
 
 7. **`widen` closes ADR-0021's loop.** It rewrites the `Paths:` line, re-checks against every live
    claim, and — the part a worker cannot do alone — **notifies the workers it now collides with**, on
