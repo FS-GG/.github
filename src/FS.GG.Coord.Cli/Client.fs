@@ -304,6 +304,47 @@ module Client =
 
     // ---- the lock lifecycle ----------------------------------------------------------------------------
 
+    /// #516 — at most ONE item per worker. The CAS is keyed on the ITEM, so it guarantees at most one
+    /// worker per item; NOTHING guaranteed the converse, and the cost model assumes it. A second,
+    /// unattended claim RESERVES A TOUCH-SET on files nobody is editing for the whole lease, and `batch`
+    /// then refuses every item that overlaps it. This scans the TARGET repo's in-flight items for a live
+    /// claim held by THIS worker on a DIFFERENT item, returning the ones they already hold.
+    ///
+    /// It rides the 90s scan cache (`Cache.Scheduling`), exactly as bash's guard rides `CACHED=1`: under
+    /// `take` the board scan is already paid, and a bare `claim` rides the window like `next` — paying a
+    /// fresh board scan per claim is the burn #418 exists to stop. A stale-by-90s set cannot cause a
+    /// double-hold: it can only miss OUR OWN very recent second claim, and the item's own CAS still holds.
+    /// A held item's markers are read fresh (`Reads.markers` — the lock is never cached), and `winner`
+    /// applies the lease, so a lapsed claim of ours does not count.
+    let private heldElsewhere (ctx: Context) (leaseMinutes: int) (workerId: string) (ref: Ref) =
+        match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+        | Error e -> Error e
+        | Ok board ->
+            match Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number with
+            | Error e -> Error e
+            | Ok rows ->
+                let inFlight =
+                    rows
+                    |> List.filter (fun r ->
+                        not r.IsPullRequest
+                        && r.Status = InProgress
+                        && r.Ref.Number <> ref.Number
+                        && String.Equals(r.Ref.Repo, ref.Repo, StringComparison.OrdinalIgnoreCase)
+                        && String.Equals(r.Ref.Owner, ref.Owner, StringComparison.OrdinalIgnoreCase))
+
+                let rec scan acc rows =
+                    match rows with
+                    | [] -> Ok(List.rev acc)
+                    | (row: Scan.Row) :: rest ->
+                        match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                        | Error e -> Error e
+                        | Ok markers ->
+                            match Reads.winner leaseMinutes markers with
+                            | Some m when m.Worker.Value = workerId -> scan (row.Ref.Short :: acc) rest
+                            | _ -> scan acc rest
+
+                scan [] inFlight
+
     let claim (ctx: Context) (opts: Options) : int =
         match oneArg opts "claim: an issue ref", worker opts with
         | Error c, _
@@ -316,40 +357,58 @@ module Client =
             | Ok ref ->
                 let session = w.Session |> Option.map SessionId
 
-                // The claim records the column it OVERWRITES, so `release` can restore it (#481). Read the
-                // current board Status for this item first — from the fresh reconciler scan is overkill for
-                // one item, so read it via the board scan's own row when available; here we pass None and
-                // let the CAS record what the marker's own prev carries on a re-claim.
-                match Writes.claim ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref None with
+                // #516: refuse a SECOND live hold before the CAS. `--force` is the deliberate override — a
+                // rule with no escape hatch gets worked around, not obeyed. Re-claiming the SAME item is not
+                // caught (the scan excludes `ref` itself), so `take` retries stay idempotent.
+                let heldCheck =
+                    if opts.Force then Ok [] else heldElsewhere ctx opts.LeaseMinutes w.Id ref
+
+                match heldCheck with
                 | Error e -> fail e
-                | Ok(Writes.Won held) ->
-                    // Move the board column to In progress — the ONE board write, through the queue-aware
-                    // path so an exhausted budget defers rather than drops (#510).
-                    match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
-                    | Error e ->
-                        // The LOCK is held (the marker is posted); a board-write failure does not un-hold
-                        // it. Report the claim, note the board.
-                        printfn "claimed %s by worker %s" ref.Short w.Id
-                        eprint $"fsgg-coord-engine: note — the lock is held, but the board column could not be moved: %s{Errors.explain e}"
-                        ExitGreen
-                    | Ok board ->
-                        match
-                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
-                        with
-                        | Ok _
-                        | Error _ ->
-                            ignore held
+                | Ok(_ :: _ as heldRefs) ->
+                    let names = String.Join(", ", heldRefs)
+
+                    eprint
+                        $"fsgg-coord-engine: worker '%s{w.Id}' ALREADY HOLDS %s{names}. A claim reserves a touch-set, so a second one locks files nobody is editing for the rest of the lease (%d{opts.LeaseMinutes}m) — and `batch` will refuse every item that overlaps it (#516)."
+
+                    eprint "  Finish or drop the item you hold:  fsgg-coord-engine done <issue> --flip   (or: release <issue>)"
+                    eprint "  If you genuinely mean to hold two, say so:  fsgg-coord-engine claim <issue> --force"
+                    ExitRed
+                | Ok [] ->
+                    // The claim records the column it OVERWRITES, so `release` can restore it (#481). Read
+                    // the current board Status for this item first — from the fresh reconciler scan is
+                    // overkill for one item, so we pass None and let the CAS record what the marker's own
+                    // prev carries on a re-claim.
+                    match Writes.claim ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref None with
+                    | Error e -> fail e
+                    | Ok(Writes.Won held) ->
+                        // Move the board column to In progress — the ONE board write, through the
+                        // queue-aware path so an exhausted budget defers rather than drops (#510).
+                        match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+                        | Error e ->
+                            // The LOCK is held (the marker is posted); a board-write failure does not
+                            // un-hold it. Report the claim, note the board.
                             printfn "claimed %s by worker %s" ref.Short w.Id
+                            eprint $"fsgg-coord-engine: note — the lock is held, but the board column could not be moved: %s{Errors.explain e}"
                             ExitGreen
-                | Ok(Writes.Lost holder) ->
-                    eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
-                    ExitRed
-                | Ok(Writes.Undecided reason) ->
-                    eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
-                    ExitRed
-                | Ok Writes.BlockedByUnparseableMarker ->
-                    eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
-                    ExitRed
+                        | Ok board ->
+                            match
+                                Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                            with
+                            | Ok _
+                            | Error _ ->
+                                ignore held
+                                printfn "claimed %s by worker %s" ref.Short w.Id
+                                ExitGreen
+                    | Ok(Writes.Lost holder) ->
+                        eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
+                        ExitRed
+                    | Ok(Writes.Undecided reason) ->
+                        eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
+                        ExitRed
+                    | Ok Writes.BlockedByUnparseableMarker ->
+                        eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
+                        ExitRed
 
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with

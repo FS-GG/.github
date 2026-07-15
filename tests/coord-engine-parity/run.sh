@@ -358,6 +358,59 @@ else
 fi
 kill "$PW5" 2>/dev/null; rm -f "$PW5_OUT"
 
+# ---- ONE ITEM PER WORKER (case 33): #516 — a second live hold is refused ---------------------------
+#
+# The CAS is keyed on the ITEM (one worker per item); nothing guarded the WORKER (one item per worker).
+# A second claim reserves a touch-set on files nobody is editing, and `batch` then refuses everything
+# overlapping it. Bash carried this guard; the engine's `claim` did not (the CAS ran with no scan of the
+# worker's other holds) — the ADR-0040 "half that was never ported." This is the slice that closes it.
+# Each mutating leg gets a FRESH server (a claim posts a marker; the state must not leak between legs).
+hclaim() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$1" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" claim "${@:2}"; }
+
+# 1. godwit-b49 already holds #870; claiming #871 must REFUSE, name #870, and cite the touch-set.
+H1_OUT="$(mktemp)"; python3 "$HERE/holds_server.py" >"$H1_OUT" 2>/dev/null & HP1=$!
+hp=""; for _ in $(seq 1 50); do hp="$(head -n1 "$H1_OUT" 2>/dev/null)"; [ -n "$hp" ] && break; sleep 0.1; done
+rm -f "$H1_OUT"
+if [ -n "$hp" ]; then
+  r1="$(hclaim "$hp" FS.GG.SDD#871 --worker godwit-b49 2>&1)"; rc1=$?
+  [ "$rc1" -ne 0 ] \
+    && ok "#516: a worker who already holds an item cannot silently claim a second (fails, non-zero)" \
+    || bad "#516: a second claim must be refused" "rc=$rc1: $r1"
+  printf '%s' "$r1" | grep -q 'FS.GG.SDD#870' \
+    && ok "#516: ...and the refusal NAMES the item they already hold (#870)" \
+    || bad "#516: refusal names the held item" "$r1"
+  printf '%s' "$r1" | grep -qi 'reserves a touch-set' \
+    && ok "#516: ...and says WHY it is not merely untidy (the touch-set stays reserved)" \
+    || bad "#516: refusal cites the reserved touch-set" "$r1"
+  printf '%s' "$r1" | grep -qi 'claimed FS.GG.SDD#871' \
+    && bad "#516: ...and the second item must NOT be claimed" "$r1" \
+    || ok "#516: ...and the second item is not claimed (refused before the write)"
+  # 2. --force is the deliberate override — the same server, #871 still free.
+  r2="$(hclaim "$hp" FS.GG.SDD#871 --worker godwit-b49 --force 2>&1)"
+  printf '%s' "$r2" | grep -q 'claimed FS.GG.SDD#871' \
+    && ok "#516: ...but --force holds two deliberately (a rule with no escape hatch gets worked around)" \
+    || bad "#516: --force must override the guard" "$r2"
+  kill "$HP1" 2>/dev/null
+else
+  bad "one-item-per-worker fixture bound a port"
+fi
+
+# 3. A DIFFERENT worker is unaffected — the rule is one item per WORKER, not one per repo. FRESH server.
+H2_OUT="$(mktemp)"; python3 "$HERE/holds_server.py" >"$H2_OUT" 2>/dev/null & HP2=$!
+hp2=""; for _ in $(seq 1 50); do hp2="$(head -n1 "$H2_OUT" 2>/dev/null)"; [ -n "$hp2" ] && break; sleep 0.1; done
+rm -f "$H2_OUT"
+if [ -n "$hp2" ]; then
+  r3="$(hclaim "$hp2" FS.GG.SDD#871 --worker stoat-c71 2>&1)"
+  if printf '%s' "$r3" | grep -q 'claimed FS.GG.SDD#871' && ! printf '%s' "$r3" | grep -qi 'ALREADY HOLDS'; then
+    ok "#516: a DIFFERENT worker claims #871 freely — the guard is one item per WORKER, not per repo"
+  else
+    bad "#516: a different worker must not be blocked by godwit-b49's hold" "$r3"
+  fi
+  kill "$HP2" 2>/dev/null
+else
+  bad "one-item-per-worker fixture (2) bound a port"
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
