@@ -97,6 +97,56 @@ else
   bad "take parity" "rc=$tkrc: $tk"
 fi
 
+# ---- FAIL-CLOSED (case 42): #461 — an unreadable LOCK is never an empty lock ----------------------
+#
+# #266's thesis at the sharpest point: a claim-marker read that comes back as non-JSON bytes (a
+# truncated page, a proxy 502 rendered as text) must be a FAILED READ, not an empty claim set. A
+# scheduler that folds it into "nothing is claimed" hands a live item to a second worker — the
+# double-book. The malformed read is served on #42, which finch-a3f DEMONSTRABLY holds, so "nothing
+# claimed" is a provably WRONG answer, not a vacuous one. Same pw board, one faulted read.
+MAL_OUT="$(mktemp)"
+FSGG_PARITY_MALFORMED_COMMENTS=42 python3 "$HERE/pw_server.py" >"$MAL_OUT" 2>/dev/null &
+MAL=$!
+MALPORT=""; for _ in $(seq 1 50); do MALPORT="$(head -n1 "$MAL_OUT" 2>/dev/null)"; [ -n "$MALPORT" ] && break; sleep 0.1; done
+if [ -n "$MALPORT" ]; then
+  malenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$MALPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  # `who` must not answer off a scan that did not succeed.
+  who461="$(malenv who --repo FS.GG.SDD 2>&1)"; rcw=$?
+  [ "$rcw" -ne 0 ] \
+    && ok "#461: who over an unreadable claim marker FAILS CLOSED (non-zero)" \
+    || bad "#461: who must fail closed on a malformed marker read" "rc=$rcw: $who461"
+  case "$who461" in
+    *"nothing is in flight"*) bad "#461: who must NOT report 'nothing is in flight' off a failed scan" "$who461" ;;
+    *) ok "#461: ...and does NOT report 'nothing is in flight' — a failed read is not an empty one" ;;
+  esac
+  printf '%s' "$who461" | grep -qi 'malformed\|not JSON\|FAILED READ' \
+    && ok "#461: ...and NAMES the unreadable read, rather than swallowing it" \
+    || bad "#461: who must name the failed read" "$who461"
+  # `take` must not schedule/claim off a claim set it could not read — that is the double-book.
+  take461="$(malenv take --repo FS.GG.SDD --worker kite-461 2>&1)"; rct=$?
+  [ "$rct" -ne 0 ] \
+    && ok "#461: take REFUSES to schedule off an unreadable claim set (non-zero)" \
+    || bad "#461: take must fail closed on a malformed marker read" "rc=$rct: $take461"
+  case "$take461" in
+    *"claimed "*) bad "#461: ...and claims NOTHING — no double-book" "$take461" ;;
+    *) ok "#461: ...and claims NOTHING — no double-book" ;;
+  esac
+else
+  bad "malformed-marker fixture bound a port"
+fi
+kill "$MAL" 2>/dev/null; rm -f "$MAL_OUT"
+
+# The GUARD MUST NOT FIRE ON A LEGITIMATE EMPTY SET (#461's positive control): a SUCCESSFUL scan that
+# found no claims is a valid answer, and must still report an empty set — otherwise the fix is just a
+# different fail-closed bug, refusing to work on a healthy, idle repo. FS.GG.Rendering has no items on
+# the pw board, so its scan succeeds and legitimately finds nothing.
+okwho="$("$ENGINE" who --repo FS.GG.Rendering 2>&1)"; rcok=$?
+if [ "$rcok" -eq 0 ] && printf '%s' "$okwho" | grep -qi 'nothing is in flight'; then
+  ok "#461: a SUCCESSFUL scan with no claims still reports an empty set (the guard does not over-fire)"
+else
+  bad "#461: a healthy empty scan must report 'nothing is in flight', not fail" "rc=$rcok: $okwho"
+fi
+
 # ---- BLOCKED (case 46): the #476 blocker rule, on its own board ------------------------------------
 BLK_OUT="$(mktemp)"
 python3 "$HERE/blocked_server.py" >"$BLK_OUT" 2>/dev/null &
