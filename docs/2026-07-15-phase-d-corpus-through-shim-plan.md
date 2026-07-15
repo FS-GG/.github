@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **21 full + 3 partial of 27 corpus cases** (~267 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **22 full + 2 partial of 27 corpus cases** (~276 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -23,7 +23,7 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~267 assertions across **21 of 27 corpus cases**, 20 fixture
+`tests/coord-engine-parity/` harness (~276 assertions across **22 of 27 corpus cases**, 21 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
@@ -119,18 +119,17 @@ fail-closed assertions re-expressed at the HTTP layer.
 - **Exit:** the corpus is green driving the engine (through the shim) locally, with call counts intact,
   and `50-shadow-engine` / `51-fs-flip` still green (bash still present, still agreeing).
 
-**Progress (as of the `#342/#558/#543 done provenance` slice, 2026-07-15).** The harness is grown one defect/case
+**Progress (as of the `#353 widen collision-notify` slice, 2026-07-15).** The harness is grown one defect/case
 at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
-`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **19 of 27 cases fully covered,
-plus 3 partial (13, 24, 34)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
+`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **20 of 27 cases fully covered,
+plus 2 partial (13, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
 which are the differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 32, 33, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+| ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — they need `reap` the engine lacks (see the remaining table) |
-| ◑ | 34 (`overlap` command, #353) | the read-only `overlap <ref> --active` / `overlap <a> <b>` repo-scoped collision diagnostic (#809) — a same-named token in another repo is not a collision, a genuine same-repo overlap still is; `widen`'s collision-DETECT-and-notify half deferred (34-remainder, needs a notify write) |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -149,17 +148,16 @@ repo's issue → SKIP naming the other repo, no verdict across the boundary). Th
 bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
 EX_RATE-vs-checkout failure modes are structurally absent).
 
-**Remaining (8 full + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
+**Remaining (7 full + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
 
 | case | what it needs | class |
 |---|---|---|
 | 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices) | new `issues`/`reap` commands |
-| 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are now DONE, and `overlap` shipped (#809) | needs `reap` the engine lacks (larger) |
+| 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are now DONE, and both `overlap` (#809) and `widen`'s notify half (#353) shipped | needs `reap` the engine lacks (larger) |
 | 25 (offboard-claims) | paginated open-issue scan for `who` (off-board markers) + starved `batch` prose | port gap (larger) |
 | 26 (expired-lease) | `reap` / expired-lease-vs-open-PR (#581) | new `reap` command |
 | 30 (pr-existence-697) | `who`/`adopt` land-the-finished-PR path (#697) | new `adopt` command |
 | 31 (superseded-run-720) | `adopt`/`landable` superseded-run scoring (#720) | new `landable`/`adopt` command |
-| 34-remainder | `widen`'s collision-DETECT-and-notify half (#353) — after widening a held claim, re-scan the SAME repo's live claims, and if the new touch-set now collides, notify that worker + exit non-zero. The read-only `overlap` command shipped (#809); this leg needs a notify write | port gap — the `overlap` collision computation is now reusable |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
 Case **44 is now FULL** (#419): `whoami --mint` is one eval-able line, CSPRNG-unique per call, and
@@ -225,21 +223,32 @@ names the merge commit (`merged PR #92 @ 09c836e`). New `doneprov_server.py`; 13
 DoneFactsTests. Disposed on the record (ADR-0040 §5): bash exits 1 on a red NOT-DONE, the engine's certified
 Red exit is `ExitRed=3` — re-expressed as the property (a refused stamp exits non-zero).
 
-Case **34 is now PARTIAL** (#809): the `overlap` command lands (#353). `Paths:` tokens are repo-relative, so
-`TouchSet.conflicts` is only meaningful WITHIN a repo — bash's `overlap` compared an item's tokens against
-every OTHER repo's live claims, so `scripts/fsgg-coord` in one repo "collided" with the same string in
-another (two files, two repositories). The engine had the repo-scoped conflict primitive already (case 35)
-but no command surface; this ports it, read-only: `overlap <ref> --active` (the item vs its own repo's live
-claims — a cross-repo namesake excluded, its holder never named) and `overlap <a> <b>` (DISJOINT by
-construction across a repo boundary, else `TouchSet.conflicts`). A real overlap exits `ExitContended=6` and
-names the colliding item + holder + shared token stems. New `Options.Active`/`--active`, `Overlap` command,
-`overlap_server.py`; 12 parity + 3 OptionsTests. **Deferred on the record (34-remainder):** `widen`'s
-collision-DETECT-and-notify half (a notify write on the colliding item). Disposed (ADR-0040 §5): the
-overlap exit is `ExitContended=6`, bash's code re-expressed as the property (a real overlap exits non-zero).
+Case **34 is now FULL** (#809 then this slice): the `overlap` command landed first (#353). `Paths:` tokens
+are repo-relative, so `TouchSet.conflicts` is only meaningful WITHIN a repo — bash's `overlap` compared an
+item's tokens against every OTHER repo's live claims, so `scripts/fsgg-coord` in one repo "collided" with the
+same string in another (two files, two repositories). The engine had the repo-scoped conflict primitive
+already (case 35) but no command surface; #809 ported it read-only: `overlap <ref> --active` (the item vs its
+own repo's live claims — a cross-repo namesake excluded, its holder never named) and `overlap <a> <b>`
+(DISJOINT by construction across a repo boundary, else `TouchSet.conflicts`). A real overlap exits
+`ExitContended=6` and names the colliding item + holder + shared token stems.
+
+This slice then closed the **`widen` collision-DETECT-and-NOTIFY half** — ADR-0021's "re-declare AND
+re-check overlap before continuing", and the part a worker cannot do alone. After the widen LANDS, the engine
+re-checks the NEW touch-set (the rewritten body's, never the old) against the live claims in THIS item's repo
+and NOTIFIES each worker it now collides with, on their own issue: a cross-repo namesake is a phantom (#353)
+and its innocent holder is left uncommented, while a genuine same-repo neighbour is named (`now collides with
+FS.GG.SDD#403`), notified (`notified worker sdd-sib on FS.GG.SDD#403` — a `Writes.say` comment), and the
+widen exits non-zero. The #353 collision scan is **factored out of `overlap --active` as a shared
+`activeCollisions`** and reused verbatim by `widen`, so the repo scope cannot drift between the two surfaces
+(#485's one-home shape). New `widennotify_server.py` (write-capable — it records the PATCH and counts the
+notify POST per issue); 9 parity assertions. Disposed on the record (ADR-0040 §5): the engine's `widen`
+requires the widener to HOLD the lock (#706) — bash's does not, so the fixture's #401 carries a claim the
+corpus omits (an engine strengthening, not a change to the property under test); and the collision exit is
+`ExitContended=6`, bash's literal 1 re-expressed as the property (a real collision exits non-zero).
 
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
 into **new commands** (`reap`, `adopt`/`landable`, `issues`) and **larger port gaps** (paginated
-off-board `who`, `widen`'s notify half). The verify-paths repo-boundary divergences (case 23's
+off-board `who`). The verify-paths repo-boundary divergences (case 23's
 SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
 the call-counting transformation is demonstrated end-to-end by case 10.
 
@@ -294,11 +303,13 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 21 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~267
+      **In progress: 22 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~276
       assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
-      landed; case 34's read-only `overlap` command (#353 repo-scoped collision) landed too. Ten engine
+      landed; case 34 is now FULL too — the read-only `overlap` command (#353 repo-scoped collision) plus
+      `widen`'s collision-DETECT-and-notify half (re-check the new touch-set against the same repo's live
+      claims and notify each colliding worker, reusing the shared `activeCollisions` scan). Ten engine
       defects the port was *for* closed along the way, plus the
       `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
       together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419

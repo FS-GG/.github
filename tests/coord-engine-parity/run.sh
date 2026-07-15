@@ -2114,6 +2114,62 @@ if [ -z "$OV_PORT" ]; then bad "overlap fixture bound a port"; else
   kill "$OV_SRV" 2>/dev/null
 fi
 
+# case 34-remainder (xrepo-touchset-353) — `widen`'s collision-DETECT-and-NOTIFY half (#353). The
+# read-only `overlap` command (#809) ported the repo-scoped collision COMPUTATION; this is the write half
+# ADR-0021 named ("re-declare AND re-check overlap before continuing") and the part a worker cannot do
+# alone: after the widen LANDS, re-check the NEW touch-set against the live claims in THIS item's repo, and
+# NOTIFY each worker it now collides with, on their own issue. The engine reuses the exact #353 collision
+# scan `overlap --active` runs (`activeCollisions`), so scoping cannot drift between the two surfaces.
+#
+# DISPOSED ON THE RECORD (ADR-0040 §5):
+#   - The engine's `widen` requires the widener to HOLD the lock (#706); bash's does not. So #401 carries a
+#     kite-t01 claim the corpus fixture omits — an engine STRENGTHENING, not a change to the property under
+#     test (verifyHeld's fail-closed refusal is proven on its own elsewhere).
+#   - The OVERLAP exit is the engine's ExitContended=6; the corpus's `assert_fails` is the PROPERTY (a real
+#     collision exits NON-ZERO), not bash's literal 1.
+WN_OUT="$(mktemp)"; python3 "$HERE/widennotify_server.py" >"$WN_OUT" 2>/dev/null & WN_SRV=$!; WN_PORT=""
+for _ in $(seq 1 50); do WN_PORT="$(head -n1 "$WN_OUT" 2>/dev/null)"; [ -n "$WN_PORT" ] && break; sleep 0.1; done
+rm -f "$WN_OUT"
+if [ -z "$WN_PORT" ]; then bad "widen-notify fixture bound a port"; else
+  wn() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$WN_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" widen "$@" 2>&1; }
+
+  # CROSS-REPO: widening #401 to the bare token `scripts/fsgg-coord` names a file in THIS repo; the same
+  # string on Rendering#402 is a different file, so it is DISJOINT — the widen lands, and the innocent
+  # cross-repo holder is NEVER pestered. (Run first, exactly as the corpus does, before the widen below.)
+  wx="$(wn 'FS.GG.SDD#401' --worker kite-t01 --paths 'scripts/fsgg-coord')"; wxrc=$?
+  printf '%s' "$wx" | grep -q 'widened FS.GG.SDD#401' \
+    && ok "case34: widen lands the re-declaration (#353)" || bad "case34: widen should land" "$wx"
+  printf '%s' "$wx" | grep -q 'DISJOINT' \
+    && ok "case34: widen — a same-named path in ANOTHER repo is not a collision (#353)" || bad "case34: 401 cross-repo widen DISJOINT" "$wx"
+  case "$wx" in
+    *OVERLAP*|*Rendering*|*402*|*render-x1*) bad "case34: widen must never invent a cross-repo overlap (#353)" "$wx" ;;
+    *) ok "case34: widen names no cross-repo holder (#353)" ;;
+  esac
+  [ "$wxrc" -eq 0 ] \
+    && ok "case34: widen exits 0 when the only namesake claim is in another repo (#353)" || bad "case34: cross-repo widen exit 0" "rc=$wxrc"
+  # ...and it left the innocent cross-repo bystander UNCOMMENTED (the corpus's before/after count check).
+  [ "$(posts_on "$WN_PORT" | jq -r '."402" // 0')" = "0" ] \
+    && ok "case34: widen leaves the cross-repo bystander #402 uncommented (#353)" || bad "case34: #402 should have no notify" "$(posts_on "$WN_PORT")"
+
+  # POSITIVE CONTROL — a REAL same-repo overlap is STILL detected: widen #401 to `src/Scene/**`, which #403
+  # (held by sdd-sib) already declares. The engine names the collision, NOTIFIES sdd-sib on #403, and exits
+  # non-zero. Scoping narrowed the live set, not the test.
+  wc="$(wn 'FS.GG.SDD#401' --worker kite-t01 --paths 'src/Scene/**')"; wcrc=$?
+  printf '%s' "$wc" | grep -q 'now collides with FS.GG.SDD#403' \
+    && ok "case34: widen — a genuine SAME-repo overlap is STILL detected, naming #403 (#353)" || bad "case34: same-repo widen detects #403" "$wc"
+  printf '%s' "$wc" | grep -q 'notified worker sdd-sib on FS.GG.SDD#403' \
+    && ok "case34: ...and NOTIFIES the same-repo worker sdd-sib on their own issue (#353)" || bad "case34: notify sdd-sib on #403" "$wc"
+  [ "$wcrc" -ne 0 ] \
+    && ok "case34: ...and a real same-repo collision exits NON-ZERO (engine ExitContended=6; bash's 1 disposed)" || bad "case34: same-repo widen non-zero" "rc=$wcrc"
+  # ...and the notify actually landed as ONE comment on #403 (the write half, counted at the HTTP layer).
+  [ "$(posts_on "$WN_PORT" | jq -r '."403" // 0')" = "1" ] \
+    && ok "case34: the notify lands as exactly one comment on #403 (#353)" || bad "case34: #403 should get one notify" "$(posts_on "$WN_PORT")"
+
+  kill "$WN_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
