@@ -1223,8 +1223,6 @@ module Client =
                 transport :> IDisposable
             )
 
-    /// Run an IO command. Every one goes through here so the token check, the transport lifetime, and the
-    /// defect boundary are in one place.
     // ---- #480: the repo a WORKER command scopes to — the one you are STANDING IN --------------------
 
     /// resolve_repo (bash): a `--repo` value is a registry short-id (`sdd`), an `owner/repo`, or a literal
@@ -1297,6 +1295,8 @@ module Client =
         | Some r -> Some(resolveRepo r)
         | None -> gitRemoteRepo () |> Option.map resolveRepo
 
+    /// Run an IO command. Every one goes through here so the token check, the transport lifetime, and the
+    /// defect boundary are in one place.
     let run (opts: Options) : int =
         // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
         // reconciler stays org-wide. `take` ACTS — it claims an item and prints a worktree command against
