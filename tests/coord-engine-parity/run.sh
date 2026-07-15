@@ -131,6 +131,19 @@ if [ -n "$MALPORT" ]; then
     *"claimed "*) bad "#461: ...and claims NOTHING — no double-book" "$take461" ;;
     *) ok "#461: ...and claims NOTHING — no double-book" ;;
   esac
+  # #584: #461's fix guarded the CANDIDATE read; the sibling defect was the IN-FLIGHT claim read one
+  # variable over, where a transient failure made a LIVE claim INVISIBLE and the scheduler handed out an
+  # item overlapping it (the double-book with no marker to see). In the engine there is no missed call
+  # site: a marker read is a typed `Result`, so a failure is `Error` everywhere, never an empty set. #42
+  # is the in-flight HOLDER of src/Audio here, and its marker read is the faulted one — `batch` must
+  # refuse rather than schedule #71 (which overlaps #42) off a claim set it could not read.
+  b584j="$(malenv batch --repo FS.GG.SDD -n 9 --json 2>/dev/null)"; rcb=$?
+  [ "$rcb" -ne 0 ] \
+    && ok "#584: batch FAILS CLOSED on a faulted IN-FLIGHT marker read (not just the candidate read)" \
+    || bad "#584: batch must fail closed when a live claim's marker is unreadable" "rc=$rcb: $b584j"
+  printf '%s' "$b584j" | grep -q 'FS.GG.SDD#71' \
+    && bad "#584: a candidate overlapping the unreadable claim must NOT be offered (the fail-open double-book)" "$b584j" \
+    || ok "#584: ...and #71 (which overlaps the unreadable in-flight claim) is not offered — no invisible-claim double-book"
 else
   bad "malformed-marker fixture bound a port"
 fi
