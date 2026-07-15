@@ -479,6 +479,121 @@ module Reads =
 
                     Ok ids
 
+    // ---- the sub-issue graph, with state + total (lint / rollup) -----------------------------------
+
+    type SubIssue = { Ref: string; Open: bool }
+    type SubIssueSet = { Total: int; Children: SubIssue list }
+
+    [<Literal>]
+    let private SubIssuesDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { subIssues(first: 100) { totalCount nodes { number state repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
+
+    let subIssues
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<SubIssueSet> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} sub-issue graph"
+
+        let request =
+            { Method = "POST"
+              Path = "graphql"
+              Query = []
+              Body =
+                Transport.Query(
+                    SubIssuesDoc,
+                    [ "owner", Transport.VString owner
+                      "repo", Transport.VString repo
+                      "number", Transport.VNumber(double number) ]
+                )
+              Budget = GraphQl
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                try
+                    let subIssuesNode =
+                        doc.RootElement
+                            .GetProperty("data")
+                            .GetProperty("repository")
+                            .GetProperty("issue")
+                            .GetProperty("subIssues")
+
+                    let total = subIssuesNode.GetProperty("totalCount").GetInt32()
+
+                    let children =
+                        subIssuesNode.GetProperty("nodes").EnumerateArray()
+                        |> Seq.choose (fun n ->
+                            let nwo =
+                                match n.TryGetProperty "repository" with
+                                | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
+                                | _ -> None
+
+                            let num =
+                                match n.TryGetProperty "number" with
+                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                | _ -> None
+
+                            let isOpen =
+                                match n.TryGetProperty "state" with
+                                // GraphQL issue state is upper-case OPEN/CLOSED. Anything that is not
+                                // exactly CLOSED is treated as still open — the conservative direction, so a
+                                // rollup never flips over a child it could not read as closed.
+                                | true, s when s.ValueKind = JsonValueKind.String -> s.GetString() <> "CLOSED"
+                                | _ -> true
+
+                            match nwo, num with
+                            | Some nwo, Some num -> Some { Ref = $"%s{nwo}#%d{num}"; Open = isOpen }
+                            | _ -> None)
+                        |> List.ofSeq
+
+                    Ok { Total = total; Children = children }
+                with
+                | :? System.Collections.Generic.KeyNotFoundException
+                | :? System.NullReferenceException ->
+                    Error(Malformed(subject, "the sub-issue graph response is missing `repository.issue.subIssues`"))
+
+    let refIsPullRequest
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<bool> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} (pull-request probe)"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                // The issues API returns a `pull_request` OBJECT iff the number is a PR. Its ABSENCE (or
+                // null) is a plain issue.
+                match doc.RootElement.TryGetProperty "pull_request" with
+                | true, pr -> Ok(pr.ValueKind = JsonValueKind.Object)
+                | _ -> Ok false
+
     // ---- the meter --------------------------------------------------------------------------------
 
     let rateLimit (transport: IGitHubTransport) : IoResult<RateLimitSnapshot> =

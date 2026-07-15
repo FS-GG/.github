@@ -29,6 +29,8 @@
     <Compile Include="Types.fs" />
     <Compile Include="TouchSet.fsi" />
     <Compile Include="TouchSet.fs" />
+    <Compile Include="EpicBody.fsi" />
+    <Compile Include="EpicBody.fs" />
     <Compile Include="Blockers.fsi" />
     <Compile Include="Blockers.fs" />
     <Compile Include="Schedulability.fsi" />
