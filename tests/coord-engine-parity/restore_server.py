@@ -15,9 +15,11 @@ Env, all optional (each parity leg spawns a fresh server):
                               board with NO Status set (`fieldValueByName` null).
   FSGG_PARITY_FAIL_STATUS=1   the item-Status read fails (a 502) — the corpus's GH_FAIL_ITEM_STATUS.
   FSGG_PARITY_MARKERS=<json>  a JSON array of pre-existing markers to seed, each
-                              {"n":<issue>, "id":<comment-id>, "worker":<w>, "prev":<enc?>, "age_hours":<h?>}.
+                              {"n":<issue>, "id":<comment-id>, "worker":<w>, "prev":<enc?>, "age_hours":<h?>,
+                              "session":<s?>}.
                               `prev` omitted → a marker minted before #481 (no `prev=` key); `age_hours`
-                              defaults to 0 (a fresh, live lease).
+                              defaults to 0 (a fresh, live lease); `session` omitted → a sessionless marker
+                              (a human, or a pre-#419 marker), the back-compat case case 44 exercises.
 """
 
 import json
@@ -47,7 +49,7 @@ LOCK = threading.Lock()
 _STORE = {}          # issue number -> [ {id, body, user, updated_at} ]
 _NEXT_ID = [900]
 _WRITES = []         # [ {item, field, optionId} ] — every Status board write, in order
-_GQL = {"projectsV2": 0, "fields": 0, "itemId": 0, "itemStatus": 0, "mutations": 0, "total": 0}
+_GQL = {"projectsV2": 0, "fields": 0, "itemId": 0, "itemStatus": 0, "boardScan": 0, "mutations": 0, "total": 0}
 
 
 def _now(offset_hours=0):
@@ -57,7 +59,10 @@ def _now(offset_hours=0):
 def _seed():
     for m in json.loads(os.environ.get("FSGG_PARITY_MARKERS", "[]")):
         prev = f" prev={m['prev']}" if m.get("prev") else ""
-        body = f"<!-- fsgg:claim worker={m['worker']} lease=120{prev} -->\nheld"
+        # `session=` rides between the lease and the prev key, exactly as `Writes.markerBody` emits it, so
+        # `Reads.sessionRe` (which anchors on `\ssession=`) parses it back. Omitted → a sessionless marker.
+        session = f" session={m['session']}" if m.get("session") else ""
+        body = f"<!-- fsgg:claim worker={m['worker']} lease=120{session}{prev} -->\nheld"
         _STORE.setdefault(int(m["n"]), []).append(
             {"id": int(m["id"]), "body": body, "user": {"login": "EHotwagner"},
              "updated_at": _now(int(m.get("age_hours", 0)))})
@@ -79,6 +84,15 @@ def graphql(query, variables):
             return {"data": {"organization": {"projectV2": {"fields": {"nodes": [
                 {"id": "PVTSSF_status", "name": "Status", "dataType": "SINGLE_SELECT", "options": OPTIONS},
                 {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"}]}}}, "rateLimit": RATE}}
+        if "items(first" in query:
+            # The board SCAN (`Scan.board`). A bare `claim` (no `--force`) rides `heldElsewhere`, which scans
+            # the repo's in-flight items for a live claim by THIS worker on a DIFFERENT item. An empty board
+            # answers "you hold nothing else" — so the claim proceeds to the CAS, where the twin/heartbeat
+            # decision (case 44) actually lives. A single page, no cursor: the scan reads one board and stops.
+            _GQL["boardScan"] += 1
+            return {"data": {"organization": {"projectV2": {"items": {
+                "pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []}}},
+                "rateLimit": RATE}}
         if "fieldValueByName" in query:
             _GQL["itemStatus"] += 1
             if FAIL_STATUS:

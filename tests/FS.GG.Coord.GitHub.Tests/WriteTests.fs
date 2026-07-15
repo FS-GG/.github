@@ -168,6 +168,42 @@ let ``re-claiming an item we ALREADY hold does not post a second marker`` () =
 
     Assert.Equal(0, transport.Count "comment-post")
 
+// ---- #419: an id two workers share is not a lock ---------------------------------------------------
+
+[<Fact>]
+let ``#419 a live marker with OUR id but a DIFFERENT session is a TWIN - refused, not adopted`` () =
+    // The regression #419 was filed on: the marker is ours by id, so the "already ours" branch adopted it
+    // and the heartbeat renewed it — silently putting two workers on one item. When both sessions are known
+    // and differ, it is a twin: refuse, and carry the OTHER session so the caller can name it.
+    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
+
+    match claim transport 120 me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
+    | Ok(Twin(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
+    | other -> failwith $"our id in another session is a twin, not a win — got %A{other}"
+
+    // Refused BEFORE the CAS posts anything — the twin's marker is untouched.
+    Assert.Equal(0, transport.Count "comment-post")
+
+[<Fact>]
+let ``#419 a SESSIONLESS marker with our id is genuinely ours - a heartbeat, not a twin`` () =
+    // The boundary of the rule (#419 leg 4). A marker with no `session=` — a human, a harness exporting
+    // none, any pre-#419 marker — is indistinguishable from ours. Failing closed on it would lock a worker
+    // out of an item they really hold, so it keeps the old behaviour: ours.
+    let transport = scripted [ ok (comments [ marker 901 "vole-418" "" ]) ]
+
+    match claim transport 120 me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
+    | Ok(Won held) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"a sessionless marker with our id must stay ours — got %A{other}"
+
+[<Fact>]
+let ``#419 the SAME session re-claiming its own marker is a heartbeat, not a twin`` () =
+    // Without this, the refusal would fire on the worker itself — it could never renew its own claim.
+    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
+
+    match claim transport 120 me (Some(SessionId "79b9e347")) aRef (fun () -> None) with
+    | Ok(Won held) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"our own session re-claiming is a heartbeat, not a twin — got %A{other}"
+
 [<Fact>]
 let ``a failed FIRST read is fatal, and nothing is posted`` () =
     // The only cheap place to fail, which is why the read comes first: we have posted nothing, so there is

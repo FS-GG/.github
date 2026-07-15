@@ -21,6 +21,7 @@ module Writes =
     type ClaimOutcome =
         | Won of Held
         | Lost of WorkerId
+        | Twin of theirs: SessionId
         | Undecided of reason: string
         | BlockedByUnparseableMarker
 
@@ -187,9 +188,22 @@ module Writes =
         // withdraw is a comment somebody has to read, and the item is not ours regardless.
         | Some m when m.Worker <> worker -> Ok(Lost m.Worker)
 
-        // A live marker that is ALREADY OURS. Re-claiming is a no-op, and running the CAS again would post
-        // a SECOND marker of ours with a higher id — which we would then lose to our own first one.
-        | Some m -> Ok(Won(Held(ref, worker, m.Id, m.PreviousStatus)))
+        // A live marker that is ALREADY OURS by worker id. Re-claiming is a no-op, and running the CAS again
+        // would post a SECOND marker of ours with a higher id — which we would then lose to our own first one.
+        //
+        // BUT an id is not a lock if two workers share it (#419). If this marker carries a DIFFERENT session
+        // from ours — and BOTH sessions are known — the holder is a TWIN, not us: another worker who derived
+        // or was handed the same id. Adopting their live lock as a heartbeat is exactly the double-claim
+        // ADR-0027 exists to prevent. So refuse, and hand back the other session to name.
+        //
+        // We conclude "twin" ONLY when both sessions are known. A sessionless marker (a human, a harness that
+        // exports none, any pre-#419 marker) is genuinely indistinguishable from ours — failing closed on it
+        // would lock workers out of items they really hold — so it heartbeats. And our OWN session re-claiming
+        // its own marker is a heartbeat, never a twin, or a worker could never renew its own lease.
+        | Some m ->
+            match session, m.Session with
+            | Some(SessionId ours), Some(SessionId theirs) when ours <> theirs -> Ok(Twin(SessionId theirs))
+            | _ -> Ok(Won(Held(ref, worker, m.Id, m.PreviousStatus)))
 
         | None ->
 

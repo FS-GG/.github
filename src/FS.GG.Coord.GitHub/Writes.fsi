@@ -84,6 +84,14 @@ module Writes =
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
         | Lost of WorkerId
 
+        /// **THE MARKER CARRIES OUR WORKER ID, BUT A DIFFERENT SESSION.** An id two workers share is not a
+        /// lock (#419): agents that derived — or were handed — the same id are TWINS, and adopting their
+        /// live lock as a heartbeat would silently put both of them on one item. Refuse instead, and carry
+        /// the OTHER session so the caller can report it. We conclude "twin" ONLY when both sessions are
+        /// known: a sessionless marker (a human, a pre-#419 marker) is genuinely indistinguishable from ours
+        /// and keeps the old behaviour, and our OWN session re-claiming is a heartbeat, not a twin.
+        | Twin of theirs: SessionId
+
         /// **WE CANNOT TELL, AND THAT IS A LOSS.** The re-read failed, or our own marker was not in it.
         ///
         /// This is the CAS's sharpest rule. Our marker is already posted by the time we re-read, so every
