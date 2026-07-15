@@ -50,7 +50,14 @@ module Options =
           Message: string option
           Paths: string list
           Pr: int option
-          Warn: bool }
+          Warn: bool
+          /// `ready --status S` — the board Status column to show, matched by NAME (case-insensitive), the
+          /// way bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is off: asking for
+          /// a column is asking to SEE it, Done included.
+          Status: string option
+          /// `ready --all` — widen past the "not Done" default without naming a column (#520: `ready` is a
+          /// TRUTH read, so `--all` shows the whole board, Done and closed items and all).
+          All: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -74,7 +81,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   next   [--repo NAME]                       the next single schedulable item
   batch  [--repo NAME] [-n N] [--include-backlog]
                                              every item schedulable in parallel right now
-  ready  [--repo NAME]                       the board as a reconciler sees it (always fresh)
+  ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
+                                             by default — a TRUTH read, so it shows items the scheduler
+                                             will refuse; --status/--all widen past the default)
   who    [--repo NAME]                       who holds what, right now
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
@@ -147,6 +156,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--warn" :: t -> flags { acc with Warn = true } t
 
+            | "--status" :: value :: _ when value.StartsWith "-" ->
+                Error $"--status needs a value (got flag '%s{value}')"
+            | "--status" :: value :: t -> flags { acc with Status = Some value } t
+            | [ "--status" ] -> Error "--status needs a value"
+
+            | "--all" :: t -> flags { acc with All = true } t
+
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             | "--include-backlog" :: t -> flags { acc with AllowBacklog = true } t
             | "--force" :: t -> flags { acc with Force = true } t
@@ -194,7 +210,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Message = None
               Paths = []
               Pr = None
-              Warn = false }
+              Warn = false
+              Status = None
+              All = false }
 
         match args with
         | []

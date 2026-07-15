@@ -15,6 +15,8 @@ namespace FS.GG.Coord.Cli
 module Client =
 
     open System
+    open System.IO
+    open System.Text.Json
     open FS.GG.Coord
     open FS.GG.Coord.Types
     open FS.GG.Coord.GitHub
@@ -242,6 +244,40 @@ module Client =
 
                 ExitGreen
 
+    /// `ready --json` — THE MACHINE CONTRACT a reconciler (`/check-board`) and `next` read, an array of
+    /// board rows. The field set is bash's `board_items` projection, the fields a consumer keys on: the
+    /// `number`/`repo` that name the item, the board `status` (null when the column is unset — a modelled
+    /// fact, #437), the issue `state` (which is not the column — when they disagree the issue wins, #520),
+    /// and the `title`. Written with a real JSON writer so a title carrying a quote cannot forge the array.
+    let private renderReadyJson (rows: Scan.Row list) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        w.WriteStartArray()
+
+        for row in rows do
+            w.WriteStartObject()
+            w.WriteNumber("number", row.Ref.Number)
+            w.WriteString("repo", $"%s{row.Ref.Owner}/%s{row.Ref.Repo}")
+            w.WriteString("title", row.Title)
+
+            match statusName row.Status with
+            | "" -> w.WriteNull("status")
+            | s -> w.WriteString("status", s)
+
+            w.WriteString(
+                "state",
+                match row.State with
+                | Open -> "OPEN"
+                | Closed -> "CLOSED"
+            )
+
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
     let ready (ctx: Context) (opts: Options) : int =
         // A RECONCILER read — always fresh, never the cache. Its whole job is to say what is true right now.
         match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
@@ -250,18 +286,38 @@ module Client =
             match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
             | Error e -> fail e
             | Ok rows ->
-                let rows =
-                    match opts.Repo with
-                    | Some r -> rows |> List.filter (fun row -> String.Equals(row.Ref.Repo, r, StringComparison.OrdinalIgnoreCase))
-                    | None -> rows
+                // #520 — `ready` is a TRUTH read: it shows the BOARD, including items the SCHEDULER refuses
+                // (a closed-but-Ready issue, an item whose only touch-set is unmatchable). So it filters on
+                // the board Status COLUMN, and NEVER on the issue's OPEN/CLOSED state — the column is the
+                // projection the reconciler exists to reconcile, and hiding a closed-but-Ready row by its
+                // state is exactly the disagreement `/check-board` is run to find. A PR is not an item of
+                // work (#641), so it is the one thing dropped unconditionally.
+                let wanted =
+                    rows
+                    |> List.filter (fun r -> not r.IsPullRequest)
+                    |> List.filter (fun r ->
+                        match opts.Repo with
+                        | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
+                        | None -> true)
+                    |> List.filter (fun r ->
+                        // The DEFAULT excludes Done and nothing else (bash's `board_filter` xd=1). Naming a
+                        // column (`--status S`) or `--all` widens past it — asking for a column, Done
+                        // included, is asking to SEE it. `--status` matches the column NAME, case-insensitive,
+                        // the way bash matches it.
+                        match opts.Status with
+                        | Some s -> String.Equals(statusName r.Status, s, StringComparison.OrdinalIgnoreCase)
+                        | None -> opts.All || r.Status <> BoardStatus.Done)
 
-                for row in rows |> List.filter (fun r -> not r.IsPullRequest && r.State = Open) do
-                    let status =
-                        match statusName row.Status with
-                        | "" -> "(no status)"
-                        | s -> s
+                match opts.Render with
+                | Json -> printfn "%s" (renderReadyJson wanted)
+                | Text ->
+                    for row in wanted do
+                        let status =
+                            match statusName row.Status with
+                            | "" -> "(no status)"
+                            | s -> s
 
-                    printfn "  %-14s %s  %s" status row.Ref.Short row.Title
+                        printfn "  %-14s %s  %s" status row.Ref.Short row.Title
 
                 ExitGreen
 

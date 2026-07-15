@@ -528,6 +528,82 @@ else
   bad "#533 fixture (stranger's marker) bound a port"
 fi
 
+# ---- READY IS THE MACHINE CONTRACT, AND A TRUTH READ (case 12): --json + the #520 column-not-state rule -
+#
+# The corpus certifies `ready` as a thrifty, machine-readable TRUTH read: `ready --json` is a JSON ARRAY
+# (the contract /check-board and `next` consume), it excludes Done by DEFAULT and nothing else, and it
+# shows what is ON THE BOARD — including items the SCHEDULER refuses. The engine's `ready` carried a
+# double port gap: it IGNORED --json (always printed the human table, so a `jq` consumer choked), and it
+# filtered by the ISSUE STATE, not the board Status column — so a CLOSED-but-Ready row (the #520 residue
+# the truth read exists to surface) was HIDDEN. This slice holds the engine to case 12's answers, over
+# HTTP: the machine contract is JSON, Done is the only default exclusion, the closed-but-Ready row is
+# shown, and --status/--all/--repo widen and scope exactly as bash's `board_filter` does.
+RDY_OUT="$(mktemp)"
+python3 "$HERE/ready_server.py" >"$RDY_OUT" 2>/dev/null &
+RDY=$!
+RDYPORT=""; for _ in $(seq 1 50); do RDYPORT="$(head -n1 "$RDY_OUT" 2>/dev/null)"; [ -n "$RDYPORT" ] && break; sleep 0.1; done
+if [ -n "$RDYPORT" ]; then
+  rdy() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$RDYPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" ready "$@"; }
+
+  # THE MACHINE CONTRACT: `ready --json` is a JSON array a consumer can parse — not the human table it
+  # used to print regardless of --json (the port gap). `jq -e` fails non-zero if the stream is not JSON.
+  rdyj="$(rdy --repo FS.GG.SDD --json 2>/dev/null)"
+  if printf '%s' "$rdyj" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    ok "ready --json is a JSON array — the machine contract, not the human table (the port gap closed)"
+  else
+    bad "ready --json must emit a JSON array" "got: $rdyj"
+  fi
+
+  # DEFAULT excludes Done, and NOTHING ELSE: Ready, Backlog and In-progress all stay.
+  nums="$(printf '%s' "$rdyj" | jq -c '[.[].number] | sort')"
+  [ "$nums" = '[99,127,200,201]' ] \
+    && ok "ready: excludes Done by default and keeps everything else (Ready/Backlog/In-progress), byte-exact" \
+    || bad "ready default set" "expected [99,127,200,201], got: $nums"
+  printf '%s' "$rdyj" | jq -e 'any(.[]; .number==55)' >/dev/null 2>&1 \
+    && bad "ready: the Done item (#55) must NOT appear by default" "$rdyj" \
+    || ok "ready: the Done item (#55) is excluded by default"
+
+  # #520 — THE TRUTH READ. A CLOSED issue whose board column still says Ready is SHOWN: `ready` reads the
+  # COLUMN, never the issue state, because the column is the projection /check-board reconciles. The old
+  # engine filtered `State = Open` and would have hidden exactly this row.
+  cbr="$(printf '%s' "$rdyj" | jq -c '.[] | select(.number==201)')"
+  printf '%s' "$cbr" | jq -e '.state == "CLOSED"' >/dev/null 2>&1 \
+    && ok "#520: a CLOSED-but-Ready row is SHOWN by ready, and reports its CLOSED state (the truth read)" \
+    || bad "#520: ready must show the closed-but-Ready row, filtering on the column not the state" "got: $cbr"
+
+  # --status WIDENS to exactly that column (Done included) — the corpus's `ready --status Done -> #54`.
+  donej="$(rdy --repo FS.GG.SDD --status Done --json 2>/dev/null | jq -c '[.[].number] | sort')"
+  [ "$donej" = '[55]' ] \
+    && ok "ready --status Done widens past the not-Done default to exactly the Done column (#55)" \
+    || bad "ready --status Done" "expected [55], got: $donej"
+
+  # `.github`'s only item is Done, so it is EMPTY by default and non-empty under --all — the corpus's
+  # `ready --repo .github -> empty`, the same board shape (#54 Done), one transport over.
+  ghdef="$(rdy --repo .github --json 2>/dev/null)"
+  [ "$ghdef" = '[]' ] \
+    && ok "ready --repo .github: its only item is Done, so the not-Done default makes it empty" \
+    || bad "ready --repo .github default" "expected [], got: $ghdef"
+  rdy --repo .github --all --json 2>/dev/null | jq -e 'any(.[]; .number==54)' >/dev/null 2>&1 \
+    && ok "ready --all widens past the default — the Done #54 appears (a TRUTH read shows the whole board)" \
+    || bad "ready --all must show the Done item" "$(rdy --repo .github --all --json 2>/dev/null)"
+
+  # --repo SCOPES: a Ready namesake in another repo (#202 Rendering) is not shown under --repo FS.GG.SDD.
+  printf '%s' "$rdyj" | jq -e 'any(.[]; .number==202)' >/dev/null 2>&1 \
+    && bad "ready --repo FS.GG.SDD must not reach into another repo (#202 Rendering)" "$rdyj" \
+    || ok "ready --repo scopes — a cross-repo namesake column is not shown"
+
+  # The human projection is still reachable (--text), and it is a TABLE, not JSON — the same row set.
+  rdyt="$(rdy --repo FS.GG.SDD --text 2>/dev/null)"
+  if printf '%s' "$rdyt" | grep -q 'Ready .*FS.GG.SDD#99' && ! printf '%s' "$rdyt" | grep -q '^\['; then
+    ok "ready --text still renders the human table (JSON is the default, text is opt-in — as batch is)"
+  else
+    bad "ready --text must render the human table" "got: $rdyt"
+  fi
+else
+  bad "ready fixture bound a port"
+fi
+kill "$RDY" 2>/dev/null; rm -f "$RDY_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
