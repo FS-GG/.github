@@ -321,6 +321,71 @@ module Client =
 
                 ExitGreen
 
+    /// A `who` row's lock state. "In flight" is a LOCK fact, not a column fact: an item is in flight when a
+    /// marker holds it — LIVE (`Held`) or past its lease (`Stale`, still a lock only `reap` may break) — or
+    /// when the board column says In progress with NO marker at all (`Unclaimed` — someone working outside
+    /// the protocol, which `who` exists to surface). A Ready/Backlog item nobody claimed is simply not in
+    /// flight, and `who` does not list it. This is cases 20/25's certified `who`, and the JSON `.state` a
+    /// consumer keys on (held/stale/unclaimed).
+    type private WhoState =
+        | Held of Reads.Marker
+        | Stale of Reads.Marker
+        | Unclaimed
+
+    let private whoStateName =
+        function
+        | Held _ -> "held"
+        | Stale _ -> "stale"
+        | Unclaimed -> "unclaimed"
+
+    /// The touch-set a claim reserves (or an In-progress item declares) — the `paths` a consumer keys on
+    /// (case 25). Read from the issue body; an undeclared or unreadable one is an empty list, because `who`
+    /// reports what is reserved, and nothing is reserved on a surface nobody declared.
+    let private pathNames (ts: TouchSet) : string list =
+        match ts with
+        | Declared tokens ->
+            tokens
+            |> List.map (fun t ->
+                match t with
+                | Matchable s -> s
+                | Unmatchable s -> s)
+        | Undeclared
+        | DeclaredNone
+        | Unreadable _ -> []
+
+    /// `who --json` — the machine contract cases 20/25 certify: a JSON array of the in-flight items, each
+    /// carrying its `number`, `repo`, `state` (held/stale/unclaimed), the `worker` holding it (`null` when
+    /// unclaimed — only the column, not a marker, says so), and the `paths` it reserves. A real JSON writer,
+    /// so a worker id or path carrying a quote cannot forge the array.
+    let private renderWhoJson (rows: (Scan.Row * WhoState * string list) list) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        w.WriteStartArray()
+
+        for (row, state, paths) in rows do
+            w.WriteStartObject()
+            w.WriteNumber("number", row.Ref.Number)
+            w.WriteString("repo", $"%s{row.Ref.Owner}/%s{row.Ref.Repo}")
+            w.WriteString("state", whoStateName state)
+
+            match state with
+            | Held m
+            | Stale m -> w.WriteString("worker", m.Worker.Value)
+            | Unclaimed -> w.WriteNull("worker")
+
+            w.WriteStartArray("paths")
+
+            for p in paths do
+                w.WriteStringValue p
+
+            w.WriteEndArray()
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
     let who (ctx: Context) (opts: Options) : int =
         // A truth read — fresh, and it reads the LOCK, which is never cached.
         match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
@@ -337,26 +402,85 @@ module Client =
                             | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
                             | None -> true))
 
-                let mutable anyHeld = false
+                // Classify a candidate by its LOCK. The lowest-id marker in the CAS's own total order names
+                // the holder; the lease decides whether it is live (`Held`) or past its window (`Stale`).
+                let classify (row: Scan.Row) (markers: Reads.Marker list) : WhoState option =
+                    match Reads.winner opts.LeaseMinutes markers with
+                    | Some m -> Some(Held m)
+                    | None ->
+                        match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                        | Some m -> Some(Stale m)
+                        | None ->
+                            // No marker at all: only an In-progress COLUMN makes it in flight — work with no
+                            // lock behind it. Ready/Backlog with no marker is nobody's claim, and not listed.
+                            if row.Status = BoardStatus.InProgress then Some Unclaimed else None
+
                 let mutable failure = None
+                let results = ResizeArray<Scan.Row * WhoState * string list>()
 
                 for row in candidates do
                     if failure.IsNone then
+                        // A FAILED MARKER READ IS FATAL (#461): a claim set we could not read is never an
+                        // empty one, so `who` fails closed rather than reporting a live lock as absent.
                         match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
                         | Error e -> failure <- Some e
                         | Ok markers ->
-                            match Reads.winner opts.LeaseMinutes markers with
-                            | Some m ->
-                                anyHeld <- true
-                                let age = Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds
-                                printfn "  %s  held by %s  (%s)" row.Ref.Short m.Worker.Value age
+                            match classify row markers with
                             | None -> ()
+                            | Some state ->
+                                // The reserved touch-set is informational, so a body we could not read is an
+                                // empty list, not a failed `who` — a body is not a lock. The one read that
+                                // must fail closed (the marker) is the one above. Only `--json` reports paths,
+                                // so the human table pays no body read: the text render never shows them.
+                                let paths =
+                                    match opts.Render with
+                                    | Text -> []
+                                    | Json ->
+                                        match Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                                        | Ok body -> pathNames (TouchSet.parse body)
+                                        | Error _ -> []
+
+                                results.Add(row, state, paths)
 
                 match failure with
                 | Some e -> fail e
                 | None ->
-                    if not anyHeld then
-                        printfn "nothing is in flight."
+                    let inFlight = List.ofSeq results
+
+                    match opts.Render with
+                    | Json -> printfn "%s" (renderWhoJson inFlight)
+                    | Text ->
+                        if List.isEmpty inFlight then
+                            printfn "nothing is in flight."
+                        else
+                            for (row, state, _) in inFlight do
+                                match state with
+                                | Held m ->
+                                    printfn
+                                        "  %-16s held by %s  (%s)"
+                                        row.Ref.Short
+                                        m.Worker.Value
+                                        (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
+                                | Stale m ->
+                                    printfn
+                                        "  %-16s held by %s  STALE (%s)"
+                                        row.Ref.Short
+                                        m.Worker.Value
+                                        (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
+                                | Unclaimed ->
+                                    printfn
+                                        "  %-16s UNCLAIMED — In progress with NO claim marker"
+                                        row.Ref.Short
+
+                    // A markerless In-progress item is work happening OUTSIDE the protocol — warned on
+                    // stderr (where case 20 looks for it) regardless of the stdout format, so a `who` piped
+                    // to a machine consumer still shouts about the one thing no reconciler can fix by itself.
+                    for (row, state, _) in inFlight do
+                        match state with
+                        | Unclaimed ->
+                            eprint
+                                $"fsgg-coord-engine: WARNING — %s{row.Ref.Short} is In progress with NO claim marker (someone is working outside the protocol)."
+                        | _ -> ()
 
                     ExitGreen
 

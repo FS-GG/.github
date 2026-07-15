@@ -604,6 +604,103 @@ else
 fi
 kill "$RDY" 2>/dev/null; rm -f "$RDY_OUT"
 
+# ---- WHO IS THE TRUTH READ OF THE LOCK (case 20): held / stale / unclaimed, --json + the NULL worker -----
+#
+# The corpus (case 20, and case 25 off-board) certifies `who` as a truth read of the LOCK, not the board
+# column: it lists the IN-FLIGHT items — HELD (a live marker), STALE (a marker past its lease, still a lock
+# only `reap` may break), and UNCLAIMED (In progress with NO marker — work outside the protocol) — and NONE
+# of the Ready candidates nobody has claimed. `who --json` is the machine contract a consumer keys on
+# (`.number/.worker/.state/.paths`), with a NULL worker where only the column, not a marker, puts the item
+# in flight. The engine carried the SAME sibling gap `ready` did (#789): `who` IGNORED --json (always the
+# human table, so a `jq` consumer choked) and reported ONLY live holders — dropping the STALE and UNCLAIMED
+# rows the truth read exists to surface. This holds the fixed engine to case 20's answers on the SAME
+# board case 22 certifies `batch` against (board-pw), one transport over: #42 is held by finch-a3f (fresh),
+# #43 by ghost-000 (5h old → stale), #60 is In progress with no marker, and #70–74 are Ready candidates.
+#
+# A FRESH pw server: the top-level one is MUTABLE and the `take` leg above claimed #70 on it (smew-f31's
+# marker is now live there), so #70 would read as held. `who` reads the LOCK, so it correctly sees that
+# marker — the state must not leak between legs, exactly as the #516/#533 mutating legs take a fresh server.
+WHO_OUT="$(mktemp)"
+python3 "$HERE/pw_server.py" >"$WHO_OUT" 2>/dev/null &
+WHO=$!
+WHOPORT=""; for _ in $(seq 1 50); do WHOPORT="$(head -n1 "$WHO_OUT" 2>/dev/null)"; [ -n "$WHOPORT" ] && break; sleep 0.1; done
+rm -f "$WHO_OUT"
+if [ -z "$WHOPORT" ]; then
+  bad "who fixture bound a port"
+else
+whor() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$WHOPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" who --repo FS.GG.SDD "$@"; }
+
+# THE MACHINE CONTRACT: `who --json` is a JSON array a consumer can parse — not the human table it used to
+# print regardless of --json (the exact port gap #789 closed for `ready`, one command over).
+whoj="$(whor --json 2>/dev/null)"
+if printf '%s' "$whoj" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  ok "who --json is a JSON array — the machine contract, not the human table (the sibling port gap to ready)"
+else
+  bad "who --json must emit a JSON array" "got: $whoj"
+fi
+
+# IN-FLIGHT, NO MORE NO LESS: the three claimed/orphaned items, and NONE of the Ready candidates (#70–74).
+# `who` reports the LOCK; a Ready item nobody has claimed is not in flight, and the old live-only who would
+# have shown only #42.
+whonums="$(printf '%s' "$whoj" | jq -c '[.[].number] | sort')"
+[ "$whonums" = '[42,43,60]' ] \
+  && ok "who: lists exactly the in-flight items (held/stale/unclaimed), never the Ready candidates" \
+  || bad "who in-flight set" "expected [42,43,60], got: $whonums"
+
+# HELD: #42's live marker is 'held', names finch-a3f (case 20's holder), and carries the paths it reserves.
+h42="$(printf '%s' "$whoj" | jq -c '.[] | select(.number==42)')"
+printf '%s' "$h42" | jq -e '.state=="held" and .worker=="finch-a3f"' >/dev/null 2>&1 \
+  && ok "who: a live marker is 'held' and names its worker (finch-a3f) — case 20's holder" \
+  || bad "who: #42 held by finch-a3f" "got: $h42"
+printf '%s' "$h42" | jq -e '.paths | any(. == "src/Audio/**")' >/dev/null 2>&1 \
+  && ok "who: ...and carries the touch-set the claim reserves (src/Audio), read from the item body" \
+  || bad "who: #42 carries its reserved paths" "got: $h42"
+
+# STALE: #43's marker is 5h old against a 120m lease, so it is a lock PAST its lease — 'stale', not dropped
+# (the old who filtered stale markers out via `winner`), and it still names the (likely dead) ghost-000.
+s43="$(printf '%s' "$whoj" | jq -c '.[] | select(.number==43)')"
+printf '%s' "$s43" | jq -e '.state=="stale" and .worker=="ghost-000"' >/dev/null 2>&1 \
+  && ok "who: a marker past its lease is 'stale' (still a lock only reap breaks) and still names its holder" \
+  || bad "who: #43 stale ghost-000" "got: $s43"
+
+# UNCLAIMED: #60 is In progress with NO marker — only the COLUMN, not a marker, makes it in flight, so its
+# worker is NULL (case 20's certified `who --json ... | .worker == null`), and its declared paths resolve.
+u60="$(printf '%s' "$whoj" | jq -c '.[] | select(.number==60)')"
+printf '%s' "$u60" | jq -e '.state=="unclaimed" and .worker==null' >/dev/null 2>&1 \
+  && ok "who --json: an In-progress item with no marker is 'unclaimed' with a NULL worker (case 20)" \
+  || bad "who: #60 unclaimed null worker" "got: $u60"
+printf '%s' "$u60" | jq -e '.paths | any(. == "src/Orphan/**")' >/dev/null 2>&1 \
+  && ok "who: ...and a markerless item's touch-set still resolves (the files something is evidently editing)" \
+  || bad "who: #60 carries its paths" "got: $u60"
+
+# THE HUMAN TABLE is the DEFAULT (no --json, as case 20 reads it): it names the holder, and it FLAGS the two
+# rows the old live-only who dropped on the floor.
+whot="$(whor 2>/dev/null)"
+printf '%s' "$whot" | grep -q 'finch-a3f' \
+  && ok "who (text default): names the worker holding each item (finch-a3f) — JSON is opt-in, unlike ready" \
+  || bad "who text names holder" "got: $whot"
+printf '%s' "$whot" | grep -qE 'FS.GG.SDD#43.*STALE' \
+  && ok "who (text): flags a claim past its lease as STALE (the row the old who filtered out)" \
+  || bad "who text STALE" "got: $whot"
+printf '%s' "$whot" | grep -qE 'FS.GG.SDD#60.*UNCLAIMED' \
+  && ok "who (text): flags In-progress work with NO marker as UNCLAIMED (the row the old who never had)" \
+  || bad "who text UNCLAIMED" "got: $whot"
+
+# ...and it WARNS on stderr about the markerless item — where case 20 looks — so a `who` whose stdout is
+# piped to a consumer still surfaces the one drift no reconciler can fix by itself.
+whoerr="$(whor 2>&1 >/dev/null)"
+printf '%s' "$whoerr" | grep -q 'In progress with NO claim marker' \
+  && ok "who: warns on stderr that someone is working outside the protocol (case 20)" \
+  || bad "who stderr warning" "got: $whoerr"
+
+# THE DISTINCTION, stated once more against the machine contract: a Ready candidate nobody has claimed is
+# NOT in flight — because `who` reads the lock, not the board column.
+printf '%s' "$whoj" | jq -e 'any(.[]; .number==70)' >/dev/null 2>&1 \
+  && bad "who: a Ready, unclaimed candidate (#70) must NOT be listed as in flight" "$whoj" \
+  || ok "who: a Ready candidate nobody claimed is not in flight — who reports the lock, not the column"
+fi
+kill "$WHO" 2>/dev/null
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

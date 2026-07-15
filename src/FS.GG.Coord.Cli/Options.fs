@@ -84,7 +84,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
                                              by default — a TRUTH read, so it shows items the scheduler
                                              will refuse; --status/--all widen past the default)
-  who    [--repo NAME]                       who holds what, right now
+  who    [--repo NAME] [--json]              who holds what, right now (held/stale/unclaimed;
+                                             --json for the machine contract, else a human table)
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
@@ -232,7 +233,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "next" :: rest -> flags { defaults with Command = Next } rest
         | "batch" :: rest -> flags { defaults with Command = BatchCmd } rest
         | "ready" :: rest -> flags { defaults with Command = Ready } rest
-        | "who" :: rest -> flags { defaults with Command = Who } rest
+        // `who` is a HUMAN truth read by default (the table case 20 asserts), and `--json` opts into the
+        // machine contract cases 20/25 consume — the mirror of `ready`/`batch`, where JSON is the default.
+        | "who" :: rest -> flags { defaults with Command = Who; Render = Text } rest
         | "claim" :: rest -> flags { defaults with Command = Claim } rest
         | "take" :: rest -> flags { defaults with Command = Take } rest
         | "release" :: rest -> flags { defaults with Command = Release } rest

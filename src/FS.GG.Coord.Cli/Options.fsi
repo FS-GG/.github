@@ -35,7 +35,7 @@ module Options =
         | BatchCmd
         /// The board, as a reconciler sees it — always fresh (`ready [--repo]`).
         | Ready
-        /// Who holds what, right now (`who [--repo]`).
+        /// Who holds what, right now — held/stale/unclaimed (`who [--repo] [--json]`).
         | Who
         /// Take an item's lock (`claim <ref> [--worker W] [--force]`).
         | Claim
