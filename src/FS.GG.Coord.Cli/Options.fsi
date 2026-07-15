@@ -6,38 +6,61 @@ namespace FS.GG.Coord.Cli
 /// the expensive way in SDD, where `init --project-root /tmp/b` silently seeded the current directory
 /// and then reported success: an argument that is ignored is indistinguishable, from the caller's side,
 /// from an argument that was honoured. A parser that shrugs at an unknown token is the same fail-open
-/// shape as a gate that reports green over a subject it never read (#266) — the caller asked for
-/// something, got a confident answer, and the answer was about something else.
+/// shape as a gate that reports green over a subject it never read (#266).
 ///
-/// So: an unknown token is NAMED and refused. A flag given without its value is refused rather than
-/// swallowing the NEXT flag as its argument.
+/// So: an unknown FLAG is NAMED and refused. A flag given without its value is refused rather than
+/// swallowing the next flag as its argument. Positional arguments (an issue ref, a field, a value) are
+/// collected in order into `Args`, and each command validates its own arity.
 module Options =
 
-    /// What the engine was asked to do.
+    /// What the engine was asked to do. The DECISION commands (`Decide`, `Fleet`, `Lanes`, `Facts`) read
+    /// state on stdin and touch no network; the CLIENT commands below `Scan` perform IO through the GitHub
+    /// adapter — they are the surface the shim (ADR-0034 §4.4) execs in place of the bash client.
     type Command =
-        /// Decide a batch from a board-state snapshot on stdin. The command the shadow uses — the engine
-        /// reads NOTHING for itself (see `Snapshot`).
         | Decide
-
-        /// Fold the fleet divergence ledger into ADR-0034 §5's cut-over verdict (#634). Reads a ledger
-        /// document on stdin; like `Decide`, it fetches nothing — not the board, not the ledger, and not
-        /// even the clock (see `Fleet`).
+        | Scan
         | FleetVerdict
-
-        /// Partition the board into lanes — sets of work that can never contend (#428, #485). DERIVED
-        /// from the touch-sets, never asserted: safety is computed by the same `TouchSet.conflicts` the
-        /// scheduler reserves against, so a lane cannot disagree with the batch about what collides.
         | LanesView
         | Facts
+
+        // ---- the client command surface (ADR-0040 Phase D — wired to the IO layer) --------------------
+
+        /// This worker's id and the rule that derived it (`whoami [--mint]`).
+        | WhoAmI
+        /// The GraphQL/REST budget (`budget`).
+        | Budget
+        /// The next single schedulable item (`next [--repo]`).
+        | Next
+        /// Every item schedulable in parallel right now (`batch [--repo] [-n N] [--include-backlog]`).
+        | BatchCmd
+        /// The board, as a reconciler sees it — always fresh (`ready [--repo]`).
+        | Ready
+        /// Who holds what, right now (`who [--repo]`).
+        | Who
+        /// Take an item's lock (`claim <ref> [--worker W] [--force]`).
+        | Claim
+        /// Schedule AND claim the next item in one step (`take [--repo] [--worker W]`).
+        | Take
+        /// Drop a lock, restoring the column it overwrote (`release <ref> [--worker W]`).
+        | Release
+        /// Renew a lease (`heartbeat <ref> [--worker W]`).
+        | Heartbeat
+        /// Write one board field (`set-field <ref> <field> <value>`).
+        | SetField
+        /// Attach a child issue to a parent (`child <parent-ref> <child-ref>`).
+        | Child
+        /// Widen a held item's touch-set (`widen <ref> --paths T...`).
+        | Widen
+        /// Message another worker (`say <ref> --to W --message M`).
+        | Say
+        /// Stamp an item done, optionally rolling the parent up (`done <ref> [--flip] [--evidence E]`).
+        | DoneCmd
+        /// Check a PR's changed files against the touch-set its issue declared (`verify-paths --pr N [--warn]`).
+        | VerifyPaths
 
         | Help
         | Version
 
-    /// How to render the answer.
-    ///
-    /// `Json` is the CONTRACT and always wins: it is what the bash client parses, and it is
-    /// byte-stable. `Text` is a projection of the same answer for a human at a terminal, and it
-    /// carries no contract — it may add or drop nothing, but nothing may parse it.
     type Render =
         | Json
         | Text
@@ -45,10 +68,45 @@ module Options =
     type Options =
         { Command: Command
           Render: Render
+          SnapshotFile: string option
+          Repo: string option
+          Fresh: bool
+          AllowBacklog: bool
+          Limit: int option
+          LeaseMinutes: int
 
-          /// Read the snapshot (or the ledger) from this file instead of stdin. Testing and debugging
-          /// only; the shadow always pipes, because a temp file is one more thing that can be stale.
-          SnapshotFile: string option }
+          /// Positional arguments in order — the ref, the field, the value, the child ref. Each command
+          /// reads what it needs and refuses the wrong count.
+          Args: string list
+
+          /// `--worker <id>` — the lock's identity (ADR-0027; NOT the GitHub account).
+          Worker: string option
+          /// `--force` — steal a live lock (`claim`/`release`). A broken IDENTITY is never stealable; this
+          /// is for a lock a human means to break.
+          Force: bool
+          /// `--mint` (`whoami`) — print one fresh id line for `eval`.
+          Mint: bool
+          /// `--flip` (`done`) — roll the parent up when this child completes it.
+          Flip: bool
+          /// `--evidence <text>` (`done`) — assert the item is finished with NO PR (#600). Required for the
+          /// no-PR green path; a green path with no argument would be a way of switching the stamp off.
+          Evidence: string option
+          /// `--to <worker>` (`say`).
+          ToWorker: string option
+          /// `--message <text>` (`say`).
+          Message: string option
+          /// `--paths <token>...` (`widen`) — the new touch-set.
+          Paths: string list
+
+          /// `--pr <n>` (`verify-paths`) — the pull request to check.
+          Pr: int option
+          /// `--warn` (`verify-paths`) — downgrade a DRIFT/INVALID verdict to advisory (exit 0). "I could
+          /// not check" is never downgraded — only a real verdict is.
+          Warn: bool }
+
+    /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
+    [<Literal>]
+    val DefaultLeaseMinutes: int = 120
 
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>

@@ -77,12 +77,16 @@
     <Compile Include="Fleet.fs" />
     <Compile Include="Options.fsi" />
     <Compile Include="Options.fs" />
+    <Compile Include="Identity.fsi" />
+    <Compile Include="Identity.fs" />
+    <Compile Include="Client.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../FS.GG.Coord.Core/FS.GG.Coord.Core.fsproj" />
+    <ProjectReference Include="../FS.GG.Coord.GitHub/FS.GG.Coord.GitHub.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

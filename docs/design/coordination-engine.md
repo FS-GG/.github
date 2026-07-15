@@ -468,8 +468,13 @@ fix.
   divergence. Zero risk — bash remains authoritative and the fleet is unaffected.
 - Divergence is the acceptance test. It will find real bugs *in both*.
 
-**Exit:** zero divergence across the live fleet for **three consecutive days** under normal
-fan-out.
+**Exit (SUPERSEDED by [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)):** ~~zero divergence
+across the live fleet for **three consecutive days** under normal fan-out.~~ That clock could not tick
+— a worker in a per-item worktree resolved no engine and so banked no evidence (#728) — and its own
+taxonomy classified as *"not a bug"* three real defects the flip would otherwise have shipped. **Phase 2
+exits on the defect corpus**, like Phase 3b: `tests/fsgg-coord/cases/`, green against **both** engines.
+The shadow keeps running as **telemetry** — it is how a live fleet is watched, not what a cut-over waits
+on.
 
 #### Phase 2 as built — what shipped, and the two decisions it forced
 
@@ -659,7 +664,15 @@ closed on evidence that is absent, thin, single-worker, uncovered on a day, or f
   shadows where one resolves, and its disagreement is logged. `--engine=bash` remains the escape hatch.
   Making `fs` the default is a **separate** decision on the corpus's evidence; ADR-0038 does not take it.
 - *(future)* `--engine=fs` becomes the default.
-- *(future)* One week later, delete the bash implementation. The kit row becomes the shim (§4.4).
+- ~~*(future)* One week later, delete the bash implementation. The kit row becomes the shim (§4.4).~~
+  **SUPERSEDED by [ADR-0040](../adr/0040-port-the-io-layer.md).** This step was never executable. The
+  typed engine has **zero IO** — one package reference, `FSharp.Core` — while the client makes **53 `gh`
+  calls** across 47 commands and performs every write. Deleting bash would delete the only thing that can
+  read a board or post a claim marker, and the §4.4 shim would resolve a binary that cannot do the job.
+  It also named a **date**, and a date is not a criterion. ADR-0040 ports the IO layer, names the four
+  preconditions the shim actually has (the corpus, the .NET-less runners, the restore gate, the CAS's
+  budget), and restates the exit so it can be computed: **bash is deleted when the corpus is green
+  through the shim in all six receivers, with the restore gate green.**
 - `fsgg-coord-selftest`'s 46 negative assertions run unchanged against the new engine — they
   are the contract, and they were written against a call-counting `gh` stub, so they port.
 

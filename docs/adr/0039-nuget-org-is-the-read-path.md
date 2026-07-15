@@ -61,9 +61,41 @@ the byte-identical nuget.org push.
 
 **3. The nuget.org push is therefore ON THE CRITICAL PATH, not additive** — and every decision that
 treats it as optional must be re-read in that light. In particular, **ADR-0013 §5's
-`vars.NUGET_ORG_PUBLISH` dormancy flag is now load-bearing**: a producer whose flag is unset ships a
-package that five of six receivers *cannot restore*. ADR-0013's own §5 amendment names the residual
-hole (nothing asserts the flag is true where a policy exists); this ADR is why that hole has teeth.
+`vars.NUGET_ORG_PUBLISH` dormancy flag is now load-bearing.**
+
+**But not where you would expect, and the difference is the point.** An earlier draft of this clause
+said *"a producer whose flag is unset ships a package five of six receivers cannot restore"*. That is
+**false of the five product repos**, and the check was worth running:
+
+| repo | consults `vars.NUGET_ORG_PUBLISH`? | flag value | on nuget.org? |
+|---|---|---|---|
+| Rendering, SDD, Governance, Game, Audio | **no** — publish is gated only on `steps.ver.outputs.push` | **unset (404)** | **yes, all of them** |
+| Templates | yes | `true` | yes |
+| **`.github`** | **yes** | `true` | yes |
+
+The five product repos push to nuget.org **unconditionally**, via OIDC Trusted Publishing. Their flag is
+not merely unset — it is *absent*, and their packages are on nuget.org anyway. Verified 2026-07-14:
+**all 32 of 32 packages match, org feed and nuget.org, at the identical newest version.** No producer is
+skipping the push today.
+
+**The flag governs exactly two workflows, and both are in `.github`:** `release-coord-engine.yml`
+(**`FS.GG.Coord.Cli`**) and `release-new-sdd-workspace.yml` (`FS.GG.NewSddWorkspace`). Templates gates on
+it too and has it set.
+
+**That is a narrower hazard, and a considerably worse one.** Follow it through: `FS.GG.Coord.Cli` is
+ADR-0034's coordination engine. It is pinned in `dist/dotnet/.config/dotnet-tools.json`, which
+`sync-build-config` byte-copies into **all six receivers**, and **five of those six restore from
+nuget.org** (decision 1). Its publish is gated behind a repo variable that **nothing asserts**. Unset it
+in `.github` — or run a release in any context that does not inherit it — and the engine silently stops
+reaching nuget.org, and `dotnet tool restore` fails in five repos. The failure mode is this document's
+own thesis: not an error, just an empty version list.
+
+It is `true` today. **Nothing holds it there.** So: **the one package whose absence would break the
+coordination engine across the fleet is precisely the one hidden behind an unenforced flag.**
+
+ADR-0013's own §5 amendment names the residual hole — *nothing asserts the flag is true where a policy
+exists* — and this ADR is why that hole has teeth. It wants a gate: assert `NUGET_ORG_PUBLISH == true` in
+every repo carrying a nuget.org Trusted Publishing policy. Tracked in [#750](https://github.com/FS-GG/.github/issues/750).
 
 **4. One invariant, one feed.** `pin-coherence` must assert pin freshness against the feed Renovate
 **bumps from**. It is currently split-brained: `scripts/check-pin-coherence.py` already defaults to

@@ -63,6 +63,7 @@ registry like any other, and this org gates its registries.
 | [0037](0037-schema-growth-is-publish-before-flip.md) | Schema growth is **publish-before-flip** — two ordered PRs; the validator gates on the declared `schemaVersion` | Accepted |
 | [0038](0038-the-corpus-is-the-cut-over-gate.md) | The **defect corpus** is the cut-over gate; the shadow clock is demoted to telemetry | Accepted |
 | [0039](0039-nuget-org-is-the-read-path.md) | **nuget.org is the read path; the org feed is the publish path** | Proposed |
+| [0040](0040-port-the-io-layer.md) | The **IO layer is ported to F# too** — an `IGitHub` seam (HTTP adapter + call-counting fake) driven by the shell corpus through a configurable API base; each write's precondition lives in its type | Accepted |
 
 ## Supersession map
 
@@ -89,3 +90,4 @@ Which record currently rules, and where a decision was amended. Every edge below
 | [0027](0027-worker-keyed-claim-lock-and-worker-channel.md) | scheduler | [0038](0038-the-corpus-is-the-cut-over-gate.md) | **Blockers are checked before the touch-set** — a blocked item cannot start whatever its touch-set says. |
 | [0031](0031-republished-package-is-a-named-failure.md) | **all** | [0032](0032-the-lock-hash-must-not-depend-on-the-machine.md) | **Withdrawn — premise false.** §1 (cold restore) and §3 (never hand-write a `contentHash`) survive, in 0032 §5 and §4. |
 | [0034](0034-typed-coordination-engine.md) | §5 | [0038](0038-the-corpus-is-the-cut-over-gate.md) | The three-day shadow clock **could never tick**. The gate is the defect corpus; the shadow is telemetry. |
+| [0034](0034-typed-coordination-engine.md) | §5 exit / §4.4 | [0040](0040-port-the-io-layer.md) | "Delete the bash implementation" was **not reachable** — the IO layer is ported, each write's precondition in its type; the shim's preconditions are named. |

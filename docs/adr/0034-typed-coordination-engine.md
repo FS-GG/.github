@@ -9,6 +9,10 @@
 - **Amended by:** [0038](0038-the-corpus-is-the-cut-over-gate.md) — the cut-over gate is the **defect
   corpus** (`tests/fsgg-coord/cases/`, green against **both** engines), not §5's three-day shadow
   clock, which **could never tick**. The shadow is demoted to **telemetry**. See §5.
+- **Amended by:** [0040](0040-port-the-io-layer.md) — §5's *"delete the bash implementation"* was **not
+  reachable** (the typed core reads nothing, so the write-path defects live at the impure edge the port
+  deferred). The **IO layer is ported** to F# with each write's precondition in its type, and §4.4's shim
+  preconditions are named. See §5.
 - **Contract-change under:** [0015](0015-register-the-registry-schema-as-a-governed-contract.md) — `registry/repos.yml` `schemaVersion` bump
 
 ## Context
