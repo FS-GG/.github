@@ -22,9 +22,15 @@ files (`/pulls/<n>/files`), and the issue body (`/issues/<n>`). #70's touch-set 
 seeds (`src/Scene/**, tests/Scene/**`), so PR 7 (Scene files) is OK and PR 8 (an Audio file + README) is
 DRIFT — the corpus's certified pair.
 
-Env toggle (the #322 fail-closed leg spawns a FRESH server):
+Env toggles:
     FSGG_PARITY_HEADREF_FAIL=<pr>   the PR read (`/pulls/<pr>`) 503s, so the head ref is UNREADABLE and the
-                                    engine must reach NO verdict and fail closed — with or without --warn.
+                                    engine must reach NO verdict and fail closed — with or without --warn
+                                    (the #322 fail-closed leg spawns a FRESH server with this set).
+    FSGG_PARITY_REQLOG=<path>       append every request's METHOD + PATH (one per line) to this file. The
+                                    #430 legs assert on the REQUEST, not the verdict: that the PR is read
+                                    from the repo the git REMOTE named, and that resolving that repo spent
+                                    NO GraphQL — the corpus's own technique (case 23 line 163), since the
+                                    verdict would be identical either way (the whole trap).
 """
 
 import json
@@ -34,14 +40,25 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 HEADREF_FAIL = os.environ.get("FSGG_PARITY_HEADREF_FAIL", "")
+REQLOG = os.environ.get("FSGG_PARITY_REQLOG", "")
 
 # PRs: branch (head.ref) + the files they change. Branches drive issue resolution — `item/<n>-…` names the
-# issue directly; a `chore/…` branch closes nothing here, so it resolves to SKIP (no tracked item).
+# issue directly; a `chore/…` branch that closes nothing resolves to SKIP (no tracked item), while a
+# `chore/…` branch that closes ANOTHER repo's issue (PR 11) falls through to the GraphQL closing-ref query.
 PRS = {
     7: {"ref": "item/70-scene-graph", "files": ["src/Scene/Graph.fs", "tests/Scene/GraphTests.fs"]},
     8: {"ref": "item/70-scene-graph", "files": ["src/Scene/Graph.fs", "src/Audio/Mixer.fs", "README.md"]},
     9: {"ref": "chore/no-linked-issue", "files": ["README.md"]},
     10: {"ref": "item/72-no-touch-set-declared", "files": ["src/Whatever.fs"]},
+    11: {"ref": "chore/closes-another-repo", "files": ["src/Scene/Graph.fs"]},
+}
+
+# Closing-ref answers, keyed by PR number (`Reads.prClosingRef` sends the PR in the GraphQL variables). PR 9
+# closes NOTHING → empty node set → the unlinked SKIP. PR 11 closes an issue in ANOTHER repo via GitHub's
+# cross-repo close (case 24 lines 148-165) → the engine resolves the issue in FS.GG.Rendering, sees it is
+# not the PR's own repo (FS.GG.SDD), and SKIPs green, naming the other repo — never a verdict across the line.
+CLOSES = {
+    11: [{"number": 70, "repository": {"nameWithOwner": "FS-GG/FS.GG.Rendering"}}],
 }
 
 # Issue bodies — the touch-sets the PRs are checked against, keyed by (repo, number). #70 is case 22's
@@ -63,6 +80,13 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def _reqlog(self):
+        # Record METHOD + PATH so a test can assert on the REQUEST the engine made — the repo it read the
+        # PR from, and that it spent no GraphQL to decide it (#430). Path only; the token is not our subject.
+        if REQLOG:
+            with open(REQLOG, "a") as f:
+                f.write(f"{self.command} {self.path.split('?', 1)[0]}\n")
+
     def _send(self, code, payload):
         b = json.dumps(payload).encode()
         self.send_response(code)
@@ -72,6 +96,7 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_GET(self):
+        self._reqlog()
         p = self.path.split("?", 1)[0]
         # The PR's changed files (`Reads.prFiles`).
         m = re.match(r"^/repos/[^/]+/[^/]+/pulls/(\d+)/files$", p)
@@ -101,13 +126,19 @@ class H(BaseHTTPRequestHandler):
         self._send(500, {"message": f"unhandled GET {p}"})
 
     def do_POST(self):
-        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        self._reqlog()
+        raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
         p = self.path.split("?", 1)[0]
         # The closing-issue fallback (`Reads.prClosingRef`): a PR whose branch is not `item/<n>-…` asks
-        # GraphQL what it closes. Here PR 9 closes NOTHING, so the answer is an empty node set → SKIP.
+        # GraphQL what it closes. The PR is in the query variables, so the answer is keyed to it: PR 9 (and
+        # anything unlisted) closes NOTHING → empty node set → SKIP; PR 11 closes another repo's issue.
         if p.rstrip("/") == "/graphql":
+            try:
+                pr = int(json.loads(raw or b"{}").get("variables", {}).get("pr", 0))
+            except (ValueError, json.JSONDecodeError):
+                pr = 0
             return self._send(200, {
-                "data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": []}}}},
+                "data": {"repository": {"pullRequest": {"closingIssuesReferences": {"nodes": CLOSES.get(pr, [])}}}},
                 "rateLimit": {"cost": 1, "remaining": 4999},
             })
         self._send(500, {"message": f"unhandled POST {p}"})
