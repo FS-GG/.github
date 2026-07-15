@@ -802,6 +802,69 @@ if [ -z "$CHILD_PORT" ]; then bad "child missing-arg fixture bound a port"; else
   kill "$CHILD_SRV" 2>/dev/null
 fi
 
+# ---- TAKE/NEXT NAME THE OBSERVED REASON, NOT A GUESSED LIST (case 41 §4): #440 --------------------
+#
+# The corpus (`tests/fsgg-coord/cases/41-residue-and-full-queue.sh` §4, #440) certifies that a full
+# queue must never read as an empty one, and — the leg this slice pins — that `take` must NOT recite a
+# GUESSED list of causes. Bash's own defect was the sentence "no schedulable item — every candidate is
+# blocked, claimed, overlapping, or undeclared": every clause could be false, and the true reason (the
+# item is blocked / in review / undeclared) was not among them, so a worker idled in front of work it
+# could see the reason for. `batch`/`decide` in the engine already answer #440 the honest way — the
+# per-item "passed over" reasons ARE the answer — but `take` and `next` slapped that same guessed
+# headline back on top in their empty branch, reintroducing the exact sentence #440 was filed on. This
+# slice holds the fixed engine to #440's PROPERTY over HTTP: a starved queue names the OBSERVED reason
+# for each candidate and never the guessed list. It reuses case 45's `board-starved` server (Audio #301
+# blocked, Governance #302 in review) — that world is already a full-but-unschedulable queue, one
+# transport over, so nothing new has to be fabricated.
+#
+# THE BACKLOG-FALLBACK LEG OF §4 IS A DELIBERATE DIVERGENCE, NOT A PORT. Bash's `take` falls back to
+# Backlog by default ("from Backlog"); the engine makes that fallback an explicit `--include-backlog`
+# flag and certifies the decision in `SchedulabilityTests` ("#440 ...NOT startable when it is off — the
+# fallback is a decision, not a default"). So this slice asserts the guessed-list property, which the
+# engine holds, and does NOT assert bash's default Backlog promotion, which the engine deliberately does
+# not do — the disposition, on the record, rather than a silently skipped assertion.
+GUESSED='every candidate is blocked, claimed, overlapping, or undeclared'
+G_OUT="$(mktemp)"
+python3 "$HERE/starved_server.py" >"$G_OUT" 2>/dev/null &
+GSRV=$!
+GPORT=""; for _ in $(seq 1 50); do GPORT="$(head -n1 "$G_OUT" 2>/dev/null)"; [ -n "$GPORT" ] && break; sleep 0.1; done
+if [ -n "$GPORT" ]; then
+  ge() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$GPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@" 2>&1; }
+  # A. take over a BLOCKED queue (#301 blocked by #999) must NOT recite the guessed list — the #440 defect.
+  tA="$(ge take --repo FS.GG.Audio --worker w440)"
+  printf '%s' "$tA" | grep -qF "$GUESSED" \
+    && bad "#440: take must NOT recite a guessed list of causes over a starved queue (case 41 §4)" "got: $tA" \
+    || ok "#440: take does not recite the guessed 'every candidate is blocked/claimed/...' list (case 41 §4)"
+  # ...and it names the OBSERVED reason instead — #301's blocker, the fact a worker actually needs.
+  printf '%s' "$tA" | grep -q 'FS.GG.Audio#301' && printf '%s' "$tA" | grep -q 'FS.GG.SDD#999' \
+    && ok "#440: ...and names the OBSERVED per-item reason (#301 blocked by #999), not a guess" \
+    || bad "#440: take must name the observed blocker on a starved queue" "got: $tA"
+  # ...on the honest headline `batch` already uses — "nothing schedulable right now.", never a false list.
+  printf '%s' "$tA" | grep -q 'nothing schedulable right now' \
+    && ok "#440: ...under the honest headline (the shape batch/decide already emit)" \
+    || bad "#440: take must print the honest 'nothing schedulable right now.' headline" "got: $tA"
+  # B. next carries the SAME contract — it is `batch` capped at one, so it cannot recite the list either.
+  nA="$(ge next --repo FS.GG.Audio --worker w440)"
+  printf '%s' "$nA" | grep -qF "$GUESSED" \
+    && bad "#440: next must NOT recite the guessed list either (it is batch capped at one)" "got: $nA" \
+    || ok "#440: next does not recite the guessed list — the same honest #440 contract as take"
+  printf '%s' "$nA" | grep -q 'FS.GG.Audio#301' \
+    && ok "#440: ...and next names the observed reason too" \
+    || bad "#440: next must name the observed reason" "got: $nA"
+  # C. A NON-STARTABLE COLUMN is a different observed reason (#302 In review), and still not the guess —
+  #    proving the fix names what it saw rather than swapping one fixed sentence for another.
+  tG="$(ge take --repo FS.GG.Governance --worker w440)"
+  printf '%s' "$tG" | grep -qF "$GUESSED" \
+    && bad "#440: a non-startable-column queue must not recite the guessed list" "got: $tG" \
+    || ok "#440: a non-startable-column queue names its OWN reason, not the guess"
+  printf '%s' "$tG" | grep -q 'FS.GG.Governance#302' && printf '%s' "$tG" | grep -q 'In review' \
+    && ok "#440: ...naming #302 and its column (In review) — the reason a worker acts on" \
+    || bad "#440: take must name the non-startable column" "got: $tG"
+else
+  bad "starved fixture (for #440) bound a port"
+fi
+kill "$GSRV" 2>/dev/null; rm -f "$G_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
