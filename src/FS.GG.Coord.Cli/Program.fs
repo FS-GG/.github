@@ -358,6 +358,7 @@ let main argv =
             | BatchCmd
             | Ready
             | Who
+            | Reap
             | Budget
             | Claim
             | Take

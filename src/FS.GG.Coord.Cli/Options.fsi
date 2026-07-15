@@ -37,6 +37,9 @@ module Options =
         | Ready
         /// Who holds what, right now — held/stale/unclaimed (`who [--repo] [--json]`).
         | Who
+        /// Collect expired claims whose work is dead — refusing any with an open `item/<n>-*` PR
+        /// (`reap [--repo] [--apply]`, #581). A DRY RUN without `--apply`.
+        | Reap
         /// Take an item's lock (`claim <ref> [--worker W] [--force]`).
         | Claim
         /// Schedule AND claim the next item in one step (`take [--repo] [--worker W]`).
@@ -141,7 +144,12 @@ module Options =
 
           /// `--active` (`overlap`) — check the item's touch-set against the LIVE claims in its own repo,
           /// rather than against a second named item. Repo-scoped (#353).
-          Active: bool }
+          Active: bool
+
+          /// `--apply` (`reap`) — actually DELETE the expired markers. Without it, `reap` is a DRY RUN that
+          /// only reports what it WOULD collect (`would reap …`), so a destructive lock-break is never the
+          /// default — the operator opts into it. #581.
+          Apply: bool }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

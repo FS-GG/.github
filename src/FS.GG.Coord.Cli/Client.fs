@@ -490,6 +490,124 @@ module Client =
 
                     ExitGreen
 
+    /// #581 — collect expired claims whose WORK is dead, and REFUSE any whose work is alive.
+    ///
+    /// A lease is EVIDENCE of abandonment, never PROOF. Its false positive is SYSTEMATIC — work that simply
+    /// outlasts its lease — and the reaper that breaks a lock on expiry alone collects the claims of workers
+    /// who are visibly, demonstrably still working. So reap does not stop at "the lease lapsed": it looks for
+    /// the item's own `item/<n>-*` PR, the worktree protocol's own server-side artifact, and REFUSES when one
+    /// is open. That refusal is not an `if` here to forget — `Writes.reapable` is the only constructor of the
+    /// capability `Writes.reap` consumes, so a live (or unreadable) claim cannot reach the delete at all.
+    ///
+    /// It scans the repo's OPEN ISSUES, not just the board's In-progress column: an abandoned claim's board
+    /// Status is wherever the dead worker last left it — or nowhere, for a claim that never made the board
+    /// (#461/#581). The scan fails CLOSED at every read (a marker set we could not read is not an empty one).
+    ///
+    /// `--apply` gates the destructive delete. The bare form is a DRY RUN that only reports what it WOULD
+    /// collect, so breaking a lock is never the default — the operator opts into it.
+    let reap (ctx: Context) (opts: Options) : int =
+        match opts.Repo with
+        | None ->
+            eprint
+                "fsgg-coord-engine: reap: --repo required (no git remote here, so the repo to reap is undefined)."
+
+            ExitError
+        | Some repoName ->
+
+        // The board map, for the post-reap column restore. BEST-EFFORT: reap has already broken the lock by
+        // the time it restores, so a board it cannot resolve leaves the column alone and reports it, rather
+        // than a failure that would strand the freed item.
+        //
+        // LAZY, and #418 is why: a DRY RUN performs no restore, so it must not pay `bootstrap`'s two GraphQL
+        // points on the budget that dies first for a board it will never write. Resolving on first actual
+        // reset keeps the dry run — the form an operator runs to LOOK before deciding — free.
+        let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
+
+        match Reads.openIssues ctx.Transport ctx.Owner repoName with
+        | Error e -> fail e
+        | Ok issues ->
+            let mutable failure: Errors.IoError option = None
+
+            for (number, _body) in issues do
+                if failure.IsNone then
+                    let ref =
+                        { Owner = ctx.Owner
+                          Repo = repoName
+                          Number = number }
+
+                    // FAIL CLOSED (#461): a claim set we could not read is never an empty one.
+                    match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
+                    | Error e -> failure <- Some e
+                    | Ok markers ->
+                        // A live winner is a claim reap may not touch. Only when NO winner is live but a
+                        // marker exists is the lowest-id marker a stale lock — reap's one candidate per item.
+                        match Reads.winner opts.LeaseMinutes markers with
+                        | Some _ -> ()
+                        | None ->
+                            match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                            | None -> ()
+                            | Some marker ->
+                                // #581: the lease lapsed — now ask whether the WORK did.
+                                match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
+                                | Error e -> failure <- Some e
+                                | Ok liveness ->
+                                    match Writes.reapable ref marker liveness with
+                                    | Error(Writes.WorkAlive pr) ->
+                                        eprint
+                                            $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{marker.Worker.Value}'s lease lapsed but PR #%d{pr} is OPEN on item/%d{number}-* (the lease lapsed, the WORK did not)."
+                                    | Error(Writes.Undetermined why) ->
+                                        eprint
+                                            $"fsgg-coord-engine: NOT reaping %s{ref.Short} — %s{why}; a lock we cannot rule dead we may not break."
+                                    | Ok reapable ->
+                                        if not opts.Apply then
+                                            // DRY RUN — say what --apply would collect, and touch nothing.
+                                            printfn "would reap  %s  worker %s" ref.Short marker.Worker.Value
+                                        else
+                                            match Writes.reap ctx.Transport reapable with
+                                            | Error e -> failure <- Some e
+                                            | Ok() ->
+                                                printfn "reaped  %s  worker %s" ref.Short marker.Worker.Value
+
+                                                // Restore the freed column — best-effort, the lock is already
+                                                // gone. An OFF-BOARD claim has no board item to reset, and reap
+                                                // must not claim a reset it never performed (case 25).
+                                                match board.Value with
+                                                | Ok bm ->
+                                                    match
+                                                        Board.itemIdCached ctx.Transport bm ref.Owner ref.Repo ref.Number
+                                                    with
+                                                    | Ok(Some _) ->
+                                                        // A recorded `In progress` is the dead claim's OWN
+                                                        // footprint, not a column anyone chose — restore to
+                                                        // `Ready`, as an unrecorded column does (#481).
+                                                        let restoreTo =
+                                                            match reapable.PreviousStatus with
+                                                            | Some InProgress
+                                                            | None -> BoardStatus.Ready
+                                                            | Some s -> s
+
+                                                        let name = statusName restoreTo
+
+                                                        if name <> "" then
+                                                            Board.boardWrite
+                                                                ctx.Transport
+                                                                bm
+                                                                ref.Owner
+                                                                ref.Repo
+                                                                ref.Number
+                                                                "Status"
+                                                                (Board.Set name)
+                                                                marker.Worker.Value
+                                                            |> ignore
+                                                    | Ok None ->
+                                                        printfn "  not on board (marker cleared; nothing to reset)"
+                                                    | Error _ -> ()
+                                                | Error _ -> ()
+
+            match failure with
+            | Some e -> fail e
+            | None -> ExitGreen
+
     let budget (ctx: Context) : int =
         match Reads.rateLimit ctx.Transport with
         | Error e -> fail e
@@ -1912,6 +2030,7 @@ module Client =
             | Next
             | BatchCmd
             | Who
+            | Reap
             | Take -> { opts with Repo = scopedRepo opts }
             | _ -> opts
 
@@ -1933,6 +2052,7 @@ module Client =
             | BatchCmd -> batch ctx opts
             | Ready -> ready ctx opts
             | Who -> who ctx opts
+            | Reap -> reap ctx opts
             | Budget -> budget ctx
             | Claim -> claim ctx opts
             | Take -> take ctx opts

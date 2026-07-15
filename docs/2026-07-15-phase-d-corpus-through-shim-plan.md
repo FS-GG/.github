@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **22 full + 2 partial of 27 corpus cases** (~276 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **22 full + 3 partial of 27 corpus cases** (~284 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -119,17 +119,18 @@ fail-closed assertions re-expressed at the HTTP layer.
 - **Exit:** the corpus is green driving the engine (through the shim) locally, with call counts intact,
   and `50-shadow-engine` / `51-fs-flip` still green (bash still present, still agreeing).
 
-**Progress (as of the `#353 widen collision-notify` slice, 2026-07-15).** The harness is grown one defect/case
+**Progress (as of the `#581 reap` slice, 2026-07-15).** The harness is grown one defect/case
 at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
-`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **20 of 27 cases fully covered,
-plus 2 partial (13, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
+`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **22 of 27 cases fully covered,
+plus 3 partial (13, 24, 26)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
 which are the differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
 | ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
-| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — they need `reap` the engine lacks (see the remaining table) |
+| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — `reap` now EXISTS (case 26), but its adversarial-interleaving legs are the remaining work |
+| ◑ | 26 (`reap` + #581) | the `reap` command + the expired-lease-vs-open-PR refusal (#581) are DONE; the case's `who` **proof-of-life** legs (`livePr` / `STALE (#NNN OPEN)`) are deferred — they ride the off-board `who` scan case 25 also needs (see the remaining table) |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -148,14 +149,14 @@ repo's issue → SKIP naming the other repo, no verdict across the boundary). Th
 bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
 EX_RATE-vs-checkout failure modes are structurally absent).
 
-**Remaining (7 full + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
+**Remaining (5 full + the rest of 13/24/26), each classified as a port gap or a deliberate divergence:**
 
 | case | what it needs | class |
 |---|---|---|
-| 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices) | new `issues`/`reap` commands |
-| 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are now DONE, and both `overlap` (#809) and `widen`'s notify half (#353) shipped | needs `reap` the engine lacks (larger) |
-| 25 (offboard-claims) | paginated open-issue scan for `who` (off-board markers) + starved `batch` prose | port gap (larger) |
-| 26 (expired-lease) | `reap` / expired-lease-vs-open-PR (#581) | new `reap` command |
+| 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
+| 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
+| 25 (offboard-claims) | paginated open-issue scan for `who` (off-board markers) + starved `batch` prose — the `reap` **command** legs (dry-run, off-board collect, "not on board") now land alongside case 26 | port gap (larger) |
+| 26-remainder | the `who` **proof-of-life** legs (`livePr` = `#NNN item/<n>-…`, and the `STALE (#NNN OPEN)` row) — the `reap` command + #581 refusal are DONE; these ride the off-board `who` scan shared with case 25 | port gap (shared with 25) |
 | 30 (pr-existence-697) | `who`/`adopt` land-the-finished-PR path (#697) | new `adopt` command |
 | 31 (superseded-run-720) | `adopt`/`landable` superseded-run scoring (#720) | new `landable`/`adopt` command |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
@@ -246,9 +247,28 @@ requires the widener to HOLD the lock (#706) — bash's does not, so the fixture
 corpus omits (an engine strengthening, not a change to the property under test); and the collision exit is
 `ExitContended=6`, bash's literal 1 re-expressed as the property (a real collision exits non-zero).
 
+Case **26 is now PARTIAL** — the **`reap` command** landed (#581). A lease is EVIDENCE of abandonment,
+never PROOF: its false positive is systematic (work that outlasts its lease), and bash's reaper broke a
+lock on expiry alone and collected the claims of workers who were visibly still working, TWICE. The new
+`reap [--repo] [--apply]` scans the repo's OPEN ISSUES (a lock lives off the board too, #461/#581), and for
+each stale marker it LOOKS for the item's own `item/<n>-*` PR — the worktree protocol's own server-side
+proof of life — and **REFUSES** to break a lock whose PR is open (naming the PR), reaps one whose work is
+genuinely dead, and fails CLOSED when it cannot read the liveness at all. The refusal is not an `if` to
+forget: `Writes.reapable` (green only on `LeaseExpiredNoPr`) is the single constructor of the `Reapable`
+capability `Writes.reap` consumes, so a live or unreadable claim cannot reach the delete. `--apply` gates
+the destructive break — the bare form is a DRY RUN (`would reap …`) — and an OFF-BOARD claim's post-reap
+column restore honestly reports `not on board (nothing to reset)` rather than claiming a reset it never
+performed (case 25). New `reap_server.py` (write-capable — it records the marker DELETE and toggles the
+item's open PR); 8 parity assertions + 5 Writes tests. Disposed on the record (ADR-0040 §5): the collision
+between "the lease lapsed" and "the work is alive" is decided by the PR probe, not the lease clock — bash's
+literal exit codes re-expressed as the properties (a refusal deletes nothing; a collect deletes exactly the
+marker), counted at the HTTP layer so the #581 bug — a refusal that deleted anyway — cannot pass. Case 26's
+`who` proof-of-life legs (the `livePr` field and the `STALE (#NNN OPEN)` row) are deferred: they ride the
+off-board `who` scan case 25 also needs, and land with it.
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`reap`, `adopt`/`landable`, `issues`) and **larger port gaps** (paginated
-off-board `who`). The verify-paths repo-boundary divergences (case 23's
+into **new commands** (`adopt`/`landable`, `issues`) and **larger port gaps** (paginated off-board `who`,
+and `reap`'s adversarial-interleaving legs). The verify-paths repo-boundary divergences (case 23's
 SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
 the call-counting transformation is demonstrated end-to-end by case 10.
 
@@ -303,13 +323,19 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 22 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~276
+      **In progress: 22 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~284
       assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
       landed; case 34 is now FULL too — the read-only `overlap` command (#353 repo-scoped collision) plus
       `widen`'s collision-DETECT-and-notify half (re-check the new touch-set against the same repo's live
-      claims and notify each colliding worker, reusing the shared `activeCollisions` scan). Ten engine
+      claims and notify each colliding worker, reusing the shared `activeCollisions` scan); and the new
+      **`reap` command** (#581) makes case 26 PARTIAL — an expired lease is EVIDENCE of abandonment, never
+      PROOF, so `reap` REFUSES to break a lock whose `item/<n>-*` PR is open (the leg that reaped live work
+      twice), reaps one whose work is dead, and fails closed on an unreadable liveness; the `#581` refusal is
+      structural (`Writes.reapable` is the only constructor of the capability `Writes.reap` consumes), and
+      `--apply` gates the break (case 26's `who` proof-of-life legs ride the off-board `who` scan and land
+      with case 25). Ten engine
       defects the port was *for* closed along the way, plus the
       `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
       together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419

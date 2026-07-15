@@ -446,3 +446,60 @@ let ``say does NOT require the lock - the worker who lost the race must still be
     match say transport me them aRef "our touch-sets overlap on src/Audio" with
     | Ok() -> Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
     | Error e -> failwith $"a message needs no lock — got %A{e}"
+
+// ---- reap: an expired lease is EVIDENCE of abandonment, not PROOF (#581) ----------------------------
+
+let private staleMarker =
+    { Reads.Id = 880L
+      Reads.Worker = WorkerId "ghost-222"
+      Reads.Session = None
+      Reads.AgeSeconds = 10800 // 3h — well past a 120-minute lease
+      Reads.PreviousStatus = None
+      Reads.Raw = "<!-- fsgg:claim worker=ghost-222 lease=120 -->" }
+
+[<Fact>]
+let ``#581 reapable is GREEN only when the lease lapsed AND no PR is open`` () =
+    // The single door to the capability `reap` consumes. `LeaseExpiredNoPr` is the one Liveness that
+    // licenses a break: the lease lapsed and we LOOKED for the item's PR and found none.
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Ok r ->
+        Assert.Equal(880L, r.MarkerId)
+        Assert.Equal("ghost-222", r.Worker.Value)
+        Assert.Equal(42, r.Ref.Number)
+    | Error e -> failwith $"a lapsed lease with no open PR is reapable — got %A{e}"
+
+[<Fact>]
+let ``#581 reapable REFUSES a claim whose item PR is open - the work is alive, not abandoned`` () =
+    // The leg that reaped live work twice: the lease lapsed but an `item/<n>-*` PR is open, so the work is
+    // demonstrably still happening. The refusal names the PR so it is checkable.
+    match reapable aRef staleMarker (LeaseExpiredPrOpen 433) with
+    | Error(WorkAlive pr) -> Assert.Equal(433, pr)
+    | other -> failwith $"an open PR must block the reap — got %A{other}"
+
+[<Fact>]
+let ``#581 reapable FAILS CLOSED when liveness is unknown - a lock we cannot rule dead we may not break`` () =
+    // "We could not ask" is NOT "there is no PR". A transient read failure must not become a reaped claim.
+    match reapable aRef staleMarker LivenessUnknown with
+    | Error(Undetermined _) -> ()
+    | other -> failwith $"an unreadable liveness must refuse the reap — got %A{other}"
+
+[<Fact>]
+let ``#581 reapable refuses a lease that is not even expired`` () =
+    // A live lease should never have reached here; reap it and the whole gate is a lie. Refuse rather than
+    // manufacture a capability out of a held lock.
+    match reapable aRef staleMarker LeaseHeld with
+    | Error(Undetermined _) -> ()
+    | other -> failwith $"a held lease is not reapable — got %A{other}"
+
+[<Fact>]
+let ``#581 reap DELETES the stale marker by its comment id`` () =
+    // The lock IS the comment id: reap addresses the marker by id, never by worker string (a twin's id
+    // would name the wrong comment, #550 one command over). A 404 would be success too, but here it lands.
+    let transport = Fake.Recorder(fun _ -> ok "")
+
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
+    | Ok r ->
+        match reap transport r with
+        | Ok() -> Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | Error e -> failwith $"the reap should have deleted the marker — got %A{e}"
