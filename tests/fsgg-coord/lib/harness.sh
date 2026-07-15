@@ -833,6 +833,15 @@ if [ "\$sub" = "api" ]; then
   # never ran" and "I could not ask" must never look alike (#606).
   if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/commits/([^/]+)/check-runs ]]; then
     printf 'check-runs %s %s\n' "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}" >>"\$GH_LOG"
+    # The check-runs grow WITH their runs (see GH_RUNS_GROW below): a new workflow run brings new
+    # check-runs with it. This read only READS the generation — it must not advance it, or one poll's
+    # two reads would straddle two generations, a state GitHub never produces.
+    if [ "\${BASH_REMATCH[2]}" = "\${GH_RUNS_GROW:-}" ] \
+       && [ -f "$STORE/gen-\${BASH_REMATCH[2]}" ] \
+       && [ "\$(cat "$STORE/gen-\${BASH_REMATCH[2]}")" -gt 1 ] \
+       && [ -f "$FIXTURES/checks-\${BASH_REMATCH[2]}.grown.json" ]; then
+      emit <"$FIXTURES/checks-\${BASH_REMATCH[2]}.grown.json"; exit 0
+    fi
     [ -f "$FIXTURES/checks-\${BASH_REMATCH[2]}.json" ] \
       || { echo "gh stub: no check-runs fixture for sha \${BASH_REMATCH[2]}" >&2; exit 4; }
     emit <"$FIXTURES/checks-\${BASH_REMATCH[2]}.json"; exit 0
@@ -845,6 +854,22 @@ if [ "\$sub" = "api" ]; then
   # an empty list, so "CI never ran" can never be confused with "I could not ask" (#606).
   if [[ "\$path" =~ ^repos/([^/]+/[^/]+)/actions/runs\?head_sha=([^\&]+) ]]; then
     printf 'wf-runs %s %s\n' "\${BASH_REMATCH[1]}" "\${BASH_REMATCH[2]}" >>"\$GH_LOG"
+    # GH_RUNS_GROW=<sha>: the run set GROWS between POLLS, which is what GitHub actually does — it
+    # schedules a PR's workflows over 20-60s, so an early poll sees a SUBSET. Poll 1 gets the small
+    # set; poll 2+ gets \`*.grown.json\`.
+    #
+    # THE GENERATION ADVANCES PER POLL, NOT PER READ, and that distinction is the whole leg. One poll
+    # of \`pr_landable\` makes TWO reads (workflow runs, then check-runs). A marker that flipped between
+    # them would serve the SMALL runs and the GROWN checks inside a single poll — a state GitHub never
+    # produces — and the PR would go red on poll 1 from the check-runs alone. The stability path would
+    # never be exercised, and the leg would pass while testing nothing. (It did, first time round: the
+    # naive-waiter mutation went uncaught.) So: the runs read INCREMENTS the generation, and the
+    # check-runs read only READS it.
+    if [ "\${BASH_REMATCH[2]}" = "\${GH_RUNS_GROW:-}" ]; then
+      gen="$STORE/gen-\${BASH_REMATCH[2]}"
+      n=\$(( \$( [ -f "\$gen" ] && cat "\$gen" || echo 0 ) + 1 )); echo "\$n" >"\$gen"
+      if [ "\$n" -gt 1 ]; then emit <"$FIXTURES/runs-\${BASH_REMATCH[2]}.grown.json"; exit 0; fi
+    fi
     [ -f "$FIXTURES/runs-\${BASH_REMATCH[2]}.json" ] \
       || { echo "gh stub: no workflow-runs fixture for sha \${BASH_REMATCH[2]}" >&2; exit 4; }
     emit <"$FIXTURES/runs-\${BASH_REMATCH[2]}.json"; exit 0

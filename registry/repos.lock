@@ -7,7 +7,7 @@
 # not a decision. DO NOT reserve it in a `Paths:` touch-set (#527); regenerate it and name it as
 # expected drift in the PR.
 00151d8428cc494dc8f8d7bfce41b663d4ae0f745c9961af2abeae778f8ce07b  .claude/skills/check-board
-c8ed26ae3b155da5be4e1b6718a4acd4e0a726dccc60238335d0f51caf86524d  .claude/skills/cross-repo-coordination
+2d3811baf0d8861a5a57ccf2b721260a876283de6c36a26d149667ad60beb0e3  .claude/skills/cross-repo-coordination
 35636ffb725d681a6f46e4ed7c18e916bc891b7f90f904aab4856568b6ac95fc  .claude/skills/intra-repo-parallel-work
-8cf8dd73fc528694f059880e2ede2424365a688d211a34f2e297a5004c7e33bb  .claude/skills/pnext-item
-e2b20959eb00608463a3b233982b1a13d5193d5f6a71ac1b39ccb8c4f0d9ef2e  scripts/fsgg-coord
+1b82a6819a8c5ef8fcfbefd76b52bb63cb4d3b5a216ef09ab6ace68a6c49e840  .claude/skills/pnext-item
+8c5342db922a6954312e739d7151cf2507a20ee5cb310df774468be346fbdcca  scripts/fsgg-coord

@@ -164,5 +164,64 @@ assert_eq "#720: landable exits 0 on green" "0" "$(lnd_rc 801)"
 assert_eq "#720: landable exits 3 on pending — the ONLY verdict worth retrying" "3" "$(lnd_rc 805)"
 assert_eq "#720: landable exits 1 on red — do not merge, and do not wait" "1" "$(lnd_rc 802)"
 
+# ---- #724: `landable --wait`, so a recipe can NAME the gate instead of EMBEDDING it. -------------
+#
+# §5 used to carry ~40 lines of jq. It was wrong four times (#547, #606, #698, #720), and every fix
+# edited a COPY — nothing executes a recipe, so nothing tests one. The logic moves into the tool, where
+# a test can hold it, and `scripts/check-recipe-landable.py` makes a fifth copy unwritable.
+#
+# `--wait` has to carry the ONE thing the recipe's loop did that a single-shot verdict cannot: it must
+# not believe an EARLY green. Both traps below are premature-green, and both are invisible to a naive
+# "poll until not pending". 801 (settled, superseded-but-green) and 804 (no runs, ever) are the #720
+# legs above; 810 (a growing run set) and 704 (conflicted) are set up here.
+# >/dev/null 2>&1, BOTH: the command prints its VERDICT on stdout and puts the DECISION in the exit
+# code, so leaking stdout here would make this helper return "green0" and every leg below would compare
+# against a word it never expected.
+lndw() { local rc=0
+  PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 \
+    bash "$COORD" --worker heron-724 landable "$1" --repo FS-GG/FS.GG.SDD \
+      --wait --tries "${2:-3}" --interval 0 >/dev/null 2>&1 || rc=$?
+  printf '%s' "$rc"; }
+
+# 1. --wait agrees with the single-shot verdict on a settled PR. (801 is the superseded-but-green PR.)
+assert_eq "#724: --wait returns GREEN on a settled, superseded-but-green PR" "0" "$(lndw 801)"
+
+# 2. TRAP ONE — THE REGISTRATION RACE. For the first 20-60s after a push there are ZERO runs, and zero
+#    runs score as RED (#606: an empty subject is a finding). A waiter that believes that rejects every
+#    PR for the crime of being new. So while N==0 it must KEEP WAITING — and only if the runs never
+#    register does the red stand, which is then the honest #606 verdict. 804 has no runs, ever.
+assert_eq "#724: zero runs is not 'CI failed', it is 'CI has not started' — but if they never register, RED" \
+  "1" "$(lndw 804 2)"
+
+# 3. TRAP TWO — THE PARTIAL ROLLUP, and this is the one that MERGES A BAD PR. GitHub schedules a PR's
+#    workflows over 20-60s, so the run set GROWS. An early poll can legitimately see "1 run, green"
+#    while the failing one has not been CREATED yet. A waiter that breaks on the first all-green
+#    reading merges a PR most of whose checks never ran — #606's defect at one remove.
+#
+#    The stub serves a DIFFERENT fixture on the second read of this SHA (GH_RUNS_GROW), exactly as
+#    GitHub does: first poll sees one green run; the next sees that run PLUS a failed one. A waiter
+#    that trusts the first reading returns green. This one must return RED.
+lnd_pr 810 sha810
+lnd_wf sha810 111 1 completed success | lnd_runs sha810
+lnd_cr 111 completed success          | lnd_checks sha810
+{ lnd_wf sha810 111 1 completed success
+  lnd_wf sha810 222 1 completed failure; } | jq -s '{workflow_runs:.}' >"$FIXTURES/runs-sha810.grown.json"
+{ lnd_cr 111 completed success
+  lnd_cr 222 completed failure;           } | jq -s '{check_runs:.}'   >"$FIXTURES/checks-sha810.grown.json"
+gw=0
+PATH="$STUB:$PATH" GH_BOARD_SET=pw GH_ISSUES_FROM_STORE=1 GH_RUNS_GROW=sha810 \
+  bash "$COORD" --worker heron-724 landable 810 --repo FS-GG/FS.GG.SDD \
+    --wait --tries 4 --interval 0 >/dev/null 2>&1 || gw=$?
+assert_eq "#724: --wait does NOT believe an early all-green — it waits for the run set to STOP GROWING" \
+  "1" "$gw"
+
+# 4. A conflicted PR gets no CI AT ALL — GitHub cannot build refs/pull/N/merge while it conflicts — so
+#    waiting on one is waiting forever. It must come back immediately, not after the full timeout.
+cat >"$FIXTURES/pr-704.json" <<'JSON'
+{"number":704,"mergeable":false,"head":{"ref":"item/975-conflicted","sha":"conflicted704"}}
+JSON
+assert_eq "#724: --wait returns CONFLICTED immediately — no amount of waiting fixes a conflict" \
+  "1" "$(lndw 704 30)"
+
 
 harness_report
