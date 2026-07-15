@@ -100,6 +100,79 @@ else
 fi
 kill "$BLK" 2>/dev/null; rm -f "$BLK_OUT"
 
+# ---- STARVED (case 45): #488 — "nothing schedulable" is OBSERVED, and its causes are told apart -----
+#
+# The corpus certifies that a starved queue must never be inferred from an empty stderr: a blocked
+# candidate, a non-startable-column candidate, a genuinely empty queue, and an unreadable board are FOUR
+# outcomes, and the old bash code collapsed them into one wrong sentence. Bash carries the fix as a COUNT
+# ("1 open board item"). The engine carries it structurally: it emits a per-item reason for every
+# non-startable candidate, so a starved board leaves a trace an empty one does not — the same property,
+# reached without a count. Parity here asserts that PROPERTY, not bash's count-prose (as #520 above
+# asserts the decision and the named state, not bash's exact sentence).
+STV_OUT="$(mktemp)"
+python3 "$HERE/starved_server.py" >"$STV_OUT" 2>/dev/null &
+STV=$!
+SPORT=""; for _ in $(seq 1 50); do SPORT="$(head -n1 "$STV_OUT" 2>/dev/null)"; [ -n "$SPORT" ] && break; sleep 0.1; done
+if [ -n "$SPORT" ]; then
+  stv()  { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SPORT" FSGG_COORD_CACHE="$(mktemp -d)" \
+    "$ENGINE" take --repo "$1" --worker smew-f31 2>&1; }
+  # `batch --json` is the machine contract — the authoritative "what is offered". A starved repo offers
+  # `[]`; asserting an id's absence there is byte-exact, the same idiom the #520 leg above uses.
+  soff() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SPORT" FSGG_COORD_CACHE="$(mktemp -d)" \
+    "$ENGINE" batch --repo "$1" -n 9 --json 2>/dev/null; }
+  # A. BLOCKED (audio) — #301 leaves a trace naming its blocker, is NOT offered, and is NOT called empty.
+  A="$(stv FS.GG.Audio)"
+  printf '%s' "$A" | grep -q 'FS.GG.Audio#301' && printf '%s' "$A" | grep -q 'FS.GG.SDD#999' \
+    && ok "#488 A: a blocked candidate leaves a trace naming its blocker (not silently dropped)" \
+    || bad "#488 A: blocked candidate traced" "got: $A"
+  printf '%s' "$(soff FS.GG.Audio)" | grep -q 'FS.GG.Audio#301' \
+    && bad "#488 A: a blocked item must NOT be offered" "batch --json: $(soff FS.GG.Audio)" \
+    || ok "#488 A: the blocked item is not offered"
+  printf '%s' "$A" | grep -qi 'empty queue' \
+    && bad "#488 A: a BLOCKED queue must not be called an empty one (the exact #488 defect)" "got: $A" \
+    || ok "#488 A: a blocked queue is not reported as an empty one"
+
+  # B. NON-STARTABLE COLUMN (governance) — #302 (In review) leaves a trace naming its column, so a
+  # starved queue is DISTINGUISHABLE from an empty one; the Done #303 is not a live candidate.
+  B="$(stv FS.GG.Governance)"
+  printf '%s' "$B" | grep -q 'FS.GG.Governance#302' && printf '%s' "$B" | grep -q 'In review' \
+    && ok "#488 B: a non-startable open item leaves a trace naming its column (starved, not empty)" \
+    || bad "#488 B: non-startable item traced" "got: $B"
+  printf '%s' "$(soff FS.GG.Governance)" | grep -q 'FS.GG.Governance#303' \
+    && bad "#488 B: a Done/closed item must NOT be offered" "batch --json: $(soff FS.GG.Governance)" \
+    || ok "#488 B: the Done item is not a live candidate"
+
+  # C. GENUINELY EMPTY (sdd) — no items at all, so NO passed-over trace. This is the signature that
+  # tells empty from starved, and it must differ from B — the whole point of #488.
+  C="$(stv FS.GG.SDD)"
+  printf '%s' "$C" | grep -qi 'passed over' \
+    && bad "#488 C: a genuinely empty queue has nothing to pass over" "got: $C" \
+    || ok "#488 C: a genuinely empty queue leaves no passed-over trace"
+  [ "$B" != "$C" ] \
+    && ok "#488: a starved queue and an empty one are DISTINGUISHABLE (the defect #488 was filed on)" \
+    || bad "#488: starved and empty produced the same output" "both: $C"
+
+  # D. UNREADABLE — a failed read is a no-verdict, never an empty queue (#266's rule, #488's leg D).
+  DSRV_OUT="$(mktemp)"
+  FSGG_PARITY_FAIL_BOARD=1 python3 "$HERE/starved_server.py" >"$DSRV_OUT" 2>/dev/null &
+  DSRV=$!
+  DPORT=""; for _ in $(seq 1 50); do DPORT="$(head -n1 "$DSRV_OUT" 2>/dev/null)"; [ -n "$DPORT" ] && break; sleep 0.1; done
+  if [ -n "$DPORT" ]; then
+    D="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$DPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" take --repo FS.GG.Governance --worker smew-f31 2>&1)"; drc=$?
+    if [ "$drc" -ne 0 ] && ! printf '%s' "$D" | grep -qiE 'empty queue|nothing schedulable'; then
+      ok "#488 D: an unreadable board fails closed — a no-verdict, never an empty queue"
+    else
+      bad "#488 D: unreadable board must fail closed as a no-verdict" "rc=$drc: $D"
+    fi
+  else
+    bad "#488 D: fail fixture bound a port"
+  fi
+  kill "$DSRV" 2>/dev/null; rm -f "$DSRV_OUT"
+else
+  bad "starved fixture bound a port"
+fi
+kill "$STV" 2>/dev/null; rm -f "$STV_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
