@@ -899,7 +899,7 @@ muts_on()  { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.requ
 sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field fixture bound a port"; else
   sfenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
-  b1="$(sfenv set-field --batch FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' 'Contract=fs-gg-ui-template' 2>&1)"; b1rc=$?
+  b1="$(sfenv set-field --batch --worker sf-448 FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' 'Contract=fs-gg-ui-template' 2>&1)"; b1rc=$?
   mj="$(muts_on "$SF_PORT")"
   { [ "$b1rc" -eq 0 ] && [ "$(printf '%s' "$mj" | jq -r '.count')" = "1" ]; } \
     && ok "#448: THREE fields cost exactly ONE GraphQL mutation request (the count, one transport over)" \
@@ -928,7 +928,7 @@ fi
 #    the batch must reach the DISTINCT clear mutation, exactly as the single path reaches for it.
 sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field clear fixture bound a port"; else
-  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --batch FS.GG.SDD#42 'Contract=' >/dev/null 2>&1
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --batch --worker sf-448 FS.GG.SDD#42 'Contract=' >/dev/null 2>&1
   printf '%s' "$(muts_on "$SF_PORT" | jq -r '.last')" | grep -q 'f0: clearProjectV2ItemFieldValue' \
     && ok "#448: an empty value emits clearProjectV2ItemFieldValue, not an empty update" \
     || bad "#448: empty value must clear" "doc: $(muts_on "$SF_PORT" | jq -r '.last')"
@@ -939,7 +939,7 @@ fi
 #    value than the caller asked for.
 sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field split fixture bound a port"; else
-  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --batch FS.GG.SDD#42 'Contract=a=b' >/dev/null 2>&1
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --batch --worker sf-448 FS.GG.SDD#42 'Contract=a=b' >/dev/null 2>&1
   printf '%s' "$(muts_on "$SF_PORT" | jq -r '.last')" | grep -q 'text: "a=b"' \
     && ok "#448: Field=Value splits on the FIRST '=' (a value may legitimately contain one)" \
     || bad "#448: split must be on the first '='" "doc: $(muts_on "$SF_PORT" | jq -r '.last')"
@@ -952,11 +952,11 @@ fi
 sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field refuse fixture bound a port"; else
   sfr() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@" 2>&1; }
-  uf="$(sfr set-field --batch FS.GG.SDD#42 'No Such Field=x')"; ufrc=$?
+  uf="$(sfr set-field --batch --worker sf-448 FS.GG.SDD#42 'No Such Field=x')"; ufrc=$?
   { [ "$ufrc" -eq 1 ] && [ "$(muts_on "$SF_PORT" | jq -r '.count')" = "0" ]; } \
     && ok "#448: an unknown field is refused (exit 1) and spends ZERO GraphQL" \
     || bad "#448: unknown field must refuse before sending" "rc=$ufrc count=$(muts_on "$SF_PORT" | jq -r '.count') out=$uf"
-  uo="$(sfr set-field --batch FS.GG.SDD#42 'Phase=No Such Option')"; uorc=$?
+  uo="$(sfr set-field --batch --worker sf-448 FS.GG.SDD#42 'Phase=No Such Option')"; uorc=$?
   { [ "$uorc" -eq 1 ] && [ "$(muts_on "$SF_PORT" | jq -r '.count')" = "0" ]; } \
     && ok "#448: an unknown single-select OPTION is refused and spends ZERO GraphQL (the build aborts, not the value)" \
     || bad "#448: unknown option must refuse before sending" "rc=$uorc count=$(muts_on "$SF_PORT" | jq -r '.count') out=$uo"
@@ -972,7 +972,7 @@ fi
 SFCACHE="$(mktemp -d)"
 sfsrv SF_FAIL_ALIAS=f1 -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field partial fixture bound a port"; else
-  pout="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$SFCACHE" "$ENGINE" set-field --batch FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' 'Contract=x' 2>&1)"; prc=$?
+  pout="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$SFCACHE" "$ENGINE" set-field --batch --worker sf-448 FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' 'Contract=x' 2>&1)"; prc=$?
   [ "$prc" -eq 4 ] \
     && ok "#448: a per-alias failure is EX_PARTIAL (4), not success and not a generic error" \
     || bad "#448: partial must exit 4" "rc=$prc out=$pout"
@@ -999,7 +999,7 @@ rm -rf "$SFCACHE"
 RLCACHE="$(mktemp -d)"
 sfsrv SF_RATELIMIT=1 -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field rate-limit fixture bound a port"; else
-  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$RLCACHE" "$ENGINE" set-field --batch FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' >/dev/null 2>&1; rlrc=$?
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$RLCACHE" "$ENGINE" set-field --batch --worker sf-448 FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' >/dev/null 2>&1; rlrc=$?
   [ "$rlrc" -eq 75 ] \
     && ok "#448: an exhausted budget exits EX_RATE (75), the back-off signal — not a generic 1" \
     || bad "#448: rate-limited batch must exit 75" "rc=$rlrc"
