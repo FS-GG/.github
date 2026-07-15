@@ -58,29 +58,40 @@ let private noSubs = """{"totalCount":0,"nodes":[]}"""
 
 // ---- the closing act ----------------------------------------------------------------------------------
 
+/// A `closedByPullRequestsReferences` node whose BODY names THIS issue (#350) — a true closer.
+let private closesThis (n: int) =
+    """{"number":"""
+    + string n
+    + ""","merged":true,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"abbreviatedOid":"c"""
+    + string n
+    + """"},"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}"""
+
 [<Fact>]
 let ``a MERGED closing PR is read as a closing PR`` () =
     let transport =
-        serving (response "CLOSED" """{"number":399,"merged":true}""" "" noSubs "null")
-
-    match facts transport board ref with
-    | Ok f -> Assert.Equal<int list>([ 399 ], f.ClosingPrs)
-    | Error e -> failwith $"the merged PR must be read — got %A{e}"
-
-[<Fact>]
-let ``an UNMERGED PR that references the issue is NOT a closing PR`` () =
-    // ONLY MERGED PRs COUNT. An OPEN or ABANDONED pull request that merely references the issue has closed
-    // NOTHING — and treating it as the closing act would stamp work done on the strength of a PR somebody
-    // threw away, or has not finished.
-    let transport =
-        serving (response "CLOSED" """{"number":399,"merged":false}""" "" noSubs "null")
+        serving (response "CLOSED" (closesThis 399) "" noSubs "null")
 
     match facts transport board ref with
     | Ok f ->
-        Assert.Empty(f.ClosingPrs)
-        // With no closing PR and no closing event, `verify` will (correctly) refuse this unless evidence is
-        // supplied — which is the #600 path.
-        match verify None f with
+        Assert.Equal<int list>([ 399 ], f.ClosingPrs |> List.map (fun p -> p.Number))
+        Assert.True((List.head f.ClosingPrs).Merged)
+        Assert.True((List.head f.ClosingPrs).ClosesThis)
+    | Error e -> failwith $"the merged PR must be read — got %A{e}"
+
+[<Fact>]
+let ``an UNMERGED PR that references the issue does NOT close it`` () =
+    // ONLY MERGED PRs COUNT. An OPEN or ABANDONED pull request that merely references the issue has closed
+    // NOTHING — and treating it as the closing act would stamp work done on the strength of a PR somebody
+    // threw away, or has not finished. The node is READ (so provenance stays whole), but `verify` filters it.
+    let transport =
+        serving (response "CLOSED" """{"number":399,"merged":false,"closingIssuesReferences":{"nodes":[{"number":350,"repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}""" "" noSubs "null")
+
+    match facts transport board ref with
+    | Ok f ->
+        // No MERGED closer is present, so `verify` refuses (unless #600 evidence is given).
+        Assert.DoesNotContain(f.ClosingPrs, fun (p: ClosingPr) -> p.Merged)
+
+        match verify None None f with
         | Red _ -> ()
         | other -> failwith $"an unmerged reference does not close the issue — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"
@@ -89,18 +100,41 @@ let ``an UNMERGED PR that references the issue is NOT a closing PR`` () =
 let ``the CLOSED_EVENT closer is read when the PR body never carried the keyword`` () =
     // `gh pr create --fill` maps the commit SUBJECT to the PR TITLE, so a commit whose subject carries the
     // keyword puts it where `closingIssuesReferences` never looks. The event's closer is the record of the
-    // ACT, and `facts` has to pull it out of a differently-shaped node.
+    // ACT. The PR is still LISTED (a merge that closed the issue is) but is not a `ClosesThis` closer, so the
+    // CLOSED_EVENT is what rescues it — and `facts` has to pull it out of a differently-shaped node.
     let transport =
-        serving (response "CLOSED" "" """{"closer":{"__typename":"PullRequest","number":399}}""" noSubs "null")
+        serving (response "CLOSED" """{"number":399,"merged":true}""" """{"closer":{"__typename":"PullRequest","number":399}}""" noSubs "null")
 
     match facts transport board ref with
     | Ok f ->
-        Assert.Empty(f.ClosingPrs)
-        Assert.Equal(Some 399, f.ClosedByEvent)
+        Assert.Contains(f.ClosingPrs, fun (p: ClosingPr) -> p.Number = 399 && not p.ClosesThis)
+        Assert.Contains(399, f.CloserPrs)
 
-        match verify None f with
-        | Green(ClosedByPullRequest 399) -> ()
+        match verify None None f with
+        | Green(ClosedByPullRequest(399, _, _)) -> ()
         | other -> failwith $"the closing ACT must rescue the stamp — got %A{other}"
+    | Error e -> failwith $"parse failed — got %A{e}"
+
+[<Fact>]
+let ``a COMMIT closer resolves through to its associated PR (#558)`` () =
+    // The closer can be the COMMIT rather than the PR (a squash). GitHub names the commit and its associated
+    // pull request(s); `facts` resolves through to the PR, which is what the stamp names.
+    let transport =
+        serving
+            (response
+                "CLOSED"
+                """{"number":399,"merged":true}"""
+                """{"closer":{"__typename":"Commit","oid":"deadbeef","associatedPullRequests":{"nodes":[{"number":399}]}}}"""
+                noSubs
+                "null")
+
+    match facts transport board ref with
+    | Ok f ->
+        Assert.Contains(399, f.CloserPrs)
+
+        match verify None None f with
+        | Green(ClosedByPullRequest(399, _, _)) -> ()
+        | other -> failwith $"a commit closer must resolve through to its PR — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"
 
 // ---- the truncation check, at the read ----------------------------------------------------------------
@@ -122,7 +156,7 @@ let ``a truncated sub-issue page is detected - totalCount disagrees with the nod
         | other -> failwith $"a 120-vs-1 disagreement is truncation — got %A{other}"
 
         // AND `verify` REFUSES IT — `NoVerdict`, not a confident green over a subject it could not read.
-        match verify None f with
+        match verify None None f with
         | NoVerdict _ -> ()
         | other -> failwith $"a truncated child set must be UNVERIFIED — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"

@@ -25,9 +25,16 @@ SDD = {"name": "FS.GG.SDD", "owner": {"login": "FS-GG"}}
 
 
 def issue_facts(number, state, closing_prs, sub_total, sub_nodes, status, parent):
+    # Each child's own PR names it in its body (closingIssuesReferences -> ClosesThis), the ordinary case:
+    # the #342 provenance read keeps the whole set, so a closer must record that it closed THIS issue.
     return {"data": {"repository": {"issue": {
         "number": number, "state": state,
-        "closedByPullRequestsReferences": {"nodes": [{"number": pr, "merged": True} for pr in closing_prs]},
+        "closedByPullRequestsReferences": {"nodes": [
+            {"number": pr, "merged": True, "mergedAt": "2026-02-01T00:00:00Z",
+             "mergeCommit": {"abbreviatedOid": f"c{pr:06d}"},
+             "closingIssuesReferences": {"nodes": [
+                 {"number": number, "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"}}]}}
+            for pr in closing_prs]},
         "timelineItems": {"nodes": []},
         "subIssues": {"totalCount": sub_total,
                       "nodes": [{"number": n, "state": st} for (n, st) in sub_nodes]},

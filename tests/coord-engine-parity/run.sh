@@ -1981,6 +1981,76 @@ if [ -z "$DF_PORT" ]; then bad "done-flip fixture bound a port"; else
   kill "$DF_SRV" 2>/dev/null
 fi
 
+# case 14 (no-touch-set-and-done) — the `done` PR-PROVENANCE legs (#342/#558/#543). With no `--pr`, `done`
+# stamps the PR that ACTUALLY closed the issue — the LATEST-merged among true closers — and refuses a mere
+# prose mention; a commit-subject keyword (routed to the PR title, where `closingIssuesReferences` never
+# looks) is rescued by GitHub's own CLOSED_EVENT; a commit closer resolves through to its PR; and `--pr`
+# overrides WHICH pull request the stamp names, never WHETHER it closed the issue. `closedByPullRequestsReferences`
+# is a SUPERSET (mentions too, lowest-number-first), so the engine keeps the whole set and decides the closer
+# from ClosesThis / the close event — the #342 fix, re-expressed over HTTP.
+#
+# DISPOSED ON THE RECORD (ADR-0040 §5): bash exits 1 on a red NOT-DONE; the engine's certified exit for a Red
+# verdict is ExitRed=3 (see Program.fs). The corpus's "with a non-zero exit" assertions are re-expressed as the
+# PROPERTY — a refused stamp exits NON-ZERO — not bash's literal 1.
+DP_OUT="$(mktemp)"; python3 "$HERE/doneprov_server.py" >"$DP_OUT" 2>/dev/null & DP_SRV=$!; DP_PORT=""
+for _ in $(seq 1 50); do DP_PORT="$(head -n1 "$DP_OUT" 2>/dev/null)"; [ -n "$DP_PORT" ] && break; sleep 0.1; done
+rm -f "$DP_OUT"
+if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
+  dp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$DP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" done "$@" 2>&1; }
+
+  # #342 — the stamp names the CLOSER (#92 @ 09c836e), never the earlier prose mention #85.
+  p84="$(dp 'FS.GG.SDD#84' --worker w-dp)"; rc84=$?
+  { [ "$rc84" -eq 0 ] && printf '%s' "$p84" | grep -q 'FSGG-DONE   FS.GG.SDD#84'; } \
+    && ok "case14: done stamps the closer, green (#84)" || bad "case14: #84 should be DONE" "rc=$rc84: $p84"
+  printf '%s' "$p84" | grep -q 'merged PR #92 @ 09c836e' \
+    && ok "case14: ...naming the PR that CLOSED it — #92 @ 09c836e (#342)" || bad "case14: #84 names the closer" "$p84"
+  printf '%s' "$p84" | grep -qE '#85|410843e' \
+    && bad "case14: the earlier MENTION #85 must not be stamped (#342)" "$p84" \
+    || ok "case14: ...and never the earlier mention #85/410843e (#342)"
+
+  # #342 — a merged PR that merely MENTIONS the issue (its body names another) closes nothing.
+  p86="$(dp 'FS.GG.SDD#86' --worker w-dp)"; rc86=$?
+  printf '%s' "$p86" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#86' \
+    && ok "case14: done REFUSES when only a mention exists — red NOT-DONE (#86, #342)" || bad "case14: #86 should refuse" "$p86"
+  printf '%s' "$p86" | grep -q 'no merged PR closes this issue' \
+    && ok "case14: ...saying no merged PR closes this issue (#342)" || bad "case14: #86 reason" "$p86"
+  [ "$rc86" -ne 0 ] \
+    && ok "case14: ...and exits NON-ZERO (engine ExitRed=3; bash's literal 1 disposed on the record)" || bad "case14: #86 non-zero exit" "rc=$rc86"
+
+  # #342 — among two TRUE closers, the LATEST-merged wins, not the lowest-numbered.
+  p88="$(dp 'FS.GG.SDD#88' --worker w-dp)"
+  printf '%s' "$p88" | grep -q 'merged PR #95 @ 2222bbb' \
+    && ok "case14: among two closers, the LATEST-merged wins — #95 @ 2222bbb (#342)" || bad "case14: #88 latest-merged" "$p88"
+  printf '%s' "$p88" | grep -qE '#89|1111aaa' \
+    && bad "case14: the earlier-merged, lower-numbered #89 must not be stamped (#342)" "$p88" \
+    || ok "case14: ...and never the earlier-merged, lower-numbered #89/1111aaa (#342)"
+
+  # #558 — a keyword in the commit SUBJECT still earns the stamp (GitHub's own CLOSED_EVENT closer).
+  p165="$(dp 'FS.GG.SDD#165' --worker w-dp --flip)"; rc165=$?
+  { [ "$rc165" -eq 0 ] && printf '%s' "$p165" | grep -q 'FSGG-DONE   FS.GG.SDD#165'; } \
+    && ok "case14: a commit-SUBJECT keyword still earns the stamp — the CLOSED_EVENT closer (#558)" \
+    || bad "case14: #165 should be DONE via the close event" "rc=$rc165: $p165"
+
+  # #558 — a COMMIT closer (a squash) resolves through to its associated PR.
+  p166="$(dp 'FS.GG.SDD#166' --worker w-dp --flip)"
+  printf '%s' "$p166" | grep -q 'FSGG-DONE   FS.GG.SDD#166' \
+    && ok "case14: a COMMIT closer resolves through to its PR (#558)" || bad "case14: #166 commit closer" "$p166"
+
+  # #543 — `--pr` may not launder a mention: PR 97 closes #70, not #96.
+  p96="$(dp 'FS.GG.SDD#96' --pr 97 --flip --worker w-dp)"; rc96=$?
+  printf '%s' "$p96" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#96' \
+    && ok "case14: --pr REFUSES a PR that only MENTIONS the issue (#543)" || bad "case14: #96 --pr should refuse" "$p96"
+  case "$p96" in
+    *FSGG-DONE*) bad "case14: --pr must not be an override of PROVENANCE (#543)" "$p96" ;;
+    *) ok "case14: --pr overrides WHICH pr, never WHETHER it closed the issue (#543)" ;;
+  esac
+  [ "$rc96" -ne 0 ] \
+    && ok "case14: ...and exits NON-ZERO (engine ExitRed=3; bash's literal 1 disposed on the record)" || bad "case14: #96 non-zero exit" "rc=$rc96"
+
+  kill "$DP_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
