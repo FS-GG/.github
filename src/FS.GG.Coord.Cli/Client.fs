@@ -480,6 +480,7 @@ module Client =
                     boardRows
                     |> List.filter (fun r -> r.Status = BoardStatus.InProgress)
                     |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number)
+                    |> Set.ofList
 
                 let candidates =
                     if failure.IsSome then
@@ -491,7 +492,7 @@ module Client =
                         |> List.ofSeq
 
                 let isInProgress ref =
-                    inProgressRefs |> List.contains ref
+                    inProgressRefs |> Set.contains ref
 
                 let results = ResizeArray<WhoRow>()
 
