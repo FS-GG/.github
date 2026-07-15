@@ -1533,6 +1533,138 @@ fi
 #     repo resolution can never touch the budget, which is the very property #430 exists to guarantee. The
 #     no-remote case is a plain refusal (leg (b) above), not a rate-limit classification.
 
+# ---- AN ID TWO WORKERS SHARE IS NOT A LOCK (case 44): #419 ---------------------------------------
+#
+# The corpus (`tests/fsgg-coord/cases/44-invented-id-419.sh`, #419) certifies two defences against the
+# double-claim ADR-0027 moved the lock off the shared GitHub account to prevent — one level down, where the
+# id itself is shared. Eight live agents once drew from four of twenty words and two independently picked
+# the same suffix; a lock whose key two workers hold is not a lock.
+#
+#   1. MINT, don't invent — the remedy is a COMMAND (`whoami --mint`), so there is no literal id in any
+#      warning for an agent to pattern-match and paste. Its stdout is EXACTLY one eval-able line, and the id
+#      is unique per call (both halves from the CSPRNG — a pid+time seed drew the same word for every agent
+#      a harness fanned out in one second).
+#   2. `claim` REFUSES a live marker carrying OUR worker id but a DIFFERENT session — a TWIN, not us. Before
+#      #419 that landed in the heartbeat path and silently renewed, putting two workers on one item.
+#
+# This was mostly ALREADY in the engine: `Identity.mint` (CSPRNG, both halves), `whoami --mint` (one line to
+# stdout), and markers that carry `session=` (`Reads.sessionRe`) all existed. The PORT GAP was the twin
+# refusal — `Writes.claim`'s "already ours by id" branch adopted the marker unconditionally, never comparing
+# sessions — and the `whoami` shared-session WARNING, which explained the hazard on stdout but named no
+# remedy. This slice lands the fix (a `Twin` outcome the CAS returns when both sessions are known and differ;
+# a stderr warning pointing at the mint command) and holds the engine to the corpus's answers over HTTP.
+#
+# Re-expressed at the HTTP layer (ADR-0040 §5): the corpus drives the twin scenario through a PATH-shim `gh`
+# and a comment store; here `restore_server.py` seeds the same markers (a twin with `session=79b9e347`; a
+# sessionless one), answers the CAS's marker reads, and records that NO second marker is posted — so the
+# "left the twin's marker intact" property is read off the served comment set, not `gh` call counts.
+#
+# DISPOSED ON THE RECORD (not silently skipped): the corpus's "lease renewed" WORDING (case 44 lines 90-100)
+# is bash's; the engine reports a successful re-claim as `claimed <ref> by worker <w>` (a `claim` that finds
+# the marker already ours is a no-op Won, not a lease-rewriting heartbeat — the lease matters more than the
+# courtesy string). This re-expresses the PROPERTY #419 leg 4 protects — a sessionless or same-session marker
+# with our id SUCCEEDS (is ours), it is not refused — asserted on the exit code and the absence of a refusal,
+# not on the literal "lease renewed".
+
+# (offline, no server) 1. THE REMEDY IS A COMMAND. Its stdout is EXACTLY one eval-able line — commentary
+#    goes to stderr, or `eval "$(… --mint)"` executes the prose.
+m1="$("$ENGINE" whoami --mint 2>/dev/null)"
+[ "$(printf '%s\n' "$m1" | wc -l | tr -d ' ')" = "1" ] \
+  && ok "#419: whoami --mint prints EXACTLY one line on stdout (eval-safe — no prose to execute) (case 44)" \
+  || bad "#419: --mint must print one line" "$m1"
+case "$m1" in export\ FSGG_WORKER=*) ok "#419: ...and it is an eval-able 'export FSGG_WORKER=' (case 44)" ;;
+             *) bad "#419: --mint must emit an eval-able export" "$m1" ;; esac
+m2="$("$ENGINE" whoami --mint 2>/dev/null)"; m3="$("$ENGINE" whoami --mint 2>/dev/null)"
+[ "$(printf '%s\n%s\n%s\n' "$m1" "$m2" "$m3" | sort -u | wc -l | tr -d ' ')" = "3" ] \
+  && ok "#419: successive mints do NOT collide — both halves are CSPRNG, not a pid+time seed (case 44)" \
+  || bad "#419: successive mints collided" "$(printf '%s / %s / %s' "$m1" "$m2" "$m3")"
+# The minted id is the one `eval` takes effect as — the ritual §0 tells each worker to run.
+minted_id="$(printf '%s' "$m1" | sed 's/^export FSGG_WORKER=//')"
+eval_id="$(eval "$m1"; "$ENGINE" whoami 2>/dev/null | awk '/^worker/{print $2}')"
+[ "$minted_id" = "$eval_id" ] \
+  && ok "#419: the minted id is the one eval takes effect as (round-trips through whoami) (case 44)" \
+  || bad "#419: minted id must round-trip through eval" "minted=$minted_id eval=$eval_id"
+
+# (offline) 2. THE SHARED-ID WARNING points at the MINT COMMAND, tells the worker not to invent one, and
+#    offers NO literal id to copy — a warning that named `finch-a3f` is exactly the attractor #419 documents.
+#    A CLAUDE_CODE session shares one id across every subagent, so a bare `whoami` deriving from it warns.
+sw="$(env -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID -u FSGG_WORKER \
+        CLAUDE_CODE_SESSION_ID=309bd638-8a1c-42b7-952b-898efb8d1064 "$ENGINE" whoami 2>&1 >/dev/null)"
+printf '%s' "$sw" | grep -q 'whoami --mint' \
+  && ok "#419: the shared-id warning points at the MINT command (case 44)" \
+  || bad "#419: shared-id warning must name 'whoami --mint'" "$sw"
+printf '%s' "$sw" | grep -q 'do NOT invent' \
+  && ok "#419: ...and tells the worker not to invent one (case 44)" \
+  || bad "#419: shared-id warning must say 'do NOT invent'" "$sw"
+[ "$(printf '%s' "$sw" | grep -cE '(finch|heron|wren)-[0-9a-f]{3}' || true)" = "0" ] \
+  && ok "#419: ...and offers NO literal id to copy (no 'finch-a3f' attractor) (case 44)" \
+  || bad "#419: shared-id warning must offer no literal id" "$sw"
+
+# (fixture) 3. THE REGRESSION. A live marker with OUR id but a DIFFERENT session is a TWIN, not us — it
+#    must REFUSE, not adopt-and-heartbeat. `restore_server.py` seeds #74 held by heron-7c2 session=79b9e347
+#    and #71 held sessionlessly by dunlin-9f1.
+TW_OUT="$(mktemp)"
+FSGG_PARITY_MARKERS='[{"n":74,"id":819,"worker":"heron-7c2","session":"79b9e347"},{"n":71,"id":820,"worker":"dunlin-9f1"}]' \
+  python3 "$HERE/restore_server.py" >"$TW_OUT" 2>/dev/null &
+TW_SRV=$!; TW_PORT=""
+for _ in $(seq 1 50); do TW_PORT="$(head -n1 "$TW_OUT" 2>/dev/null)"; [ -n "$TW_PORT" ] && break; sleep 0.1; done
+rm -f "$TW_OUT"
+if [ -z "$TW_PORT" ]; then bad "twin fixture bound a port"; else
+  # tclaim <session> <worker> <claim-args...> — a claim as a named session/worker against the twin fixture.
+  tclaim() { local s="$1" w="$2"; shift 2
+    env FSGG_GITHUB_API_BASE="http://127.0.0.1:$TW_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+        FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+        env -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID CLAUDE_CODE_SESSION_ID="$s" FSGG_WORKER="$w" \
+        "$ENGINE" claim "$@"; }
+  tmarkers() { python3 -c 'import sys,urllib.request; print(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/repos/FS-GG/FS.GG.SDD/issues/"+sys.argv[2]+"/comments").read().decode())' "$TW_PORT" "$1" 2>/dev/null; }
+
+  twin_err="$(tclaim ed60050b heron-7c2 FS.GG.SDD#74 2>&1 >/dev/null)"; twin_rc=$?
+  [ "$twin_rc" -ne 0 ] \
+    && ok "#419: claim REFUSES a marker with our id but another session (non-zero) (case 44)" \
+    || bad "#419: a twin claim must be refused" "rc=$twin_rc err=$twin_err"
+  printf '%s' "$twin_err" | grep -q 'two workers share one id' \
+    && ok "#419: ...naming it as two workers sharing one id (case 44)" \
+    || bad "#419: the refusal must name the shared-id hazard" "$twin_err"
+  printf '%s' "$twin_err" | grep -q '79b9e347' \
+    && ok "#419: ...and reporting the OTHER session (79b9e347) (case 44)" \
+    || bad "#419: the refusal must report the other session" "$twin_err"
+  printf '%s' "$twin_err" | grep -q 'whoami --mint' \
+    && ok "#419: ...and offering the mint as the way out (case 44)" \
+    || bad "#419: the refusal must offer whoami --mint" "$twin_err"
+  # THE ONE THAT MATTERS: the twin's marker is untouched and NO second marker was posted (the refusal is
+  # before the CAS's post). Read off the served comment set — the HTTP re-expression of `claims_on 74`.
+  ids74="$(tmarkers 74 | jq -r 'sort_by(.id) | map(.id|tostring) | join(",")')"
+  [ "$ids74" = "819" ] \
+    && ok "#419: ...and the twin's marker is left intact — no second marker posted (case 44)" \
+    || bad "#419: the twin's marker must be untouched and alone" "ids=$ids74"
+
+  # --force steals a CONTESTED item; a twin is a broken IDENTITY, not a contested item, so the refusal must
+  # SURVIVE --force (forcing would delete a lock our twin is working behind).
+  force_err="$(tclaim ed60050b heron-7c2 FS.GG.SDD#74 --force 2>&1 >/dev/null)"; force_rc=$?
+  { [ "$force_rc" -ne 0 ] && printf '%s' "$force_err" | grep -q 'two workers share one id'; } \
+    && ok "#419: --force does NOT override the twin refusal (case 44)" \
+    || bad "#419: --force must not override the twin refusal" "rc=$force_rc err=$force_err"
+  ids74f="$(tmarkers 74 | jq -r 'sort_by(.id) | map(.id|tostring) | join(",")')"
+  [ "$ids74f" = "819" ] \
+    && ok "#419: ...so --force left the twin's marker alone (case 44)" \
+    || bad "#419: --force must leave the twin's marker alone" "ids=$ids74f"
+
+  # 4. BACK-COMPAT, the boundary of the rule. We may only conclude "twin" when BOTH sessions are known. A
+  #    SESSIONLESS marker (a human, a harness exporting none, any pre-#419 marker) is indistinguishable from
+  #    ours — it stays OURS (a successful claim), rather than failing closed and locking a worker out.
+  tclaim ed60050b dunlin-9f1 FS.GG.SDD#71 >/dev/null 2>&1; sless_rc=$?
+  [ "$sless_rc" -eq 0 ] \
+    && ok "#419: a SESSIONLESS marker with our id is still ours — the claim SUCCEEDS, not refused (case 44)" \
+    || bad "#419: a sessionless marker with our id must not be refused" "rc=$sless_rc"
+  # ...and the SAME session re-claiming its OWN marker is a heartbeat, never a twin — or a worker could
+  #    never renew its own claim (the refusal firing on itself).
+  tclaim 79b9e347 heron-7c2 FS.GG.SDD#74 >/dev/null 2>&1; same_rc=$?
+  [ "$same_rc" -eq 0 ] \
+    && ok "#419: the SAME session re-claiming its own marker SUCCEEDS (a heartbeat, not a twin) (case 44)" \
+    || bad "#419: same-session re-claim must not be refused as a twin" "rc=$same_rc"
+  kill "$TW_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

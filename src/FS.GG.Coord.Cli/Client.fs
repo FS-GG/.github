@@ -123,7 +123,10 @@ module Client =
         | Ok w ->
             match w.Provenance with
             | Identity.FromSharedSession(_, _, why) ->
-                eprint $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Pass --worker to be certain."
+                // #419: point at the mint COMMAND, not a literal — the same remedy `whoami` gives, so the
+                // command path agents actually run most does not re-introduce the copy-a-literal attractor.
+                // The id is named as DIAGNOSIS (which id you are using now), never as one to invent.
+                eprint $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Give EACH worker a unique id (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
             | _ -> ()
 
             Ok w
@@ -618,6 +621,17 @@ module Client =
                                 ExitGreen
                     | Ok(Writes.Lost holder) ->
                         eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
+                        ExitRed
+                    | Ok(Writes.Twin theirs) ->
+                        // #419: the marker is ours by id but a DIFFERENT session — two workers share one id.
+                        // This is a broken IDENTITY, not a contested item, and the fix for a broken identity
+                        // is a NEW identity, so `--force` (which steals contested items) must NOT override it:
+                        // forcing here would delete a lock our twin is working behind. The remedy is a command,
+                        // not a literal — an id an agent copies is an id agents collide on.
+                        eprint
+                            $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{w.Id}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Adopting it would put both of you on this item, which is the double-claim ADR-0027 exists to prevent."
+
+                        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
                         ExitRed
                     | Ok(Writes.Undecided reason) ->
                         eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
@@ -1325,6 +1339,19 @@ module Client =
             | Ok w ->
                 for line in Identity.explain w do
                     printfn "%s" line
+
+                // #419: when the id was DERIVED from a session that shares one id across every subagent, a
+                // fan-out would hand N workers the same id — the exact collision ADR-0027 moved the lock off
+                // the shared account to avoid. Warn to STDERR (stdout is the id itself), point at the mint
+                // COMMAND, and offer NO literal to copy: a warning that named an example id is one agents
+                // pattern-match on and paste, which is how #419 happened.
+                match w.Provenance with
+                | Identity.FromSharedSession _ ->
+                    eprint
+                        "fsgg-coord-engine: WARNING — this id was derived from a session that shares one id across every subagent, so a fan-out of workers would all draw it and collide on each other's locks (#419)."
+
+                    eprint "  Give EACH worker a unique id (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
+                | _ -> ()
 
                 ExitGreen
 
