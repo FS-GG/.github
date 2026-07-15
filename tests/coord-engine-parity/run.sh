@@ -49,12 +49,39 @@ out1="$("$ENGINE" batch --repo FS.GG.SDD -n 1 --json 2>/dev/null)"
   && ok "batch -n 1 --json honours the requested width" \
   || bad "batch -n 1 --json" "expected [\"FS.GG.SDD#70\"], got: $out1"
 
-# ---- the skip reasons name the right items and causes (stderr; the corpus asserts substrings) -----
+# ---- the skip reasons name the right items AND the right CAUSE KIND (case 22 certifies these exact
+#      substrings). It is not enough to name #71 — the reason must say WHY, and the WHY is the #428
+#      distinction below.
 err="$("$ENGINE" batch --repo FS.GG.SDD 2>&1 >/dev/null)"
 check_skip() { printf '%s' "$err" | grep -q "$1" && ok "$2" || bad "$2" "not in stderr: $err"; }
-check_skip "FS.GG.SDD#71" "batch: names #71 among the passed-over (the in-flight overlap)"
-check_skip "FS.GG.SDD#72" "batch: names #72 among the passed-over (no touch-set)"
-check_skip "FS.GG.SDD#73" "batch: names #73 among the passed-over (batch-member overlap)"
+check_skip "FS.GG.SDD#71 — overlaps in-flight work"           "batch: #71 is a LIVE-CLAIM overlap — 'overlaps in-flight work' (case 22)"
+check_skip "FS.GG.SDD#72 — no 'Paths:' declared"              "batch: #72 is UNDECLARED — 'no Paths: declared' (case 22)"
+check_skip "FS.GG.SDD#73 — overlaps batch member FS.GG.SDD#70" "batch: #73 is a BATCH-MEMBER overlap — names its peer #70 (case 22)"
+
+# ---- #428: a LIVE-CLAIM overlap and a BATCH-MEMBER overlap are the SAME verdict (skipped) but two
+#      DIFFERENT instructions — one is queued behind a holder's lease, the other clashes a peer being
+#      scheduled right now. The flip's #428 defect dropped the lease window + holder and collapsed the
+#      two into one line, so 'wait for a lease' and 'reorder your batch' read identically. The corpus
+#      certifies the two phrasings ('in-flight work' vs 'batch member'); parity holds the engine to the
+#      DISTINCTION, over HTTP.
+l71="$(printf '%s' "$err" | grep 'FS.GG.SDD#71')"
+l73="$(printf '%s' "$err" | grep 'FS.GG.SDD#73')"
+if printf '%s' "$l71" | grep -q 'in-flight work' \
+   && printf '%s' "$l73" | grep -q 'batch member' \
+   && [ "$l71" != "$l73" ]; then
+  ok "#428: a live-claim overlap and a batch-member overlap are DISTINGUISHABLE (same verdict, different instruction)"
+else
+  bad "#428: the live-claim and batch-member collision lines must not read alike" "71:$l71 | 73:$l73"
+fi
+# ...and the live-claim line carries the holder — #42's holder is finch-a3f (case 22 certifies that
+# name in the widen collision); a 'batch member' line names a peer ITEM, never a worker.
+printf '%s' "$l71" | grep -q 'finch-a3f' \
+  && ok "#428: the live-claim overlap names the HOLDER (finch-a3f) — the fact a batch-member line has not got" \
+  || bad "#428: live-claim overlap names its holder" "$l71"
+case "$l73" in
+  *finch-a3f*|*"held by"*) bad "#428: a batch-member line must NOT name a worker/holder — it is not a live claim" "$l73" ;;
+  *) ok "#428: the batch-member overlap names a peer item, not a worker — the two lines cannot be confused" ;;
+esac
 
 # ---- next: the first schedulable item ------------------------------------------------------------
 nxt="$("$ENGINE" next --repo FS.GG.SDD 2>/dev/null)"
