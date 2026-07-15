@@ -1,0 +1,78 @@
+# Assert `vars.NUGET_ORG_PUBLISH` is `true` wherever a workflow gates a nuget.org publish on it
+# (.github#750, epic #266).
+#
+# Two release workflows here (release-coord-engine.yml, release-new-sdd-workspace.yml) publish to public
+# nuget.org via Trusted Publishing and gate their nuget.org steps on `vars.NUGET_ORG_PUBLISH == 'true'`.
+# The gate is deliberate — without the OIDC policy in place NuGet/login fail-closes (401) — so the variable
+# is a switch. But nothing asserts the switch is on. FS.GG.Coord.Cli is one of the two packages behind it,
+# and it is the coordination engine the whole FLEET restores; unset the variable and `dotnet tool restore`
+# fails in five receivers, as an empty version list rather than an error (ADR-0039). scripts/check-publish-
+# flags.py closes that.
+#
+# THE SCHEDULE IS THE LOAD-BEARING TRIGGER. The #750 hazard is the repo VARIABLE being unset — which touches
+# no file in this repo, so no path-filtered trigger can see it. Only a periodic run can. This mirrors
+# feed-coherence.yml, whose daily read is what caught the #250-class staleness six times.
+#
+# FAILS CLOSED (epic #266): the gate errors on an unset/false/absent flag, a missing workflows directory, or
+# a policy it cannot see. This workflow must never gain a `continue-on-error` or a conditional that lets the
+# assertion be skipped into green — "nothing to check" and "checked, and it's on" must not share an exit code.
+name: publish-flags
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-publish-flags.py"
+      - "tests/publish-flags/**"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-new-sdd-workspace.yml"
+      - ".github/workflows/publish-flags.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-publish-flags.py"
+      - "tests/publish-flags/**"
+      - ".github/workflows/release-coord-engine.yml"
+      - ".github/workflows/release-new-sdd-workspace.yml"
+      - ".github/workflows/publish-flags.yml"
+  schedule:
+    # Daily. The variable being unset out-of-band touches no file here — only a periodic run notices.
+    - cron: "37 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-flags-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate goes red on every unset/false/absent-flag condition before we trust its green.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Run the publish-flags fixture (no network)
+        run: bash tests/publish-flags/run.sh
+
+  # The assertion. Reads THIS repo's own `NUGET_ORG_PUBLISH` and the real workflows it gates.
+  assert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Assert NUGET_ORG_PUBLISH is true wherever a nuget.org publish gates on it
+        env:
+          # The variable, passed as env — never interpolated into the run script (the org's uniform
+          # anti-injection pattern). An unset repo variable renders as the empty string, which the gate
+          # reads as the #750 hazard and fails closed on.
+          NUGET_ORG_PUBLISH: ${{ vars.NUGET_ORG_PUBLISH }}
+        run: python scripts/check-publish-flags.py .github/workflows
