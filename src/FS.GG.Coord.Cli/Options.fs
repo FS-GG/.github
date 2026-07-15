@@ -14,6 +14,7 @@ module Options =
         | BatchCmd
         | Ready
         | Who
+        | Reap
         | Claim
         | Take
         | Release
@@ -77,7 +78,10 @@ module Options =
           /// `overlap <ref> --active` — check the item's touch-set against the LIVE claims in its own repo,
           /// rather than against a second named item. Repo-scoped: a same-named token in another repo is not
           /// a collision (#353).
-          Active: bool }
+          Active: bool
+
+          /// `reap --apply` — actually DELETE the expired markers; without it, reap is a DRY RUN (#581).
+          Apply: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -106,6 +110,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              will refuse; --status/--all widen past the default)
   who    [--repo NAME] [--json]              who holds what, right now (held/stale/unclaimed;
                                              --json for the machine contract, else a human table)
+  reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
+                                             an open item/<n>-* PR (#581); a DRY RUN without --apply
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
@@ -205,6 +211,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--batch" :: t -> flags { acc with Batch = true } t
             | "--strict" :: t -> flags { acc with Strict = true } t
             | "--active" :: t -> flags { acc with Active = true } t
+            | "--apply" :: t -> flags { acc with Apply = true } t
 
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
@@ -262,7 +269,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               All = false
               Batch = false
               Strict = false
-              Active = false }
+              Active = false
+              Apply = false }
 
         match args with
         | []
@@ -285,6 +293,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `who` is a HUMAN truth read by default (the table case 20 asserts), and `--json` opts into the
         // machine contract cases 20/25 consume — the mirror of `ready`/`batch`, where JSON is the default.
         | "who" :: rest -> flags { defaults with Command = Who; Render = Text } rest
+        // `reap` reports as text (the operator reads it before deciding); its collect is gated behind
+        // `--apply`, so the bare form is a DRY RUN.
+        | "reap" :: rest -> flags { defaults with Command = Reap; Render = Text } rest
         | "claim" :: rest -> flags { defaults with Command = Claim } rest
         | "take" :: rest -> flags { defaults with Command = Take } rest
         | "release" :: rest -> flags { defaults with Command = Release } rest

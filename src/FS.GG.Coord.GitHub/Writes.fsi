@@ -208,6 +208,61 @@ module Writes =
     /// leaves the column alone and REPORTS it, rather than failing and leaving a lock behind.
     val release: transport: IGitHubTransport -> held: Held -> IoResult<BoardStatus option>
 
+    /// A stale marker that has been PROVEN reapable — its lease has lapsed AND we LOOKED for the item's
+    /// own `item/<n>-*` PR and found none. This is #581 as a TYPE.
+    ///
+    /// Abstract, and produced ONLY by `reapable`. There is no constructor from a `Marker` alone, and that
+    /// is the whole point: lease expiry is EVIDENCE of abandonment, never PROOF (its false positive is
+    /// systematic — work that outlasts its lease), so a marker whose PR is open, or whose liveness we could
+    /// not read, cannot be turned into one of these. `reap` accepts nothing else, so "collect a claim only
+    /// once you have ruled its work dead" is not an `if` a reaper can forget — it is the only door in.
+    ///
+    /// It carries the marker's COMMENT ID, because the lock IS that id: reaping by worker STRING would let a
+    /// twin's id name the wrong comment, the #550 shape one command over.
+    [<Sealed>]
+    type Reapable =
+        /// The item this stale lock sits on.
+        member Ref: Ref
+
+        /// The worker whose lapsed claim this is — named in the reap report, never the reaper's.
+        member Worker: WorkerId
+
+        /// The comment id of the stale marker. The lock IS this number.
+        member MarkerId: int64
+
+        /// The board column this claim overwrote (#481), so a reap can put it back rather than guess — the
+        /// same restore `release` performs, now for a lock its own holder abandoned.
+        member PreviousStatus: BoardStatus option
+
+    /// Why a stale marker may NOT be reaped. NOT a `bool`: each case is a different thing to tell the
+    /// operator, and collapsing "the work is alive" into "could not reap" is exactly how #581's reaper
+    /// destroyed the claims of workers who were visibly still working.
+    type ReapRefusal =
+        /// #581: the lease lapsed, but an `item/<n>-*` PR is OPEN — the worktree protocol's own artifact,
+        /// server-side proof the work is alive. Carries the PR number so the refusal is checkable.
+        | WorkAlive of pr: int
+
+        /// WE COULD NOT TELL. The liveness read failed, and a lock we cannot rule dead we may not break —
+        /// a transient 5xx must not become a reaped claim (the fail-closed direction on a lock).
+        | Undetermined of reason: string
+
+    /// Prove a STALE marker is reapable — #581's judgement, in ONE place.
+    ///
+    /// `Ok` only on `LeaseExpiredNoPr`: the lease lapsed and we LOOKED for the item's PR and found none.
+    /// Every other `Liveness` is a `ReapRefusal` the caller must report instead of collecting. The caller
+    /// owns finding the lease lapsed first (it must, or the `LeaseExpired*` cases are a lie) — this function
+    /// owns the proof-of-life gate on top of it.
+    val reapable: ref: Ref -> marker: Reads.Marker -> liveness: Liveness -> Result<Reapable, ReapRefusal>
+
+    /// COLLECT a reaped claim — delete the stale marker so the lease self-heals.
+    ///
+    /// Takes the `Reapable`, so #581 is unexpressible here: a live or unreadable claim has no way to reach
+    /// this call. It deletes by COMMENT ID (a 404 is success — two reapers collecting the same marker must
+    /// not turn the loser's benign miss into an error), and it does NOT touch the board: what the freed
+    /// column becomes is the caller's decision (`PreviousStatus`), made after the lock is already gone, so a
+    /// board it cannot read or write leaves the column alone rather than stranding a lock behind a failure.
+    val reap: transport: IGitHubTransport -> reapable: Reapable -> IoResult<unit>
+
     /// Post a message to another worker (`fsgg:msg`).
     ///
     /// Does NOT take a `Held` — deliberately. A worker who has just LOST a race, or who is warning the

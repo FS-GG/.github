@@ -734,6 +734,7 @@ childsrv() {  # childsrv <env-kv...> --  ; sets globals CHILD_PORT and CHILD_SRV
 # Read the POST bodies the fixture recorded — python3 is already the fixture runtime, so this adds no
 # dependency (the same idiom the #533 `dclaims` leg uses to read state straight off its server).
 posts_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_posts").read().decode())' "$1" 2>/dev/null; }
+deletes_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_deletes").read().decode())' "$1" 2>/dev/null; }
 
 # 1. THE LINK. An empty parent, a fresh child: `child` links it, names the edge in the sub-issue's own
 #    vocabulary (case 15's "linked … as a sub-issue of …"), and POSTs the child's REST id as a NUMBER.
@@ -2168,6 +2169,72 @@ if [ -z "$WN_PORT" ]; then bad "widen-notify fixture bound a port"; else
     && ok "case34: the notify lands as exactly one comment on #403 (#353)" || bad "case34: #403 should get one notify" "$(posts_on "$WN_PORT")"
 
   kill "$WN_SRV" 2>/dev/null
+fi
+
+# ---- REAP: an expired lease is EVIDENCE of abandonment, not PROOF (#581) — case 26 ----------------
+# The false positive is SYSTEMATIC: work that simply outlasts its lease. bash's reaper broke a lock on
+# expiry alone and collected the claims of workers who were visibly still working, TWICE. #581's fix: an
+# open PR on the item's own `item/<n>-*` branch is the worktree protocol's own server-side proof of life,
+# so `reap` LOOKS for it and REFUSES when one is open. This holds the engine's new `reap` command to case
+# 26's certified answers over HTTP: the SAME off-board stale claim (#216, ghost-222, lease lapsed), reaped
+# when its work is dead and REFUSED when its PR is open — with the deletes counted at the HTTP layer, so a
+# refusal that deleted anyway (the exact #581 bug) cannot pass. `reap_server.py` is that world one
+# transport over; `--apply` gates the destructive break, and the bare form is a dry run (case 25).
+RP_OUT="$(mktemp)"; python3 "$HERE/reap_server.py" >"$RP_OUT" 2>/dev/null & RP_SRV=$!; RP_PORT=""
+for _ in $(seq 1 50); do RP_PORT="$(head -n1 "$RP_OUT" 2>/dev/null)"; [ -n "$RP_PORT" ] && break; sleep 0.1; done
+rm -f "$RP_OUT"
+if [ -z "$RP_PORT" ]; then bad "reap fixture bound a port"; else
+  rp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$RP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" reap "$@" 2>&1; }
+
+  # DRY RUN (case 25): a bare `reap` reports what --apply WOULD collect and deletes NOTHING. A destructive
+  # lock-break is never the default — the operator opts in.
+  rdry="$(rp --repo FS.GG.Rendering)"
+  printf '%s' "$rdry" | grep -q 'would reap  FS.GG.Rendering#216  worker ghost-222' \
+    && ok "reap: a bare reap is a DRY RUN — 'would reap …' names the item and its dead worker (case 25)" \
+    || bad "reap dry-run line" "$rdry"
+  [ "$(deletes_on "$RP_PORT")" = '[]' ] \
+    && ok "reap: ...and the DRY RUN deletes NOTHING (the break is gated behind --apply)" \
+    || bad "reap dry-run must not delete" "deletes: $(deletes_on "$RP_PORT")"
+
+  # --apply, DEAD lease (case 26 / case 25): the expired claim with NO open PR is collected — the negative
+  # control that keeps the #581 refusal below from being satisfied by a reap that simply stopped working.
+  rapp="$(rp --repo FS.GG.Rendering --apply)"
+  printf '%s' "$rapp" | grep -q 'reaped  FS.GG.Rendering#216  worker ghost-222' \
+    && ok "#581: an expired claim with NO open PR is reaped, naming the item + dead worker (case 26)" \
+    || bad "reap --apply reaped line" "$rapp"
+  [ "$(deletes_on "$RP_PORT")" = '[880]' ] \
+    && ok "#581: ...and the marker (comment 880) is actually DELETED — the lock released (case 26)" \
+    || bad "reap --apply must delete the marker" "deletes: $(deletes_on "$RP_PORT")"
+  # OFF-BOARD honesty (case 25): #216 is not on the board, and reap must not claim a reset it never did.
+  printf '%s' "$rapp" | grep -q 'not on board (marker cleared; nothing to reset)' \
+    && ok "reap: an OFF-BOARD claim's reset is 'not on board (nothing to reset)' — none invented (case 25)" \
+    || bad "reap off-board reset honesty" "$rapp"
+
+  kill "$RP_SRV" 2>/dev/null
+fi
+
+# LIVE-PR server: the SAME lapsed lease, but an OPEN PR #433 on item/216-* — the work is demonstrably alive.
+RL_OUT="$(mktemp)"; REAP_LIVE_PR=216:433 python3 "$HERE/reap_server.py" >"$RL_OUT" 2>/dev/null & RL_SRV=$!; RL_PORT=""
+for _ in $(seq 1 50); do RL_PORT="$(head -n1 "$RL_OUT" 2>/dev/null)"; [ -n "$RL_PORT" ] && break; sleep 0.1; done
+rm -f "$RL_OUT"
+if [ -z "$RL_PORT" ]; then bad "reap live-PR fixture bound a port"; else
+  rl="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$RL_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+          FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+          "$ENGINE" reap --repo FS.GG.Rendering --apply 2>&1)"
+  printf '%s' "$rl" | grep -q 'REFUSING' \
+    && ok "#581: reap REFUSES a claim whose PR is open — the lease lapsed, the WORK did not (case 26)" \
+    || bad "reap must refuse a live PR" "$rl"
+  printf '%s' "$rl" | grep -q '#433' \
+    && ok "#581: ...and names the PR (#433), so the refusal is checkable (case 26)" \
+    || bad "reap refusal names the PR" "$rl"
+  # THE ONE THAT MATTERS: the marker must SURVIVE. A refusal that deleted anyway is the bug #581 is for.
+  [ "$(deletes_on "$RL_PORT")" = '[]' ] \
+    && ok "#581: ...and the claim SURVIVES — nothing deleted (the leg that reaped live work TWICE) (case 26)" \
+    || bad "reap refusal must not delete" "deletes: $(deletes_on "$RL_PORT")"
+
+  kill "$RL_SRV" 2>/dev/null
 fi
 
 echo

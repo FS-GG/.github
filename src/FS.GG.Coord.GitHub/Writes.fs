@@ -26,6 +26,18 @@ module Writes =
         | BlockedByUnparseableMarker
 
     [<Sealed>]
+    type Reapable
+        internal (ref: Ref, worker: WorkerId, markerId: int64, previousStatus: BoardStatus option) =
+        member _.Ref = ref
+        member _.Worker = worker
+        member _.MarkerId = markerId
+        member _.PreviousStatus = previousStatus
+
+    type ReapRefusal =
+        | WorkAlive of pr: int
+        | Undetermined of reason: string
+
+    [<Sealed>]
     type Validated internal (tokens: string list) =
         member _.Tokens = tokens
 
@@ -422,6 +434,27 @@ module Writes =
             // `None` is "this claim recorded no column" — and a column nobody recorded cannot be restored,
             // so the caller says so instead of inventing one (#481).
             Ok held.PreviousStatus
+
+    // ---- reap: break a lock its own holder abandoned (#581) ------------------------------------------
+
+    let reapable (ref: Ref) (marker: Reads.Marker) (liveness: Liveness) : Result<Reapable, ReapRefusal> =
+        // The ONLY green case: the lease lapsed and we LOOKED for the item's PR and found none. `reapable`
+        // is the whole of #581 — a reaper cannot reach `reap` any other way, so the proof-of-life gate is
+        // structural, not a checklist item.
+        match liveness with
+        | LeaseExpiredNoPr -> Ok(Reapable(ref, marker.Worker, marker.Id, marker.PreviousStatus))
+        | LeaseExpiredPrOpen pr -> Error(WorkAlive pr)
+        // "We could not ask" is NOT "there is no PR" — the distinction that stops a transient failure from
+        // reaping live work. A lease that is not even expired should never have reached here; treat it, too,
+        // as a refusal rather than manufacturing a capability, because a `reap` from that state is a bug.
+        | LivenessUnknown -> Error(Undetermined "the item's proof-of-life (its open PRs) could not be read")
+        | LeaseHeld -> Error(Undetermined "the lease has not expired")
+
+    let reap (transport: IGitHubTransport) (reapable: Reapable) : IoResult<unit> =
+        // DELETE THE MARKER. The lease self-heals the instant it is gone. Nothing here restores the board:
+        // that is the caller's decision (`PreviousStatus`), taken after the lock is already dropped, so a
+        // board write that fails cannot strand a lock the way a fatal-here reap would.
+        deleteComment transport reapable.Ref reapable.MarkerId
 
     // ---- the writes that do NOT need the lock ---------------------------------------------------------
 
