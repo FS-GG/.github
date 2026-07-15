@@ -701,6 +701,107 @@ printf '%s' "$whoj" | jq -e 'any(.[]; .number==70)' >/dev/null 2>&1 \
 fi
 kill "$WHO" 2>/dev/null
 
+# ---- CHILD LINKS A SUB-ISSUE, AND FAILS CLOSED READING THE EDGE (case 15): #320 -------------------
+#
+# `child` attaches an issue as a native SUB-ISSUE of a parent so `done --flip`'s epic rollup can see it.
+# The corpus certifies four properties, and each is a fail-closed rule in a different coat: the POST
+# carries the child's REST INTEGER ID as a NUMBER (#266 — the quoted `-f` string form 422s, and the id
+# never the number, since two repos can each have an issue #7); a re-link is idempotent (SUCCESS, keyed by
+# id); the existing-links READ fails closed (#320 — an unreachable read is NOT an absent edge, or `child`
+# would POST, collect a 422, and blame the token); and a failed POST surfaces the API's OWN diagnosis.
+#
+# The engine's `child` POSTed BLINDLY — no existing-links read at all, so no idempotency and no #320
+# fail-closed: the ADR-0040 "half that was never ported." This slice closes it and holds the fixed engine
+# to case 15's answers over HTTP. The corpus's `-F sub_issue_id=1047` (typed number, not the string that
+# 422s) is re-expressed at the HTTP layer: the fixture records the POST body and serves it on `/_posts`, so
+# the assertion is that `sub_issue_id` arrives as a JSON NUMBER — the same property, one transport over.
+# Each leg spawns a FRESH server (a POST mutates the edge set), exactly as the #516/#533 mutating legs do.
+childsrv() {  # childsrv <env-kv...> --  ; sets globals CHILD_PORT and CHILD_SRV for the spawned fixture
+  local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
+  local out; out="$(mktemp)"
+  # `${envs[@]+…}` so an empty env list is not an unbound-variable error under `set -u` (bash < 4.4).
+  env ${envs[@]+"${envs[@]}"} python3 "$HERE/child_server.py" >"$out" 2>/dev/null &
+  local srv=$! port=""
+  for _ in $(seq 1 50); do port="$(head -n1 "$out" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
+  rm -f "$out"
+  CHILD_PORT="$port"; CHILD_SRV="$srv"
+}
+# Read the POST bodies the fixture recorded — python3 is already the fixture runtime, so this adds no
+# dependency (the same idiom the #533 `dclaims` leg uses to read state straight off its server).
+posts_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_posts").read().decode())' "$1" 2>/dev/null; }
+
+# 1. THE LINK. An empty parent, a fresh child: `child` links it, names the edge in the sub-issue's own
+#    vocabulary (case 15's "linked … as a sub-issue of …"), and POSTs the child's REST id as a NUMBER.
+childsrv -- child
+if [ -z "$CHILD_PORT" ]; then bad "child fixture bound a port"; else
+  cenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$CHILD_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  c1="$(cenv child FS.GG.SDD#302 FS.GG.SDD#47 2>&1)"; c1rc=$?
+  { [ "$c1rc" -eq 0 ] && printf '%s' "$c1" | grep -q 'linked FS.GG.SDD#47 as a sub-issue of FS.GG.SDD#302'; } \
+    && ok "child: links the issue as a sub-issue and names the edge (case 15's certified line)" \
+    || bad "child link parity" "rc=$c1rc: $c1"
+  # #266: the id is POSTed as a JSON NUMBER (1047 = #47's REST id), never the quoted string that 422s, and
+  # never the issue number 47 — the HTTP-level form of the corpus's `-F sub_issue_id=1047`.
+  p1="$(posts_on "$CHILD_PORT")"
+  printf '%s' "$p1" | jq -e '.[0].sub_issue_id == 1047 and (.[0].sub_issue_id | type) == "number"' >/dev/null 2>&1 \
+    && ok "#266: child POSTs the child's REST id (1047) as a JSON NUMBER, not its number and not a string" \
+    || bad "#266: sub_issue_id must be the numeric REST id" "posts: $p1"
+  kill "$CHILD_SRV" 2>/dev/null
+fi
+
+# 2. IDEMPOTENT BY ID. The parent already has #47 (id 1047) as a sub-issue: re-linking is SUCCESS, and it
+#    POSTs NOTHING — a worker re-running its close-out never has to check the edge first.
+childsrv FSGG_PARITY_LINKED=1047 -- child
+if [ -z "$CHILD_PORT" ]; then bad "child idempotent fixture bound a port"; else
+  c2="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$CHILD_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" child FS.GG.SDD#302 FS.GG.SDD#47 2>&1)"; c2rc=$?
+  { [ "$c2rc" -eq 0 ] && printf '%s' "$c2" | grep -q 'already a sub-issue'; } \
+    && ok "child: re-linking an already-attached child is idempotent SUCCESS (keyed by id)" \
+    || bad "child idempotent parity" "rc=$c2rc: $c2"
+  [ "$(posts_on "$CHILD_PORT")" = '[]' ] \
+    && ok "child: ...and an idempotent re-link POSTs nothing — the edge already exists" \
+    || bad "child: an idempotent re-link must not POST" "posts: $(posts_on "$CHILD_PORT")"
+  kill "$CHILD_SRV" 2>/dev/null
+fi
+
+# 3. FAIL CLOSED ON THE EDGE READ (#320). The existing-links read 500s: `child` must REFUSE, name the
+#    unreadable subject, and POST NOTHING — an unreachable read is not an absent edge (or it POSTs, collects
+#    a 422, and blames the token). This is #266's thesis on the sub-issue graph.
+childsrv FSGG_PARITY_SUBISSUES_FAIL=1 -- child
+if [ -z "$CHILD_PORT" ]; then bad "child fail-closed fixture bound a port"; else
+  c3="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$CHILD_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" child FS.GG.SDD#302 FS.GG.SDD#47 2>&1)"; c3rc=$?
+  [ "$c3rc" -ne 0 ] \
+    && ok "#320: an unreachable existing-links read fails closed (non-zero)" \
+    || bad "#320: child must refuse on an unreadable sub-issue read" "rc=$c3rc: $c3"
+  printf '%s' "$c3" | grep -q 'refusing to guess whether' \
+    && ok "#320: ...and it NAMES the refusal — an unreachable read is not an absent edge" \
+    || bad "#320: child names the refusal to guess" "$c3"
+  [ "$(posts_on "$CHILD_PORT")" = '[]' ] \
+    && ok "#320: ...and it POSTs NOTHING while it cannot tell (no 422-and-blame-the-token)" \
+    || bad "#320: child must not POST on a failed edge read" "posts: $(posts_on "$CHILD_PORT")"
+  kill "$CHILD_SRV" 2>/dev/null
+fi
+
+# 4. SURFACE THE API'S OWN ERROR. The link POST 422s: `child` reports the API's diagnosis (422), never a
+#    guessed cause — a 422 (already linked / cross-repo refusal) and a 403 (no `issues: write`) are
+#    different problems with different fixes.
+childsrv FSGG_PARITY_POST_FAIL=1 -- child
+if [ -z "$CHILD_PORT" ]; then bad "child POST-fail fixture bound a port"; else
+  c4="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$CHILD_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" child FS.GG.SDD#302 FS.GG.SDD#47 2>&1)"; c4rc=$?
+  [ "$c4rc" -ne 0 ] && printf '%s' "$c4" | grep -q '422' \
+    && ok "child: a failed link reports the API's own error (422), not a guessed cause" \
+    || bad "child POST-fail parity" "rc=$c4rc: $c4"
+  kill "$CHILD_SRV" 2>/dev/null
+fi
+
+# 5. A MISSING ARGUMENT IS REFUSED. `child` needs BOTH refs; one is a usage error, not a link.
+childsrv -- child
+if [ -z "$CHILD_PORT" ]; then bad "child missing-arg fixture bound a port"; else
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$CHILD_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" child FS.GG.SDD#302 >/dev/null 2>&1
+  [ "$?" -ne 0 ] \
+    && ok "child: refuses a missing argument (both refs are required)" \
+    || bad "child must refuse a single argument"
+  kill "$CHILD_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

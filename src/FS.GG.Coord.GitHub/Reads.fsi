@@ -131,6 +131,13 @@ module Reads =
     /// number where an id belongs attaches the wrong issue silently.
     val restId: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<int64>
 
+    /// The REST ids of an issue's EXISTING sub-issues (`issues/{n}/sub_issues`).
+    ///
+    /// FAILS CLOSED (#320): an unreadable list is an ERROR, never an empty one. `child` reads it to be
+    /// idempotent, and folding a failed read into "the edge is absent" would make it POST, collect a 422,
+    /// and blame the token — an unreachable subject reported as an absent one.
+    val subIssueIds: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<int64 list>
+
     /// The rate-limit meter.
     ///
     /// FREE — this read does not spend the budget it reports, which is what makes "back off until the
