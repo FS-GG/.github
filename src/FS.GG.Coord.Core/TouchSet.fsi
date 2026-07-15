@@ -42,7 +42,20 @@ module TouchSet =
     /// `src/Scene/Types.fs`, so declaring the parent reserves the child exactly as effectively as
     /// naming it. (Which is the trap behind #309: declaring a generated artifact's PARENT directory
     /// reserves the artifact against the whole board.)
+    /// The token with its trailing `/**` or `/*` taken off — the SUBTREE it actually names. This is the
+    /// form a collision is REPORTED in, not merely matched in: `src/Off/Sub/**` and `src/Off/Sub` are one
+    /// subtree, and printing the raw suffix beside a reservation that has none reads as two different things.
+    val stem: t: string -> string
+
     val tokensOverlap: a: string -> b: string -> bool
+
+    /// Is `file` covered by `token`? THE verify-paths containment rule, matching the bash client byte for
+    /// byte: strip the trailing `/**`, `/*`, or `/` (the grammar's only wildcard), then the file is covered
+    /// iff it EQUALS that directory prefix or lies under it (`prefix/…`).
+    ///
+    /// An `Unmatchable` token reserves nothing, so it covers nothing (#273): a token that can match no file
+    /// cannot vouch for one either. This is the same asymmetry the scheduler relies on, in one place.
+    val covers: token: PathToken -> file: string -> bool
 
     /// The tokens two touch-sets share. Empty = they may run in parallel.
     ///

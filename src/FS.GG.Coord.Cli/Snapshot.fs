@@ -24,9 +24,15 @@ module Snapshot =
         { Item: Item
           BashPaths: string list option }
 
+    /// The claim lease, in minutes. It is CONFIGURABLE in the client (`FSGG_CLAIM_LEASE_MIN`, default
+    /// 120), so the engine may not assume it — a repo that shortened its lease and an engine that hard-
+    /// coded 120 would together tell every worker to wait out a window that already closed.
+    let DefaultLeaseMinutes = 120
+
     type Request =
         { AllowBacklog: bool
           Limit: int option
+          LeaseMinutes: int
           InFlight: Batch.Reservation list
           Candidates: Candidate list }
 
@@ -76,15 +82,50 @@ module Snapshot =
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Ref>)
 
+    /// A BLOCKER'S REF IS OPTIONAL, BECAUSE PROSE BLOCKS (#421, and the fail-open the corpus caught).
+    ///
+    /// `BlockerUnparseable` means the `Blocked by` text is not a ref at all — "RESOLVED: shipped last week"
+    /// — so demanding owner/repo/number here would refuse the very case the state exists to name. The
+    /// client used to sidestep that by dropping such blockers entirely (its `jq capture` matched nothing,
+    /// produced no object, and the whole array collapsed to `[]`), so an item the client called BLOCKED
+    /// arrived here UNBLOCKED. Under `--engine=fs` that is a worker being handed blocked work.
+    ///
+    /// So: take the ref if it is there, keep the raw text always, and let the STATE carry the meaning.
     let private blocker (path: string) (el: JsonElement) : Result<Blocker, Error list> =
-        let r = refOf path el
-
         let state =
             stringField path "state" el
             |> Result.bind (blockerState $"%s{path}.state")
 
-        match r, state with
-        | Ok r, Ok s -> Ok { Ref = r; State = s }
+        let raw =
+            match optProp "raw" el with
+            | Some v -> asString $"%s{path}.raw" v |> Result.map Some
+            | None -> Ok None
+
+        // A ref is present only if it is COMPLETE. A half-ref is not a ref, and coercing one would put a
+        // fabricated `owner/repo#0` in front of a human.
+        let parsedRef =
+            match optProp "owner" el, optProp "repo" el, optProp "number" el with
+            | Some _, Some _, Some _ ->
+                match refOf path el with
+                | Ok r when r.Number > 0 && r.Owner <> "" && r.Repo <> "" -> Some r
+                | _ -> None
+            | _ -> None
+
+        match state, raw with
+        | Ok s, Ok rawOpt ->
+            let display =
+                match rawOpt, parsedRef with
+                | Some t, _ when t <> "" -> t
+                | _, Some r -> r.Short
+                | _ -> "an unnamed blocker"
+
+            // AN UNNAMEABLE BLOCKER STILL BLOCKS. If neither a ref nor any text survived, we know only
+            // that something was declared and we cannot read it — which is `BlockerUnparseable`'s whole
+            // point, and it is emphatically not "nothing is blocking".
+            Ok
+                { Ref = parsedRef
+                  Raw = display
+                  State = s }
         | a, b ->
             [ a |> Result.map ignore; b |> Result.map ignore ]
             |> collect
@@ -174,8 +215,27 @@ module Snapshot =
         // THE ENGINE PARSES THE BODY ITSELF. This is the whole reason the raw body is on the wire: the
         // touch-set grammar is its own family of incidents (#273, #277, #435, #496), and a shadow that
         // re-used bash's parse would compare two schedulers over one parser and call the parser proven.
+        //
+        // `bodyUnreadable` is the client saying "I could not fetch this one". The body is then ABSENT,
+        // not empty — and `TouchSet.parse ""` would answer `Undeclared`, a confident OMISSION about an
+        // item nobody looked at. The client used to WITHHOLD such items entirely instead, which is worse:
+        // an item bash had classified BLOCKED simply vanished from the engine's world, so it could not be
+        // offered and could not even be passed over with a reason. Say what is true: UNREADABLE.
         let touchSet =
-            stringField path "body" el |> Result.map TouchSet.parse
+            match optProp "bodyUnreadable" el with
+            | Some v ->
+                asString $"%s{path}.bodyUnreadable" v
+                |> Result.map (fun reason -> Unreadable reason)
+            | None ->
+                match optProp "body" el, state with
+                | None, Ok Closed ->
+                    // A CLOSED item is SWEPT: the client short-circuits it off the board scan and never
+                    // reads its body, exactly as bash's own scheduler does. Its touch-set is never
+                    // consulted — `Schedulability` answers `Closed -> IssueClosed` as its FIRST question,
+                    // before the touch-set — so an absent body here is a fact, not a malformed item. (A
+                    // shadow that pays to read the closed body still sends one; that parses too.)
+                    Ok(TouchSet.parse "")
+                | _ -> stringField path "body" el |> Result.map TouchSet.parse
 
         let blockers =
             match optProp "blockers" el with
@@ -321,6 +381,21 @@ module Snapshot =
                 // `batch -n 0` is bash's "unlimited", and it must not read as "choose nothing".
                 |> Result.map (fun n -> if n > 0 then Some n else None)
 
+        // OPTIONAL, and defaulted — an older shim that does not send it still gets the documented 120,
+        // which is what it was silently assuming anyway. A NON-POSITIVE lease is refused rather than
+        // coerced: "every claim is instantly reapable" is never what anyone meant, and it would turn the
+        // whole lock into a no-op on a typo.
+        let leaseMinutes =
+            match optProp "leaseMinutes" root with
+            | None -> Ok DefaultLeaseMinutes
+            | Some v ->
+                asInt "$.leaseMinutes" v
+                |> Result.bind (fun n ->
+                    if n > 0 then
+                        Ok n
+                    else
+                        err "$.leaseMinutes" $"a lease of %d{n} minute(s) would make every claim instantly reapable")
+
         let inFlight =
             match optProp "inFlight" root with
             | None -> Ok []
@@ -333,19 +408,21 @@ module Snapshot =
             |> Result.bind (asArray "$.items")
             |> Result.bind (fun els -> els |> List.mapi candidate |> collect)
 
-        match schema, allowBacklog, limit, inFlight, candidates with
-        | Ok _, Ok ab, Ok lim, Ok inf, Ok cands ->
+        match schema, allowBacklog, limit, leaseMinutes, inFlight, candidates with
+        | Ok _, Ok ab, Ok lim, Ok lease, Ok inf, Ok cands ->
             Ok
                 { AllowBacklog = ab
                   Limit = lim
+                  LeaseMinutes = lease
                   InFlight = inf
                   Candidates = cands }
-        | a, b, c, d, e ->
+        | a, b, c, d, e, f ->
             [ a |> Result.map ignore
               b |> Result.map ignore
               c |> Result.map ignore
               d |> Result.map ignore
-              e |> Result.map ignore ]
+              e |> Result.map ignore
+              f |> Result.map ignore ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Request>)
 
@@ -426,7 +503,15 @@ module Snapshot =
 
             for b in blockers do
                 w.WriteStartObject()
-                writeRef w b.Ref
+
+                // The ref only when there IS one — a prose blocker has none, and emitting `owner: ""`,
+                // `number: 0` would put a fabricated ref in the divergence log, which is the one document
+                // that has to be readable when two engines disagree about exactly this.
+                match b.Ref with
+                | Some r -> writeRef w r
+                | None -> ()
+
+                w.WriteString("raw", b.Raw)
                 w.WriteString("state", blockerStateName b.State)
                 w.WriteEndObject()
 
@@ -459,15 +544,20 @@ module Snapshot =
                 | Matchable t -> t
                 | Unmatchable t -> t)
         | Undeclared
-        | DeclaredNone -> []
+        | DeclaredNone
+        // No tokens are KNOWN. Not the same as none existing — see `touchSetKind`, which says so out loud
+        // in the divergence log, because "the engines disagree" and "one of them never saw the body" are
+        // the first two questions a reader of that log has to be able to tell apart.
+        | Unreadable _ -> []
 
     let private touchSetKind (ts: TouchSet) =
         match ts with
         | Undeclared -> "undeclared"
         | DeclaredNone -> "none"
         | Declared _ -> "declared"
+        | Unreadable _ -> "unreadable"
 
-    let render (candidates: Candidate list) (decision: Verdict<Batch.BatchResult>) : string =
+    let render (leaseMinutes: int) (candidates: Candidate list) (decision: Verdict<Batch.BatchResult>) : string =
         let bashPathsOf (r: Ref) =
             candidates
             |> List.tryFind (fun c -> c.Item.Ref = r)
@@ -540,11 +630,54 @@ module Snapshot =
                     w.WriteEndArray()
                 | None -> ()
 
-                w.WriteString("explain", Schedulability.explain d.Item d.Result)
+                // The HOLDER-AWARE rendering (see Batch.explainDecision). This string is what `--engine=fs`
+                // relays to the worker verbatim, so it is the one place the reason is worded — bash may
+                // not restate it, and a holder-blind version of it is a regression on #428.
+                w.WriteString("explain", Batch.explainDecision leaseMinutes d)
                 w.WriteEndObject()
 
             w.WriteEndArray()
 
+        w.WriteEndObject()
+        w.Flush()
+
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    // ================================================================================================
+    // THE PROTOCOL (ADR-0034 §4.5) — the rules, as a document nobody authors.
+    // ================================================================================================
+
+    [<Literal>]
+    let private FactsSchema = "fsgg.coord.protocol/1"
+
+    let renderFacts (rules: Protocol.Rule list) (verdicts: Protocol.VerdictDoc list) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
+
+        w.WriteStartObject()
+        w.WriteString("schema", FactsSchema)
+
+        w.WriteStartArray("rules")
+
+        for r in rules do
+            w.WriteStartObject()
+            w.WriteString("id", r.Id)
+            w.WriteString("title", r.Title)
+            w.WriteString("statement", r.Statement)
+            w.WriteString("because", r.Because)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+
+        w.WriteStartArray("verdicts")
+
+        for v in verdicts do
+            w.WriteStartObject()
+            w.WriteString("kind", v.Kind)
+            w.WriteString("meaning", v.Meaning)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
         w.WriteEndObject()
         w.Flush()
 
@@ -649,6 +782,14 @@ module Snapshot =
             w.WriteString("ref", u.Item.Ref.Short)
 
             match u with
+            | Lanes.Unread(_, reason) ->
+                // NOT a chore. A chore is work an agent can do; nobody can declare a touch-set for a body
+                // that was never read, and telling them to would put a `Paths:` line on an item that may
+                // already have one.
+                w.WriteString("reason", "body-unreadable")
+                w.WriteBoolean("chore", false)
+                w.WriteString("detail", $"its body could not be READ, so its touch-set is unknown — not absent ({reason}). Retry; do not declare one for it.")
+
             | Lanes.NoTouchSet _ ->
                 w.WriteString("reason", "no-touch-set")
                 w.WriteBoolean("chore", true)

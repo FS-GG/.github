@@ -1,8 +1,13 @@
 # ADR-0006: `.github` owns the org-shared .NET build config; `RestoreLockedMode` gates on `GITHUB_ACTIONS`
 
-- **Status:** Accepted
+- **Status:** Accepted — **§Decision 3's `--check` drift gate is superseded by
+  [ADR-0036](0036-the-build-config-drift-check-pins-its-source.md)**; §Decision 1 (`.github` is the
+  source of truth) and §Decision 2 (the `GITHUB_ACTIONS` gate) stand.
 - **Date:** 2026-06-28
 - **Affects:** .github, FS.GG.Rendering, FS.GG.SDD, FS.GG.Governance, FS.GG.Templates
+- **Amended by:** [ADR-0036](0036-the-build-config-drift-check-pins-its-source.md) — `--check`'s
+  semantics are **inverted**: it diffs against the receiver's committed
+  `.config/fsgg-build-config.sha` pin, not against `.github@main`. See §Decision 3.
 
 ## Context
 
@@ -40,6 +45,17 @@ repo; CIB fails the second requirement wherever a repo forces it for determinism
    - `.config/dotnet-tools.json` — pinned tool manifest (`fake-cli` `6.1.4`, matching Rendering's
      `Fake.Core.*` library pin).
 
+   > **Amendment (2026-07-14).** The canonical set is **no longer three files**. `dist/dotnet/` now
+   > also holds **`global.json`** ([#536](https://github.com/FS-GG/.github/issues/536)) — four
+   > canonical files — and, per
+   > [ADR-0036](0036-the-build-config-drift-check-pins-its-source.md), each receiver additionally
+   > carries **`.config/fsgg-build-config.sha`**, the provenance pin `--check` now compares against.
+   > Neither is in `sync-build-config.sh`'s `FILES` list, and both omissions are deliberate:
+   > `global.json` is held at "in `dist/dotnet/`, not yet checked" until the per-repo adoption items
+   > land (four of five consumers have none, so listing it today would freeze them), and the pin is
+   > excluded by design — `--check` treats a missing member of `FILES` as drift, so listing it would
+   > red-light every unpinned receiver on day one.
+
 2. **The unified gate is `GITHUB_ACTIONS`, not `ContinuousIntegrationBuild`:**
    ```xml
    <RestoreLockedMode Condition="'$(GITHUB_ACTIONS)' == 'true' And Exists('$(MSBuildProjectDirectory)/packages.lock.json')">true</RestoreLockedMode>
@@ -52,6 +68,20 @@ repo; CIB fails the second requirement wherever a repo forces it for determinism
    move into `Directory.Build.local.props` / `Directory.Packages.local.props`, which the canonical
    files import last (so a repo can still override any default). The script's `--check` mode is the
    drift gate consumed by the reusable coherence workflow ([.github#18](https://github.com/FS-GG/.github/issues/18)).
+
+   > **Amendment (2026-07-14, [ADR-0036](0036-the-build-config-drift-check-pins-its-source.md),
+   > [#592](https://github.com/FS-GG/.github/issues/592)). `--check`'s semantics are INVERTED.** It no
+   > longer requires the receiver's managed files to be byte-identical to `dist/dotnet/` as of
+   > **`.github@main`**; it diffs them against `dist/dotnet/` **at the commit the receiver's own
+   > `.config/fsgg-build-config.sha` pins**. As written below, the verdict was a function of *another
+   > repo's moving branch*: a receiver could not green the check from its own PR, and the instant
+   > anything landed in `dist/dotnet/` here, every open PR in every adopting repo went red on a
+   > **required** check — which fired twice ([#499](https://github.com/FS-GG/.github/issues/499),
+   > [#536](https://github.com/FS-GG/.github/issues/536); a *comment* edit was enough). The verdict is
+   > now a pure function of the receiver's own tree. **Being behind the pin is GREEN** (and
+   > bot-remediated by `build-config-propagate.yml`'s rolling sync PR); only a hand-edited managed
+   > file is RED — the only thing a required check can honestly demand. An absent pin means legacy
+   > mode (compare against `main`), so nothing froze on rollout. Read the sentence above as history.
 
 ## Consequences
 

@@ -49,11 +49,22 @@ module Snapshot =
           /// reader to guess which layer disagreed.
           BashPaths: string list option }
 
+    /// The documented default (`FSGG_CLAIM_LEASE_MIN`), for a shim too old to send one.
+    val DefaultLeaseMinutes: int
+
     type Request =
         { AllowBacklog: bool
 
           /// `batch -n`. `None` is unlimited.
           Limit: int option
+
+          /// The claim lease, in minutes — how long before a claim is reapable.
+          ///
+          /// It travels with the SNAPSHOT because it is configurable in the client
+          /// (`FSGG_CLAIM_LEASE_MIN`), so the engine may not assume it: a repo that shortened its lease,
+          /// plus an engine that hard-coded 120, would agree to tell every worker to wait out a window
+          /// that has already closed. Optional on the wire, defaulted to `DefaultLeaseMinutes`.
+          LeaseMinutes: int
 
           /// Touch-sets already spoken for by live claims, as the bash client observed them.
           ///
@@ -73,7 +84,10 @@ module Snapshot =
     /// Render the engine's decision as the response document.
     ///
     /// `candidates` is threaded through only to echo `BashPaths` back beside the engine's own parse.
-    val render: candidates: Candidate list -> decision: Verdict<Batch.BatchResult> -> string
+    /// `leaseMinutes` is what turns "already claimed" into "wait ~96m, or reap it" — see
+    /// `Batch.explainDecision`, whose output the `--engine=fs` client relays to the worker verbatim.
+    val render:
+        leaseMinutes: int -> candidates: Candidate list -> decision: Verdict<Batch.BatchResult> -> string
 
     /// Render a lane partition (#428).
     ///
@@ -84,3 +98,7 @@ module Snapshot =
     /// reserves nothing). Collapsing them is #496, and an agent that "helpfully" declares paths for an
     /// epic would be making the board worse while reporting that it improved it.
     val renderLanes: startable: (Item -> bool) -> partition: Lanes.Partition -> string
+
+    /// The PROTOCOL, as the document the projections are generated from (ADR-0034 §4.5). Emitted, never
+    /// authored — so a rule cannot land in the engine and not in the prose that tells a worker about it.
+    val renderFacts: rules: Protocol.Rule list -> verdicts: Protocol.VerdictDoc list -> string

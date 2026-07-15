@@ -32,6 +32,8 @@ on:
       - "src/FS.GG.Coord.Cli/**"
       - "src/FS.GG.Coord.Core/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/coord-engine-e2e/**"
+      - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
@@ -45,6 +47,8 @@ on:
       - "src/FS.GG.Coord.Cli/**"
       - "src/FS.GG.Coord.Core/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/coord-engine-e2e/**"
+      - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
@@ -83,6 +87,30 @@ jobs:
       - name: Build the engine
         run: dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
 
+      # THE BINARY, END TO END, OVER HTTP — hermetically. Every other test drives the engine through
+      # `Fake.Recorder` or a snapshot on stdin; this one runs the COMPILED binary against a fixture GitHub
+      # (a stdlib http.server, no network, no token) via the configurable API base (ADR-0040 C1) and proves
+      # `scan | decide` returns the right verdict. It was proven once by hand against the live board, which
+      # CI cannot reach; this is that proof made a gate. If the engine could not talk HTTP at all, this is
+      # the only step that would notice.
+      - name: The engine reads its own board — scan | decide, over HTTP, hermetic
+        run: bash tests/coord-engine-e2e/run.sh
+
+      # THE WRITE COMMANDS, over HTTP, against a STATEFUL fixture. The claim CAS is a read-modify-reread,
+      # so this drives `claim`/`heartbeat`/`release`/`set-field`/`child`/`say`/`widen`/`done` as real CLI
+      # commands against a server that remembers what they posted — a green is a green over a real lock, not
+      # a canned answer. This is the surface the shim (ADR-0034 §4.4) execs in place of bash.
+      - name: The engine's write commands land — the CAS and the capability-typed writes
+        run: bash tests/coord-engine-e2e/writes.sh
+
+      # PARITY — the first slice of the Phase-D corpus-through-shim gate. The compiled engine, over HTTP,
+      # must return the answer the SHELL CORPUS certifies for bash on the same board (case 22:
+      # batch → ["FS.GG.SDD#70","FS.GG.SDD#74"]). This turns "the engine is modelled on bash's output" into
+      # "the engine produces bash's certified output", with no bash in the pipeline. The golden is the
+      # corpus's own contract, so the two cannot drift.
+      - name: Parity — the engine matches the corpus's certified batch answer
+        run: bash tests/coord-engine-parity/run.sh
+
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
 
@@ -109,4 +137,4 @@ jobs:
         env:
           FSGG_SHADOW_REQUIRE_ENGINE: "1"
           FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
-        run: bash tests/fsgg-coord/run.sh
+        run: bash tests/fsgg-coord/run-cases.sh

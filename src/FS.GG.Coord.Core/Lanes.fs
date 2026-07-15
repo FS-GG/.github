@@ -9,9 +9,13 @@ module Lanes =
         | NoTouchSet of Item
         | DeliberatelyNone of Item
         | UnusableTokens of item: Item * tokens: string list
+        /// The body was never read, so the touch-set is UNKNOWN. It cannot be laned — and it must not be
+        /// silently dropped either, or a lane partition would look complete over an item nobody saw.
+        | Unread of item: Item * reason: string
 
         member this.Item =
             match this with
+            | Unread(i, _) -> i
             | NoTouchSet i -> i
             | DeliberatelyNone i -> i
             | UnusableTokens(i, _) -> i
@@ -38,7 +42,8 @@ module Lanes =
                 | Unmatchable _ -> None
             )
         | Undeclared
-        | DeclaredNone -> []
+        | DeclaredNone
+        | Unreadable _ -> []
 
     let private unmatchable (ts: TouchSet) =
         match ts with
@@ -50,7 +55,8 @@ module Lanes =
                 | Matchable _ -> None
             )
         | Undeclared
-        | DeclaredNone -> []
+        | DeclaredNone
+        | Unreadable _ -> []
 
     /// A live claim on the item, if the caller observed one. A lane holding one is OCCUPIED.
     let private holder (item: Item) =
@@ -71,6 +77,7 @@ module Lanes =
             |> List.fold
                 (fun (lanable, unlanable) item ->
                     match item.TouchSet with
+                    | Unreadable reason -> lanable, Unread(item, reason) :: unlanable
                     | Undeclared -> lanable, NoTouchSet item :: unlanable
                     | DeclaredNone -> lanable, DeliberatelyNone item :: unlanable
                     | Declared _ ->
@@ -280,6 +287,12 @@ module Lanes =
               for chore in chores do
                   match chore with
                   | NoTouchSet item -> yield $"  %s{item.Ref.Short}  no `Paths:` at all — somebody forgot. It is real work, and nobody can pick it up."
+                  | Unread(item, reason) ->
+                      // NOT a chore anybody can fix by declaring a touch-set — we never READ the item.
+                      // Saying "somebody forgot" here would send an agent to add a `Paths:` line to a body
+                      // that may already have one.
+                      yield
+                          $"  %s{item.Ref.Short}  its body could not be READ, so its touch-set is unknown — not absent (%s{reason}). Retry; do not declare one for it."
                   | UnusableTokens(item, tokens) ->
                       let named = String.concat ", " tokens
 

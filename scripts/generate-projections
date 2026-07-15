@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Emit the coordination protocol into every document that states it (ADR-0034 §4.5).
+#
+# THE INVERSION. A coordination rule was stated in up to six places — the ADR, the canonical doc, the
+# tool, and four `SKILL.md` bodies across two skill roots — then content-addressed into `repos.lock` and
+# byte-copied into six receivers. **54 vendored copies.** The propagation edge cost a second issue and a
+# second PR every time (#309 → #502, #481 → #531), and the collision attractor was removed BY HAND twice
+# (#532, #551) before #570 gated it.
+#
+# `fsgg-coord` was ALREADY the model — it was simply not the SOURCE. In every drift that can be dated,
+# the tool was right and the prose was wrong. So the rules now live once, in the typed core that already
+# enforces them (`FS.GG.Coord.Core/Protocol.fs`), and the prose is a BUILD ARTIFACT: `repos.lock`'s
+# discipline, applied to the protocol itself. A collision in a generated region is a rebase, not a
+# decision — and a rule cannot land in one tier and not the others, because there are no tiers.
+#
+# The proof it was needed arrived while the flip was being written: `TouchSetGrammar` was typed into F#
+# by hand, byte-identical to bash's `TOUCHSET_GRAMMAR` purely by luck, with NOTHING holding them in step.
+# A seventh copy, added by the change that was fixing the copies. `--check` now asserts those two agree.
+#
+#   scripts/generate-projections            # rewrite every generated region in place
+#   scripts/generate-projections --check    # verify they are current; exit 1 on any drift (the GATE)
+#
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+CHECK=""
+[ "${1:-}" = "--check" ] && CHECK=1
+
+BEGIN='<!-- BEGIN GENERATED: fsgg-protocol -->'
+END='<!-- END GENERATED: fsgg-protocol -->'
+
+# THE ENGINE IS THE SOURCE, AND IT IS BUILT FROM SOURCE HERE. `.github` never takes the engine from the
+# feed — that asymmetry is deliberate (ADR-0034 §4.3): fixing coord would otherwise require publishing,
+# and publishing would require coord to schedule the fix.
+ENGINE="${FSGG_COORD_ENGINE_BIN:-$HERE/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
+if [ ! -x "$ENGINE" ]; then
+  echo "::error::no engine at $ENGINE — build it: dotnet build src/FS.GG.Coord.Cli -c Release" >&2
+  exit 2
+fi
+
+FACTS="$(mktemp)"; trap 'rm -f "$FACTS"' EXIT
+"$ENGINE" facts --json >"$FACTS"
+
+# ---- the projection ------------------------------------------------------------------------------
+# ONE rendering, used by every target. A per-target rendering would be a second place for the protocol
+# to live, which is the thing this script exists to delete.
+render() {
+  echo "$BEGIN"
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  This region exists because a rule stated in six documents is a rule that will disagree with"
+  echo "  itself — #485 (startability computed in five places, agreeing in none) and the #502/#531/#551"
+  echo "  family. Edit Protocol.fs and regenerate; a collision here is a rebase, not a decision (#309)."
+  echo "-->"
+  echo ""
+  echo "### The rules the scheduler actually enforces"
+  echo ""
+  echo "*Generated from the typed core. The engine that decides your item is the engine that wrote this.*"
+  echo ""
+  jq -r '.rules[] | "#### \(.title)\n\n\(.statement)\n\n> **Why:** \(.because)\n"' "$FACTS"
+  echo "### What the scheduler can tell you, and nothing else"
+  echo ""
+  echo "One total function returns one of these. There is no other answer, and there is no silent no —"
+  echo "an unreachable answer is not a negative one."
+  echo ""
+  jq -r '.verdicts[] | "- **`\(.kind)`** — \(.meaning)"' "$FACTS"
+  echo ""
+  echo "$END"
+}
+
+BLOCK="$(mktemp)"; trap 'rm -f "$FACTS" "$BLOCK"' EXIT
+render >"$BLOCK"
+
+# ---- the targets ---------------------------------------------------------------------------------
+# The canonical doc, and the skill that OWNS the protocol — in BOTH skill roots. `.agents/` is a
+# byte-for-byte twin of `.claude/`, so a generator that wrote only one would leave the duplication it
+# was built to remove, one level down.
+TARGETS=(
+  "docs/coordination/parallel-work.md"
+  ".claude/skills/intra-repo-parallel-work/SKILL.md"
+  ".agents/skills/intra-repo-parallel-work/SKILL.md"
+)
+
+drift=0
+for rel in "${TARGETS[@]}"; do
+  f="$HERE/$rel"
+  [ -f "$f" ] || { echo "::error::missing projection target: $rel" >&2; exit 2; }
+
+  if ! grep -qF "$BEGIN" "$f"; then
+    echo "::error::$rel has no generated region — it must carry one, or it is a copy of the protocol that nothing holds in step" >&2
+    exit 2
+  fi
+
+  new="$(mktemp)"
+  # Splice: everything before BEGIN, the freshly rendered block, everything after END. Anything BETWEEN
+  # them is discarded — that is the point of a generated region, and it is why the marker comment says
+  # so in the file itself.
+  awk -v b="$BEGIN" -v e="$END" -v blockfile="$BLOCK" '
+    index($0, b) { print_block = 1; while ((getline line < blockfile) > 0) print line; close(blockfile); skipping = 1; next }
+    index($0, e) { skipping = 0; next }
+    !skipping { print }
+  ' "$f" >"$new"
+
+  if cmp -s "$f" "$new"; then
+    rm -f "$new"
+    continue
+  fi
+
+  if [ -n "$CHECK" ]; then
+    echo "::error::$rel is STALE — its protocol region does not match src/FS.GG.Coord.Core/Protocol.fs" >&2
+    diff -u "$f" "$new" | sed -n '1,25p' >&2 || true
+    drift=1
+    rm -f "$new"
+  else
+    mv "$new" "$f"
+    echo "  regenerated  $rel"
+  fi
+done
+
+# ---- THE SECOND ENGINE'S COPY OF THE GRAMMAR -----------------------------------------------------
+# `scripts/fsgg-coord` states the touch-set grammar too — it must, because it refuses bad tokens before
+# it ever builds a snapshot. Two copies of one sentence in two engines is exactly the drift surface this
+# file exists to close, so if it must be copied, it may not be copied SILENTLY: assert they agree.
+engine_grammar="$(jq -r '.rules[] | select(.id == "touch-set-grammar") | .statement' "$FACTS")"
+bash_grammar="$(sed -n "s/^TOUCHSET_GRAMMAR=\"\(.*\)\"$/\1/p" "$HERE/scripts/fsgg-coord")"
+
+if [ "$engine_grammar" != "$bash_grammar" ]; then
+  echo "::error::the touch-set grammar has DRIFTED between the two engines" >&2
+  echo "  Protocol.fs : $engine_grammar" >&2
+  echo "  fsgg-coord  : $bash_grammar" >&2
+  echo "  They are one rule. Fix Schedulability.TouchSetGrammar and scripts/fsgg-coord's TOUCHSET_GRAMMAR together." >&2
+  drift=1
+fi
+
+if [ -n "$CHECK" ]; then
+  if [ "$drift" -ne 0 ]; then
+    echo "" >&2
+    echo "Regenerate with: dotnet build src/FS.GG.Coord.Cli -c Release && scripts/generate-projections" >&2
+    exit 1
+  fi
+  echo "projections: current — the protocol is stated once, and every projection agrees with it."
+fi

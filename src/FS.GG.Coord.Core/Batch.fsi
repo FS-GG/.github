@@ -114,3 +114,15 @@ module Batch =
         inFlight: Reservation list ->
         candidates: Item list ->
             Verdict<BatchResult>
+
+    /// THE OPERATOR-FACING RENDERER — the only place a passed-over item is put into English.
+    ///
+    /// `Schedulability.explain` cannot do this alone: it sees the ITEM and the VERDICT, but a collision's
+    /// holder lives on the DECISION, because "who reserved this path" is a fact about the batch. Rendering
+    /// without it yields "overlaps in-flight work: a ⇄ b" — true, useless, and a regression on bash, which
+    /// has named the holder and its lease window since #428.
+    ///
+    /// It also keeps the distinction a holder-blind renderer destroys: a BATCH MEMBER frees at the end of
+    /// this run and has no lease; a LIVE CLAIM means wait out a window or go and talk to a worker. Same
+    /// verdict, opposite instructions.
+    val explainDecision: leaseMinutes: int -> d: Decision -> string

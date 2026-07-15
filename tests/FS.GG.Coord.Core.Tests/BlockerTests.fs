@@ -12,7 +12,16 @@ module BlockerTests =
           Repo = "FS.GG.SDD"
           Number = n }
 
-    let private blocker n state = { Ref = ref n; State = state }
+    let private blocker n state =
+        { Ref = Some(ref n)
+          Raw = (ref n).Short
+          State = state }
+
+    /// A blocker whose `Blocked by` text is not a ref at all — the case the record could not hold.
+    let private prose text =
+        { Ref = None
+          Raw = text
+          State = BlockerUnparseable }
 
     // ---- #476: MERGED resolves. This is the clause that was missing. --------------------------------
     //
@@ -49,7 +58,36 @@ module BlockerTests =
 
     [<Fact>]
     let ``#266 an UNPARSEABLE ref blocks — prose in a dependency field is not permission`` () =
-        Assert.False(Blockers.isResolved (blocker 0 BlockerUnparseable))
+        Assert.False(Blockers.isResolved (prose "RESOLVED: shipped last week"))
+
+    // ---- PROSE IS NOT A REF, AND THE RECORD USED TO INSIST IT WAS -----------------------------------
+    //
+    // `Blocker` demanded a `Ref`, so `BlockerUnparseable` — the one state whose entire meaning is "this
+    // is not a ref" — was the one state the type could not hold. This test could only be written by
+    // fabricating `#0` and pretending. The client fabricated too, in its own way: its `jq capture`
+    // matched nothing, produced NO object, and the whole blockers array collapsed to `[]`. So an item
+    // the client had just classified BLOCKED reached the engine UNBLOCKED, and under `--engine=fs` a
+    // worker would have been handed it.
+    //
+    // The corpus caught that (a `next --repo governance` where bash passed the item over and the engine
+    // did not). The type now says what was always true: the ref is an OPTION, and the prose survives.
+
+    [<Fact>]
+    let ``a prose blocker keeps its TEXT — it is the only thing there is to show a human`` () =
+        let b = prose "RESOLVED: shipped last week"
+        Assert.Equal("RESOLVED: shipped last week", b.Display)
+        Assert.True(b.Ref.IsNone)
+
+    [<Fact>]
+    let ``a prose blocker still BLOCKS — an unreadable dependency is not an absent one`` () =
+        Assert.Equal<Blocker list>(
+            [ prose "blocked on the design review" ],
+            Blockers.unresolved [ prose "blocked on the design review" ]
+        )
+
+    [<Fact>]
+    let ``a parsed blocker still displays as its canonical ref`` () =
+        Assert.Equal("FS.GG.SDD#449", (blocker 449 BlockerOpen).Display)
 
     // ---- the aggregate ------------------------------------------------------------------------------
 
@@ -67,7 +105,7 @@ module BlockerTests =
 
         let holding = Blockers.unresolved blockers
         Assert.Equal(1, List.length holding)
-        Assert.Equal(3, holding.Head.Ref.Number)
+        Assert.Equal(3, holding.Head.Ref.Value.Number)
 
     [<Fact>]
     let ``#520 the unresolved set NAMES only the blockers still holding — never a MERGED one`` () =

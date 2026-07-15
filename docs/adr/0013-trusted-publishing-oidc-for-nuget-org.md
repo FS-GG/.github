@@ -1,9 +1,9 @@
 # ADR-0013: Publish to nuget.org via Trusted Publishing (OIDC), not a long-lived API key
 
-- **Status:** Accepted
+- **Status:** Accepted — **§5's "fail-closed is intrinsic" is amended (2026-07-14)**: the nuget.org leg is gated on `vars.NUGET_ORG_PUBLISH`, and when that variable is unset the push is **silently skipped**, not 401'd. See the amendment at §5.
 - **Date:** 2026-07-01
-- **Affects:** `.github` (admin provisioning, registry, this ADR), FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance (producer release workflows)
-- **Supersedes:** [ADR-0012](0012-dual-publish-to-nuget-org.md) §6 (the admin-gate mechanism) and its §4 push authentication. ADR-0012's decision to **dual-publish to nuget.org** (§1–§5) stands unchanged — this ADR only changes **how a producer authenticates the push**.
+- **Affects:** `.github` (admin provisioning, registry, this ADR, **and — since #624 — its own two producer workflows**), FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance (producer release workflows)
+- **Supersedes:** [ADR-0012](0012-dual-publish-to-nuget-org.md) §6 (the admin-gate mechanism) and the **push-authentication clause of its §4**. ADR-0012's decision to **dual-publish to nuget.org** stands unchanged — this ADR only changes **how a producer authenticates the push**. (ADR-0012 §4's *gated ordering*, org-feed-first, is untouched; §2 of this ADR says so explicitly. Read "its §4 push authentication" as the auth clause only.)
 
 ## Context
 
@@ -63,6 +63,42 @@ is retired here.
    never a silent no-op, never a half-published coherent set (ADR-0012 §6 intent preserved by
    a different mechanism). The org GitHub Packages feed remains authoritative; a failed
    nuget.org push is retry-safe (`--skip-duplicate`).
+
+   > **Amendment (2026-07-14) — the fail-close is real, but it is scoped by an opt-in flag.**
+   >
+   > As shipped, every producer gates its `NuGet/login` **and** its nuget.org push on
+   > `vars.NUGET_ORG_PUBLISH == 'true'` (`release-coord-engine.yml`,
+   > `release-new-sdd-workspace.yml`, and the FS.GG.Templates release). **When that variable is
+   > unset the login step never runs, so there is no `401` to fail on:** the org-feed push
+   > succeeds and the nuget.org leg is *skipped in silence*. That is precisely the "silent no-op"
+   > the paragraph above forbids, and the ratified text is wrong about it. The guarantee §5
+   > actually delivers is narrower, and is the one we keep:
+   >
+   > - **`NUGET_ORG_PUBLISH=true` and no matching policy** → `NuGet/login` 401s, the release fails
+   >   loud. Fail-closed, exactly as written.
+   > - **`NUGET_ORG_PUBLISH` unset** → nuget.org is skipped, deliberately and silently. The package
+   >   ships to the org feed only.
+   >
+   > **Why the flag exists.** Policy creation is a manual act by an org-owner in the nuget.org UI,
+   > bound to the producer's *repository + workflow filename + package id*. A new producer therefore
+   > cannot have a policy on its first release. Without the flag, standing up any new producer would
+   > mean a **red release** until an admin got to it — the gate would freeze the org feed to protect
+   > a feed the package is not on yet. The flag buys the org-feed release its independence from an
+   > admin's calendar. That is a deliberate trade, and §5 as ratified did not admit it.
+   >
+   > **Exit condition.** Per producer: an org-owner creates the Trusted Publishing policy, then sets
+   > `vars.NUGET_ORG_PUBLISH=true` for that repo — after which the fail-closed behaviour above is
+   > the *only* behaviour, and the flag is inert. Tracked in [#103](https://github.com/FS-GG/.github/issues/103)
+   > (FS.GG.SDD · Rendering · Governance) and [#624](https://github.com/FS-GG/.github/issues/624)
+   > (`.github`'s own two packages). **State at this amendment:** enabled for `.github` — both
+   > `FS.GG.Coord.Cli` (0.1.1) and `FS.GG.NewSddWorkspace` (0.3.0-preview.1) resolve on nuget.org
+   > today, so nothing is currently dormant.
+   >
+   > **The residual hole, named.** Nothing asserts the flag is *true* where a policy already exists.
+   > A producer whose policy is live but whose repo variable is unset — or gets unset — stops
+   > dual-publishing **silently**, and the org would learn about it from a consumer, not from a gate.
+   > Closing that is a `pin-coherence`-shaped check ("every producer with a policy has the var set"),
+   > and it is **not** shipped. Filed as an open item under #624.
 
 ## Consequences
 

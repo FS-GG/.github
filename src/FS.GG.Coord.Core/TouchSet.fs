@@ -100,19 +100,29 @@ module TouchSet =
     let unmatchable (touchSet: TouchSet) : string list =
         match touchSet with
         | Undeclared
-        | DeclaredNone -> []
+        | DeclaredNone
+        // We never read the body, so we know of NO unmatchable tokens — which is emphatically not the
+        // claim that it has none. The scheduler rejects `Unreadable` before it ever asks this (it is
+        // `Undetermined`), and the linter must not report a clean bill of health on an unread item.
+        | Unreadable _ -> []
         | Declared tokens ->
             tokens
             |> List.choose (function
                 | Unmatchable t -> Some t
                 | Matchable _ -> None)
 
-    let tokensOverlap (a: string) (b: string) : bool =
-        let stem (t: string) =
-            if t.EndsWith("/**", StringComparison.Ordinal) then t.Substring(0, t.Length - 3)
-            elif t.EndsWith("/*", StringComparison.Ordinal) then t.Substring(0, t.Length - 2)
-            else t.TrimEnd('/')
+    /// The token with its trailing `/**` or `/*` taken off — the SUBTREE it actually names.
+    ///
+    /// This is the form a collision is REPORTED in, not just the form it is matched in. `src/Off/Sub/**`
+    /// and `src/Off/Sub` name the same subtree, and printing the raw suffix beside a reservation that has
+    /// none reads as though the two tokens were different things. Bash has always reported the stem; the
+    /// engine must, or the flip silently rewords every collision line a worker has ever seen.
+    let stem (t: string) =
+        if t.EndsWith("/**", StringComparison.Ordinal) then t.Substring(0, t.Length - 3)
+        elif t.EndsWith("/*", StringComparison.Ordinal) then t.Substring(0, t.Length - 2)
+        else t.TrimEnd('/')
 
+    let tokensOverlap (a: string) (b: string) : bool =
         let x = stem a
         let y = stem b
 
@@ -122,11 +132,25 @@ module TouchSet =
         || y.StartsWith(x + "/", StringComparison.Ordinal)
         || x.StartsWith(y + "/", StringComparison.Ordinal)
 
+    /// A touch-set we could not read yields NO tokens — so it would COLLIDE WITH NOTHING, and every
+    /// candidate would clear it. That is a fail-open, and it is why `Unreadable` may never reach here as
+    /// a RESERVATION: `Batch.schedule` refuses the whole batch on one (see `unusableReservation`), and
+    /// the scheduler rejects it as a CANDIDATE before disjointness is ever asked. This function is total
+    /// because the type demands it, not because an unreadable surface is safe to compare.
+    let covers (token: PathToken) (file: string) : bool =
+        match token with
+        // #273: reserves nothing, covers nothing.
+        | Unmatchable _ -> false
+        | Matchable t ->
+            let s = stem t
+            file = s || file.StartsWith(s + "/", System.StringComparison.Ordinal)
+
     let conflicts (a: TouchSet) (b: TouchSet) : (string * string) list =
         let tokensOf =
             function
             | Undeclared
-            | DeclaredNone -> []
+            | DeclaredNone
+            | Unreadable _ -> []
             | Declared ts ->
                 ts
                 |> List.map (function

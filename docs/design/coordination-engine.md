@@ -468,8 +468,13 @@ fix.
   divergence. Zero risk — bash remains authoritative and the fleet is unaffected.
 - Divergence is the acceptance test. It will find real bugs *in both*.
 
-**Exit:** zero divergence across the live fleet for **three consecutive days** under normal
-fan-out.
+**Exit (SUPERSEDED by [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)):** ~~zero divergence
+across the live fleet for **three consecutive days** under normal fan-out.~~ That clock could not tick
+— a worker in a per-item worktree resolved no engine and so banked no evidence (#728) — and its own
+taxonomy classified as *"not a bug"* three real defects the flip would otherwise have shipped. **Phase 2
+exits on the defect corpus**, like Phase 3b: `tests/fsgg-coord/cases/`, green against **both** engines.
+The shadow keeps running as **telemetry** — it is how a live fleet is watched, not what a cut-over waits
+on.
 
 #### Phase 2 as built — what shipped, and the two decisions it forced
 
@@ -511,6 +516,15 @@ consecutive days" could never have gone green — for something that was never a
 which order survives is a Phase 3 decision, taken with the live frequency data the shadow is now
 collecting.** It is recorded here rather than merged silently, because #485 exists precisely because
 five predicates were merged silently.
+
+> **TAKEN — [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md): blockers are checked BEFORE the
+> touch-set.** Bash's order wins. *Semantics:* a blocked item cannot be started whatever its touch-set
+> says, so *"no `Paths:` declared"* sends a worker to fix something that leaves them exactly where they
+> were. *Cost, which settles it:* blockers are **board** facts, already in the scan and free; a touch-set
+> lives in the issue **body**, one REST read per item. Touch-set-first would oblige a body fetch for every
+> blocked item on the board — paying the budget that dies first (#418) to answer a question the board had
+> already answered. It is also why bash never fetched those bodies, why they were never fixtures, and how
+> a swept item with an unreadable body could silently cease to exist for as long as it did.
 
 **Decision 2 — the core's order is not free, and the shadow now measures what it costs.**
 
@@ -630,14 +644,42 @@ closed on evidence that is absent, thin, single-worker, uncovered on a day, or f
 
 ### Phase 3 — flip *(days)*
 
-- **Entry:** `fsgg-coord divergence --fleet` is GREEN — which now means something checkable: three
-  consecutive covered days, ≥2 distinct workers, zero blocking divergences, on the build being flipped.
-- `--engine=fs` becomes the default; `--engine=bash` remains as the escape hatch.
-- One week later, delete the bash implementation. The kit row becomes the shim (§4.4).
+- **Entry (SUPERSEDED by [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)):** ~~`fsgg-coord
+  divergence --fleet` is GREEN — three consecutive covered days, ≥2 distinct workers, zero blocking
+  divergences, on the build being flipped.~~
+  **That clock could not tick.** Workers run in per-item worktrees; a worktree worker resolved no engine
+  (#728); a worker who banks no evidence can never be one of the "≥2 distinct workers". And because
+  `Divergence.evaluate` partitions by exact engine build, any republish restarts the window — so the
+  engine could not be improved while waiting for the clock that was waiting for the engine.
+- **Entry (actual):** the **defect corpus** — `tests/fsgg-coord/cases/`, one case per historical defect —
+  is green against **both** `--engine=bash` and `--engine=fs`. It covers every path that has actually
+  broken, rather than whatever floated past a live fleet for three days; it needs only a checkout; and it
+  survives an engine rebuild. Sweeping it under `fs` found three real defects that this clock's own
+  taxonomy classifies as REASON divergences — *"not a bug"* — and would have waved through. The shadow is
+  now **telemetry**, not a gate.
+- **What actually landed:** `--engine=fs` is **open** — the engine's answer is the answer, and every
+  failure in that mode is fatal (no fallback: falling back to bash after the caller asked for the typed
+  core is a silent engine substitution). **The default did NOT move.** With no flag and no
+  `FSGG_COORD_ENGINE`, the mode is `auto`, and `auto` still returns **bash's** answer — the engine
+  shadows where one resolves, and its disagreement is logged. `--engine=bash` remains the escape hatch.
+  Making `fs` the default is a **separate** decision on the corpus's evidence; ADR-0038 does not take it.
+- *(future)* `--engine=fs` becomes the default.
+- ~~*(future)* One week later, delete the bash implementation. The kit row becomes the shim (§4.4).~~
+  **SUPERSEDED by [ADR-0040](../adr/0040-port-the-io-layer.md).** This step was never executable. The
+  typed engine has **zero IO** — one package reference, `FSharp.Core` — while the client makes **53 `gh`
+  calls** across 47 commands and performs every write. Deleting bash would delete the only thing that can
+  read a board or post a claim marker, and the §4.4 shim would resolve a binary that cannot do the job.
+  It also named a **date**, and a date is not a criterion. ADR-0040 ports the IO layer, names the four
+  preconditions the shim actually has (the corpus, the .NET-less runners, the restore gate, the CAS's
+  budget), and restates the exit so it can be computed: **bash is deleted when the corpus is green
+  through the shim in all six receivers, with the restore gate green.**
 - `fsgg-coord-selftest`'s 46 negative assertions run unchanged against the new engine — they
   are the contract, and they were written against a call-counting `gh` stub, so they port.
 
-**Exit:** F# is authoritative; every gate in §3 is green; the stdout tokens are byte-identical.
+**Exit *(FUTURE — this is the criterion, not the present tense)*:** F# is authoritative — `fs` is the
+**default** and the bash implementation is gone; every gate in §3 is green; the stdout tokens are
+byte-identical. **What has landed is the OPENING of `fs`, not its imposition:** today the default is
+`auto` and bash is still the answer a caller gets.
 
 ### Phase 4 — take the wins the model enables *(the actual payoff)*
 

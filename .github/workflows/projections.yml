@@ -1,0 +1,82 @@
+# The protocol is stated ONCE, and every document that repeats it is GENERATED (ADR-0034 §4.5).
+#
+# A coordination rule used to live in up to six places — the ADR, the canonical doc, the tool, and four
+# `SKILL.md` bodies across two skill roots — then content-addressed into `repos.lock` and byte-copied
+# into six receivers: 54 vendored copies. The propagation edge cost a second issue and a second PR every
+# time (#309 → #502, #481 → #531), and the collision attractor was removed BY HAND twice (#532, #551)
+# before #570 gated it.
+#
+# `fsgg-coord` was ALREADY the model — it just was not the SOURCE. So the rules now live in
+# `FS.GG.Coord.Core/Protocol.fs`, the prose is emitted from them, and this gate fails on any drift. A
+# rule cannot land in one tier and not the others, because there are no tiers.
+#
+# It also asserts the ONE copy that must exist — bash's `TOUCHSET_GRAMMAR`, which the client needs before
+# it can build a snapshot at all — agrees with the engine's. That copy was typed in by hand while the
+# flip was being written, byte-identical purely by luck, with nothing holding the two in step.
+name: projections
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "scripts/fsgg-coord"
+      - "scripts/generate-projections"
+      - "docs/coordination/parallel-work.md"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - ".github/workflows/projections.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "scripts/fsgg-coord"
+      - "scripts/generate-projections"
+      - "docs/coordination/parallel-work.md"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - ".github/workflows/projections.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: projections-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  current:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # From SOURCE, never the feed (ADR-0034 §4.3): fixing coord would otherwise require publishing,
+      # and publishing would require coord to schedule the fix.
+      - name: Build the engine
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      - name: Every projection is current
+        run: bash scripts/generate-projections --check
+
+      # A GATE THAT CANNOT FAIL IS NOT A GATE (#266, #436). If the region markers were deleted, the
+      # regenerator would have nothing to compare and would pass over a document that is now, once again,
+      # a hand-maintained copy of the protocol. Assert the regions are actually there.
+      - name: Non-vacuity — the generated regions exist
+        run: |
+          set -euo pipefail
+          n="$(grep -rlF 'BEGIN GENERATED: fsgg-protocol' \
+                 docs/coordination/parallel-work.md \
+                 .claude/skills/intra-repo-parallel-work/SKILL.md \
+                 .agents/skills/intra-repo-parallel-work/SKILL.md | wc -l)"
+          echo "documents carrying a generated protocol region: $n"
+          [ "$n" -eq 3 ] || { echo "::error::expected 3 generated regions, found $n — a projection has become a hand-maintained copy again"; exit 1; }
