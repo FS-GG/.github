@@ -1838,6 +1838,94 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
   kill "$LINT_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 14 (no-touch-set-and-done) — the `lint` EPIC-ROLL-UP-GRAPH rules (#325/#346/#266/#235). An [epic]
+# with zero sub-issues (EPIC-NO-CHILDREN); a TRUNCATED child list rollup cannot verify
+# (EPIC-CHILDREN-TRUNCATED); a board-Done epic over an open child (EPIC-DONE-OPEN-CHILD); a board-Done
+# issue still open (DONE-STATUS-OPEN-ISSUE, a note); and an epic whose BODY declares a child the graph does
+# not contain (EPIC-UNLINKED-CHILD) — with a body-cited PR ref DROPPED (#346), a prose mention ignored, and
+# an unresolvable ref KEPT (fail closed, #266).
+LE_OUT="$(mktemp)"; python3 "$HERE/lintepic_server.py" >"$LE_OUT" 2>/dev/null & LE_SRV=$!; LE_PORT=""
+for _ in $(seq 1 50); do LE_PORT="$(head -n1 "$LE_OUT" 2>/dev/null)"; [ -n "$LE_PORT" ] && break; sleep 0.1; done
+rm -f "$LE_OUT"
+if [ -z "$LE_PORT" ]; then bad "lint-epic fixture bound a port"; else
+  le() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$LE_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" lint "$@"; }
+  lej="$(le --json 2>/dev/null)"
+  codeids() { jq -r "[.[] | select(.code==\"$1\") | .id | sub(\"^[^/]+/\";\"\")] | sort | join(\",\")" <<<"$lej"; }
+
+  [ "$(codeids EPIC-NO-CHILDREN)" = "FS.GG.SDD#440" ] \
+    && ok "case14: EPIC-NO-CHILDREN fires on an open [epic] with zero sub-issues (#440)" \
+    || bad "case14: EPIC-NO-CHILDREN" "$(codeids EPIC-NO-CHILDREN)"
+  [ "$(codeids EPIC-CHILDREN-TRUNCATED)" = "FS.GG.Rendering#404" ] \
+    && ok "case14: EPIC-CHILDREN-TRUNCATED fires on the epic whose graph is truncated (#404)" \
+    || bad "case14: EPIC-CHILDREN-TRUNCATED" "$(codeids EPIC-CHILDREN-TRUNCATED)"
+  jq -r '.[] | select(.code=="EPIC-CHILDREN-TRUNCATED") | .detail' <<<"$lej" | grep -q '5 sub-issues, only 2 visible' \
+    && ok "case14: ...and names the total vs the visible count (5 sub-issues, only 2 visible)" \
+    || bad "case14: truncated detail" "$(jq -r '.[]|select(.code=="EPIC-CHILDREN-TRUNCATED")|.detail' <<<"$lej")"
+  [ "$(codeids EPIC-DONE-OPEN-CHILD)" = "FS.GG.SDD#450" ] \
+    && ok "case14: EPIC-DONE-OPEN-CHILD fires on a board-Done epic over an open child (#450)" \
+    || bad "case14: EPIC-DONE-OPEN-CHILD" "$(codeids EPIC-DONE-OPEN-CHILD)"
+  jq -r '.[] | select(.code=="EPIC-DONE-OPEN-CHILD") | .detail' <<<"$lej" | grep -q 'FS.GG.SDD#451' \
+    && ok "case14: ...and names the open child (#451)" \
+    || bad "case14: done-open-child names the child" "$(jq -r '.[]|select(.code=="EPIC-DONE-OPEN-CHILD")|.detail' <<<"$lej")"
+  # DONE-STATUS-OPEN-ISSUE (note): board Done but the issue is still open — the epic #450 and the plain #460.
+  [ "$(codeids DONE-STATUS-OPEN-ISSUE)" = "FS.GG.Game#480,FS.GG.SDD#450,FS.GG.SDD#460" ] \
+    && ok "case14: DONE-STATUS-OPEN-ISSUE (note) fires on every board-Done-but-open issue (#450, #460, #480)" \
+    || bad "case14: DONE-STATUS-OPEN-ISSUE" "$(codeids DONE-STATUS-OPEN-ISSUE)"
+
+  # EPIC-UNLINKED-CHILD (#325): #409's body declares #414 (unlinked), PR #418 (dropped, #346), and #413
+  # (linked); prose #415 is not a child. The graph {#413} is complete, so the rule may reason.
+  [ "$(codeids EPIC-UNLINKED-CHILD)" = "FS.GG.SDD#409" ] \
+    && ok "case14: EPIC-UNLINKED-CHILD fires on exactly the epic that has one (#409)" \
+    || bad "case14: EPIC-UNLINKED-CHILD" "$(codeids EPIC-UNLINKED-CHILD)"
+  unamed="$(jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .detail' <<<"$lej" | sed 's/.*rollup cannot see them: //')"
+  [ "$unamed" = "FS.GG.SDD#414" ] \
+    && ok "case14: ...and names the declared-but-unlinked child, and ONLY it (#414)" \
+    || bad "case14: unlinked names exactly #414" "$unamed"
+  [ "$(jq -r '[.[] | select(.detail|test("415|#413|418"))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: a PR ref is dropped (#346), a prose mention and a linked child are not unlinked" \
+    || bad "case14: #415/#413/#418 must not appear as unlinked" "$lej"
+  # A truncated epic yields NO unlinked-child verdict — "unlinked" is unknowable over an incomplete set.
+  [ "$(jq -r '[.[] | select(.code=="EPIC-UNLINKED-CHILD" and (.id|test("404")))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: a truncated epic (#404) yields no unlinked-child verdict (#266)" \
+    || bad "case14: truncated epic must not fire unlinked" "$lej"
+  # The internal PR-probe scratch list must not leak into the schema.
+  [ "$(jq -r '[.[] | select(has("unlinked"))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: the PR-probe scratch field is not exposed in --json" \
+    || bad "case14: no 'unlinked' scratch field" "$lej"
+  # #470 is a healthy epic (its one declared child is linked) — the negative control.
+  [ "$(jq -r '[.[] | select(.id|test("470"))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: a healthy epic (linked children, complete graph) yields nothing (#470)" \
+    || bad "case14: #470 must be clean" "$lej"
+
+  # Fail closed (#266): a ref the PR-probe cannot resolve is KEPT, never dropped. Force #414's probe to 502.
+  lefc_out="$(mktemp)"; FSGG_PARITY_FAIL_ISSUE=414 python3 "$HERE/lintepic_server.py" >"$lefc_out" 2>/dev/null & LEFC=$!; LEFC_PORT=""
+  for _ in $(seq 1 50); do LEFC_PORT="$(head -n1 "$lefc_out" 2>/dev/null)"; [ -n "$LEFC_PORT" ] && break; sleep 0.1; done
+  rm -f "$lefc_out"
+  if [ -z "$LEFC_PORT" ]; then bad "lint-epic fail-closed fixture bound a port"; else
+    fcnamed="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$LEFC_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+                 FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" lint --json 2>/dev/null \
+               | jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .detail' | sed 's/.*rollup cannot see them: //')"
+    [ "$fcnamed" = "FS.GG.SDD#414" ] \
+      && ok "case14: an unresolvable PR-probe ref is KEPT, not silently dropped (fail closed, #266)" \
+      || bad "case14: fail-closed keep" "$fcnamed"
+    kill "$LEFC" 2>/dev/null
+  fi
+
+  # --repo scopes the scan: only #404's finding is in Rendering; a note-only Game scope passes, and
+  # --strict makes that note fatal.
+  [ "$(le --repo rendering --json 2>/dev/null | jq -r '[.[].code] | unique | join(",")')" = "EPIC-CHILDREN-TRUNCATED" ] \
+    && ok "case14: --repo rendering scopes to only #404's finding (EPIC-CHILDREN-TRUNCATED)" \
+    || bad "case14: --repo rendering scope" "$(le --repo rendering --json 2>/dev/null)"
+  le --repo game >/dev/null 2>&1; gnrc=$?
+  [ "$gnrc" -eq 0 ] && ok "case14: lint --repo game (a note, no error) passes the gate (exit 0)" || bad "case14: note-only exit 0" "rc=$gnrc"
+  le --repo game --strict >/dev/null 2>&1; gsrc=$?
+  [ "$gsrc" -eq 1 ] && ok "case14: lint --repo game --strict makes the note fatal (exit 1)" || bad "case14: --strict note fatal" "rc=$gsrc"
+
+  kill "$LE_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

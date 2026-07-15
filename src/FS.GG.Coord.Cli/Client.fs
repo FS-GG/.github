@@ -1536,6 +1536,21 @@ module Client =
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())
 
+    // Strip the owner from a `owner/repo#n` ref → `repo#n` (bash's `sub("^[^/]+/";"")`), the form a finding
+    // NAMES a ref in.
+    let private shortRef (ref: string) =
+        match ref.IndexOf '/' with
+        | i when i >= 0 -> ref.Substring(i + 1)
+        | _ -> ref
+
+    let private ownerRepoNum (ref: string) =
+        let m = Text.RegularExpressions.Regex.Match(ref, @"^([^/]+)/([^#]+)#(\d+)$")
+
+        if m.Success then
+            Some(m.Groups.[1].Value, m.Groups.[2].Value, int m.Groups.[3].Value)
+        else
+            None
+
     let lint (ctx: Context) (opts: Options) : int =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
@@ -1544,18 +1559,14 @@ module Client =
             | Error e -> fail e
             | Ok rows ->
                 let repoFilter = opts.Repo |> Option.map resolveRepo
-                // Scoped to the items a worker could be asked to pick up: OPEN, on the board as Ready or
-                // Backlog, and an ISSUE — a PR is not work (#641). An In progress item is already claimed
-                // and a CLOSED one needs nobody, so neither is a candidate.
-                let candidates =
+                // A PR is not an item of work (#641), and `--repo` scopes the pass (short-ids resolved).
+                let items =
                     rows
                     |> List.filter (fun r -> not r.IsPullRequest)
                     |> List.filter (fun r ->
                         match repoFilter with
                         | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
                         | None -> true)
-                    |> List.filter (fun r -> r.State = IssueState.Open)
-                    |> List.filter (fun r -> r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
 
                 let mk code severity (r: Scan.Row) detail =
                     { Code = code
@@ -1566,56 +1577,160 @@ module Client =
                       Url = $"https://github.com/%s{r.Ref.Owner}/%s{r.Ref.Repo}/issues/%d{r.Ref.Number}"
                       Detail = detail }
 
-                // Read each candidate's body and classify its touch-set. FAIL CLOSED (#266): a board-health
-                // gate that could not read an item must not report it clean — one unreadable body fails the
-                // whole pass, exactly as a failed board scan does.
+                // The schedulability rules (#496): a Ready/Backlog OPEN item no worker can pick up.
+                let touchSetFindings (r: Scan.Row) (body: string) : LintFinding list =
+                    if r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog) then
+                        match TouchSet.parse body with
+                        | Undeclared ->
+                            [ mk
+                                  "NO-TOUCH-SET"
+                                  "error"
+                                  r
+                                  $"%s{statusName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)." ]
+                        | Declared tokens when
+                            (not (List.isEmpty tokens))
+                            && tokens
+                               |> List.forall (function
+                                   | Unmatchable _ -> true
+                                   | Matchable _ -> false)
+                            ->
+                            let bad =
+                                tokens
+                                |> List.map (function
+                                    | Unmatchable t -> t
+                                    | Matchable t -> t)
+                                |> String.concat ", "
+
+                            [ mk
+                                  "BAD-TOUCH-SET"
+                                  "error"
+                                  r
+                                  $"%s{statusName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`." ]
+                        | _ -> []
+                    else
+                        []
+
+                // A body-declared "child" that resolves to a PR is not an unlinked child — GitHub refuses to
+                // link a PR as a sub-issue (#346). Re-resolve the otherwise-unlinked refs and drop the PRs;
+                // a ref we CANNOT resolve is KEPT (#266 — "I could not check" is not "it is a PR").
+                let rec prunePrs (kept: string list) (refs: string list) : Errors.IoResult<string list> =
+                    match refs with
+                    | [] -> Ok(List.rev kept)
+                    | ref :: rest ->
+                        match ownerRepoNum ref with
+                        | None -> prunePrs (ref :: kept) rest
+                        | Some(o, rp, n) ->
+                            match Reads.refIsPullRequest ctx.Transport o rp n with
+                            | Ok true -> prunePrs kept rest
+                            | Ok false -> prunePrs (ref :: kept) rest
+                            | Error _ -> prunePrs (ref :: kept) rest
+
+                // The epic ROLL-UP-graph rules. Only epics pay the sub-issue read.
+                let epicFindings (r: Scan.Row) (body: string) : Errors.IoResult<LintFinding list> =
+                    match Reads.subIssues ctx.Transport r.Ref.Owner r.Ref.Repo r.Ref.Number with
+                    | Error e -> Error e
+                    | Ok graph ->
+                        let visible = List.length graph.Children
+
+                        let noChildren =
+                            if r.State = IssueState.Open && graph.Total = 0 then
+                                [ mk "EPIC-NO-CHILDREN" "error" r "open [epic] with zero sub-issues — nothing rolls up" ]
+                            else
+                                []
+
+                        let truncated =
+                            if graph.Total > visible then
+                                [ mk
+                                      "EPIC-CHILDREN-TRUNCATED"
+                                      "error"
+                                      r
+                                      $"%d{graph.Total} sub-issues, only %d{visible} visible — cannot verify rollup" ]
+                            else
+                                []
+
+                        let doneOpenChild =
+                            if r.Status = BoardStatus.Done && graph.Children |> List.exists (fun c -> c.Open) then
+                                let openRefs =
+                                    graph.Children
+                                    |> List.filter (fun c -> c.Open)
+                                    |> List.map (fun c -> shortRef c.Ref)
+                                    |> String.concat ", "
+
+                                [ mk "EPIC-DONE-OPEN-CHILD" "error" r $"board says Done, but open child: %s{openRefs}" ]
+                            else
+                                []
+
+                        // EPIC-UNLINKED-CHILD may only reason when the graph is WHOLE (Total == visible) — a
+                        // truncated graph makes "this declared child is unlinked" a claim about a set already
+                        // known to be short (#266); EPIC-CHILDREN-TRUNCATED covers that case instead.
+                        let unlinkedResult =
+                            if graph.Total = visible then
+                                let graphRefs = graph.Children |> List.map (fun c -> c.Ref) |> Set.ofList
+
+                                let declared =
+                                    EpicBody.childRefs r.Ref.Owner r.Ref.Repo body
+                                    |> List.filter (fun d -> not (graphRefs.Contains d))
+
+                                match prunePrs [] declared with
+                                | Error e -> Error e
+                                | Ok [] -> Ok []
+                                | Ok kept ->
+                                    let named = kept |> List.map shortRef |> String.concat ", "
+
+                                    Ok
+                                        [ mk
+                                              "EPIC-UNLINKED-CHILD"
+                                              "error"
+                                              r
+                                              $"body declares child(ren) absent from the sub-issue graph, so rollup cannot see them: %s{named}" ]
+                            else
+                                Ok []
+
+                        match unlinkedResult with
+                        | Error e -> Error e
+                        | Ok unlinked -> Ok(noChildren @ truncated @ doneOpenChild @ unlinked)
+
+                // Per item, in rule order: touch-set rules, then a Done-but-open NOTE, then the epic rules
+                // (only epics read their graph/body-child-refs). FAIL CLOSED (#266): an unreadable body or
+                // graph fails the whole pass — a gate that could not read an item must not report it clean.
                 let rec classify (acc: LintFinding list) (rows: Scan.Row list) : Errors.IoResult<LintFinding list> =
                     match rows with
-                    | [] -> Ok(List.rev acc)
+                    | [] -> Ok acc
                     | r :: rest ->
-                        match Reads.issueBody ctx.Transport r.Ref.Owner r.Ref.Repo r.Ref.Number with
+                        let isEpic =
+                            r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
+
+                        let isTouchSetCandidate =
+                            r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+
+                        let doneOpenNote =
+                            if r.Status = BoardStatus.Done && r.State = IssueState.Open then
+                                [ mk "DONE-STATUS-OPEN-ISSUE" "note" r "board Status is Done but the issue is still open" ]
+                            else
+                                []
+
+                        // One body read serves BOTH the touch-set rules and the epic body-child-refs.
+                        let bodyNeeded = isTouchSetCandidate || isEpic
+
+                        let bodyResult =
+                            if bodyNeeded then
+                                Reads.issueBody ctx.Transport r.Ref.Owner r.Ref.Repo r.Ref.Number
+                            else
+                                Ok ""
+
+                        match bodyResult with
                         | Error e -> Error e
                         | Ok body ->
-                            let finding =
-                                match TouchSet.parse body with
-                                | Undeclared ->
-                                    Some(
-                                        mk
-                                            "NO-TOUCH-SET"
-                                            "error"
-                                            r
-                                            $"%s{statusName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)."
-                                    )
-                                | Declared tokens when
-                                    (not (List.isEmpty tokens))
-                                    && tokens
-                                       |> List.forall (function
-                                           | Unmatchable _ -> true
-                                           | Matchable _ -> false)
-                                    ->
-                                    let bad =
-                                        tokens
-                                        |> List.map (function
-                                            | Unmatchable t -> t
-                                            | Matchable t -> t)
-                                        |> String.concat ", "
+                            let tsFindings = touchSetFindings r body
 
-                                    Some(
-                                        mk
-                                            "BAD-TOUCH-SET"
-                                            "error"
-                                            r
-                                            $"%s{statusName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
-                                    )
-                                | _ -> None
+                            let epicResult =
+                                if isEpic then epicFindings r body else Ok []
 
-                            classify
-                                (match finding with
-                                 | Some f -> f :: acc
-                                 | None -> acc)
-                                rest
+                            match epicResult with
+                            | Error e -> Error e
+                            | Ok epic -> classify (acc @ tsFindings @ doneOpenNote @ epic) rest
 
-                match classify [] candidates with
+                match classify [] items with
                 | Error e -> fail e
                 | Ok findings ->
                     let errors = findings |> List.filter (fun f -> f.Severity = "error") |> List.length

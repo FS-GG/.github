@@ -336,3 +336,58 @@ let ``#421 a rate-limited read propagates as RateLimited - never as 'not there'`
     match Reads.issueBody recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
     | other -> failwith $"an exhausted budget must not become an empty body — got %A{other}"
+
+// ---- the sub-issue graph (lint / rollup) -----------------------------------------------------------
+
+[<Fact>]
+let ``subIssues reads the total apart from the visible nodes, with each child's ref and state`` () =
+    let transport =
+        serving
+            """{"data":{"repository":{"issue":{"subIssues":{"totalCount":2,"nodes":[
+                 {"number":51,"state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}},
+                 {"number":52,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}"""
+
+    match Reads.subIssues transport "FS-GG" "FS.GG.SDD" 50 with
+    | Ok set ->
+        Assert.Equal(2, set.Total)
+        Assert.Equal<Reads.SubIssue list>(
+            [ ({ Ref = "FS-GG/FS.GG.SDD#51"; Open = true }: Reads.SubIssue)
+              { Ref = "FS-GG/FS.GG.SDD#52"; Open = false } ],
+            set.Children
+        )
+    | Error e -> failwith $"the graph must resolve — got %A{e}"
+
+[<Fact>]
+let ``subIssues keeps a truncated graph honest - Total exceeds the visible nodes`` () =
+    // The distinction EPIC-CHILDREN-TRUNCATED and the rollup depend on: five children, only two returned.
+    let transport =
+        serving
+            """{"data":{"repository":{"issue":{"subIssues":{"totalCount":5,"nodes":[
+                 {"number":1,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}},
+                 {"number":2,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}"""
+
+    match Reads.subIssues transport "FS-GG" "FS.GG.SDD" 50 with
+    | Ok set -> Assert.True(set.Total > List.length set.Children)
+    | Error e -> failwith $"the graph must resolve — got %A{e}"
+
+[<Fact>]
+let ``subIssues FAILS CLOSED - an unreadable graph is an error, never an empty set`` () =
+    // An epic whose children could not be read must not roll up as "no children".
+    match Reads.subIssues (failing (RateLimited None)) "FS-GG" "FS.GG.SDD" 50 with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"a failed graph read must be an error — got %A{other}"
+
+[<Fact>]
+let ``refIsPullRequest is true iff the issues payload carries a pull_request object`` () =
+    let asPr =
+        serving """{"number":418,"pull_request":{"url":"https://github.com/x/y/pull/418"}}"""
+
+    let asIssue = serving """{"number":414,"body":"a plain issue"}"""
+
+    match Reads.refIsPullRequest asPr "FS-GG" "FS.GG.SDD" 418 with
+    | Ok true -> ()
+    | other -> failwith $"a PR payload must probe true — got %A{other}"
+
+    match Reads.refIsPullRequest asIssue "FS-GG" "FS.GG.SDD" 414 with
+    | Ok false -> ()
+    | other -> failwith $"a plain issue must probe false — got %A{other}"

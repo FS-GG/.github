@@ -76,7 +76,13 @@ BODIES = {
 }
 
 
-def graphql(q):
+def graphql(q, variables=None):
+    if "subIssues" in q:
+        # #400 is titled "[epic]", so `lint` reads its sub-issue graph. A healthy, complete graph (one
+        # linked, closed child) so the epic rules stay silent — this slice is about the schedulability
+        # rules, and #400 is here only to prove `Paths: none` suppresses NO-TOUCH-SET on an epic.
+        return {"data": {"repository": {"issue": {"subIssues": {"totalCount": 1, "nodes": [
+            {"number": 401, "state": "CLOSED", "repository": {"nameWithOwner": SDD}}]}}}}, "rateLimit": RATE}
     if "projectsV2" in q:
         return {"data": {"organization": {"projectsV2": {"nodes": [
             {"number": 12, "title": "Coordination", "id": "PVT_coord"}]}}, "rateLimit": RATE}}

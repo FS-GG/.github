@@ -144,6 +144,32 @@ module Reads =
     /// and blame the token — an unreachable subject reported as an absent one.
     val subIssueIds: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<int64 list>
 
+    /// One node of an epic's sub-issue GRAPH: its ref (`owner/repo#n`) and whether it is still open.
+    type SubIssue = { Ref: string; Open: bool }
+
+    /// An epic's sub-issue graph, with the TOTAL count kept apart from the visible nodes.
+    ///
+    /// `Total > Children.length` is a TRUNCATED graph, and the distinction is load-bearing: the rollup and
+    /// EPIC-UNLINKED-CHILD may only reason about "all children" when they have all of them. Concluding
+    /// "every child is done" — or "this declared child is unlinked" — over a list already known to be short
+    /// is the #266 shape (a verdict on a subject not wholly seen).
+    type SubIssueSet = { Total: int; Children: SubIssue list }
+
+    /// An epic's sub-issue graph: the total count and each child's ref + open/closed state.
+    ///
+    /// FAILS CLOSED, like every read here: an unreadable graph is an ERROR, never an empty set — an epic
+    /// whose children could not be read must not roll up as "no children" or "all done".
+    val subIssues: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<SubIssueSet>
+
+    /// Does this ref name a PULL REQUEST rather than an issue? (`issues/{n}` carries `pull_request` iff so.)
+    ///
+    /// GitHub refuses to link a PR as a sub-issue, so a task-list line citing the PR that closed a checklist
+    /// item declares a ref the graph can never hold. EPIC-UNLINKED-CHILD re-resolves its otherwise-unlinked
+    /// refs through this and drops the PRs — else the gate wedges red forever on genuinely-complete work
+    /// (#346). The CALLER owns the fail-closed policy (#266): a ref this cannot resolve is KEPT, because "I
+    /// could not check" is not "it is a PR".
+    val refIsPullRequest: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<bool>
+
     /// The rate-limit meter.
     ///
     /// FREE — this read does not spend the budget it reports, which is what makes "back off until the
