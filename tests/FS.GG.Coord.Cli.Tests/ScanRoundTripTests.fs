@@ -196,16 +196,39 @@ let ``#641 a PULL REQUEST on the board is not a candidate`` () =
     | Error e -> failwith $"scan failed: %A{e}"
 
 [<Fact>]
-let ``#520 a CLOSED issue is not a candidate, whatever its board column says`` () =
+let ``#520 a CLOSED issue is a candidate, SWEPT with no read, and decided IssueClosed`` () =
     // One was handed to a worker two hours after it was closed as completed, because candidate selection
     // read the board COLUMN and nothing else — and then it was PROMOTED back to Ready on release, re-arming
-    // it for the next worker.
+    // it for the next worker. The fix is NOT to drop it from the candidates: that gets the right answer
+    // (never scheduled) with no WORDS, so a worker asking "why isn't #502 offered?" gets nothing for it,
+    // where bash names it "the issue is closed". So it stays a candidate and is SWEPT — `Schedulability`
+    // answers `Closed -> IssueClosed` as its FIRST question, before the touch-set or the lock, so the sweep
+    // needs neither a body read nor a marker read, and the reason survives to `decide`.
     let closed = { aRow with State = Closed; Status = Ready }
-    let transport = routed (issueBody "Paths: src/**") "[]"
+
+    // A transport that FAILS on EVERY call — so a green here is proof the closed sweep read nothing at all.
+    let transport =
+        Fake.Recorder(fun _ -> Error(Errors.Transport "the closed sweep must read nothing"))
 
     match Scan.snapshot transport [ closed ] None false None 120 with
-    | Ok(_, receipt) -> Assert.Equal(0, receipt.Candidates)
-    | Error e -> failwith $"scan failed: %A{e}"
+    | Error e -> failwith $"a swept closed item reads nothing, so the scan cannot fail — got %A{e}"
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.Candidates) // it IS a candidate now — that is what carries the reason
+        Assert.Equal(0, receipt.BodiesUnreadable)
+
+        match Snapshot.parse document with
+        | Error errors ->
+            let detail =
+                errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+
+            failwith $"a swept closed item, which carries no body, must still parse: %s{detail}"
+        | Ok request ->
+            let item = request.Candidates.[0].Item
+            Assert.Equal(Closed, item.State)
+
+            match Schedulability.schedulable false [] item with
+            | Schedulability.IssueClosed -> ()
+            | other -> failwith $"a closed issue is IssueClosed — the reason a worker reads — got %A{other}"
 
 // ---- blockers ---------------------------------------------------------------------------------------
 

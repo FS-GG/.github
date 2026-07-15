@@ -16,6 +16,7 @@ transport over.
 import json
 import re
 import sys
+import threading
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -45,16 +46,38 @@ def _now(offset_hours=0):
     return (datetime.now(timezone.utc) + timedelta(hours=offset_hours)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-# Pre-existing claims: #42 held by finch-a3f (FRESH → live, reserves src/Audio), #43 by ghost-000 (5h old →
-# STALE, filtered out and therefore NOT reserving), #60 no marker at all.
+# Pre-existing claims, and a MUTABLE store so `take` can post its own marker and win its re-read:
+# #42 held by finch-a3f (FRESH → live, reserves src/Audio), #43 by ghost-000 (5h old → STALE, filtered
+# out), #60 no marker. The store is seeded lazily (the fresh/stale timestamps are computed at first read).
+LOCK = threading.Lock()
+_STORE = {}
+_NEXT_ID = [900]
+_SEEDED = [False]
+
+
+def _seed():
+    if _SEEDED[0]:
+        return
+    _STORE[42] = [{"id": 801, "body": "<!-- fsgg:claim worker=finch-a3f lease=120 -->\nheld",
+                   "user": {"login": "EHotwagner"}, "updated_at": _now(0)}]
+    _STORE[43] = [{"id": 802, "body": "<!-- fsgg:claim worker=ghost-000 lease=120 -->\ndead",
+                   "user": {"login": "EHotwagner"}, "updated_at": _now(-5)}]
+    _SEEDED[0] = True
+
+
 def comments(n):
-    if n == 42:
-        return [{"id": 801, "body": "<!-- fsgg:claim worker=finch-a3f lease=120 -->\nheld",
-                 "user": {"login": "EHotwagner"}, "updated_at": _now(0)}]
-    if n == 43:
-        return [{"id": 802, "body": "<!-- fsgg:claim worker=ghost-000 lease=120 -->\ndead",
-                 "user": {"login": "EHotwagner"}, "updated_at": _now(-5)}]
-    return []
+    with LOCK:
+        _seed()
+        return list(_STORE.get(n, []))
+
+
+def post_comment(n, body):
+    with LOCK:
+        _seed()
+        cid = _NEXT_ID[0]
+        _NEXT_ID[0] += 1
+        _STORE.setdefault(n, []).append({"id": cid, "body": body, "updated_at": _now(0)})
+        return cid
 
 
 def board_items():
@@ -82,6 +105,11 @@ def graphql(query):
             {"id": "PVTF_blocked", "name": "Blocked by", "dataType": "TEXT"}]}}}, "rateLimit": RATE}}
     if "items(first" in query:
         return board_items()
+    if "projectItems" in query:
+        return {"data": {"repository": {"issue": {"projectItems": {"nodes": [
+            {"id": "PVTI_item", "project": {"number": 12}}]}}}}, "rateLimit": RATE}
+    if "updateProjectV2ItemFieldValue" in query or "clearProjectV2ItemFieldValue" in query:
+        return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
     return None
 
 
@@ -98,15 +126,28 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(b)
 
     def do_POST(self):
-        if self.path.rstrip("/") != "/graphql":
-            return self._send(500, {"errors": [{"message": f"unhandled POST {self.path}"}]})
-        n = int(self.headers.get("Content-Length", 0))
-        try:
-            q = json.loads(self.rfile.read(n).decode()).get("query", "")
-        except json.JSONDecodeError:
-            return self._send(500, {"errors": [{"message": "bad body"}]})
-        a = graphql(q)
-        self._send(200, a if a is not None else {"errors": [{"message": f"unhandled query {q[:60]}"}]})
+        raw = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
+        p = self.path.split("?", 1)[0]
+        if p.rstrip("/") == "/graphql":
+            try:
+                q = json.loads(raw).get("query", "")
+            except json.JSONDecodeError:
+                return self._send(500, {"errors": [{"message": "bad body"}]})
+            a = graphql(q)
+            return self._send(200, a if a is not None else {"errors": [{"message": f"unhandled query {q[:60]}"}]})
+        m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p)
+        if m:
+            body = ""
+            try:
+                body = json.loads(raw).get("body", "")
+            except json.JSONDecodeError:
+                pass
+            cid = post_comment(int(m.group(1)), body)
+            return self._send(201, {"id": cid, "body": body, "updated_at": _now(0)})
+        m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/assignees$", p)
+        if m:
+            return self._send(201, {})
+        self._send(500, {"message": f"unhandled POST {p}"})
 
     def do_GET(self):
         p = self.path.split("?", 1)[0]
