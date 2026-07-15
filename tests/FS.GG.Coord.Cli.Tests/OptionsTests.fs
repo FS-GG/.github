@@ -61,3 +61,29 @@ module OptionsTests =
     [<Fact>]
     let ``no arguments prints help rather than deciding over an empty board`` () =
         Assert.Equal(Help, (parse [] |> ok).Command)
+
+    [<Fact>]
+    let ``ready --status carries the column name`` () =
+        Assert.Equal(Some "Done", (parse [ "ready"; "--status"; "Done" ] |> ok).Status)
+
+    [<Fact>]
+    let ``ready --status without a value is refused, not left silently unset`` () =
+        // The residue rule again: a `--status` that swallowed nothing would filter on `None` and quietly
+        // show the not-Done default, answering a question the caller did not ask.
+        let e = parse [ "ready"; "--status" ] |> rejected
+        Assert.Contains("--status", e)
+
+    [<Fact>]
+    let ``ready --status does NOT swallow the following flag as its value`` () =
+        let e = parse [ "ready"; "--status"; "--json" ] |> rejected
+        Assert.Contains("--status", e)
+
+    [<Fact>]
+    let ``ready --all is a boolean widen with no value`` () =
+        Assert.True((parse [ "ready"; "--all" ] |> ok).All)
+
+    [<Fact>]
+    let ``ready defaults leave the not-Done filter on — no status, not --all`` () =
+        let o = parse [ "ready" ] |> ok
+        Assert.Equal(None, o.Status)
+        Assert.False(o.All)
