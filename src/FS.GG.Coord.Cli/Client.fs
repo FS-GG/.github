@@ -716,7 +716,105 @@ module Client =
 
     // ---- the writes ------------------------------------------------------------------------------------
 
+    /// `set-field --batch <ref> Field=Value ...` — N fields in ONE aliased mutation (#448).
+    ///
+    /// The whole point is the call count: three separate writes are three GraphQL points; the same three
+    /// aliased into one document is one. So EVERYTHING is resolved before a single mutation is emitted (a
+    /// pair that fails validation costs zero — a refused value must not spend the budget that dies first),
+    /// and the two failure arms are told apart because they carry opposite promises: a rate limit refused
+    /// the whole document, so every pair is QUEUED; a per-alias failure means the board is half-written, so
+    /// nothing is queued and the caller is told, field by field, what landed and what did not.
+    let private setFieldBatchCmd (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | refArg :: (_ :: _ as pairs) ->
+            match parseRef ctx refArg, worker opts with
+            | Error msg, _ ->
+                eprint $"fsgg-coord-engine: %s{msg}"
+                ExitError
+            | _, Error c -> c
+            | Ok ref, Ok w ->
+                // Split each pair on the FIRST '=' — a value may legitimately contain one (`Contract=a=b`),
+                // and an empty value clears, exactly as the single path's empty `<value>` does.
+                let parsePair (s: string) : Result<string * Board.FieldWrite, string> =
+                    match s.IndexOf '=' with
+                    | -1 -> Error s
+                    | i ->
+                        let field = s.Substring(0, i)
+                        let value = s.Substring(i + 1)
+
+                        if field = "" then Error s
+                        else Ok(field, (if value = "" then Board.Clear else Board.Set value))
+
+                let parsed = pairs |> List.map parsePair
+
+                match parsed |> List.tryPick (function | Error s -> Some s | Ok _ -> None) with
+                | Some bad ->
+                    eprint
+                        $"fsgg-coord-engine: set-field --batch takes Field=Value pairs (an empty value clears); '%s{bad}' is not one."
+                    ExitError
+                | None ->
+                    let writes = parsed |> List.choose (function | Ok p -> Some p | Error _ -> None)
+
+                    match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+                    | Error e -> fail e
+                    | Ok board ->
+                        // Map an alias ("f2") back to the pair it wrote, so a partial write can be reported
+                        // in the caller's OWN vocabulary — `Field='value'` — not "f2".
+                        let describe (alias: string) : string =
+                            let idx =
+                                match Int32.TryParse(alias.TrimStart 'f') with
+                                | true, n -> Some n
+                                | _ -> None
+
+                            match idx with
+                            | Some i when i >= 0 && i < List.length writes ->
+                                match List.item i writes with
+                                | field, Board.Set v -> $"%s{field}='%s{v}'"
+                                | field, Board.Clear -> $"%s{field}=<cleared>"
+                            | _ -> alias
+
+                        match Board.boardWriteBatch ctx.Transport board ref.Owner ref.Repo ref.Number writes w.Id with
+                        // THE PARTIAL ARM IS ITS OWN ANSWER — matched BEFORE the generic failure. Some aliases
+                        // landed; reporting nothing happened would be a lie, and reporting success is the bug
+                        // #448 forbade by name. EX_PARTIAL (4), and the board is half-written on the record.
+                        | Error(Errors.Partial(applied, failed)) ->
+                            eprint
+                                "fsgg-coord-engine: PARTIALLY APPLIED — the board is now half-written. This is NOT queued: replaying the document would rewrite the aliases that already landed."
+
+                            for alias in applied do
+                                eprint $"  APPLIED  %s{describe alias}"
+
+                            for alias, msg in failed do
+                                eprint $"  FAILED   %s{describe alias} — %s{msg}"
+
+                            Errors.ExPartial
+                        | Error e -> fail e
+                        | Ok Board.Written ->
+                            printfn "set %d field(s) on %s in one aliased mutation:" (List.length writes) ref.Short
+
+                            for field, write in writes do
+                                printfn "  %s = %s" field (match write with | Board.Set v -> v | Board.Clear -> "<cleared>")
+
+                            ExitGreen
+                        | Ok Board.Deferred ->
+                            printfn
+                                "set-field --batch %s — QUEUED all %d field(s) (budget exhausted; flush replays the batch)"
+                                ref.Short
+                                (List.length writes)
+
+                            Errors.ExRate
+                        | Ok Board.NotOnBoard ->
+                            eprint $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."
+                            ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: set-field --batch takes <ref> followed by one or more Field=Value pairs."
+            ExitError
+
     let setField (ctx: Context) (opts: Options) : int =
+        if opts.Batch then
+            setFieldBatchCmd ctx opts
+        else
+
         match opts.Args with
         | [ refArg; field; value ] ->
             match parseRef ctx refArg, worker opts with

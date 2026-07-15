@@ -110,7 +110,11 @@ module Options =
           Status: string option
           /// `--all` (`ready`) — widen past the "not Done" default without naming a column. `ready` is a
           /// TRUTH read (#520), so `--all` shows the whole board — Done, and closed-but-still-columned rows.
-          All: bool }
+          All: bool
+
+          /// `--batch` (`set-field`) — write the remaining `Field=Value` args in ONE aliased mutation
+          /// document (#448): N fields, one GraphQL request, one point at the floor.
+          Batch: bool }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

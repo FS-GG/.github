@@ -865,6 +865,151 @@ else
 fi
 kill "$GSRV" 2>/dev/null; rm -f "$G_OUT"
 
+# ---- SET-FIELD --BATCH: N FIELDS, ONE GRAPHQL REQUEST (case 11): #448 ------------------------------
+#
+# The corpus (`tests/fsgg-coord/cases/11-set-field-batch.sh`, #448) certifies that N field writes aliased
+# into ONE mutation document cost ONE GraphQL point, not N — the whole reason the batch path exists. The
+# shell corpus proves it by COUNTING `gh` invocations; an F# tool calling HTTPS is invisible to that stub,
+# so this slice re-expresses the count at the HTTP layer (ADR-0040 C1): `setfield_server.py` records every
+# FIELD mutation document the engine POSTs, and the assertion is that a three-field batch emits exactly ONE
+# of them, carrying f0/f1/f2. The property is unchanged; it is counted one transport over.
+#
+# This was a PORT GAP, not a divergence. `Board.setFieldBatch` (the aliased-document builder, #448) existed
+# in the engine but had NO caller — `set-field` only ever took a single `<ref> <field> <value>`. This slice
+# lands with the fix that wires `set-field --batch` to it (and `Board.boardWriteBatch`, the batch sibling of
+# the one board write, carrying the same deferral policy). The corpus's harder halves are held too: an empty
+# value reaches the DISTINCT clear mutation; a refused pair spends ZERO GraphQL (a rejected value must not
+# spend the budget that dies first); a per-alias failure is EX_PARTIAL and NEVER queued (replaying rewrites
+# what landed); and an exhausted budget refused the whole document, so EVERY pair is queued.
+sfsrv() {  # sfsrv <env-kv...> --  ; sets globals SF_PORT and SF_SRV for the spawned fixture
+  local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
+  local out; out="$(mktemp)"
+  env ${envs[@]+"${envs[@]}"} python3 "$HERE/setfield_server.py" >"$out" 2>/dev/null &
+  local srv=$! port=""
+  for _ in $(seq 1 50); do port="$(head -n1 "$out" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
+  rm -f "$out"
+  SF_PORT="$port"; SF_SRV="$srv"
+}
+# The mutation count and the last document the fixture recorded — `gcount` + `cat "$GH_LOG"`, one transport
+# over (the same python3-off-the-server idiom the #533/#320 legs use).
+muts_on()  { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_mutations").read().decode())' "$1" 2>/dev/null; }
+
+# 1. THE COUNT IS THE CRITERION. Three fields — a SINGLE_SELECT, a DATE and a TEXT — cost exactly ONE
+#    mutation request, aliased f0/f1/f2, each value routed to its field's own mutation shape.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field fixture bound a port"; else
+  sfenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  b1="$(sfenv set-field --batch FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' 'Contract=fs-gg-ui-template' 2>&1)"; b1rc=$?
+  mj="$(muts_on "$SF_PORT")"
+  { [ "$b1rc" -eq 0 ] && [ "$(printf '%s' "$mj" | jq -r '.count')" = "1" ]; } \
+    && ok "#448: THREE fields cost exactly ONE GraphQL mutation request (the count, one transport over)" \
+    || bad "#448: a three-field batch must be one request" "rc=$b1rc count=$(printf '%s' "$mj" | jq -r '.count') out=$b1"
+  doc="$(printf '%s' "$mj" | jq -r '.last')"
+  printf '%s' "$doc" | grep -q 'f0: updateProjectV2ItemFieldValue' && printf '%s' "$doc" | grep -q 'f2: updateProjectV2ItemFieldValue' \
+    && ok "#448: ...emitted as ONE aliased document — f0 and f2 ride the SAME mutation" \
+    || bad "#448: the batch must alias f0..f2 into one document" "doc: $doc"
+  printf '%s' "$doc" | grep -q 'singleSelectOptionId: "opt_p2"' \
+    && ok "#448: SINGLE_SELECT routes 'P2 SDD' to singleSelectOptionId (opt_p2)" \
+    || bad "#448: SINGLE_SELECT routing" "doc: $doc"
+  printf '%s' "$doc" | grep -q 'date: "2026-08-01"' && printf '%s' "$doc" | grep -q 'text: "fs-gg-ui-template"' \
+    && ok "#448: DATE routes to date, TEXT routes to text — each value to its field's own shape" \
+    || bad "#448: DATE/TEXT routing" "doc: $doc"
+  printf '%s' "$doc" | grep -q 'itemId: "PVTI_item42"' \
+    && ok "#448: the resolved board item id is carried on every alias" \
+    || bad "#448: the item id must be carried" "doc: $doc"
+  # The batch must not fall back to per-field writes on a different transport — pin the negative.
+  [ "$(printf '%s' "$mj" | jq -r '.count')" = "1" ] \
+    && ok "#448: the batch does NOT fall back to N per-field writes (count stays 1, not 3)" \
+    || bad "#448: the batch must not loop per field" "count=$(printf '%s' "$mj" | jq -r '.count')"
+  kill "$SF_SRV" 2>/dev/null
+fi
+
+# 2. AN EMPTY VALUE CLEARS — and `update` with an empty value is a NO-OP on the real API, not a clear, so
+#    the batch must reach the DISTINCT clear mutation, exactly as the single path reaches for it.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field clear fixture bound a port"; else
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --batch FS.GG.SDD#42 'Contract=' >/dev/null 2>&1
+  printf '%s' "$(muts_on "$SF_PORT" | jq -r '.last')" | grep -q 'f0: clearProjectV2ItemFieldValue' \
+    && ok "#448: an empty value emits clearProjectV2ItemFieldValue, not an empty update" \
+    || bad "#448: empty value must clear" "doc: $(muts_on "$SF_PORT" | jq -r '.last')"
+  kill "$SF_SRV" 2>/dev/null
+fi
+
+# 3. A VALUE MAY CONTAIN '='. Split on the FIRST one only, or `Contract=a=b` silently becomes a different
+#    value than the caller asked for.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field split fixture bound a port"; else
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --batch FS.GG.SDD#42 'Contract=a=b' >/dev/null 2>&1
+  printf '%s' "$(muts_on "$SF_PORT" | jq -r '.last')" | grep -q 'text: "a=b"' \
+    && ok "#448: Field=Value splits on the FIRST '=' (a value may legitimately contain one)" \
+    || bad "#448: split must be on the first '='" "doc: $(muts_on "$SF_PORT" | jq -r '.last')"
+  kill "$SF_SRV" 2>/dev/null
+fi
+
+# 4. A REFUSED PAIR SPENDS ZERO GRAPHQL — the same invariant the single write holds. An unknown FIELD and an
+#    unknown single-select OPTION are DIFFERENT code paths, so each needs its own assertion: both must be
+#    refused BEFORE a document is sent, or a bad pair caught late fails the batch AFTER earlier aliases landed.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field refuse fixture bound a port"; else
+  sfr() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@" 2>&1; }
+  uf="$(sfr set-field --batch FS.GG.SDD#42 'No Such Field=x')"; ufrc=$?
+  { [ "$ufrc" -eq 1 ] && [ "$(muts_on "$SF_PORT" | jq -r '.count')" = "0" ]; } \
+    && ok "#448: an unknown field is refused (exit 1) and spends ZERO GraphQL" \
+    || bad "#448: unknown field must refuse before sending" "rc=$ufrc count=$(muts_on "$SF_PORT" | jq -r '.count') out=$uf"
+  uo="$(sfr set-field --batch FS.GG.SDD#42 'Phase=No Such Option')"; uorc=$?
+  { [ "$uorc" -eq 1 ] && [ "$(muts_on "$SF_PORT" | jq -r '.count')" = "0" ]; } \
+    && ok "#448: an unknown single-select OPTION is refused and spends ZERO GraphQL (the build aborts, not the value)" \
+    || bad "#448: unknown option must refuse before sending" "rc=$uorc count=$(muts_on "$SF_PORT" | jq -r '.count') out=$uo"
+  printf '%s' "$uo" | grep -q 'No Such Option' \
+    && ok "#448: ...and the reason names the OPTION, not a GraphQL parse error" \
+    || bad "#448: the refusal must name the option" "out: $uo"
+  kill "$SF_SRV" 2>/dev/null
+fi
+
+# 5. THE PARTIAL ARM. Mutations run SERIALLY: when f1 fails, f0 has ALREADY been written. Reporting that as
+#    a failure claims nothing happened; reporting it as success is the bug #448 forbade by name. It is its
+#    own answer — EX_PARTIAL (4), naming what landed and what did not — and it is NEVER queued.
+SFCACHE="$(mktemp -d)"
+sfsrv SF_FAIL_ALIAS=f1 -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field partial fixture bound a port"; else
+  pout="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$SFCACHE" "$ENGINE" set-field --batch FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' 'Contract=x' 2>&1)"; prc=$?
+  [ "$prc" -eq 4 ] \
+    && ok "#448: a per-alias failure is EX_PARTIAL (4), not success and not a generic error" \
+    || bad "#448: partial must exit 4" "rc=$prc out=$pout"
+  printf '%s' "$pout" | grep -q 'PARTIALLY APPLIED' && printf '%s' "$pout" | grep -q 'half-written' \
+    && ok "#448: ...it says PARTIALLY APPLIED and that the board is half-written" \
+    || bad "#448: partial must announce the half-written board" "out: $pout"
+  printf '%s' "$pout" | grep -q "APPLIED  Phase='P2 SDD'" \
+    && ok "#448: ...naming the field that WAS written (Phase)" \
+    || bad "#448: partial must name the applied field" "out: $pout"
+  printf '%s' "$pout" | grep -q 'FAILED   Target=' && printf '%s' "$pout" | grep -q 'stub: f1 rejected' \
+    && ok "#448: ...and the field that FAILED (Target), carrying the API's own reason" \
+    || bad "#448: partial must name the failed field and its reason" "out: $pout"
+  [ ! -s "$SFCACHE/pending.jsonl" ] || [ "$(grep -c '#42' "$SFCACHE/pending.jsonl" 2>/dev/null || echo 0)" = "0" ] \
+    && ok "#448: a PARTIAL batch is NEVER queued — replaying it would rewrite what already landed" \
+    || bad "#448: partial must not queue" "pending: $(cat "$SFCACHE/pending.jsonl" 2>/dev/null)"
+  kill "$SF_SRV" 2>/dev/null
+fi
+rm -rf "$SFCACHE"
+
+# 6. AN EXHAUSTED BUDGET refuses the document OUTRIGHT — nothing is applied — so the whole batch is
+#    deferrable and EVERY pair must land in the queue. This is the arm that must be tested BEFORE the partial
+#    arm in the client: a rate limit that fell through to the partial reporter would describe a half-written
+#    board that does not exist.
+RLCACHE="$(mktemp -d)"
+sfsrv SF_RATELIMIT=1 -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field rate-limit fixture bound a port"; else
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$RLCACHE" "$ENGINE" set-field --batch FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' >/dev/null 2>&1; rlrc=$?
+  [ "$rlrc" -eq 75 ] \
+    && ok "#448: an exhausted budget exits EX_RATE (75), the back-off signal — not a generic 1" \
+    || bad "#448: rate-limited batch must exit 75" "rc=$rlrc"
+  [ "$(grep -c '#42' "$RLCACHE/pending.jsonl" 2>/dev/null || echo 0)" = "2" ] \
+    && ok "#448: ...and QUEUES every pair (nothing was applied, so nothing is lost)" \
+    || bad "#448: rate-limited batch must queue both pairs" "pending: $(cat "$RLCACHE/pending.jsonl" 2>/dev/null)"
+  kill "$SF_SRV" 2>/dev/null
+fi
+rm -rf "$RLCACHE"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

@@ -87,3 +87,15 @@ module OptionsTests =
         let o = parse [ "ready" ] |> ok
         Assert.Equal(None, o.Status)
         Assert.False(o.All)
+
+    [<Fact>]
+    let ``set-field --batch is a boolean flag; the Field=Value pairs stay in Args`` () =
+        // #448: `--batch` opts the remaining args into the aliased-mutation path. A `Field=Value` pair
+        // begins with a field name (not `-`), so it is an ordinary Arg — the ref first, then the pairs.
+        let o = parse [ "set-field"; "--batch"; "FS.GG.SDD#42"; "Phase=P2 SDD"; "Target=2026-08-01" ] |> ok
+        Assert.True(o.Batch)
+        Assert.Equal<string list>([ "FS.GG.SDD#42"; "Phase=P2 SDD"; "Target=2026-08-01" ], o.Args)
+
+    [<Fact>]
+    let ``set-field without --batch leaves Batch off`` () =
+        Assert.False((parse [ "set-field"; "FS.GG.SDD#42"; "Phase"; "P2 SDD" ] |> ok).Batch)
