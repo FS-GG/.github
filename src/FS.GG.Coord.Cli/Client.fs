@@ -920,6 +920,67 @@ module Client =
             eprint "fsgg-coord-engine: child takes <parent-ref> <child-ref>."
             ExitError
 
+    // #353 — two refs name the same repo. `Paths:` tokens are repo-relative, so a touch-set comparison
+    // is only meaningful within a repo; both `overlap` and `widen`'s re-check narrow the live set to this.
+    let private sameRepo (a: Ref) (b: Ref) =
+        String.Equals(a.Owner, b.Owner, StringComparison.OrdinalIgnoreCase)
+        && String.Equals(a.Repo, b.Repo, StringComparison.OrdinalIgnoreCase)
+
+    // The tokens a collision is named IN — the stem (`src/Scene/**` and `src/Scene` are one subtree, so
+    // the raw suffix beside a reservation that has none reads as two different things), deduped.
+    let private sharedTokens (pairs: (string * string) list) =
+        pairs
+        |> List.collect (fun (a, b) -> [ TouchSet.stem a; TouchSet.stem b ])
+        |> List.distinct
+        |> String.concat ", "
+
+    /// The #353 collision scan, shared by `overlap --active` and `widen`'s re-check: given an item's ref
+    /// and touch-set, every LIVE claim in the SAME repo whose touch-set collides with it, named with its
+    /// holder and the shared token stems. The repo scope IS the fix — a same-named repo-relative token in
+    /// another repo names a different file, so it is never a collision and its holder is never named. A
+    /// claim we could not read propagates as an Error: a claim we could not check is never a silent DISJOINT.
+    let private activeCollisions
+        (ctx: Context)
+        (opts: Options)
+        (ref: Ref)
+        (ts: TouchSet)
+        : Errors.IoResult<(Ref * string * string) list> =
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+        | Error e -> Error e
+        | Ok board ->
+            match Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number with
+            | Error e -> Error e
+            | Ok rows ->
+                // SAME REPO, in flight, not this item, not a PR — the repo scope IS the #353 fix.
+                let candidates =
+                    rows
+                    |> List.filter (fun r ->
+                        not r.IsPullRequest
+                        && r.Status = InProgress
+                        && r.Ref.Number <> ref.Number
+                        && sameRepo r.Ref ref)
+
+                // Only a LIVE claim reserves anything (`winner` applies the lease); read its touch-set and
+                // compare. A read that fails propagates — a claim we could not check is never a silent DISJOINT.
+                let rec scan acc rows =
+                    match rows with
+                    | [] -> Ok(List.rev acc)
+                    | (row: Scan.Row) :: rest ->
+                        match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                        | Error e -> Error e
+                        | Ok markers ->
+                            match Reads.winner opts.LeaseMinutes markers with
+                            | None -> scan acc rest
+                            | Some m ->
+                                match Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                                | Error e -> Error e
+                                | Ok body ->
+                                    match TouchSet.conflicts ts (TouchSet.parse body) with
+                                    | [] -> scan acc rest
+                                    | pairs -> scan ((row.Ref, m.Worker.Value, sharedTokens pairs) :: acc) rest
+
+                scan [] candidates
+
     let widen (ctx: Context) (opts: Options) : int =
         match oneArg opts "widen: an issue ref", worker opts with
         | Error c, _
@@ -958,7 +1019,40 @@ module Client =
                                 | Error e -> fail e
                                 | Ok() ->
                                     printfn "widened %s → Paths: %s" ref.Short (String.Join(", ", opts.Paths))
-                                    ExitGreen
+
+                                    // #353 — ADR-0021's "re-declare AND re-check overlap before continuing", the
+                                    // half a worker cannot do alone. The widen has LANDED (that is its job, and how
+                                    // a bad declaration gets fixed); now re-check the NEW touch-set against the live
+                                    // claims in THIS item's repo, and notify each worker it now collides with — on
+                                    // their own issue. The scan compares the rewritten body's touch-set, never the
+                                    // old one. Scoped to the same repo: a cross-repo namesake is a phantom (#353),
+                                    // and its innocent holder is left uncommented.
+                                    match activeCollisions ctx opts ref (TouchSet.parse rewritten.Body) with
+                                    | Error e -> fail e
+                                    | Ok [] ->
+                                        printfn "DISJOINT — the widened touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
+                                        ExitGreen
+                                    | Ok collisions ->
+                                        // The notify is the part a worker cannot do alone. A post that fails is
+                                        // reported, but the collision still stands — it does not become a DISJOINT.
+                                        let paths = String.Join(", ", opts.Paths)
+
+                                        for other, holder, toks in collisions do
+                                            eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
+                                            eprint $"  %s{toks}"
+
+                                            let msg =
+                                                $"heads up: I widened %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). We cannot run these in parallel as declared — sequence one behind the other (`Blocked by`) or split the touch-set, and reply here."
+
+                                            match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
+                                            | Error e ->
+                                                eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+                                            | Ok() -> eprint $"  notified worker %s{holder} on %s{other.Short}"
+
+                                        eprint "fsgg-coord-engine: widening introduced a collision — do NOT keep editing the shared paths until it is resolved."
+                                        // A real same-repo collision exits non-zero (engine ExitContended=6; bash's
+                                        // literal 1 disposed on the record, ADR-0040 §5).
+                                        ExitContended
 
     /// #353 — DOES THIS ITEM'S TOUCH-SET COLLIDE WITH ANOTHER'S, and NOTHING outside its own repo counts.
     ///
@@ -971,21 +1065,9 @@ module Client =
     ///   `overlap <ref> --active`     — the item vs the LIVE claims in its own repo.
     ///   `overlap <ref-a> <ref-b>`    — the two items, or DISJOINT-by-construction if they are in different repos.
     let overlapCmd (ctx: Context) (opts: Options) : int =
-        let sameRepo (a: Ref) (b: Ref) =
-            String.Equals(a.Owner, b.Owner, StringComparison.OrdinalIgnoreCase)
-            && String.Equals(a.Repo, b.Repo, StringComparison.OrdinalIgnoreCase)
-
         let touchSetOf (ref: Ref) =
             Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number
             |> Result.map TouchSet.parse
-
-        // The tokens a collision is named IN — the stem (`src/Scene/**` and `src/Scene` are one subtree, so
-        // the raw suffix beside a reservation that has none reads as two different things), deduped.
-        let sharedTokens (pairs: (string * string) list) =
-            pairs
-            |> List.collect (fun (a, b) -> [ TouchSet.stem a; TouchSet.stem b ])
-            |> List.distinct
-            |> String.concat ", "
 
         match opts.Args with
         | [ a ] when opts.Active ->
@@ -997,51 +1079,16 @@ module Client =
                 match touchSetOf ref with
                 | Error e -> fail e
                 | Ok ts ->
-                    match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                    match activeCollisions ctx opts ref ts with
                     | Error e -> fail e
-                    | Ok board ->
-                        match Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number with
-                        | Error e -> fail e
-                        | Ok rows ->
-                            // SAME REPO, in flight, not this item, not a PR — the repo scope IS the #353 fix.
-                            let candidates =
-                                rows
-                                |> List.filter (fun r ->
-                                    not r.IsPullRequest
-                                    && r.Status = InProgress
-                                    && r.Ref.Number <> ref.Number
-                                    && sameRepo r.Ref ref)
+                    | Ok [] ->
+                        printfn "DISJOINT — %s overlaps no live claim in %s/%s (#353)." ref.Short ref.Owner ref.Repo
+                        ExitGreen
+                    | Ok collisions ->
+                        for other, holder, toks in collisions do
+                            printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder toks
 
-                            // Only a LIVE claim reserves anything (`winner` applies the lease); read its
-                            // touch-set and compare. A read that fails propagates — a claim we could not
-                            // check is never a silent DISJOINT.
-                            let rec scan acc rows =
-                                match rows with
-                                | [] -> Ok(List.rev acc)
-                                | (row: Scan.Row) :: rest ->
-                                    match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                                    | Error e -> Error e
-                                    | Ok markers ->
-                                        match Reads.winner opts.LeaseMinutes markers with
-                                        | None -> scan acc rest
-                                        | Some m ->
-                                            match touchSetOf row.Ref with
-                                            | Error e -> Error e
-                                            | Ok theirs ->
-                                                match TouchSet.conflicts ts theirs with
-                                                | [] -> scan acc rest
-                                                | pairs -> scan ((row.Ref, m.Worker.Value, sharedTokens pairs) :: acc) rest
-
-                            match scan [] candidates with
-                            | Error e -> fail e
-                            | Ok [] ->
-                                printfn "DISJOINT — %s overlaps no live claim in %s/%s (#353)." ref.Short ref.Owner ref.Repo
-                                ExitGreen
-                            | Ok collisions ->
-                                for other, holder, toks in collisions do
-                                    printfn "OVERLAP — %s collides with %s held by %s on %s" ref.Short other.Short holder toks
-
-                                ExitContended
+                        ExitContended
 
         | [ a; b ] when not opts.Active ->
             match parseRef ctx a, parseRef ctx b with
