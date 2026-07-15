@@ -98,6 +98,8 @@ A <ref> is a URL, owner/repo#n, or repo#n (owner/repo default to $FSGG_COORD_OWN
 EXIT CODES — the engine's own (the shim translates them for a caller that still speaks bash):
   0 green   ·   1 error (bad args / malformed input)   ·   2 defect (the engine broke)
   3 red     ·   4 no-verdict   ·   75 EX_RATE (budget exhausted — back off, try again later)
+  `take` (#585): 0 ONLY when it claimed an item · 5 EX_NONE (nothing startable) · 6 EX_CONTENDED
+  (lost every race) · 75 EX_RATE · any other non-zero, could not read (never EX_NONE, #266)
 """
 
     let parse (args: string list) : Result<Options, string> =

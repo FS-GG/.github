@@ -448,6 +448,28 @@ else
 fi
 kill "$RL" 2>/dev/null; rm -f "$RL_OUT"
 
+# ---- TAKE EXIT CODES (case 52): #585 — `take` tells a claim (0) from claiming NOTHING ---------------
+#
+# The engine's side of the #585 contract (bash's is `52-take-exit-codes-585.sh`): `take` exits 0 ONLY
+# when it claimed an item, so `take && work_it` never fires on nothing. The starved board has no SDD item
+# (empty) — the engine must exit EX_NONE (2), NOT 0. Budget (75) and unreadable (non-zero) are covered by
+# #418 and #461 above; the pw `take` above proves the claim path is 0. (EX_NONE is 5, not 2 — 2 is the
+# engine's ExitDefect.)
+S585_OUT="$(mktemp)"
+python3 "$HERE/starved_server.py" >"$S585_OUT" 2>/dev/null &
+S585=$!
+S585PORT=""; for _ in $(seq 1 50); do S585PORT="$(head -n1 "$S585_OUT" 2>/dev/null)"; [ -n "$S585PORT" ] && break; sleep 0.1; done
+if [ -n "$S585PORT" ]; then
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$S585PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" take --repo FS.GG.SDD --worker w585 >/dev/null 2>&1
+  ec=$?
+  [ "$ec" -eq 5 ] \
+    && ok "#585: a nothing-startable queue exits EX_NONE (5), not 0 — the engine agrees with bash [#480→#585]" \
+    || bad "#585: engine take on an empty queue must exit 5 (EX_NONE)" "got: $ec"
+else
+  bad "#585 fixture bound a port"
+fi
+kill "$S585" 2>/dev/null; rm -f "$S585_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

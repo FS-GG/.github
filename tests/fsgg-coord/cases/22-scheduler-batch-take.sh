@@ -77,13 +77,16 @@ assert_fails "widen: a collision exits non-zero" as brant-g07 widen 'FS.GG.SDD#7
 # `.github` checkout claimed FS.GG.Game#141 and printed a worktree command against `.github`'s
 # origin/main. A `take` now always has a scope — the checkout, or an explicit --repo — so the test
 # says where it is standing instead of relying on the absence of a scope.
-if as_at "$CO_SDD" teal-e55 take >/dev/null 2>&1; then ok "take: the empty queue exits cleanly [#480]"
-else bad "take: the empty queue exits cleanly [#480]" "non-zero exit"; fi
+# #585 AMENDS #480: "the empty queue exits cleanly (0)" is reversed. `take` claimed NOTHING, and its
+# exit code must SAY so — a worker loop (`take && work_it`) must not proceed on nothing. Nothing-startable
+# is EX_NONE (5), NOT 0; the command still runs cleanly (no error), it just reports "no item" honestly.
+rc_empty=0; as_at "$CO_SDD" teal-e55 take >/dev/null 2>&1 || rc_empty=$?
+assert_eq "take: a nothing-startable queue exits EX_NONE (5), not 0 — nothing was claimed [#480→#585]" "5" "$rc_empty"
 # It must say why PER ITEM, in `batch`'s own words. This assertion used to accept the fixed sentence
 # "no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared", which named
 # four causes without observing any of them (#440) — so the test's own name was the thing it failed to
 # check. The reason now has to be one `batch` actually found.
-take_empty="$(as_at "$CO_SDD" teal-e55 take 2>&1 >/dev/null)"
+take_empty="$(as_at "$CO_SDD" teal-e55 take 2>&1 >/dev/null || true)"   # #585: EX_NONE now, so guard set -e
 assert_contains "take: says WHY there is nothing to hand out" "passed over:" "$take_empty"
 assert_contains "take: ...naming a real, observed reason rather than a guessed list" \
   "already claimed by worker" "$take_empty"
