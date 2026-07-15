@@ -33,6 +33,7 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/coord-engine-e2e/**"
+      - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
@@ -47,6 +48,7 @@ on:
       - "src/FS.GG.Coord.Core/**"
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/coord-engine-e2e/**"
+      - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
@@ -100,6 +102,14 @@ jobs:
       # a canned answer. This is the surface the shim (ADR-0034 §4.4) execs in place of bash.
       - name: The engine's write commands land — the CAS and the capability-typed writes
         run: bash tests/coord-engine-e2e/writes.sh
+
+      # PARITY — the first slice of the Phase-D corpus-through-shim gate. The compiled engine, over HTTP,
+      # must return the answer the SHELL CORPUS certifies for bash on the same board (case 22:
+      # batch → ["FS.GG.SDD#70","FS.GG.SDD#74"]). This turns "the engine is modelled on bash's output" into
+      # "the engine produces bash's certified output", with no bash in the pipeline. The golden is the
+      # corpus's own contract, so the two cannot drift.
+      - name: Parity — the engine matches the corpus's certified batch answer
+        run: bash tests/coord-engine-parity/run.sh
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
