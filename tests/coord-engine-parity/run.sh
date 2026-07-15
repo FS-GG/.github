@@ -725,7 +725,9 @@ childsrv() {  # childsrv <env-kv...> -- <engine args...>  ; echoes "PORT<TAB>rc<
   rm -f "$out"
   CHILD_PORT="$port"; CHILD_SRV="$srv"
 }
-posts_on() { curl -s "http://127.0.0.1:$1/_posts"; }
+# Read the POST bodies the fixture recorded — python3 is already the fixture runtime, so this adds no
+# dependency (the same idiom the #533 `dclaims` leg uses to read state straight off its server).
+posts_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_posts").read().decode())' "$1" 2>/dev/null; }
 
 # 1. THE LINK. An empty parent, a fresh child: `child` links it, names the edge in the sub-issue's own
 #    vocabulary (case 15's "linked … as a sub-issue of …"), and POSTs the child's REST id as a NUMBER.
