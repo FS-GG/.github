@@ -173,6 +173,46 @@ else
 fi
 kill "$STV" 2>/dev/null; rm -f "$STV_OUT"
 
+# ---- CROSS-REPO (case 35): #312 — batch qualifies its touch-set comparison BY REPO ----------------
+#
+# `Paths:` tokens are repo-relative, so `src/Physics/**` HELD in one repo names different files than the
+# same bare token READY in another. Scheduling the whole board (no --repo), the engine must not let a
+# cross-repo namesake phantom-block a candidate, while still catching a GENUINE same-repo overlap. The
+# corpus certifies both on board-xbatch — the two cross-repo namesakes ride together, the two real
+# same-repo overlaps drop. This is the FIRST multi-repo fixture in this harness; the earlier slices are
+# all single-repo, and repo-scoping is invisible to a single-repo board.
+XB_OUT="$(mktemp)"
+python3 "$HERE/xbatch_server.py" >"$XB_OUT" 2>/dev/null &
+XB=$!
+XBPORT=""; for _ in $(seq 1 50); do XBPORT="$(head -n1 "$XB_OUT" 2>/dev/null)"; [ -n "$XBPORT" ] && break; sleep 0.1; done
+if [ -n "$XBPORT" ]; then
+  xbenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$XBPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  # The machine contract: both cross-repo namesakes ride together, byte for byte (the corpus's answer).
+  xbj="$(xbenv batch -n 9 --json 2>/dev/null)"
+  [ "$xbj" = '["FS.GG.Templates#420","FS.GG.Governance#421"]' ] \
+    && ok "#312: two cross-repo candidates sharing only a repo-relative token BOTH schedule (byte-exact)" \
+    || bad "#312: cross-repo batch parity" "expected [\"FS.GG.Templates#420\",\"FS.GG.Governance#421\"], got: $xbj"
+  # Neither cross-repo candidate is ever dropped FOR the phantom (#423 Game / #424 Audio hold the same
+  # bare token in OTHER repos). This is the exact defect #312 was filed on.
+  xberr="$(xbenv batch -n 9 2>&1 >/dev/null)"
+  if printf '%s' "$xberr" | grep -qE 'FS.GG.(Templates#420|Governance#421) — overlaps'; then
+    bad "#312: a candidate must NOT be dropped for a cross-repo phantom" "$xberr"
+  else
+    ok "#312: neither candidate is passed over for a cross-repo phantom"
+  fi
+  # ...and scoping narrowed the comparison, it did not BLIND the check: the two GENUINE same-repo
+  # overlaps are still caught, each naming its real same-repo neighbour.
+  printf '%s' "$xberr" | grep -q 'FS.GG.Audio#422 — overlaps in-flight work held by audio-n1' \
+    && ok "#312: a genuine same-repo in-flight overlap is still caught (#422 ⇄ Audio#424)" \
+    || bad "#312: same-repo in-flight overlap caught" "$xberr"
+  printf '%s' "$xberr" | grep -q 'FS.GG.Templates#425 — overlaps batch member FS.GG.Templates#420' \
+    && ok "#312: a genuine same-repo batch-member overlap is still caught (#425 ⇄ Templates#420)" \
+    || bad "#312: same-repo batch-member overlap caught" "$xberr"
+else
+  bad "xbatch fixture bound a port"
+fi
+kill "$XB" 2>/dev/null; rm -f "$XB_OUT"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
