@@ -59,6 +59,11 @@ let private renderText (leaseMinutes: int) (decision: Verdict<Batch.BatchResult>
             for d in passed do
                 eprint $"  %s{Batch.explainDecision leaseMinutes d}"
 
+        // #428 — the starved-queue banner. `decide` feeds a pre-built snapshot (shadow/flip), so a bash
+        // snapshot that carried the same off-board and markerless reservations produces the same aggregate.
+        for line in Batch.starvedBanner leaseMinutes result do
+            eprint line
+
         if result.Truncated then
             eprint "note: the batch was capped, so the candidates after the last one chosen were never evaluated."
 

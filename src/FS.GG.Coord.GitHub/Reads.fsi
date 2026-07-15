@@ -80,6 +80,16 @@ module Reads =
     /// and both believe they hold the lock — the exact outcome the CAS exists to prevent.
     val winner: leaseMinutes: int -> markers: Marker list -> Marker option
 
+    /// THE MARKER THAT HOLDS THE LOCK, REGARDLESS OF LEASE — the live `winner` if there is one, else the
+    /// lowest-id marker whose lease has lapsed.
+    ///
+    /// `winner` decides IDENTITY (only a live marker answers a heartbeat or loses a CAS); this decides
+    /// RESERVATION. A lease is a clock, but a lock is broken only by `reap` (#461/#581): the scheduler must
+    /// reserve a stale-but-unreaped claim's touch-set exactly as it reserves a live one, or hand a second
+    /// worker the tree its holder is standing in. This is the choice `who` makes classifying a row Held vs
+    /// Stale, expressed for the scheduler.
+    val reserver: leaseMinutes: int -> markers: Marker list -> Marker option
+
     /// An issue's body — the touch-set lives in it.
     ///
     /// Returns the raw body. The caller parses it with `TouchSet.parse`, and the distinction that matters

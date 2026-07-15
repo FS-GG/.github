@@ -2399,6 +2399,78 @@ if [ -z "$OBB_PORT" ]; then bad "off-board batch fixture bound a port"; else
   kill "$OBB_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 25 (offboard-claims) — the STARVED-QUEUE BANNER (#428). The scheduler above reserves off-board
+# and stale claims; this proves the AGGREGATE it renders when that reservation leaves NOTHING to hand
+# out. "nothing schedulable" over a busy repo reads as an empty backlog and sends a worker home — so a
+# starved queue must be called BUSY, name every holder, give the soonest lease, and — for a lease that
+# has EXPIRED — point at `reap`, the one blocker a worker clears alone. World (case 25's starved
+# section, one transport over): #221/#222/#224 are queued behind live claims (tern fresh, kite fresh,
+# ghost EXPIRED); #225 overlaps a MARKERLESS In-progress reserver (#226) — reserved, but no holder to
+# name and no lease to wait out; only #212's world (above) ever hands out work.
+# ==================================================================================================
+SQ_OUT="$(mktemp)"; python3 "$HERE/starvedqueue_server.py" >"$SQ_OUT" 2>/dev/null & SQ_SRV=$!; SQ_PORT=""
+for _ in $(seq 1 50); do SQ_PORT="$(head -n1 "$SQ_OUT" 2>/dev/null)"; [ -n "$SQ_PORT" ] && break; sleep 0.1; done
+rm -f "$SQ_OUT"
+if [ -z "$SQ_PORT" ]; then bad "starved-queue fixture bound a port"; else
+  sqenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SQ_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" "$@"; }
+
+  # THE LOCKS STILL HOLD: a starved queue schedules nothing (the machine array is empty), but it is NOT
+  # the same fact as an empty backlog — the banner below is the whole difference.
+  sqj="$(sqenv batch --repo FS.GG.Rendering --json 2>/dev/null)"; rc=$?
+  [ "$rc" -eq 0 ] && [ "$sqj" = '[]' ] \
+    && ok "#428: a starved queue schedules NOTHING — the locks still hold (case 25)" \
+    || bad "#428: starved batch --json" "expected [] (rc=0), got (rc=$rc): $sqj"
+
+  sqerr="$(sqenv batch --repo FS.GG.Rendering 2>&1 >/dev/null)"
+
+  # THE BANNER: the queue is BUSY, and it names every holder so the worker knows who to talk to.
+  printf '%s' "$sqerr" | grep -q '3 item(s) are QUEUED BEHIND LIVE CLAIMS held by: ghost-222, kite-z01, tern-y99' \
+    && ok "#428: the starved queue is called BUSY and names every holder (case 25)" \
+    || bad "#428: queued-behind-claims banner" "$sqerr"
+  printf '%s' "$sqerr" | grep -q 'this queue is BUSY, not empty' \
+    && ok "#428: ...and says plainly this is not an empty backlog (case 25)" \
+    || bad "#428: BUSY-not-empty line" "$sqerr"
+
+  # THE SOONEST LEASE decides the wait — and an EXPIRED lease is a reap, not a wait, so it is the soonest
+  # of all (it frees NOW) and the advice points at `reap`, the one blocker a worker can clear alone.
+  printf '%s' "$sqerr" | grep -q 'soonest: lease EXPIRED — reapable' \
+    && ok "#428: the soonest lease is named — an EXPIRED one frees now (case 25)" \
+    || bad "#428: soonest lease" "$sqerr"
+  printf '%s' "$sqerr" | grep -q '1 of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo FS.GG.Rendering --apply' \
+    && ok "#428: ...and an expired lease is a REAP, with the exact command (case 25)" \
+    || bad "#428: expired-lease reap advice" "$sqerr"
+
+  # A DEAD holder is not a wait: the per-item reason says EXPIRED, not a countdown, so a worker does not
+  # go off to wait for a holder who is very likely gone.
+  printf '%s' "$sqerr" | grep -q '#224 — overlaps in-flight work held by ghost-222 on FS.GG.Rendering#216 (lease EXPIRED — reapable)' \
+    && ok "#428: an EXPIRED lease is a reap, never a wait — named on the item too (case 25)" \
+    || bad "#428: #224 expired per-item" "$sqerr"
+
+  # A MARKERLESS In-progress item RESERVES its files (arm A), so it must not be scheduled over — but it
+  # has no worker and no lease, so it is NOT a holder, NOT counted in the 3, and NEVER named "—".
+  printf '%s' "$sqerr" | grep -q '#225 — overlaps FS.GG.Rendering#226, which the board says is In progress with NO claim marker' \
+    && ok "#428: a markerless In-progress item is a reserver, not a holder (case 25)" \
+    || bad "#428: #225 markerless reserver" "$sqerr"
+  printf '%s' "$sqerr" | grep -q 'there is no lease to wait out; see: fsgg-coord who' \
+    && ok "#428: ...and it says there is no lease to wait out (case 25)" \
+    || bad "#428: #225 no-lease advice" "$sqerr"
+  printf '%s' "$sqerr" | grep -q 'held by —' \
+    && bad "#428: an unnameable reserver must never appear as a holder named '—'" "$sqerr" \
+    || ok "#428: an unnameable reserver never appears as a holder named '—' (case 25)"
+
+  # THE BANNER DOES NOT FIRE ON A HEALTHY QUEUE: the off-board world above HANDED OUT #212, so its stderr
+  # carries the per-item skips but NEVER the BUSY banner — a banner on a schedule that worked is noise
+  # that trains workers to skip stderr (#440). Re-run that world here and confirm the silence.
+  printf '%s' "$obberr" | grep -q 'QUEUED BEHIND LIVE CLAIMS' \
+    && bad "#428: a queue that DID hand out work must print no starved-queue banner" "$obberr" \
+    || ok "#428: a queue that handed out work prints NO starved-queue banner (case 25)"
+
+  kill "$SQ_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

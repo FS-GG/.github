@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **23 full + 3 partial of 27 corpus cases** (~305 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **23 full + 3 partial of 27 corpus cases** (~315 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -23,7 +23,7 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~305 assertions across **23 of 27 corpus cases**, 23 fixture
+`tests/coord-engine-parity/` harness (~315 assertions across **23 of 27 corpus cases**, 24 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
@@ -130,7 +130,7 @@ which are the differential harness D.4 disposes of, not engine-behaviour cases:
 | ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 26, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — `reap` now EXISTS (case 26), but its adversarial-interleaving legs are the remaining work |
-| ◑ | 25 (offboard-claims) | the off-board **`who`** legs and the **`batch` off-board RESERVATION** are DONE — `who --repo` scans the repo's OPEN ISSUES (paginated, never conditional) and reports a claim WHEREVER the board thinks the item is; and the scheduler (`batch`/`next`/`take`) now runs that SAME scan (bash's `active_claims` arm B) so it RESERVES an off-board claim's touch-set — it schedules only the item no live marker touches, skips a Ready item a marker actually holds, and refuses to schedule over an off-board claim (naming the holder, its item, and the colliding paths, with the lease window). The #428 starved-queue prose and `inbox` delivery legs are deferred (see the remaining table) |
+| ◑ | 25 (offboard-claims) | the off-board **`who`** legs, the **`batch` off-board RESERVATION**, and the **#428 starved-queue BANNER** are DONE — `who --repo` scans the repo's OPEN ISSUES (paginated, never conditional) and reports a claim WHEREVER the board thinks the item is; the scheduler (`batch`/`next`/`take`) runs that SAME scan (bash's `active_claims` arm B) so it RESERVES an off-board claim's touch-set — including a STALE-but-unreaped one (a lock is broken only by `reap`, never a clock) and a MARKERLESS In-progress row (arm A, reserved as `Unowned`); and when that reservation leaves NOTHING to hand out, the queue is called **BUSY, not empty** — every holder named, the soonest lease given, an EXPIRED lease flagged as a `reap` not a wait, and a markerless reserver named WITHOUT a lease (never a holder "—"). Only `inbox` delivery on an off-board claim is deferred (see the remaining table) |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -155,7 +155,7 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 |---|---|---|
 | 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
-| 25-remainder | the #428 **starved-queue prose** (BUSY-not-empty banner, name the holders, name the lease to wait on, an EXPIRED lease is a reap not a wait, a markerless In-progress reserver named without a lease) + `inbox` delivery on an off-board claim — the off-board **`who`** scan, the `reap` command legs, AND the **`batch` off-board RESERVATION** (the scheduler now runs `active_claims` arm B and reserves an off-board claim's touch-set) are DONE; what remains is the aggregate starved-queue banner over that reservation, plus off-board `inbox` | port gap (starved-queue renderer + `inbox`) |
+| 25-remainder | `inbox` delivery on an off-board claim — the off-board **`who`** scan, the `reap` command legs, the **`batch` off-board RESERVATION**, AND the **#428 starved-queue BANNER** (BUSY-not-empty, name the holders, name the soonest lease, an EXPIRED lease is a reap not a wait, a markerless In-progress reserver named without a lease) are all DONE; only off-board `inbox` remains | port gap (`inbox`) |
 | 30 (pr-existence-697) | `who`/`adopt` land-the-finished-PR path (#697), incl. the `prState` (`green`/`conflicted`/`pending`/`red`) enrichment on `who`'s STALE row that `pr_landable` computes — the base `who` proof-of-life (`livePr`, `STALE (#NNN OPEN)`) landed with case 26; the landable colour of it is this | new `adopt`/`landable` command |
 | 31 (superseded-run-720) | `adopt`/`landable` superseded-run scoring (#720) | new `landable`/`adopt` command |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
@@ -312,6 +312,27 @@ pre-built snapshot to `decide`, which never scans** — the engine's own scan is
 already carried. Case 25 stays PARTIAL: the #428 starved-queue banner over this reservation, and off-board
 `inbox`, remain (see the remaining table).
 
+The **#428 starved-queue BANNER** landed next (case 25, this slice): the AGGREGATE the per-item reasons
+cannot give. In a repo where one file is nearly every item's touch-set, ONE claim serialises the whole
+queue — `batch` correctly hands out nothing, and "nothing schedulable" reads exactly like an empty backlog,
+so a worker goes home from a repo with work in it. This slice makes the scheduler say the queue is **BUSY,
+not empty**: it names every holder (`held by: ghost-222, kite-z01, tern-y99` — who to talk to), gives the
+**soonest lease** (whether the wait is worth it), and — for a lease already EXPIRED — points at `reap`
+(`N of those lease(s) have EXPIRED — collect them: fsgg-coord reap …`), the one blocker a worker clears
+alone. Two reservations the board scan had been blind to had to land first, both under the lock, not the
+column (#461): a **STALE-but-unreaped off-board claim** now reserves (a lapsed lease is a clock; a lock is
+broken only by `reap` — so `Reads.reserver` reads the lowest-id marker regardless of lease, where `winner`,
+which decides IDENTITY, drops it), carrying its true expired age so the collision reads `lease EXPIRED —
+reapable`; and a **MARKERLESS `In progress` row** reserves too (arm A of bash's `active_claims` — something
+is evidently editing those files), but as `Unowned` — no worker to name and no lease to wait out, so a
+colliding candidate is told `In progress with NO claim marker` and the banner NEVER dresses it up as a
+holder "—" nor counts it among the queued-behind-claims. `Batch.starvedBanner` is the pure computation
+(silent whenever work was handed out, or the queue is starved by blockers/columns — that is #440's per-item
+business); `batch`/`next`/`decide` relay it to stderr. New `starvedqueue_server.py`; 10 parity assertions +
+6 `Batch` + 2 `Scan` round-trip tests. Disposed on the record (ADR-0040 §5): the "EXPIRED — reapable"
+verdict is decided by the lease clock at the banner, but the `reap` it points at RE-probes and refuses a
+claim whose `item/<n>-*` PR is still open (#581), so the advice can never break a lock over live work.
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
 into **new commands** (`adopt`/`landable`, `issues`) and **larger port gaps** (case 25's #428 starved-queue
 renderer, and `reap`'s adversarial-interleaving legs). The verify-paths repo-boundary divergences (case 23's
@@ -369,7 +390,7 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 23 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~305
+      **In progress: 23 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~315
       assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
@@ -389,8 +410,11 @@ documented retirement is not.**
       reserves an off-board claim's touch-set — schedule only the item no live marker touches, skip a
       board-Ready item a marker holds, refuse to schedule over an off-board claim naming its holder/item/paths
       and lease window; REST-only (C4), and `--engine fs`/shadow/flip are untouched (they `decide` a pre-built
-      snapshot, which never scans). Case 25 stays PARTIAL (its #428 starved-queue banner + off-board `inbox`
-      remain). Ten engine
+      snapshot, which never scans); and the **#428 starved-queue BANNER** then made a starved queue say it is
+      **BUSY, not empty** — a STALE off-board claim and a MARKERLESS In-progress row now reserve too (the lock,
+      not the column, #461), and when that leaves nothing to hand out the queue names every holder, the soonest
+      lease, and — for an EXPIRED lease — the exact `reap` (`Batch.starvedBanner`, silent on a healthy queue).
+      Case 25 stays PARTIAL (only off-board `inbox` remains). Ten engine
       defects the port was *for* closed along the way, plus the
       `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
       together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419
