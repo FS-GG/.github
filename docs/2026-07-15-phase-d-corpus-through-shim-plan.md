@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **16 of 27 corpus cases** (~131 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **17 of 27 corpus cases** (~140 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -23,11 +23,12 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~131 assertions across **16 of 27 corpus cases**, 14 fixture
+`tests/coord-engine-parity/` harness (~140 assertions across **17 of 27 corpus cases**, 15 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
-`claim`'s column restore, the honest empty-queue reason, the git-remote repo scope, and the full `take`
+`claim`'s column restore, the honest empty-queue reason, the git-remote repo scope, the `verify-paths`
+touch-set gate (OK/DRIFT/SKIP and #322's "I could not check is never a verdict"), and the full `take`
 exit-code contract. **Eight real defects the port was *for* have been closed in the engine along the
 way**, each proven with a parity slice: [#516](https://github.com/FS-GG/.github/issues/516) (one item per
 worker), [#585](https://github.com/FS-GG/.github/issues/585) (distinct `take` exit codes),
@@ -110,14 +111,15 @@ fail-closed assertions re-expressed at the HTTP layer.
 
 **Progress (as of #795, 2026-07-15).** The harness is grown one defect/case at a time — each PR titled
 `parity: … (case N)` (the engine already matched bash — port the slice) or `fix(engine): … (#NNN)` (a real
-port gap — fix the engine, then prove it). **15 of 27 cases covered** — the 27 being the full corpus's 29
-minus `50-shadow-engine`/`51-fs-flip`, which are the differential harness D.4 disposes of, not
-engine-behaviour cases:
+port gap — fix the engine, then prove it). **15 of 27 cases fully covered, plus 2 partial (13, 23)** — the
+27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which are the differential harness
+D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
 | ✓ | 11, 12, 15, 20, 21, 22, 32, 33, 35, 40, 41, 42, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `lint`/`issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
+| ◑ | 23 (core verdicts) | `verify-paths` OK/DRIFT/SKIP + #322 fail-closed; the SKIP-exit divergence is disposed on the record, `--issue`/#479/#494 + #430-remote legs deferred (see the remaining table) |
 
 **Remaining (11 full + the rest of 13), each classified as a port gap or a deliberate divergence:**
 
@@ -126,7 +128,7 @@ engine-behaviour cases:
 | 10 (cache-and-budget) | re-express ETag-304 / "costs N `gh` calls" as HTTP request counts | the §3 "one hard problem" — the call-counting transformation |
 | 13-remainder | the epic-rollup / NO-TOUCH-SET `lint` rules (#496), `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — all deferred on the record when the #480 scope slice landed | new `lint`/`issues`/`reap` commands |
 | 14 (no-touch-set-and-done) | `lint` NO-TOUCH-SET/epic-rollup rules | new `lint` command |
-| 23 (verify-paths-boundary) | SKIP exit code | **deliberate divergence** — engine SKIP always exits 0 |
+| 23-remainder | `--issue` (verify-paths against a named issue) + its repo-boundary refusals (#479/#494), and the #430 git-remote repo default for verify-paths | port gap — core verdicts covered; `--issue` shared with case 24, remote-scope with case 13 |
 | 24 (issue-boundary-adversarial) | adversarial issue-parse boundaries | to be triaged |
 | 25 (offboard-claims) | paginated open-issue scan for `who` (off-board markers) + starved `batch` prose | port gap (larger) |
 | 26 (expired-lease) | `reap` / expired-lease-vs-open-PR (#581) | new `reap` command |
@@ -192,8 +194,8 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 16 of 27 cases** ported to `tests/coord-engine-parity/` (~131 assertions); 11 remain
-      (see the §5 D.1 ledger). Eight engine defects the port was *for* closed along the way.
+      **In progress: 17 of 27 cases** ported to `tests/coord-engine-parity/` (~140 assertions); the rest
+      remain (see the §5 D.1 ledger). Eight engine defects the port was *for* closed along the way.
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the
