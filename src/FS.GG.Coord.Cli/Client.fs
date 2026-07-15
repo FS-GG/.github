@@ -239,7 +239,9 @@ module Client =
                 match result.Chosen with
                 | item :: _ -> printfn "%s" item.Ref.Short
                 | [] ->
-                    printfn "no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared"
+                    // #440: name the OBSERVED reason, never a GUESSED list of causes — `printChosen` prints the
+                    // honest "nothing schedulable right now." plus the per-item passed-over reasons, the shape
+                    // `batch` already uses. The guessed list asserted causes `next` never observed (case 41).
                     printChosen opts.LeaseMinutes result
 
                 ExitGreen
@@ -691,8 +693,13 @@ module Client =
                     match result.Chosen with
                     | [] ->
                         // #585: looked, nothing startable — NOT a claim. Exit EX_NONE so `take && work_it`
-                        // does not proceed on nothing. (`printChosen` still prints the per-item WHY.)
-                        printfn "no schedulable item — every candidate is blocked, claimed, overlapping, or undeclared"
+                        // does not proceed on nothing.
+                        // #440: name the OBSERVED reason, never a GUESSED list of causes. `printChosen` prints
+                        // the honest "nothing schedulable right now." to stdout and the per-item passed-over
+                        // reasons to stderr — the same shape `batch`/`decide` already use. Reciting "every
+                        // candidate is blocked, claimed, overlapping, or undeclared" asserts causes we did not
+                        // observe (case 41); over a starved queue half of them are false, which is the #440
+                        // defect wearing a headline.
                         printChosen opts.LeaseMinutes result
                         ExitNone
                     | item :: _ ->
