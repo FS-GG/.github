@@ -805,10 +805,15 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   disagreement is logged (`fsgg-coord divergence`). Nothing about your run changes — not the answer,
   not the exit code, not the timing you would notice.
 
-  It is worth the one command because the shadow is how the port earns its cutover. Bash stays
-  authoritative until the divergence log has been clean across the live fleet for three consecutive
-  days, and that log only fills where an engine exists. A worker without one contributes no evidence,
-  and the clock does not move.
+  It is worth the one command because an engine you have is an engine you can ASK. `--engine=fs` is
+  **open** (ADR-0038) — there, the typed core's answer *is* the answer, and every failure is fatal
+  rather than a quiet fall back to bash. The **default does not move**: with no flag it is `auto`, and
+  `auto` still hands you bash's answer.
+
+  The cut-over gate is the **defect corpus** — `tests/fsgg-coord/cases/`, one case per historical
+  defect, run against **both** engines in CI. It is not a fleet clock: that clock could never tick,
+  because a worker in a per-item worktree resolves no engine and so banks no evidence (#728). The
+  shadow is now **telemetry** — it is how a live fleet is watched, not what the flip waits on.
 
   A global tool lands in `~/.dotnet/tools`, which is already on `PATH`, so it is found in **every**
   repo with no per-repo setup. (A local `dotnet tool restore` also works — but note a local tool is
@@ -867,9 +872,9 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   ```
 
   The local log lives in `~/.cache/fsgg-coord/`, a cache directory that dies with your container. The
-  cut-over criterion is *"zero divergence across the **live fleet** for three consecutive days"*, and a
-  worker who shadows and never publishes has moved that clock exactly as far as one who never shadowed
-  at all.
+  cut-over criterion is no longer a fleet clock — it is the **defect corpus** (ADR-0038) — but the
+  ledger is still how a **live** fleet is watched, and a worker who shadows and never publishes has told
+  it exactly as much as one who never shadowed at all.
 
 - `Status: In progress` and `Blocked by` already exist on the board — **no schema change is
   required**. A repo may add an optional `Paths` text field if it wants touch-sets filterable
