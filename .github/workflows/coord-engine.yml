@@ -94,6 +94,13 @@ jobs:
       - name: The engine reads its own board — scan | decide, over HTTP, hermetic
         run: bash tests/coord-engine-e2e/run.sh
 
+      # THE WRITE COMMANDS, over HTTP, against a STATEFUL fixture. The claim CAS is a read-modify-reread,
+      # so this drives `claim`/`heartbeat`/`release`/`set-field`/`child`/`say`/`widen`/`done` as real CLI
+      # commands against a server that remembers what they posted — a green is a green over a real lock, not
+      # a canned answer. This is the surface the shim (ADR-0034 §4.4) execs in place of bash.
+      - name: The engine's write commands land — the CAS and the capability-typed writes
+        run: bash tests/coord-engine-e2e/writes.sh
+
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
 

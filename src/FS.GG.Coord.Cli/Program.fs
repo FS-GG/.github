@@ -349,6 +349,26 @@ let main argv =
 
             | Facts -> facts opts
 
+            // `whoami` reads no board — identity is local, and `--mint` needs no token.
+            | WhoAmI -> Client.whoami opts
+
+            // The client command surface — the shim's targets. Each reads/writes GitHub through the typed
+            // IO layer; `Client.run` owns the token check, the transport lifetime, and the exit contract.
+            | Next
+            | BatchCmd
+            | Ready
+            | Who
+            | Budget
+            | Claim
+            | Take
+            | Release
+            | Heartbeat
+            | SetField
+            | Child
+            | Widen
+            | Say
+            | DoneCmd -> Client.run opts
+
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
         // is broken" from "the caller is wrong" — because the first means the shadow is untrustworthy
