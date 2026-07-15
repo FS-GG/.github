@@ -15,6 +15,7 @@ namespace FS.GG.Coord.Cli
 module Client =
 
     open System
+    open System.Diagnostics
     open System.IO
     open System.Text.Json
     open FS.GG.Coord
@@ -1222,9 +1223,102 @@ module Client =
                 transport :> IDisposable
             )
 
+    // ---- #480: the repo a WORKER command scopes to — the one you are STANDING IN --------------------
+
+    /// resolve_repo (bash): a `--repo` value is a registry short-id (`sdd`), an `owner/repo`, or a literal
+    /// repo name. It reduces to the repo NAME board rows carry — a short-id maps, an `owner/repo` keeps its
+    /// repo part, a literal name passes through — so `--repo sdd`, `--repo FS-GG/FS.GG.SDD` and
+    /// `--repo FS.GG.SDD` all name one queue. (The roster map is embedded, not read from repos.yml, because
+    /// the shim ships as a `kind: client` kit item WITHOUT the roster — case 13 §6c / #381.)
+    let private resolveRepo (raw: string) : string =
+        match raw.ToLowerInvariant() with
+        | "sdd" -> "FS.GG.SDD"
+        | "rendering" -> "FS.GG.Rendering"
+        | "governance" -> "FS.GG.Governance"
+        | "templates" -> "FS.GG.Templates"
+        | "game" -> "FS.GG.Game"
+        | "audio" -> "FS.GG.Audio"
+        | _ ->
+            // owner/repo -> the repo part (bash's `${1#*/}`); a literal name -> itself.
+            match raw.IndexOf('/') with
+            | -1 -> raw
+            | i -> raw.Substring(i + 1)
+
+    /// A GitHub remote URL → its `owner/repo`, or `None` when the URL is not a GitHub remote naming
+    /// exactly one owner/repo. Handles every form `git config remote.origin.url` yields:
+    /// `https://github.com/FS-GG/x(.git)`, `git@github.com:FS-GG/x(.git)`, `ssh://…/FS-GG/x.git`. A bare
+    /// host or a nested path is NOT a scope — bash's `*/*/*|*/` guard, held here as an exact one-slash
+    /// requirement — so a malformed remote can never be silently read as a repo.
+    let parseGitHubSlug (url: string) : string option =
+        match url.IndexOf("github.com", StringComparison.OrdinalIgnoreCase) with
+        | -1 -> None
+        | idx ->
+            let mutable s = url.Substring(idx + "github.com".Length).TrimStart(':', '/')
+
+            if s.EndsWith(".git", StringComparison.OrdinalIgnoreCase) then
+                s <- s.Substring(0, s.Length - 4)
+
+            s <- s.TrimEnd('/')
+            // owner/repo EXACTLY — one slash, both sides non-empty.
+            let parts = s.Split('/')
+
+            if parts.Length = 2 && parts.[0] <> "" && parts.[1] <> "" then
+                Some s
+            else
+                None
+
+    /// scope_repo (#480): the current checkout's `owner/repo`, read from `git config --get
+    /// remote.origin.url`. FREE and offline — deliberately NOT `gh repo view` — so resolving the scope
+    /// cannot burn GraphQL budget, and an exhausted budget can never be misreported as "you are not in a
+    /// checkout" (#430). `None` when there is no readable `origin` that parses as `owner/repo`.
+    let private gitRemoteRepo () : string option =
+        try
+            let psi = ProcessStartInfo("git", "config --get remote.origin.url")
+            psi.RedirectStandardOutput <- true
+            psi.RedirectStandardError <- true
+            psi.UseShellExecute <- false
+            use p = Process.Start psi
+            let url = p.StandardOutput.ReadToEnd().Trim()
+            p.WaitForExit()
+
+            if p.ExitCode <> 0 then None else parseGitHubSlug url
+        with _ ->
+            None
+
+    /// The repo a worker command (`next`/`take`/`batch`/`who`) scopes to. An explicit `--repo` wins and is
+    /// resolved through `resolveRepo`; otherwise the scope defaults to the checkout you are standing in
+    /// (#480). Reconcilers (`ready`) do NOT call this — /check-board runs a bare `ready --all` to reconcile
+    /// the WHOLE board, so narrowing it to the checkout would silently shrink the reconciler to one repo,
+    /// trading this scope bug for a strictly worse one in the very tool that exists to catch it.
+    let private scopedRepo (opts: Options) : string option =
+        match opts.Repo with
+        | Some r -> Some(resolveRepo r)
+        | None -> gitRemoteRepo () |> Option.map resolveRepo
+
     /// Run an IO command. Every one goes through here so the token check, the transport lifetime, and the
     /// defect boundary are in one place.
     let run (opts: Options) : int =
+        // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
+        // reconciler stays org-wide. `take` ACTS — it claims an item and prints a worktree command against
+        // THIS checkout's origin — so an undetectable scope is a hard error, not a quiet fall-back to the
+        // whole org, which is what once handed a `.github` worker another repo's item and a worktree
+        // command that would have built it in the wrong repository.
+        let opts =
+            match opts.Command with
+            | Next
+            | BatchCmd
+            | Who
+            | Take -> { opts with Repo = scopedRepo opts }
+            | _ -> opts
+
+        match opts.Command with
+        | Take when Option.isNone opts.Repo ->
+            eprint
+                "fsgg-coord-engine: take: --repo required (no git remote here, so 'the repo you are standing in' is undefined)."
+
+            ExitError
+        | _ ->
+
         match context () with
         | Error code -> code
         | Ok(ctx, disposable) ->
