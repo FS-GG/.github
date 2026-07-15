@@ -265,6 +265,121 @@ module Cache =
         with :? IOException ->
             ()
 
+    // ---- the board-map cache (#418) ---------------------------------------------------------------
+
+    [<Literal>]
+    let private DefaultBoardTtl = 86400
+
+    let boardTtlSeconds () =
+        match Environment.GetEnvironmentVariable "FSGG_COORD_BOARD_TTL_SEC" with
+        | null
+        | "" -> DefaultBoardTtl
+        | v ->
+            match Int32.TryParse v with
+            | true, n when n >= 0 -> n
+            // A TTL we cannot parse is not zero and not the default — but the safe direction for a cache is
+            // always to pay for the read, so a malformed value disables it rather than failing the run.
+            | _ -> 0
+
+    let private boardMapFile (owner: string) (title: string) =
+        Path.Combine(ensureRoot (), $"boardmap-%s{slug owner}-%s{slug title}.json")
+
+    /// A board map worth memoising: a JSON object whose `fields` is a non-empty object. The mirror of
+    /// `isNonEmptyScan` — an empty field map is #199's shape, a bootstrap that failed to walk the document,
+    /// and caching it would make every write fail with "no field named Status" for a day.
+    let private isUsableBoardMap (board: string) =
+        if String.IsNullOrWhiteSpace board then
+            false
+        else
+            try
+                use doc = JsonDocument.Parse board
+
+                doc.RootElement.ValueKind = JsonValueKind.Object
+                && (match doc.RootElement.TryGetProperty "fields" with
+                    | true, f -> f.ValueKind = JsonValueKind.Object && f.EnumerateObject() |> Seq.isEmpty |> not
+                    | _ -> false)
+            with :? JsonException ->
+                false
+
+    let getBoardMap (owner: string) (title: string) =
+        let ttl = boardTtlSeconds ()
+
+        if ttl <= 0 then
+            None
+        else
+
+        let file = boardMapFile owner title
+
+        if not (File.Exists file) then
+            None
+        else
+
+        let info = FileInfo file
+
+        // A zero-byte file is a torn write, not a cached board — the same discipline `getScan` keeps.
+        if info.Length = 0L then
+            None
+        else
+
+        let age = DateTimeOffset.UtcNow - DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero)
+
+        if age.TotalSeconds >= float ttl then
+            None
+        else
+            try
+                Some(File.ReadAllText file)
+            with :? IOException ->
+                None
+
+    let putBoardMap (owner: string) (title: string) (board: string) =
+        if not (isUsableBoardMap board) then
+            false
+        else
+            try
+                let file = boardMapFile owner title
+                let temp = file + ".tmp." + string (Environment.ProcessId)
+                File.WriteAllText(temp, board)
+                File.Move(temp, file, overwrite = true)
+                true
+            with :? IOException ->
+                false
+
+    let dropBoardMap (owner: string) (title: string) =
+        try
+            File.Delete(boardMapFile owner title)
+        with :? IOException ->
+            ()
+
+    let private itemIdFile (owner: string) (repo: string) (number: int) (boardNumber: int) =
+        // Keyed on the BOARD too: an issue can sit on several boards, and its item id differs per board.
+        Path.Combine(ensureRoot (), $"itemid-%s{slug owner}-%s{slug repo}-%d{number}-b%d{boardNumber}.id")
+
+    let getItemId (owner: string) (repo: string) (number: int) (boardNumber: int) =
+        let file = itemIdFile owner repo number boardNumber
+
+        if not (File.Exists file) then
+            None
+        else
+            try
+                match File.ReadAllText(file).Trim() with
+                | "" -> None
+                | id -> Some id
+            with :? IOException ->
+                None
+
+    let putItemId (owner: string) (repo: string) (number: int) (boardNumber: int) (id: string) =
+        // Never memoise an empty id — an absence must not be manufactured into a hit (#421).
+        if String.IsNullOrWhiteSpace id then
+            ()
+        else
+            try
+                let file = itemIdFile owner repo number boardNumber
+                let temp = file + ".tmp." + string (Environment.ProcessId)
+                File.WriteAllText(temp, id)
+                File.Move(temp, file, overwrite = true)
+            with :? IOException ->
+                ()
+
     // ---- the deferred board-write queue -----------------------------------------------------------
 
     type Deferred =

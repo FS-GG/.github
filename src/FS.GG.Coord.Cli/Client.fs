@@ -146,7 +146,7 @@ module Client =
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
     /// so the three can never disagree about which items exist (#485).
     let private scanAndDecide (ctx: Context) (opts: Options) (intent: Cache.ReadIntent) =
-        Board.bootstrap ctx.Transport ctx.Owner ctx.Title
+        Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
         |> Result.bind (fun board -> Scan.board ctx.Transport intent ctx.Owner ctx.Title board.Number)
         |> Result.bind (fun rows ->
             Scan.snapshot ctx.Transport rows opts.Repo opts.AllowBacklog opts.Limit opts.LeaseMinutes
@@ -286,7 +286,7 @@ module Client =
 
     let ready (ctx: Context) (opts: Options) : int =
         // A RECONCILER read — always fresh, never the cache. Its whole job is to say what is true right now.
-        match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
         | Ok board ->
             match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
@@ -394,7 +394,7 @@ module Client =
 
     let who (ctx: Context) (opts: Options) : int =
         // A truth read — fresh, and it reads the LOCK, which is never cached.
-        match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
         | Ok board ->
             match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
@@ -516,7 +516,7 @@ module Client =
     /// A held item's markers are read fresh (`Reads.markers` — the lock is never cached), and `winner`
     /// applies the lease, so a lapsed claim of ours does not count.
     let private heldElsewhere (ctx: Context) (leaseMinutes: int) (workerId: string) (ref: Ref) =
-        match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> Error e
         | Ok board ->
             match Scan.board ctx.Transport Cache.Scheduling ctx.Owner ctx.Title board.Number with
@@ -584,7 +584,7 @@ module Client =
                     // post-path thunk, never called on a lost race or an idempotent re-claim. That is what
                     // keeps this off the losing side of the hottest path in the org, on the budget that dies
                     // first under fan-out (#418).
-                    let board = lazy (Board.bootstrap ctx.Transport ctx.Owner ctx.Title)
+                    let board = lazy (Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title)
 
                     let readPreviousStatus () =
                         // BEST-EFFORT. A pre-claim column we cannot read is recorded as NONE — the same as a
@@ -673,7 +673,7 @@ module Client =
 
                         let name = statusName restoreTo
 
-                        match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+                        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                         | Ok board when name <> "" ->
                             Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
                             |> ignore
@@ -794,7 +794,7 @@ module Client =
                 | None ->
                     let writes = parsed |> List.choose (function | Ok p -> Some p | Error _ -> None)
 
-                    match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+                    match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                     | Error e -> fail e
                     | Ok board ->
                         // Map an alias ("f2") back to the pair it wrote, so a partial write can be reported
@@ -862,7 +862,7 @@ module Client =
                 ExitError
             | _, Error c -> c
             | Ok ref, Ok w ->
-                match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                 | Error e -> fail e
                 | Ok board ->
                     let write =
@@ -995,7 +995,7 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                match Board.bootstrap ctx.Transport ctx.Owner ctx.Title with
+                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                 | Error e -> fail e
                 | Ok board ->
                     match Done.facts ctx.Transport board ref with
@@ -1398,6 +1398,101 @@ module Client =
 
     /// Run an IO command. Every one goes through here so the token check, the transport lifetime, and the
     /// defect boundary are in one place.
+    // ---- the plumbing commands (#418 board/item cache, case 10) ---------------------------------------
+    //
+    // These expose the resolver cache the corpus counts: `bootstrap` pays the two GraphQL points once and
+    // day-caches the field/option id map; `board`/`field-id`/`option-id` read it back for ZERO; `item-id`
+    // resolves an issue's board item id in ONE call and then keeps it forever. They are board-global — no
+    // #480 repo scoping — because the board is one board and its ids are the same from any checkout.
+
+    let bootstrapCmd (ctx: Context) (opts: Options) : int =
+        // `--refresh` drops the day-cache so the next resolve is a real one — the remedy Snapshot.fs points
+        // a worker at when the board schema changed under a warm cache.
+        if opts.Fresh then
+            Cache.dropBoardMap ctx.Owner ctx.Title
+
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+        | Error e -> fail e
+        | Ok board ->
+            printfn "bootstrapped board #%d '%s' in %s (%d fields)" board.Number board.Title board.Owner (Map.count board.Fields)
+            ExitGreen
+
+    let boardCmd (ctx: Context) : int =
+        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+        | Error e -> fail e
+        | Ok board ->
+            printfn "%s" (Board.boardToJson board)
+            ExitGreen
+
+    let fieldId (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ field ] ->
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error e -> fail e
+            | Ok board ->
+                match Map.tryFind field board.Fields with
+                | Some f ->
+                    printfn "%s" f.Id
+                    ExitGreen
+                | None ->
+                    eprint $"fsgg-coord-engine: no board field named '%s{field}'."
+                    ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: field-id takes <field>."
+            ExitError
+
+    let optionId (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ field; option ] ->
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error e -> fail e
+            | Ok board ->
+                match Map.tryFind field board.Fields with
+                | Some f ->
+                    match f.Type with
+                    | Board.SingleSelect options ->
+                        match Map.tryFind option options with
+                        | Some id ->
+                            printfn "%s" id
+                            ExitGreen
+                        | None ->
+                            eprint $"fsgg-coord-engine: field '%s{field}' has no option '%s{option}'."
+                            ExitError
+                    | _ ->
+                        eprint $"fsgg-coord-engine: field '%s{field}' is not a single-select field."
+                        ExitError
+                | None ->
+                    eprint $"fsgg-coord-engine: no board field named '%s{field}'."
+                    ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: option-id takes <field> <option>."
+            ExitError
+
+    let itemIdCmd (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ refArg ] ->
+            match parseRef ctx refArg with
+            | Error msg ->
+                eprint $"fsgg-coord-engine: %s{msg}"
+                ExitError
+            | Ok ref ->
+                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                | Error e -> fail e
+                | Ok board ->
+                    match Board.itemIdCached ctx.Transport board ref.Owner ref.Repo ref.Number with
+                    | Error e -> fail e
+                    | Ok(Some id) ->
+                        printfn "%s" id
+                        ExitGreen
+                    // #421: a SUCCESSFUL read that found nothing is the only path that says "not on board".
+                    // It is a definite answer, not a failure — but it is not an id, so it exits non-zero.
+                    | Ok None ->
+                        eprint $"fsgg-coord-engine: %s{ref.Short} is not an item on this board."
+                        ExitError
+        | _ ->
+            eprint "fsgg-coord-engine: item-id takes <ref>."
+            ExitError
+
     let run (opts: Options) : int =
         // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
         // reconciler stays org-wide. `take` ACTS — it claims an item and prints a worktree command against
@@ -1441,4 +1536,9 @@ module Client =
             | Say -> say ctx opts
             | DoneCmd -> doneCmd ctx opts
             | VerifyPaths -> verifyPaths ctx opts
+            | Bootstrap -> bootstrapCmd ctx opts
+            | BoardCmd -> boardCmd ctx
+            | FieldId -> fieldId ctx opts
+            | OptionId -> optionId ctx opts
+            | ItemId -> itemIdCmd ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

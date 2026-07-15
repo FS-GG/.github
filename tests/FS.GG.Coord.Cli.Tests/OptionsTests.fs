@@ -118,3 +118,24 @@ module OptionsTests =
         // resolve a straddle against a ref named `--warn`. It must be "you forgot the issue".
         let e = parse [ "verify-paths"; "--pr"; "7"; "--issue"; "--warn" ] |> rejected
         Assert.Contains("--issue", e)
+
+    // ---- the plumbing commands (#418 cache, case 10) ----------------------------------------------
+
+    [<Fact>]
+    let ``the board-map plumbing commands parse to their own commands`` () =
+        Assert.Equal(Bootstrap, (parse [ "bootstrap" ] |> ok).Command)
+        Assert.Equal(BoardCmd, (parse [ "board" ] |> ok).Command)
+        Assert.Equal(FieldId, (parse [ "field-id"; "Phase" ] |> ok).Command)
+        Assert.Equal(OptionId, (parse [ "option-id"; "Phase"; "P2 SDD" ] |> ok).Command)
+        Assert.Equal(ItemId, (parse [ "item-id"; "FS.GG.SDD#42" ] |> ok).Command)
+
+    [<Fact>]
+    let ``field-id / option-id / item-id carry their operands as Args`` () =
+        Assert.Equal<string list>([ "Phase" ], (parse [ "field-id"; "Phase" ] |> ok).Args)
+        Assert.Equal<string list>([ "Phase"; "P2 SDD" ], (parse [ "option-id"; "Phase"; "P2 SDD" ] |> ok).Args)
+        Assert.Equal<string list>([ "FS.GG.SDD#42" ], (parse [ "item-id"; "FS.GG.SDD#42" ] |> ok).Args)
+
+    [<Fact>]
+    let ``bootstrap --refresh sets the fresh flag - the drop-the-day-cache remedy`` () =
+        Assert.True((parse [ "bootstrap"; "--refresh" ] |> ok).Fresh)
+        Assert.False((parse [ "bootstrap" ] |> ok).Fresh)

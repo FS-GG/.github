@@ -4,6 +4,7 @@ module Board =
 
     open System
     open System.Collections.Generic
+    open System.IO
     open System.Text.Json
     open FS.GG.Coord.Types
     open Errors
@@ -205,6 +206,119 @@ module Board =
                   Title = title
                   Fields = fields }
 
+    // ---- the board map, serialised (#418) ----------------------------------------------------------
+
+    let private dataTypeName (t: FieldType) =
+        match t with
+        | SingleSelect _ -> "SINGLE_SELECT"
+        | Text -> "TEXT"
+        | Number -> "NUMBER"
+        | Date -> "DATE"
+        | Iteration -> "ITERATION"
+
+    /// The board map as JSON. This is BOTH the `board` command's machine contract AND the on-disk cache
+    /// format — one codec, so a `board` a human reads and a board `next` re-hydrates cannot drift. Written
+    /// with a real JSON writer; a project title carrying a quote cannot forge the document. F# `Map`
+    /// iterates in key order, so the output is deterministic.
+    let boardToJson (board: BoardMap) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        w.WriteStartObject()
+        w.WriteNumber("number", board.Number)
+        w.WriteString("id", board.Id)
+        w.WriteString("owner", board.Owner)
+        w.WriteString("title", board.Title)
+        w.WriteStartObject("fields")
+
+        for KeyValue(name, field) in board.Fields do
+            w.WriteStartObject(name)
+            w.WriteString("id", field.Id)
+            w.WriteString("dataType", dataTypeName field.Type)
+
+            match field.Type with
+            | SingleSelect options ->
+                w.WriteStartObject("options")
+
+                for KeyValue(optName, optId) in options do
+                    w.WriteString(optName, optId)
+
+                w.WriteEndObject()
+            | _ -> ()
+
+            w.WriteEndObject()
+
+        w.WriteEndObject()
+        w.WriteEndObject()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    /// Re-hydrate a board map from its JSON. `None` on anything we cannot walk — a cache we cannot parse is
+    /// a MISS, never a failure: the caller simply re-bootstraps.
+    let private boardOfJson (json: string) : BoardMap option =
+        try
+            use doc = JsonDocument.Parse json
+            let root = doc.RootElement
+
+            let fields =
+                root.GetProperty("fields").EnumerateObject()
+                |> Seq.choose (fun f ->
+                    let o = f.Value
+                    let fid = o.GetProperty("id").GetString()
+
+                    let ty =
+                        match o.GetProperty("dataType").GetString() with
+                        | "SINGLE_SELECT" ->
+                            let options =
+                                match o.TryGetProperty "options" with
+                                | true, opts when opts.ValueKind = JsonValueKind.Object ->
+                                    opts.EnumerateObject()
+                                    |> Seq.map (fun p -> p.Name, p.Value.GetString())
+                                    |> Map.ofSeq
+                                | _ -> Map.empty
+
+                            Some(SingleSelect options)
+                        | "TEXT" -> Some Text
+                        | "NUMBER" -> Some Number
+                        | "DATE" -> Some Date
+                        | "ITERATION" -> Some Iteration
+                        | _ -> None
+
+                    ty |> Option.map (fun t -> f.Name, { Id = fid; Type = t }))
+                |> Map.ofSeq
+
+            if Map.isEmpty fields then
+                None
+            else
+                Some
+                    { Number = root.GetProperty("number").GetInt32()
+                      Id = root.GetProperty("id").GetString()
+                      Owner = root.GetProperty("owner").GetString()
+                      Title = root.GetProperty("title").GetString()
+                      Fields = fields }
+        with _ ->
+            None
+
+    /// `bootstrap`, served from the day-cache when it is warm (#418).
+    ///
+    /// This is the whole budget win: `bootstrap` is two GraphQL points, and it sits under EVERY worker
+    /// command. Uncached, five workers looping `take` re-paid it every invocation — the exact drain #418
+    /// is written about. A warm map costs zero, and the ids do not change under it.
+    let bootstrapCached (transport: IGitHubTransport) (owner: string) (title: string) : IoResult<BoardMap> =
+        let resolveAndStore () =
+            match bootstrap transport owner title with
+            | Ok board ->
+                Cache.putBoardMap owner title (boardToJson board) |> ignore
+                Ok board
+            | Error e -> Error e
+
+        match Cache.getBoardMap owner title with
+        | Some cached ->
+            match boardOfJson cached with
+            | Some board -> Ok board
+            | None -> resolveAndStore ()
+        | None -> resolveAndStore ()
+
     // ---- the item id -------------------------------------------------------------------------------
 
     [<Literal>]
@@ -275,6 +389,29 @@ module Board =
 
         with :? KeyNotFoundException ->
             Error(Malformed(subject, "the item lookup response is missing `repository.issue.projectItems`"))
+
+    /// `itemId`, served from the forever-cache when it is warm.
+    ///
+    /// Item ids are stable, so a resolved id is kept forever — the second `item-id` for the same issue
+    /// costs zero GraphQL. Only a FOUND id is cached: `Ok None` (#421 — genuinely not on the board) and
+    /// `Error` are never memoised, because an item added later must still be found, and a failed read must
+    /// never wear an absence's clothes.
+    let itemIdCached
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<string option> =
+
+        match Cache.getItemId owner repo number board.Number with
+        | Some id -> Ok(Some id)
+        | None ->
+            match itemId transport board owner repo number with
+            | Ok(Some id) ->
+                Cache.putItemId owner repo number board.Number id
+                Ok(Some id)
+            | other -> other
 
     // ---- the pre-claim column (#481) ----------------------------------------------------------------
 

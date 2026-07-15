@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **19 of 27 corpus cases** (~177 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **20 of 27 corpus cases** (~196 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -23,7 +23,7 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~177 assertions across **19 of 27 corpus cases**, 15 fixture
+`tests/coord-engine-parity/` harness (~196 assertions across **20 of 27 corpus cases**, 16 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
@@ -31,8 +31,11 @@ fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempoten
 touch-set gate (OK/DRIFT/SKIP, #322's "I could not check is never a verdict", the `--issue`
 repo-boundary refusals — #479 cross-repo straddle, #494 the repo-qualified issue read — the #430
 git-remote repo default when neither `--repo` nor `--issue` is given, and the cross-repo closing-ref
-SKIP), the `whoami --mint`/twin-session identity defence (#419), and the full `take` exit-code contract.
-**Nine real defects the port was *for* have been closed in the engine along the
+SKIP), the `whoami --mint`/twin-session identity defence (#419), the **resolver cache and its budget**
+(#418 — `bootstrap` costs two GraphQL points and day-caches the id map; `board`/`field-id`/`option-id`
+read it for zero; `item-id` resolves in one and then serves from cache — the §3 call-counting
+transformation, re-expressed as HTTP request counts), and the full `take` exit-code contract.
+**Ten real defects the port was *for* have been closed in the engine along the
 way**, each proven with a parity slice: [#516](https://github.com/FS-GG/.github/issues/516) (one item per
 worker), [#585](https://github.com/FS-GG/.github/issues/585) (distinct `take` exit codes),
 [#533](https://github.com/FS-GG/.github/issues/533) (`done` drops the worker's own claim),
@@ -41,8 +44,11 @@ worker), [#585](https://github.com/FS-GG/.github/issues/585) (distinct `take` ex
 [#448](https://github.com/FS-GG/.github/issues/448) (`set-field --batch`),
 [#481](https://github.com/FS-GG/.github/issues/481) (`claim` records the column it overwrites),
 [#480](https://github.com/FS-GG/.github/issues/480) (a worker command scopes to the checkout you are
-standing in), and [#419](https://github.com/FS-GG/.github/issues/419) (`claim` refuses a marker with our id
-but another session — two workers sharing one id is not a lock). The rest
+standing in), [#419](https://github.com/FS-GG/.github/issues/419) (`claim` refuses a marker with our id
+but another session — two workers sharing one id is not a lock), and
+[#418](https://github.com/FS-GG/.github/issues/418) (the board id map and item ids are disk-cached, so a
+worker command pays `bootstrap`'s two GraphQL points once a day, not once an invocation — the budget that
+dies first). The rest
 of ADR-0040's "~19" are either addressed in source or closed by construction (a typed `Result` makes a
 failed read an `Error` at every call site — [#584](https://github.com/FS-GG/.github/issues/584) cannot
 exist in the engine).
@@ -113,15 +119,15 @@ fail-closed assertions re-expressed at the HTTP layer.
 - **Exit:** the corpus is green driving the engine (through the shim) locally, with call counts intact,
   and `50-shadow-engine` / `51-fs-flip` still green (bash still present, still agreeing).
 
-**Progress (as of the `#419 twin-session` slice, 2026-07-15).** The harness is grown one defect/case at a
+**Progress (as of the `#418 resolver-cache` slice, 2026-07-15).** The harness is grown one defect/case at a
 time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
-`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **17 of 27 cases fully covered,
+`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **18 of 27 cases fully covered,
 plus 2 partial (13, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which
 are the differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 11, 12, 15, 20, 21, 22, 23, 32, 33, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+| ✓ | 10, 11, 12, 15, 20, 21, 22, 23, 32, 33, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `lint`/`issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`overlap`/`heartbeat` resurrection, forged/malformed markers) deferred — they need `reap`/`overlap` commands the engine lacks (see the remaining table) |
 
@@ -134,11 +140,10 @@ repo's issue → SKIP naming the other repo, no verdict across the boundary). Th
 bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
 EX_RATE-vs-checkout failure modes are structurally absent).
 
-**Remaining (9 full + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
+**Remaining (8 full + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
 
 | case | what it needs | class |
 |---|---|---|
-| 10 (cache-and-budget) | re-express ETag-304 / "costs N `gh` calls" as HTTP request counts | the §3 "one hard problem" — the call-counting transformation |
 | 13-remainder | the epic-rollup / NO-TOUCH-SET `lint` rules (#496), `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — all deferred on the record when the #480 scope slice landed (`gitRemoteRepo` is now shared with verify-paths' #430 default) | new `lint`/`issues`/`reap` commands |
 | 14 (no-touch-set-and-done) | `lint` NO-TOUCH-SET/epic-rollup rules | new `lint` command |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `reap`/`overlap`/`say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are now DONE | needs `reap`/`overlap` commands the engine lacks (larger) |
@@ -158,11 +163,27 @@ the `Twin` CAS outcome and the stderr warning; `Identity.mint`/`whoami --mint`/m
 existed. The "lease renewed" WORDING is disposed on the record (bash's; the engine reports a re-claim as
 `claimed <ref> by worker <w>`), re-expressed as the property — a same/sessionless re-claim SUCCEEDS.
 
+Case **10 is now FULL** (#418): the §3 "one hard problem" — the call-counting transformation — is
+discharged. `bootstrap` resolves the board + field/option id map in exactly **two** GraphQL points and
+now **day-caches** it to disk (`Cache.getBoardMap`/`putBoardMap`, `FSGG_COORD_BOARD_TTL_SEC` default a
+day); `board`/`field-id`/`option-id` re-hydrate that map and cost **zero**; `item-id` resolves an issue's
+board item in **one** call and then serves it **forever** (`Cache.getItemId`/`putItemId`, positives only —
+#421's `Ok None` is never memoised). Every "costs N `gh` calls" assertion is re-expressed as an HTTP
+request count read off the fixture's `/_gql` counter (`cache_server.py`), and `set-field`'s dataType
+routing (single-select → option id, DATE → date, TEXT → text, empty → the clear mutation) is proved at the
+mutation the engine emits. **The fix was the port gap the `.fsi` doc-comments already described but no
+layer implemented:** `bootstrap`/`itemId` were re-resolved on every invocation, so five workers looping
+`take` re-paid `bootstrap`'s two points each time — the exact #418 drain. `bootstrapCached` (rolled out to
+every worker-command call site) and `itemIdCached` (the `item-id` command) close it; the five diagnostic
+subcommands expose the resolver the corpus counts. `--refresh` drops the day-cache (the remedy
+`Snapshot.fs` already pointed at but no command backed). 23 parity assertions + 7 Board/Cache tests + 3
+Options tests.
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`lint`, `reap`, `adopt`/`landable`, `overlap`), **larger port gaps** (paginated
-off-board `who`), and the **call-counting transformation** (case 10). The verify-paths
-repo-boundary divergences (case 23's SKIP-exit code and the absent `gh repo view` fallback) are now
-disposed on the record in the harness.
+into **new commands** (`lint`, `reap`, `adopt`/`landable`, `overlap`) and **larger port gaps** (paginated
+off-board `who`). The verify-paths repo-boundary divergences (case 23's SKIP-exit code and the absent
+`gh repo view` fallback) are now disposed on the record in the harness, and the call-counting
+transformation is demonstrated end-to-end by case 10.
 
 ### D.2 — Cut the shim
 
@@ -215,11 +236,13 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 19 of 27 cases** ported to `tests/coord-engine-parity/` (~177 assertions); the rest
-      remain (see the §5 D.1 ledger). Nine engine defects the port was *for* closed along the way, plus the
+      **In progress: 20 of 27 cases** ported to `tests/coord-engine-parity/` (~196 assertions); the rest
+      remain (see the §5 D.1 ledger). Ten engine defects the port was *for* closed along the way, plus the
       `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
-      together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), and the #419
-      twin-session refusal + shared-id warning, which closes case 44 in full.
+      together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419
+      twin-session refusal + shared-id warning, which closes case 44 in full, and the #418 resolver cache
+      (board id map day-cached, item ids cached forever), which closes case 10 in full — the §3
+      call-counting transformation, re-expressed as HTTP request counts.
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the
