@@ -359,33 +359,57 @@ module Client =
         | DeclaredNone
         | Unreadable _ -> []
 
+    /// A classified in-flight row: the item, its lock state, the touch-set it reserves, and — on a STALE
+    /// row only — the #581 proof of life that turns a bare `STALE` into `STALE (#NNN OPEN)`.
+    type private WhoRow =
+        { Ref: Ref
+          State: WhoState
+          Paths: string list
+          /// The item's own OPEN `item/<n>-*` PR, as (number, headRef), when the lease lapsed but the WORK
+          /// did not (#581). Populated ONLY on a Stale row; `None` on held/unclaimed and on a genuinely dead
+          /// stale claim a reaper may collect.
+          LivePr: (int * string) option }
+
     /// `who --json` — the machine contract cases 20/25 certify: a JSON array of the in-flight items, each
     /// carrying its `number`, `repo`, `state` (held/stale/unclaimed), the `worker` holding it (`null` when
-    /// unclaimed — only the column, not a marker, says so), and the `paths` it reserves. A real JSON writer,
-    /// so a worker id or path carrying a quote cannot forge the array.
-    let private renderWhoJson (rows: (Scan.Row * WhoState * string list) list) : string =
+    /// unclaimed — only the column, not a marker, says so), and the `paths` it reserves. A STALE row also
+    /// carries `livePr` (#581): `null` when the lease lapsed and NO open PR was found (a bare stale a reaper
+    /// may collect), the `#NNN item/<n>-*` ref where the work is demonstrably still alive. A real JSON
+    /// writer, so a worker id, path, or branch name carrying a quote cannot forge the array.
+    let private renderWhoJson (rows: WhoRow list) : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
         w.WriteStartArray()
 
-        for (row, state, paths) in rows do
+        for row in rows do
             w.WriteStartObject()
             w.WriteNumber("number", row.Ref.Number)
             w.WriteString("repo", $"%s{row.Ref.Owner}/%s{row.Ref.Repo}")
-            w.WriteString("state", whoStateName state)
+            w.WriteString("state", whoStateName row.State)
 
-            match state with
+            match row.State with
             | Held m
             | Stale m -> w.WriteString("worker", m.Worker.Value)
             | Unclaimed -> w.WriteNull("worker")
 
             w.WriteStartArray("paths")
 
-            for p in paths do
+            for p in row.Paths do
                 w.WriteStringValue p
 
             w.WriteEndArray()
+
+            // #581 proof of life rides the STALE row only — a held claim needs no proof, an unclaimed item
+            // has nothing to prove. So the field appears exactly where a human is about to decide to reap.
+            match row.State with
+            | Stale _ ->
+                match row.LivePr with
+                | Some(pr, headRef) -> w.WriteString("livePr", $"#%d{pr} %s{headRef}")
+                | None -> w.WriteNull("livePr")
+            | Held _
+            | Unclaimed -> ()
+
             w.WriteEndObject()
 
         w.WriteEndArray()
@@ -400,7 +424,10 @@ module Client =
             match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
             | Error e -> fail e
             | Ok rows ->
-                let candidates =
+                // The board rows in scope, no PRs (#641). #480 — `--repo` scopes to the checkout. These
+                // carry the ONE thing the off-board scan cannot: the In-progress COLUMN, which is the only
+                // fact that licenses an `unclaimed` verdict on a markerless item (work outside the protocol).
+                let boardRows =
                     rows
                     |> List.filter (fun r ->
                         not r.IsPullRequest
@@ -408,45 +435,141 @@ module Client =
                             | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
                             | None -> true))
 
-                // Classify a candidate by its LOCK. The lowest-id marker in the CAS's own total order names
-                // the holder; the lease decides whether it is live (`Held`) or past its window (`Stale`).
-                let classify (row: Scan.Row) (markers: Reads.Marker list) : WhoState option =
-                    match Reads.winner opts.LeaseMinutes markers with
-                    | Some m -> Some(Held m)
-                    | None ->
-                        match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
-                        | Some m -> Some(Stale m)
-                        | None ->
-                            // No marker at all: only an In-progress COLUMN makes it in flight — work with no
-                            // lock behind it. Ready/Backlog with no marker is nobody's claim, and not listed.
-                            if row.Status = BoardStatus.InProgress then Some Unclaimed else None
+                // A CLAIM LIVES OFF THE BOARD TOO (#461/#581, case 25). The board's In-progress column is not
+                // the claim set: a marker sits on the ISSUE, and the issue's board Status may be Ready (a
+                // failed column flip), or the item may never have reached the board at all. So the candidate
+                // set is the board's In-progress rows (arm A — the only thing that can be `unclaimed`) UNION
+                // every open issue in the repos in scope (arm B — the off-board scan, PAGINATED and never
+                // conditional, because a lock has no hundred-issue limit and a 304 can hide a fresh marker).
+                //
+                // The repos an off-board claim could live in are derived from the board scan already in hand
+                // (bash's `active_claims`). A `--repo` that names no board item at all still resolves against
+                // the default owner — so a claim on an issue that never reached the board is still found.
+                let repos =
+                    let fromBoard =
+                        boardRows |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo) |> List.distinct
 
-                let mutable failure = None
-                let results = ResizeArray<Scan.Row * WhoState * string list>()
+                    match fromBoard, opts.Repo with
+                    | [], Some name when name.Contains "/" ->
+                        let parts = name.Split('/')
+                        [ parts.[0], parts.[1] ]
+                    | [], Some name -> [ ctx.Owner, name ]
+                    | rs, _ -> rs
 
-                for row in candidates do
+                let mutable failure: Errors.IoError option = None
+
+                // arm B — the off-board scan. Each open issue's BODY rides along for free (one list read
+                // serves both the marker scan and the touch-set extraction), keyed by ref.
+                let offBoard =
+                    System.Collections.Generic.Dictionary<string * string * int, string>()
+
+                for (o, r) in repos do
                     if failure.IsNone then
+                        // FAILS CLOSED (#461): an unreadable scan is never an empty one — `who` would report
+                        // a held item as free, which is exactly the fail-open the lock exists to prevent.
+                        match Reads.openIssues ctx.Transport o r with
+                        | Error e -> failure <- Some e
+                        | Ok issues ->
+                            for (n, body) in issues do
+                                offBoard.[(o, r, n)] <- body
+
+                // arm A ∪ arm B, deduped by ref and ordered (repo, number) so the output is deterministic.
+                // A board `In progress` row is a candidate even with no marker (it may be `unclaimed`); an
+                // arm-B issue is a candidate only if it carries one (below) — a chatty issue is not in flight.
+                let inProgressRefs =
+                    boardRows
+                    |> List.filter (fun r -> r.Status = BoardStatus.InProgress)
+                    |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number)
+                    |> Set.ofList
+
+                let candidates =
+                    if failure.IsSome then
+                        []
+                    else
+                        Seq.append offBoard.Keys inProgressRefs
+                        |> Seq.distinct
+                        |> Seq.sortBy (fun (o, r, n) -> o, r, n)
+                        |> List.ofSeq
+
+                let isInProgress ref =
+                    inProgressRefs |> Set.contains ref
+
+                let results = ResizeArray<WhoRow>()
+
+                for (o, r, n) in candidates do
+                    if failure.IsNone then
+                        let ref = { Owner = o; Repo = r; Number = n }
+
                         // A FAILED MARKER READ IS FATAL (#461): a claim set we could not read is never an
                         // empty one, so `who` fails closed rather than reporting a live lock as absent.
-                        match Reads.markers ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                        match Reads.markers ctx.Transport o r n with
                         | Error e -> failure <- Some e
                         | Ok markers ->
-                            match classify row markers with
+                            // Classify by the LOCK. The lowest-id marker in the CAS's own total order names
+                            // the holder; the lease decides live (`Held`) vs past its window (`Stale`). No
+                            // marker at all is in flight ONLY when the board column says In progress — an
+                            // arm-B issue someone merely commented on is not a claim.
+                            let state =
+                                match Reads.winner opts.LeaseMinutes markers with
+                                | Some m -> Some(Held m)
+                                | None ->
+                                    match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                                    | Some m -> Some(Stale m)
+                                    | None -> if isInProgress (o, r, n) then Some Unclaimed else None
+
+                            match state with
                             | None -> ()
-                            | Some state ->
+                            | Some st ->
                                 // The reserved touch-set is informational, so a body we could not read is an
-                                // empty list, not a failed `who` — a body is not a lock. The one read that
-                                // must fail closed (the marker) is the one above. Only `--json` reports paths,
-                                // so the human table pays no body read: the text render never shows them.
+                                // empty list, not a failed `who` — a body is not a lock. Only `--json` reports
+                                // paths, so the human table pays no body read. An arm-B body is already in
+                                // hand (free); a board-only item (In progress but closed/unlisted) pays one.
                                 let paths =
                                     match opts.Render with
                                     | Text -> []
                                     | Json ->
-                                        match Reads.issueBody ctx.Transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                                        | Ok body -> pathNames (TouchSet.parse body)
+                                        let body =
+                                            match offBoard.TryGetValue((o, r, n)) with
+                                            | true, b -> Ok b
+                                            | _ -> Reads.issueBody ctx.Transport o r n
+
+                                        match body with
+                                        | Ok text -> pathNames (TouchSet.parse text)
                                         | Error _ -> []
 
-                                results.Add(row, state, paths)
+                                // #581 — a bare `STALE` and `STALE (#NNN OPEN)` are not the same fact, and
+                                // `who` is what a human reads immediately before deciding to reap. Probe ONLY
+                                // a stale row (a held claim needs no proof of life, an unclaimed item has
+                                // nothing to prove): does the item's own `item/<n>-*` PR exist, and on which
+                                // branch? REST, and rare. The lease-vs-life decision that DELETES lives in
+                                // `reap` (which re-probes and fails closed); here a probe we could not make is
+                                // simply a bare `STALE` — advisory, not the gate.
+                                //
+                                // Two reads (the open-PR scan, then that PR's head ref) rather than bash's
+                                // one: the head ref `prAlive` matched on is not surfaced through `Liveness`,
+                                // so `who` reads it back with `prHeadRef`. Disposed as acceptable — the path
+                                // is a stale claim WITH an open PR, which is rare, and both reads are REST.
+                                let livePr =
+                                    match st with
+                                    | Stale _ ->
+                                        match Reads.prAlive ctx.Transport o r n with
+                                        | Ok(LeaseExpiredPrOpen pr) ->
+                                            match Reads.prHeadRef ctx.Transport o r pr with
+                                            | Ok headRef -> Some(pr, headRef)
+                                            | Error _ -> None
+                                        | Ok LeaseExpiredNoPr
+                                        | Ok LeaseHeld
+                                        | Ok LivenessUnknown
+                                        | Error _ -> None
+                                    | Held _
+                                    | Unclaimed -> None
+
+                                results.Add(
+                                    { Ref = ref
+                                      State = st
+                                      Paths = paths
+                                      LivePr = livePr }
+                                )
 
                 match failure with
                 | Some e -> fail e
@@ -459,8 +582,8 @@ module Client =
                         if List.isEmpty inFlight then
                             printfn "nothing is in flight."
                         else
-                            for (row, state, _) in inFlight do
-                                match state with
+                            for row in inFlight do
+                                match row.State with
                                 | Held m ->
                                     printfn
                                         "  %-16s held by %s  (%s)"
@@ -468,10 +591,18 @@ module Client =
                                         m.Worker.Value
                                         (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
                                 | Stale m ->
+                                    // #581: `STALE (#NNN OPEN)` when the work is demonstrably alive, a bare
+                                    // `STALE` (which a reaper may collect) otherwise.
+                                    let flag =
+                                        match row.LivePr with
+                                        | Some(pr, _) -> $"STALE (#%d{pr} OPEN)"
+                                        | None -> "STALE"
+
                                     printfn
-                                        "  %-16s held by %s  STALE (%s)"
+                                        "  %-16s held by %s  %s (%s)"
                                         row.Ref.Short
                                         m.Worker.Value
+                                        flag
                                         (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
                                 | Unclaimed ->
                                     printfn
@@ -481,12 +612,13 @@ module Client =
                     // A markerless In-progress item is work happening OUTSIDE the protocol — warned on
                     // stderr (where case 20 looks for it) regardless of the stdout format, so a `who` piped
                     // to a machine consumer still shouts about the one thing no reconciler can fix by itself.
-                    for (row, state, _) in inFlight do
-                        match state with
+                    for row in inFlight do
+                        match row.State with
                         | Unclaimed ->
                             eprint
                                 $"fsgg-coord-engine: WARNING — %s{row.Ref.Short} is In progress with NO claim marker (someone is working outside the protocol)."
-                        | _ -> ()
+                        | Held _
+                        | Stale _ -> ()
 
                     ExitGreen
 

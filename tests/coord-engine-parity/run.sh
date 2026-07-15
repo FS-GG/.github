@@ -2237,6 +2237,90 @@ if [ -z "$RL_PORT" ]; then bad "reap live-PR fixture bound a port"; else
   kill "$RL_SRV" 2>/dev/null
 fi
 
+# ---- WHO READS THE LOCK OFF THE BOARD TOO (cases 25 + 26): #461/#581 -------------------------------
+#
+# `who` is the truth read of the LOCK, and the lock is NOT the board column — a marker sits on the ISSUE,
+# whose board Status may be Ready (a column flip that FAILED) or nowhere at all (a claim that never
+# reached the board). Case 20 above proves `who` on the board; this proves the half a board scan cannot
+# reach: `who --repo` scans the repo's OPEN ISSUES and reads the marker on each. The world (case 25's
+# `seed_offboard_world` + case 26's proof-of-life seed, one transport over): #210 In progress w/ no marker
+# (UNCLAIMED), #211 board-says-Ready but a live marker HOLDS it, #215 an off-board HELD claim, #216 an
+# off-board DEAD stale claim (bare STALE), #217 a chatty markerless issue (NOT in flight), and #890 an
+# off-board stale claim whose `item/890-*` PR is OPEN — #581 proof of life. The off-board scan must also
+# PAGINATE (a lock has no 100-issue limit) and never be conditional (a 304 could hide a fresh marker);
+# both are re-expressed at the HTTP layer via the fixture's `/_requests` ledger.
+OB_OUT="$(mktemp)"; python3 "$HERE/offboard_server.py" >"$OB_OUT" 2>/dev/null & OB_SRV=$!; OB_PORT=""
+for _ in $(seq 1 50); do OB_PORT="$(head -n1 "$OB_OUT" 2>/dev/null)"; [ -n "$OB_PORT" ] && break; sleep 0.1; done
+rm -f "$OB_OUT"
+if [ -z "$OB_PORT" ]; then bad "off-board who fixture bound a port"; else
+  obenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$OB_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" "$@"; }
+  obj="$(obenv who --repo FS.GG.Rendering --json 2>/dev/null)"
+
+  # IN FLIGHT, NO MORE NO LESS: the five claimed/orphaned items — INCLUDING the two off the board (#215,
+  # #216) and #890 — and NOT the chatty markerless #217. This is the whole of case 25's `who` contract.
+  obnums="$(printf '%s' "$obj" | jq -c '[.[].number] | sort')"
+  [ "$obnums" = '[210,211,215,216,890]' ] \
+    && ok "who: reports every in-flight item WHEREVER the board thinks it is — never the chatty #217 (case 25)" \
+    || bad "who off-board in-flight set" "expected [210,211,215,216,890], got: $obnums"
+
+  # OFF THE BOARD, STILL A LOCK: #215 is on NO board item, yet its live marker is HELD, names puffin-h11,
+  # and carries the touch-set read from the issue body — a reservation a board scan would miss entirely.
+  o215="$(printf '%s' "$obj" | jq -c '.[] | select(.number==215)')"
+  printf '%s' "$o215" | jq -e '.state=="held" and .worker=="puffin-h11"' >/dev/null 2>&1 \
+    && ok "who: an OFF-BOARD claim is HELD and names its worker (case 25 — the board never knew about #215)" \
+    || bad "who: #215 off-board held" "got: $o215"
+  printf '%s' "$o215" | jq -e '.paths == ["src/Off"]' >/dev/null 2>&1 \
+    && ok "who: ...and carries its touch-set, read from the issue body (case 25)" \
+    || bad "who: #215 off-board paths" "got: $o215"
+
+  # THE LOCK, NOT THE COLUMN: the board says #211 is Ready (its In-progress flip FAILED), but a live marker
+  # holds it — so `who` reports HELD. Reading the column instead would call a held item free.
+  printf '%s' "$obj" | jq -e '.[] | select(.number==211) | .state=="held" and .worker=="wren-c22"' >/dev/null 2>&1 \
+    && ok "who: a claim whose board Status flip FAILED is HELD, not free — who reads the lock (case 25)" \
+    || bad "who: #211 held despite Ready column" "$obj"
+
+  # UNCLAIMED rides the off-board scan too: #210 is In progress with no marker, so ONLY the column puts it
+  # in flight — null worker — and its declared touch-set still resolves.
+  printf '%s' "$obj" | jq -e '.[] | select(.number==210) | .state=="unclaimed" and .worker==null and (.paths==["src/Orphan2"])' >/dev/null 2>&1 \
+    && ok "who: an In-progress markerless item is UNCLAIMED with a null worker, even amid off-board claims (case 25)" \
+    || bad "who: #210 unclaimed" "$obj"
+
+  # #581 PROOF OF LIFE: #890's lease lapsed, but PR #433 is OPEN on item/890-* — the worktree protocol's
+  # own artifact. `who --json` carries it on the STALE row (`livePr`), and #216 — a stale claim with NO
+  # open PR — is a BARE stale (livePr null), the one a reaper may actually collect.
+  printf '%s' "$obj" | jq -e '.[] | select(.number==890) | .state=="stale" and .livePr=="#433 item/890-live-work"' >/dev/null 2>&1 \
+    && ok "#581: who carries the proof of life on the STALE row — livePr '#433 item/890-live-work' (case 26)" \
+    || bad "#581: #890 livePr" "$(printf '%s' "$obj" | jq -c '.[] | select(.number==890)')"
+  printf '%s' "$obj" | jq -e '.[] | select(.number==216) | .state=="stale" and .livePr==null' >/dev/null 2>&1 \
+    && ok "#581: a stale claim with NO open PR is a BARE stale (livePr null) — a reaper may collect it (case 26)" \
+    || bad "#581: #216 bare stale" "$(printf '%s' "$obj" | jq -c '.[] | select(.number==216)')"
+
+  # THE HUMAN ROW #581 is FOR: `STALE (#433 OPEN)` on the live one, a bare `STALE` on the dead one. `who`
+  # is what a human reads immediately before deciding to reap, so the two must not read the same.
+  obt="$(obenv who --repo FS.GG.Rendering 2>/dev/null)"
+  printf '%s' "$obt" | grep -qE 'FS.GG.Rendering#890.*STALE \(#433 OPEN\)' \
+    && ok "#581: ...and the human row says STALE (#433 OPEN), not a bare STALE (case 26)" \
+    || bad "#581: #890 text STALE (#433 OPEN)" "$obt"
+  printf '%s' "$obt" | grep FS.GG.Rendering#216 | grep -q 'OPEN' \
+    && bad "#581: #216 must be a BARE stale in the text row (no OPEN)" "$(printf '%s' "$obt" | grep '#216')" \
+    || ok "#581: ...and #216, whose work is dead, is a BARE STALE (no PR to name) (case 26)"
+
+  # THE SCAN ITSELF (case 25): a lock has no 100-issue limit, so the open-issue scan PAGINATES; and it is
+  # NEVER conditional, because a 304 could serve a `comments: 0` captured before a marker was posted and
+  # hide a live lock. `inm=none` and `paginate=1`, one transport over — read off the fixture's ledger.
+  reqs="$(curl -s "http://127.0.0.1:$OB_PORT/_requests")"
+  printf '%s' "$reqs" | jq -e 'any(.[]; .page=="2")' >/dev/null 2>&1 \
+    && ok "who: the open-issue scan PAGINATES — page 2 is fetched (a lock has no 100-issue limit) (case 25)" \
+    || bad "who scan must paginate" "issue-list requests: $reqs"
+  printf '%s' "$reqs" | jq -e 'all(.[]; .inm==false)' >/dev/null 2>&1 \
+    && ok "who: ...and is NEVER a conditional request — no If-None-Match may let a 304 hide a marker (case 25)" \
+    || bad "who scan must be unconditional (inm=none)" "issue-list requests: $reqs"
+
+  kill "$OB_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
