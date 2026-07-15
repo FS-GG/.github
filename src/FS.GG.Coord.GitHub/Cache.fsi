@@ -96,6 +96,41 @@ module Cache =
     /// revalidated, and a validator without its body is what makes a 304 unanswerable.
     val putBody: path: string -> etag: string option -> body: string -> unit
 
+    // ---- the board-map cache (#418) ----------------------------------------------------------------
+
+    /// The board TTL in seconds. `FSGG_COORD_BOARD_TTL_SEC`, default 86400 (a day). **Zero disables it.**
+    ///
+    /// The field/option ID map is cached for a DAY, not the 90 seconds the scan is, because these are IDs
+    /// and ids do not change. Conflating the two would re-resolve the whole field map on every `next`/`take`
+    /// — two GraphQL points per worker per invocation, on the budget that dies first (#418) — which is the
+    /// exact cost `bootstrap` exists to pay once.
+    val boardTtlSeconds: unit -> int
+
+    /// The cached board map (the `bootstrap` JSON), if we have one and it is fresh.
+    ///
+    /// `None` is a MISS — go and bootstrap — never "the board has no fields". Not gated on `ReadIntent`: a
+    /// reconciler needs the field ids too, and the ids are stable; it is the item STATE (the scan) a
+    /// reconciler may never serve stale, not the schema.
+    val getBoardMap: owner: string -> title: string -> string option
+
+    /// Store a board map. A document that is not a JSON object carrying a non-empty `fields` map is NEVER
+    /// written — an empty field map is a bootstrap that went wrong (#199-shape), and caching it would make
+    /// every write for a day fail with "no field named Status". Returns whether it stored anything.
+    val putBoardMap: owner: string -> title: string -> board: string -> bool
+
+    /// Drop the cached board map for a board. Used by `bootstrap --refresh`.
+    val dropBoardMap: owner: string -> title: string -> unit
+
+    /// The cached board item id for an issue on a board, if we have resolved it before.
+    ///
+    /// Item ids are STABLE, so this has no TTL — once resolved, forever. Only a FOUND id is ever cached: a
+    /// "not on this board" answer (#421's `Ok None`) is NOT memoised, because an item added later would
+    /// then be invisible for the life of the cache.
+    val getItemId: owner: string -> repo: string -> number: int -> boardNumber: int -> string option
+
+    /// Store a resolved board item id.
+    val putItemId: owner: string -> repo: string -> number: int -> boardNumber: int -> id: string -> unit
+
     /// The deferred board-write queue (`pending.jsonl`).
     ///
     /// ONLY an exhausted budget may be queued (`Errors.isQueueable`). Every other failure is permanent, and

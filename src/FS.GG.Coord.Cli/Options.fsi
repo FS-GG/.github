@@ -57,6 +57,16 @@ module Options =
         | DoneCmd
         /// Check a PR's changed files against the touch-set its issue declared (`verify-paths --pr N [--warn]`).
         | VerifyPaths
+        /// Resolve the board + field/option ids and cache them for a day (`bootstrap [--refresh]`, #418).
+        | Bootstrap
+        /// Print the cached board map as JSON (`board`) — 0 GraphQL when the day-cache is warm.
+        | BoardCmd
+        /// The resolved id of a board field, from the cache (`field-id <field>`).
+        | FieldId
+        /// The resolved id of a single-select option, from the cache (`option-id <field> <option>`).
+        | OptionId
+        /// The board item id for an issue (`item-id <ref>`) — 1 GraphQL, then cached forever.
+        | ItemId
 
         | Help
         | Version

@@ -1665,6 +1665,95 @@ if [ -z "$TW_PORT" ]; then bad "twin fixture bound a port"; else
   kill "$TW_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 10 (cache-and-budget) — THE CALL-COUNTING TRANSFORMATION (ADR-0040 §3/§5). The corpus counts `gh`
+# invocations against a stub; the engine speaks HTTP, so every "costs N GraphQL calls" assertion is
+# re-expressed as an HTTP request count read off the fixture's `/_gql` counter. `bootstrap` costs TWO
+# points and DAY-caches the field/option id map; `board`/`field-id`/`option-id` read it for ZERO more;
+# `item-id` resolves in ONE and then serves from cache — the #418 win: the budget that dies first is now
+# paid once, not once per invocation. One cache dir spans the case, as the corpus's HARNESS_COLD run shares
+# one across its assertions.
+C10_OUT="$(mktemp)"; python3 "$HERE/cache_server.py" >"$C10_OUT" 2>/dev/null & C10_SRV=$!; C10_PORT=""
+for _ in $(seq 1 50); do C10_PORT="$(head -n1 "$C10_OUT" 2>/dev/null)"; [ -n "$C10_PORT" ] && break; sleep 0.1; done
+rm -f "$C10_OUT"
+if [ -z "$C10_PORT" ]; then bad "cache-and-budget fixture bound a port"; else
+  C10CACHE="$(mktemp -d)"
+  c10() { env FSGG_GITHUB_API_BASE="http://127.0.0.1:$C10_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$C10CACHE" "$ENGINE" "$@"; }
+  gc10() { python3 -c 'import sys,urllib.request,json; print(json.load(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_gql"))["total"])' "$C10_PORT" 2>/dev/null; }
+  wr10() { python3 -c 'import sys,urllib.request; print(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_writes").read().decode())' "$C10_PORT" 2>/dev/null; }
+
+  # (1) bootstrap once — exactly TWO GraphQL calls (projects + fields).
+  c10 bootstrap >/dev/null 2>&1; brc=$?
+  ab="$(gc10)"
+  { [ "$brc" -eq 0 ] && [ "$ab" = "2" ]; } \
+    && ok "case10: bootstrap costs exactly TWO GraphQL calls, projects + fields (#418)" \
+    || bad "case10: bootstrap must exit 0 and cost 2 gql" "rc=$brc gql=$ab"
+
+  # (2) board / field-id / option-id read the day-cache — ZERO further GraphQL.
+  board="$(c10 board 2>/dev/null)"
+  [ "$(jq -r '.number' <<<"$board")" = "12" ] \
+    && ok "case10: board number cached (12)" || bad "case10: board .number" "$board"
+  [ "$(jq -r '.id' <<<"$board")" = "PVT_coord" ] \
+    && ok "case10: board node id cached (PVT_coord)" || bad "case10: board .id" "$board"
+  [ "$(jq -r '.fields.Phase.dataType' <<<"$board")" = "SINGLE_SELECT" ] \
+    && ok "case10: Phase is SINGLE_SELECT" || bad "case10: Phase dataType" "$board"
+  [ "$(jq -r '.fields.Phase.options["P2 SDD"]' <<<"$board")" = "opt_p2" ] \
+    && ok "case10: Phase option id cached (opt_p2)" || bad "case10: Phase option id" "$board"
+  [ "$(jq -r '.fields.Target.dataType' <<<"$board")" = "DATE" ] \
+    && ok "case10: Target is DATE" || bad "case10: Target dataType" "$board"
+  [ "$(c10 field-id Phase 2>/dev/null)" = "PVTSSF_phase" ] \
+    && ok "case10: field-id Phase from cache (PVTSSF_phase)" || bad "case10: field-id Phase"
+  [ "$(c10 option-id Phase 'P2 SDD' 2>/dev/null)" = "opt_p2" ] \
+    && ok "case10: option-id Phase 'P2 SDD' (opt_p2)" || bad "case10: option-id Phase 'P2 SDD'"
+  ac="$(gc10)"
+  [ "$ac" = "$ab" ] \
+    && ok "case10: board/field-id/option-id add ZERO GraphQL calls" \
+    || bad "case10: warm reads must add zero gql" "before=$ab after=$ac"
+
+  # (3) item-id: exactly ONE GraphQL call, then served from cache (zero) — across the owner/repo#n and URL
+  # spellings of the same issue.
+  bi="$(gc10)"
+  [ "$(c10 item-id 'FS.GG.SDD#42' 2>/dev/null)" = "PVTI_coord123" ] \
+    && ok "case10: item-id resolves the Coordination item (PVTI_coord123)" || bad "case10: item-id resolve"
+  ai="$(gc10)"
+  [ "$ai" = "$((bi + 1))" ] \
+    && ok "case10: item-id costs exactly ONE GraphQL call" || bad "case10: item-id must cost 1" "before=$bi after=$ai"
+  c10 item-id 'FS.GG.SDD#42' >/dev/null 2>&1
+  [ "$(gc10)" = "$ai" ] \
+    && ok "case10: item-id again is served from cache (zero calls)" || bad "case10: item-id must cache" "after=$(gc10)"
+  [ "$(c10 item-id 'FS-GG/FS.GG.SDD#42' 2>/dev/null)" = "PVTI_coord123" ] \
+    && ok "case10: item-id accepts owner/repo#n form" || bad "case10: item-id owner/repo#n"
+  [ "$(c10 item-id 'https://github.com/FS-GG/FS.GG.SDD/issues/42' 2>/dev/null)" = "PVTI_coord123" ] \
+    && ok "case10: item-id accepts a full URL" || bad "case10: item-id URL"
+
+  # (4) set-field auto-routes by dataType, ids resolved from cache. Re-expressed at HTTP: the mutation the
+  # engine emits carries the right value var (optionId / date / text) on the resolved field id.
+  c10 set-field 'FS.GG.SDD#42' Phase 'P2 SDD' --worker smew-c10 >/dev/null 2>&1
+  c10 set-field 'FS.GG.SDD#42' Target '2026-08-01' --worker smew-c10 >/dev/null 2>&1
+  c10 set-field 'FS.GG.SDD#42' Contract 'fs-gg-ui-template' --worker smew-c10 >/dev/null 2>&1
+  writes="$(wr10)"
+  echo "$writes" | jq -e '.writes[] | select(.fieldId=="PVTSSF_phase" and .kind=="optionId" and .value=="opt_p2")' >/dev/null \
+    && ok "case10: set-field SINGLE_SELECT routes to the resolved option id (opt_p2 on PVTSSF_phase)" || bad "case10: set-field single-select route" "$writes"
+  echo "$writes" | jq -e '.writes[] | select(.fieldId=="PVTF_target" and .kind=="date" and .value=="2026-08-01")' >/dev/null \
+    && ok "case10: set-field DATE routes to date" || bad "case10: set-field date route" "$writes"
+  echo "$writes" | jq -e '.writes[] | select(.fieldId=="PVTF_contract" and .kind=="text" and .value=="fs-gg-ui-template")' >/dev/null \
+    && ok "case10: set-field TEXT routes to text" || bad "case10: set-field text route" "$writes"
+  c10 set-field 'FS.GG.SDD#42' Contract '' --worker smew-c10 >/dev/null 2>&1
+  echo "$(wr10)" | jq -e '.writes[] | select(.fieldId=="PVTF_contract" and .kind=="clear")' >/dev/null \
+    && ok "case10: set-field empty value CLEARS via the clear mutation (not an empty set)" || bad "case10: set-field clear route" "$(wr10)"
+
+  # (5) --refresh drops the day-cache and re-resolves — bootstrap pays the two points again.
+  br="$(gc10)"
+  c10 bootstrap --refresh >/dev/null 2>&1
+  ar="$(gc10)"
+  [ "$ar" = "$((br + 2))" ] \
+    && ok "case10: bootstrap --refresh drops the cache and re-resolves (2 more gql)" \
+    || bad "case10: --refresh must re-resolve" "before=$br after=$ar"
+
+  kill "$C10_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

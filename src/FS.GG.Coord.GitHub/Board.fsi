@@ -83,8 +83,17 @@ module Board =
         | Set of value: string
         | Clear
 
-    /// Resolve the board and its field/option ids. Two GraphQL calls, then cached for a day.
+    /// Resolve the board and its field/option ids. Two GraphQL calls.
     val bootstrap: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
+
+    /// The board map as JSON — the `board` command's machine contract, and the on-disk cache format. One
+    /// codec serves both, so a board a human reads and a board `next` re-hydrates cannot drift.
+    val boardToJson: board: BoardMap -> string
+
+    /// `bootstrap`, served from the day-cache (`Cache.getBoardMap`) when it is warm; resolves and stores it
+    /// on a miss. The budget win of #418 — two GraphQL points under every worker command, paid once a day
+    /// instead of once an invocation. A cached document we cannot parse is a miss, never a failure.
+    val bootstrapCached: transport: IGitHubTransport -> owner: string -> title: string -> IoResult<BoardMap>
 
     /// The board item id for an issue.
     ///
@@ -94,6 +103,17 @@ module Board =
     ///
     /// Item ids are stable, so this is cached forever once resolved.
     val itemId:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+            IoResult<string option>
+
+    /// `itemId`, served from the forever-cache (`Cache.getItemId`) when it is warm. A resolved id is stable,
+    /// so the second lookup for the same issue costs zero GraphQL. Only a FOUND id is cached — `Ok None`
+    /// (#421) and `Error` are never memoised.
+    val itemIdCached:
         transport: IGitHubTransport ->
         board: BoardMap ->
         owner: string ->

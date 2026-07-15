@@ -522,3 +522,89 @@ let ``a board TITLE that does not exist is named back, so it can be fixed`` () =
     match bootstrap transport "FS-GG" "Coordination" with
     | Error(NotFound message) -> Assert.Contains("Coordination", message)
     | other -> failwith $"a missing board must name the title it looked for — got %A{other}"
+
+// ---- the board-map + item-id caches (#418, case 10) ------------------------------------------------
+
+[<Fact>]
+let ``boardToJson is the board's machine contract - number, id, and typed fields`` () =
+    let json = boardToJson board
+    use doc = System.Text.Json.JsonDocument.Parse json
+    let root = doc.RootElement
+    Assert.Equal(12, root.GetProperty("number").GetInt32())
+    Assert.Equal("PVT_coord", root.GetProperty("id").GetString())
+    let fields = root.GetProperty("fields")
+    Assert.Equal("SINGLE_SELECT", fields.GetProperty("Status").GetProperty("dataType").GetString())
+    Assert.Equal("opt_ready", fields.GetProperty("Status").GetProperty("options").GetProperty("Ready").GetString())
+    Assert.Equal("NUMBER", fields.GetProperty("Estimate").GetProperty("dataType").GetString())
+    Assert.Equal("TEXT", fields.GetProperty("Blocked by").GetProperty("dataType").GetString())
+
+[<Fact>]
+let ``bootstrapCached serves the day-cache on the second call - zero GraphQL (#418)`` () =
+    use _sandbox = new Sandbox()
+
+    let cold =
+        scripted
+            [ ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+              ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
+                     {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]},
+                     {"id":"PVTF_est","name":"Estimate","dataType":"NUMBER"}]}}}}}""" ]
+
+    match bootstrapCached cold "FS-GG" "Coordination" with
+    | Ok _ -> Assert.Equal(2, cold.GraphQlCalls)
+    | other -> failwith $"cold bootstrapCached must resolve — got %A{other}"
+
+    // The second call must NOT touch the transport — a warm map costs zero. `scripted []` throws if called,
+    // and the re-hydrated field map must reconstruct the single-select options too.
+    let warm = scripted []
+
+    match bootstrapCached warm "FS-GG" "Coordination" with
+    | Ok b ->
+        Assert.Equal(0, warm.GraphQlCalls)
+        Assert.Equal(12, b.Number)
+        Assert.Equal("PVT_coord", b.Id)
+
+        match Map.tryFind "Status" b.Fields with
+        | Some { Type = SingleSelect options } -> Assert.Equal("opt_ready", options.["Ready"])
+        | other -> failwith $"the re-hydrated Status must be a single-select — got %A{other}"
+    | other -> failwith $"warm bootstrapCached must serve the cache — got %A{other}"
+
+[<Fact>]
+let ``itemIdCached serves the forever-cache on the second lookup - one GraphQL, then zero`` () =
+    use _sandbox = new Sandbox()
+
+    let cold = scripted [ ok itemOnBoard ]
+
+    match itemIdCached cold board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok(Some id) ->
+        Assert.Equal("PVTI_coord123", id)
+        Assert.Equal(1, cold.GraphQlCalls)
+    | other -> failwith $"cold itemIdCached must resolve — got %A{other}"
+
+    let warm = scripted []
+
+    match itemIdCached warm board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok(Some id) ->
+        Assert.Equal("PVTI_coord123", id)
+        Assert.Equal(0, warm.GraphQlCalls)
+    | other -> failwith $"warm itemIdCached must serve the cache — got %A{other}"
+
+[<Fact>]
+let ``itemIdCached never memoises 'not on board' - an item added later must still be found (#421)`` () =
+    use _sandbox = new Sandbox()
+
+    // A successful empty lookup is `Ok None`. It must NOT be cached: the issue could be added to the board a
+    // minute later, and a memoised absence would hide it for the life of the cache.
+    let first = scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+
+    match itemIdCached first board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok None -> ()
+    | other -> failwith $"a successful empty lookup is 'not on board' — got %A{other}"
+
+    // A later lookup must re-read (a real GraphQL call), not serve a cached absence.
+    let second = scripted [ ok itemOnBoard ]
+
+    match itemIdCached second board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok(Some id) ->
+        Assert.Equal("PVTI_coord123", id)
+        Assert.Equal(1, second.GraphQlCalls)
+    | other -> failwith $"an absence must not be cached — got %A{other}"

@@ -24,6 +24,11 @@ module Options =
         | Say
         | DoneCmd
         | VerifyPaths
+        | Bootstrap
+        | BoardCmd
+        | FieldId
+        | OptionId
+        | ItemId
         | Help
         | Version
 
@@ -110,6 +115,13 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   whoami [--mint]                            this worker's id and how it was derived
   budget                                     the GraphQL/REST budget
 
+  bootstrap [--refresh]                      resolve the board + field/option ids (2 GraphQL, then
+                                             day-cached; --refresh drops the cache and re-resolves)
+  board                                      the cached board map as JSON (0 GraphQL when warm)
+  field-id <field>                           the resolved id of a board field (from cache)
+  option-id <field> <option>                 the resolved id of a single-select option (from cache)
+  item-id <ref>                              the board item id for an issue (1 GraphQL, then cached)
+
   --help    --version
 
 A <ref> is a URL, owner/repo#n, or repo#n (owner/repo default to $FSGG_COORD_OWNER / --repo).
@@ -179,6 +191,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--batch" :: t -> flags { acc with Batch = true } t
 
             | "--fresh" :: t -> flags { acc with Fresh = true } t
+            // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
+            // (both mean "ignore the cache, re-read"); the remediation text elsewhere names `--refresh`.
+            | "--refresh" :: t -> flags { acc with Fresh = true } t
             | "--include-backlog" :: t -> flags { acc with AllowBacklog = true } t
             | "--force" :: t -> flags { acc with Force = true } t
             | "--mint" :: t -> flags { acc with Mint = true } t
@@ -262,5 +277,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "say" :: rest -> flags { defaults with Command = Say } rest
         | "done" :: rest -> flags { defaults with Command = DoneCmd } rest
         | "verify-paths" :: rest -> flags { defaults with Command = VerifyPaths } rest
+        | "bootstrap" :: rest -> flags { defaults with Command = Bootstrap } rest
+        | "board" :: rest -> flags { defaults with Command = BoardCmd } rest
+        | "field-id" :: rest -> flags { defaults with Command = FieldId } rest
+        | "option-id" :: rest -> flags { defaults with Command = OptionId } rest
+        | "item-id" :: rest -> flags { defaults with Command = ItemId } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"

@@ -26,6 +26,7 @@ type private Sandbox() =
         member _.Dispose() =
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", null)
             Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", null)
+            Environment.SetEnvironmentVariable("FSGG_COORD_BOARD_TTL_SEC", null)
 
             try
                 Directory.Delete(dir, true)
@@ -240,3 +241,64 @@ let ``a body and its ETag are stored together, and a body with no ETag drops the
     // server sent no ETag, we have no validator, and we must not keep pretending we do.
     putBody path None """[{"number":43}]"""
     Assert.True((getETag path).IsNone)
+
+// ---- the board-map cache (#418) --------------------------------------------------------------------
+
+let private aBoard =
+    """{"number":12,"id":"PVT_coord","owner":"FS-GG","title":"Coordination","fields":{"Phase":{"id":"PVTSSF_phase","dataType":"SINGLE_SELECT","options":{"P2 SDD":"opt_p2"}}}}"""
+
+[<Fact>]
+let ``a usable board map round-trips through the day-cache`` () =
+    use _sandbox = new Sandbox()
+
+    // The counterweight to every fail-closed rule below: a real board map IS cached and served back
+    // verbatim. Without this the #418 win never happens — every worker re-bootstraps.
+    Assert.True(putBoardMap "FS-GG" "Coordination" aBoard)
+    Assert.Equal(Some aBoard, getBoardMap "FS-GG" "Coordination")
+
+[<Fact>]
+let ``a board map with NO fields is never cached - it is a bootstrap that went wrong`` () =
+    use _sandbox = new Sandbox()
+
+    // An empty field map is #199's shape — a document we failed to walk. Caching it would make every write
+    // fail with "no field named Status" for a day, so it is refused at the write, like an empty scan.
+    Assert.False(putBoardMap "FS-GG" "Coordination" """{"number":12,"id":"PVT_coord","owner":"FS-GG","title":"Coordination","fields":{}}""")
+    Assert.False(putBoardMap "FS-GG" "Coordination" "<html>502</html>")
+    Assert.True((getBoardMap "FS-GG" "Coordination").IsNone)
+
+[<Fact>]
+let ``a zero board TTL disables the board cache - the safe direction is to pay for the read`` () =
+    use _sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_BOARD_TTL_SEC", "0")
+
+    // The store still writes (the file is there for a later run), but a zero TTL never serves it — exactly
+    // as FSGG_COORD_SCAN_TTL_SEC=0 disables the scan cache.
+    Assert.True(putBoardMap "FS-GG" "Coordination" aBoard)
+    Assert.True((getBoardMap "FS-GG" "Coordination").IsNone)
+
+[<Fact>]
+let ``dropBoardMap forgets the cached map - the --refresh path`` () =
+    use _sandbox = new Sandbox()
+    Assert.True(putBoardMap "FS-GG" "Coordination" aBoard)
+    dropBoardMap "FS-GG" "Coordination"
+    Assert.True((getBoardMap "FS-GG" "Coordination").IsNone)
+
+// ---- the item-id cache (forever, positives only) ---------------------------------------------------
+
+[<Fact>]
+let ``a resolved item id is cached forever, keyed on the board`` () =
+    use _sandbox = new Sandbox()
+
+    putItemId "FS-GG" "FS.GG.SDD" 42 12 "PVTI_coord123"
+    Assert.Equal(Some "PVTI_coord123", getItemId "FS-GG" "FS.GG.SDD" 42 12)
+
+    // Keyed on the BOARD too: the same issue on a different board is a different item, a distinct miss.
+    Assert.True((getItemId "FS-GG" "FS.GG.SDD" 42 7).IsNone)
+    // And a different issue is its own miss.
+    Assert.True((getItemId "FS-GG" "FS.GG.SDD" 43 12).IsNone)
+
+[<Fact>]
+let ``an empty item id is never memoised - an absence must not become a hit (#421)`` () =
+    use _sandbox = new Sandbox()
+    putItemId "FS-GG" "FS.GG.SDD" 42 12 ""
+    Assert.True((getItemId "FS-GG" "FS.GG.SDD" 42 12).IsNone)
