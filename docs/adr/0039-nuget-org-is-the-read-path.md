@@ -1,7 +1,7 @@
 # ADR-0039: nuget.org is the read path; the org feed is the publish path
 
-- **Status:** Proposed
-- **Date:** 2026-07-14
+- **Status:** Accepted (ratified 2026-07-15)
+- **Date:** 2026-07-14 (proposed) · 2026-07-15 (accepted)
 - **Affects:** `.github` (Renovate preset, `dist/dotnet` tools manifest, `pin-coherence`, registry), FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance, FS.GG.Game, FS.GG.Audio, FS.GG.Templates (every repo that *restores* an FS.GG.\* package)
 - **Amends:** [ADR-0012](0012-dual-publish-to-nuget-org.md) §1 — "the org GitHub Packages feed stays the **coherence source of truth**" — which is no longer true of the read path. ADR-0012 §2–§5 (scope, byte-identical, gated ordering, listing metadata) stand.
 

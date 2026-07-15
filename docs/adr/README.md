@@ -62,7 +62,7 @@ registry like any other, and this org gates its registries.
 | [0036](0036-the-build-config-drift-check-pins-its-source.md) | The shared-build-config drift check compares against a **pin**, not against `main` | Accepted |
 | [0037](0037-schema-growth-is-publish-before-flip.md) | Schema growth is **publish-before-flip** — two ordered PRs; the validator gates on the declared `schemaVersion` | Accepted |
 | [0038](0038-the-corpus-is-the-cut-over-gate.md) | The **defect corpus** is the cut-over gate; the shadow clock is demoted to telemetry | Accepted |
-| [0039](0039-nuget-org-is-the-read-path.md) | **nuget.org is the read path; the org feed is the publish path** | Proposed |
+| [0039](0039-nuget-org-is-the-read-path.md) | **nuget.org is the read path; the org feed is the publish path** | Accepted |
 | [0040](0040-port-the-io-layer.md) | The **IO layer is ported to F# too** — an `IGitHub` seam (HTTP adapter + call-counting fake) driven by the shell corpus through a configurable API base; each write's precondition lives in its type | Accepted |
 
 ## Supersession map
