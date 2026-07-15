@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Fixture for .claude/hooks/block-merge-and-main-push.sh — the PreToolUse guard that stops an
-# agent merging a PR or pushing to main.
+# agent pushing directly to main. (Agent PR merges were re-authorized 2026-07-15; the guard no
+# longer blocks `gh pr merge` — this fixture pins that they are now ALLOWED.)
 #
 # THIS FILE EXISTS BECAUSE THE GUARD BLOCKED ITS OWN TESTS.
 #
@@ -32,12 +33,7 @@ expect() {
   fi
 }
 
-echo "MUST BLOCK — the acts that took #742 and #743 to main without a human:"
-expect 2 'gh pr merge 744 --squash'                                  'gh pr merge'
-expect 2 'gh pr merge --admin'                                       'gh pr merge --admin (bypasses branch protection)'
-expect 2 'gh pr merge 744 --auto --squash --delete-branch'           'gh pr merge --auto'
-expect 2 'cd /repo && gh pr merge 744'                               'gh pr merge after && (compound command)'
-expect 2 'gh api --method PUT /repos/FS-GG/.github/pulls/744/merge'  'the merge API — the same act, one layer down'
+echo "MUST BLOCK — a direct push to main bypasses PR review, and nothing else in this repo does:"
 expect 2 'git push origin main'                                      'push to main'
 expect 2 'git push -f origin main'                                   'force-push to main'
 expect 2 'git push origin HEAD:main'                                 'HEAD:main refspec'
@@ -45,7 +41,10 @@ expect 2 'git push --force-with-lease origin +main'                  '+main refs
 expect 2 'git push origin refs/heads/main'                           'fully-qualified ref'
 
 echo
-echo "MUST ALLOW — a guard that blocks real work is a guard someone turns off:"
+echo "MUST ALLOW — including agent PR merges, re-authorized 2026-07-15 (a guard that blocks real work gets turned off):"
+expect 0 'gh pr merge 744 --squash'                                  'gh pr merge — re-authorized, no longer blocked'
+expect 0 'gh pr merge --admin'                                       'gh pr merge --admin — re-authorized'
+expect 0 'gh api --method PUT /repos/FS-GG/.github/pulls/744/merge'  'the merge API — re-authorized'
 expect 0 'git push origin adr/corpus-coherence'                      'pushing a feature branch'
 expect 0 'git push -u origin feat/maintenance-window'                'branch whose NAME contains "main" (maintenance)'
 expect 0 'git push origin fix/domain-parsing'                        'branch whose name contains "main" (domain)'
