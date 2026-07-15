@@ -110,7 +110,7 @@ sy="$(run say FS.GG.SDD#43 --to kite-461 --message 'heads up, our paths overlap'
 
 # ---- widen requires the HELD claim (#706) ----------------------------------------------------------
 # Not holding #43 → widen must refuse (the ownership check is an argument, not an if).
-wx="$("$ENGINE" widen FS.GG.SDD#43 --paths 'src/New/**' --worker ghost-000 2>&1)"; wxrc=$?
+wx="$("$ENGINE" widen FS.GG.SDD#43 --worker ghost-000 --paths 'src/New/**' 2>&1)"; wxrc=$?
 [ "$wxrc" -ne 0 ] && printf '%s' "$wx" | grep -qi 'does not hold' \
   && ok "#706: widen refuses when the caller does not hold the claim" \
   || bad "#706: widen refuses without the lock" "rc=$wxrc: $wx"
