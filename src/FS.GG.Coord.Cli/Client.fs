@@ -1060,6 +1060,26 @@ module Client =
 
                             ExitGreen
 
+    /// resolve_repo (bash): a `--repo` value is a registry short-id (`sdd`), an `owner/repo`, or a literal
+    /// repo name. It reduces to the repo NAME board rows carry — a short-id maps, an `owner/repo` keeps its
+    /// repo part, a literal name passes through — so `--repo sdd`, `--repo FS-GG/FS.GG.SDD` and
+    /// `--repo FS.GG.SDD` all name one queue. (The roster map is embedded, not read from repos.yml, because
+    /// the shim ships as a `kind: client` kit item WITHOUT the roster — case 13 §6c / #381.) Shared by the
+    /// #480 worker-command scoping below and by verify-paths' `--repo`/`--issue` boundary (#479).
+    let private resolveRepo (raw: string) : string =
+        match raw.ToLowerInvariant() with
+        | "sdd" -> "FS.GG.SDD"
+        | "rendering" -> "FS.GG.Rendering"
+        | "governance" -> "FS.GG.Governance"
+        | "templates" -> "FS.GG.Templates"
+        | "game" -> "FS.GG.Game"
+        | "audio" -> "FS.GG.Audio"
+        | _ ->
+            // owner/repo -> the repo part (bash's `${1#*/}`); a literal name -> itself.
+            match raw.IndexOf('/') with
+            | -1 -> raw
+            | i -> raw.Substring(i + 1)
+
     // ---- verify-paths ----------------------------------------------------------------------------------
 
     /// Check a PR's changed files against the touch-set declared by the issue it implements.
@@ -1082,29 +1102,84 @@ module Client =
         | Some pr ->
             let owner = ctx.Owner
 
+            // An explicit `--issue` (owner/repo#n, repo#n, or a URL) names the issue the PR implements —
+            // no branch or closing-ref resolution needed. It is parsed up front because its repo is
+            // authoritative: it decides the repo when `--repo` is absent, and a `--issue` in a DIFFERENT
+            // repo than `--repo` is a straddle the tool refuses (#479).
+            let issueRef =
+                match opts.Issue with
+                | None -> Ok None
+                | Some raw ->
+                    match parseRef ctx raw with
+                    | Ok r -> Ok(Some r)
+                    | Error m -> Result.Error m
+
+            match issueRef with
+            | Result.Error m ->
+                eprint $"fsgg-coord-engine: verify-paths --issue: %s{m}"
+                ExitError
+            | Ok issueRef ->
+
+            // The repo the PR is in: `--repo` (a registry short-id / owner/repo / literal name, reduced the
+            // way every worker command reduces it — case 13's resolve_repo), else the `--issue`'s repo (the
+            // issue decides when no `--repo` is given). #430's git-remote default (neither flag) is deferred.
             let repo =
                 match opts.Repo with
-                | Some r -> r
+                | Some r -> Ok(resolveRepo r)
                 | None ->
-                    eprint "fsgg-coord-engine: verify-paths needs --repo <name> (the repo the PR is in)."
-                    ""
+                    match issueRef with
+                    | Some ir -> Ok ir.Repo
+                    | None ->
+                        eprint
+                            "fsgg-coord-engine: verify-paths needs --repo <name> (the repo the PR is in) or --issue <ref>."
 
-            if repo = "" then
-                ExitError
-            else
+                        Result.Error ExitError
 
-            // The issue a PR implements: its `item/<n>-*` branch, else what it declares it closes.
+            match repo with
+            | Result.Error rc -> rc
+            | Ok repo ->
+
+            // #479: `--repo` and `--issue` naming DIFFERENT repos is a straddle — a touch-set in one repo
+            // says nothing about the files changed in the other, and printing a verdict on the wrong subject
+            // is the exact fail-open this command exists to prevent (#266). It fails CLOSED both by default
+            // AND under --warn: --warn downgrades a real DRIFT to advisory, but it cannot license a verdict on
+            // a subject that was never compared. (Only reachable when BOTH flags are present — with `--repo`
+            // absent, `repo` IS the issue's repo and they agree by construction.)
+            match issueRef with
+            | Some ir when opts.Repo.IsSome && not (String.Equals(ir.Repo, repo, StringComparison.OrdinalIgnoreCase)) ->
+                // No FSGG-PATHS verdict — the touch-set drift gate greps stdout for one, and a straddle
+                // produces none; it exits non-zero and the gate reads that as the failure it is.
+                eprint (
+                    sprintf
+                        "fsgg-coord-engine: verify-paths refuses to straddle a repo boundary — PR #%d in %s/%s vs the touch-set of %s/%s#%d, in another repo. The touch-set was NOT checked (a touch-set there says nothing about the files changed here). Name the PR's own issue with --issue, or drop --issue to resolve it from the branch."
+                        pr
+                        owner
+                        repo
+                        ir.Owner
+                        ir.Repo
+                        ir.Number
+                )
+
+                ExitNoVerdict
+            | _ ->
+
+            // The issue a PR implements: an explicit `--issue` (which bypasses the head-ref read entirely —
+            // #322, an unreadable head ref must not drag down a run that named its issue), else its
+            // `item/<n>-*` branch, else what it declares it closes.
             let resolveIssue () : Result<Ref option, Errors.IoError> =
-                match Reads.prHeadRef ctx.Transport owner repo pr with
-                | Error e -> Result.Error e
-                | Ok head ->
-                    let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
+                match issueRef with
+                | Some ir -> Ok(Some ir)
+                | None ->
+                    match Reads.prHeadRef ctx.Transport owner repo pr with
+                    | Error e -> Result.Error e
+                    | Ok head ->
+                        let m = Text.RegularExpressions.Regex.Match(head, @"^item/(\d+)-")
 
-                    if m.Success then
-                        Ok(Some { Owner = owner; Repo = repo; Number = int m.Groups.[1].Value })
-                    else
-                        // Not an item branch — ask what it closes.
-                        Reads.prClosingRef ctx.Transport owner repo pr
+                        if m.Success then
+                            Ok(Some { Owner = owner; Repo = repo; Number = int m.Groups.[1].Value })
+                        else
+                            // Not an item branch — ask what it closes.
+                            Reads.prClosingRef ctx.Transport owner repo pr
 
             match resolveIssue () with
             | Error e -> fail e
@@ -1121,11 +1196,13 @@ module Client =
                 // against B's paths — those say nothing about A's files (#353).
                 if not (String.Equals(issue.Repo, repo, StringComparison.OrdinalIgnoreCase)) then
                     printfn
-                        "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s, in another repo — a touch-set there says nothing about the files changed here."
+                        "FSGG-PATHS SKIP — PR #%d is in %s/%s but implements %s/%s#%d, in another repo — a touch-set there says nothing about the files changed here."
                         pr
                         owner
                         repo
-                        issue.Short
+                        issue.Owner
+                        issue.Repo
+                        issue.Number
 
                     ExitGreen
                 else
@@ -1224,25 +1301,6 @@ module Client =
             )
 
     // ---- #480: the repo a WORKER command scopes to — the one you are STANDING IN --------------------
-
-    /// resolve_repo (bash): a `--repo` value is a registry short-id (`sdd`), an `owner/repo`, or a literal
-    /// repo name. It reduces to the repo NAME board rows carry — a short-id maps, an `owner/repo` keeps its
-    /// repo part, a literal name passes through — so `--repo sdd`, `--repo FS-GG/FS.GG.SDD` and
-    /// `--repo FS.GG.SDD` all name one queue. (The roster map is embedded, not read from repos.yml, because
-    /// the shim ships as a `kind: client` kit item WITHOUT the roster — case 13 §6c / #381.)
-    let private resolveRepo (raw: string) : string =
-        match raw.ToLowerInvariant() with
-        | "sdd" -> "FS.GG.SDD"
-        | "rendering" -> "FS.GG.Rendering"
-        | "governance" -> "FS.GG.Governance"
-        | "templates" -> "FS.GG.Templates"
-        | "game" -> "FS.GG.Game"
-        | "audio" -> "FS.GG.Audio"
-        | _ ->
-            // owner/repo -> the repo part (bash's `${1#*/}`); a literal name -> itself.
-            match raw.IndexOf('/') with
-            | -1 -> raw
-            | i -> raw.Substring(i + 1)
 
     /// A GitHub remote URL → its `owner/repo`, or `None` when the URL is not a GitHub remote naming
     /// exactly one owner/repo. Handles every form `git config remote.origin.url` yields:

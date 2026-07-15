@@ -99,3 +99,22 @@ module OptionsTests =
     [<Fact>]
     let ``set-field without --batch leaves Batch off`` () =
         Assert.False((parse [ "set-field"; "FS.GG.SDD#42"; "Phase"; "P2 SDD" ] |> ok).Batch)
+
+    [<Fact>]
+    let ``verify-paths --issue carries the named issue ref`` () =
+        // #479: `--issue` names the issue the PR implements explicitly. Its VALUE (an issue ref) is not
+        // parsed here — that is verifyPaths' job — but it must be captured, not dropped.
+        let o = parse [ "verify-paths"; "--pr"; "7"; "--repo"; "sdd"; "--issue"; "FS-GG/FS.GG.SDD#70" ] |> ok
+        Assert.Equal(Some "FS-GG/FS.GG.SDD#70", o.Issue)
+        Assert.Equal(Some 7, o.Pr)
+
+    [<Fact>]
+    let ``verify-paths without --issue leaves Issue unset`` () =
+        Assert.Equal(None, (parse [ "verify-paths"; "--pr"; "7"; "--repo"; "sdd" ] |> ok).Issue)
+
+    [<Fact>]
+    let ``verify-paths --issue without a value is refused, not left silently unset`` () =
+        // The residue rule (as for --status/--snapshot): a `--issue` that swallowed the next flag would
+        // resolve a straddle against a ref named `--warn`. It must be "you forgot the issue".
+        let e = parse [ "verify-paths"; "--pr"; "7"; "--issue"; "--warn" ] |> rejected
+        Assert.Contains("--issue", e)

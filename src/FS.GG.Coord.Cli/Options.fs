@@ -51,6 +51,9 @@ module Options =
           Paths: string list
           Pr: int option
           Warn: bool
+          /// `verify-paths --issue REF` — the issue whose touch-set to check the PR against, named
+          /// explicitly (bypasses branch/closing-ref resolution). Its repo is authoritative (#479).
+          Issue: string option
           /// `ready --status S` — the board Status column to show, matched by NAME (case-insensitive), the
           /// way bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is off: asking for
           /// a column is asking to SEE it, Done included.
@@ -101,6 +104,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   widen  <ref> --paths T...                  widen a HELD item's touch-set
   say    <ref> --to W --message M            message another worker
   done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up
+  verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
+               [--issue REF] [--warn]        SKIP; --issue names the issue explicitly; --warn advisory)
 
   whoami [--mint]                            this worker's id and how it was derived
   budget                                     the GraphQL/REST budget
@@ -161,6 +166,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--warn" :: t -> flags { acc with Warn = true } t
 
+            | "--issue" :: value :: _ when value.StartsWith "-" -> Error $"--issue needs a value (got flag '%s{value}')"
+            | "--issue" :: value :: t -> flags { acc with Issue = Some value } t
+            | [ "--issue" ] -> Error "--issue needs a value"
+
             | "--status" :: value :: _ when value.StartsWith "-" ->
                 Error $"--status needs a value (got flag '%s{value}')"
             | "--status" :: value :: t -> flags { acc with Status = Some value } t
@@ -217,6 +226,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Paths = []
               Pr = None
               Warn = false
+              Issue = None
               Status = None
               All = false
               Batch = false }
