@@ -83,6 +83,11 @@ module Options =
         /// Put an issue on the board, idempotently (`add <ref>`) — the metered verb the GraphQL monopoly
         /// rule (#586) names in place of `gh project item-add`, restored in #861.
         | Add
+        /// Replay the board writes an exhausted budget queued (`flush [--dry-run]`, #862) — the verb every
+        /// `Deferred` write's "QUEUED; flush replays it" message names, and which nothing exposed. The queue
+        /// (`Cache.defer`) and the replay (`Board.flush`) were always here; only this arm was missing, so
+        /// the promise could not be kept by anyone.
+        | Flush
         /// Board-health gate: flag Ready/Backlog items no worker can pick up (`lint [--repo] [--strict]`, #496).
         | LintCmd
         /// List a repo's issues over REST, ETag-revalidated — the GraphQL-budget-free read
@@ -170,6 +175,15 @@ module Options =
           /// `--peek` (`inbox`) — show new messages WITHOUT advancing the per-worker cursor, so the same
           /// mail is still "new" on the next read. Off, `inbox` consumes what it shows.
           Peek: bool
+
+          /// `--dry-run` (`flush`) — LIST the queued board writes without replaying them.
+          ///
+          /// The polarity is the OPPOSITE of `reap --apply`, deliberately (#862). `reap` breaks another
+          /// worker's lock, so its bare form must be safe. `flush` replays writes THIS worker was already
+          /// told were queued — the recovery the `EX_RATE` message names — so defaulting to a dry run would
+          /// rebuild the very trap #862 was filed for: the worker runs the command the engine named, reads
+          /// a queue depth, concludes the board is repaired, and walks away from writes that never landed.
+          DryRun: bool
 
           /// `--wait` (`landable`) — poll until the verdict SETTLES rather than reading it once (#724). The
           /// poll never believes an early `green`: it waits for the run set to STOP GROWING, and it keeps

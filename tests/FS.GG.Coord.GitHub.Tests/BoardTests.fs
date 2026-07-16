@@ -550,6 +550,32 @@ let ``flush replays a queued write and DROPS it`` () =
     | other -> failwith $"flush must replay the queued write — got %A{other}"
 
 [<Fact>]
+let ``#862 flush DROPS an entry whose item left the board - but does NOT count it as written`` () =
+    use _sandbox = new Sandbox()
+
+    // QUEUE A WRITE, then have the item leave the board before the replay. `boardWrite` refuses to queue a
+    // `NotOnBoard` (the #510 leg above), so this is the ONE way the case is reachable: the entry was
+    // legitimately queued against an item that WAS on the board, and the board moved underneath it.
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited None) ]
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    // The replay's lookup succeeds and finds NOTHING — the item is gone.
+    let gone =
+        scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+
+    match flush gone board with
+    // ZERO, not one. The entry is permanent and correctly DROPPED — carrying it forever would mean the
+    // queue never drains — but `written` is the count `flush` REPORTS, and a caller renders it as "replayed
+    // N of M". Counting a drop there tells a worker their board write landed when nothing was written: the
+    // precise failure #862 exists to end, rebuilt inside the verb that exists to repair it.
+    | Ok 0 ->
+        match Cache.pending () with
+        | Ok [] -> ()
+        | other -> failwith $"the un-writable entry must still be DROPPED — got %A{other}"
+    | Ok n -> failwith $"a dropped entry must not be COUNTED as written — flush reported %d{n}"
+    | other -> failwith $"expected a clean flush that wrote nothing — got %A{other}"
+
+[<Fact>]
 let ``an exhausted budget STOPS the flush - the rest would fail identically`` () =
     use _sandbox = new Sandbox()
 

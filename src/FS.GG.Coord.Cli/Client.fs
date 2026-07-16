@@ -886,14 +886,52 @@ module Client =
             | Some e -> fail e
             | None -> ExitGreen
 
-    let budget (ctx: Context) : int =
+    /// `pendingBoardWrites` is the DEPTH OF THE DEFERRAL QUEUE — the writes `boardWrite` took on an
+    /// exhausted budget and `flush` will replay (#862). It reads a local file and spends nothing, which is
+    /// the point: the moment you most need to ask "did my stamp land?" is the moment you have no budget to
+    /// ask with.
+    ///
+    /// A queue we could not READ is `None`, never `0`. They are opposite answers — "nothing is waiting" vs
+    /// "I cannot tell you what is waiting" — and rendering the second as the first is how a worker concludes
+    /// their `done --flip` was dropped when it is sitting in the queue, or the reverse (#266).
+    let budget (ctx: Context) (opts: Options) : int =
         match Reads.rateLimit ctx.Transport with
         | Error e -> fail e
         | Ok meter ->
-            printfn "GraphQL budget: %d / %d remaining" meter.Remaining meter.Limit
+            let pending =
+                match Cache.pending () with
+                | Ok entries -> Some(List.length entries)
+                | Error _ -> None
+
+            match opts.Render with
+            | Json ->
+                let doc =
+                    JsonSerializer.Serialize(
+                        {| graphql =
+                            {| remaining = meter.Remaining
+                               limit = meter.Limit |}
+                           pendingBoardWrites = pending |}
+                    )
+
+                printfn "%s" doc
+            | Text ->
+                printfn "GraphQL budget: %d / %d remaining" meter.Remaining meter.Limit
+
+                match pending with
+                | Some 0 -> printfn "pending board writes: 0"
+                | Some n -> printfn "pending board writes: %d — replay them with `flush` (#862)" n
+                | None -> printfn "pending board writes: UNKNOWN — the deferral queue could not be read"
 
             if meter.Remaining < Budget.WarnBelow then
                 eprint $"fsgg-coord-engine: WARNING — only %d{meter.Remaining} GraphQL points remain (< %d{Budget.WarnBelow}); the fleet shares one 5,000/hr budget (#418)."
+
+            // A QUEUE WITH ENTRIES IN IT IS NOT AN ERROR — it is the state `flush` exists for — so this
+            // stays green and merely says so. Exiting non-zero here would make `budget`, the one free
+            // pre-flight read the recipes tell you to START with, fail on a board that is merely mid-repair.
+            match pending with
+            | Some n when n > 0 ->
+                eprint $"fsgg-coord-engine: NOTE — %d{n} board write(s) are queued and have NOT landed; `flush` replays them (#862)."
+            | _ -> ()
 
             ExitGreen
 
@@ -2743,6 +2781,91 @@ module Client =
             eprint "fsgg-coord-engine: add takes <ref> (a URL, owner/repo#n, or repo#n)."
             ExitError
 
+    // ---- flush: the replay every deferral already promised (#862) --------------------------------------
+    //
+    // `Board.boardWrite` QUEUES a field write that meets an exhausted budget and returns `Deferred`; the
+    // verb then prints "QUEUED — flush replays it" and exits `EX_RATE`. That message was true of the
+    // LIBRARY and false of this CLI. The queue (`Cache.defer`/`pending`/`dropPending`) and the replay
+    // (`Board.flush`) were both here, complete and tested — nothing exposed the verb, so `flush` was an
+    // unknown command and the promise could not be kept by anyone.
+    //
+    // THAT IS THE WORST DIRECTION FOR IT TO BE WRONG, and it is why this is a bug and not a missing
+    // feature. `EX_RATE` means back off and retry; "QUEUED, flush replays it" means the retry is already
+    // arranged. A worker who reads both correctly concludes there is NOTHING TO DO — and the write is
+    // gone. The board is a projection of issue state, so a dropped `set-field`/`done --flip` leaves the
+    // projection lying, and the cost lands on a later reconcile pass rather than on the write (#510).
+    //
+    // The rendering rule (#266): "3 queued" and "3 replayed" are DIFFERENT SENTENCES. A dry run must never
+    // be readable as a flush, which is the whole reason `--dry-run` says NOT replayed in those words.
+
+    let flushCmd (ctx: Context) (opts: Options) : int =
+        // READ THE QUEUE FIRST, AND BEFORE ANY BOARD READ. An empty queue needs no board map, and
+        // `bootstrapCached` can spend GraphQL — which is precisely what we do not have when a flush is
+        // called for. The overwhelmingly common case (nothing pending) must cost nothing.
+        match Cache.pending () with
+        | Error e -> fail e
+
+        // AN EMPTY QUEUE IS A SUCCESS, and it exits 0. `flush` is a recovery verb: a close-out pass, a
+        // retry, or a worker following the `EX_RATE` advice on a budget that recovered before they got
+        // here all reach it, and none of them is an error.
+        | Ok [] ->
+            printfn "flush — nothing pending."
+            ExitGreen
+
+        | Ok entries when opts.DryRun ->
+            printfn "flush --dry-run — %d write(s) queued, NOT replayed:" (List.length entries)
+
+            for e in entries do
+                printfn
+                    "  %s %s = %s  (queued %s by %s)"
+                    e.Ref
+                    e.Field
+                    (if e.Value = "" then "<cleared>" else e.Value)
+                    e.At
+                    e.Worker
+
+            ExitGreen
+
+        | Ok entries ->
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error e -> fail e
+            | Ok board ->
+                let queued = List.length entries
+
+                match Board.flush ctx.Transport board with
+                | Ok written ->
+                    printfn "flush — replayed %d of %d queued write(s)." written queued
+
+                    // WRITTEN < QUEUED WITHOUT AN ERROR IS NOT AN ANOMALY. `Board.flush` drops what it can
+                    // never land — an unparseable ref, an item no longer on the board — rather than
+                    // retrying it forever. Saying so is the difference between a queue that drained and a
+                    // queue that gave up quietly.
+                    if written < queued then
+                        eprint
+                            $"fsgg-coord-engine: %d{queued - written} queued write(s) were DROPPED, not replayed — permanently un-writable (an unparseable ref, or an item no longer on this board)."
+
+                    ExitGreen
+
+                // A FLUSH STOPPED BY A FRESH RATE LIMIT IS A PARTIAL, AND SILENCE HERE WOULD REBUILD THIS
+                // ISSUE. `Board.flush` surfaces the rate-limit as an `Error`, which loses the count it had
+                // written before stopping — so a bare `fail e` would report "budget exhausted" over a flush
+                // that DID land writes, and the worker could not tell "nothing landed" from "most landed".
+                // Re-reading the queue costs nothing (a file read) and answers exactly that.
+                | Error e ->
+                    let remaining =
+                        match Cache.pending () with
+                        | Ok rest -> List.length rest
+                        | Error _ -> queued
+
+                    if remaining < queued then
+                        eprint
+                            $"fsgg-coord-engine: replayed %d{queued - remaining} of %d{queued} queued write(s) before the budget ran out; %d{remaining} REMAIN QUEUED — re-run flush after the reset."
+                    else
+                        eprint
+                            $"fsgg-coord-engine: nothing replayed; all %d{queued} write(s) REMAIN QUEUED — re-run flush after the reset."
+
+                    fail e
+
     // ---- lint: the board-health gate (#496) -----------------------------------------------------------
     //
     // The rule whose absence let `lint` report `0 error(s)` over a DEAD queue. A Ready/Backlog item that
@@ -3071,7 +3194,7 @@ module Client =
             | Ready -> ready ctx opts
             | Who -> who ctx opts
             | Reap -> reap ctx opts
-            | Budget -> budget ctx
+            | Budget -> budget ctx opts
             | Claim -> claim ctx opts
             | Adopt -> adopt ctx opts
             | Landable -> landable ctx opts
@@ -3092,6 +3215,7 @@ module Client =
             | OptionId -> optionId ctx opts
             | ItemId -> itemIdCmd ctx opts
             | Add -> addCmd ctx opts
+            | Flush -> flushCmd ctx opts
             | LintCmd -> lint ctx opts
             | Issues -> issues ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

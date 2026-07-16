@@ -1075,14 +1075,23 @@ module Board =
                     // appends a second copy. Every flush under a dead budget would double the queue,
                     // forever, while reporting that it had written nothing and backing off from nothing.
                     match attempt transport board owner repo number entry.Field write with
-                    | Ok Written
+                    | Ok Written ->
+                        Cache.dropPending entry
+                        written <- written + 1
+
                     | Ok NotOnBoard ->
                         // `NotOnBoard` is DROPPED, not retried. It is permanent, and `boardWrite` would not
                         // have queued it in the first place — but an entry queued before the item was
                         // removed from the board can still reach here, and carrying it forever would mean
                         // the queue never drains.
+                        //
+                        // DROPPED IS NOT WRITTEN, AND `written` IS THE COUNT THIS FUNCTION RETURNS (#862).
+                        // Counting it here would report a write that never happened, to a caller whose whole
+                        // job is telling a worker whether their board writes landed — the same
+                        // "reported success over a subject it never touched" that #266 names, inside the
+                        // one verb that exists to repair exactly that. The entry still drops; it does not
+                        // count.
                         Cache.dropPending entry
-                        written <- written + 1
 
                     | Ok Deferred ->
                         // `attempt` cannot return this — it has no queue. The case exists so that a future

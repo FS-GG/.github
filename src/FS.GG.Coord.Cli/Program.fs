@@ -338,6 +338,7 @@ let main argv =
             | OptionId
             | ItemId
             | Add
+            | Flush
             | LintCmd
             | Issues -> Client.run opts
 
