@@ -258,3 +258,18 @@ module Reads =
     /// The bodies ride along because they are free here — one list read serves both the marker scan and the
     /// touch-set extraction, where two reads per item would double the REST cost of the scheduling loop.
     val openIssues: transport: IGitHubTransport -> owner: string -> repo: string -> IoResult<(int * string) list>
+
+    /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
+    /// serves the cached body for zero cost.
+    ///
+    /// CONDITIONAL, unlike `openIssues` — its subject is a listing, not the lock, so a 304 serving the
+    /// cached body is exactly right (no marker can hide in a list nobody scans for markers). `fresh`
+    /// (`--refresh`) drops the stored ETag and forces a full re-read. Returns the raw JSON body bash prints.
+    val issues:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        state: string ->
+        label: string option ->
+        fresh: bool ->
+            IoResult<string>

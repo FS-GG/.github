@@ -83,6 +83,9 @@ module Options =
         | ItemId
         /// Board-health gate: flag Ready/Backlog items no worker can pick up (`lint [--repo] [--strict]`, #496).
         | LintCmd
+        /// List a repo's issues over REST, ETag-revalidated — the GraphQL-budget-free read
+        /// (`issues <repo> [--label L] [--state S] [--refresh]`, #446/#418).
+        | Issues
 
         | Help
         | Version
@@ -172,7 +175,14 @@ module Options =
           Tries: int option
           /// `--interval S` (`landable --wait`) — seconds to sleep between polls (0 permitted, for the test
           /// harness). Default 20.
-          Interval: int option }
+          Interval: int option
+
+          /// `--label L` (`issues`) — restrict the REST listing to issues carrying this label. Absent ⇒ every
+          /// issue in the state.
+          Label: string option
+          /// `--state open|closed|all` (`issues`) — which issue state to list. Default `open`, exactly as
+          /// bash's `issues`.
+          IssueState: string option }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

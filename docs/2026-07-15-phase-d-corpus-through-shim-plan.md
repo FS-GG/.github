@@ -4,10 +4,12 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **24 full + 2 partial of 27 corpus cases** (~376 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **24 full + 2 partial of 27 corpus cases** (~385 assertions); D.2–D.4 not started.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
-STOP GROWING) landed on top of it.
+STOP GROWING) landed on top of it. Case 13's `issues` short-id command (#446) has now landed too — the last
+repo-taking command taught to resolve a registry short-id — leaving case 13 with only `reap`'s #480
+checkout-scope leg outstanding.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -26,7 +28,7 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~376 assertions across **24 of 27 corpus cases**, 26 fixture
+`tests/coord-engine-parity/` harness (~385 assertions across **24 of 27 corpus cases**, 27 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
@@ -131,7 +133,7 @@ which are the differential harness D.4 disposes of, not engine-behaviour cases:
 | covered | case | note |
 |---|---|---|
 | ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
-| ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
+| ◑ | 13 (§#480 scope + `Blocked by` + `issues`) | the git-remote repo scope for `next`/`take`/`batch`/`who`, the `Blocked by` write gate, and the `issues` short-id command all landed; only `reap`'s #480 checkout scope remains (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — `reap` now EXISTS (case 26), but its adversarial-interleaving legs are the remaining work |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
@@ -155,7 +157,7 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 
 | case | what it needs | class |
 |---|---|---|
-| 13-remainder | the `Blocked by` canonicalization gate LANDED (this slice); the `issues` short-id (#446) and `reap`'s #480 checkout scope remain — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
+| 13-remainder | the `Blocked by` canonicalization gate and the `issues` short-id command (#446) both LANDED; only `reap`'s #480 checkout scope remains — `reap` now exists (case 26) but still demands an explicit `--repo`, so scoping it to the checkout you are standing in is a follow-up | `reap` scope leg |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
@@ -472,9 +474,32 @@ PROPERTY (the canonical value the mutation carries) one transport under; and the
 nothing). Case 13 stays PARTIAL: the `issues` short-id command (#446) and `reap`'s #480 checkout scope remain
 (see the remaining table).
 
-The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`issues`) and **larger port gaps** (`reap`'s adversarial-interleaving legs, case 24).
-The verify-paths repo-boundary divergences (case 23's
+The **`issues` short-id command** landed next (case 13, this slice): the last repo-taking command taught to
+resolve a registry short-id (#446). `issues` lists a repo's issues over REST with ETag revalidation — the
+read both coordination skills advertise as THE way to read issues WITHOUT spending GraphQL (a 304 costs
+nothing, #418) — but it was the ONE command that took its `<repo>` argument VERBATIM where every sibling ran
+it through `resolve_repo`. So `issues game` asked GitHub for `repos/FS-GG/game` and 404'd while `--repo game`
+resolved everywhere else, and the natural recovery from that 404 is `gh issue list` — 2 GraphQL points a
+call, the exact budget the command exists to save. The engine now resolves the arg the same way as the rest:
+an explicit `owner/repo` splits and passes through untouched (an owner is authoritative), a bare short-id
+maps through the shared `resolveRepo` to `owner/<repo-name>` — so `issues game` reads `FS-GG/FS.GG.Game` and
+the bare `FS-GG/game` never reaches GitHub. The read is a NEW `Reads.issues` primitive that finally consumes
+the ETag body cache built for it (`Cache.getETag`/`getBody`/`putBody`, unused until now): CONDITIONAL by
+design (unlike the claim scan's `openIssues`, whose subject is the lock and must never be served a stale
+304, #461 — a listing has no marker to hide), so a repeat read sends the stored validator and a 304 serves
+the body from cache for zero fresh cost, and `--refresh` drops the validator to force a full re-read. It
+emits the raw JSON array — the caller projects it with real jq. New `issues_server.py` records the
+`owner/repo` (and state/label/If-None-Match) of every `/repos/*/issues` request, so the corpus's
+`issue-list FS-GG/<repo>` `gh`-log assertion becomes "the fixture was asked for `FS-GG/FS.GG.Game`, NEVER
+`FS-GG/game`", one transport under; the fixture serves NO GraphQL, because `issues` is a pure REST read that
+never bootstraps the board. 9 parity assertions + 3 `Reads.issues` unit tests (the 200→cache→304 round-trip,
+`--refresh`, fail-closed) + 4 Options parse tests. Disposed on the record (ADR-0040 §5): bash's `--jq EXPR`
+is an ERGONOMIC — the engine emits the raw array and the caller pipes it to real jq (the Json-is-contract
+rule), so `issues … | jq` IS the port of `issues … --jq …`, and the engine refuses an unknown `--jq` flag.
+
+The clean "engine already matches bash by construction" cases are largely ported; what remains clusters into
+**larger port gaps** (`reap`'s adversarial-interleaving legs, case 24, and its #480 checkout-scope leg,
+case 13). The verify-paths repo-boundary divergences (case 23's
 SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
 the call-counting transformation is demonstrated end-to-end by case 10.
 
@@ -529,7 +554,7 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 24 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~376
+      **In progress: 24 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~385
       assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
@@ -587,7 +612,14 @@ documented retirement is not.**
       REFUSES prose (a delivery log, the inverted `blocks X`, a ref trailed by prose — redirecting "the item
       IS blocked" to a Status), while a `-`/`none` placeholder is refused toward clearing; it runs in a
       shared `gateField` on BOTH set-field surfaces BEFORE any board read, so a refused write spends ZERO
-      GraphQL (`blockedby_server.py` counts the requests; 11 parity + 12 `Blockers` unit tests).
+      GraphQL (`blockedby_server.py` counts the requests; 11 parity + 12 `Blockers` unit tests). The
+      **`issues` short-id command** (#446) then landed the LAST repo-taking command taught to resolve a
+      registry short-id: `issues game` now reads `FS-GG/FS.GG.Game` (never the `repos/FS-GG/game` 404 that
+      sent a worker to the budget-burning `gh issue list`), via a new `Reads.issues` primitive that finally
+      consumes the ETag body cache built for it — CONDITIONAL, so a repeat listing is a free 304 (#418),
+      where the claim scan's `openIssues` must never be (a stale 304 could hide a lock, #461). `issues_server.py`
+      records the resolved `owner/repo` of every REST request; 9 parity + 3 `Reads.issues` + 4 Options tests.
+      Case 13 stays PARTIAL — only `reap`'s #480 checkout scope remains.
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the

@@ -224,3 +224,31 @@ module OptionsTests =
     let ``landable --interval refuses a negative delay`` () =
         let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--interval"; "-3" ] |> rejected
         Assert.Contains("--interval", e)
+
+    // ---- issues: the ETag-revalidated REST list (#446) --------------------------------------------
+
+    [<Fact>]
+    let ``issues takes a repo positional and defaults its state and label`` () =
+        let o = parse [ "issues"; "sdd" ] |> ok
+        Assert.Equal(Issues, o.Command)
+        Assert.Equal<string list>([ "sdd" ], o.Args)
+        // No --state / --label ⇒ None (the command applies bash's `open` default itself).
+        Assert.Equal(None, o.IssueState)
+        Assert.Equal(None, o.Label)
+        // `issues` emits the raw JSON array — the default projection, so the caller jq's it.
+        Assert.Equal(Json, o.Render)
+
+    [<Fact>]
+    let ``issues --state and --label are carried through`` () =
+        let o = parse [ "issues"; "FS-GG/FS.GG.Game"; "--state"; "closed"; "--label"; "bug" ] |> ok
+        Assert.Equal(Some "closed", o.IssueState)
+        Assert.Equal(Some "bug", o.Label)
+
+    [<Fact>]
+    let ``issues --state refuses a value that is not open, closed, or all`` () =
+        let e = parse [ "issues"; "sdd"; "--state"; "reopened" ] |> rejected
+        Assert.Contains("--state", e)
+
+    [<Fact>]
+    let ``issues --refresh drops the cache (an alias of the fresh flag)`` () =
+        Assert.True((parse [ "issues"; "sdd"; "--refresh" ] |> ok).Fresh)

@@ -2691,6 +2691,37 @@ module Client =
                     else
                         ExitGreen
 
+    /// `issues <repo> [--label L] [--state S] [--refresh]` — list a repo's issues over REST, ETag-revalidated
+    /// (#446/#418). The repo is resolved like every OTHER repo-taking command: an `owner/repo` splits and
+    /// passes through, a bare short-id maps through `resolveRepo` to `owner/<repo-name>`. This was the ONE
+    /// command that took the bare token verbatim — so `issues game` asked for `repos/FS-GG/game` and 404'd
+    /// while `--repo game` worked everywhere else (#446). A 404 there is worse than a typo: `issues` is
+    /// advertised as THE way to read issues without spending GraphQL, so the natural recovery is `gh issue
+    /// list` — the exact budget the command exists to save. Emits the raw JSON array; the caller jq's it.
+    let private issues (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [] ->
+            eprint "fsgg-coord-engine: issues: a repo is required (a registry short-id, owner/repo, or a repo name)."
+            ExitError
+        | raw :: _ ->
+            // bash's `issues` split: a slashed token is an explicit owner/repo (kept whole), a bare token is
+            // a short-id resolved against the board owner. Note this does NOT run an owner/repo back through
+            // resolveRepo — an explicit owner is authoritative, exactly as bash's `${1%%/*}`/`${1#*/}` reads.
+            let owner, repo =
+                match raw.IndexOf('/') with
+                | -1 -> ctx.Owner, resolveRepo raw
+                | i -> raw.Substring(0, i), raw.Substring(i + 1)
+
+            let state = opts.IssueState |> Option.defaultValue "open"
+
+            match Reads.issues ctx.Transport owner repo state opts.Label opts.Fresh with
+            | Ok body ->
+                printfn "%s" (body.TrimEnd())
+                ExitGreen
+            | Error e ->
+                eprint $"fsgg-coord-engine: %s{Errors.explain e}"
+                ExitError
+
     let run (opts: Options) : int =
         // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
         // reconciler stays org-wide. `take` ACTS — it claims an item and prints a worktree command against
@@ -2748,4 +2779,5 @@ module Client =
             | OptionId -> optionId ctx opts
             | ItemId -> itemIdCmd ctx opts
             | LintCmd -> lint ctx opts
+            | Issues -> issues ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

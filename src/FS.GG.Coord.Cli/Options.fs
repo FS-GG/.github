@@ -35,6 +35,7 @@ module Options =
         | OptionId
         | ItemId
         | LintCmd
+        | Issues
         | Help
         | Version
 
@@ -97,7 +98,12 @@ module Options =
           /// `--tries N` (`landable --wait`) — the maximum number of polls. Default 30.
           Tries: int option
           /// `--interval N` (`landable --wait`) — seconds to sleep between polls. Default 20.
-          Interval: int option }
+          Interval: int option
+
+          /// `issues --label L` — restrict the REST listing to issues carrying this label (absent ⇒ all).
+          Label: string option
+          /// `issues --state open|closed|all` — which issue state to list. Default `open` (bash's default).
+          IssueState: string option }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -166,6 +172,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   lint   [--repo NAME] [--json] [--strict]   board-health gate: a Ready/Backlog item that no worker can
                                              ever pick up (no `Paths:`, or every token unmatchable) is an
                                              error (#496); --strict makes notes fatal too
+  issues <repo> [--label L] [--state S]      list a repo's issues over REST, ETag-revalidated — a 304 costs
+         [--refresh]                         nothing (#446/#418). <repo> is a short-id, owner/repo, or a
+                                             repo name; emits the raw JSON array (project it with jq)
 
   --help    --version
 
@@ -233,6 +242,20 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 Error $"--status needs a value (got flag '%s{value}')"
             | "--status" :: value :: t -> flags { acc with Status = Some value } t
             | [ "--status" ] -> Error "--status needs a value"
+
+            // `issues --label` / `--state` — a label may legitimately begin with a hyphen, but a bare
+            // trailing `--label` with nothing after it is still an error, so the empty-tail guard stays.
+            | "--label" :: value :: t -> flags { acc with Label = Some value } t
+            | [ "--label" ] -> Error "--label needs a value"
+
+            | "--state" :: value :: _ when value.StartsWith "-" -> Error $"--state needs a value (got flag '%s{value}')"
+            | "--state" :: value :: t ->
+                match value with
+                | "open"
+                | "closed"
+                | "all" -> flags { acc with IssueState = Some value } t
+                | other -> Error $"--state must be open, closed, or all (got '%s{other}')"
+            | [ "--state" ] -> Error "--state needs a value"
 
             | "--all" :: t -> flags { acc with All = true } t
             | "--batch" :: t -> flags { acc with Batch = true } t
@@ -324,7 +347,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Peek = false
               Wait = false
               Tries = None
-              Interval = None }
+              Interval = None
+              Label = None
+              IssueState = None }
 
         match args with
         | []
@@ -375,5 +400,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "option-id" :: rest -> flags { defaults with Command = OptionId } rest
         | "item-id" :: rest -> flags { defaults with Command = ItemId } rest
         | "lint" :: rest -> flags { defaults with Command = LintCmd; Render = Text } rest
+        // `issues` emits the raw JSON array (bash's `issues` prints the REST body); the caller projects it
+        // with jq, so the default Json render stands.
+        | "issues" :: rest -> flags { defaults with Command = Issues } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"
