@@ -119,6 +119,9 @@ module Options =
           /// `--evidence <text>` (`done`) — assert the item is finished with NO PR (#600). Required for the
           /// no-PR green path; a green path with no argument would be a way of switching the stamp off.
           Evidence: string option
+          /// `--partial <why>` (`done --flip`) — this child is a PARTIAL fix and does NOT discharge its
+          /// parent, so the roll-up leaves the parent OPEN (#614). Absent means the child completes it.
+          Partial: string option
           /// `--to <worker>` (`say`).
           ToWorker: string option
           /// `--message <text>` (`say`).

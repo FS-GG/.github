@@ -57,6 +57,9 @@ module Options =
           Mint: bool
           Flip: bool
           Evidence: string option
+          /// `done --flip --partial "<why>"` — this child is a PARTIAL fix and does NOT discharge its
+          /// parent, so the roll-up must leave the parent OPEN (#614). Absent means the child completes it.
+          Partial: string option
           ToWorker: string option
           Message: string option
           Paths: string list
@@ -153,7 +156,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   inbox  [--repo NAME] [--peek] [--json]     messages addressed to this worker across every in-flight
                                              claim (ON the board and off it, #461/case 25); --peek does
                                              not advance the cursor
-  done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up
+  done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up (add
+               [--partial "why"]             --partial "why" if this child does NOT complete its parent, #614)
   verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
                [--issue REF] [--warn]        SKIP; --issue names the issue explicitly; --warn advisory)
 
@@ -207,6 +211,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--evidence" :: value :: t -> flags { acc with Evidence = Some value } t
             | [ "--evidence" ] -> Error "--evidence needs a value"
+            | "--partial" :: value :: t -> flags { acc with Partial = Some value } t
+            | [ "--partial" ] -> Error "--partial needs a value — say why this child does NOT complete its parent (#614)"
 
             | "--to" :: value :: _ when value.StartsWith "-" -> Error $"--to needs a value (got flag '%s{value}')"
             | "--to" :: value :: t -> flags { acc with ToWorker = Some value } t
@@ -330,6 +336,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Mint = false
               Flip = false
               Evidence = None
+              Partial = None
               ToWorker = None
               Message = None
               Paths = []

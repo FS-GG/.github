@@ -2218,13 +2218,21 @@ module Client =
                             Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set "Done") w.Id
                             |> ignore
 
-                            // --flip: roll the parent up, if the child completes it. `Completes` is asserted
-                            // by the caller running `done --flip`; a partial fix would pass through the CLI
-                            // as a plain `done` (no --flip), which never climbs.
+                            // --flip: roll the parent up. Whether this child DISCHARGES its parent is a fact
+                            // only the author knows and no board read recovers (#614), so it is the caller's
+                            // to state: `--partial "why"` makes it a `Partial` that leaves the parent OPEN
+                            // (naming why), and its absence asserts `Completes`. A partial fix that once had
+                            // to be run as a plain `done` (no climb at all) can now flip its own status AND
+                            // record on the parent that it did not complete it.
                             if opts.Flip then
+                                let discharge =
+                                    match opts.Partial with
+                                    | Some why -> Done.Partial why
+                                    | None -> Done.Completes
+
                                 match facts.Parent with
                                 | Some parent ->
-                                    match Done.rollUp ctx.Transport board w.Id parent Done.Completes with
+                                    match Done.rollUp ctx.Transport board w.Id parent discharge with
                                     | Error e ->
                                         eprint $"fsgg-coord-engine: the stamp is GREEN, but the roll-up to %s{parent.Short} did not complete: %s{Errors.explain e}"
                                     | Ok results ->

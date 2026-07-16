@@ -2172,6 +2172,21 @@ if [ -z "$DF_PORT" ]; then bad "done-flip fixture bound a port"; else
   printf '%s' "$d" | grep -q 'does not contain' \
     && bad "case14: a body-cited PR must not read as an unlinked child" "$d" || ok "case14: a body-cited PR does not block the rollup"
 
+  # E — #614: the SAME only-child #62/#302 world as leg B, but the child is declared a PARTIAL fix with
+  #     `--partial`. The roll-up must LEAVE #302 OPEN (naming why), not close it on the strength of "all
+  #     children are done". This is the exact bug #614 names: an only child that was a partial fix closed
+  #     its open parent, because the roll-up assumed children partition the parent. Leg B (bare --flip)
+  #     remains the positive control that a completing child still closes the parent.
+  e="$(df 'FS.GG.SDD#62' --worker w-df --flip --partial 'the API rename landed; migrating the callers is a separate child')"
+  printf '%s' "$e" | grep -q 'FSGG-DONE   FS.GG.SDD#62' \
+    && ok "#614: done --flip --partial still stamps the child DONE (#62)" || bad "#614: child not stamped under --partial" "$e"
+  printf '%s' "$e" | grep -q 'FS.GG.SDD#302 left OPEN' \
+    && ok "#614: ...but --partial LEAVES THE PARENT OPEN — a partial child does not discharge its parent" || bad "#614: parent must stay open under --partial" "$e"
+  printf '%s' "$e" | grep -q '302 stamped Done and closed' \
+    && bad "#614: --partial must NOT close the parent (the exact #614 bug)" "$e" || ok "#614: ...and the parent is NOT stamped Done and closed"
+  printf '%s' "$e" | grep -q 'migrating the callers is a separate child' \
+    && ok "#614: ...naming WHY it is partial, so the left-open parent is explained" || bad "#614: names the partial reason" "$e"
+
   kill "$DF_SRV" 2>/dev/null
 fi
 
