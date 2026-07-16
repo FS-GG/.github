@@ -440,6 +440,179 @@ def assert_no_stray_secret_templates(cfg: dict, config_path: str) -> None:
         )
 
 
+# The receiver-side path of every file scripts/sync-build-config.sh copies byte-for-byte out of
+# dist/dotnet/. A receiver's copy is SYNCED, not authored (ADR-0006, sync-not-fork), and the
+# build-config drift gate — a REQUIRED check in adopting repos — fails any PR that changes one.
+#
+# Directory.Build.props and Directory.Packages.props are sync-build-config.sh's other two managed
+# files and are DELIBERATELY not listed here. They are inexpressible in the shared preset: .github
+# does not adopt the org baseline (its root Directory.Packages.props is hand-authored — the
+# baseline's FSharp.Core pin would collide, NU1506), so the same root path is a synced copy in a
+# receiver and this repo's own build config here, and .github dogfoods this preset. Disabling those
+# names org-wide would freeze this repo's own engine pins. That half is .github#794.
+SYNCED_RECEIVER_FILES = (".config/dotnet-tools.json",)
+
+# The org source of truth for each synced file: the copy that lives HERE and must stay MANAGED, so
+# that Renovate keeps bumping the baseline (#660, #677). Every check below is ultimately about
+# protecting these paths, not about the receiver copy.
+SYNCED_SOURCE_PATHS = tuple(f"dist/dotnet/{f}" for f in SYNCED_RECEIVER_FILES)
+
+# The only keys the disabling rule may carry. Any other key is a MATCHER, and a matcher narrows the
+# rule — `matchUpdateTypes: ["major"]` would leave every minor bump proposing the un-mergeable PR
+# again, with the gate still green.
+_DISABLE_RULE_KEYS = {"description", "matchFileNames", "enabled"}
+
+
+def assert_synced_files_unmanaged(preset_path: str) -> None:
+    """A synced receiver file must be disabled with matchFileNames — NEVER with ignorePaths.
+
+    Renovate proposing a bump against a receiver's synced copy opens a PR that structurally cannot
+    merge, in any receiver, ever, and re-opens it after every close (.github#678; FS.GG.Game#278 is
+    the instance, closed unmerged). So the rule must exist. This asserts it, and asserts that the
+    org SOURCE OF TRUTH survives it — which is the half that is easy to lose.
+
+    #678 proposed `ignorePaths: [".config/dotnet-tools.json"]`, and that fix defeats its own stated
+    intent. Renovate's filterIgnoredFiles ignores a file when
+
+        file.includes(ignorePath) || minimatch(ignorePath, {dot:true}).match(file)
+
+    The first branch is a SUBSTRING test, and it is the one that bites: any LITERAL path that occurs
+    inside dist/dotnet/.config/dotnet-tools.json un-manages it. That is not only the spelling #678
+    proposed — ".config", "dist/", ".json" and even "/" all freeze the baseline, and the shorter the
+    entry the more it swallows. So this check runs in RENOVATE'S direction (`entry in source`), not
+    the intuitive one (`basename in entry`): the intuitive form catches exactly the one spelling the
+    fixture happens to write and waves through every worse one.
+
+    Scope of the modelling, stated rather than implied. The substring branch is reproduced EXACTLY —
+    Python's `in` is JavaScript's `String.includes`, the same operator, not an approximation of it.
+    The minimatch branch is NOT reproduced: re-implementing minimatch here would be a hand-rolled
+    copy of a matcher that has been wrong four times elsewhere (#724) and would drift from the bot
+    the moment either changed. So entries carrying glob metacharacters are refused conservatively
+    when they name a synced file, and a glob that reaches dist/dotnet/ by some spelling neither
+    branch catches would pass. That is a known hole, not a claim of completeness.
+
+    And the sentence this docstring used to carry — "ignorePaths honours neither regex nor
+    anchoring" — was FALSE, which matters in the one file whose doctrine is that a false sentence
+    froze the SDD.Cli pin four times (#576). Measured against renovate 43.265.2: the minimatch
+    branch DOES anchor, so `[.]config/dotnet-tools.json` and `*.config/dotnet-tools.json` both
+    ignore the receiver copy and correctly leave dist/dotnet/ managed. Working ignorePaths forms
+    exist. They work by ESCAPING the substring branch on a glob metacharacter, which is a coincidence
+    to rest a baseline on, and they are refused here for that reason — not because they cannot work.
+    The regex form is the genuinely dead one: `/^\\.config\\/dotnet-tools\\.json$/` matches NOTHING
+    (ignorePaths is not a regex surface), so it fails silently and looks exactly like a fix.
+
+    Every failure mode here is invisible to renovate-config-validator — each is a perfectly valid
+    config — and every one is silent. Hence a gate rather than a comment (#266).
+    """
+    # Split exactly as routed_hosts() does: "cannot read" and "is not valid JSON" are different
+    # findings with different fixes, and this runs first, so collapsing them here would mis-name
+    # every malformed-preset failure in the gate.
+    try:
+        with open(preset_path, encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except OSError as e:
+        raise GateError(f"cannot read the org Renovate preset {preset_path!r}: {e}") from e
+    except ValueError as e:
+        raise GateError(f"the org Renovate preset {preset_path!r} is not valid JSON: {e}") from e
+
+    # (1) No ignorePaths entry may reach a synced file — tested in RENOVATE'S direction.
+    offenders: list[str] = []
+
+    def _offence(entry: str) -> str | None:
+        # Renovate's own substring branch, verbatim: `file.includes(ignorePath)`. Anything that
+        # occurs inside the source-of-truth path un-manages it, however short.
+        for src in SYNCED_SOURCE_PATHS:
+            if entry in src:
+                return f"it is a SUBSTRING of {src}, which Renovate would therefore stop managing"
+        # The minimatch branch is not modelled (see the docstring). Refuse conservatively: an entry
+        # naming a synced file is either the literal trap above or a glob that works by coincidence.
+        for rel in SYNCED_RECEIVER_FILES:
+            if os.path.basename(rel) in entry or rel in entry:
+                return f"it names {rel}, whose only safe home is a matchFileNames packageRule"
+        return None
+
+    def walk(node, path: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                here = f"{path}.{k}" if path else str(k)
+                if k == "ignorePaths" and isinstance(v, list):
+                    for i, entry in enumerate(v):
+                        if isinstance(entry, str) and (why := _offence(entry)):
+                            offenders.append(f"{here}[{i}] = {entry!r} — {why}")
+                walk(v, here)
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                walk(v, f"{path}[{i}]")
+
+    walk(cfg, "")
+    if offenders:
+        raise GateError(
+            f"{preset_path} uses `ignorePaths` to reach a synced build-config file, at: "
+            f"{'; '.join(offenders)}. ignorePaths matches by SUBSTRING "
+            f"(`file.includes(ignorePath)`), so it cannot separate a receiver's copy from THIS "
+            f"repo's dist/dotnet/ source of truth — the one pin Renovate actually bumps here "
+            f"(#660). Use a packageRule with `matchFileNames` + `enabled: false`, which anchors "
+            f"(.github#678)."
+        )
+
+    # (2) Each synced file must actually BE disabled, by an anchored matchFileNames rule.
+    rules = cfg.get("packageRules")
+    rules = rules if isinstance(rules, list) else []
+    for rel in SYNCED_RECEIVER_FILES:
+        base = os.path.basename(rel)
+        # Every rule whose matchFileNames mentions this file, in declaration order. Renovate merges
+        # packageRules in order and LAST WINS, so the rule that decides `enabled` is the last one
+        # that matches — not the first, and not "the one that says enabled:false somewhere".
+        mentioning = [
+            (i, rule, pats)
+            for i, rule in enumerate(rules)
+            if isinstance(rule, dict) and isinstance(pats := rule.get("matchFileNames"), list)
+            and any(isinstance(p, str) and (p == rel or base in p or p.endswith(rel)) for p in pats)
+        ]
+        if not mentioning:
+            raise GateError(
+                f"{preset_path} declares no `matchFileNames: [{rel!r}]` + `enabled: false` "
+                f"packageRule. Without it Renovate proposes bumps against every receiver's SYNCED "
+                f"copy of {rel} — a PR the build-config drift gate must reject, in every receiver, "
+                f"forever, re-opened after every close (.github#678, FS.GG.Game#278)."
+            )
+
+        i, rule, pats = mentioning[-1]  # last wins
+        if rule.get("enabled") is not False:
+            raise GateError(
+                f"{preset_path} packageRules[{i}] is the LAST rule matching {rel} and it does not "
+                f"set `enabled: false` (enabled={rule.get('enabled')!r}). Renovate merges "
+                f"packageRules in order and the last match wins, so this re-enables the receiver's "
+                f"synced copy and the un-mergeable PR returns — with every earlier `enabled: false` "
+                f"still sitting in the file, looking correct (.github#678)."
+            )
+
+        over_broad = [p for p in pats if isinstance(p, str) and p != rel and (base in p or p.endswith(rel))]
+        if over_broad:
+            raise GateError(
+                f"{preset_path} packageRules[{i}].matchFileNames contains {over_broad!r}, which "
+                f"reaches beyond the receiver's copy — `**/`-style patterns match "
+                f"dist/dotnet/{rel} too, disabling the ORG SOURCE OF TRUTH and the one pin Renovate "
+                f"actually bumps here (#660). Declare exactly {rel!r}, anchored at the repo root "
+                f"(.github#678)."
+            )
+        if rel not in pats:
+            raise GateError(
+                f"{preset_path} packageRules[{i}].matchFileNames is {pats!r}, which does not "
+                f"declare {rel!r} exactly (.github#678)."
+            )
+
+        extra = sorted(set(rule) - _DISABLE_RULE_KEYS)
+        if extra:
+            raise GateError(
+                f"{preset_path} packageRules[{i}] disables {rel} but also carries {extra!r}. Every "
+                f"additional key NARROWS the rule, and a narrowed rule leaves the un-mergeable "
+                f"receiver PR proposing again for whatever it no longer covers — "
+                f"`matchUpdateTypes: ['major']` would still propose every minor bump — while this "
+                f"gate stayed green. The disable must be unconditional (.github#678)."
+            )
+
+
 def check_bump_mechanism(root: str, preset_path: str) -> tuple[str, list[str]]:
     """Every host the preset routes FS.GG.* to must be one Renovate can actually read.
 
@@ -853,6 +1026,14 @@ def main(argv: list[str]) -> int:
             return gather_bot_evidence(repo, token, dep, items=_items)
 
     try:
+        # Runs before the feed is read: it needs no network, and a preset that un-manages the org
+        # source of truth is a finding whether or not the feed happens to be reachable today.
+        assert_synced_files_unmanaged(preset)
+        print(
+            f"ok: {', '.join(SYNCED_RECEIVER_FILES)} is disabled for receivers via matchFileNames, "
+            f"leaving dist/dotnet/ managed here (#678)."
+        )
+
         config_path, hosts = check_bump_mechanism(root, preset)
         # Deliberately NOT "pins can be bumped". For an auth-required host, presence of a token is
         # not resolution of it, and the gate cannot prove the latter from here (#566) — if a pin
