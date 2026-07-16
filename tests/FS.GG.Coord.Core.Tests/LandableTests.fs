@@ -116,6 +116,80 @@ module LandableTests =
         let dispatch = run ".github/workflows/build.yml" "workflow_dispatch" "item/x" [ 1 ] 2 "completed" (Some "success") (Some 11L)
         Assert.Equal(PrRed, score (Some true) [ cancelled; dispatch ] [])
 
+    // ---- scoreN: the verdict AND the count `--wait` polls on (#724) ----------------------------------
+
+    [<Fact>]
+    let ``scoreN returns the verdict AND the number of LIVE subjects it scored`` () =
+        // One live run + one live check = 2 subjects, and the verdict agrees with `score`.
+        let state, n = scoreN (Some true) [ greenRun ] [ check (Some 1L) "completed" (Some "success") ]
+        Assert.Equal(PrGreen, state)
+        Assert.Equal(2, n)
+
+    [<Fact>]
+    let ``scoreN counts ZERO subjects for the empty set (#606) — the registration-race red`` () =
+        // Zero runs, zero checks: the verdict is RED, but the count is what tells --wait this is "CI has not
+        // started" rather than "CI failed".
+        Assert.Equal((PrRed, 0), scoreN (Some true) [] [])
+
+    [<Fact>]
+    let ``scoreN drops a superseded suite from the count, not just the verdict`` () =
+        // The cancelled run and its check-run are superseded, so only the live run + live check are counted.
+        let cancelled = run ".github/workflows/build.yml" "pull_request" "item/718-x" [ 718 ] 1 "completed" (Some "cancelled") (Some 10L)
+        let later = run ".github/workflows/build.yml" "pull_request" "item/718-x" [ 718 ] 2 "completed" (Some "success") (Some 11L)
+        let deadCheck = check (Some 10L) "completed" (Some "failure")
+        let liveCheck = check (Some 11L) "completed" (Some "success")
+        let state, n = scoreN (Some true) [ cancelled; later ] [ deadCheck; liveCheck ]
+        Assert.Equal(PrGreen, state)
+        // live run (11) + live check (11) = 2; the dead suite's run and check are both dropped.
+        Assert.Equal(2, n)
+
+    [<Fact>]
+    let ``scoreN counts 0 for conflicted and unknown — the verdict precedes any subject`` () =
+        Assert.Equal((PrConflicted, 0), scoreN (Some false) [ greenRun ] [])
+        Assert.Equal((PrUnknown, 0), scoreN None [ greenRun ] [])
+
+    // ---- settled: the --wait break-vs-keep-waiting decision (#724) -----------------------------------
+
+    [<Fact>]
+    let ``settled: conflicted stops at once — no amount of waiting fixes a conflict`` () =
+        // n and prev are irrelevant; a conflict has no CI to grow.
+        Assert.True(settled PrConflicted 0 -1)
+
+    [<Fact>]
+    let ``settled: unknown stops at once — the fail-closed answer does not clear by waiting`` () =
+        Assert.True(settled PrUnknown 0 -1)
+
+    [<Fact>]
+    let ``settled: a red over ZERO subjects KEEPS WAITING — it is the registration race, not a failure`` () =
+        // The trap that rejects every PR for being new: N==0 red is "CI has not started YET".
+        Assert.False(settled PrRed 0 -1)
+
+    [<Fact>]
+    let ``settled: a red over some subjects STOPS — a real finding does not clear by waiting`` () =
+        Assert.True(settled PrRed 3 3)
+
+    [<Fact>]
+    let ``settled: a green whose count is STILL GROWING keeps waiting — the partial-rollup trap`` () =
+        // First observation (prev = -1): the count has not been confirmed stable, so an early all-green is
+        // not believed. This is the leg that would otherwise merge a PR whose failing check had not been
+        // created yet.
+        Assert.False(settled PrGreen 1 -1)
+        // Grew between polls (prev 1, now 2): still not stable.
+        Assert.False(settled PrGreen 2 1)
+
+    [<Fact>]
+    let ``settled: a green whose count has STOPPED GROWING stops — believed only when stable`` () =
+        Assert.True(settled PrGreen 2 2)
+
+    [<Fact>]
+    let ``settled: a green over zero subjects never stops — there is nothing to be green about`` () =
+        // Defensive: score never emits PrGreen at n=0 (that is #606's PrRed), but settled must not either.
+        Assert.False(settled PrGreen 0 0)
+
+    [<Fact>]
+    let ``settled: pending never stops — a run still going is the one verdict worth waiting on`` () =
+        Assert.False(settled PrPending 2 2)
+
     // ---- the name projection -------------------------------------------------------------------------
 
     [<Fact>]

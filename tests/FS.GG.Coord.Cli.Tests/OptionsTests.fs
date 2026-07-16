@@ -200,3 +200,27 @@ module OptionsTests =
         Assert.Equal(Landable, o.Command)
         Assert.Equal<string list>([ "801" ], o.Args)
         Assert.Equal(Some "FS-GG/FS.GG.SDD", o.Repo)
+        // Without --wait, the poll knobs are unset (the single-shot verdict).
+        Assert.False(o.Wait)
+        Assert.Equal(None, o.Tries)
+        Assert.Equal(None, o.Interval)
+
+    [<Fact>]
+    let ``landable --wait carries the poll knobs, and --interval permits 0 (#724)`` () =
+        let o =
+            parse [ "landable"; "810"; "--repo"; "FS.GG.SDD"; "--wait"; "--tries"; "4"; "--interval"; "0" ]
+            |> ok
+        Assert.True(o.Wait)
+        Assert.Equal(Some 4, o.Tries)
+        // A delay, not a count — 0 is meaningful (the test harness drives the poll with no wall-clock).
+        Assert.Equal(Some 0, o.Interval)
+
+    [<Fact>]
+    let ``landable --tries must be positive`` () =
+        let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--tries"; "0" ] |> rejected
+        Assert.Contains("--tries", e)
+
+    [<Fact>]
+    let ``landable --interval refuses a negative delay`` () =
+        let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--interval"; "-3" ] |> rejected
+        Assert.Contains("--interval", e)

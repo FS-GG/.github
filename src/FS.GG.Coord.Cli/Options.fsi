@@ -161,7 +161,18 @@ module Options =
 
           /// `--peek` (`inbox`) — show new messages WITHOUT advancing the per-worker cursor, so the same
           /// mail is still "new" on the next read. Off, `inbox` consumes what it shows.
-          Peek: bool }
+          Peek: bool
+
+          /// `--wait` (`landable`) — poll until the verdict SETTLES rather than reading it once (#724). The
+          /// poll never believes an early `green`: it waits for the run set to STOP GROWING, and it keeps
+          /// waiting while zero runs have registered (the registration race). Conflicted/unknown return at
+          /// once — no amount of waiting fixes either.
+          Wait: bool
+          /// `--tries N` (`landable --wait`) — the maximum number of polls (positive). Default 30.
+          Tries: int option
+          /// `--interval S` (`landable --wait`) — seconds to sleep between polls (0 permitted, for the test
+          /// harness). Default 20.
+          Interval: int option }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

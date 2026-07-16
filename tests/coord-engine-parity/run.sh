@@ -2821,6 +2821,70 @@ if [ -z "$SUP_PORT" ]; then bad "landable-super fixture bound a port"; else
   kill "$SUP_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 31 (#724) — `landable --wait`, the poll loop that does NOT believe an early green.
+#
+# The single-shot verdict above fixed the SCORING; `--wait` carries the one thing a single read cannot —
+# refusing a PREMATURE green. GitHub registers a PR's runs over 20-60s, so the subject set is empty at first
+# (a `red` that is really "not started yet") and then GROWS (an early all-green is a PARTIAL rollup). The
+# engine's `Landable.settled` decides break-vs-wait: it keeps waiting while zero runs have registered, and it
+# believes a green only once the subject count has STOPPED GROWING across two consecutive polls.
+#
+# `landable_wait_server.py` is STATEFUL where it must be: sha810's runs/checks GROW on the SECOND read
+# (exactly as GitHub schedules them), so the 810 leg is invoked ONCE and its exit captured — a second call
+# would advance the fixture's read counter and score against a set that had already grown.
+#
+# Disposed on the record (ADR-0040 §5): the exit CODES are the engine's own — green 0, red/conflicted 3 —
+# where bash's poll loop numbers green/red 0/1; run.sh asserts the PROPERTY (green 0; red/conflicted a
+# distinct do-not-wait code), not bash's literals. `--interval 0` drives the poll with no wall-clock.
+# ==================================================================================================
+WAIT_OUT="$(mktemp)"; python3 "$HERE/landable_wait_server.py" >"$WAIT_OUT" 2>/dev/null & WAIT_SRV=$!; WAIT_PORT=""
+for _ in $(seq 1 50); do WAIT_PORT="$(head -n1 "$WAIT_OUT" 2>/dev/null)"; [ -n "$WAIT_PORT" ] && break; sleep 0.1; done
+rm -f "$WAIT_OUT"
+if [ -z "$WAIT_PORT" ]; then bad "landable-wait fixture bound a port"; else
+  # `landable --wait --tries N --interval 0` -> the command's exit status (the poll-loop contract). Both
+  # stdout and stderr to /dev/null: the verdict word on stdout would otherwise fold into the captured value.
+  lndw() { local rc=0; FSGG_GITHUB_API_BASE="http://127.0.0.1:$WAIT_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+             FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" landable "$1" --repo FS.GG.SDD --wait --tries "${2:-3}" --interval 0 >/dev/null 2>&1 \
+             || rc=$?; printf '%s' "$rc"; }
+
+  # 1. --wait AGREES with the single-shot verdict on a SETTLED PR. 801 is the superseded-but-green PR: its
+  #    run set does not grow, so the count is stable on the second poll and the green is believed.
+  wr="$(lndw 801)"
+  [ "$wr" = "0" ] \
+    && ok "#724: --wait returns GREEN (exit 0) on a settled, superseded-but-green PR (case 31)" \
+    || bad "#724: --wait settled green -> 0" "got: $wr"
+
+  # 2. TRAP ONE — THE REGISTRATION RACE. 804 has ZERO runs, forever. Zero runs score red (#606), but a
+  #    waiter must read that as "CI has not started YET" and keep waiting; only when the runs never register
+  #    (tries exhausted) does the red stand — the honest #606 finding. Engine red is exit 3 (bash 1, disposed).
+  wr="$(lndw 804 2)"
+  [ "$wr" = "3" ] \
+    && ok "#724: zero runs is 'CI has not started', not 'CI failed' — but if they never register, RED (exit 3) (case 31)" \
+    || bad "#724: --wait registration race -> 3" "got: $wr"
+
+  # 3. TRAP TWO — THE PARTIAL ROLLUP, the one that MERGES A BAD PR. sha810 grows: the first poll sees one
+  #    green run, the next sees that run PLUS a failed one. A waiter that trusts the first all-green returns
+  #    green; the engine waits for the set to STOP GROWING and returns RED (exit 3). Invoked ONCE — the
+  #    fixture is stateful, so a second call would score against an already-grown set.
+  wr="$(lndw 810 4)"
+  [ "$wr" = "3" ] \
+    && ok "#724: --wait does NOT believe an early all-green — it waits for the run set to STOP GROWING (exit 3) (case 31)" \
+    || bad "#724: --wait growing set -> 3" "got: $wr"
+
+  # 4. A CONFLICTED PR gets no CI at all (GitHub cannot build refs/pull/N/merge while it conflicts), so
+  #    waiting on one waits forever. It must come back AT ONCE — --tries 30 with no wall-clock proves it did
+  #    not spin. Engine conflicted is exit 3 (bash 1, disposed).
+  wr="$(lndw 704 30)"
+  [ "$wr" = "3" ] \
+    && ok "#724: --wait returns CONFLICTED immediately (exit 3) — no amount of waiting fixes a conflict (case 31)" \
+    || bad "#724: --wait conflicted -> 3" "got: $wr"
+
+  kill "$WAIT_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

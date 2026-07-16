@@ -1155,6 +1155,11 @@ module Client =
     /// `PrUnknown`, an honest no-verdict, never a masqueraded green — so there is no separate error path here:
     /// a rate limit, a 404, a `null` mergeability GitHub has not resolved all resolve to `unknown` (exit 4),
     /// the fail-closed verdict on which the poll loop advises nothing.
+    ///
+    /// `--wait` (#724) turns the single read into a POLL that never believes an early green — it waits for
+    /// the run set to STOP GROWING and keeps waiting while zero runs have registered — so a recipe can NAME
+    /// this gate instead of embedding the ~40 lines of jq the four recipe copies drifted on. The
+    /// break-vs-wait decision is `Landable.settled` (pure, unit-tested); the loop here only threads the read.
     let landable (ctx: Context) (opts: Options) : int =
         match opts.Repo with
         | None ->
@@ -1175,7 +1180,34 @@ module Client =
                 | true, pr ->
                     // The verdict, over the head SHA's workflow runs UNIONED with its check-runs, a superseded
                     // suite dropped (#720). One word on stdout; the exit code carries the decision.
-                    let state = Reads.prLandable ctx.Transport ctx.Owner repoName pr
+                    let state =
+                        if not opts.Wait then
+                            Reads.prLandable ctx.Transport ctx.Owner repoName pr
+                        else
+                            // --wait: poll until the verdict SETTLES (#724). A single-shot verdict cannot do
+                            // the ONE thing the recipe's loop did — refuse to believe an EARLY green. GitHub
+                            // registers a PR's runs over 20-60s, so the subject set is empty at first (a
+                            // `red` that is really "not started yet") and then GROWS (an early all-green is a
+                            // PARTIAL rollup). `Landable.settled` decides break-vs-wait from the verdict and
+                            // whether the count has stopped growing; the loop threads the previous count and
+                            // keeps the LAST verdict for when the tries run out (the honest #606 red if the
+                            // runs never registered, the still-growing verdict otherwise).
+                            let tries = defaultArg opts.Tries 30
+                            let interval = defaultArg opts.Interval 20
+
+                            let rec poll (i: int) (prev: int) : PrState =
+                                let v, n = Reads.prLandableN ctx.Transport ctx.Owner repoName pr
+
+                                if Landable.settled v n prev then v
+                                elif i >= tries then v
+                                else
+                                    if interval > 0 then
+                                        System.Threading.Thread.Sleep(interval * 1000)
+
+                                    poll (i + 1) n
+
+                            poll 1 -1
+
                     printfn "%s" (Landable.name state)
 
                     match state with

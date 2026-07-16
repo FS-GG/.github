@@ -4,9 +4,10 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **23 full + 3 partial of 27 corpus cases** (~363 assertions); D.2–D.4 not started.
-Case 31's #720 superseded-run verdict now drives through the engine's first-class `landable` command;
-its #724 `--wait` poll loop is the one remaining case-31 leg.
+harness has grown from the prototype to **24 full + 2 partial of 27 corpus cases** (~367 assertions); D.2–D.4 not started.
+Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
+command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
+STOP GROWING) landed on top of it.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -123,16 +124,15 @@ fail-closed assertions re-expressed at the HTTP layer.
 
 **Progress (as of the off-board `who` slice, 2026-07-15).** The harness is grown one defect/case
 at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
-`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **23 of 27 cases fully covered,
-plus 3 partial (13, 24, 31)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
+`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **24 of 27 cases fully covered,
+plus 2 partial (13, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
 which are the differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 25, 26, 30, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+| ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — `reap` now EXISTS (case 26), but its adversarial-interleaving legs are the remaining work |
-| ◑ | 31 (#720 verdict only) | the superseded-run SCORING (`landable` command, all 10 #720 legs) drives through the engine over HTTP; the #724 `--wait` poll loop — which must not believe an early green and waits for the run set to STOP GROWING — is deferred (see the remaining table) |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -151,13 +151,12 @@ repo's issue → SKIP naming the other repo, no verdict across the boundary). Th
 bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
 EX_RATE-vs-checkout failure modes are structurally absent).
 
-**Remaining (case 31, 43 + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
+**Remaining (case 43 + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
 
 | case | what it needs | class |
 |---|---|---|
 | 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
-| 31-remainder (`landable --wait`, #724) | the single-shot `landable` verdict — all 10 #720 legs, including the superseded-run scoring against MULTIPLE runs on one SHA — now drives through the engine's first-class `landable <pr> --repo` command; the remaining leg is `--wait`, the poll loop that must NOT believe an early green and waits for the run set to STOP GROWING (the registration-race and partial-rollup traps), so a recipe can NAME the gate instead of embedding ~40 lines of jq | new `--wait` flag + growth-detection loop |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
 Case **44 is now FULL** (#419): `whoami --mint` is one eval-able line, CSPRNG-unique per call, and
@@ -431,13 +430,29 @@ gives PENDING its own `7`, so the LITERALS differ while the PROPERTY (green `0`;
 code; red a distinct do-not-wait code) does not; (b) leg 9's argv-128KB cap (`MAX_ARG_STRLEN`) is bash's —
 its rollup piped both lists to jq through argv and a real run set died with "Argument list too long"; the
 engine reads the JSON off `HttpClient`, so the failure mode is STRUCTURALLY ABSENT, and the fat payload is
-served only to prove the engine rolls a real-sized body up to `green`. Case 31 stays PARTIAL: `landable
---wait` (#724) — the poll loop that must not believe an early green and waits for the run set to STOP
-GROWING — is the remaining leg (see the remaining table).
+served only to prove the engine rolls a real-sized body up to `green`.
+
+The **`landable --wait` poll loop** landed next (#724), and case **31 is now FULL** (this slice): the single
+read becomes a POLL that carries the one thing a single-shot verdict cannot — refusing a PREMATURE green.
+GitHub registers a PR's runs over 20-60s, so the subject set is empty at first (a `red` that is really "CI
+has not started YET", #606's registration race) and then GROWS (an early all-green is a PARTIAL rollup whose
+failing check has not been CREATED yet — #606's defect at one remove, and the one that MERGES A BAD PR). The
+break-vs-wait decision is a pure, unit-tested `Landable.settled`: `conflicted`/`unknown` settle at once (no
+waiting fixes a conflict); a `red` settles only with a subject to be red ABOUT (`n > 0`, else keep waiting
+for the runs to register); a `green` settles only once the subject count has STOPPED GROWING (`n > 0 && n =
+prev` — stable across two consecutive polls); `pending` never settles. `Reads.prLandableN` surfaces the
+subject count (`Landable.scoreN`) the loop polls on — `prLandable` is now that, with the count dropped — and
+the `landable` command threads the previous count through a `--tries`/`--interval` loop, keeping the LAST
+verdict for when the tries run out (the honest #606 red if the runs never registered). New stateful
+`landable_wait_server.py` (sha810's runs/checks GROW on the second read, exactly as GitHub schedules them); 4
+parity assertions (settled-green, registration-race, growing-set, conflicted-at-once) + 12 `Landable`
+(`scoreN` + `settled`) tests + 3 Options parse tests. Disposed on the record (ADR-0040 §5): the exit codes
+are the engine's own (`--wait` green `0`, red/conflicted `3`), where bash numbers green/red `0/1` — the
+PROPERTY (green `0`; red/conflicted a distinct do-not-wait code) re-expressed, not bash's literals.
 
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`issues`) and **larger port gaps** (`reap`'s adversarial-interleaving legs, case 24,
-and case 31's superseded-run world). The verify-paths repo-boundary divergences (case 23's
+into **new commands** (`issues`) and **larger port gaps** (`reap`'s adversarial-interleaving legs, case 24).
+The verify-paths repo-boundary divergences (case 23's
 SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
 the call-counting transformation is demonstrated end-to-end by case 10.
 
@@ -492,7 +507,7 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 23 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~363
+      **In progress: 24 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~367
       assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
@@ -533,14 +548,18 @@ documented retirement is not.**
       the **`adopt` command** landed — a GATE in front of `claim` that lands a green, mergeable orphan and
       refuses everything else (live claim, no PR, conflicted, zero-checks/`NOT green`, pending, unknown),
       with `prLandable`'s lazy-`mergeable` re-read so a `null`-then-`false` PR resolves to `CONFLICTED`.
-      Case **31 is now PARTIAL**: the #720 superseded-run verdict got a first-class home — a standalone
+      Case **31 is now FULL**: the #720 superseded-run verdict got a first-class home — a standalone
       **`landable <pr> --repo` command** (one verdict word on stdout, the decision in the exit code) — and
       all ten #720 legs drive through the engine over HTTP, including the MULTI-run-on-one-SHA supersession
       (a cancelled run replaced by a later run of its own concurrency group is superseded and dropped with
       its check-runs; a `workflow_dispatch` run supersedes nothing, #703; zero runs is `red`, #606). The
       exit code is the poll-loop contract (green `0` / pending a distinct retryable code / red a distinct
-      do-not-wait code / unknown fail-closed). `landable --wait` (#724) — the poll loop that does not believe
-      an early green and waits for the run set to STOP GROWING — is the remaining case-31 leg.
+      do-not-wait code / unknown fail-closed). And **`landable --wait`** (#724) then landed the poll loop that
+      does not believe an early green: a pure `Landable.settled` keeps waiting while zero runs have registered
+      (the #606 registration race) and believes a `green` only once the subject count (`Reads.prLandableN` →
+      `Landable.scoreN`) has STOPPED GROWING across two consecutive polls (the partial-rollup trap that merges
+      a bad PR), while `conflicted`/`unknown` return at once — proven through a stateful
+      `landable_wait_server.py` whose run set grows on the second read.
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the

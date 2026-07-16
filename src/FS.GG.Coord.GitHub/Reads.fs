@@ -1011,12 +1011,16 @@ module Reads =
 
                 Some(merge, sha)
 
-    let prLandable
+    /// The landable verdict AND the number of subjects it was scored over (`Landable.scoreN`). The count is
+    /// what `landable --wait` polls on: a `red` over ZERO subjects is "CI has not started yet", not "CI
+    /// failed" (#606/#724), and it is 0 for every verdict reached before the runs are scored (conflicted,
+    /// unknown). `prLandable` is this, with the count dropped.
+    let prLandableN
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
         (pr: int)
-        : PrState =
+        : PrState * int =
 
         // THE LAZY RE-READ (#697). A null `mergeable` is UNKNOWN, not "mergeable" and not "conflicted" — and
         // it is the NORMAL first answer for a PR GitHub has not yet tested. So a present `null` is re-read a
@@ -1036,14 +1040,22 @@ module Reads =
             | Some result -> result
 
         match readMerge 3 with
-        | Mergeable false, _ -> PrConflicted
+        | Mergeable false, _ -> PrConflicted, 0
         | Computing, _
-        | Absent, _ -> PrUnknown
-        | Mergeable true, None -> PrUnknown
+        | Absent, _ -> PrUnknown, 0
+        | Mergeable true, None -> PrUnknown, 0
         | Mergeable true, Some sha ->
             match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
-            | Some runs, Some checks -> Landable.score (Some true) runs checks
-            | _ -> PrUnknown
+            | Some runs, Some checks -> Landable.scoreN (Some true) runs checks
+            | _ -> PrUnknown, 0
+
+    let prLandable
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : PrState =
+        prLandableN transport owner repo pr |> fst
 
     [<Literal>]
     let private ClosingRefDoc =
