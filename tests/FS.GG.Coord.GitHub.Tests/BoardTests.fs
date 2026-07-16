@@ -94,6 +94,94 @@ let ``#421 'not on board' is reachable ONLY from a successful read`` () =
     | Ok None -> ()
     | other -> failwith $"a successful empty lookup is 'not on board' — got %A{other}"
 
+// ---- add: the verb the port dropped (#861) ---------------------------------------------------------
+
+/// Not on this board, then the issue's node id, then the mutation.
+let private addResponses =
+    [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}"""
+      ok """{"data":{"repository":{"issue":{"id":"I_issue42"}}}}"""
+      ok """{"data":{"addProjectV2ItemById":{"item":{"id":"PVTI_added"}}}}""" ]
+
+[<Fact>]
+let ``#421 addItem REFUSES to add on a failed lookup - and spends no mutation`` () =
+    // THE REASON THIS FUNCTION HAS A SHAPE AT ALL. `Ok None` licenses the mutation; an Error must not —
+    // unreachable is not absent, which is #421's actual finding and #266's class.
+    //
+    // NOT because it would duplicate the row: `addProjectV2ItemById` is idempotent server-side, measured
+    // (#861). Because a write decided from a read that did not happen is a definite answer built on no
+    // information — and it would report `AddedToBoard` for an issue whose presence was never established.
+    //
+    // The call count is the real assertion. "Returned an Error" would also be true of a version that added
+    // first and reported the failure afterwards.
+    use _sandbox = new Sandbox()
+
+    let transport = scripted [ Error(RateLimited None) ]
+
+    match addItem transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Error(RateLimited _) -> ()
+    | Ok(AddedToBoard _) -> failwith "added the item on a FAILED lookup — this is #421, and it duplicates a board row"
+    | other -> failwith $"expected RateLimited — got %A{other}"
+
+    Assert.Equal(1, transport.GraphQlCalls)
+
+[<Fact>]
+let ``addItem is IDEMPOTENT - an issue already on the board is a success, and writes nothing`` () =
+    // `add` is the second line of the recipe's filing procedure, so a retry, a close-out pass, or two
+    // workers racing the same follow-up all reach it. None of them may create a twin, and none of them is
+    // an error.
+    use _sandbox = new Sandbox()
+
+    let transport = scripted [ ok itemOnBoard ]
+
+    match addItem transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok(AlreadyOnBoard id) -> Assert.Equal("PVTI_coord123", id)
+    | other -> failwith $"an issue already on the board is AlreadyOnBoard — got %A{other}"
+
+    // One read, no mutation.
+    Assert.Equal(1, transport.GraphQlCalls)
+
+[<Fact>]
+let ``addItem adds when the read DEFINITELY says not-on-board, and returns the new item id`` () =
+    use _sandbox = new Sandbox()
+
+    let transport = scripted addResponses
+
+    match addItem transport board "FS-GG" "FS.GG.SDD" 42 with
+    | Ok(AddedToBoard id) -> Assert.Equal("PVTI_added", id)
+    | other -> failwith $"a definite absence licenses the add — got %A{other}"
+
+    Assert.True(transport.Logged "item-add", "the add mutation must actually be sent")
+
+[<Fact>]
+let ``addItem sends the ISSUE's node id as contentId, not the board item id`` () =
+    // `addProjectV2ItemById` takes `contentId` — the ISSUE's node id. Passing an item id would be a
+    // different object entirely, and the API would reject it or attach the wrong thing.
+    use _sandbox = new Sandbox()
+
+    let mutable doc = ""
+    let mutable vars: (string * Var) list = []
+    let queue = System.Collections.Generic.Queue<IoResult<Response>>(addResponses)
+
+    let transport =
+        Fake.Recorder(fun (req: Request) ->
+            match req.Body with
+            | Query(d, v) when d.Contains "addProjectV2ItemById" ->
+                doc <- d
+                vars <- v
+            | _ -> ()
+
+            queue.Dequeue())
+
+    addItem transport board "FS-GG" "FS.GG.SDD" 42 |> ignore
+
+    Assert.Equal<Var>(VId "I_issue42", vars |> List.find (fun (k, _) -> k = "contentId") |> snd)
+    Assert.Equal<Var>(VId "PVT_coord", vars |> List.find (fun (k, _) -> k = "projectId") |> snd)
+
+    // #848, one verb along: both of THESE really are `ID!` — verified against the live schema, not assumed
+    // from the shape of the string. The declaration is the thing the API validates.
+    Assert.Contains("$projectId: ID!", doc)
+    Assert.Contains("$contentId: ID!", doc)
+
 [<Fact>]
 let ``the item lookup narrows to OUR board - an issue can sit on several`` () =
     // Writing a Status to another board's item is a silent cross-board write: a no-op here, vandalism over

@@ -33,6 +33,7 @@ module Options =
         | FieldId
         | OptionId
         | ItemId
+        | Add
         | LintCmd
         | Issues
         | Help
@@ -147,6 +148,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   release <ref> [--worker W] [--force]       drop the lock, restoring the column it overwrote
   heartbeat <ref> [--worker W]               renew the lease
 
+  add    <ref>                               put an issue ON the board, idempotently (#861) — the metered
+                                             verb the GraphQL monopoly rule names (#586); prints the item id
   set-field <ref> <field> <value>            write one board field (empty value clears)
   set-field --batch <ref> Field=Value ...    write N fields in ONE aliased mutation (#448)
   child  <parent-ref> <child-ref>            attach a child issue to a parent
@@ -403,6 +406,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "field-id" :: rest -> flags { defaults with Command = FieldId } rest
         | "option-id" :: rest -> flags { defaults with Command = OptionId } rest
         | "item-id" :: rest -> flags { defaults with Command = ItemId } rest
+        | "add" :: rest -> flags { defaults with Command = Add } rest
         | "lint" :: rest -> flags { defaults with Command = LintCmd; Render = Text } rest
         // `issues` emits the raw JSON array (bash's `issues` prints the REST body); the caller projects it
         // with jq, so the default Json render stands.
