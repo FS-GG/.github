@@ -1367,12 +1367,17 @@ if [ -z "$ISS_PORT" ]; then bad "#446: issues fixture bound a port"; else
   isslast() { issget "$ISS_PORT" | jq -r ".[-1] | $1"; }
   issnwos() { issget "$ISS_PORT" | jq -r '[.[].nwo] | join(" ")'; }
 
-  # 1. A bare short-id resolves to the repo board rows carry — the ENGINE emits the raw REST array (jq'd
-  #    by the CALLER, the port of bash's `--jq`), and the fixture was asked for the RESOLVED owner/repo.
+  # 1. A bare short-id resolves to the repo board rows carry — the ENGINE emits the issue array (jq'd by the
+  #    CALLER, the port of bash's `--jq`), and the fixture was asked for the RESOLVED owner/repo. #641: a
+  #    PULL REQUEST is an issue in REST, and `issues` must NOT list it — 777 (which carries `pull_request`)
+  #    is dropped, so the §4 duplicate-check cannot read a PR as "already filed" and suppress a real finding.
   nums="$(iss sdd | jq -c '[.[].number]')"
-  [ "$nums" = "[501,502,777]" ] \
-    && ok "#446: 'issues sdd' emits the raw REST array — the caller jq's it (the port of --jq)" \
-    || bad "#446: issues emits the REST body" "got: $nums"
+  [ "$nums" = "[501,502]" ] \
+    && ok "#641: 'issues sdd' emits genuine issues only — the PR (777) is filtered out" \
+    || bad "#641: issues must drop pull requests" "got: $nums"
+  printf '%s' "$nums" | grep -q '777' \
+    && bad "#641: a PR (777) must never appear in the issues listing" "got: $nums" \
+    || ok "#641: ...and the §4 duplicate-check never sees a PR as an already-filed issue"
   [ "$(isslast '.nwo')" = "FS-GG/FS.GG.SDD" ] \
     && ok "#446: 'issues sdd' reads FS-GG/FS.GG.SDD over REST — the short-id resolves like --repo does" \
     || bad "#446: issues short-id resolves" "requested: $(isslast '.nwo')"
@@ -1406,9 +1411,9 @@ if [ -z "$ISS_PORT" ]; then bad "#446: issues fixture bound a port"; else
   #    same cache, sends the stored ETag; the fixture answers 304, and the engine serves the body FROM CACHE.
   #    That is a conditional request (`inm` carries the validator, not `none`) served for zero fresh body —
   #    the ETag revalidation the command is built on.
-  iss sdd >/dev/null            # warms the body+etag cache
+  iss sdd >/dev/null            # warms the body+etag cache (the FILTERED body is what is stored, #641)
   again="$(iss sdd | jq -c 'length')"
-  [ "$again" = "3" ] && [ "$(isslast '.inm')" != "none" ] \
+  [ "$again" = "2" ] && [ "$(isslast '.inm')" != "none" ] \
     && ok "#418: a repeat 'issues sdd' sends the ETag and is served a 304 from cache — the budget-free read" \
     || bad "#418: issues revalidates with the stored ETag (304 is free)" "count=$again inm=$(isslast '.inm')"
 
