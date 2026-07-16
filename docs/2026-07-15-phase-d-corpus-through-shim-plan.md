@@ -3,7 +3,11 @@
 **Date:** 2026-07-15
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
-**Status:** **COMPLETE — D.1 through D.4 have all landed. Bash is deleted; the port is done.** Phases A–C have landed. The
+**Status:** **COMPLETE — D.1 through D.4 have all landed. Bash is deleted; the port is done.** The post-port
+"take the payoff" leg (epic [#729](https://github.com/FS-GG/.github/issues/729)) is recorded in
+[the Phase-D payoff disposition](2026-07-16-phase-d-payoff-disposition.md): of the 14 `engine-retires:phase-d`
+issues, **9 were verified retired by the engine and closed**, and **5 the port did not retire** (#523, #651,
+#641, #614, #646) stay open, re-filed against the engine. Phases A–C have landed. The
 corpus-through-engine parity harness grew from the prototype to **all 27 of 27 corpus cases** (~445
 assertions); the full corpus drives the engine over HTTP, green, with the call counts intact. D.2 landed in
 two slices: slice 1 ([#831](https://github.com/FS-GG/.github/pull/831)) landed the ADR-0034 §4.4 shim as a

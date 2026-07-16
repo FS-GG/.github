@@ -19,10 +19,14 @@ namespace FS.GG.Coord.GitHub
 /// marker and confirming it is ours. There is no constructor for it. #706 is not fixed here. It is
 /// *unexpressible*.
 ///
-/// The same move retires #523: `widen` PATCHed the body and re-checked it afterwards, so on an exhausted
-/// budget the declaration was already rewritten when the refusal arrived. Here the re-check PRODUCES the
-/// value the PATCH consumes — `rewrite` returns a `Rewritten`, and `patchBody` accepts nothing else. A
-/// PATCH that precedes its own validation cannot be written down.
+/// The same move enforces #523's GRAMMAR half by construction: a bad token cannot reach the write, because
+/// `rewrite` returns a `Rewritten`, `patchBody` accepts nothing else, and a PATCH that precedes its own
+/// grammar validation cannot be written down. But #523 PROPER is not retired here, and this docstring must
+/// not claim it is (this module's own rule, below: overstating scope is how a module gets trusted for what
+/// it does not do). #523's defect is the COLLISION re-check — #353, "the colliding workers are never told" —
+/// and that scan still runs AFTER the PATCH in `Client.widen` (PATCH, then `activeCollisions`), so on an
+/// exhausted GraphQL budget the widened body lands and no worker is notified. #523 stays OPEN against the
+/// engine; see the Phase-D payoff disposition (docs/2026-07-16-phase-d-payoff-disposition.md).
 ///
 /// WHAT IS HERE, AND WHAT IS NOT — STATED, BECAUSE A MODULE THAT OVERSTATES ITS SCOPE IS A MODULE THAT
 /// GETS TRUSTED FOR THINGS IT DOES NOT DO.
