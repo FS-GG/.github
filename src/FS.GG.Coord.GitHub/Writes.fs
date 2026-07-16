@@ -252,9 +252,14 @@ module Writes =
                 let collected = collectStale m.Id before
                 let renewed = markerBody worker session leaseMinutes m.PreviousStatus
 
-                match patchComment transport ref m.Id renewed with
-                | Error e -> Error e
-                | Ok() -> Ok(Renewed(Held(ref, worker, m.Id, m.PreviousStatus), collected))
+                // THE RENEWAL IS BEST-EFFORT, and it must be: we ALREADY hold this lock — our marker is the
+                // live CAS winner — so a failed renewal PATCH does not un-hold us, and failing the command
+                // here would turn an idempotent re-claim (a `take` retry) into an error on a transient 5xx,
+                // reporting a loss on an item we demonstrably hold. Renew the lease if we can; hold either
+                // way. This is bash's own re-claim (its `heartbeat_comment` result is not checked), and it
+                // matches how the fresh-CAS `Won` path treats its follow-on board write (best-effort, #510).
+                patchComment transport ref m.Id renewed |> ignore
+                Ok(Renewed(Held(ref, worker, m.Id, m.PreviousStatus), collected))
 
         | None ->
 
