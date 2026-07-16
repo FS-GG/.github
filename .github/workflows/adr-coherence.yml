@@ -35,6 +35,8 @@ on:
     paths:
       - "docs/adr/**"
       - "scripts/check-adr-coherence.py"
+      - "tests/adr-coherence/**"
+      - ".github/workflows/adr-coherence.yml"
   workflow_dispatch:
 
 permissions:
