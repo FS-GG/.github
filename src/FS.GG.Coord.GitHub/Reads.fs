@@ -937,7 +937,8 @@ module Reads =
                             | true, s when s.ValueKind = JsonValueKind.Object -> int64Of s "id"
                             | _ -> None
 
-                        ({ CheckSuiteId = suiteId
+                        ({ Name = str c "name" |> Option.defaultValue ""
+                           CheckSuiteId = suiteId
                            Status = str c "status" |> Option.defaultValue ""
                            Conclusion = str c "conclusion" }
                         : Landable.CheckRow))
@@ -1015,12 +1016,30 @@ module Reads =
     /// what `landable --wait` polls on: a `red` over ZERO subjects is "CI has not started yet", not "CI
     /// failed" (#606/#724), and it is 0 for every verdict reached before the runs are scored (conflicted,
     /// unknown). `prLandable` is this, with the count dropped.
-    let prLandableN
+    /// `prLandableN`, plus the two assertions a caller can add to it (#737):
+    ///
+    /// `required` — check-run names that must have REPORTED, threaded to `Landable.scoreRequired`.
+    ///
+    /// `expected` — the head SHA the caller believes it is gating. GitHub's PR object is EVENTUALLY
+    /// CONSISTENT after a force-push: for a second or so `pulls/{n}` still names the PREVIOUS commit, whose
+    /// checks are green and are not about the code that would be merged. A caller that has just pushed KNOWS
+    /// the SHA it pushed (`git rev-parse HEAD`), so it can say so, and a disagreement scores `PrPending` —
+    /// never green, never a verdict about the wrong commit. `pending` does not settle, so `--wait` simply
+    /// waits for GitHub to catch up. Omit it and the PR's own head SHA is taken on trust, which is the right
+    /// default for every caller that did not just push.
+    ///
+    /// Returns the verdict, the subject count `--wait` settles on, and — for diagnostics only — the caller's
+    /// assertions that are NOT met, each as a human phrase. Without it a `pending` is one honest word and no
+    /// thread to pull, which is fine while the state is transient and useless on the case that never
+    /// resolves (a renamed job, a SHA the caller got wrong). The verdict never depends on this list.
+    let prLandableRequire
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
         (pr: int)
-        : PrState * int =
+        (required: string list)
+        (expected: string option)
+        : PrState * int * string list =
 
         // THE LAZY RE-READ (#697). A null `mergeable` is UNKNOWN, not "mergeable" and not "conflicted" — and
         // it is the NORMAL first answer for a PR GitHub has not yet tested. So a present `null` is re-read a
@@ -1040,14 +1059,39 @@ module Reads =
             | Some result -> result
 
         match readMerge 3 with
-        | Mergeable false, _ -> PrConflicted, 0
+        | Mergeable false, _ -> PrConflicted, 0, []
         | Computing, _
-        | Absent, _ -> PrUnknown, 0
-        | Mergeable true, None -> PrUnknown, 0
+        | Absent, _ -> PrUnknown, 0, []
+        | Mergeable true, None -> PrUnknown, 0, []
+        // THE PR STILL NAMES A DIFFERENT COMMIT than the caller pushed, so its checks are the OLD commit's.
+        // Not a verdict about this PR — a read taken too early. `PrPending` keeps `--wait` polling until
+        // GitHub catches up, and keeps a single-shot read from ever calling the wrong commit's green ours.
+        | Mergeable true, Some sha when expected |> Option.exists (fun e -> e <> sha) ->
+            let want = defaultArg expected ""
+
+            PrPending,
+            0,
+            [ $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
         | Mergeable true, Some sha ->
             match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
-            | Some runs, Some checks -> Landable.scoreN (Some true) runs checks
-            | _ -> PrUnknown, 0
+            | Some runs, Some checks ->
+                let state, n = Landable.scoreRequired required (Some true) runs checks
+
+                let unmet =
+                    Landable.missing required runs checks
+                    |> List.map (fun name -> $"required check `%s{name}` has not reported")
+
+                state, n, unmet
+            | _ -> PrUnknown, 0, []
+
+    let prLandableN
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : PrState * int =
+        let state, n, _ = prLandableRequire transport owner repo pr [] None
+        state, n
 
     let prLandable
         (transport: IGitHubTransport)

@@ -181,6 +181,16 @@ module Options =
           /// `--interval S` (`landable --wait`) — seconds to sleep between polls (0 permitted, for the test
           /// harness). Default 20.
           Interval: int option
+          /// `--require NAME` (`landable`, REPEATABLE — each occurrence APPENDS) — a check-run name that must
+          /// have REPORTED before this PR is `green`. The rollup asks "is anything red?", which is blind to a
+          /// check that is ABSENT; branch protection covers the REQUIRED set, so this is for a NON-required
+          /// check that nonetheless decides the PR (#737). A missing one is `pending`, never `green`.
+          Require: string list
+          /// `--sha SHA` (`landable`) — the head SHA the caller believes it is gating. `pulls/{n}` is
+          /// eventually consistent after a force-push, so a caller that just pushed can name the commit it
+          /// MEANS; a disagreement is `pending` rather than a verdict about the previous commit (#737).
+          /// Absent ⇒ the PR's own head SHA is taken on trust, right for every caller that did not push.
+          Sha: string option
 
           /// `--label L` (`issues`) — restrict the REST listing to issues carrying this label. Absent ⇒ every
           /// issue in the state.

@@ -134,6 +134,140 @@ else
   bad "a gate that scans nothing and reports success is the bug it exists to catch" "rc=$rc"$'\n'"$OUT"
 fi
 
+# --- WORKFLOWS, TOO (#737) -------------------------------------------------------------------------
+# The last hand-rolled copy of the gate was not a recipe — it was `skill-registry-autofix.yml`, an
+# auto-merge bot. #737 converted it to call `landable`, so the root goes in and a SIXTH copy is now
+# unwritable in a workflow as well.
+#
+# A workflow is scanned by PARSING (`jobs.*.steps[*].run`), not by fence, and these legs are the reason:
+# this repo's workflows are more comment than code, and they discuss `actions/runs` at length and
+# correctly. A whole-file regex would fire on the very prose that explains the rule.
+run_wf() {
+  local wf="$1" root rc=0
+  root="$(mktemp -d "$WORK/repo-XXXXXX")"
+  mkdir -p "$root/scripts" "$root/.claude/skills/x" "$root/.github/workflows"
+  cp "$GATE" "$root/scripts/"
+  printf '# a recipe that does nothing\n' > "$root/.claude/skills/x/SKILL.md"
+  printf '%s\n' "$wf" > "$root/.github/workflows/w.yml"
+  OUT="$(python3 "$root/scripts/check-recipe-landable.py" 2>&1)" || rc=$?
+  return "$rc"
+}
+
+# THE RULE, in a workflow: a hand-rolled rollup in a `run:` block is refused.
+rc=0; run_wf 'name: w
+on: [push]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the checks
+        run: |
+          gh api "repos/FS-GG/x/actions/runs?head_sha=$SHA" --paginate --slurp > runs.json' || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q 'workflow runs'; then
+  ok "#737: a workflow that hand-rolls the rollup in a run: block is REFUSED"
+else
+  bad "#737: the last copy lived in a workflow — the rule must reach one" "rc=$rc"$'\n'"$OUT"
+fi
+
+# ...and the check-runs half.
+rc=0; run_wf 'name: w
+on: [push]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh api "repos/FS-GG/x/commits/$SHA/check-runs" --paginate --slurp > c.json' || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q 'check runs'; then
+  ok "#737: a workflow reading check-runs itself is REFUSED"
+else
+  bad "#737: a workflow must not read check-runs itself" "rc=$rc"$'\n'"$OUT"
+fi
+
+# THE FALSE-POSITIVE THIS DESIGN EXISTS TO AVOID. A workflow COMMENT naming the endpoints is prose —
+# `skill-registry-autofix.yml`'s permissions block explains at length why `actions/runs` needs
+# `Actions: read`, and it must keep being able to. The YAML parser drops comments, which is exactly the
+# prose/code line the fence rule draws by hand. A gate that fired here would fire on correct behaviour,
+# and one that does that is one people learn to skip (#498).
+rc=0; run_wf 'name: w
+# The merge gate needs actions/runs?head_sha= to tell a superseded check run from a red one, and
+# repos/x/commits/y/check-runs is what it scores. Both are prose here, and must stay legal.
+on: [push]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    # actions/runs? in a job comment, too
+    steps:
+      - name: Gate
+        # ...and a step comment mentioning /check-runs
+        run: scripts/fsgg-coord landable "$PR" --wait --require registry-coherence' || rc=$?
+if [ "$rc" -eq 0 ]; then
+  ok "#737: a workflow COMMENT naming the endpoints is prose, and passes — the rule reads run:, not the file"
+else
+  bad "#737: the rule fired on a comment — it must scan run: blocks, not raw text" "rc=$rc"$'\n'"$OUT"
+fi
+
+# The sanctioned form, in a workflow.
+rc=0; run_wf 'name: w
+on: [push]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          scripts/fsgg-coord landable "$PR" --repo "$GITHUB_REPOSITORY" --wait --require registry-coherence --sha "$SHA"' || rc=$?
+[ "$rc" -eq 0 ] && ok "#737: a workflow that CALLS the tool passes" \
+                || bad "#737: the sanctioned form must pass in a workflow too" "rc=$rc"$'\n'"$OUT"
+
+# THE ESCAPE HATCH, IN THE SYNTAX OF THE THING BEING SCANNED. A recipe's hatch is an HTML comment before
+# the fence; a `run:` block is SHELL, where `<!--` is not a comment but a syntax error — so a workflow's
+# hatch is a `#` comment. This leg exists because the first cut of #737 reused the markdown regex here,
+# which made the hatch UNWRITABLE in a workflow: the only way past the gate would have been to delete it,
+# which is the exact opposite of why the hatch exists.
+rc=0; run_wf 'name: w
+on: [push]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: A deliberate, reasoned exception
+        run: |
+          # landable-exempt: this step audits historical runs; it is not a merge gate
+          gh api "repos/FS-GG/x/actions/runs?head_sha=$SHA" --paginate' || rc=$?
+[ "$rc" -eq 0 ] && ok "#737: an explicitly-exempted run: block is allowed, in SHELL comment syntax" \
+                || bad "#737: the hatch must be WRITABLE in a workflow, or the gate gets deleted instead" "rc=$rc"$'\n'"$OUT"
+
+# ...and the hatch must still be a DELIBERATE act: an unexempted step next to an exempted one is refused,
+# so the escape is per-step and cannot be smuggled in file-wide.
+rc=0; run_wf 'name: w
+on: [push]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Exempted
+        run: |
+          # landable-exempt: audit only
+          gh api "repos/FS-GG/x/actions/runs?head_sha=$SHA"
+      - name: NOT exempted
+        run: gh api "repos/FS-GG/x/commits/$SHA/check-runs" --paginate' || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q 'NOT exempted'; then
+  ok "#737: the hatch is PER-STEP — an unexempted step beside an exempted one is still refused"
+else
+  bad "#737: one exempted step must not exempt the whole workflow" "rc=$rc"$'\n'"$OUT"
+fi
+
+# An UNPARSEABLE workflow is a finding, not a pass — this gate's own lesson (#266). A file we could not
+# read is one whose gate we could not check, and calling that clean is the fail-open shape.
+rc=0; run_wf 'name: w
+on: [push]
+jobs: [this is not
+   valid: yaml: at all' || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -qi 'could not be parsed'; then
+  ok "#737: an UNPARSEABLE workflow is a finding, not a pass (#266)"
+else
+  bad "#737: a workflow the gate could not read must not report as clean" "rc=$rc"$'\n'"$OUT"
+fi
+
 # --- AND IT MUST STILL FIRE ON THE REAL REPO. Everything above runs on toy input; this leg is what
 #     stops the rule passing forever on fixtures while the real recipes drift out from under it.
 rc=0; OUT="$(python3 "$GATE" 2>&1)" || rc=$?
@@ -149,6 +283,14 @@ if [ -n "$n" ] && [ "$n" -gt 0 ]; then
   ok "...and it scanned $n real recipe(s), so that pass is not vacuous"
 else
   bad "the real-repo run must report how many recipes it scanned, and it must be > 0" "$OUT"
+fi
+# ...and the same for the workflows (#737). `and 0 workflow(s) scanned` would pass the leg above while
+# leaving the root this item added pointed at nothing — the #266 shape, in the fix for it.
+w="$(printf '%s' "$OUT" | sed -n 's/.*and \([0-9]*\) workflow(s).*/\1/p')"
+if [ -n "$w" ] && [ "$w" -gt 0 ]; then
+  ok "...and $w real workflow(s), so the #737 root is not pointed at nothing"
+else
+  bad "the real-repo run must report how many workflows it scanned, and it must be > 0" "$OUT"
 fi
 
 echo "recipe-landable fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"

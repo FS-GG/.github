@@ -25,9 +25,14 @@ module LandableTests =
           CheckSuiteId = suite }
 
     let private check suite status concl : CheckRow =
-        { CheckSuiteId = suite
+        { Name = "job"
+          CheckSuiteId = suite
           Status = status
           Conclusion = concl }
+
+    /// `check`, with the check-run NAME that `--require` matches on (#737).
+    let private named name suite status concl : CheckRow =
+        { check suite status concl with Name = name }
 
     /// A single green Actions run, no third-party checks.
     let private greenRun =
@@ -147,6 +152,126 @@ module LandableTests =
     let ``scoreN counts 0 for conflicted and unknown — the verdict precedes any subject`` () =
         Assert.Equal((PrConflicted, 0), scoreN (Some false) [ greenRun ] [])
         Assert.Equal((PrUnknown, 0), scoreN None [ greenRun ] [])
+
+    [<Fact>]
+    let ``two check-runs SHARE a job name and one FAILS — the failure still reds it (#698, the open trap)`` () =
+        // "Latest check run per NAME" is what branch protection does, and here it FAILS OPEN: check-run
+        // `.name` is the JOB name and job names COLLIDE ACROSS WORKFLOWS — measured on `.github`, seven
+        // runs named `fixture` from six workflows. Collapse by name and a genuinely FAILING `fixture`
+        // (pin-coherence) is hidden by another workflow's passing `fixture` (timeout-coherence): "all
+        // green", merge, red check landed.
+        //
+        // The scorer cannot do this — it keys supersession on the concurrency GROUP and joins check-runs
+        // by SUITE ID, never by name. This test exists because #737 gave `CheckRow` a `Name` for
+        // `scoreRequired` to match on, which makes the trap REACHABLE for the first time: the field is
+        // fit for a presence test and for nothing else. Nothing is cancelled here, so nothing may be
+        // dropped — both `fixture`s are live verdicts.
+        let pin = run ".github/workflows/pin-coherence.yml" "pull_request" "b" [ 595 ] 30 "completed" (Some "success") (Some 7L)
+        let timeout = run ".github/workflows/timeout-coherence.yml" "pull_request" "b" [ 595 ] 31 "completed" (Some "success") (Some 8L)
+        let redFixture = named "fixture" (Some 7L) "completed" (Some "failure")
+        let greenFixture = named "fixture" (Some 8L) "completed" (Some "success")
+        Assert.Equal(PrRed, score (Some true) [ pin; timeout ] [ redFixture; greenFixture ])
+
+    [<Fact>]
+    let ``--require is satisfied by a check of that name even when another shares it and FAILS`` () =
+        // The other half of the same rule: `--require` is a PRESENCE test, so a name collision cannot make
+        // it unsatisfiable — but it also cannot launder the red. The verdict is still RED, from the rollup.
+        let a = run ".github/workflows/a.yml" "pull_request" "b" [ 1 ] 1 "completed" (Some "success") (Some 7L)
+        let b = run ".github/workflows/b.yml" "pull_request" "b" [ 1 ] 1 "completed" (Some "success") (Some 8L)
+        let red = named "registry-coherence" (Some 7L) "completed" (Some "failure")
+        let green = named "registry-coherence" (Some 8L) "completed" (Some "success")
+        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ a; b ] [ red; green ]
+        Assert.Equal(PrRed, state)
+        Assert.Empty(missing [ "registry-coherence" ] [ a; b ] [ red; green ])
+
+    // ---- scoreRequired: a check that must have REPORTED, by name (#737) ------------------------------
+    //
+    // The rollup above answers "is anything red?", and that question CANNOT see a check that is absent —
+    // an absent subject reads exactly like a passing one (#606). Branch protection covers the REQUIRED
+    // set, so what is asserted here is a NON-required check that nonetheless decides the PR: the autofix
+    // bot's `registry-coherence`, whose redness means "this snapshot is OBSOLETE" and which GitHub's own
+    // auto-merge would merge straight past (#642/#425). These are the legs that let that bot stop
+    // hand-rolling the gate.
+
+    [<Fact>]
+    let ``scoreRequired: the required check reported and is green — so is the PR`` () =
+        let checks = [ named "registry-coherence" (Some 1L) "completed" (Some "success") ]
+        Assert.Equal((PrGreen, 2), scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``scoreRequired: an ABSENT required check is PENDING, never green — the #606 hole, closed`` () =
+        // Everything present is green, and without --require this is a GREEN that merges. The required
+        // check never reported, so the thing it was to verify was never verified: not green.
+        let checks = [ named "some-other-job" (Some 1L) "completed" (Some "success") ]
+        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] checks
+        Assert.Equal(PrPending, state)
+        // ...and without the requirement, the very same input IS green. That contrast is the whole point.
+        Assert.Equal(PrGreen, score (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``scoreRequired: an absent required check is PENDING, not RED — so --wait rides out the race`` () =
+        // Deliberate, and the subtle call. `pending` never settles, so --wait keeps polling: a check that
+        // has not REGISTERED yet, and a required check whose suite was just SUPERSEDED (the state a bot
+        // that force-pushes manufactures on every run, #710), both resolve on a later poll. Calling it RED
+        // would settle at once and refuse the PR the bot had just pushed. It cannot fail OPEN: the one
+        // thing `pending` is not, is green.
+        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] []
+        Assert.NotEqual(PrRed, state)
+        Assert.NotEqual(PrGreen, state)
+
+    [<Fact>]
+    let ``scoreRequired: a RED check outranks a missing required one — a finding is reported at once`` () =
+        // Ordering matters: `red` settles immediately, `pending` polls for the whole budget. Reporting the
+        // softer verdict over a hard red would make --wait spin out its tries before announcing a failure
+        // it already knew.
+        let checks = [ named "build" (Some 1L) "completed" (Some "failure") ]
+        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ greenRun ] checks
+        Assert.Equal(PrRed, state)
+
+    [<Fact>]
+    let ``scoreRequired: a SUPERSEDED copy of the required check does NOT satisfy it (#710)`` () =
+        // The cancelled run's `registry-coherence` is dropped with its suite — and it is precisely the
+        // check whose verdict we do not have. The replacement has not registered, so: pending, and the
+        // next poll sees it. Satisfying the requirement from a dropped check would merge on a verdict
+        // that was cancelled before it could be reached.
+        let cancelled = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 1 "completed" (Some "cancelled") (Some 10L)
+        let later = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 2 "completed" (Some "success") (Some 11L)
+        let deadCheck = named "registry-coherence" (Some 10L) "completed" (Some "cancelled")
+        let state, _ = scoreRequired [ "registry-coherence" ] (Some true) [ cancelled; later ] [ deadCheck ]
+        Assert.Equal(PrPending, state)
+
+    [<Fact>]
+    let ``scoreRequired: EVERY named check must report — a set is not its first element`` () =
+        // The parse appends rather than last-wins; this is the scoring half of the same rule.
+        let checks = [ named "a" (Some 1L) "completed" (Some "success") ]
+        let state, _ = scoreRequired [ "a"; "b" ] (Some true) [ greenRun ] checks
+        Assert.Equal(PrPending, state)
+
+    [<Fact>]
+    let ``scoreRequired with an empty require-list IS scoreN — the default cannot change behaviour`` () =
+        let checks = [ named "build" (Some 1L) "completed" (Some "success") ]
+        Assert.Equal(scoreN (Some true) [ greenRun ] checks, scoreRequired [] (Some true) [ greenRun ] checks)
+
+    [<Fact>]
+    let ``scoreRequired: a required check is not consulted before mergeability`` () =
+        // A conflicted PR gets no CI at all, so every required check is absent — by construction, not by
+        // fault. Reporting that as "pending on registry-coherence" would send the reader hunting a check
+        // that was never going to run; the conflict is the finding.
+        Assert.Equal((PrConflicted, 0), scoreRequired [ "registry-coherence" ] (Some false) [] [])
+        Assert.Equal((PrUnknown, 0), scoreRequired [ "registry-coherence" ] None [] [])
+
+    [<Fact>]
+    let ``missing: names the required checks that did not report, superseded copies not counted`` () =
+        let cancelled = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 1 "completed" (Some "cancelled") (Some 10L)
+        let later = run ".github/workflows/registry.yml" "pull_request" "auto/registry" [ 9 ] 2 "completed" (Some "success") (Some 11L)
+        let dead = named "registry-coherence" (Some 10L) "completed" (Some "cancelled")
+        let live = named "build" (Some 11L) "completed" (Some "success")
+        Assert.Equal<string list>([ "registry-coherence" ], missing [ "registry-coherence"; "build" ] [ cancelled; later ] [ dead; live ])
+
+    [<Fact>]
+    let ``missing: nothing is missing when every required check reported`` () =
+        let checks = [ named "registry-coherence" (Some 1L) "completed" (Some "success") ]
+        Assert.Empty(missing [ "registry-coherence" ] [ greenRun ] checks)
 
     // ---- settled: the --wait break-vs-keep-waiting decision (#724) -----------------------------------
 

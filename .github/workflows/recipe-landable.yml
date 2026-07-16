@@ -31,7 +31,11 @@ on:
       - "docs/coordination/**"
       - "src/FS.GG.Coord.Cli/Options.fs"
       - "src/FS.GG.Coord.Cli/Client.fs"
-      - ".github/workflows/recipe-landable.yml"
+      # EVERY workflow, since #737 — the rule now reaches `jobs.*.steps[*].run`, and the last
+      # hand-rolled copy of the gate lived in a workflow, not a recipe. Watching only this file would
+      # leave the new root ungated on the exact PR that re-grows a copy: the gate would be correct and
+      # would never run, which is #266 wearing the fix for #266.
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
@@ -42,7 +46,11 @@ on:
       - "docs/coordination/**"
       - "src/FS.GG.Coord.Cli/Options.fs"
       - "src/FS.GG.Coord.Cli/Client.fs"
-      - ".github/workflows/recipe-landable.yml"
+      # EVERY workflow, since #737 — the rule now reaches `jobs.*.steps[*].run`, and the last
+      # hand-rolled copy of the gate lived in a workflow, not a recipe. Watching only this file would
+      # leave the new root ungated on the exact PR that re-grows a copy: the gate would be correct and
+      # would never run, which is #266 wearing the fix for #266.
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -54,6 +62,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      # The gate PARSES workflows since #737 (a recipe is fence-scanned; a workflow's shell lives in
+      # `run:` blocks, and its comments are prose that must stay legal). That needs PyYAML.
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
       - name: Run the recipe-landable fixture
         run: bash tests/recipe-landable/run.sh
       # The fixture drives the gate against throwaway recipes AND against this repo's real ones. This
