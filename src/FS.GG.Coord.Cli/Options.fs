@@ -171,6 +171,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
   release <ref> [--worker W] [--force]       drop the lock, restoring the column it overwrote
   heartbeat <ref> [--worker W]               renew the lease
+  adopt  <ref> [--worker W]                  take over an ORPHAN — a stale claim whose PR is FINISHED —
+                                             and land it (#697/#720); reports the preconditions it checked,
+                                             then transfers the claim
 
   add    <ref>                               put an issue ON the board, idempotently (#861) — the metered
                                              verb the GraphQL monopoly rule names (#586); prints the item id
