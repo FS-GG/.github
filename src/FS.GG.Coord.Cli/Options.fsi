@@ -59,6 +59,9 @@ module Options =
         | Overlap
         /// Message another worker (`say <ref> --to W --message M`).
         | Say
+        /// This worker's mailbox — messages across every in-flight claim, on the board and off it
+        /// (`inbox [--repo] [--peek] [--json]`, #461/case 25).
+        | Inbox
         /// Stamp an item done, optionally rolling the parent up (`done <ref> [--flip] [--evidence E]`).
         | DoneCmd
         /// Check a PR's changed files against the touch-set its issue declared (`verify-paths --pr N [--warn]`).
@@ -149,7 +152,11 @@ module Options =
           /// `--apply` (`reap`) — actually DELETE the expired markers. Without it, `reap` is a DRY RUN that
           /// only reports what it WOULD collect (`would reap …`), so a destructive lock-break is never the
           /// default — the operator opts into it. #581.
-          Apply: bool }
+          Apply: bool
+
+          /// `--peek` (`inbox`) — show new messages WITHOUT advancing the per-worker cursor, so the same
+          /// mail is still "new" on the next read. Off, `inbox` consumes what it shows.
+          Peek: bool }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

@@ -374,6 +374,7 @@ let main argv =
             | Widen
             | Overlap
             | Say
+            | Inbox
             | DoneCmd
             | VerifyPaths
             | Bootstrap

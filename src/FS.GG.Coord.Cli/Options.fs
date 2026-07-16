@@ -24,6 +24,7 @@ module Options =
         | Widen
         | Overlap
         | Say
+        | Inbox
         | DoneCmd
         | VerifyPaths
         | Bootstrap
@@ -81,7 +82,11 @@ module Options =
           Active: bool
 
           /// `reap --apply` — actually DELETE the expired markers; without it, reap is a DRY RUN (#581).
-          Apply: bool }
+          Apply: bool
+
+          /// `inbox --peek` — show new messages WITHOUT advancing the per-worker cursor, so the same mail
+          /// is still "new" on the next read. Off, `inbox` consumes what it shows.
+          Peek: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -124,6 +129,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   widen  <ref> --paths T...                  widen a HELD item's touch-set
   overlap <ref> --active | <a> <b>           does an item's touch-set collide? (repo-scoped, #353)
   say    <ref> --to W --message M            message another worker
+  inbox  [--repo NAME] [--peek] [--json]     messages addressed to this worker across every in-flight
+                                             claim (ON the board and off it, #461/case 25); --peek does
+                                             not advance the cursor
   done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up
   verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
                [--issue REF] [--warn]        SKIP; --issue names the issue explicitly; --warn advisory)
@@ -212,6 +220,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--strict" :: t -> flags { acc with Strict = true } t
             | "--active" :: t -> flags { acc with Active = true } t
             | "--apply" :: t -> flags { acc with Apply = true } t
+            | "--peek" :: t -> flags { acc with Peek = true } t
 
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
@@ -270,7 +279,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Batch = false
               Strict = false
               Active = false
-              Apply = false }
+              Apply = false
+              Peek = false }
 
         match args with
         | []
@@ -305,6 +315,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "widen" :: rest -> flags { defaults with Command = Widen } rest
         | "overlap" :: rest -> flags { defaults with Command = Overlap; Render = Text } rest
         | "say" :: rest -> flags { defaults with Command = Say } rest
+        // `inbox` reports as a human table by default (a worker reads it), `--json` for a machine consumer —
+        // the mirror of `who`.
+        | "inbox" :: rest -> flags { defaults with Command = Inbox; Render = Text } rest
         | "done" :: rest -> flags { defaults with Command = DoneCmd } rest
         | "verify-paths" :: rest -> flags { defaults with Command = VerifyPaths } rest
         | "bootstrap" :: rest -> flags { defaults with Command = Bootstrap } rest

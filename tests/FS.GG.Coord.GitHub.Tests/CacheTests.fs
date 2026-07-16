@@ -302,3 +302,42 @@ let ``an empty item id is never memoised - an absence must not become a hit (#42
     use _sandbox = new Sandbox()
     putItemId "FS-GG" "FS.GG.SDD" 42 12 ""
     Assert.True((getItemId "FS-GG" "FS.GG.SDD" 42 12).IsNone)
+
+// ---- the inbox cursor: a per-worker high-water mark -------------------------------------------------
+
+[<Fact>]
+let ``inboxCursor is 0 for a mailbox never read`` () =
+    use _sandbox = new Sandbox()
+    // A fresh worker has seen no mail — 0, so its first read delivers everything above 0.
+    Assert.Equal(0L, inboxCursor "smew-f31")
+
+[<Fact>]
+let ``putInboxCursor then inboxCursor round-trips the high-water mark`` () =
+    use _sandbox = new Sandbox()
+    putInboxCursor "smew-f31" 4210L
+    Assert.Equal(4210L, inboxCursor "smew-f31")
+
+[<Fact>]
+let ``the cursor is per-worker - one worker's read does not consume another's mail`` () =
+    use _sandbox = new Sandbox()
+    putInboxCursor "smew-f31" 900L
+    // finch never read, so its cursor is untouched — the mailbox is a per-worker fact.
+    Assert.Equal(0L, inboxCursor "finch-a3f")
+    Assert.Equal(900L, inboxCursor "smew-f31")
+
+[<Fact>]
+let ``an unreadable cursor falls back to 0 - it shows too much, never too little`` () =
+    use sandbox = new Sandbox()
+    // Garbage in the cursor file (a truncated write, a half-flushed disk). The fallback direction is the
+    // OPPOSITE of the lock's: a cursor read too HIGH would hide new mail, so a bad one degrades to 0 and
+    // re-shows old mail instead — noise, never a silently swallowed message.
+    File.WriteAllText(Path.Combine(sandbox.Dir, "inbox-smew-f31"), "not-a-number")
+    Assert.Equal(0L, inboxCursor "smew-f31")
+
+[<Fact>]
+let ``the cursor file is keyed on the slugged worker id (matches the bash client)`` () =
+    use sandbox = new Sandbox()
+    putInboxCursor "smew-f31" 12L
+    // `inbox-<slug>` is the shared contract with the bash client — a worker that switches engines mid-loop
+    // must land on the SAME file, or it re-reads mail it already saw.
+    Assert.True(File.Exists(Path.Combine(sandbox.Dir, "inbox-smew-f31")))

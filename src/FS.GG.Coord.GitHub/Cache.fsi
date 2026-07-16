@@ -131,6 +131,19 @@ module Cache =
     /// Store a resolved board item id.
     val putItemId: owner: string -> repo: string -> number: int -> boardNumber: int -> id: string -> unit
 
+    /// The highest message id this worker has already seen (the `inbox` cursor). `0` for a fresh mailbox,
+    /// and `0` for an unreadable or malformed cursor too.
+    ///
+    /// The fallback direction is the opposite of the lock's, on purpose: a lost cursor re-shows old mail
+    /// (noise), where a cursor read too HIGH would hide new mail. So it fails toward showing too much. Keyed
+    /// on the (slugged) worker id, matching the bash client's `inbox-<slug>` file, so the cursor survives a
+    /// worker switching engines mid-loop.
+    val inboxCursor: worker: string -> int64
+
+    /// Advance the `inbox` cursor to the highest message id seen. `inbox --peek` does NOT call this — leaving
+    /// the cursor un-advanced is the entire meaning of `--peek`.
+    val putInboxCursor: worker: string -> id: int64 -> unit
+
     /// The deferred board-write queue (`pending.jsonl`).
     ///
     /// ONLY an exhausted budget may be queued (`Errors.isQueueable`). Every other failure is permanent, and

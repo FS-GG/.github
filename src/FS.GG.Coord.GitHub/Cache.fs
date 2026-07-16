@@ -380,6 +380,44 @@ module Cache =
             with :? IOException ->
                 ()
 
+    // ---- the inbox cursor (per-worker high-water mark) --------------------------------------------
+
+    let private inboxCursorFile (worker: string) =
+        // `slug` matches the bash client's `inbox-$(slug "$w")`, so a worker's cursor is the same file on
+        // both engines and a worker that switched mid-loop does not re-read mail it has already seen.
+        Path.Combine(ensureRoot (), $"inbox-%s{slug worker}")
+
+    /// The highest message id this worker has already seen. `0` — a fresh mailbox — when there is no cursor
+    /// or it cannot be read.
+    ///
+    /// The failure direction is DELIBERATE and it is the opposite of the lock's. A lost cursor re-shows old
+    /// mail (harmless noise); a cursor read as HIGHER than it is would hide new mail. So an unreadable or
+    /// malformed cursor falls back to `0` — showing too much, never too little — where the lock, faced with
+    /// the same ambiguity, fails the other way and blocks.
+    let inboxCursor (worker: string) : int64 =
+        let file = inboxCursorFile worker
+
+        if not (File.Exists file) then
+            0L
+        else
+            try
+                match Int64.TryParse((File.ReadAllText file).Trim()) with
+                | true, n when n >= 0L -> n
+                | _ -> 0L
+            with :? IOException ->
+                0L
+
+    /// Advance the cursor to the highest message id seen. `inbox --peek` never calls this — that is the
+    /// whole of what `--peek` means.
+    let putInboxCursor (worker: string) (id: int64) : unit =
+        try
+            let file = inboxCursorFile worker
+            let temp = file + ".tmp." + string (Environment.ProcessId)
+            File.WriteAllText(temp, string id)
+            File.Move(temp, file, overwrite = true)
+        with :? IOException ->
+            ()
+
     // ---- the deferred board-write queue -----------------------------------------------------------
 
     type Deferred =
