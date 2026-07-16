@@ -6,7 +6,7 @@
 # `repos-registry-selftest` fails on any diff, so nobody AUTHORS it — a collision here is a REBASE,
 # not a decision. DO NOT reserve it in a `Paths:` touch-set (#527); regenerate it and name it as
 # expected drift in the PR.
-00151d8428cc494dc8f8d7bfce41b663d4ae0f745c9961af2abeae778f8ce07b  .claude/skills/check-board
+b610d6a7f245991408f8286640071801843bbe6f789f8354522ac4e5e81bbcc9  .claude/skills/check-board
 2d3811baf0d8861a5a57ccf2b721260a876283de6c36a26d149667ad60beb0e3  .claude/skills/cross-repo-coordination
 f28956818970c59cbdf86e2c8e96a2ccceb8fe95db0f416e7705aad6136720c4  .claude/skills/intra-repo-parallel-work
 b6fc1e4357c50bd6568aeacb1a7cde017d11354e50756c85a7812fd53cb78c43  .claude/skills/pnext-item
