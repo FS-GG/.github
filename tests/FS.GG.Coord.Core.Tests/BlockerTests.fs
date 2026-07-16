@@ -117,3 +117,80 @@ module BlockerTests =
         let holding = Blockers.unresolved blockers
         Assert.DoesNotContain(blocker 449 BlockerMerged, holding)
         Assert.Contains(blocker 500 BlockerOpen, holding)
+
+    // ---- the WRITE gate (case 13): `Blocked by` is a typed edge, not a resolution log -----------------
+    //
+    // Projects v2 has no dependency field, so `Blocked by` is TEXT. In bash it drifted into a free-form log
+    // ("RESOLVED: #8 closed, shipped @d80a8ae"), and `.blocked` — reading that field back as refs — could
+    // not parse it. `canonicalizeBlockedBy` is the gate on the WRITE: every accepted form reduces to one
+    // canonical `owner/repo#n`, and prose is refused before it can be stored. `SDD` here is the BLOCKED
+    // item's own owner/repo (FS-GG/FS.GG.SDD), so a bare `#n` adopts it.
+    let private canon raw = Blockers.canonicalizeBlockedBy "FS-GG" "FS.GG.SDD" raw
+
+    [<Fact>]
+    let ``a full owner/repo#n ref passes through unchanged`` () =
+        Assert.Equal<Result<string option, _>>(Ok(Some "FS-GG/FS.GG.SDD#8"), canon "FS-GG/FS.GG.SDD#8")
+
+    [<Fact>]
+    let ``a bare #n adopts the blocked item's OWN owner/repo`` () =
+        Assert.Equal<Result<string option, _>>(Ok(Some "FS-GG/FS.GG.SDD#33"), canon "#33")
+
+    [<Fact>]
+    let ``a repo#n adopts the owner but keeps the named repo`` () =
+        Assert.Equal<Result<string option, _>>(Ok(Some "FS-GG/FS.GG.Rendering#33"), canon "FS.GG.Rendering#33")
+
+    [<Fact>]
+    let ``an issue URL canonicalizes to owner/repo#n`` () =
+        Assert.Equal<Result<string option, _>>(
+            Ok(Some "FS-GG/FS.GG.Templates#8"),
+            canon "https://github.com/FS-GG/FS.GG.Templates/issues/8"
+        )
+
+    [<Fact>]
+    let ``a list canonicalizes EVERY form, in order`` () =
+        Assert.Equal<Result<string option, _>>(
+            Ok(Some "FS-GG/FS.GG.Rendering#33, FS-GG/FS.GG.Templates#8"),
+            canon "FS.GG.Rendering#33 , https://github.com/FS-GG/FS.GG.Templates/issues/8"
+        )
+
+    [<Fact>]
+    let ``refs that canonicalize alike are de-duped — the bare #n and its full form are one edge`` () =
+        Assert.Equal<Result<string option, _>>(Ok(Some "FS-GG/FS.GG.SDD#8"), canon "#8, FS-GG/FS.GG.SDD#8")
+
+    [<Fact>]
+    let ``an empty value is Ok None — the caller clears the field`` () =
+        Assert.Equal<Result<string option, _>>(Ok None, canon "")
+        Assert.Equal<Result<string option, _>>(Ok None, canon "   ")
+
+    [<Fact>]
+    let ``a '-'/'none' placeholder is refused TOWARD clearing, not stored`` () =
+        Assert.Equal<Result<string option, _>>(Error Blockers.Placeholder, canon "-")
+        Assert.Equal<Result<string option, _>>(Error Blockers.Placeholder, canon "none")
+        Assert.Equal<Result<string option, _>>(Error Blockers.Placeholder, canon "None")
+
+    [<Fact>]
+    let ``the WHOLE bash placeholder set is refused as a placeholder, not misrouted to prose`` () =
+        // bash's `canon_blocked_by` set: a run of hyphens, an em/en dash, none / n/a / tbd / todo. All
+        // point at CLEARING (Placeholder), never at Status (NotIssueRefs) — the divergence a narrower set
+        // would introduce is a user typing `tbd` and being told to set a Status.
+        for p in [ "--"; "---"; "—"; "–"; "n/a"; "na"; "N/A"; "TBD"; "todo"; "ToDo" ] do
+            Assert.Equal<Result<string option, _>>(Error Blockers.Placeholder, canon p)
+
+    [<Fact>]
+    let ``a delivery log is prose, not a dependency`` () =
+        Assert.Equal<Result<string option, _>>(Error Blockers.NotIssueRefs, canon "RESOLVED: #8 closed, shipped @d80a8ae")
+
+    [<Fact>]
+    let ``the inverted 'blocks X' edge is refused — it is the wrong direction`` () =
+        Assert.Equal<Result<string option, _>>(Error Blockers.NotIssueRefs, canon "blocks FS.GG.Governance#14")
+
+    [<Fact>]
+    let ``prose TRAILING a valid ref is refused — the anchored match will not swallow it`` () =
+        Assert.Equal<Result<string option, _>>(
+            Error Blockers.NotIssueRefs,
+            canon "FS-GG/FS.GG.SDD#8 (republish vehicle)"
+        )
+
+    [<Fact>]
+    let ``a value that is not a ref at all is refused`` () =
+        Assert.Equal<Result<string option, _>>(Error Blockers.NotIssueRefs, canon "not a ref")

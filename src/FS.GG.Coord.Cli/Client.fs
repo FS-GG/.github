@@ -1332,6 +1332,37 @@ module Client =
 
     // ---- the writes ------------------------------------------------------------------------------------
 
+    /// The `Blocked by` gate (case 13). The field is a TYPED dependency edge (Projects v2 has no dependency
+    /// field, so it is TEXT — nothing but this gate stops it drifting back into the resolution log it was in
+    /// bash), so its value canonicalizes to `owner/repo#n` and prose is refused. It applies to BOTH set-field
+    /// surfaces — the single write and `--batch` — so the two cannot disagree about what the field accepts,
+    /// and it runs BEFORE any board read, so a refused write spends no GraphQL (the budget that dies first).
+    ///
+    /// `Ok write` is the value to write (`Set canonical` or `Clear`); `Error rc` is a refusal already
+    /// reported, with the exit code to return. A non-`Blocked by` field passes through unchanged — the gate
+    /// is scoped to the one field (Contract and every other TEXT field stay free-form).
+    let private gateField (ref: Ref) (field: string) (raw: string) : Result<Board.FieldWrite, int> =
+        if field <> "Blocked by" then
+            Ok(if raw = "" then Board.Clear else Board.Set raw)
+        else
+            match Blockers.canonicalizeBlockedBy ref.Owner ref.Repo raw with
+            | Ok None -> Ok Board.Clear
+            | Ok(Some canonical) -> Ok(Board.Set canonical)
+            | Error Blockers.Placeholder ->
+                // A placeholder is not a value — it is the caller trying to say "no blocker" with a token
+                // rather than by clearing. Point at the clear (`'Blocked by' ''`), not at Status.
+                eprint
+                    $"fsgg-coord-engine: 'Blocked by' does not take a placeholder ('%s{raw.Trim()}'). To say there is no blocker, CLEAR the field:  set-field <issue> 'Blocked by' ''"
+
+                Error ExitError
+            | Error Blockers.NotIssueRefs ->
+                // Prose in a dependency field. If the caller means the item ITSELF is blocked, that is a
+                // Status — name it, so the refusal is a redirection, not just a rejection.
+                eprint
+                    $"fsgg-coord-engine: 'Blocked by' takes issue refs (owner/repo#n), not prose: '%s{raw}'. If the item ITSELF is blocked, that is a Status:  set-field <issue> Status Blocked"
+
+                Error ExitError
+
     /// `set-field --batch <ref> Field=Value ...` — N fields in ONE aliased mutation (#448).
     ///
     /// The whole point is the call count: three separate writes are three GraphQL points; the same three
@@ -1369,7 +1400,30 @@ module Client =
                         $"fsgg-coord-engine: set-field --batch takes Field=Value pairs (an empty value clears); '%s{bad}' is not one."
                     ExitError
                 | None ->
-                    let writes = parsed |> List.choose (function | Ok p -> Some p | Error _ -> None)
+                    let rawWrites = parsed |> List.choose (function | Ok p -> Some p | Error _ -> None)
+
+                    // The `Blocked by` gate applies to `--batch` too — the same one home the single write
+                    // uses — so a prose dependency cannot slip in through the aliased document. It runs
+                    // BEFORE bootstrap, so a refused pair spends no GraphQL and queues nothing.
+                    let gated =
+                        (Ok [], rawWrites)
+                        ||> List.fold (fun acc (field, write) ->
+                            match acc with
+                            | Error _ -> acc
+                            | Ok done' ->
+                                let raw =
+                                    match write with
+                                    | Board.Set v -> v
+                                    | Board.Clear -> ""
+
+                                match gateField ref field raw with
+                                | Error rc -> Error rc
+                                | Ok w -> Ok((field, w) :: done'))
+                        |> Result.map List.rev
+
+                    match gated with
+                    | Error rc -> rc
+                    | Ok writes ->
 
                     match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                     | Error e -> fail e
@@ -1439,19 +1493,34 @@ module Client =
                 ExitError
             | _, Error c -> c
             | Ok ref, Ok w ->
+                // The `Blocked by` gate runs FIRST — before any board read — so a refused value spends no
+                // GraphQL, and it produces the canonical value (or `Clear`) the write below emits.
+                match gateField ref field value with
+                | Error rc -> rc
+                | Ok write ->
                 match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                 | Error e -> fail e
                 | Ok board ->
-                    let write =
-                        if value = "" then Board.Clear else Board.Set value
-
                     match Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number field write w.Id with
                     | Error e -> fail e
                     | Ok Board.Written ->
-                        printfn "set %s %s = %s" ref.Short field (if value = "" then "<cleared>" else value)
+                        printfn
+                            "set %s %s = %s"
+                            ref.Short
+                            field
+                            (match write with
+                             | Board.Set v -> v
+                             | Board.Clear -> "<cleared>")
                         ExitGreen
                     | Ok Board.Deferred ->
-                        printfn "set %s %s = %s — QUEUED (budget exhausted; flush replays it)" ref.Short field value
+                        printfn
+                            "set %s %s = %s — QUEUED (budget exhausted; flush replays it)"
+                            ref.Short
+                            field
+                            (match write with
+                             | Board.Set v -> v
+                             | Board.Clear -> "<cleared>")
+
                         Errors.ExRate
                     | Ok Board.NotOnBoard ->
                         eprint $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — nothing written."

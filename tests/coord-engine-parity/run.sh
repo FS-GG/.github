@@ -1239,12 +1239,110 @@ else
   kill "$SC_SRV" 2>/dev/null
 fi
 rm -f "$SC_OUT"; rm -rf "$SC_CACHE" "$CO"
+# ---- case 13: the `Blocked by` WRITE gate — a typed dependency edge, not a resolution log ------------
+#
+# Projects v2 has no dependency field, so `Blocked by` is TEXT. In bash it drifted back into a free-form
+# LOG ("RESOLVED: #8 closed, shipped @d80a8ae"), and `.blocked` — which reads the field back as refs —
+# could not parse it, so an item the board displayed as blocked reached the scheduler UNBLOCKED. The gate
+# is on the WRITE: `set-field <issue> 'Blocked by' <value>` canonicalizes every accepted form
+# (owner/repo#n, repo#n, a bare #n adopting the item's own repo, an issue URL) to one `owner/repo#n`,
+# de-dupes refs that canonicalize alike, and REFUSES prose — before any board read, so a refused value
+# spends no GraphQL (the budget that dies first). The corpus (case 13 lines 153-243) counts `gh`; this
+# drives the ENGINE over HTTP against `blockedby_server.py`, which records each field mutation (the field,
+# whether it SET or CLEARED, the text it carried — mapped from the `fieldId` variable) and counts the
+# GraphQL requests, so "a refused write spends no GraphQL" is a request count of ZERO. The `--text`
+# wording is the API's; parity holds the PROPERTY (the canonical value the mutation carries), one transport
+# under the corpus's `gh` log.
+BB_OUT="$(mktemp)"; python3 "$HERE/blockedby_server.py" >"$BB_OUT" 2>/dev/null & BB_SRV=$!; BB_PORT=""
+for _ in $(seq 1 50); do BB_PORT="$(head -n1 "$BB_OUT" 2>/dev/null)"; [ -n "$BB_PORT" ] && break; sleep 0.1; done
+rm -f "$BB_OUT"
+bbget() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+sys.argv[2]).read().decode())' "$1" "$2" 2>/dev/null; }
+if [ -z "$BB_PORT" ]; then bad "#480: Blocked by fixture bound a port"; else
+  BBCACHE="$(mktemp -d)"
+  # The WRITE path shares one cache — the first write warms bootstrap, each records its mutation.
+  bbw() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$BBCACHE" \
+              "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' "$1" 2>&1; }
+  bblast() { bbget "$BB_PORT" /_writes | jq -r "$1"; }
+
+  # 1. A full ref passes through, canonical.
+  bbw 'FS-GG/FS.GG.SDD#8' >/dev/null
+  [ "$(bblast '.last | "\(.op) \(.field) \(.text)"')" = "set Blocked by FS-GG/FS.GG.SDD#8" ] \
+    && ok "Blocked by: a full owner/repo#n ref writes as-is (canonical --text, one transport over)" \
+    || bad "Blocked by: full ref passthrough" "$(bblast '.last')"
+
+  # 2. A bare #n adopts the BLOCKED item's own repo (SDD#42 -> FS-GG/FS.GG.SDD#33).
+  bbw '#33' >/dev/null
+  [ "$(bblast '.last.text')" = "FS-GG/FS.GG.SDD#33" ] \
+    && ok "Blocked by: a bare #n adopts the blocked item's repo (#33 -> FS-GG/FS.GG.SDD#33)" \
+    || bad "Blocked by: bare #n adoption" "$(bblast '.last.text')"
+
+  # 3. A LIST canonicalizes every form — a repo#n and an issue URL, in order.
+  bbw 'FS.GG.Rendering#33 , https://github.com/FS-GG/FS.GG.Templates/issues/8' >/dev/null
+  [ "$(bblast '.last.text')" = "FS-GG/FS.GG.Rendering#33, FS-GG/FS.GG.Templates#8" ] \
+    && ok "Blocked by: a list canonicalizes EVERY form (repo#n + URL), in order" \
+    || bad "Blocked by: list canonicalization" "$(bblast '.last.text')"
+
+  # 4. Refs that canonicalize alike are DE-DUPED — one edge, not two.
+  bbw '#8, FS-GG/FS.GG.SDD#8' >/dev/null
+  [ "$(bblast '.last.text')" = "FS-GG/FS.GG.SDD#8" ] \
+    && ok "Blocked by: refs that canonicalize alike are de-duped (#8 == FS-GG/FS.GG.SDD#8)" \
+    || bad "Blocked by: de-dupe" "$(bblast '.last.text')"
+
+  # 5. An EMPTY value CLEARS — via the distinct clear mutation, never an empty --text (a no-op on the API).
+  bbw '' >/dev/null
+  [ "$(bblast '.last.op')" = "clear" ] \
+    && ok "Blocked by: an empty value CLEARS the field (clearProjectV2ItemFieldValue, not an empty update)" \
+    || bad "Blocked by: empty clears" "$(bblast '.last')"
+
+  # 6. A REFUSED write spends ZERO GraphQL — validation PRECEDES item resolution. Run it against a FRESH
+  #    cache, so if the gate did NOT fire, bootstrap WOULD hit /graphql: the delta of 0 proves precedence.
+  before="$(bbget "$BB_PORT" /_gqlcount | jq -r '.count')"
+  pr_refuse="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" \
+                 "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'RESOLVED: #8 closed, shipped @d80a8ae' 2>&1)"; refrc=$?
+  after="$(bbget "$BB_PORT" /_gqlcount | jq -r '.count')"
+  { [ "$refrc" -ne 0 ] && [ "$before" = "$after" ]; } \
+    && ok "Blocked by: a refused write (a delivery log) is rejected AND spends ZERO GraphQL (validation precedes resolution)" \
+    || bad "Blocked by: refused write must cost no GraphQL" "rc=$refrc before=$before after=$after out=$pr_refuse"
+
+  # 7. The delivery log, the inverted edge, and a ref TRAILED by prose are all prose — all refused.
+  ( set +e
+    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'blocks FS.GG.Governance#14' >/dev/null 2>&1
+    [ $? -ne 0 ] ) \
+    && ok "Blocked by: the inverted 'blocks X' edge is refused (wrong direction)" \
+    || bad "Blocked by: inverted edge must refuse"
+  ( set +e
+    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'FS-GG/FS.GG.SDD#8 (republish vehicle)' >/dev/null 2>&1
+    [ $? -ne 0 ] ) \
+    && ok "Blocked by: prose TRAILING a valid ref is refused — the anchored match will not swallow it" \
+    || bad "Blocked by: trailing prose must refuse"
+
+  # 8. The prose refusal REDIRECTS: names Status as the home for 'the item IS blocked'.
+  prose_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'not a ref' 2>&1)"
+  printf '%s' "$prose_out" | grep -q 'set-field <issue> Status Blocked' \
+    && ok "Blocked by: the prose refusal names Status as the right home for 'is blocked'" \
+    || bad "Blocked by: prose refusal must name Status" "$prose_out"
+
+  # 9. A '-'/'none' PLACEHOLDER is a distinct refusal — it points at CLEARING, not at Status.
+  ph_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'none' 2>&1)"; phrc=$?
+  { [ "$phrc" -ne 0 ] && printf '%s' "$ph_out" | grep -q "'Blocked by' ''"; } \
+    && ok "Blocked by: a '-'/'none' placeholder is refused TOWARD clearing (points at 'Blocked by' '')" \
+    || bad "Blocked by: placeholder must point at clearing" "rc=$phrc out=$ph_out"
+
+  # 10. THE GATE IS SCOPED to `Blocked by`. Every other TEXT field stays free-form — Contract takes prose.
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$BBCACHE" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 Contract 'fs-gg-ui-template (0.3.1, preview)' >/dev/null 2>&1
+  [ "$(bblast '.last | "\(.field) \(.text)"')" = "Contract fs-gg-ui-template (0.3.1, preview)" ] \
+    && ok "Blocked by: the gate is SCOPED — Contract (and every other TEXT field) still takes free-form text" \
+    || bad "Blocked by: gate must not touch other fields" "$(bblast '.last')"
+
+  kill "$BB_SRV" 2>/dev/null
+fi
+
 # DISPOSITION ON THE RECORD (not silently skipped): case 13's remaining legs are separate work —
-#   * `reap` scopes to the checkout too (#480, the destructive one): NO `reap` command in the engine yet
-#     (the case 21 §d/§e / case 26 mold).
-#   * resolve_repo across the full roster + `issues` short-id (#381/#446), the `Blocked by`
-#     canonicalization gate, and the epic-rollup / NO-TOUCH-SET `lint` rules (#496): a `lint`/`issues`
-#     command the engine does not have. Tracked for cases 13-remainder / 14.
+#   * `reap` scopes to the checkout too (#480, the destructive one): `reap` now EXISTS (case 26), so its
+#     #480 checkout-scope default is a follow-up (it still demands an explicit --repo).
+#   * the `issues` short-id command (#381/#446): a read command the engine does not have yet.
+#   The `Blocked by` canonicalization gate landed above; the epic-rollup / NO-TOUCH-SET `lint` rules (#496)
+#   landed with case 14 (now FULL).
 
 # ---- VERIFY-PATHS: DID THE PR STAY INSIDE ITS TOUCH-SET? (case 23) --------------------------------
 #

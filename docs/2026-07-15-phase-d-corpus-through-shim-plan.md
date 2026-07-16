@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **24 full + 2 partial of 27 corpus cases** (~367 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **24 full + 2 partial of 27 corpus cases** (~376 assertions); D.2–D.4 not started.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it.
@@ -26,7 +26,7 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~322 assertions across **24 of 27 corpus cases**, 25 fixture
+`tests/coord-engine-parity/` harness (~376 assertions across **24 of 27 corpus cases**, 26 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
@@ -155,7 +155,7 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 
 | case | what it needs | class |
 |---|---|---|
-| 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
+| 13-remainder | the `Blocked by` canonicalization gate LANDED (this slice); the `issues` short-id (#446) and `reap`'s #480 checkout scope remain — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
@@ -450,6 +450,28 @@ parity assertions (settled-green, registration-race, growing-set, conflicted-at-
 are the engine's own (`--wait` green `0`, red/conflicted `3`), where bash numbers green/red `0/1` — the
 PROPERTY (green `0`; red/conflicted a distinct do-not-wait code) re-expressed, not bash's literals.
 
+The **`Blocked by` WRITE gate** landed next (case 13, this slice): `Blocked by` is a TYPED dependency edge,
+but Projects v2 has no dependency field — so it is TEXT, and in bash it drifted back into a resolution LOG
+("RESOLVED: #8 closed, shipped @d80a8ae") that `.blocked`, which reads the field back as refs, could not
+parse, so an item the board DISPLAYED as blocked reached the scheduler UNBLOCKED. The gate is on the WRITE:
+`set-field <issue> 'Blocked by' <value>` canonicalizes every accepted form (`owner/repo#n`, `repo#n`, a bare
+`#n` adopting the item's OWN owner/repo, an issue URL) to one `owner/repo#n`, de-dupes refs that canonicalize
+alike (first occurrence wins), and — the point — REFUSES prose: a delivery log, the inverted `blocks X` edge,
+and a ref TRAILED by prose all fail the anchored per-token match, and the refusal REDIRECTS (`set-field
+<issue> Status Blocked` — "the item IS blocked" is a Status, not a dependency), while the `-`/`none`
+placeholder is refused toward CLEARING (`'Blocked by' ''`). An empty value clears via the distinct clear
+mutation (never an empty `--text`, a no-op on the real API). The rule is a pure, unit-tested
+`Blockers.canonicalizeBlockedBy` (one home, #485), and it runs in a shared `gateField` on BOTH set-field
+surfaces — the single write and `--batch` — BEFORE any board read, so a refused value spends ZERO GraphQL
+(the budget that dies first). New `blockedby_server.py` records each field mutation (the field, SET-vs-CLEAR,
+and the text — mapped from the `fieldId` variable) and counts the GraphQL requests, so "a refused write
+spends no GraphQL" is a request count of ZERO; 11 parity assertions + 12 `Blockers` unit tests. Disposed on
+the record (ADR-0040 §5): the `--text FS-GG/...` wording is bash's `gh`-log form, re-expressed as the
+PROPERTY (the canonical value the mutation carries) one transport under; and the refusal exit is the engine's
+`ExitError`, bash's literal 1 re-expressed as the property (a refused write exits non-zero and writes
+nothing). Case 13 stays PARTIAL: the `issues` short-id command (#446) and `reap`'s #480 checkout scope remain
+(see the remaining table).
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
 into **new commands** (`issues`) and **larger port gaps** (`reap`'s adversarial-interleaving legs, case 24).
 The verify-paths repo-boundary divergences (case 23's
@@ -507,7 +529,7 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 24 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~367
+      **In progress: 24 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~376
       assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
@@ -559,7 +581,13 @@ documented retirement is not.**
       (the #606 registration race) and believes a `green` only once the subject count (`Reads.prLandableN` →
       `Landable.scoreN`) has STOPPED GROWING across two consecutive polls (the partial-rollup trap that merges
       a bad PR), while `conflicted`/`unknown` return at once — proven through a stateful
-      `landable_wait_server.py` whose run set grows on the second read.
+      `landable_wait_server.py` whose run set grows on the second read. Case 13's **`Blocked by` WRITE gate**
+      then landed (case 13 stays PARTIAL — `issues` #446 and `reap`'s #480 scope remain): a pure
+      `Blockers.canonicalizeBlockedBy` reduces every accepted form to one `owner/repo#n`, de-dupes, and
+      REFUSES prose (a delivery log, the inverted `blocks X`, a ref trailed by prose — redirecting "the item
+      IS blocked" to a Status), while a `-`/`none` placeholder is refused toward clearing; it runs in a
+      shared `gateField` on BOTH set-field surfaces BEFORE any board read, so a refused write spends ZERO
+      GraphQL (`blockedby_server.py` counts the requests; 11 parity + 12 `Blockers` unit tests).
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the
