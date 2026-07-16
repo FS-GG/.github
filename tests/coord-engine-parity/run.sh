@@ -1337,12 +1337,101 @@ if [ -z "$BB_PORT" ]; then bad "#480: Blocked by fixture bound a port"; else
   kill "$BB_SRV" 2>/dev/null
 fi
 
-# DISPOSITION ON THE RECORD (not silently skipped): case 13's remaining legs are separate work —
+# ---- case 13: the `issues` short-id command — resolve the repo like everything else (#446) ----------
+#
+# `issues` lists a repo's issues over REST with ETag revalidation — the read both coordination skills
+# advertise as THE way to read issues WITHOUT spending GraphQL (a 304 costs nothing, #418). The corpus
+# (case 13 lines 99-121) certifies that it resolves its `<repo>` argument like EVERY other repo-taking
+# command: an `owner/repo` passes through split, a bare short-id maps through `resolve_repo` to the repo
+# NAME. bash's bug (#446): `issues` was the ONE command that took the bare token VERBATIM — so `issues
+# game` asked for `repos/FS-GG/game` and 404'd, while `--repo game` resolved everywhere else. The natural
+# recovery from that 404 is `gh issue list` — 2 GraphQL points a call, the exact budget the command exists
+# to save. The corpus counts `gh` (`issue-list FS-GG/<repo>` in `$GH_LOG`); this drives the ENGINE over
+# HTTP against `issues_server.py`, which records the `owner/repo` (and state/label/If-None-Match) of every
+# `/repos/*/issues` request — so the assertion becomes "the fixture was asked for FS-GG/FS.GG.Game, NEVER
+# FS-GG/game", one transport under. `issues` is a pure REST read (it never bootstraps the board), so the
+# fixture serves no GraphQL. Disposed on the record (ADR-0040 §5): bash's `--jq EXPR` is an ERGONOMIC —
+# the engine emits the raw JSON array and the caller projects it with real jq (the Json-is-contract rule),
+# so `issues … | jq` here IS the port of `issues … --jq …`, and the engine refuses an unknown `--jq` flag.
+ISS_OUT="$(mktemp)"; python3 "$HERE/issues_server.py" >"$ISS_OUT" 2>/dev/null & ISS_SRV=$!; ISS_PORT=""
+for _ in $(seq 1 50); do ISS_PORT="$(head -n1 "$ISS_OUT" 2>/dev/null)"; [ -n "$ISS_PORT" ] && break; sleep 0.1; done
+rm -f "$ISS_OUT"
+issget() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_requests").read().decode())' "$1" 2>/dev/null; }
+if [ -z "$ISS_PORT" ]; then bad "#446: issues fixture bound a port"; else
+  ISSCACHE="$(mktemp -d)"
+  iss() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$ISS_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$ISSCACHE" "$ENGINE" issues "$@"; }
+  # The nwo of the LAST /repos/*/issues request the fixture saw — the resolved REST path, `$GH_LOG`'s
+  # `issue-list <nwo>` one transport over. `.inm` proves the conditional (ETag) read.
+  isslast() { issget "$ISS_PORT" | jq -r ".[-1] | $1"; }
+  issnwos() { issget "$ISS_PORT" | jq -r '[.[].nwo] | join(" ")'; }
+
+  # 1. A bare short-id resolves to the repo board rows carry — the ENGINE emits the raw REST array (jq'd
+  #    by the CALLER, the port of bash's `--jq`), and the fixture was asked for the RESOLVED owner/repo.
+  nums="$(iss sdd | jq -c '[.[].number]')"
+  [ "$nums" = "[501,502,777]" ] \
+    && ok "#446: 'issues sdd' emits the raw REST array — the caller jq's it (the port of --jq)" \
+    || bad "#446: issues emits the REST body" "got: $nums"
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.SDD" ] \
+    && ok "#446: 'issues sdd' reads FS-GG/FS.GG.SDD over REST — the short-id resolves like --repo does" \
+    || bad "#446: issues short-id resolves" "requested: $(isslast '.nwo')"
+
+  # 2. THE #446 POSTER CHILD. `game` is one of the two short-ids resolve_repo once let fall through to the
+  #    literal token (#381), so `issues game` asked for `repos/FS-GG/game` and 404'd. It must resolve to
+  #    FS-GG/FS.GG.Game, and the bare `FS-GG/game` must NEVER reach the fixture.
+  iss game >/dev/null
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.Game" ] \
+    && ok "#446: 'issues game' resolves to FS-GG/FS.GG.Game (the short-id that once 404'd as repos/FS-GG/game)" \
+    || bad "#446: issues game must resolve, not 404" "requested: $(isslast '.nwo')"
+  case " $(issnwos) " in
+    *" FS-GG/game "*) bad "#446: the bare short-id must NEVER reach GitHub unresolved" "saw FS-GG/game" ;;
+    *) ok "#446: ...and 'FS-GG/game' NEVER reaches the fixture — the 404 (and the gh-issue-list fallback) is gone" ;;
+  esac
+
+  # 3. An EXPLICIT owner/repo is authoritative — split and passed through untouched, never re-resolved.
+  iss FS-GG/FS.GG.Game >/dev/null
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.Game" ] \
+    && ok "#446: an explicit owner/repo ('FS-GG/FS.GG.Game') passes through untouched" \
+    || bad "#446: owner/repo passthrough" "requested: $(isslast '.nwo')"
+
+  # 4. A non-original-four short-id resolves too — resolve_repo covers the WHOLE roster (#381), not just
+  #    the framework repos. `audio` fell through to the literal token in the same bug class.
+  iss audio >/dev/null
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.Audio" ] \
+    && ok "#446/#381: 'issues audio' resolves across the whole roster (not just the original four repos)" \
+    || bad "#446: roster-wide resolution" "requested: $(isslast '.nwo')"
+
+  # 5. THE BUDGET-FREE 304 (#418) — the reason `issues` exists. A second read of the SAME listing, with the
+  #    same cache, sends the stored ETag; the fixture answers 304, and the engine serves the body FROM CACHE.
+  #    That is a conditional request (`inm` carries the validator, not `none`) served for zero fresh body —
+  #    the ETag revalidation the command is built on.
+  iss sdd >/dev/null            # warms the body+etag cache
+  again="$(iss sdd | jq -c 'length')"
+  [ "$again" = "3" ] && [ "$(isslast '.inm')" != "none" ] \
+    && ok "#418: a repeat 'issues sdd' sends the ETag and is served a 304 from cache — the budget-free read" \
+    || bad "#418: issues revalidates with the stored ETag (304 is free)" "count=$again inm=$(isslast '.inm')"
+
+  # 6. `--state` and `--label` shape the REST path (and the cache key) — the query the listing is scoped by.
+  iss sdd --state closed --label bug >/dev/null
+  [ "$(isslast '"\(.state) \(.label)"')" = "closed bug" ] \
+    && ok "#446: --state and --label shape the REST listing (state=closed, labels=bug)" \
+    || bad "#446: issues --state/--label" "$(isslast '"\(.state) \(.label)"')"
+
+  # 7. No repo is a hard refusal — `issues` cannot default to a checkout (it is not a scoped worker command;
+  #    the repo is its one required positional). It refuses rather than guessing.
+  iss_norepo="$(iss 2>&1 >/dev/null)"; iss_rc=$?
+  { printf '%s' "$iss_norepo" | grep -q 'a repo is required' && [ "$iss_rc" -ne 0 ]; } \
+    && ok "#446: 'issues' with no repo REFUSES (a repo is required) — never a silent org-wide read" \
+    || bad "#446: issues must require a repo" "rc=$iss_rc: $iss_norepo"
+
+  kill "$ISS_SRV" 2>/dev/null; rm -rf "$ISSCACHE"
+fi
+
+# DISPOSITION ON THE RECORD (not silently skipped): case 13's ONE remaining leg is separate work —
 #   * `reap` scopes to the checkout too (#480, the destructive one): `reap` now EXISTS (case 26), so its
 #     #480 checkout-scope default is a follow-up (it still demands an explicit --repo).
-#   * the `issues` short-id command (#381/#446): a read command the engine does not have yet.
-#   The `Blocked by` canonicalization gate landed above; the epic-rollup / NO-TOUCH-SET `lint` rules (#496)
-#   landed with case 14 (now FULL).
+#   The `Blocked by` canonicalization gate and the `issues` short-id command (#446) landed above; the
+#   epic-rollup / NO-TOUCH-SET `lint` rules (#496) landed with case 14 (now FULL).
 
 # ---- VERIFY-PATHS: DID THE PR STAY INSIDE ITS TOUCH-SET? (case 23) --------------------------------
 #

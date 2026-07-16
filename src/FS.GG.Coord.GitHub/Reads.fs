@@ -1180,3 +1180,74 @@ module Reads =
                         |> List.ofSeq
 
                     Ok issues
+
+    /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
+    /// serves the cached body for zero cost, which is the whole reason the command exists — a worker reads
+    /// issues WITHOUT spending GraphQL, so it never has to fall back to `gh issue list` (2 points a call).
+    ///
+    /// UNLIKE `openIssues`, this read IS conditional, and that is correct: its subject is the issue list a
+    /// human/consumer asked for, not the lock. `openIssues` must never be served a 304 because a stale body
+    /// could hide a claim marker (#461); here there is no marker to hide — a listing is a listing — so the
+    /// ETag is pure budget savings. The cache key is the request AS A STRING (path + the query that shapes
+    /// the result), so a different state or label is a different cache entry, exactly as bash slugs its path.
+    ///
+    /// Returns the raw JSON body — the array bash's `issues` prints. The caller projects it with jq.
+    let issues
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (state: string)
+        (label: string option)
+        (fresh: bool)
+        : IoResult<string> =
+
+        let query =
+            [ "state", state; "per_page", "100" ]
+            @ (match label with
+               | Some l when l <> "" -> [ "labels", l ]
+               | _ -> [])
+
+        // The cache key is the full request string — the same fact bash slugs to name its body/etag files.
+        let cacheKey =
+            let qs = query |> List.map (fun (k, v) -> $"%s{k}=%s{v}") |> String.concat "&"
+            $"repos/%s{owner}/%s{repo}/issues?%s{qs}"
+
+        let subject = $"%s{owner}/%s{repo} issues"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues"
+              Query = query
+              Body = NoBody
+              Budget = Rest
+              // CONDITIONAL BY DESIGN — the ETag is what makes the 304 free. `--refresh` (fresh) drops it,
+              // forcing a full re-read when the caller wants to bypass the cache.
+              IfNoneMatch = (if fresh then None else Cache.getETag cacheKey)
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match response with
+            // A 304 says "what you have is current" — serve it from the cache. A missing body here is OUR
+            // protocol violation (a validator we could not honour), and `getBody` reports it as an error,
+            // never an empty result. The cached body was validated on the 200 that stored it (below), so a
+            // 304 does not re-parse it.
+            | NotModified -> Cache.getBody cacheKey
+            | _ ->
+                // 200: a body we could not parse is a FAILED READ, never "this repo has no issues" — the same
+                // #461 fail-closed rule the rest of this layer holds (a 200 carrying a proxy's HTML error or a
+                // truncated page is not an empty listing). We validate it is a JSON ARRAY, then emit the RAW
+                // bytes bash's `issues` prints (so the caller's jq sees exactly the REST body), and cache the
+                // body + its validator TOGETHER so the next read can revalidate. An empty-but-present `[]` is
+                // a real answer and passes; garbage does not.
+                match parse subject response.Body with
+                | Error e -> Error e
+                | Ok doc ->
+                    use doc = doc
+
+                    if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                        Error(Malformed(subject, "the issue-list response is not a JSON array"))
+                    else
+                        Cache.putBody cacheKey response.ETag response.Body
+                        Ok response.Body

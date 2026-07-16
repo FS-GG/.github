@@ -462,3 +462,99 @@ let ``messages FAILS CLOSED on a malformed page - a lost message is not an empty
     match Reads.messages (serving "<html>502</html>") "FS-GG" "FS.GG.SDD" 42 with
     | Error(Malformed _) -> ()
     | other -> failwith $"a malformed page must be an error, not an empty mailbox — got %A{other}"
+
+// ---- issues: the ETag-revalidated REST list (#446/#418) --------------------------------------------
+
+/// A private cache directory for the ETag round-trip. `Reads.issues` stores the body + its validator on
+/// disk (that is what makes a later 304 answerable), so a test of it owns a throwaway cache the way
+/// `CacheTests.Sandbox` does — an inherited cache would be testing whatever ran before it.
+type private IssuesCache() =
+    let dir =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-issues-test-" + System.Guid.NewGuid().ToString("N"))
+
+    do
+        System.IO.Directory.CreateDirectory dir |> ignore
+        System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+
+    interface System.IDisposable with
+        member _.Dispose() =
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", null)
+
+            try
+                System.IO.Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+/// A stateful transport: 200 + ETag for an UNCONDITIONAL read, 304 for a conditional one whose validator
+/// matches — exactly how GitHub answers `If-None-Match`. It is the ETag revalidation the command is built on.
+let private etagServer (body: string) (etag: string) =
+    Fake.Recorder(fun (req: Request) ->
+        match req.IfNoneMatch with
+        | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None }
+        | _ -> Ok { Status = 200; Body = body; ETag = Some etag; NextLink = None })
+
+[<Fact>]
+let ``issues returns the raw body, then revalidates with the stored ETag and serves the 304 from cache (#418)`` () =
+    // The command's whole reason to exist: a repeat listing costs NOTHING. The first read is unconditional
+    // (inm=none) and caches the body with its validator; the second sends the ETag, the server answers 304,
+    // and the body is served FROM CACHE — the budget-free read.
+    use _cache = new IssuesCache()
+    let body = """[{"number":501},{"number":502}]"""
+    let etag = "W/\"issues-v1\""
+    let recorder = etagServer body etag
+
+    match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false with
+    | Ok b -> Assert.Equal(body, b)
+    | other -> failwith $"first read must return the body — got %A{other}"
+
+    Assert.True(recorder.Logged "issue-list FS-GG/FS.GG.SDD paginate=1 inm=none")
+
+    match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false with
+    | Ok b -> Assert.Equal(body, b)
+    | other -> failwith $"a 304 must serve the cached body, never an empty result — got %A{other}"
+
+    Assert.True(recorder.Logged $"issue-list FS-GG/FS.GG.SDD paginate=1 inm={etag}")
+
+[<Fact>]
+let ``issues --refresh drops the stored ETag and re-reads unconditionally`` () =
+    // `--refresh` (fresh=true) is the caller saying "ignore the cache". Even with a warm body+etag, the
+    // read goes out UNCONDITIONAL (inm=none), so a caller who suspects a stale cache can force a full read.
+    use _cache = new IssuesCache()
+    let body = """[{"number":501}]"""
+    let etag = "W/\"issues-v1\""
+    let recorder = etagServer body etag
+
+    Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false |> ignore // warm the cache
+
+    match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None true with
+    | Ok b -> Assert.Equal(body, b)
+    | other -> failwith $"a --refresh read must return the fresh body — got %A{other}"
+
+    // Both requests carried NO validator — the second because --refresh dropped it.
+    Assert.Equal(2, recorder.Count "issue-list FS-GG/FS.GG.SDD paginate=1 inm=none")
+
+[<Fact>]
+let ``issues fails closed on an unreadable list - never an empty array`` () =
+    // A listing we could not read is an ERROR, not "this repo has no issues" — the same fail-closed rule
+    // the rest of this layer holds. The body is passed through raw, so an empty-but-present array `[]` is a
+    // real answer; a 502 is not.
+    use _cache = new IssuesCache()
+
+    match Reads.issues (failing (Http(502, "bad gateway"))) "FS-GG" "FS.GG.SDD" "open" None false with
+    | Error(Http(502, _)) -> ()
+    | other -> failwith $"an unreadable listing must refuse — got %A{other}"
+
+[<Fact>]
+let ``issues fails closed on a 200 that is not a JSON array - a proxy error page is not an empty listing`` () =
+    // The #461 rule at the `issues` surface: a 200 carrying a proxy's HTML error body (or a truncated page)
+    // must NOT be emitted verbatim as if it were the issue list — it is a failed read. A present-but-empty
+    // `[]` passes (a real answer); garbage does not, and nothing is cached for a later 304 to serve.
+    use _cache = new IssuesCache()
+
+    match Reads.issues (serving "<html>502 Bad Gateway</html>") "FS-GG" "FS.GG.SDD" "open" None false with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a non-JSON 200 must be a failed read, not a listing — got %A{other}"
+
+    match Reads.issues (serving "[]") "FS-GG" "FS.GG.SDD" "open" None false with
+    | Ok "[]" -> ()
+    | other -> failwith $"a present-but-empty array is a real answer — got %A{other}"
