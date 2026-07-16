@@ -147,14 +147,14 @@ form still works for text fields (`Blocked by`, `Contract`) — which is why the
 miss, and why this table prescribed the broken spelling for every flip in it until `#848` was found.
 
 `--batch` builds a different document and is **immune either way**, which is why it is the standing
-instruction rather than a workaround to retire. `.github#857` repairs the single-field form at the
-source, but that does **not** reach a receiver when it merges: `.github` builds the engine from
-source (ADR-0034 §4.3) and picks the fix up immediately, while every other repo restores the
-**pinned** `FS.GG.Coord.Cli` from `dist/dotnet/.config/dotnet-tools.json` and keeps the bug until a
-release carries `#857` and the pin flips (as `#852`/`#853` did for 0.2.0). So "is it fixed?" has two
-different answers depending on where you are standing — and `--batch` is correct in both. Prefer it
-regardless: it writes N fields in **one aliased mutation** (`#448`), which is also the cheaper spend
-against a budget every worker shares.
+instruction rather than a workaround to retire. `.github#857` **has** repaired the single-field form
+at the source — and that repaired it for **nobody but `.github`**. This repo builds the engine from
+source (ADR-0034 §4.3), so it picked the fix up on merge; every other repo restores the **pinned**
+`FS.GG.Coord.Cli` from `dist/dotnet/.config/dotnet-tools.json` and keeps the bug until a release
+carries `#857` and the pin flips (as `#852`/`#853` did for 0.2.0). So **"is it fixed?" has two
+answers at once**, and which one is true depends only on where you are standing — a merged fix is
+not a distributed one (`#846`). `--batch` is correct in both, and is the cheaper spend regardless:
+it writes N fields in **one aliased mutation** (`#448`) against a budget every worker shares.
 
 **`OFF-BOARD-ISSUE` is report-only, and there is currently NO sanctioned way to fix it.** Say that
 plainly rather than hand anyone a recipe. The bash client wrapped the raw Projects v2 add in
