@@ -20,7 +20,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
-      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-bash"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - ".claude/skills/**"
@@ -31,7 +31,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
-      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-bash"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - ".claude/skills/**"

@@ -2,11 +2,11 @@
 # SHIM PARITY (ADR-0040 Phase D.2): the D.1 corpus is green THROUGH the ADR-0034 §4.4 shim.
 #
 # D.1 proved the compiled engine, over HTTP, returns every answer the shell corpus certifies for bash
-# (tests/coord-engine-parity/run.sh, 445 assertions). D.2 cuts `scripts/fsgg-coord` down to a ~40-line
-# SHIM that resolves the engine and execs it. This asserts the cut changes nothing the corpus can see:
+# (tests/coord-engine-parity/run.sh, 445 assertions). D.2's swap cut `scripts/fsgg-coord` down to the
+# ~40-line SHIM that resolves the engine and execs it. This asserts the cut changes nothing the corpus can see:
 #
 #   1. THE WHOLE D.1 CORPUS, THROUGH THE SHIM. run.sh, re-run with its engine indirected through
-#      `scripts/fsgg-coord-shim` — every one of the 445 assertions is now decided by `shim <args>`
+#      `scripts/fsgg-coord` (now the shim) — every one of the 445 assertions is now decided by `shim <args>`
 #      instead of `engine <args>`. A shim that dropped an arg, swallowed stdout/stderr, or mangled an
 #      exit code would red one of them. This is the literal D.2 exit: "the corpus is green through the shim."
 #
@@ -22,7 +22,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$REPO_ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
-SHIM="$REPO_ROOT/scripts/fsgg-coord-shim"
+SHIM="$REPO_ROOT/scripts/fsgg-coord"          # D.2 swap: the entrypoint IS the shim now
 
 pass=0; failcount=0
 ok()  { echo "PASS  $1"; pass=$((pass+1)); }

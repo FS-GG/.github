@@ -120,17 +120,19 @@ for rel in "${TARGETS[@]}"; do
 done
 
 # ---- THE SECOND ENGINE'S COPY OF THE GRAMMAR -----------------------------------------------------
-# `scripts/fsgg-coord` states the touch-set grammar too — it must, because it refuses bad tokens before
+# The bash `fsgg-coord` states the touch-set grammar too — it must, because it refuses bad tokens before
 # it ever builds a snapshot. Two copies of one sentence in two engines is exactly the drift surface this
 # file exists to close, so if it must be copied, it may not be copied SILENTLY: assert they agree.
+# (ADR-0040 D.2 cut `scripts/fsgg-coord` to the engine shim; the bash grammar this compares against lives
+# at `scripts/fsgg-coord-bash` until D.4 deletes bash — after which the drift check has one engine left.)
 engine_grammar="$(jq -r '.rules[] | select(.id == "touch-set-grammar") | .statement' "$FACTS")"
-bash_grammar="$(sed -n "s/^TOUCHSET_GRAMMAR=\"\(.*\)\"$/\1/p" "$HERE/scripts/fsgg-coord")"
+bash_grammar="$(sed -n "s/^TOUCHSET_GRAMMAR=\"\(.*\)\"$/\1/p" "$HERE/scripts/fsgg-coord-bash")"
 
 if [ "$engine_grammar" != "$bash_grammar" ]; then
   echo "::error::the touch-set grammar has DRIFTED between the two engines" >&2
   echo "  Protocol.fs : $engine_grammar" >&2
   echo "  fsgg-coord  : $bash_grammar" >&2
-  echo "  They are one rule. Fix Schedulability.TouchSetGrammar and scripts/fsgg-coord's TOUCHSET_GRAMMAR together." >&2
+  echo "  They are one rule. Fix Schedulability.TouchSetGrammar and scripts/fsgg-coord-bash's TOUCHSET_GRAMMAR together." >&2
   drift=1
 fi
 
