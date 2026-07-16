@@ -88,6 +88,23 @@ module Transport =
     type Response =
         { Status: int
           Body: string
+          /// The response's validator, for a conditional re-read.
+          ///
+          /// **`None` WHENEVER `Body` IS A MERGE, AND THAT IS A GUARANTEE THIS TYPE MAKES.** An ETag belongs
+          /// to the request that returned it — page ONE — and `Send` merges the pages below it. A validator
+          /// that outlived its page would revalidate a whole collection against its first page: a set that
+          /// grows a page while page one stays byte-identical answers 304, the merge never runs, and the
+          /// caller is handed a one-page body for a two-page set. That is #461 — a partial read wearing a
+          /// complete one's clothes — and downstream it decides whether to merge.
+          ///
+          /// It is dropped HERE, at the only layer that knows a merge happened, rather than guarded at each
+          /// caller. A caller cannot see how many requests its read cost, so a rule asking it to reason about
+          /// that is a rule it will get wrong once and silently. Compare `Cache.defer`, which takes the
+          /// `IoError` that licenses a deferral so a caller CANNOT queue a write without holding one: the
+          /// type is what stops it being rewritten.
+          ///
+          /// A single-page response still carries its ETag. Whether that page may be MEMOISED is a further
+          /// question this cannot answer — see `Reads.memoisable`, which also demands headroom.
           ETag: string option
           /// The `Link: rel="next"` URL, when the server paginated. Following it is the adapter's job —
           /// the bash client passed `--paginate` to `gh` and the corpus asserts the scan is paginated,

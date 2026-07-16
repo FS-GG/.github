@@ -268,7 +268,18 @@ module Transport =
                         | Ok page ->
                             match mergeArrays acc.Body page.Body with
                             | Error detail -> Error(Malformed(request.Subject, detail))
-                            | Ok merged -> follow { acc with Body = merged } page.NextLink (guard - 1)
+                            // THE VALIDATOR DIES AT THE MERGE. `acc.ETag` is PAGE ONE'S — it was returned by
+                            // the first request and it describes that request's answer, not this
+                            // concatenation. Carry it forward and a caller could store it against the merged
+                            // body, then revalidate the whole collection against its first page: a set that
+                            // grows a page while page one stays byte-identical answers 304, this merge never
+                            // runs again, and a one-page body is served for a two-page set (#461).
+                            //
+                            // Dropping it HERE is the difference between a rule and a guarantee. This is the
+                            // only layer that knows a merge happened — a caller sees one `Response` and
+                            // cannot tell how many requests paid for it, so a rule asking it to reason about
+                            // that is one it gets wrong once, silently, forever.
+                            | Ok merged -> follow { acc with Body = merged; ETag = None } page.NextLink (guard - 1)
 
                 follow first first.NextLink 100
 
