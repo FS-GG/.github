@@ -236,6 +236,14 @@ module Reads =
     /// is a follow-up.
     val prLandable: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState
 
+    /// `prLandable`, plus the NUMBER of subjects the verdict was scored over (`Landable.scoreN`) — the read
+    /// `landable --wait` polls on (#724). The count distinguishes a `red` over zero subjects (the
+    /// registration race — "CI has not started yet") from a `red` over real ones (a finding), and the
+    /// `--wait` loop must not believe an early `green` until that count has stopped growing. It is 0 for
+    /// every verdict reached before the runs are scored (conflicted, unknown). Same single-page caveat as
+    /// `prLandable`.
+    val prLandableN: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState * int
+
     /// The FIRST issue a pull request declares it closes (`closingIssuesReferences`), if any.
     ///
     /// `Ok None` means it closes nothing by that record — a real answer (the PR may implement an item by

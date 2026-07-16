@@ -56,6 +56,21 @@ module Landable =
     /// not `PrGreen` (#606 — a missing subject is a finding, not a pass).
     val score: mergeable: bool option -> runs: RunRow list -> checks: CheckRow list -> PrState
 
+    /// `score`, plus the NUMBER of subjects the verdict was scored over — the live runs plus the live
+    /// check-runs, after the superseded suites are dropped. `landable --wait` needs the count: a `red` over
+    /// ZERO subjects is the registration race ("CI has not started yet"), a `red` over some is a real
+    /// finding, and only the count tells them apart (#606/#724). Conflicted/unknown are reached before any
+    /// subject is scored, so their count is 0.
+    val scoreN: mergeable: bool option -> runs: RunRow list -> checks: CheckRow list -> PrState * int
+
+    /// The `--wait` poll decision (#724): given this poll's verdict, its subject count `n`, and the PREVIOUS
+    /// poll's count `prev`, has the verdict SETTLED (stop) or must the loop keep waiting? `conflicted`/
+    /// `unknown` settle at once; `red` settles only with a subject to be red about (`n > 0`, else it is the
+    /// registration race); `green` settles only once the count has STOPPED GROWING (`n > 0 && n = prev`, or
+    /// an early partial rollup merges a PR whose failing check had not been created yet); `pending` never
+    /// settles. Pure, so both premature-green traps are held by a unit test rather than a fixture.
+    val settled: state: PrState -> n: int -> prev: int -> bool
+
     /// The one-word verdict the corpus certifies (`green`/`conflicted`/`pending`/`red`/`unknown`), for the
     /// `who --json` `prState` field and the human table. ONE projection, so the JSON and text surfaces
     /// cannot name the same state differently.

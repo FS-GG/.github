@@ -88,7 +88,16 @@ module Options =
 
           /// `inbox --peek` — show new messages WITHOUT advancing the per-worker cursor, so the same mail
           /// is still "new" on the next read. Off, `inbox` consumes what it shows.
-          Peek: bool }
+          Peek: bool
+
+          /// `landable --wait` — poll until the verdict SETTLES instead of reading it once (#724). A `green`
+          /// is believed only once the subject count has stopped growing; a `red` at zero subjects is the
+          /// registration race and keeps waiting; conflicted/unknown return at once.
+          Wait: bool
+          /// `--tries N` (`landable --wait`) — the maximum number of polls. Default 30.
+          Tries: int option
+          /// `--interval N` (`landable --wait`) — seconds to sleep between polls. Default 20.
+          Interval: int option }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -120,8 +129,11 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
                                              an open item/<n>-* PR (#581); a DRY RUN without --apply
   landable <pr> --repo NAME                  is this OPEN PR finished work? one verdict word on stdout
-                                             (green/conflicted/pending/red/unknown), the decision in the
-                                             exit code — the #697/#720 gate as a query (#724)
+    [--wait [--tries N] [--interval S]]      (green/conflicted/pending/red/unknown), the decision in the
+                                             exit code — the #697/#720 gate as a query (#724). --wait polls
+                                             until the verdict SETTLES: it never believes an early green (it
+                                             waits for the run set to STOP GROWING), and keeps waiting while
+                                             zero runs have registered (default --tries 30, --interval 20s)
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
@@ -229,6 +241,28 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--apply" :: t -> flags { acc with Apply = true } t
             | "--peek" :: t -> flags { acc with Peek = true } t
 
+            | "--wait" :: t -> flags { acc with Wait = true } t
+
+            | "--tries" :: value :: _ when value.StartsWith "-" ->
+                Error $"--tries needs a value (got flag '%s{value}')"
+            | "--tries" :: value :: t ->
+                match System.Int32.TryParse value with
+                | true, n when n > 0 -> flags { acc with Tries = Some n } t
+                | true, n -> Error $"--tries must be a positive count (got %d{n})"
+                | _ -> Error $"--tries needs a number (got '%s{value}')"
+            | [ "--tries" ] -> Error "--tries needs a value"
+
+            // `--interval` permits 0 (the test harness drives the poll with no wall-clock); it is a delay,
+            // not a count, so zero is meaningful where `-n 0` would not be.
+            | "--interval" :: value :: _ when value.StartsWith "-" ->
+                Error $"--interval needs a value (got flag '%s{value}')"
+            | "--interval" :: value :: t ->
+                match System.Int32.TryParse value with
+                | true, n when n >= 0 -> flags { acc with Interval = Some n } t
+                | true, n -> Error $"--interval must be a non-negative number of seconds (got %d{n})"
+                | _ -> Error $"--interval needs a number of seconds (got '%s{value}')"
+            | [ "--interval" ] -> Error "--interval needs a value"
+
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
             // (both mean "ignore the cache, re-read"); the remediation text elsewhere names `--refresh`.
@@ -287,7 +321,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Strict = false
               Active = false
               Apply = false
-              Peek = false }
+              Peek = false
+              Wait = false
+              Tries = None
+              Interval = None }
 
         match args with
         | []
