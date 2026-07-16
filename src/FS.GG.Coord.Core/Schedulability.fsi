@@ -59,6 +59,12 @@ module Schedulability =
         /// its touch-set stays reserved.
         | HeldByLiveWork of WorkerId * pr: int
 
+        /// No claim marker governs it, but its own `item/<n>-*` PR is OPEN — an implementation is already
+        /// in flight, whether or not anyone claimed it. #581 read this proof-of-life only THROUGH a marker,
+        /// so a markerless item with an open PR fell straight through to `Startable` and was handed out a
+        /// second time, costing a duplicate implementation (#651).
+        | ItemPrOpen of pr: int
+
         /// It collides with work already in flight.
         | OverlapsInFlight of (string * string) list
 

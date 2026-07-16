@@ -335,10 +335,13 @@ module Batch =
             | DeliberatelyNoTouchSet
             | UnusableTouchSet _
             | BlockedBy _
+            | ItemPrOpen _
             | OverlapsInFlight _
             | Undetermined _ ->
-                // Not startable, and reserving nothing — precisely BECAUSE nobody is working it,
-                // which is what separates this leg from the two above.
+                // Not startable, and reserving nothing. `ItemPrOpen` is the #651 leg: an open `item/<n>-*`
+                // PR with no marker means someone is implementing it, but there is no claim to name and no
+                // lease to wait out — so, like a markerless Ready row, it reserves nothing here; it is simply
+                // not handed out (which is what stops the duplicate implementation).
                 ()
 
         for item in ordered do

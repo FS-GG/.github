@@ -659,6 +659,25 @@ module Scan =
                     w.WriteEndObject()
                     w.WriteEndObject()
 
+                // #651 — a MARKERLESS item with an open `item/<n>-*` PR is a duplicate implementation
+                // already in flight. #581's proof-of-life read the PR only THROUGH a claim marker, so a
+                // Ready/Backlog row whose marker never existed (or was cleaned) fell through to `Startable`
+                // and got handed out a second time. Probe it here — only when there is NO marker (a marker
+                // carries its own liveness above, and offering it is decided by that) and the column is one
+                // a scheduler would OFFER; an In-progress/Done/etc. row is never offered, so the read would
+                // be wasted budget. An unreadable probe writes nothing (fail open to the disjointness check,
+                // exactly as a markerless row behaved before): #651 is a false NEGATIVE we are closing, not a
+                // new fail-closed surface.
+                match holder with
+                | Some _ -> ()
+                | None ->
+                    match row.State, row.Status with
+                    | Open, (Ready | Backlog) ->
+                        match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                        | Ok(LeaseExpiredPrOpen pr) -> w.WriteNumber("itemPr", pr)
+                        | _ -> ()
+                    | _ -> ()
+
                 w.WriteEndObject()
 
                 // THE RESERVATION (arm A of bash's `active_claims`, plus the lock #461). It comes from the

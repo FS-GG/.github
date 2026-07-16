@@ -32,7 +32,8 @@ module LanesTests =
           State = Open
           TouchSet = Declared(paths |> List.map Matchable)
           Blockers = []
-          Claim = None }
+          Claim = None
+          ItemPr = None }
 
     let private item n paths = itemAt (ref n) paths
 

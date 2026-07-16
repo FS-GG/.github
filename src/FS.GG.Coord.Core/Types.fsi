@@ -192,7 +192,11 @@ module Types =
           TouchSet: TouchSet
           Blockers: Blocker list
           /// The live claim, if any — plus what we know about whether its work is alive.
-          Claim: (Claim * Liveness) option }
+          Claim: (Claim * Liveness) option
+          /// The open `item/<n>-*` PR when this item carries NO live-held claim marker — a duplicate
+          /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
+          /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
+          ItemPr: int option }
 
     /// A three-valued verdict. There is no `bool` in this domain.
     ///
