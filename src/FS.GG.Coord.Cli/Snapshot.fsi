@@ -101,4 +101,8 @@ module Snapshot =
 
     /// The PROTOCOL, as the document the projections are generated from (ADR-0034 §4.5). Emitted, never
     /// authored — so a rule cannot land in the engine and not in the prose that tells a worker about it.
-    val renderFacts: rules: Protocol.Rule list -> verdicts: Protocol.VerdictDoc list -> string
+    val renderFacts:
+        rules: Protocol.Rule list ->
+        verdicts: Protocol.VerdictDoc list ->
+        takeExitCodes: Protocol.ExitCodeDoc list ->
+            string

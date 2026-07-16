@@ -31,6 +31,31 @@ module Protocol =
     /// worker reads cannot omit one — which is what fourteen of the scheduler family's issues were.
     val verdicts: VerdictDoc list
 
+    /// One exit code, as the CALLER's contract — the fact a shell script reads without parsing prose.
+    type ExitCodeDoc =
+        { Code: int
+
+          /// The `EX_*` spelling, where the code has one a worker would recognise; `""` where it does
+          /// not. The name is a label on the number, never a second source for it.
+          Name: string
+
+          /// What the code means the engine OBSERVED.
+          Meaning: string
+
+          /// What the caller should DO about it. A code whose remedy is unstated is a code a worker
+          /// invents a remedy for.
+          Action: string }
+
+    /// `take`'s exit contract (#585) — the one command in the worker loop, so the code that tells "you
+    /// hold it" from the ways it can hand you nothing is the difference between a fan-out and a
+    /// double-claim.
+    ///
+    /// Generated, because the hand-written copy was WRONG: `/pnext-item` §1 documented `EX_PARTIAL` as
+    /// `take` "could not read the board — a no-verdict", where `Errors.ExPartial` is a WRITE that
+    /// half-landed and `take` never returns it. `Cli.Tests` pins every `Code` here against the literal
+    /// the engine actually returns, so this list cannot drift from `Client.take` again.
+    val takeExitCodes: ExitCodeDoc list
+
     val touchSetGrammar: Rule
     val touchSetDeclaration: Rule
     val blockerResolution: Rule
