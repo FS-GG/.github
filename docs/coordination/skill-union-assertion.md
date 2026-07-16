@@ -202,6 +202,46 @@ The [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/
 (roadmap **T3.2**) is the first caller — it invokes this for the orchestrated **and** standalone
 lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2, consumer half).
 
+### Standalone fetch — supported, and it is `dist/`, not `scripts/`
+
+**Fetching the assertion as a single file is a supported consumer pattern**
+([#843](https://github.com/FS-GG/.github/issues/843)). Fetch **[`dist/skill-union-assert.sh`](../../dist/skill-union-assert.sh)**,
+at a pinned 40-char commit SHA:
+
+```sh
+curl -fsSL -o skill-union-assert.sh \
+  "https://raw.githubusercontent.com/FS-GG/.github/<40-char-sha>/dist/skill-union-assert.sh"
+bash skill-union-assert.sh --product path/to/product
+```
+
+`dist/skill-union-assert.sh` is **self-contained by construction** and that is a *gated* property, not
+a promise: it is generated from `scripts/skill-union-assert.sh` + `scripts/lib/*` by
+[`scripts/generate-skill-union-bundle`](../../scripts/generate-skill-union-bundle), and the
+`skill-union-bundle` gate re-runs the entire [self-test](#self-test) against the bundle **from a
+directory with no `lib/` siblings** — the consumer's actual conditions — on every PR that touches
+either. A `source` added to the source script is inlined into the bundle by the same commit that adds
+it.
+
+> **Fetch `dist/`, never `scripts/`.** `scripts/skill-union-assert.sh` sources `scripts/lib/args.sh` and
+> `scripts/lib/roots.sh` relative to its own dirname, so fetched alone it dies immediately with
+> `lib/args.sh: No such file or directory`. That is not a bug to be fixed by inlining: `lib/roots.sh` is
+> shared with `coordination-sync` **on purpose**, so the script that WRITES a tree's roots resolves them
+> exactly as the one that ASSERTS them does — they diverged silently once, and the asserter blamed the
+> tree for the writer's omission ([#525](https://github.com/FS-GG/.github/issues/525)). The libs stay
+> shared; the consumer-facing artifact is generated. **The file set under `scripts/` is internal and may
+> be refactored without notice. `dist/skill-union-assert.sh` is the contract.**
+>
+> This is exactly how #843 arose: [#358](https://github.com/FS-GG/.github/issues/358) and
+> [#524](https://github.com/FS-GG/.github/issues/524) hoisted those helpers, and because every other
+> consumer arrives via the reusable workflow's `actions/checkout` (siblings included, for free), the
+> break was invisible here and red only in FS.GG.Templates' CI — for two weeks, since their pin sat
+> stale under `tests/` where `config:recommended` ignores it and never attempted the bump that would
+> have failed.
+
+Either pattern is fine, and they are not ranked: the reusable workflow is less to wire up, while the
+pinned fetch is deterministic, carries its own integrity check by content address, makes moving the pin
+a reviewable commit, and needs no network to re-run offline.
+
 ## Self-test
 
 [`tests/skill-union/run.sh`](../../tests/skill-union/run.sh) — run in CI by

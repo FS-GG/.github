@@ -4,18 +4,26 @@
 # byte-identical union and FAILS on each violation class (divergent / partitioned / dangling /
 # manifest-drift). This is the "a fixture proves it fails" acceptance line of #111 — it guards the
 # reusable assertion the same way coherence.yml guards this repo's own registry.
+#
+# `scripts/lib/**` IS PART OF THE SUBJECT (#843). The assertion SOURCES lib/args.sh (#358) and
+# lib/roots.sh (#524), so a change to either changes what this fixture tests — but the filter listed
+# only the script, and an edit to a lib did not re-run the suite that covers it. That is #332's class,
+# hand-repaired five times before #880 gated the narrower half of it (the two paths copies agreeing).
+# A filter can agree with itself and still omit the subject's own dependencies.
 name: skill-union-selftest
 
 on:
   pull_request:
     paths:
       - "scripts/skill-union-assert.sh"
+      - "scripts/lib/**"
       - "tests/skill-union/**"
       - ".github/workflows/skill-union-selftest.yml"
   push:
     branches: [main]
     paths:
       - "scripts/skill-union-assert.sh"
+      - "scripts/lib/**"
       - "tests/skill-union/**"
       - ".github/workflows/skill-union-selftest.yml"
   workflow_dispatch:

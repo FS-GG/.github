@@ -19,7 +19,15 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ASSERT="$HERE/../../scripts/skill-union-assert.sh"  # always invoked as `bash "$ASSERT"`
+
+# THE SUBJECT IS SWAPPABLE, AND THAT IS THE POINT (#843). By default this is the source script. The
+# `skill-union-bundle` gate re-runs this ENTIRE suite with SKILL_UNION_ASSERT pointed at the generated
+# `dist/skill-union-assert.sh`, from a directory that has no `lib/` siblings — so the bundle external
+# consumers actually fetch is proven behaviourally identical to the script this repo runs, case for case,
+# rather than merely proven to start. A bundle that only proved it starts is how #843 stayed invisible for
+# two weeks: the standalone fetch was never exercised by anything.
+ASSERT="${SKILL_UNION_ASSERT:-$HERE/../../scripts/skill-union-assert.sh}"  # always invoked as `bash "$ASSERT"`
+[ -f "$ASSERT" ] || { echo "no assertion script at $ASSERT" >&2; exit 2; }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/skill-union-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT

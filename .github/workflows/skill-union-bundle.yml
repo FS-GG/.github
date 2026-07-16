@@ -1,0 +1,96 @@
+# The standalone skill-union artifact is GENERATED, and this gate is what makes that a contract (#843).
+#
+# `dist/skill-union-assert.sh` is what external consumers fetch over `raw.githubusercontent.com` at a
+# pinned commit SHA (FS.GG.Templates#56). It is emitted from `scripts/skill-union-assert.sh` +
+# `scripts/lib/*` by `scripts/generate-skill-union-bundle`, so the libs stay the single source of truth —
+# `lib/roots.sh` in particular MUST stay shared with `coordination-sync`, because the script that writes a
+# tree's roots and the script that asserts them diverged silently once already (#525) and hand-inlining
+# would re-open exactly that.
+#
+# WHAT WENT WRONG WITHOUT IT. #358 and #524 hoisted two helpers into `scripts/lib/`, and the standalone
+# fetch started dying on `lib/args.sh: No such file or directory`. Every other consumer reaches the
+# assertion through `coordination-coherence`, which checks out this whole repo — so the siblings came
+# along for free and the break was invisible here and red only in FS.GG.Templates' CI. It stayed hidden
+# for two weeks because the Renovate manager meant to move their pin never fired, so nothing ever
+# attempted the bump that would have failed.
+#
+# So this gate does not merely diff the artifact. It re-runs the WHOLE assertion suite against the bundle
+# from a directory with no `lib/` siblings — the consumer's actual conditions. A gate that only diffed
+# bytes would have passed the entire two weeks #843 describes.
+name: skill-union-bundle
+
+on:
+  pull_request:
+    paths:
+      - "scripts/skill-union-assert.sh"
+      - "scripts/lib/**"
+      - "scripts/generate-skill-union-bundle"
+      - "dist/skill-union-assert.sh"
+      - "tests/skill-union/**"
+      - ".github/workflows/skill-union-bundle.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/skill-union-assert.sh"
+      - "scripts/lib/**"
+      - "scripts/generate-skill-union-bundle"
+      - "dist/skill-union-assert.sh"
+      - "tests/skill-union/**"
+      - ".github/workflows/skill-union-bundle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: skill-union-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The bundle is current
+        run: bash scripts/generate-skill-union-bundle --check
+
+      # NON-VACUITY (#266, #436). A GATE THAT CANNOT FAIL IS NOT A GATE. If the source script stopped
+      # sourcing its libs, the generator would emit a bundle with nothing inlined and the `--check` diff
+      # above would pass forever over an artifact that is no longer proving anything. The generator
+      # refuses to emit a zero-inline bundle; assert here that the markers really are in the committed
+      # artifact, so the gate's subject is verified to exist rather than assumed.
+      - name: Non-vacuity — the bundle really did inline the libs
+        run: |
+          set -euo pipefail
+          n="$(grep -cF '# ---- BEGIN INLINED: scripts/lib/' dist/skill-union-assert.sh || true)"
+          echo "libs inlined into the bundle: $n"
+          [ "$n" -ge 2 ] || { echo "::error::expected >=2 inlined libs, found $n — the bundle has stopped inlining and this gate is vacuous"; exit 1; }
+
+      # THE PROPERTY CONSUMERS ACTUALLY DEPEND ON. Asserted on the committed bytes, not inferred from the
+      # generator having run: nothing in the shipped artifact sources a sibling it will not have.
+      - name: Closure — the bundle sources no siblings
+        run: |
+          set -euo pipefail
+          if grep -nE '^[[:space:]]*(\.|source)[[:space:]]+' dist/skill-union-assert.sh; then
+            echo "::error::dist/skill-union-assert.sh sources a sibling — it is NOT self-contained and the standalone fetch is broken"
+            exit 1
+          fi
+          echo "no sibling sources — self-contained"
+
+      # THE CONSUMER'S CONDITIONS, EXACTLY. Copy the ONE file a consumer fetches into an empty directory
+      # and run the entire suite against it. This is the step that would have caught #358/#524 on the PR
+      # that introduced them, two weeks before FS.GG.Templates' CI did.
+      - name: The bundle passes the whole suite, standalone
+        run: |
+          set -euo pipefail
+          t="$(mktemp -d)"
+          cp dist/skill-union-assert.sh "$t/"
+          echo "isolated dir contains: $(ls "$t")"
+          SKILL_UNION_ASSERT="$t/skill-union-assert.sh" bash tests/skill-union/run.sh
+
+      # The source script must keep passing its own suite too — the bundle is a projection of it, not a
+      # replacement, and a green bundle over a red source would be a projection of a broken thing.
+      - name: The source script passes the whole suite
+        run: bash tests/skill-union/run.sh
