@@ -391,3 +391,74 @@ let ``refIsPullRequest is true iff the issues payload carries a pull_request obj
     match Reads.refIsPullRequest asIssue "FS-GG" "FS.GG.SDD" 414 with
     | Ok false -> ()
     | other -> failwith $"a plain issue must probe false — got %A{other}"
+
+
+// ---- messages: the say/inbox channel ---------------------------------------------------------------
+
+/// One `fsgg:msg` comment, rendered exactly as `Writes.say` writes the body: REAL newlines separating the
+/// marker comment, the `**from → to**` header, and the text.
+let private msgComment (cid: int) (fromW: string) (dest: string) (text: string) =
+    let body = $"<!-- fsgg:msg from={fromW} to={dest} -->\n**{fromW} → {dest}**\n\n{text}"
+    let jbody = System.Text.Json.JsonSerializer.Serialize body
+    $"""{{"id":{cid},"body":{jbody},"created_at":"2026-07-16T00:00:0{cid}Z"}}"""
+
+[<Fact>]
+let ``messages parses an fsgg:msg comment - id, from, to, and the text with the header peeled off`` () =
+    let recorder =
+        serving ("[" + msgComment 7 "finch-a3f" "smew-f31" "I own src/Audio until Friday." + "]")
+
+    match Reads.messages recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [ m ] ->
+        Assert.Equal(7L, m.Id)
+        Assert.Equal("finch-a3f", m.From)
+        Assert.Equal("smew-f31", m.To)
+        // The `<!-- … -->` marker and the `**from → to**` header are peeled; the message itself remains.
+        Assert.Equal("I own src/Audio until Friday.", m.Text)
+    | other -> failwith $"expected one parsed message — got %A{other}"
+
+[<Fact>]
+let ``messages keeps a broadcast (to=*) and orders by comment id`` () =
+    let page =
+        "[" + msgComment 9 "finch-a3f" "*" "second" + "," + msgComment 4 "finch-a3f" "smew-f31" "first" + "]"
+
+    match Reads.messages (serving page) "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [ a; b ] ->
+        // Lowest comment id first — the same total order `markers` returns, so a cursor keyed on the id is
+        // monotone regardless of the order GitHub returned the page in.
+        Assert.Equal(4L, a.Id)
+        Assert.Equal(9L, b.Id)
+        Assert.Equal("*", b.To)
+    | other -> failwith $"expected two ordered messages — got %A{other}"
+
+[<Fact>]
+let ``messages ignores a claim marker and any non-message comment`` () =
+    // A comments page carries claim markers and plain comments too. `messages` reads ONLY `fsgg:msg`, so a
+    // lock marker on the same issue never surfaces as mail.
+    let marker =
+        comment 1 "<!-- fsgg:claim worker=ghost -->" now
+
+    let plain = comment 2 "just a normal human comment" now
+    let page = "[" + marker + "," + plain + "," + msgComment 3 "finch-a3f" "smew-f31" "the only message" + "]"
+
+    match Reads.messages (serving page) "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [ m ] -> Assert.Equal("the only message", m.Text)
+    | other -> failwith $"a claim marker and a plain comment are not messages — got %A{other}"
+
+[<Fact>]
+let ``messages does NOT deliver a comment whose TEXT merely quotes a msg marker (anchored)`` () =
+    // The same forgery `markerRe` refuses: an un-anchored match would let a message BODY that quotes an
+    // `fsgg:msg` header be read as a real message header. The regex is anchored at the start of the body.
+    let forgery =
+        comment 5 "look what I can write: <!-- fsgg:msg from=ghost to=victim -->" now
+
+    match Reads.messages (serving ("[" + forgery + "]")) "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [] -> ()
+    | other -> failwith $"a quoted marker mid-body is not a message — got %A{other}"
+
+[<Fact>]
+let ``messages FAILS CLOSED on a malformed page - a lost message is not an empty mailbox`` () =
+    // A message is not a lock, so a single unparseable message is DROPPED — but a page we could not read at
+    // all is still an error, never an empty mailbox that reports "no new mail" over an unread warning.
+    match Reads.messages (serving "<html>502</html>") "FS-GG" "FS.GG.SDD" 42 with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a malformed page must be an error, not an empty mailbox — got %A{other}"

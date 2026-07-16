@@ -2471,6 +2471,74 @@ if [ -z "$SQ_PORT" ]; then bad "starved-queue fixture bound a port"; else
   kill "$SQ_SRV" 2>/dev/null
 fi
 
+# ---- INBOX: the worker mailbox, and the message that rides an OFF-BOARD claim (cases 22 + 25) --------
+#
+# `inbox` delivers what `say` posts. Case 22 certifies the mailbox contract (addressed + broadcast
+# delivery, the item named, the cursor advancing, a worker not seeing its OWN mail, `--peek` not
+# consuming); case 25 certifies that a message posted on an OFF-BOARD claim is delivered — which forces
+# `inbox` onto the SAME open-issue scan `who`/`reap`/`batch` run, or it drops the message. This is a pure
+# engine round-trip: the engine `say`s each message over HTTP and the engine `inbox`es it back — the
+# fixture seeds NO message, it only stores what the engine POSTs. #215 is OFF the board (only the
+# open-issue scan reaches it), so a mailbox reading the board's In-progress column alone would miss it.
+#
+# ONE shared cache dir for the whole slice (unlike the per-call `mktemp -d` elsewhere): the per-worker
+# inbox cursor is a file in it, and the cursor advancing between reads is half of what case 22 asserts.
+IBX_OUT="$(mktemp)"; python3 "$HERE/inbox_server.py" >"$IBX_OUT" 2>/dev/null & IBX_SRV=$!; IBX_PORT=""
+for _ in $(seq 1 50); do IBX_PORT="$(head -n1 "$IBX_OUT" 2>/dev/null)"; [ -n "$IBX_PORT" ] && break; sleep 0.1; done
+rm -f "$IBX_OUT"
+if [ -z "$IBX_PORT" ]; then bad "inbox fixture bound a port"; else
+  IBX_CACHE="$(mktemp -d)"
+  ibx() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$IBX_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$IBX_CACHE" \
+            "$ENGINE" "$@"; }
+
+  # puffin-h11 (who holds the OFF-BOARD #215) messages hoopoe-i22, then broadcasts to whoever is here.
+  ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to hoopoe-i22 --message 'I hold src/Off — stay out.' >/dev/null 2>&1
+  ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to '*' --message 'Broadcast to whoever is here.' >/dev/null 2>&1
+
+  inbox1="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering 2>/dev/null)"
+
+  # OFF-BOARD DELIVERY (case 25): the message rode #215, an issue the board never listed — delivered only
+  # because `inbox` ran the off-board open-issue scan, not the board column.
+  printf '%s' "$inbox1" | grep -q 'I hold src/Off — stay out.' \
+    && ok "inbox: delivers a message posted on an OFF-BOARD claim (case 25 — #215 is not on the board)" \
+    || bad "inbox off-board delivery" "$inbox1"
+  # A BROADCAST (to=*) reaches whoever reads (case 22).
+  printf '%s' "$inbox1" | grep -q 'Broadcast to whoever is here.' \
+    && ok "inbox: delivers a broadcast (to=*) (case 22)" \
+    || bad "inbox broadcast" "$inbox1"
+  # ...and it NAMES the item the message rode in on (case 22).
+  printf '%s' "$inbox1" | grep -q 'FS.GG.Rendering#215' \
+    && ok "inbox: names the item the message rode in on (case 22)" \
+    || bad "inbox names item" "$inbox1"
+
+  # THE CURSOR ADVANCED: a second read shows nothing new (case 22). The mail was consumed, not re-shown.
+  inbox2="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering 2>/dev/null)"
+  [ "$inbox2" = "no new messages for worker hoopoe-i22." ] \
+    && ok "inbox: the cursor advanced — nothing new on a second read (case 22)" \
+    || bad "inbox cursor advance" "expected 'no new messages...', got: $inbox2"
+
+  # A WORKER DOES NOT SEE ITS OWN MESSAGES (case 22): puffin-h11 sent both, so its own inbox is empty.
+  inboxself="$(ibx inbox --worker puffin-h11 --repo FS.GG.Rendering 2>/dev/null)"
+  [ "$inboxself" = "no new messages for worker puffin-h11." ] \
+    && ok "inbox: a worker does not see its OWN messages (case 22)" \
+    || bad "inbox self-filter" "expected 'no new messages...', got: $inboxself"
+
+  # --PEEK SHOWS NEW MAIL WITHOUT CONSUMING IT (case 22): post one more, peek it, then a plain read still
+  # sees it — the peek left the cursor where it was.
+  ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to hoopoe-i22 --message 'One more.' >/dev/null 2>&1
+  peek="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering --peek 2>/dev/null)"
+  printf '%s' "$peek" | grep -q 'One more.' \
+    && ok "inbox --peek: shows new mail (case 22)" \
+    || bad "inbox --peek shows" "$peek"
+  plain="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering 2>/dev/null)"
+  printf '%s' "$plain" | grep -q 'One more.' \
+    && ok "inbox --peek: did NOT advance the cursor — the mail is still new (case 22)" \
+    || bad "inbox --peek no-advance" "$plain"
+
+  kill "$IBX_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

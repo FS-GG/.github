@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **23 full + 3 partial of 27 corpus cases** (~315 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **24 full + 2 partial of 27 corpus cases** (~322 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -23,7 +23,7 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~315 assertions across **23 of 27 corpus cases**, 24 fixture
+`tests/coord-engine-parity/` harness (~322 assertions across **24 of 27 corpus cases**, 25 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
@@ -121,16 +121,15 @@ fail-closed assertions re-expressed at the HTTP layer.
 
 **Progress (as of the off-board `who` slice, 2026-07-15).** The harness is grown one defect/case
 at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
-`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **23 of 27 cases fully covered,
-plus 3 partial (13, 24, 25)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
+`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **24 of 27 cases fully covered,
+plus 2 partial (13, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
 which are the differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 26, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+| ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 25, 26, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — `reap` now EXISTS (case 26), but its adversarial-interleaving legs are the remaining work |
-| ◑ | 25 (offboard-claims) | the off-board **`who`** legs, the **`batch` off-board RESERVATION**, and the **#428 starved-queue BANNER** are DONE — `who --repo` scans the repo's OPEN ISSUES (paginated, never conditional) and reports a claim WHEREVER the board thinks the item is; the scheduler (`batch`/`next`/`take`) runs that SAME scan (bash's `active_claims` arm B) so it RESERVES an off-board claim's touch-set — including a STALE-but-unreaped one (a lock is broken only by `reap`, never a clock) and a MARKERLESS In-progress row (arm A, reserved as `Unowned`); and when that reservation leaves NOTHING to hand out, the queue is called **BUSY, not empty** — every holder named, the soonest lease given, an EXPIRED lease flagged as a `reap` not a wait, and a markerless reserver named WITHOUT a lease (never a holder "—"). Only `inbox` delivery on an off-board claim is deferred (see the remaining table) |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -149,13 +148,12 @@ repo's issue → SKIP naming the other repo, no verdict across the boundary). Th
 bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
 EX_RATE-vs-checkout failure modes are structurally absent).
 
-**Remaining (5 full + the rest of 13/24/25), each classified as a port gap or a deliberate divergence:**
+**Remaining (5 full + the rest of 13/24), each classified as a port gap or a deliberate divergence:**
 
 | case | what it needs | class |
 |---|---|---|
 | 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
-| 25-remainder | `inbox` delivery on an off-board claim — the off-board **`who`** scan, the `reap` command legs, the **`batch` off-board RESERVATION**, AND the **#428 starved-queue BANNER** (BUSY-not-empty, name the holders, name the soonest lease, an EXPIRED lease is a reap not a wait, a markerless In-progress reserver named without a lease) are all DONE; only off-board `inbox` remains | port gap (`inbox`) |
 | 30 (pr-existence-697) | `who`/`adopt` land-the-finished-PR path (#697), incl. the `prState` (`green`/`conflicted`/`pending`/`red`) enrichment on `who`'s STALE row that `pr_landable` computes — the base `who` proof-of-life (`livePr`, `STALE (#NNN OPEN)`) landed with case 26; the landable colour of it is this | new `adopt`/`landable` command |
 | 31 (superseded-run-720) | `adopt`/`landable` superseded-run scoring (#720) | new `landable`/`adopt` command |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
@@ -333,9 +331,31 @@ business); `batch`/`next`/`decide` relay it to stderr. New `starvedqueue_server.
 verdict is decided by the lease clock at the banner, but the `reap` it points at RE-probes and refuses a
 claim whose `item/<n>-*` PR is still open (#581), so the advice can never break a lock over live work.
 
+The **`say` / `inbox` channel** landed last, and case **25 is now FULL** (this slice): the mailbox rides the
+off-board scan too. `say` posts a message as an `fsgg:msg` comment on the ITEM it concerns, and `inbox`
+delivers the ones addressed to a worker (or broadcast, `to=*`) across every in-flight claim. The port gap
+was case 25's whole point: a claim — and the message riding it — can sit on an issue the board never listed
+(a failed column flip, or one that never reached the board), so a mailbox that read only the board's
+In-progress column would silently DROP a message posted on an off-board claim. So `inbox` runs the SAME
+paginated, unconditional open-issue scan (arm B) unioned with the board's In-progress rows (arm A) that
+`who`/`reap`/`batch` run, reads the `fsgg:msg` comments on each (`Reads.messages`, unconditional like the
+lock — a 304 could hide a message posted after the cached page), and filters to new-and-for-me: `id >` a
+per-worker **cursor** (`Cache.inboxCursor`/`putInboxCursor`, the bash client's `inbox-<slug>` file, so a
+worker that switched engines mid-loop does not re-read old mail), `from ≠` me, and `to ∈ {me, *}`. The
+cursor advances past every message SEEN (so a broadcast I sent does not resurface forever), while delivery
+gates on the OLD cursor; `--peek` shows the mail and leaves the cursor. The whole thing is a pure engine
+round-trip in the harness — the engine `say`s each message over HTTP and the engine `inbox`es it back, the
+fixture seeding none. New `inbox_server.py` (write-capable: it stores the POSTed comment and serves it back);
+7 parity assertions (off-board delivery, broadcast, the item named, cursor advance, self-filter, `--peek`
+shows + does-not-advance) + 6 `Reads.messages` + 5 `Cache` cursor tests. Disposed on the record (ADR-0040
+§5): the engine's `say` takes `--message`, where bash takes the message as a trailing positional — the same
+already-recorded `say` divergence, re-expressed as the property (a message posted by `say` is delivered by
+`inbox`); and the cursor's unreadable-file fallback is `0` (re-show old mail — noise), the OPPOSITE of the
+lock's fail-closed, because a cursor read too HIGH would hide new mail.
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`adopt`/`landable`, `issues`) and **larger port gaps** (case 25's #428 starved-queue
-renderer, and `reap`'s adversarial-interleaving legs). The verify-paths repo-boundary divergences (case 23's
+into **new commands** (`adopt`/`landable`, `issues`) and **larger port gaps** (`reap`'s
+adversarial-interleaving legs, case 24). The verify-paths repo-boundary divergences (case 23's
 SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
 the call-counting transformation is demonstrated end-to-end by case 10.
 
@@ -390,7 +410,7 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 23 full + 3 partial of 27 cases** ported to `tests/coord-engine-parity/` (~315
+      **In progress: 24 full + 2 partial of 27 cases** ported to `tests/coord-engine-parity/` (~322
       assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
@@ -414,7 +434,10 @@ documented retirement is not.**
       **BUSY, not empty** — a STALE off-board claim and a MARKERLESS In-progress row now reserve too (the lock,
       not the column, #461), and when that leaves nothing to hand out the queue names every holder, the soonest
       lease, and — for an EXPIRED lease — the exact `reap` (`Batch.starvedBanner`, silent on a healthy queue).
-      Case 25 stays PARTIAL (only off-board `inbox` remains). Ten engine
+      Case 25 is now FULL — the **`say` / `inbox` channel** ported last: `inbox` runs the same off-board
+      scan `who`/`reap`/`batch` do, reads the `fsgg:msg` comments (`Reads.messages`, unconditional), and
+      delivers new-and-for-me mail past a per-worker cursor (`Cache.inboxCursor`, the bash `inbox-<slug>`
+      file), so a message posted on an OFF-BOARD claim is delivered and `--peek` shows without consuming. Ten engine
       defects the port was *for* closed along the way, plus the
       `verify-paths --issue` repo-boundary port gap (#479/#494) and the #430 git-remote repo default, which
       together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419

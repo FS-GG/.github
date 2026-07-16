@@ -1411,6 +1411,150 @@ module Client =
                         printfn "said to %s on %s" toW ref.Short
                         ExitGreen
 
+    let private renderInboxJson (msgs: (string * Reads.Message) list) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        w.WriteStartArray()
+
+        for (item, m) in msgs do
+            w.WriteStartObject()
+            w.WriteString("item", item)
+            w.WriteNumber("id", m.Id)
+            w.WriteString("from", m.From)
+            w.WriteString("to", m.To)
+            w.WriteString("at", m.At)
+            w.WriteString("text", m.Text)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    /// This worker's mailbox: every message addressed to it (or broadcast) across the in-flight claims.
+    ///
+    /// `say` posts a message on the ITEM it concerns, and both parties to a collision are In progress, so the
+    /// in-flight set is exactly where cross-work talk lives. A per-worker cursor makes `inbox` show only
+    /// what is new; `--peek` leaves the cursor alone.
+    ///
+    /// IT RUNS THE SAME OFF-BOARD SCAN `who`/`reap`/`batch` run (case 25). A claim — and the message riding
+    /// it — can sit on an issue the board never listed (a failed column flip, or an item that never reached
+    /// the board), so a mailbox that read only the board's In-progress column would silently drop a message
+    /// posted on an off-board claim. The candidate set is the board's In-progress rows (arm A) UNION every
+    /// open issue in the repos in scope (arm B — paginated, and never conditional, so a 304 cannot hide a
+    /// message the way it must never hide a lock).
+    let inbox (ctx: Context) (opts: Options) : int =
+        match worker opts with
+        | Error c -> c
+        | Ok w ->
+            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+            | Error e -> fail e
+            | Ok board ->
+                match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
+                | Error e -> fail e
+                | Ok rows ->
+                    let boardRows =
+                        rows
+                        |> List.filter (fun r ->
+                            not r.IsPullRequest
+                            && (match opts.Repo with
+                                | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
+                                | None -> true))
+
+                    // The repos an off-board claim could live in — derived from the board scan in hand, with
+                    // the same `--repo`-names-no-board-item fallback `who` uses, so a message on an issue that
+                    // never reached the board is still found.
+                    let repos =
+                        let fromBoard =
+                            boardRows |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo) |> List.distinct
+
+                        match fromBoard, opts.Repo with
+                        | [], Some name when name.Contains "/" ->
+                            let parts = name.Split('/')
+                            [ parts.[0], parts.[1] ]
+                        | [], Some name -> [ ctx.Owner, name ]
+                        | rs, _ -> rs
+
+                    let mutable failure: Errors.IoError option = None
+                    let offBoard = System.Collections.Generic.HashSet<string * string * int>()
+
+                    for (o, r) in repos do
+                        if failure.IsNone then
+                            // FAILS CLOSED (#461): an unreadable scan is never an empty one. A mailbox that
+                            // swallowed a failed issue-list read would report "no new mail" over a claim whose
+                            // messages it never looked for.
+                            match Reads.openIssues ctx.Transport o r with
+                            | Error e -> failure <- Some e
+                            | Ok issues ->
+                                for (n, _) in issues do
+                                    offBoard.Add((o, r, n)) |> ignore
+
+                    let inProgressRefs =
+                        boardRows
+                        |> List.filter (fun r -> r.Status = BoardStatus.InProgress)
+                        |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number)
+                        |> Set.ofList
+
+                    let candidates =
+                        if failure.IsSome then
+                            []
+                        else
+                            Seq.append offBoard inProgressRefs
+                            |> Seq.distinct
+                            |> Seq.sortBy (fun (o, r, n) -> o, r, n)
+                            |> List.ofSeq
+
+                    // The cursor is the high-water mark. `maxId` advances past EVERY message seen — even one
+                    // not addressed to us, even a broadcast we sent — so mail already read never re-surfaces;
+                    // `delivered` is the subset the cursor's advance does NOT gate on: new (> the old cursor),
+                    // not our own, and addressed to us or to everyone.
+                    let since = Cache.inboxCursor w.Id
+                    let mutable maxId = since
+                    let delivered = ResizeArray<string * Reads.Message>()
+
+                    for (o, r, n) in candidates do
+                        if failure.IsNone then
+                            // A FAILED READ IS A LOST MESSAGE, not an empty mailbox — fail closed over the
+                            // in-flight set exactly as `who` does, so an unread warning is never reported as
+                            // "no new mail".
+                            match Reads.messages ctx.Transport o r n with
+                            | Error e -> failure <- Some e
+                            | Ok msgs ->
+                                for m in msgs do
+                                    if m.Id > maxId then
+                                        maxId <- m.Id
+
+                                    if m.Id > since && m.From <> w.Id && (m.To = w.Id || m.To = "*") then
+                                        delivered.Add($"%s{r}#%d{n}", m)
+
+                    match failure with
+                    | Some e -> fail e
+                    | None ->
+                        // The default consumes what it shows (advance the cursor); `--peek` shows it and
+                        // leaves the cursor, so the same mail is still new next time.
+                        if not opts.Peek then
+                            Cache.putInboxCursor w.Id maxId
+
+                        let delivered = List.ofSeq delivered
+
+                        match opts.Render with
+                        | Json -> printfn "%s" (renderInboxJson delivered)
+                        | Text ->
+                            if List.isEmpty delivered then
+                                printfn "no new messages for worker %s." w.Id
+                            else
+                                for (item, m) in delivered do
+                                    printfn "── %s  %s → %s  (%s)" item m.From m.To m.At
+                                    printfn "%s" m.Text
+                                    printfn ""
+
+                                // Say the cursor was NOT advanced, on stderr, so a `--peek` piped to a machine
+                                // consumer still shouts that this read did not consume the mail it showed.
+                                if opts.Peek then
+                                    eprint "fsgg-coord-engine: --peek — cursor not advanced."
+
+                        ExitGreen
+
     let doneCmd (ctx: Context) (opts: Options) : int =
         match oneArg opts "done: an issue ref", worker opts with
         | Error c, _
@@ -2174,6 +2318,7 @@ module Client =
             | BatchCmd
             | Who
             | Reap
+            | Inbox
             | Take -> { opts with Repo = scopedRepo opts }
             | _ -> opts
 
@@ -2206,6 +2351,7 @@ module Client =
             | Widen -> widen ctx opts
             | Overlap -> overlapCmd ctx opts
             | Say -> say ctx opts
+            | Inbox -> inbox ctx opts
             | DoneCmd -> doneCmd ctx opts
             | VerifyPaths -> verifyPaths ctx opts
             | Bootstrap -> bootstrapCmd ctx opts

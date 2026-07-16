@@ -237,6 +237,108 @@ module Reads =
 
                     Ok found
 
+    // ---- worker-to-worker messages (the `say` / `inbox` channel) ----------------------------------
+
+    type Message =
+        { Id: int64
+          From: string
+          To: string
+          At: string
+          Text: string }
+
+    /// ANCHORED, exactly like `markerRe`. Un-anchor it and a `say` message whose TEXT merely quotes a
+    /// message marker would be delivered as though it were one — the same forgery `markerRe` refuses.
+    let private msgRe = Regex(@"^<!--\s*fsgg:msg\s", RegexOptions.Compiled)
+
+    let private msgFromToRe =
+        Regex(@"^<!--\s*fsgg:msg\s+from=(?<f>[^\s>]+)\s+to=(?<t>[^\s>]+)", RegexOptions.Compiled)
+
+    // The rendered body is `<!-- fsgg:msg … -->\n**from → to**\n\n<text>`. Peel the marker comment and the
+    // `**from → to**` header off the front, then trim the trailing newline, leaving the message the worker
+    // wrote — the same two `sub`s bash's `parse_msgs` applies.
+    let private msgCommentRe = Regex(@"^<!--[^>]*-->\s*", RegexOptions.Compiled)
+    let private msgHeaderRe = Regex(@"^\*\*[^*]*\*\*\s*", RegexOptions.Compiled)
+
+    let private parseMessage (comment: JsonElement) : Message option =
+        match str comment "body" with
+        | None -> None
+        | Some body when not (msgRe.IsMatch body) -> None
+        | Some body ->
+
+        let id =
+            match comment.TryGetProperty "id" with
+            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
+            | _ -> None
+
+        match id with
+        // A message with no orderable id cannot be paged past — the inbox cursor is keyed on the id. Drop
+        // it rather than let a null reset every reader's high-water mark. A message is NOT a lock, so the
+        // safe failure here is to lose one message, never (as with a marker) to read an item as free.
+        | None -> None
+        | Some id ->
+
+        let m = msgFromToRe.Match body
+
+        if not m.Success then
+            // A half-written `fsgg:msg` names no correspondent. Deliver it to nobody rather than guess a
+            // recipient — again, a message is not a lock: dropping it is safe where broadcasting is not.
+            None
+        else
+            let text =
+                let noComment = msgCommentRe.Replace(body, "")
+                let noHeader = msgHeaderRe.Replace(noComment, "")
+                noHeader.TrimEnd()
+
+            Some
+                { Id = id
+                  From = m.Groups.["f"].Value
+                  To = m.Groups.["t"].Value
+                  At = (str comment "created_at" |> Option.defaultValue "")
+                  Text = text }
+
+    /// The worker-to-worker messages on an issue, in comment-id order (lowest first).
+    ///
+    /// A message is an `fsgg:msg` comment `say` posts; `inbox` reads them across every in-flight claim. Read
+    /// UNCONDITIONALLY, exactly like `markers`: a 304 could serve a comments page captured before a `say`,
+    /// and a lost message is a coordination failure even where it is not a lost lock — the same reason the
+    /// claim scan never goes conditional.
+    let messages
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<Message list> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} messages"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the comments response is not a JSON array"))
+                else
+                    let found =
+                        doc.RootElement.EnumerateArray()
+                        |> Seq.choose parseMessage
+                        |> Seq.sortBy (fun m -> m.Id)
+                        |> List.ofSeq
+
+                    Ok found
+
     // ---- the issue body ---------------------------------------------------------------------------
 
     let issueBody

@@ -90,6 +90,23 @@ module Reads =
     /// Stale, expressed for the scheduler.
     val reserver: leaseMinutes: int -> markers: Marker list -> Marker option
 
+    /// A worker-to-worker message parsed off an issue comment — the `say` / `inbox` channel.
+    type Message =
+        { Id: int64
+          From: string
+          To: string
+          At: string
+          Text: string }
+
+    /// The `fsgg:msg` messages on an issue, in comment-id order (lowest first).
+    ///
+    /// **NEVER CONDITIONAL**, exactly like `markers`: a 304 could serve a comments page captured before a
+    /// `say`, hiding a message. A message is not a lock, so the failure mode differs — a message with no
+    /// orderable id, or with no parseable `from`/`to`, is DROPPED rather than (as a marker must) failing
+    /// closed and blocking — but the read itself is as unconditional as the lock's, because a lost message
+    /// is still a coordination failure. A malformed page is an error, never an empty mailbox (#461).
+    val messages: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<Message list>
+
     /// An issue's body — the touch-set lives in it.
     ///
     /// Returns the raw body. The caller parses it with `TouchSet.parse`, and the distinction that matters
