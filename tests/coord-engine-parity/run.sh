@@ -3175,59 +3175,65 @@ if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
   adv() { FSGG_GITHUB_API_BASE="$ADV_BASE" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
             "$ENGINE" "$@"; }
-  adv_rc() { local rc=0; adv "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+  # Capture stdout+stderr AND the exit code in ONE invocation into `ADV_OUT`/`ADV_RC`. The legs below
+  # drive stateful, MUTATING commands (claim POSTs and withdraws), so running a command twice — once for
+  # its text, once for its exit code — would exercise a DIFFERENT read on the second call (e.g. #90's
+  # re-read fault would land on the second run's INITIAL read). One invocation per leg keeps the exit-code
+  # assertion and the text assertion about the SAME run.
+  adv_cap() { ADV_OUT="$(adv "$@" 2>&1)"; ADV_RC=$?; }
 
   # (e) A claim marker QUOTED inside a message does not forge a lock — the marker is only a marker at the
   #     START of a comment body (`^<!--\s*fsgg:claim`). #88 carries a `fsgg:msg` that quotes a claim marker
   #     in prose and no real marker, so the item is FREE and claims cleanly.
-  c88="$(adv claim 'FS.GG.SDD#88' --worker vole-c88 2>/dev/null)"
-  printf '%s' "$c88" | grep -q 'claimed FS.GG.SDD#88' \
+  adv_cap claim 'FS.GG.SDD#88' --worker vole-c88
+  { [ "$ADV_RC" = "0" ] && printf '%s' "$ADV_OUT" | grep -q 'claimed FS.GG.SDD#88'; } \
     && ok "case24(e): a marker quoted inside a message does NOT hold the item — it is still claimable" \
-    || bad "case24(e): forged-marker-in-message must not block the claim" "got: $c88"
+    || bad "case24(e): forged-marker-in-message must not block the claim" "rc=$ADV_RC got: $ADV_OUT"
 
   # (f) A marker we cannot parse a worker out of FAILS CLOSED: it BLOCKS the item rather than reading as
   #     free (a lock you cannot read is still a lock). #89's marker has no `worker=`. Engine says
   #     "unparseable lock" (bash: "unparsed-marker" — disposed as the property).
-  f89="$(adv claim 'FS.GG.SDD#89' --worker vole-c89 2>&1 || true)"
-  [ "$(adv_rc claim 'FS.GG.SDD#89' --worker vole-c89)" != "0" ] \
+  adv_cap claim 'FS.GG.SDD#89' --worker vole-c89
+  [ "$ADV_RC" != "0" ] \
     && ok "case24(f): a malformed marker BLOCKS the item (claim fails closed, non-zero)" \
-    || bad "case24(f): a malformed marker must block the claim" "$f89"
-  printf '%s' "$f89" | grep -q 'unparseable lock' \
+    || bad "case24(f): a malformed marker must block the claim" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'unparseable lock' \
     && ok "case24(f): ...and the refusal names the unparseable marker (bash 'unparsed-marker', disposed)" \
-    || bad "case24(f): refusal must name the unparseable lock" "$f89"
+    || bad "case24(f): refusal must name the unparseable lock" "$ADV_OUT"
 
   # (c) THE RESURRECTION BUG. A worker whose lease expired must NOT heartbeat its marker back to life once
   #     another worker legitimately holds the item — it must be told to STOP. #86 carries ghost-222 STALE
   #     under heron-b71 FRESH.
-  hb86="$(adv heartbeat 'FS.GG.SDD#86' --worker ghost-222 2>&1 || true)"
-  [ "$(adv_rc heartbeat 'FS.GG.SDD#86' --worker ghost-222)" != "0" ] \
+  adv_cap heartbeat 'FS.GG.SDD#86' --worker ghost-222
+  [ "$ADV_RC" != "0" ] \
     && ok "case24(c): an expired worker cannot resurrect its claim under a NEW holder (heartbeat refused)" \
-    || bad "case24(c): heartbeat under a new holder must fail" "$hb86"
-  printf '%s' "$hb86" | grep -q 'heron-b71' && printf '%s' "$hb86" | grep -q 'STOP working' \
+    || bad "case24(c): heartbeat under a new holder must fail" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'heron-b71' && printf '%s' "$ADV_OUT" | grep -q 'STOP working' \
     && ok "case24(c): ...it names the worker that now holds it (heron-b71) and says STOP working it" \
-    || bad "case24(c): refusal must name the holder and say STOP working" "$hb86"
+    || bad "case24(c): refusal must name the holder and say STOP working" "$ADV_OUT"
   # ...and the refused renew patched NOTHING — the fixture recorded zero comment PATCHes.
   [ "$(curl -s "$ADV_BASE/_patches")" = "[]" ] \
     && ok "case24(c): the refused renew patched NOTHING (no comment PATCH reached the fixture)" \
     || bad "case24(c): a refused heartbeat must not PATCH" "$(curl -s "$ADV_BASE/_patches")"
 
   # (d) An expired lease is refused even when nobody else took the item — the promise lapsed; re-claim.
-  hb87="$(adv heartbeat 'FS.GG.SDD#87' --worker ghost-333 2>&1 || true)"
-  [ "$(adv_rc heartbeat 'FS.GG.SDD#87' --worker ghost-333)" != "0" ] \
+  adv_cap heartbeat 'FS.GG.SDD#87' --worker ghost-333
+  [ "$ADV_RC" != "0" ] \
     && ok "case24(d): an expired lease cannot be renewed in place (heartbeat refused)" \
-    || bad "case24(d): an expired lease heartbeat must fail" "$hb87"
-  printf '%s' "$hb87" | grep -q 'EXPIRED' && printf '%s' "$hb87" | grep -qi 'claim' \
+    || bad "case24(d): an expired lease heartbeat must fail" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'EXPIRED' && printf '%s' "$ADV_OUT" | grep -qi 'claim' \
     && ok "case24(d): ...it says the lease EXPIRED and points at re-claiming (bash 'fsgg-coord claim', disposed)" \
-    || bad "case24(d): refusal must say EXPIRED and name the re-claim remedy" "$hb87"
+    || bad "case24(d): refusal must say EXPIRED and name the re-claim remedy" "$ADV_OUT"
 
   # (g) A transient read failure on the CAS re-read must not ORPHAN the marker we just posted — an orphaned
   #     live marker blocks every other worker for a full lease while nobody works the item. #90 starts
-  #     empty; its re-read FAULTS (502). The claim withdraws its own marker.
+  #     empty; its re-read FAULTS (502). The claim withdraws its own marker (ONE invocation — the fixture
+  #     faults every #90 read after the first, so a second run would fault the initial read instead).
   del_before="$(curl -s "$ADV_BASE/_deletes")"
-  g90="$(adv claim 'FS.GG.SDD#90' --worker teal-e55 2>&1 || true)"
-  [ "$(adv_rc claim 'FS.GG.SDD#90' --worker teal-e55)" != "0" ] \
+  adv_cap claim 'FS.GG.SDD#90' --worker teal-e55
+  [ "$ADV_RC" != "0" ] \
     && ok "case24(g): a failed CAS re-read is a LOSS (claim exits non-zero — nothing was claimed)" \
-    || bad "case24(g): a failed CAS re-read must not announce a claim" "$g90"
+    || bad "case24(g): a failed CAS re-read must not announce a claim" "rc=$ADV_RC $ADV_OUT"
   # The posted marker was DELETEd — "removed our marker" (bash), proven at the transport: /_deletes grew.
   del_after="$(curl -s "$ADV_BASE/_deletes")"
   [ "$del_after" != "$del_before" ] \
@@ -3237,15 +3243,15 @@ if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
   # (i) THE FAIL-OPEN. If the CAS re-read shows NO live marker, our own marker is missing — a peer collected
   #     it, or the read lagged our write. We cannot demonstrate we hold the lock, so we must NOT announce
   #     that we do. "We cannot tell" is a LOSS. #92 starts empty and its re-read stays empty (vanished).
-  i92="$(adv claim 'FS.GG.SDD#92' --worker teal-e55 2>&1 || true)"
-  [ "$(adv_rc claim 'FS.GG.SDD#92' --worker teal-e55)" != "0" ] \
+  adv_cap claim 'FS.GG.SDD#92' --worker teal-e55
+  [ "$ADV_RC" != "0" ] \
     && ok "case24(i): an empty CAS re-read is a LOSS, not a win (claim exits non-zero)" \
-    || bad "case24(i): an empty CAS re-read must not be a win" "$i92"
-  printf '%s' "$i92" | grep -q 'marker vanished' \
+    || bad "case24(i): an empty CAS re-read must not be a win" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'marker vanished' \
     && ok "case24(i): ...it says the marker vanished" \
-    || bad "case24(i): refusal must say the marker vanished" "$i92"
-  case "$i92" in
-    *"claimed FS.GG.SDD#92"*) bad "case24(i): must not announce a lock it cannot show" "$i92" ;;
+    || bad "case24(i): refusal must say the marker vanished" "$ADV_OUT"
+  case "$ADV_OUT" in
+    *"claimed FS.GG.SDD#92"*) bad "case24(i): must not announce a lock it cannot show" "$ADV_OUT" ;;
     *) ok "case24(i): ...and it does NOT announce a lock it cannot show" ;;
   esac
 
