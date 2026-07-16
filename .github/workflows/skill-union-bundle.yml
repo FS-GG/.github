@@ -73,7 +73,7 @@ jobs:
       - name: Closure — the bundle sources no siblings
         run: |
           set -euo pipefail
-          if grep -nE '^[[:space:]]*(\.|source)[[:space:]]+.*(dirname|BASH_SOURCE|/lib/)' dist/skill-union-assert.sh; then
+          if grep -nE '^[[:space:]]*(\.|source)[[:space:]]+' dist/skill-union-assert.sh; then
             echo "::error::dist/skill-union-assert.sh sources a sibling — it is NOT self-contained and the standalone fetch is broken"
             exit 1
           fi

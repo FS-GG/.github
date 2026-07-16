@@ -76,18 +76,21 @@ render() {
 }
 
 emit() {
-  cat <<EOF
+  # QUOTED heredoc. Unquoted, every `$` and backtick in this banner would be expanded by the generator —
+  # so a future `$VAR` in the text would vanish into the artifact silently, and the backticks below would
+  # each need a backslash to survive. The banner is literal text; say so once, here.
+  cat <<'EOF'
 #!/usr/bin/env bash
 # ============================================================================================
 # DO NOT EDIT. GENERATED FILE.
 #
 # Generated from scripts/skill-union-assert.sh + scripts/lib/* by
-# scripts/generate-skill-union-bundle. \`skill-union-bundle\` in CI fails on any drift, so an edit
+# scripts/generate-skill-union-bundle. `skill-union-bundle` in CI fails on any drift, so an edit
 # here is reverted by the next regeneration — edit the SOURCE and regenerate.
 #
 # THIS FILE IS THE SUPPORTED STANDALONE ARTIFACT (.github#843). It is self-contained BY
 # CONSTRUCTION: it sources no siblings, so fetching this one file at a pinned commit SHA is a
-# complete, deterministic, content-addressed gate. Adding a \`source\` to the source script inlines
+# complete, deterministic, content-addressed gate. Adding a `source` to the source script inlines
 # it here; it can no longer break a consumer who fetched one file.
 #
 #   curl -fsSL https://raw.githubusercontent.com/FS-GG/.github/<40-char-sha>/dist/skill-union-assert.sh
@@ -117,10 +120,17 @@ inlined="$(printf '%s\n' "$BODY" | grep -cF "$MARKER" || true)"
 }
 
 # CLOSURE. The property a consumer actually depends on, asserted on the bytes we are about to write
-# rather than assumed from the inlining above: nothing in the bundle sources a sibling. This catches an
-# inlined lib that itself sources a third file — the failure that would otherwise reach the consumer as a
-# fresh "No such file or directory" and cost another cross-repo issue.
-if residual="$(printf '%s\n' "$BODY" | grep -nE '^[[:space:]]*(\.|source)[[:space:]]+.*(dirname|BASH_SOURCE|/lib/)' || true)"; [ -n "$residual" ]; then
+# rather than assumed from the inlining above: the bundle sources NOTHING. This catches an inlined lib
+# that itself sources a third file — the failure that would otherwise reach the consumer as a fresh
+# "No such file or directory" and cost another cross-repo issue.
+#
+# ANY `.`/`source` line, not just one naming `dirname`/`BASH_SOURCE`/`lib/`. Matching only the shape the
+# script uses TODAY would let `. ./helper.sh` — a sibling by any other spelling — through untouched, and
+# the bundle would ship a dependency it cannot satisfy. The assertion is "sources nothing", so test
+# exactly that. (`.foo` is not a match: `\.` must be followed by whitespace, so paths like `.claude/skills`
+# in the usage text are unaffected.)
+CLOSURE_RE='^[[:space:]]*(\.|source)[[:space:]]+'
+if residual="$(printf '%s\n' "$BODY" | grep -nE "$CLOSURE_RE" || true)"; [ -n "$residual" ]; then
   echo "::error::the bundle still sources a sibling — it is NOT self-contained:" >&2
   printf '%s\n' "$residual" >&2
   exit 2
