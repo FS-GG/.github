@@ -34,6 +34,11 @@ module Identity =
           Session: string option
           Provenance: Provenance }
 
+    /// A filename/id-safe slug, matching the bash client's `slug` so an id round-trips identically. Worker
+    /// ids are slug()'d at creation, so any surface that ADDRESSES a worker (e.g. `say --to`) must run its
+    /// target through the SAME slug or it names an id nobody holds. The one home for that normalization.
+    val slug: s: string -> string
+
     /// Resolve the worker id. `worker` is the `--worker` flag value, if any.
     ///
     /// `Error` when no id can be derived without inventing a shared one — with a message telling the caller
