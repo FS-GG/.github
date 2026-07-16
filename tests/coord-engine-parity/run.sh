@@ -2448,7 +2448,7 @@ else
   mkdir -p "$RSCO/nogit"
   rscoped() { local dir="$1"; shift; ( cd "$dir" \
       && FSGG_GITHUB_API_BASE="http://127.0.0.1:$RS_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
-         FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+         FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$RS_CACHE" \
          "$ENGINE" reap "$@" 2>&1 ); }
 
   # (1) A bare `reap` (DRY RUN) from an SDD checkout considers ONLY SDD's claim — names it, and NOT
