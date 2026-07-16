@@ -945,12 +945,34 @@ module Reads =
                     |> Some
                 | _ -> None
 
-    let prLandable
+    /// `mergeable` as GitHub returns it: `true`/`false`, `null` while it COMPUTES lazily in a background
+    /// job, or absent (a malformed/minimal PR response). `Computing` and `Absent` are held apart because
+    /// only `Computing` is worth a re-read — an absent field will not appear on a second look.
+    type private MergeState =
+        | Mergeable of bool
+        | Computing
+        | Absent
+
+    /// The delay between mergeability re-reads. GitHub computes `mergeable` in a BACKGROUND job and returns
+    /// `null` until it lands, so a retry fired microseconds after the first read cannot have observed a job
+    /// that had not finished — a zero-delay retry is a no-op dressed as diligence. Default ~1s (bash's), env
+    /// so the test harness can drive the fixture's read-count flip without paying the wall-clock.
+    let private mergeableRetryMs () =
+        match Environment.GetEnvironmentVariable "FSGG_COORD_MERGEABLE_RETRY_MS" with
+        | null
+        | "" -> 1000
+        | v ->
+            match Int32.TryParse v with
+            | true, n when n >= 0 -> n
+            | _ -> 1000
+
+    /// Read a PR once: its mergeability state and head SHA (`None` if unreadable/absent).
+    let private prMergeAndSha
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
         (pr: int)
-        : PrState =
+        : (MergeState * string option) option =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
 
@@ -964,40 +986,64 @@ module Reads =
               Subject = subject }
 
         match transport.Send request with
-        | Error _ -> PrUnknown
+        | Error _ -> None
         | Ok response ->
             match parse subject response.Body with
-            | Error _ -> PrUnknown
+            | Error _ -> None
             | Ok doc ->
                 use doc = doc
                 let root = doc.RootElement
 
-                // `.mergeable` is `true` / `false` / `null` (computed lazily). Read all three APART: `false`
-                // is CONFLICTED, the one state we most need to name, and folding it into the `null` fallback
-                // (the jq `//` trap the corpus warns about) would report a conflict as `unknown`.
-                let mergeable =
+                // `.mergeable` is `true` / `false` / `null` / absent. Read them all APART: `false` is
+                // CONFLICTED, the one state we most need to name, and folding it into a fallback (the jq `//`
+                // trap the corpus warns about) would report a conflict as `unknown`.
+                let merge =
                     match root.TryGetProperty "mergeable" with
-                    | true, v when v.ValueKind = JsonValueKind.True -> Some true
-                    | true, v when v.ValueKind = JsonValueKind.False -> Some false
-                    // null, absent, or any other kind — UNKNOWN. (The lazy re-read that resolves a real
-                    // `null` is deferred to the `adopt` slice; here a null is fail-closed `PrUnknown`.)
+                    | true, v when v.ValueKind = JsonValueKind.True -> Mergeable true
+                    | true, v when v.ValueKind = JsonValueKind.False -> Mergeable false
+                    | true, v when v.ValueKind = JsonValueKind.Null -> Computing
+                    | _ -> Absent
+
+                let sha =
+                    match root.TryGetProperty "head" with
+                    | true, h when h.ValueKind = JsonValueKind.Object -> str h "sha"
                     | _ -> None
 
-                match mergeable with
-                | None -> PrUnknown
-                | Some false -> PrConflicted
-                | Some true ->
-                    let sha =
-                        match root.TryGetProperty "head" with
-                        | true, h when h.ValueKind = JsonValueKind.Object -> str h "sha"
-                        | _ -> None
+                Some(merge, sha)
 
-                    match sha with
-                    | None -> PrUnknown
-                    | Some sha ->
-                        match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
-                        | Some runs, Some checks -> Landable.score (Some true) runs checks
-                        | _ -> PrUnknown
+    let prLandable
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : PrState =
+
+        // THE LAZY RE-READ (#697). A null `mergeable` is UNKNOWN, not "mergeable" and not "conflicted" — and
+        // it is the NORMAL first answer for a PR GitHub has not yet tested. So a present `null` is re-read a
+        // bounded number of times (3, ~1s apart, bash's budget); a `false` seen on the SECOND look is the
+        // conflict the first read could not yet see, and adopting on the first `null` would land it. `Absent`
+        // is not re-read — the field is not there to change — and a read that FAILED is `PrUnknown`.
+        let rec readMerge (triesLeft: int) : MergeState * string option =
+            match prMergeAndSha transport owner repo pr with
+            | None -> Absent, None
+            | Some(Computing, sha) when triesLeft > 1 ->
+                let ms = mergeableRetryMs ()
+
+                if ms > 0 then
+                    System.Threading.Thread.Sleep ms
+
+                readMerge (triesLeft - 1)
+            | Some result -> result
+
+        match readMerge 3 with
+        | Mergeable false, _ -> PrConflicted
+        | Computing, _
+        | Absent, _ -> PrUnknown
+        | Mergeable true, None -> PrUnknown
+        | Mergeable true, Some sha ->
+            match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
+            | Some runs, Some checks -> Landable.score (Some true) runs checks
+            | _ -> PrUnknown
 
     [<Literal>]
     let private ClosingRefDoc =

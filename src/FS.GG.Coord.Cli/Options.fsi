@@ -42,6 +42,8 @@ module Options =
         | Reap
         /// Take an item's lock (`claim <ref> [--worker W] [--force]`).
         | Claim
+        /// Take over an ORPHAN — a stale claim whose PR is FINISHED — and land it (`adopt <ref> [--worker W]`, #697).
+        | Adopt
         /// Schedule AND claim the next item in one step (`take [--repo] [--worker W]`).
         | Take
         /// Drop a lock, restoring the column it overwrote (`release <ref> [--worker W]`).

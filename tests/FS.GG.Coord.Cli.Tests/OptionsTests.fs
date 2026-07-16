@@ -179,3 +179,13 @@ module OptionsTests =
     [<Fact>]
     let ``--active is off by default`` () =
         Assert.False((parse [ "overlap"; "FS.GG.SDD#401"; "FS.GG.SDD#403" ] |> ok).Active)
+
+    // ---- adopt (the #697 land-the-orphan command) -------------------------------------------------
+
+    [<Fact>]
+    let ``adopt parses to its command, defaults to text, and carries the ref`` () =
+        let o = parse [ "adopt"; "FS.GG.SDD#970"; "--worker"; "heron-697" ] |> ok
+        Assert.Equal(Adopt, o.Command)
+        Assert.Equal(Text, o.Render)
+        Assert.Equal<string list>([ "FS.GG.SDD#970" ], o.Args)
+        Assert.Equal(Some "heron-697", o.Worker)

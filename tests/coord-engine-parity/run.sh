@@ -2621,6 +2621,101 @@ if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
   kill "$LND_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 30 (pr-existence-697) — the `adopt` COMMAND. Land another worker's orphaned PR through ONE verified
+# command that cannot be talked into landing anything else. The GATE is what makes it safe: `adopt` lands
+# FINISHED work (green + mergeable) and nothing else. The transfer reuses `claim` (one lock, one CAS). World
+# (case 30's #697 seeds, one transport over — `adopt_server.py`): #970 GREEN (LAND IT, transfer), #971
+# CONFLICTED, #972 mergeable-but-ZERO-checks (NOT green, #606), #973 a LIVE claim (a steal, not an orphan),
+# #974 NO open PR (merely dead), #975 mergeable=null-then-false (the lazy re-read sees the conflict), #976
+# checks RUNNING (pending). Every refusal leaves the lock UNTOUCHED.
+# ==================================================================================================
+ADP_OUT="$(mktemp)"; python3 "$HERE/adopt_server.py" >"$ADP_OUT" 2>/dev/null & ADP_SRV=$!; ADP_PORT=""
+for _ in $(seq 1 50); do ADP_PORT="$(head -n1 "$ADP_OUT" 2>/dev/null)"; [ -n "$ADP_PORT" ] && break; sleep 0.1; done
+rm -f "$ADP_OUT"
+if [ -z "$ADP_PORT" ]; then bad "adopt fixture bound a port"; else
+  adp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$ADP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+            FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  # The workers whose markers sit on an issue right now (the transfer POSTs; a refusal does not).
+  workers_on() { curl -s "http://127.0.0.1:$ADP_PORT/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                   | jq -r '[.[].body | capture("worker=(?<w>[^\\s>]+)").w] | join(",")' 2>/dev/null; }
+
+  # THE REFUSALS FIRST (they touch nothing), so the green transfer's POSTed marker cannot leak into them.
+
+  # 4a. A CONFLICTED PR is not finished — rebasing it is AUTHORING, not landing.
+  conf="$(adp adopt FS.GG.SDD#971 --worker heron-697 2>&1 || true)"
+  printf '%s' "$conf" | grep -q 'CONFLICTED' \
+    && ok "#697: adopt REFUSES a conflicted PR — rebasing is authoring, not landing (case 30)" \
+    || bad "#697: adopt #971 conflicted" "$conf"
+  [ "$(workers_on 971)" = "ghost-971" ] \
+    && ok "#697: ...and does NOT take the lock on it (case 30)" \
+    || bad "#697: adopt #971 lock leaked" "workers: $(workers_on 971)"
+
+  # 4b. ZERO check runs is NOT green (#606) — an absent subject is a finding, not a pass.
+  nock="$(adp adopt FS.GG.SDD#972 --worker heron-697 2>&1 || true)"
+  printf '%s' "$nock" | grep -q 'NOT green' \
+    && ok "#697/#606: a mergeable PR with ZERO check runs is NOT green — adopt refuses it (case 30)" \
+    || bad "#697: adopt #972 zero-checks" "$nock"
+  [ "$(workers_on 972)" = "ghost-972" ] \
+    && ok "#697/#606: ...and does NOT take the lock on untested work (case 30)" \
+    || bad "#697: adopt #972 lock leaked" "workers: $(workers_on 972)"
+
+  # 4c. A LIVE claim is not an orphan. Adopting one is a STEAL.
+  livec="$(adp adopt FS.GG.SDD#973 --worker heron-697 2>&1 || true)"
+  printf '%s' "$livec" | grep -q 'held by a LIVE claim' \
+    && ok "#697: adopt REFUSES a LIVE claim — a worker that is alive is not an orphan (case 30)" \
+    || bad "#697: adopt #973 live" "$livec"
+  [ "$(workers_on 973)" = "busy-973" ] \
+    && ok "#697: ...and the live worker keeps its lock (case 30)" \
+    || bad "#697: adopt #973 lock stolen" "workers: $(workers_on 973)"
+
+  # 4d. No PR at all: nothing to land — the claim is merely DEAD, and `reap` is the right tool.
+  nopr="$(adp adopt FS.GG.SDD#974 --worker heron-697 2>&1 || true)"
+  printf '%s' "$nopr" | grep -q 'no finished work to adopt' \
+    && ok "#697: adopt REFUSES an item with no open PR — there is no finished work to land (case 30)" \
+    || bad "#697: adopt #974 no-pr" "$nopr"
+  [ "$(workers_on 974)" = "ghost-974" ] \
+    && ok "#697: ...and leaves the dead claim for reap (case 30)" \
+    || bad "#697: adopt #974 lock leaked" "workers: $(workers_on 974)"
+
+  # 5. `mergeable` IS COMPUTED LAZILY: the first read is `null`, a later one carries the truth. A null must
+  #    be RE-READ, not believed — else a CONFLICTED PR reads as landable.
+  lazy="$(adp adopt FS.GG.SDD#975 --worker heron-697 2>&1 || true)"
+  printf '%s' "$lazy" | grep -q 'CONFLICTED' \
+    && ok "#697: a null \`mergeable\` is re-read, and the PR's REAL state (conflicted) is seen (case 30)" \
+    || bad "#697: adopt #975 lazy" "$lazy"
+  [ "$(workers_on 975)" = "ghost-975" ] \
+    && ok "#697: ...and the lock is not taken on a PR we misread as landable (case 30)" \
+    || bad "#697: adopt #975 lock leaked" "workers: $(workers_on 975)"
+
+  # 4e. Checks still RUNNING — a pending check is not a passing one.
+  pend="$(adp adopt FS.GG.SDD#976 --worker heron-697 2>&1 || true)"
+  printf '%s' "$pend" | grep -q 'checks RUNNING' \
+    && ok "#697: adopt refuses a PR whose checks are still RUNNING — pending is not passing (case 30)" \
+    || bad "#697: adopt #976 pending" "$pend"
+  [ "$(workers_on 976)" = "ghost-976" ] \
+    && ok "#697: ...and does NOT take the lock on unfinished work (case 30)" \
+    || bad "#697: adopt #976 lock leaked" "workers: $(workers_on 976)"
+
+  # 3. THE TRANSFER. A GREEN, mergeable orphan is adopted: adopt confirms GREEN and MERGEABLE, hands the
+  #    worker the MERGE (not a rebuild, not a close), and TRANSFERS the claim under `claim`'s CAS.
+  adopt970="$(adp adopt FS.GG.SDD#970 --worker heron-697 2>&1 || true)"
+  printf '%s' "$adopt970" | grep -q 'GREEN and MERGEABLE' \
+    && ok "#697: adopt confirms the PR is green and mergeable before touching anything (case 30)" \
+    || bad "#697: adopt #970 GREEN banner" "$adopt970"
+  printf '%s' "$adopt970" | grep -q 'Do NOT rebuild it, and do NOT close PR #701' \
+    && ok "#697: adopt hands the worker the MERGE, and says not to close the PR (case 30)" \
+    || bad "#697: adopt #970 epilogue" "$adopt970"
+  # THE TRANSFER ITSELF: heron-697's marker is now on #970, so the live winner (ghost-970 is stale) is the
+  # adopter — the claim is theirs, under one CAS, the total order intact.
+  printf '%s' "$(workers_on 970)" | grep -q 'heron-697' \
+    && ok "#697: adopt TRANSFERS the claim — the adopter's marker is posted under the CAS (case 30)" \
+    || bad "#697: adopt #970 transfer" "workers: $(workers_on 970)"
+
+  kill "$ADP_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
