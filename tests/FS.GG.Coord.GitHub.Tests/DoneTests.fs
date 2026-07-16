@@ -468,7 +468,7 @@ let ``a rate-limited roll-up PROPAGATES - it does not silently leave the parent 
     // "I could not read the parent" and "the parent is not finished" are different facts. Reporting the
     // second when the first is true would leave a genuinely-complete epic open forever, and nobody would
     // ever know why.
-    let transport = Fake.Recorder(fun _ -> Error(RateLimited None))
+    let transport = Fake.Recorder(fun _ -> Error(RateLimited(UnknownBudget, None)))
 
     match rollUp transport board "w" parentRef Completes with
     | Error(RateLimited _) -> ()

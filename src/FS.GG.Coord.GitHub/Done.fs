@@ -234,7 +234,9 @@ module Done =
                     |> List.ofSeq
 
                 if messages |> List.exists Budget.isRateLimited then
-                    Error(RateLimited None)
+                    // Asserted, not read — this arm parses a GraphQL `errors` array, so the response is a
+                    // GraphQL one by construction (same reasoning as `Scan.fs`).
+                    Error(RateLimited(GraphQlBudget, None))
                 else
                     Error(GraphQlErrors messages)
 

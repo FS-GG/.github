@@ -249,7 +249,7 @@ let ``a stale marker we could not delete is LEFT for reap, never a reason to fai
             [ ok (comments [ staleClaimJson 810 "ghost-111" "" ])
               ok """{"id":901}"""
               ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ])
-              Error(RateLimited None) ] // 4. DELETE faults — leave it for reap
+              Error(RateLimited(UnknownBudget, None)) ] // 4. DELETE faults — leave it for reap
 
     match claim transport 120 me None aRef (fun () -> None) with
     | Ok(Won(held, collected)) ->
@@ -322,7 +322,7 @@ let ``a failed FIRST read is fatal, and nothing is posted`` () =
     // The only cheap place to fail, which is why the read comes first: we have posted nothing, so there is
     // no marker to clean up. Guessing the lock state from a failed read is the one thing a lock may never
     // do.
-    let transport = scripted [ Error(RateLimited None) ]
+    let transport = scripted [ Error(RateLimited(UnknownBudget, None)) ]
 
     match claim transport 120 me None aRef (fun () -> None) with
     | Error(RateLimited _) -> ()

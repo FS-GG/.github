@@ -161,7 +161,7 @@ let ``#510 a board write may be deferred ONLY on an exhausted budget`` () =
     // holding the failure that licenses it, and only one failure does. In bash this test was written at the
     // `claim` call site and not at the `set-field` one — so `set-field` printed "the write is QUEUED" over
     // failures it could never replay, and `flush` then reported success, confirming the lie.
-    match defer (RateLimited None) entry with
+    match defer (RateLimited(UnknownBudget, None)) entry with
     | Ok() -> ()
     | Error e -> failwith $"an exhausted budget must be queueable — got %A{e}"
 
@@ -187,7 +187,7 @@ let ``#510 a PERMANENT failure is refused, and nothing is queued`` () =
 let ``the queue is UNLINKED when it drains, not truncated`` () =
     use sandbox = new Sandbox()
 
-    defer (RateLimited None) entry |> ignore
+    defer (RateLimited(UnknownBudget, None)) entry |> ignore
     dropPending entry
 
     // An empty file is a CLAIM — "there is a queue, and it is empty" — and that is a statement about state
@@ -203,7 +203,7 @@ let ``the queue is UNLINKED when it drains, not truncated`` () =
 let ``a CORRUPT queue refuses to drain rather than silently dropping a board write`` () =
     use sandbox = new Sandbox()
 
-    defer (RateLimited None) entry |> ignore
+    defer (RateLimited(UnknownBudget, None)) entry |> ignore
     File.AppendAllText(Path.Combine(sandbox.Dir, "pending.jsonl"), "this is not a queue entry\n")
 
     // Skipping the unreadable line would silently drop a queued board write — the exact promise-not-kept

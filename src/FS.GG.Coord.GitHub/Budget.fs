@@ -74,12 +74,11 @@ module Budget =
             // from bytes it could not read.
             None
 
-    /// Pull the reset instant out of a rate-limit response.
+    /// Pull the reset instant out of a rate-limit response BODY (a GraphQL `resetAt`).
     ///
-    /// GitHub sends `X-RateLimit-Reset` as a header, but a GraphQL 403 body can also carry `resetAt`. The
-    /// caller passes whatever it has; a reset we cannot read yields `None`, and `Errors.explain` then says
-    /// so rather than inventing a wait.
-    let private readResetAt (body: string) =
+    /// This is the FALLBACK. The header is the primary source and `readReset` below prefers it — this
+    /// arm only answers for a GraphQL 403 whose body carries `resetAt`.
+    let private readResetAtFromBody (body: string) =
         if String.IsNullOrWhiteSpace body then
             None
         else
@@ -87,6 +86,12 @@ module Budget =
         try
             use doc = JsonDocument.Parse body
 
+            // ARRAYS ARE SEARCHED TOO, and that is not hypothetical tidying. This search only ever runs on
+            // a GraphQL body, and a rate-limited GraphQL response nulls `data` and reports the failure in
+            // `errors[]` — an ARRAY. Descending objects alone meant the one shape this fallback exists to
+            // read was the one shape it could not reach, so it always returned `None` and the caller always
+            // said "the reset time could not be read". A search that cannot see its own subject is #266
+            // again, three levels down.
             let rec find (e: JsonElement) =
                 match e.ValueKind with
                 | JsonValueKind.Object ->
@@ -98,18 +103,64 @@ module Budget =
                             | _ -> None
                         else
                             find p.Value)
+                | JsonValueKind.Array -> e.EnumerateArray() |> Seq.tryPick find
                 | _ -> None
 
             find doc.RootElement
         with :? JsonException ->
             None
 
-    let classify (subject: string) (status: int) (body: string) =
+    /// WHICH budget did GitHub say this was? Read, never inferred.
+    ///
+    /// `X-RateLimit-Resource` rides on the 403 itself, so it names the bucket that ACTUALLY refused the
+    /// call. That matters more than it sounds: on this account the free `/rate_limit` endpoint reports a
+    /// `core` counter that DISAGREES with the one real requests are billed against (measured 2026-07-16 —
+    /// `/rate_limit` said 2431/5000 remaining while every real read 403'd with `remaining: 0`, and the two
+    /// even named different reset instants). The failing response's own headers are the only reading that
+    /// is definitionally about the request that failed.
+    ///
+    /// Every REST resource (`core`, `search`, `code_search`, …) is `RestBudget`: they are separate
+    /// counters, but they share one remedy and one shape, and the distinction a worker needs is REST vs
+    /// GraphQL — which of the two the protocol just lost.
+    let private readResource (header: string -> string option) =
+        match header "X-RateLimit-Resource" with
+        | Some r when not (String.IsNullOrWhiteSpace r) ->
+            if r.Trim().Equals("graphql", StringComparison.OrdinalIgnoreCase) then
+                GraphQlBudget
+            else
+                RestBudget
+        // NO HEADER, NO GUESS. A secondary/abuse-detector 403 carries no resource, and naming one here
+        // would re-introduce the exact defect this function replaces — a confident budget name with
+        // nothing behind it.
+        | _ -> UnknownBudget
+
+    /// The reset instant — the HEADER first, then a GraphQL body's `resetAt`.
+    ///
+    /// `X-RateLimit-Reset` is epoch SECONDS. It was sitting on every REST 403 the whole time and nothing
+    /// ever read it, so a REST rate limit could only ever say "the reset time could not be read" — while
+    /// `/pnext-item` §1 told the worker to "back off until the reset it names". The tool was structurally
+    /// unable to name one.
+    let private readReset (header: string -> string option) (body: string) =
+        let fromHeader =
+            match header "X-RateLimit-Reset" with
+            | Some v ->
+                match Int64.TryParse(v.Trim()) with
+                | true, epoch -> Some(DateTimeOffset.FromUnixTimeSeconds epoch)
+                // A header we cannot parse is not a reset of zero — 1970 would render as "retry now",
+                // which is the one answer guaranteed to be wrong on a limit that just fired.
+                | _ -> None
+            | None -> None
+
+        match fromHeader with
+        | Some at -> Some at
+        | None -> readResetAtFromBody body
+
+    let classify (subject: string) (status: int) (body: string) (header: string -> string option) =
         // ORDER IS THE CONTRACT. The rate-limit test runs FIRST, on every non-2xx, because a 403 is
         // ambiguous and the two readings have opposite remedies. Test permissions first and an exhausted
         // budget becomes "your token is wrong" — advice that is wrong, unactionable, and permanent.
         if isRateLimited body then
-            RateLimited(readResetAt body)
+            RateLimited(readResource header, readReset header body)
         else
             match status with
             | 404 -> NotFound subject

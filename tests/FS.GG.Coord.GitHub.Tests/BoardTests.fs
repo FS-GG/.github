@@ -76,7 +76,7 @@ let ``#421 a rate-limited item lookup is RateLimited - it is NEVER 'not on board
     // already had one.
     //
     // `Ok None` is what licenses an `item-add`. It must be UNREACHABLE from a failure.
-    let transport = failing (RateLimited None)
+    let transport = failing (RateLimited(UnknownBudget, None))
 
     match itemId transport board "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
@@ -115,7 +115,7 @@ let ``#421 addItem REFUSES to add on a failed lookup - and spends no mutation`` 
     // first and reported the failure afterwards.
     use _sandbox = new Sandbox()
 
-    let transport = scripted [ Error(RateLimited None) ]
+    let transport = scripted [ Error(RateLimited(UnknownBudget, None)) ]
 
     match addItem transport board "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
@@ -237,7 +237,7 @@ let ``itemStatus fails CLOSED - a failed read is Error, never the definite Ok No
     // The same discipline `itemId` keeps (#421): a read that FAILED may not be manufactured into "there is
     // no column". `claim` treats the error as "recorded no column" and falls back to Ready, but it does so
     // from an Error it was handed, not an absence it invented.
-    let transport = failing (RateLimited None)
+    let transport = failing (RateLimited(UnknownBudget, None))
 
     match itemStatus transport board "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
@@ -487,7 +487,7 @@ let ``#510 an exhausted budget DEFERS the board write - and it is really queued`
     use _sandbox = new Sandbox()
 
     let transport =
-        scripted [ ok itemOnBoard; Error(RateLimited None) ]
+        scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
 
     match boardWrite transport board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "In progress") "vole-418" with
     | Ok Deferred ->
@@ -534,7 +534,7 @@ let ``#510 an issue NOT on the board is permanent - reported, and NOT queued`` (
 let ``flush replays a queued write and DROPS it`` () =
     use _sandbox = new Sandbox()
 
-    let deferring = scripted [ ok itemOnBoard; Error(RateLimited None) ]
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
 
     let replaying =
@@ -556,7 +556,7 @@ let ``#862 flush DROPS an entry whose item left the board - but does NOT count i
     // QUEUE A WRITE, then have the item leave the board before the replay. `boardWrite` refuses to queue a
     // `NotOnBoard` (the #510 leg above), so this is the ONE way the case is reachable: the entry was
     // legitimately queued against an item that WAS on the board, and the board moved underneath it.
-    let deferring = scripted [ ok itemOnBoard; Error(RateLimited None) ]
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
 
     // The replay's lookup succeeds and finds NOTHING — the item is gone.
@@ -586,16 +586,16 @@ let ``an exhausted budget STOPS the flush - the rest would fail identically`` ()
     let deferring =
         scripted
             [ ok itemOnBoard
-              Error(RateLimited None)
+              Error(RateLimited(UnknownBudget, None))
               ok itemOnBoard
-              Error(RateLimited None) ]
+              Error(RateLimited(UnknownBudget, None)) ]
 
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 811 "Status" (Set "Ready") "vole-418" |> ignore
 
     // Spending REST calls to confirm that the budget is still exhausted is exactly the back-off EX_RATE
     // exists to signal. The remainder stays queued.
-    let stillLimited = Fake.Recorder(fun _ -> Error(RateLimited None))
+    let stillLimited = Fake.Recorder(fun _ -> Error(RateLimited(UnknownBudget, None)))
 
     // A STOP IS `Stopped`, NOT `Error` (#862). `Error` is reserved for a queue that could not be READ, so
     // that the count this pass landed survives alongside the rate limit rather than being discarded with it.
@@ -614,7 +614,7 @@ let ``#862 a PARTIAL flush reports the writes it DID land, alongside the stop`` 
 
     // Two queued writes; the replay lands the first and meets a fresh rate limit on the second.
     let deferring =
-        scripted [ ok itemOnBoard; Error(RateLimited None); ok itemOnBoard; Error(RateLimited None) ]
+        scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)); ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
 
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 811 "Status" (Set "Ready") "vole-418" |> ignore
@@ -623,7 +623,7 @@ let ``#862 a PARTIAL flush reports the writes it DID land, alongside the stop`` 
         scripted
             [ ok itemOnBoard
               ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
-              Error(RateLimited None) ]
+              Error(RateLimited(UnknownBudget, None)) ]
 
     // THE COUNT MUST SURVIVE THE STOP. `flush` used to return `IoResult<int>`, so a stop returned `Error e`
     // and DISCARDED the 1 it had just written — leaving the caller to re-read the shared queue file and
@@ -654,7 +654,7 @@ let ``a stopped flush does NOT RE-QUEUE what it was replaying - the queue must n
     //
     // A queue that grows every time you try to drain it is worse than no queue at all: it is a promise that
     // gets louder the less able it is to keep it.
-    let deferring = scripted [ ok itemOnBoard; Error(RateLimited None) ]
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
 
     let depthBefore =
@@ -664,7 +664,7 @@ let ``a stopped flush does NOT RE-QUEUE what it was replaying - the queue must n
 
     Assert.Equal(1, depthBefore)
 
-    let stillLimited = Fake.Recorder(fun _ -> Error(RateLimited None))
+    let stillLimited = Fake.Recorder(fun _ -> Error(RateLimited(UnknownBudget, None)))
 
     // Three flushes, all of them meeting the same dead budget.
     flush stillLimited board |> ignore

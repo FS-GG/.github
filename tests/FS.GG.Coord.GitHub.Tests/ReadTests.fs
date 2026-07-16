@@ -222,7 +222,7 @@ let ``#534 an EXHAUSTED BUDGET is NOT degraded to 'blocker unknown' - it is prop
     // message swallowed, the worker told there is nothing to do) wearing #421's clothes (a budget failure
     // reported as a fact about an item) — and the caller would never back off, because it was never told
     // to.
-    let recorder = failing (RateLimited None)
+    let recorder = failing (RateLimited(UnknownBudget, None))
 
     match Reads.blockerState recorder "FS-GG" "FS.GG.SDD" 8 with
     | Error(RateLimited _) -> ()
@@ -230,7 +230,7 @@ let ``#534 an EXHAUSTED BUDGET is NOT degraded to 'blocker unknown' - it is prop
 
 [<Fact>]
 let ``#534 ...and prAlive propagates it too - reap must not decide liveness on a read it cannot make`` () =
-    let recorder = failing (RateLimited None)
+    let recorder = failing (RateLimited(UnknownBudget, None))
 
     match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
@@ -327,7 +327,7 @@ let ``#421 a rate-limited read propagates as RateLimited - never as 'not there'`
     // The read layer must carry the budget failure OUT, intact. The moment it degrades to an empty result
     // the caller cannot tell an exhausted budget from an absent subject — and the remediation for the
     // second one CREATES A DUPLICATE BOARD ITEM.
-    let recorder = failing (RateLimited None)
+    let recorder = failing (RateLimited(UnknownBudget, None))
 
     match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
@@ -373,7 +373,7 @@ let ``subIssues keeps a truncated graph honest - Total exceeds the visible nodes
 [<Fact>]
 let ``subIssues FAILS CLOSED - an unreadable graph is an error, never an empty set`` () =
     // An epic whose children could not be read must not roll up as "no children".
-    match Reads.subIssues (failing (RateLimited None)) "FS-GG" "FS.GG.SDD" 50 with
+    match Reads.subIssues (failing (RateLimited(UnknownBudget, None))) "FS-GG" "FS.GG.SDD" 50 with
     | Error(RateLimited _) -> ()
     | other -> failwith $"a failed graph read must be an error — got %A{other}"
 

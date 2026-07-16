@@ -1,6 +1,15 @@
 namespace FS.GG.Coord.GitHub
 
-/// The 5,000 pt/hr GraphQL budget — the one the whole fleet shares, and the first one to die.
+/// The budgets — GraphQL points and REST requests — and the classifier that says which one just died.
+///
+/// THE FLEET SHARES BOTH, AND EITHER CAN GO FIRST. This module's header used to read "the 5,000 pt/hr
+/// GraphQL budget — the one the whole fleet shares, and the first one to die", and every message it
+/// produced was written from that premise. It is not reliably true. Measured live on 2026-07-16: REST core
+/// sat at 0/5000 and 403'd every read — `take`, `claim`, `who`, `issues`, the whole lock — while GraphQL
+/// had 3,639 points still on the clock. `/pnext-item`'s own doctrine ("read issues over REST, it's free";
+/// "when GraphQL is gone, REST is still up") is what drains core, so this is a state the recipe MANUFACTURES
+/// rather than an exotic one. Whether the lock should still live on REST is ADR-0034 §3's call, not this
+/// module's; what this module owes the worker either way is the NAME OF THE BUDGET THAT ACTUALLY DIED.
 ///
 /// #418 is the founding incident: five workers looping `take` drained the primary budget in ~15 minutes,
 /// and everything downstream of an exhausted budget then reported the wrong fact — "not on board" (#421),
@@ -73,4 +82,10 @@ module Budget =
     /// THE ONE RULE: a 403 that is a rate limit and a 403 that is a permissions failure are DIFFERENT
     /// FACTS with different remedies — one is "wait", the other is "your token is wrong" — and telling a
     /// worker to wait out a token error is an infinite loop that reports progress.
-    val classify: subject: string -> status: int -> body: string -> IoError
+    ///
+    /// `header` looks up a RESPONSE header on the failing call, case-insensitively, and it is what lets a
+    /// rate limit name the budget that died (`X-RateLimit-Resource`) and the reset it named
+    /// (`X-RateLimit-Reset`). Without it this function could not tell a REST 403 from a GraphQL one, so
+    /// `explain` said "GraphQL" for both — and then recommended REST, on a REST limit, in the sentence
+    /// telling you what to do next.
+    val classify: subject: string -> status: int -> body: string -> header: (string -> string option) -> IoError
