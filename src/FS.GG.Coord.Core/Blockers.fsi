@@ -25,3 +25,30 @@ module Blockers =
 
     /// The blockers still holding this item. Empty = not blocked.
     val unresolved: blockers: Blocker list -> Blocker list
+
+    /// Why a `Blocked by` WRITE was refused. The field is a TYPED dependency edge (Projects v2 has no
+    /// dependency field, so it is TEXT and nothing but this gate stops it drifting back into a resolution
+    /// log), so `set-field <issue> 'Blocked by' <value>` accepts only issue refs — and the two ways to get
+    /// it wrong want two different corrections.
+    type BlockedByRefusal =
+        /// A placeholder (a run of hyphens, an em/en dash, or `none` / `n/a` / `tbd` / `todo`,
+        /// case-insensitive — bash's `canon_blocked_by` set) — the caller is trying to say "no blocker"
+        /// with a token, not by clearing the field. The correction is to clear it (`'Blocked by' ''`).
+        | Placeholder
+        /// Prose, not issue refs (a delivery log, an inverted `blocks X` edge, or a ref trailed by prose).
+        /// If the caller means the item ITSELF is blocked, that is a `Status`, not a dependency edge.
+        | NotIssueRefs
+
+    /// Canonicalize a `Blocked by` field value to `owner/repo#n[, owner/repo#n …]`.
+    ///
+    /// `defaultOwner`/`defaultRepo` are the BLOCKED item's own owner/repo, so a bare `#n` adopts BOTH and a
+    /// `repo#n` adopts the owner — every accepted form (`owner/repo#n`, `repo#n`, `#n`, an issue URL)
+    /// reduces to one canonical `owner/repo#n`, and refs that canonicalize alike are de-duped (first
+    /// occurrence wins, order preserved). Every token must be a ref: prose in a dependency field is not a
+    /// dependency (`Error NotIssueRefs`), and the `-`/`none` placeholder is refused toward clearing
+    /// (`Error Placeholder`). An empty / whitespace value is `Ok None` — the caller clears the field.
+    ///
+    /// PURE, so the write can be validated BEFORE any board read — a refused value spends no GraphQL, the
+    /// budget that dies first.
+    val canonicalizeBlockedBy:
+        defaultOwner: string -> defaultRepo: string -> raw: string -> Result<string option, BlockedByRefusal>
