@@ -2302,6 +2302,40 @@ if [ -z "$OV_PORT" ]; then bad "overlap fixture bound a port"; else
   kill "$OV_SRV" 2>/dev/null
 fi
 
+# case 24 leg (k) — `paths_of` FAILS CLOSED. An empty touch-set reads as "disjoint from everything", so a
+# failed BODY read (rate limit, network) must NOT be mis-read as "the issue declared nothing" — that is the
+# #266 fail-open, one subtree down, which would let the scheduler hand out work overlapping a held item. The
+# tell is WHICH diagnosis comes out: a failed read must refuse ("refusing to schedule against an unknown
+# touch-set"), never "no 'Paths:' touch-set declared". The engine's `overlap` reads the subject's touch-set
+# through `failSchedule`, which swaps the generic IO explain for the scheduler refusal while carrying the
+# IoError's own exit code. Re-expressed at the HTTP layer: `OVERLAP_FAIL_ISSUE=403` 500s the body read the
+# corpus faults with `GH_FAIL_ISSUE_GET=94`. DISPOSED (ADR-0040 §5): bash's `die` exits 1; the engine keeps
+# the read's own code (the corpus greps the SENTENCE, not the literal — `|| true`), and the property is the
+# refusal wording, not the exit number.
+OVK_OUT="$(mktemp)"; OVERLAP_FAIL_ISSUE=403 python3 "$HERE/overlap_server.py" >"$OVK_OUT" 2>/dev/null & OVK_SRV=$!; OVK_PORT=""
+for _ in $(seq 1 50); do OVK_PORT="$(head -n1 "$OVK_OUT" 2>/dev/null)"; [ -n "$OVK_PORT" ] && break; sleep 0.1; done
+rm -f "$OVK_OUT"
+if [ -z "$OVK_PORT" ]; then bad "overlap fail-closed fixture bound a port"; else
+  # `overlap 403 405` — same repo, but 403's body read FAULTS (500) before any comparison can be made.
+  ovk="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$OVK_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+            "$ENGINE" overlap 'FS.GG.SDD#403' 'FS.GG.SDD#405' 2>&1 || true)"
+  printf '%s' "$ovk" | grep -q 'refusing to schedule' \
+    && ok "case24(k): a failed touch-set read refuses to schedule against an unknown touch-set" \
+    || bad "case24(k): failed read must refuse to schedule" "$ovk"
+  case "$ovk" in
+    *"no 'Paths:' touch-set declared"*|*"declared nothing"*)
+      bad "case24(k): a failed read must NOT be diagnosed as 'the issue declared nothing'" "$ovk" ;;
+    *) ok "case24(k): a failed read is not mis-diagnosed as an empty declaration (#266 fail-open avoided)" ;;
+  esac
+  # ...and it never fell through to a DISJOINT — the fail-OPEN that hands out the overlapping tree.
+  case "$ovk" in
+    *DISJOINT*) bad "case24(k): a failed read must never read as DISJOINT (the fail-open double-book)" "$ovk" ;;
+    *) ok "case24(k): a failed read never reads as DISJOINT (fails closed, not open)" ;;
+  esac
+  kill "$OVK_SRV" 2>/dev/null
+fi
+
 # case 34-remainder (xrepo-touchset-353) — `widen`'s collision-DETECT-and-NOTIFY half (#353). The
 # read-only `overlap` command (#809) ported the repo-scoped collision COMPUTATION; this is the write half
 # ADR-0021 named ("re-declare AND re-check overlap before continuing") and the part a worker cannot do
