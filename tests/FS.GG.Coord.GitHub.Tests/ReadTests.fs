@@ -558,3 +558,226 @@ let ``issues fails closed on a 200 that is not a JSON array - a proxy error page
     match Reads.issues (serving "[]") "FS-GG" "FS.GG.SDD" "open" None false with
     | Ok "[]" -> ()
     | other -> failwith $"a present-but-empty array is a real answer — got %A{other}"
+
+
+// ---- the conditional landable reads (the `--wait` poll loop) ---------------------------------------
+//
+// `landable --wait` polls `prLandableRequire` up to 30 times at 20s intervals, and each poll reads THREE
+// REST paths: the PR object, its head SHA's workflow runs, and its check-runs. That is ~90 REST calls per
+// wait, per worker, per item — on the budget the whole fleet shares — and `pnext-item` drives a wait on
+// every item. A poll that finds no change is exactly the 304 case, because "nothing has changed yet" is
+// what waiting MEANS. So all three revalidate.
+//
+// What makes that safe is NOT that the reads are cheap. It is that a 304 is the server asserting the body
+// we hold is current, and that the validator is only ever stored where it can stand for the WHOLE answer:
+// a single resource, or a page with headroom (`Reads.memoisable`). These tests hold both lines.
+
+/// A per-path ETag server. 200 + a path-derived validator on an unconditional read; 304 when the caller
+/// sends that validator back — how GitHub answers `If-None-Match`. It RECORDS the validator every request
+/// carried, per path, which is the one fact the fake's log grammar does not carry for these paths.
+///
+/// `runs` is how many workflow runs the page carries, which is how a test drives the headroom boundary.
+/// `nextLink` makes every 200 advertise a next page.
+type private LandableServer(sha: string, ?runs: int, ?nextLink: string) =
+    let seen = System.Collections.Generic.List<string * string option>()
+    let runCount = defaultArg runs 1
+
+    /// `runCount` green runs, all in the same check suite — the page whose SIZE the headroom rule reads.
+    let runsBody =
+        let one (i: int) =
+            $"""{{"path":".github/workflows/b%d{i}.yml","event":"pull_request","head_branch":"item/42-x","run_number":%d{i},"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{{"number":801}}]}}"""
+
+        let items = [ 1..runCount ] |> List.map one |> String.concat ","
+        $"""{{"total_count":%d{runCount},"workflow_runs":[%s{items}]}}"""
+
+    let bodies =
+        [ "repos/FS-GG/FS.GG.SDD/pulls/801",
+          "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"head\":{\"ref\":\"item/42-x\",\"sha\":\""
+          + sha
+          + "\"}}"
+          "repos/FS-GG/FS.GG.SDD/actions/runs", runsBody
+          "repos/FS-GG/FS.GG.SDD/commits/" + sha + "/check-runs",
+          """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}""" ]
+
+    /// The validator is derived from the path AND the sha, so a test can prove one subject's body is never
+    /// served as another's — a WRONG answer, not merely a stale one, feeding a decision to merge.
+    let etagOf (path: string) = $"W/\"%s{path}@%s{sha}\""
+
+    member _.Validators(path: string) =
+        seen |> Seq.filter (fun (p, _) -> p = path) |> Seq.map snd |> List.ofSeq
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            seen.Add(req.Path, req.IfNoneMatch)
+
+            match bodies |> List.tryFind (fun (p, _) -> p = req.Path) with
+            | None -> Error(NotFound req.Path)
+            | Some(_, body) ->
+                let etag = etagOf req.Path
+
+                match req.IfNoneMatch with
+                | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None }
+                | _ ->
+                    Ok
+                        { Status = 200
+                          Body = body
+                          ETag = Some etag
+                          NextLink = nextLink })
+
+/// The three reads of one `landable` poll.
+let private pollPaths (sha: string) =
+    [ "repos/FS-GG/FS.GG.SDD/pulls/801"
+      "repos/FS-GG/FS.GG.SDD/actions/runs"
+      $"repos/FS-GG/FS.GG.SDD/commits/%s{sha}/check-runs" ]
+
+[<Fact>]
+let ``every read of the landable poll revalidates on the second look, and the 304s reach the SAME verdict`` () =
+    // THE WIN, AND ITS SAFETY ARGUMENT, IN ONE TEST. The first poll is unconditional and caches each body
+    // with its validator; the second sends them back, is served 304s — and still scores GREEN. A cache that
+    // changed the verdict would be a cache deciding whether to merge.
+    use _cache = new IssuesCache()
+    let server = LandableServer "sha-green"
+
+    Assert.Equal(PrGreen, Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801)
+    Assert.Equal(PrGreen, Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801)
+
+    for path in pollPaths "sha-green" do
+        match server.Validators path with
+        | [ None; Some _ ] -> ()
+        | other -> failwith $"%s{path}: poll one must be unconditional and poll two must revalidate — got %A{other}"
+
+[<Fact>]
+let ``a page with NO headroom is never memoised - the boundary the whole rule exists to refuse`` () =
+    // THE PROOF'S EDGE. A page carrying exactly `per_page` items and no `Link` looks complete and is not
+    // provably so: if the set later grows, the new items land on page two and page one can stay
+    // byte-identical — so the server would answer 304 and we would serve a one-page body for a two-page set,
+    // scoring a merge verdict over runs we never saw (#461). Only a page with HEADROOM (`n < per_page`)
+    // guarantees that growth rewrites page one. So a full page stores no validator and the next poll pays.
+    use _cache = new IssuesCache()
+    let server = LandableServer("sha-green", runs = 100) // per_page is 100 — a full page, no headroom
+
+    Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+    Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+
+    let conditional =
+        server.Validators "repos/FS-GG/FS.GG.SDD/actions/runs" |> List.filter Option.isSome
+
+    if not conditional.IsEmpty then
+        failwith $"a FULL page cannot prove headroom and must not be memoised — got %A{conditional}"
+
+    // ...while the same poll's PR object — a single resource, which cannot paginate — still revalidates. The
+    // rule is per-subject, not a blanket retreat.
+    match server.Validators "repos/FS-GG/FS.GG.SDD/pulls/801" with
+    | [ None; Some _ ] -> ()
+    | other -> failwith $"a single resource still revalidates — got %A{other}"
+
+[<Fact>]
+let ``a response that PAGINATES stores no validator, whatever its shape`` () =
+    // A merged response's ETag is page one's alone. Storing it would revalidate a two-page set against its
+    // first page — the hazard headroom exists to make unreachable, and this is the backstop under it.
+    use _cache = new IssuesCache()
+    let server = LandableServer("sha-green", nextLink = "https://api.github.com/x?page=2")
+
+    Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+    Reads.prLandable server.Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+
+    for path in pollPaths "sha-green" do
+        let conditional = server.Validators path |> List.filter Option.isSome
+
+        if not conditional.IsEmpty then
+            failwith $"%s{path}: a paginated response's page-one ETag must never be stored — got %A{conditional}"
+
+[<Fact>]
+let ``the runs cache is keyed on the head SHA - one commit's green is never served as another's`` () =
+    // `actions/runs` is the SAME PATH for every commit; the SHA rides in the QUERY. Key on the path alone and
+    // a force-push would be served the PREVIOUS commit's green — not a stale answer but a WRONG one, and what
+    // it decides is whether to merge. So the cache key carries the query.
+    use _cache = new IssuesCache()
+
+    Reads.prLandable (LandableServer "sha-one").Recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+
+    let second = LandableServer "sha-two"
+    Assert.Equal(PrGreen, Reads.prLandable second.Recorder "FS-GG" "FS.GG.SDD" 801)
+
+    match second.Validators "repos/FS-GG/FS.GG.SDD/actions/runs" with
+    | [ None ] -> ()
+    | other -> failwith $"a different head SHA must not reuse the previous commit's validator — got %A{other}"
+
+[<Fact>]
+let ``issues judges headroom on the RAW page, not on the filtered projection (#641)`` () =
+    // THE SUBTLE ONE. `issues` caches a PROJECTION — pull requests dropped (#641) — but `memoisable` asks a
+    // question about the PAGE the server sent and what its ETag stands for. Serve a FULL page of 100 raw
+    // items that filters down to 60 issues: judged on the filtered body it would "prove" headroom (60 < 100)
+    // and memoise a validator that cannot vouch for the set; judged on the raw page (100 = per_page, no
+    // headroom) it must refuse. Getting this backwards would serve a one-page body for a two-page list once
+    // a repo crossed 100 open issues — #461, laundered through our own filter, on a delay.
+    use _cache = new IssuesCache()
+
+    let raw =
+        let issue (i: int) = "{\"number\":" + string i + "}"
+        let pr (i: int) = "{\"number\":" + string i + ",\"pull_request\":{\"url\":\"u\"}}"
+        // 60 issues + 40 PRs = a full page of 100.
+        let items = [ for i in 1..60 -> issue i ] @ [ for i in 61..100 -> pr i ]
+        "[" + String.concat "," items + "]"
+
+    let seen = System.Collections.Generic.List<string option>()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            seen.Add req.IfNoneMatch
+            Ok { Status = 200; Body = raw; ETag = Some "W/\"full-page\""; NextLink = None })
+
+    match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false with
+    | Ok body -> Assert.DoesNotContain("pull_request", body) // the projection still drops PRs
+    | other -> failwith $"the listing must be returned — got %A{other}"
+
+    Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false |> ignore
+
+    if seen |> Seq.exists Option.isSome then
+        failwith
+            $"a full RAW page has no headroom and must not be memoised, however few items survive the #641 filter — got %A{List.ofSeq seen}"
+
+[<Fact>]
+let ``a page we cannot COUNT is never memoised - headroom unproven is headroom refused`` () =
+    // The fail-closed clause of the headroom rule. `memoisable` proves headroom by COUNTING the page; a body
+    // that parses but is not shaped as the caller declared (here: no `workflow_runs` array) yields no count,
+    // and no count means no proof. It must refuse rather than assume — the cost of not memoising is one paid
+    // read, and the cost of assuming is a validator vouching for a set nobody measured.
+    use _cache = new IssuesCache()
+    let seen = System.Collections.Generic.List<string * string option>()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            seen.Add(req.Path, req.IfNoneMatch)
+
+            let body =
+                if req.Path.EndsWith "actions/runs" then
+                    // Valid JSON, and countable by nobody: the declared `workflow_runs` array is absent.
+                    """{"total_count":0}"""
+                elif req.Path.EndsWith "check-runs" then
+                    """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                else
+                    "{\"number\":801,\"state\":\"open\",\"mergeable\":true,\"head\":{\"ref\":\"item/42-x\",\"sha\":\"sha-x\"}}"
+
+            Ok { Status = 200; Body = body; ETag = Some "W/\"v1\""; NextLink = None })
+
+    Reads.prLandable recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+    Reads.prLandable recorder "FS-GG" "FS.GG.SDD" 801 |> ignore
+
+    let validatorsFor (needle: string) =
+        seen
+        |> Seq.filter (fun (p, _) -> p.EndsWith needle)
+        |> Seq.map snd
+        |> List.ofSeq
+
+    // The uncountable runs page proved no headroom, so it stored nothing and BOTH polls went out
+    // unconditional.
+    match validatorsFor "actions/runs" with
+    | [ None; None ] -> ()
+    | other -> failwith $"an uncountable page must never be memoised — got %A{other}"
+
+    // THE COUNTERWEIGHT, and it is what stops this passing for the wrong reason: the same poll's countable
+    // reads DO revalidate. A blanket failure to memoise anything would satisfy the assertion above.
+    match validatorsFor "check-runs" with
+    | [ None; Some _ ] -> ()
+    | other -> failwith $"a countable page with headroom must still revalidate — got %A{other}"

@@ -45,6 +45,152 @@ module Reads =
         | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
         | _ -> None
 
+    /// The `per_page` every collection read in this module asks for.
+    ///
+    /// IT IS A CONSTANT BECAUSE THE HEADROOM PROOF DEPENDS ON THE REQUEST AND THE PAGE SHAPE AGREEING. Ask
+    /// for 100 and declare `Page(30, …)` and the guard would "prove" headroom over a page that is actually
+    /// full — the one boundary it exists to refuse. One literal, used by both.
+    [<Literal>]
+    let private CollectionPageSize = 100
+
+    /// What a response's ETag is entitled to stand for. DECLARED BY THE CALLER, never inferred — a PR object
+    /// carries `labels`/`assignees` arrays and a check-runs page carries `check_runs`, and nothing in the
+    /// bytes distinguishes "a resource that happens to contain a list" from "a page OF a list". Guessing that
+    /// apart is how a validator comes to vouch for something it never saw.
+    type private PageShape =
+        /// ONE resource (`pulls/{n}`). It cannot paginate: there is no `Link`, no page two, and nothing for a
+        /// validator to be partial about.
+        | Single
+        /// One PAGE of a collection: the `per_page` the request asked for, and where the items live — `None`
+        /// when the root IS the array (`repos/…/issues`), `Some prop` for GitHub's wrapper objects
+        /// (`{"total_count": …, "check_runs": [ … ]}`).
+        | Page of perPage: int * property: string option
+
+    /// How many items this page carries. `None` — a body we cannot count, or one shaped unlike the caller
+    /// declared — and `memoisable` then refuses, because an uncountable page is one we cannot prove anything
+    /// about.
+    let private pageCount (property: string option) (body: string) : int option =
+        try
+            use doc = JsonDocument.Parse body
+
+            let items =
+                match property with
+                | None ->
+                    if doc.RootElement.ValueKind = JsonValueKind.Array then
+                        Some doc.RootElement
+                    else
+                        None
+                | Some p ->
+                    match doc.RootElement.TryGetProperty p with
+                    | true, v when v.ValueKind = JsonValueKind.Array -> Some v
+                    | _ -> None
+
+            items |> Option.map (fun a -> a.GetArrayLength())
+        with :? JsonException ->
+            None
+
+    /// May this response's ETag be stored against this body?
+    ///
+    /// **THIS PREDICATE IS A PROOF, NOT A HEURISTIC**, and the thing it proves is that a future 304 against
+    /// the stored validator can only mean the collection is genuinely unchanged.
+    ///
+    /// The hazard: `Transport.Send` follows `Link: rel=next` and MERGES the pages, but an ETag belongs to the
+    /// FIRST request alone. Store it against a merge and a set that grows a page while page one stays
+    /// byte-identical answers 304 — the merge never runs, and the caller is served a one-page body for a
+    /// two-page set. A red run invisible on page two then scores GREEN: #461 (a partial read wearing a
+    /// complete one's clothes) deciding whether to merge.
+    ///
+    /// The obvious guard — *don't memoise a response that paginated* — does NOT close that, because it never
+    /// runs on the case that matters: the unsound read is precisely the one where page one 304s and the
+    /// pagination never happens.
+    ///
+    /// **HEADROOM CLOSES IT.** Memoise a page only when it carries FEWER items than the `per_page` it asked
+    /// for. Then, writing `n` for the stored page's item count and `m` for the collection's true size later:
+    ///
+    ///   * `m <= perPage` — page one IS the whole collection. A 304 means page one's bytes still equal the
+    ///     stored body, so the collection is unchanged and serving it is correct.
+    ///   * `m > perPage` — page one now carries `perPage` items, and `n < perPage`, so page one's bytes
+    ///     CANNOT equal the stored body. The server must answer 200, and that response carries a `Link` — so
+    ///     we drop the validator rather than store it against a merge.
+    ///
+    /// A 304 is therefore only reachable in the first case. The `n < perPage` strictness is load-bearing:
+    /// at `n = perPage` exactly (a full page, no `Link`) growth could leave page one untouched and 304 over
+    /// the items that landed on page two — the one boundary this whole rule exists to refuse.
+    let private memoisable (shape: PageShape) (response: Response) : bool =
+        // A merged response's validator is page one's alone — never store it, whatever the shape.
+        if response.NextLink.IsSome then
+            false
+        else
+            match shape with
+            | Single -> true
+            | Page(perPage, property) ->
+                // A page we cannot COUNT is a page we cannot prove has headroom. Refuse: the cost of not
+                // memoising is a paid read, and the cost of being wrong is a merge over runs we never saw.
+                match pageCount property response.Body with
+                | Some n -> n < perPage
+                | None -> false
+
+    /// A REST GET that revalidates against a stored ETag: send the validator, serve the cached body on 304.
+    ///
+    /// **A 304 IS NOT A STALE READ, AND THAT IS THE WHOLE ARGUMENT.** The TTL caches (`Cache.getScan`) answer
+    /// WITHOUT asking, so they trade freshness for cost and must be gated on `ReadIntent`. This does not: the
+    /// server is asked every time, and a 304 is its assertion that the body we hold IS current. So this is
+    /// transparent — it returns exactly what the unconditional read would have returned — and it is free
+    /// (GitHub does not bill a 304 against the primary REST limit when the request carries an `Authorization`
+    /// header). Transparent and free is why it may go where a TTL cache may NOT.
+    ///
+    /// **IT MAY NOT GO ON THE LOCK, AND CHEAPNESS IS NOT AN ARGUMENT AGAINST THAT.** `markers`, `messages`
+    /// and `openIssues` stay unconditional under the rule they already carry — *a lock may never be read from
+    /// a cache* (ADR-0034 §3). `memoisable`'s headroom proof would in fact admit them, and that is not a
+    /// licence: it bounds what a VALIDATOR may vouch for, which is a strictly weaker question than what a LOCK
+    /// may be answered from. Two rules, and the stricter one governs.
+    ///
+    /// THE CACHE KEY CARRIES THE QUERY, not just the path. `actions/runs?head_sha=…` is the SAME path for
+    /// every commit, so keying on the path alone would serve one SHA's runs as another's — not a stale answer
+    /// but a WRONG one, and the verdict it feeds is whether to merge.
+    ///
+    /// `shape` is what this response's ETag is entitled to stand for — see `memoisable`.
+    let private conditionalGet
+        (transport: IGitHubTransport)
+        (subject: string)
+        (path: string)
+        (query: (string * string) list)
+        (shape: PageShape)
+        : IoResult<string> =
+
+        let cacheKey =
+            let qs = query |> List.map (fun (k, v) -> $"%s{k}=%s{v}") |> String.concat "&"
+            if qs = "" then path else $"%s{path}?%s{qs}"
+
+        let request =
+            { Method = "GET"
+              Path = path
+              Query = query
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = Cache.getETag cacheKey
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match response with
+            // The server says what we hold is current. A missing body here is OUR protocol violation — a
+            // validator we could not honour — and `getBody` reports it as an error, never an empty result.
+            | NotModified -> Cache.getBody cacheKey
+            | _ ->
+                // Storing `None` is not a no-op: it DROPS any validator left from when this set still had
+                // headroom, which is what stops a grown collection revalidating against the page it used to
+                // fit on.
+                let validator =
+                    if memoisable shape response then
+                        response.ETag
+                    else
+                        None
+
+                Cache.putBody cacheKey validator response.Body
+                Ok response.Body
+
     // ---- the claim marker -------------------------------------------------------------------------
 
     /// ANCHORED AT THE START OF THE BODY, and `worker=` must be the FIRST key.
@@ -861,19 +1007,25 @@ module Reads =
 
         let subject = $"%s{owner}/%s{repo} runs @ %s{sha}"
 
-        let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/actions/runs"
-              Query = [ "head_sha", sha; "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
-
-        match transport.Send request with
+        // CONDITIONAL, AND THE HOTTEST READ IN THE TOOL: `landable --wait` polls this 30 times per wait, per
+        // worker, on every item. A poll that finds no change is EXACTLY the 304 case, because "nothing has
+        // changed yet" is what waiting MEANS. Keyed on the head SHA (it rides in the query), so one commit's
+        // runs can never be served as another's.
+        //
+        // It is a PAGE of a collection, so it is memoised only with headroom — see `memoisable`. A commit's
+        // runs are far short of 100 in practice, so this revalidates; if one ever crosses the page boundary
+        // it silently reverts to paying in full, which is the safe direction.
+        match
+            conditionalGet
+                transport
+                subject
+                $"repos/%s{owner}/%s{repo}/actions/runs"
+                [ "head_sha", sha; "per_page", string CollectionPageSize ]
+                (Page(CollectionPageSize, Some "workflow_runs"))
+        with
         | Error _ -> None
-        | Ok response ->
-            match parse subject response.Body with
+        | Ok body ->
+            match parse subject body with
             | Error _ -> None
             | Ok doc ->
                 use doc = doc
@@ -911,19 +1063,19 @@ module Reads =
 
         let subject = $"%s{owner}/%s{repo} check-runs @ %s{sha}"
 
-        let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/commits/%s{sha}/check-runs"
-              Query = [ "per_page", "100" ]
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
-
-        match transport.Send request with
+        // CONDITIONAL, for the same reason as `workflowRuns` — the other half of the same poll. The SHA is in
+        // the PATH here rather than the query, which keys it just as soundly.
+        match
+            conditionalGet
+                transport
+                subject
+                $"repos/%s{owner}/%s{repo}/commits/%s{sha}/check-runs"
+                [ "per_page", string CollectionPageSize ]
+                (Page(CollectionPageSize, Some "check_runs"))
+        with
         | Error _ -> None
-        | Ok response ->
-            match parse subject response.Body with
+        | Ok body ->
+            match parse subject body with
             | Error _ -> None
             | Ok doc ->
                 use doc = doc
@@ -977,19 +1129,17 @@ module Reads =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
 
-        let request =
-            { Method = "GET"
-              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
-              Query = []
-              Body = NoBody
-              Budget = Rest
-              IfNoneMatch = None
-              Subject = subject }
-
-        match transport.Send request with
+        // CONDITIONAL — the third read of the poll, and the one that 304s most: a PR object barely changes
+        // while its CI runs, which is the whole duration of the wait. `pulls/{n}` is a single object, so it
+        // never paginates and the validator always stands for the whole body.
+        //
+        // The lazy-`mergeable` re-read above still works: GitHub computes it in a background job, and when it
+        // lands the PR object CHANGES — so the validator changes and we get the new body. A 304 means it has
+        // NOT landed yet, which is precisely the `Computing` the retry is for.
+        match conditionalGet transport subject $"repos/%s{owner}/%s{repo}/pulls/%d{pr}" [] Single with
         | Error _ -> None
-        | Ok response ->
-            match parse subject response.Body with
+        | Ok body ->
+            match parse subject body with
             | Error _ -> None
             | Ok doc ->
                 use doc = doc
@@ -1235,6 +1385,14 @@ module Reads =
     /// ETag is pure budget savings. The cache key is the request AS A STRING (path + the query that shapes
     /// the result), so a different state or label is a different cache entry, exactly as bash slugs its path.
     ///
+    /// **IT IS A PAGE OF A COLLECTION, AND IT DOES PAGINATE.** `docs/coordination/graphql-budget.md` says this
+    /// command "asks for one page of 100", and that was true of the bash client — it is NOT true here:
+    /// `Transport.Send` follows `Link: rel=next` and merges. So the ETag it stores is PAGE ONE'S, over a body
+    /// that may be a merge, and it is memoised only under `memoisable`'s headroom rule. Without that, a repo
+    /// whose open issues cross 100 would revalidate the whole list against its first page and 304 over
+    /// everything past it — silently, and only once the repo got big enough. `FS-GG/.github` sits under 100
+    /// today, which is why this has never bitten and why it would have bitten later.
+    ///
     /// Returns the issue array as a JSON string — pull requests dropped (#641) — for the caller to jq.
     let issues
         (transport: IGitHubTransport)
@@ -1246,7 +1404,7 @@ module Reads =
         : IoResult<string> =
 
         let query =
-            [ "state", state; "per_page", "100" ]
+            [ "state", state; "per_page", string CollectionPageSize ]
             @ (match label with
                | Some l when l <> "" -> [ "labels", l ]
                | _ -> [])
@@ -1308,5 +1466,19 @@ module Reads =
                             | _ -> kept.Add(Nodes.JsonNode.Parse(el.GetRawText()))
 
                         let filtered = kept.ToJsonString()
-                        Cache.putBody cacheKey response.ETag filtered
+
+                        // THE VALIDATOR IS JUDGED ON THE RAW PAGE, THE BODY IS THE FILTERED ONE, AND THAT
+                        // DISTINCTION IS THE WHOLE OF THIS. `memoisable` asks whether the PAGE had headroom —
+                        // a question about what the server sent and what its ETag stands for — so it must see
+                        // `response`, never the projection. Count the filtered array instead and a page of
+                        // exactly 100 raw items that filters to 60 issues (40 PRs, #641) would "prove"
+                        // headroom it does not have, and a later 304 would serve a one-page body for a
+                        // two-page set. That is the #461 shape, laundered through our own filter.
+                        let validator =
+                            if memoisable (Page(CollectionPageSize, None)) response then
+                                response.ETag
+                            else
+                                None
+
+                        Cache.putBody cacheKey validator filtered
                         Ok filtered
