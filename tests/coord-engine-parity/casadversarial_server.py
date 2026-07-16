@@ -25,6 +25,9 @@ The world is ONE repo (FS.GG.SDD). Each issue carries the marker state its leg n
                                         the evicted worker (a fsgg:msg to=ghost-111), one marker survives
     (b) #85  otter-b55 STALE (id 811)   a worker whose OWN marker went stale renews to ONE marker, not two
     (l) #95  ghost-444 STALE (id 818)   the collect DELETE 404s (a peer collected it first) — not fatal
+    (j) #93  WID93 FRESH (id 817, session=SESS93)  a re-claim under a SHARED session id renews the marker in
+                                        place (a PATCH, not a second POST) and WARNS ("adopted ITS lock",
+                                        "may not be unique to this worker") — the id is not proof of ownership
 
 Legs (a)/(b)/(l) MUTATE this process too: `claim` POSTs its fresh marker, wins the CAS over the stale one,
 and then COLLECTS the stale marker (a DELETE, recorded in `/_deletes`). A GET on an issue's /comments
@@ -47,6 +50,7 @@ PROPERTY is asserted, not the spelling:
       DELETE the just-posted marker (proven at `/_deletes`) and claim NOTHING (a non-zero exit).
 """
 
+import hashlib
 import json
 import re
 import sys
@@ -57,6 +61,23 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 OWNER = "FS-GG"
 REPO = "FS.GG.SDD"
 RATE = {"cost": 1, "remaining": 4977}
+
+# (j) THE SHARED-ID RE-CLAIM WARNING. A marker bearing our worker id is not proof it is ours — rules 4/5
+# (#419) can hand one id to several workers — and the re-claim (heartbeat) path bypasses the CAS entirely,
+# so it is exactly where a same-id sibling silently adopts another worker's lock. The worker id here is
+# DERIVED from a shared claude-code session id (`Identity.nameFromSeed`, replicated below so the fixture
+# seeds a marker carrying the SAME id + session the engine derives), so the re-claim must WARN.
+_WORDS = ["finch", "heron", "wren", "swift", "kite", "tern", "rook", "crake", "snipe", "plover",
+          "merlin", "godwit", "curlew", "dunlin", "teal", "smew", "osprey", "shrike", "avocet", "brant"]
+
+
+def name_from_seed(seed):
+    head = hashlib.sha256(seed.encode()).hexdigest()[:8]
+    return f"{_WORDS[int(head[:2], 16) % len(_WORDS)]}-{head[2:5]}"
+
+
+SESS93 = "309bd638-8a1c-42b7-952b-898efb8d1064"  # the corpus's shared claude-code session id (case 24 leg j)
+WID93 = name_from_seed(SESS93)                    # the worker id BOTH the engine and this fixture derive from it
 
 LOCK = threading.Lock()
 _DELETES = []          # comment ids this process was asked to DELETE (the CAS withdraw / stale collect).
@@ -103,6 +124,11 @@ def _seeded(n):
         return [_marker(811, "otter-b55", _ago(3))]
     if n == 95:  # (l) a stale claim whose DELETE 404s (a peer collected it first)
         return [_marker(818, "ghost-444", _ago(3))]
+    if n == 93:  # (j) a FRESH marker carrying OUR shared-session id — a re-claim renews it (PATCH), warns
+        ts = _now()
+        return [{"id": 817,
+                 "body": f"<!-- fsgg:claim worker={WID93} lease=120 session={SESS93} -->\nheld",
+                 "user": {"login": "EHotwagner"}, "created_at": ts, "updated_at": ts}]
     return []  # #90, #92 start EMPTY
 
 
@@ -110,7 +136,7 @@ ISSUE_BODY = {
     84: "Paths: src/A/**", 85: "Paths: src/B/**",
     86: "Paths: src/C/**", 87: "Paths: src/D/**", 88: "Paths: src/E/**",
     89: "Paths: src/F/**", 90: "Paths: src/G/**", 92: "Paths: src/I/**",
-    95: "Paths: src/L/**",
+    93: "Paths: src/J/**", 95: "Paths: src/L/**",
 }
 
 

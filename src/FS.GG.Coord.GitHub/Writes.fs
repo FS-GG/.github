@@ -20,6 +20,7 @@ module Writes =
 
     type ClaimOutcome =
         | Won of held: Held * collected: WorkerId list
+        | Renewed of held: Held * collected: WorkerId list
         | Lost of WorkerId
         | Twin of theirs: SessionId
         | Undecided of reason: string
@@ -235,7 +236,25 @@ module Writes =
         | Some m ->
             match session, m.Session with
             | Some(SessionId ours), Some(SessionId theirs) when ours <> theirs -> Ok(Twin(SessionId theirs))
-            | _ -> Ok(Won(Held(ref, worker, m.Id, m.PreviousStatus), collectStale m.Id before))
+            | _ ->
+                // RE-CLAIM / HEARTBEAT. The marker is already ours — same session, sessionless (a human or a
+                // pre-#419 marker, indistinguishable from ours), or our own session re-claiming. RENEW THE
+                // LEASE IN PLACE: a PATCH of the one marker we have, never a second POST that we would then
+                // lose to our own first one and withdraw, reporting a loss on an item we hold. So a slow
+                // worker re-claiming ends with ONE marker, and `take` retries stay idempotent.
+                //
+                // This bypasses the CAS entirely, which is why it is a SEPARATE outcome the caller must warn
+                // about on a shared id (#419): a marker bearing our id is not proof it is ours, and adopting
+                // it without the CAS is exactly where a same-id sibling silently takes another worker's lock.
+                //
+                // Collect the stale debris first (as the fresh-CAS win does), then renew — a stale OTHER
+                // marker on this item is still what `heartbeat` would resurrect underneath us.
+                let collected = collectStale m.Id before
+                let renewed = markerBody worker session leaseMinutes m.PreviousStatus
+
+                match patchComment transport ref m.Id renewed with
+                | Error e -> Error e
+                | Ok() -> Ok(Renewed(Held(ref, worker, m.Id, m.PreviousStatus), collected))
 
         | None ->
 
@@ -471,11 +490,32 @@ module Writes =
         | LivenessUnknown -> Error(Undetermined "the item's proof-of-life (its open PRs) could not be read")
         | LeaseHeld -> Error(Undetermined "the lease has not expired")
 
-    let reap (transport: IGitHubTransport) (reapable: Reapable) : IoResult<unit> =
-        // DELETE THE MARKER. The lease self-heals the instant it is gone. Nothing here restores the board:
-        // that is the caller's decision (`PreviousStatus`), taken after the lock is already dropped, so a
-        // board write that fails cannot strand a lock the way a fatal-here reap would.
-        deleteComment transport reapable.Ref reapable.MarkerId
+    type ReapResult =
+        | Reaped
+        | RenewedSinceScan of ageSeconds: int
+        | AlreadyGone
+
+    let reap (transport: IGitHubTransport) (leaseMinutes: int) (reapable: Reapable) : IoResult<ReapResult> =
+        // RE-VERIFY AGAINST A FRESH READ, IMMEDIATELY BEFORE THE DELETE. `Reapable` was proven against the
+        // SCAN, and the scan is a snapshot — between it and now the holder may have heartbeated. Deleting a
+        // marker because it USED TO BE stale evicts a worker that is alive and believes its lease was
+        // renewed, which is the double-hold `reap` exists to CLEAN UP, caused BY `reap`. So the marker's
+        // freshness is the last thing checked before it is broken.
+        match Reads.markers transport reapable.Ref.Owner reapable.Ref.Repo reapable.Ref.Number with
+        | Error e -> Error e
+        | Ok markers ->
+            match markers |> List.tryFind (fun m -> m.Id = reapable.MarkerId) with
+            // A peer collected it between the scan and now — "already gone" is a collector's goal state.
+            | None -> Ok AlreadyGone
+            // Renewed since the scan: the lease is live again, so the lock stands. Leave it.
+            | Some m when not (Reads.isStale leaseMinutes m) -> Ok(RenewedSinceScan m.AgeSeconds)
+            // Still stale on the fresh read — break the lock. The lease self-heals the instant the marker is
+            // gone. Nothing here restores the board: that is the caller's decision (`PreviousStatus`), taken
+            // after the lock is already dropped, so a board write that fails cannot strand a lock.
+            | Some _ ->
+                match deleteComment transport reapable.Ref reapable.MarkerId with
+                | Error e -> Error e
+                | Ok() -> Ok Reaped
 
     // ---- the writes that do NOT need the lock ---------------------------------------------------------
 

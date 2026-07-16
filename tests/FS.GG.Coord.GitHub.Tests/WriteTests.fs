@@ -164,17 +164,23 @@ let ``an UNPARSEABLE marker blocks the item - it is a claim held by nobody`` () 
     Assert.Equal(0, transport.Count "comment-post")
 
 [<Fact>]
-let ``re-claiming an item we ALREADY hold does not post a second marker`` () =
+let ``re-claiming an item we ALREADY hold renews it in place and posts no second marker`` () =
     // Running the CAS again would post a SECOND marker of ours with a HIGHER id — which we would then lose
     // to our own first one, withdraw, and report as a loss on an item we hold. A worker would be told to
-    // stop working on the thing it is holding the lock for.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" "" ]) ]
+    // stop working on the thing it is holding the lock for. So a re-claim RENEWS the one marker we have (a
+    // PATCH), never posts another — a `Renewed`, not a fresh `Won`.
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
+              ok """{"id":901}""" ] // 2. PATCH: renew the lease in place
 
     match claim transport 120 me None aRef (fun () -> None) with
-    | Ok(Won(held, _)) -> Assert.Equal(901L, held.MarkerId)
-    | other -> failwith $"re-claiming our own live lock is a no-op win — got %A{other}"
+    | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"re-claiming our own live lock renews it in place — got %A{other}"
 
+    // No second marker POSTed — the renew is a PATCH of the one we already hold.
     Assert.Equal(0, transport.Count "comment-post")
+    Assert.True(transport.Logged "comment-patch FS-GG/FS.GG.SDD 901")
 
 // ---- case 24 (a)/(b)/(l): a won claim COLLECTS the stale marker it claimed over --------------------
 
@@ -294,19 +300,21 @@ let ``#419 a SESSIONLESS marker with our id is genuinely ours - a heartbeat, not
     // The boundary of the rule (#419 leg 4). A marker with no `session=` — a human, a harness exporting
     // none, any pre-#419 marker — is indistinguishable from ours. Failing closed on it would lock a worker
     // out of an item they really hold, so it keeps the old behaviour: ours.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" "" ]) ]
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" "" ]); ok """{"id":901}""" ] // read, then PATCH the renew
 
     match claim transport 120 me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
-    | Ok(Won(held, _)) -> Assert.Equal(901L, held.MarkerId)
+    | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"a sessionless marker with our id must stay ours — got %A{other}"
 
 [<Fact>]
 let ``#419 the SAME session re-claiming its own marker is a heartbeat, not a twin`` () =
     // Without this, the refusal would fire on the worker itself — it could never renew its own claim.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]); ok """{"id":901}""" ] // read, then PATCH
 
     match claim transport 120 me (Some(SessionId "79b9e347")) aRef (fun () -> None) with
-    | Ok(Won(held, _)) -> Assert.Equal(901L, held.MarkerId)
+    | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"our own session re-claiming is a heartbeat, not a twin — got %A{other}"
 
 [<Fact>]
@@ -597,14 +605,46 @@ let ``#581 reapable refuses a lease that is not even expired`` () =
     | other -> failwith $"a held lease is not reapable — got %A{other}"
 
 [<Fact>]
-let ``#581 reap DELETES the stale marker by its comment id`` () =
+let ``#581 reap RE-VERIFIES the marker is still stale, then DELETES it by its comment id`` () =
     // The lock IS the comment id: reap addresses the marker by id, never by worker string (a twin's id
     // would name the wrong comment, #550 one command over). A 404 would be success too, but here it lands.
-    let transport = Fake.Recorder(fun _ -> ok "")
+    // It re-reads the markers first — `Reapable` was proven against a SNAPSHOT — and only deletes because
+    // the marker is STILL stale on the fresh read.
+    let transport =
+        scripted
+            [ ok (comments [ staleClaimJson 880 "ghost-222" "" ]) // 1. re-verify: still stale
+              ok "" ] // 2. DELETE lands
 
     match reapable aRef staleMarker LeaseExpiredNoPr with
     | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
     | Ok r ->
-        match reap transport r with
-        | Ok() -> Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
-        | Error e -> failwith $"the reap should have deleted the marker — got %A{e}"
+        match reap transport 120 r with
+        | Ok Reaped -> Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | other -> failwith $"the reap should have deleted the marker — got %A{other}"
+
+[<Fact>]
+let ``reap SKIPS a marker the holder RENEWED between the scan and the delete`` () =
+    // The re-verify's whole point: `Reapable` is a snapshot verdict, and a holder that heartbeated since is
+    // ALIVE. Reaping it would be `reap` causing the double-hold it exists to clean up. The fresh read shows
+    // marker 880 renewed (a `now` timestamp), so it is left alone and NOTHING is deleted.
+    let transport = scripted [ ok (comments [ marker 880 "ghost-222" "" ]) ] // fresh — renewed since the scan
+
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
+    | Ok r ->
+        match reap transport 120 r with
+        | Ok(RenewedSinceScan _) -> Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | other -> failwith $"a marker renewed since the scan must be SKIPPED, not reaped — got %A{other}"
+
+[<Fact>]
+let ``reap treats a marker a peer already collected as AlreadyGone, deleting nothing`` () =
+    // A peer collected the same stale marker between our scan and our re-verify — "already gone" is a
+    // collector's goal state, not a failure, and there is nothing to delete.
+    let transport = scripted [ ok "[]" ] // the marker is gone on the fresh read
+
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
+    | Ok r ->
+        match reap transport 120 r with
+        | Ok AlreadyGone -> Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | other -> failwith $"a marker a peer already collected must read AlreadyGone — got %A{other}"

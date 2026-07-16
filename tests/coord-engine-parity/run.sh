@@ -3350,7 +3350,95 @@ if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
     && ok "case24(l): ...and 'already gone' leaves exactly the new holder" \
     || bad "case24(l): a concurrent-GC 404 must leave only the new holder" "workers: $(adv_workers_on 95)"
 
+  # (j) A marker bearing OUR id is NOT proof it is ours — rules 4/5 (#419) can hand one id to several
+  #     workers — and the re-claim (heartbeat) path bypasses the CAS entirely, so it is exactly where a
+  #     same-id sibling silently adopts another worker's lock. It must WARN there, not only on the fresh
+  #     path. #93 carries a FRESH marker whose worker id is DERIVED from a shared claude-code session id
+  #     (`Identity.nameFromSeed`); re-claiming under that SAME session (no --worker — the id comes from
+  #     CLAUDE_CODE_SESSION_ID) renews the ONE marker in place (a PATCH, not a duplicate) and warns.
+  #     Disposed on the record (ADR-0040 §5): the engine's wording differs from bash's literal — engine
+  #     `held … (lease renewed)` + `NOTE — … adopted ITS lock` + `WARNING — … may not be unique to this
+  #     worker`, bash the same three strings — the PROPERTY is asserted (renew in place, one marker, warn
+  #     the shared-id hazard), not the exact spelling.
+  j93="$(FSGG_GITHUB_API_BASE="$ADV_BASE" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+           FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+           env -u FSGG_WORKER -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID \
+               CLAUDE_CODE_SESSION_ID=309bd638-8a1c-42b7-952b-898efb8d1064 \
+           "$ENGINE" claim 'FS.GG.SDD#93' 2>&1 || true)"
+  printf '%s' "$j93" | grep -q 'lease renewed' \
+    && ok "case24(j): a re-claim of our own live marker RENEWS it in place (lease renewed)" \
+    || bad "case24(j): a re-claim must renew in place, not duplicate" "$j93"
+  printf '%s' "$j93" | grep -q 'adopted ITS lock' \
+    && ok "case24(j): ...and WARNS it never ran the CAS (adopted ITS lock)" \
+    || bad "case24(j): a re-claim under a shared id must warn 'adopted ITS lock'" "$j93"
+  printf '%s' "$j93" | grep -q 'may not be unique to this worker' \
+    && ok "case24(j): ...and names the shared-id hazard (may not be unique to this worker)" \
+    || bad "case24(j): a re-claim must name the shared-id hazard" "$j93"
+  j93n="$(curl -s "$ADV_BASE/repos/FS-GG/FS.GG.SDD/issues/93/comments" | jq '[.[]|select(.body|test("fsgg:claim"))]|length' 2>/dev/null)"
+  [ "$j93n" = "1" ] \
+    && ok "case24(j): ...and still exactly ONE marker (a renew, not a duplicate)" \
+    || bad "case24(j): a re-claim must leave exactly one marker" "markers on #93: $j93n"
+
   kill "$ADV_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 24 (legs h + m) — reap's MUTATING interleavings: it does not cause the double-hold it CLEANS UP,
+# and a failed delete is REPORTED, not swallowed.
+#
+# `Reapable` is a SNAPSHOT verdict — proven against the scan's read — so `reap` RE-VERIFIES the marker's
+# freshness immediately before breaking the lock, and DELETES before it would ever notify. One
+# `reap --repo FS.GG.SDD --apply` over `reap_race_server.py`'s two-item world drives both legs:
+#   (h) #91  the holder HEARTBEATED between the scan and the delete (the marker's `updated_at` flips
+#            stale→fresh on the RE-VERIFY read) → reap SKIPS it: "renewed since the scan", marker SURVIVES.
+#            This is `GH_REAP_RACE=91` re-expressed at the HTTP layer.
+#   (m) #96  the marker's DELETE FAILS (500, `GH_FAIL_DELETE=819`) → reap REPORTS "FAILED", LEAVES the
+#            marker (still held), and does NOT tell the worker (reap posts no notify — the delete comes
+#            first, so a failed delete never leaves a worker told-to-stop over a marker that still holds).
+#
+# Disposed on the record (ADR-0040 §5): the engine's reap posts NO notify (leg m's "worker not notified"
+# is structural, not an ordering it could get wrong), and its FAILED/skipped wording is its own — the
+# PROPERTY is asserted (a renewed lock is skipped and survives; a failed delete is reported and the marker
+# stands), counted at the HTTP layer via `/_deletes` and the /comments read-back.
+# ==================================================================================================
+RR_OUT="$(mktemp)"; python3 "$HERE/reap_race_server.py" >"$RR_OUT" 2>/dev/null & RR_SRV=$!; RR_PORT=""
+for _ in $(seq 1 50); do RR_PORT="$(head -n1 "$RR_OUT" 2>/dev/null)"; [ -n "$RR_PORT" ] && break; sleep 0.1; done
+rm -f "$RR_OUT"
+if [ -z "$RR_PORT" ]; then bad "reap-race fixture bound a port"; else
+  RR_BASE="http://127.0.0.1:$RR_PORT"
+  rr_workers_on() { curl -s "$RR_BASE/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                      | jq -r '[.[].body | capture("worker=(?<w>[^\\s>]+)").w] | join(",")' 2>/dev/null; }
+  rr_out="$(FSGG_GITHUB_API_BASE="$RR_BASE" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" reap --repo FS.GG.SDD --apply 2>&1 || true)"
+
+  # (h) A claim renewed between the scan and the delete is SKIPPED, and its marker SURVIVES.
+  printf '%s' "$rr_out" | grep -q 'renewed since the scan' \
+    && ok "case24(h): reap RE-VERIFIES — a claim renewed between the scan and the delete is SKIPPED" \
+    || bad "case24(h): a claim renewed since the scan must be skipped" "$rr_out"
+  [ "$(rr_workers_on 91)" = "finch-a3f" ] \
+    && ok "case24(h): ...and its marker SURVIVES the reap (finch-a3f still holds #91)" \
+    || bad "case24(h): a renewed claim's marker must survive" "workers on #91: $(rr_workers_on 91)"
+  # The skip DELETED nothing on #91 — the re-verify short-circuited before the break.
+  [ "$(curl -s "$RR_BASE/_deletes" | jq 'index(816)')" = "null" ] \
+    && ok "case24(h): ...and reap DELETED nothing on the renewed claim (no 816 in /_deletes)" \
+    || bad "case24(h): a skipped reap must delete nothing" "deletes: $(curl -s "$RR_BASE/_deletes")"
+
+  # (m) A failed DELETE is REPORTED ("FAILED"), the marker STAYS, and the worker is NOT told (reap deletes
+  #     before it would notify, and this engine's reap posts no notify — so a failed delete strands nobody).
+  printf '%s' "$rr_out" | grep -q 'FAILED' \
+    && ok "case24(m): reap reports a failed delete ('FAILED'), it is not swallowed" \
+    || bad "case24(m): a failed delete must be reported" "$rr_out"
+  [ "$(rr_workers_on 96)" = "ghost-555" ] \
+    && ok "case24(m): ...and a failed delete leaves the marker in place (ghost-555 still holds #96)" \
+    || bad "case24(m): a failed delete must leave the marker" "workers on #96: $(rr_workers_on 96)"
+  # No fsgg:msg addressed to ghost-555 anywhere — reap posts no notify, so nothing told the worker it was
+  # released while its marker still held the item (the ordering leg m guards, structural in the engine).
+  [ "$(curl -s "$RR_BASE/repos/FS-GG/FS.GG.SDD/issues/96/comments" | jq '[.[]|select(.body|test("fsgg:msg"))|select(.body|test("to=ghost-555"))]|length')" = "0" ] \
+    && ok "case24(m): ...and does NOT tell the worker it was released (no fsgg:msg to=ghost-555)" \
+    || bad "case24(m): a failed reap must not notify the worker" "messages to ghost-555 present"
+
+  kill "$RR_SRV" 2>/dev/null
 fi
 
 echo

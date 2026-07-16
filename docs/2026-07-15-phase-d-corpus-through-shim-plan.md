@@ -4,17 +4,20 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **25 full + 1 partial of 27 corpus cases** (~417 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **26 full of 27 corpus cases** (~433 assertions); only case 43
+(kit digest/argv, which overlaps D.2) remains. D.2–D.4 not started.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
 command) scoping to the checkout you are standing in (#480), is proven: a bare `reap` from an SDD checkout
 considers only SDD's claims, from a Rendering checkout only Rendering's, and outside a checkout it REFUSES
-rather than fall back to the org-wide scan that once deleted across five repos. Case 24 (the last partial)
-has begun to close: its **lock-fails-closed adversarial legs** — a marker quoted in a message does not forge
-a lock, a malformed marker BLOCKS, an expired worker cannot resurrect its claim under a new holder, and a
-failed or empty CAS re-read is a LOSS that withdraws its own marker rather than orphaning it — now drive
-through the engine over HTTP.
+rather than fall back to the org-wide scan that once deleted across five repos. **Case 24 is now FULL** — its
+last legs, the lock's MUTATING interleavings on `reap` and `claim`, land: `reap` RE-VERIFIES a stale marker
+against a fresh read immediately before breaking it (a holder that heartbeated between the scan and the delete
+is SKIPPED — the one way `reap` could itself cause the double-hold it exists to clean up) and REPORTS a failed
+delete rather than swallowing it (the marker stands, and the worker is never told it was released over a lock
+that still holds); and the shared-id `claim` RE-CLAIM renews its own live marker IN PLACE (a PATCH, not a
+duplicate) and WARNS that it adopted a lock on the strength of an id alone, without running the CAS.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -33,7 +36,7 @@ the work A→D, "each step reachable from the one before it." A, B, and C have l
   ([#750](https://github.com/FS-GG/.github/issues/750), [#765](https://github.com/FS-GG/.github/issues/765)).
 
 **The engine is now proven case-by-case, over HTTP, against the corpus's certified answers.** The
-`tests/coord-engine-parity/` harness (~417 assertions across **25 of 27 corpus cases**, 28 fixture
+`tests/coord-engine-parity/` harness (~433 assertions across **26 of 27 corpus cases**, 29 fixture
 servers) drives the *compiled binary* against fixture GitHub servers and holds it to the exact answers
 the shell corpus certifies for bash — scheduling, blockers, starved-vs-empty, cross-repo scoping,
 fail-closed reads, touch-set fabrication, one-item-per-worker, `child` idempotency, `set-field --batch`,
@@ -131,14 +134,24 @@ fail-closed assertions re-expressed at the HTTP layer.
 
 **Progress (as of the off-board `who` slice, 2026-07-15).** The harness is grown one defect/case
 at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
-`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **25 of 27 cases fully covered,
-plus 1 partial (24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
-which are the differential harness D.4 disposes of, not engine-behaviour cases:
+`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **26 of 27 cases fully covered**
+— the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which are the differential
+harness D.4 disposes of, not engine-behaviour cases. Only case 43 (kit digest/argv, which overlaps D.2)
+remains:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
-| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP are DONE; the lock's **fail-closed** adversarial reads (forged/malformed markers, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read) now land too; `say --to` normalization (a mis-cased target is slugged to the id `inbox` matches, `*` stays literal) lands too; `overlap`'s `paths_of` **fail-closed** (leg k) lands too; and `claim`'s **stale-marker COLLECTION + notify** (legs a, b, l — a won claim DELETEs the stale marker it claims over, TELLS the evicted worker, renews its OWN stale marker to one, and treats a concurrent-GC 404 as success) now lands too; what remains is the lock's **mutating** interleavings on `reap` — re-verify-before-delete (h) + delete-before-notify (m) — and the shared-id re-claim warning (j) |
+| ✓ | 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+
+Case **24 is now FULL**: the `--issue` boundary (#479/#494) and cross-repo CLOSING-ref SKIP (shared with 23),
+the lock's **fail-closed** adversarial reads (forged/malformed markers, heartbeat resurrection + expired-lease
+refusal, failed/empty CAS re-read), `say --to` normalization (leg n), `overlap`'s `paths_of` fail-closed (leg
+k), `claim`'s **stale-marker COLLECTION + notify** (legs a, b, l), and now the lock's **MUTATING interleavings**
+(legs h, m, j): `reap` RE-VERIFIES a stale marker against a fresh read immediately before the delete (a claim
+heartbeated between the scan and the delete is SKIPPED, leg h) and REPORTS a failed delete rather than
+swallowing it (the marker stands; the worker is never notified over a lock that still holds, leg m), and the
+shared-id `claim` RE-CLAIM renews its own live marker in place (a PATCH, not a duplicate) and WARNS that it
+adopted a lock on an id alone without running the CAS (leg j).
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -157,11 +170,10 @@ repo's issue → SKIP naming the other repo, no verdict across the boundary). Th
 bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
 EX_RATE-vs-checkout failure modes are structurally absent).
 
-**Remaining (case 43 + the rest of 24), each classified as a port gap or a deliberate divergence:**
+**Remaining (case 43 only), classified as a port gap or a deliberate divergence:**
 
 | case | what it needs | class |
 |---|---|---|
-| 24-remainder | the lock's **fail-closed** adversarial reads are DONE (forged marker does not hold, malformed marker BLOCKS, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read is a LOSS that withdraws its own marker), `say --to` normalization is DONE, `overlap`'s `paths_of` **fail-closed** is DONE (leg k), and `claim`'s **stale-marker COLLECTION + notify** is DONE (legs a, b, l — a won claim DELETEs the stale marker it claims over, TELLS the evicted worker, renews its own to one, tolerates a concurrent-GC 404; the GC-on-transfer + notify follow-up is thereby partly discharged, since `adopt` transfers through `claim`); what remains is `reap`'s **mutating** interleavings — re-verify-before-delete (h) + delete-before-notify (m) — and the shared-id re-claim warning + `lease renewed` wording (j) | `reap`/`claim` mutating legs (genuine engine changes) |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
 Case **44 is now FULL** (#419): `whoami --mint` is one eval-able line, CSPRNG-unique per call, and
@@ -602,12 +614,42 @@ expired claim`), bash's `collected worker '…' expired claim` matched where it 
 that exactly one marker survives and the evicted worker is told. Case 24 stays PARTIAL: `reap`
 re-verify-before-delete (h) + delete-before-notify (m), and the shared-id re-claim warning (j), remain.
 
-The clean "engine already matches bash by construction" cases are largely ported; what remains clusters into
-the **larger port gap** of `reap`/`claim`'s MUTATING adversarial legs (case 24 — `claim` stale-marker
-collection + notify now DONE (legs a, b, l); `reap` re-verify-before-delete (h) + delete-before-notify (m) and
-the shared-id re-claim warning (j) remain). The verify-paths repo-boundary divergences (case 23's SKIP-exit code
-and the absent `gh repo view` fallback) are now disposed on the record in the harness, and the call-counting
-transformation is demonstrated end-to-end by case 10.
+Case 24's **`reap`/`claim` MUTATING interleavings** landed last, and case **24 is now FULL** (legs h, m, j,
+this slice) — the interleavings where the destructive verb, or a bypassed CAS, could ITSELF cause the
+double-hold the whole ADR-0027 protocol exists to prevent. Two guarantees on `reap`, one on `claim`:
+(h) `Reapable` is a SNAPSHOT verdict — proven against the scan's read — and a holder may heartbeat between
+the scan and the delete, so `Writes.reap` now RE-VERIFIES the marker's freshness against a FRESH read
+immediately before breaking the lock: it returns a new `ReapResult` (`Reaped` / `RenewedSinceScan age` /
+`AlreadyGone`), and a marker gone live again is SKIPPED (`renewed since the scan`, its marker SURVIVES) —
+deleting a lock because it USED TO BE stale is the one way `reap` causes the very double-hold it cleans up.
+(m) `reap` DELETEs before it would ever notify — and this engine's reap posts NO notify at all — so a failed
+delete is REPORTED (`FAILED … board left untouched, worker not notified`) and the scan moves on, the marker
+LEFT in place (still held) rather than a worker told-to-stop over a lock that still holds for a full lease
+(a genuine, non-404 delete failure is not fatal to the whole reap; the other items still collect).
+(j) a marker bearing our worker id is not proof it is ours (#419: rules 4/5 hand one id to several workers),
+and the re-claim path bypasses the CAS entirely — so `Writes.claim`'s "already ours" branch now returns a
+distinct `Renewed of Held * WorkerId list` and RENEWS the marker IN PLACE (a PATCH, never a second POST it
+would lose to its own first), and the CLI prints `held … (lease renewed)` and, on a shared id
+(`Identity.FromSharedSession`), WARNS it `adopted ITS lock` without running the CAS and that the id `may not
+be unique to this worker`. New `reap_race_server.py` (the h/m world: #91's marker flips stale→fresh on the
+RE-VERIFY read — `GH_REAP_RACE` one transport under; #96's DELETE 500s — `GH_FAIL_DELETE`); leg j rides
+`casadversarial_server.py` (a new #93 whose FRESH marker carries a worker id DERIVED from a shared
+claude-code session, `name_from_seed` replicated in the fixture so it matches the engine's `Identity`). 10
+parity assertions + 5 `Writes` unit tests (re-claim renews in place / no second POST; reap re-verify skips a
+renewed marker / treats an already-gone marker as `AlreadyGone` / deletes a still-stale one); the `Renewed`
+signature change rippled the three re-claim `WriteTests` to script the PATCH. Disposed on the record
+(ADR-0040 §5): the engine's reap posts NO notify (leg m's "worker not notified" is STRUCTURAL, not an
+ordering it could get wrong — the full stale-sweep-with-notify remains `reap`'s job, and the GC-on-transfer
+notify is `claim`'s, discharged in the collection slice above); and the `FAILED`/`renewed since the scan`/
+`adopted ITS lock` wording is the engine's — the PROPERTY is asserted (a renewed lock is skipped and
+survives; a failed delete is reported and the marker stands; a re-claim renews one marker and warns), counted
+at the HTTP layer via `/_deletes` and the /comments read-back.
+
+With case 24 full, the clean "engine already matches bash by construction" cases and the larger `reap`/`claim`
+MUTATING port gap are BOTH discharged; only case 43 (kit digest/argv, which overlaps D.2) remains of the 27.
+The verify-paths repo-boundary divergences (case 23's SKIP-exit code and the absent `gh repo view` fallback)
+are disposed on the record in the harness, and the call-counting transformation is demonstrated end-to-end by
+case 10.
 
 ### D.2 — Cut the shim
 
@@ -660,23 +702,29 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 25 full + 1 partial of 27 cases** ported to `tests/coord-engine-parity/` (~417
-      assertions); the rest remain (see the §5 D.1 ledger). Case 24 (the last partial) has begun to close —
-      its **lock-fails-closed** adversarial reads (a quoted marker does not forge a lock, a malformed marker
-      BLOCKS, an expired worker cannot resurrect its claim, and a failed/empty CAS re-read is a LOSS that
-      withdraws its own marker) now drive through the engine over HTTP (`casadversarial_server.py`), its
-      **`say --to` normalization** landed too (a mis-cased target is slugged to the id `inbox` matches via the
-      now-public `Identity.slug`, `*` stays literal, an unslugged target is WARNED about — proven as an engine
-      round-trip through `inbox_server.py`), and its **`overlap` `paths_of` fail-closed** landed too (leg k — a
-      failed body read refuses to schedule against an unknown touch-set via a shared `failSchedule`, never
-      mis-read as the empty-set DISJOINT nor as "declared nothing", proven with an `OVERLAP_FAIL_ISSUE` toggle
-      on `overlap_server.py`), and its **`claim` stale-marker COLLECTION + notify** landed too (legs a, b, l — a
-      won claim DELETEs the stale marker it claims over via a private `collectStale`, TELLS each evicted worker
-      on their own item, renews its OWN stale marker to exactly one, and treats a concurrent-GC 404 as success;
-      the outcome grew a collected-workers list, `Won of Held * WorkerId list`, and `adopt` — which transfers
-      through `claim` — now GCs an adopted orphan's marker too, partly discharging the GC-on-transfer follow-up);
-      what remains of case 24 is `reap`'s MUTATING interleavings (re-verify h, delete-before-notify m) and the
-      shared-id re-claim warning (j). Case 14 is now FULL — its whole `lint` command
+      **In progress: 26 full of 27 cases** ported to `tests/coord-engine-parity/` (~433
+      assertions); only case 43 (kit digest/argv, which overlaps D.2) remains (see the §5 D.1 ledger).
+      **Case 24 is now FULL** — its **lock-fails-closed** adversarial reads (a quoted marker does not forge a
+      lock, a malformed marker BLOCKS, an expired worker cannot resurrect its claim, and a failed/empty CAS
+      re-read is a LOSS that withdraws its own marker) drive through the engine over HTTP
+      (`casadversarial_server.py`), its **`say --to` normalization** landed (a mis-cased target is slugged to
+      the id `inbox` matches via the now-public `Identity.slug`, `*` stays literal, an unslugged target is
+      WARNED about — proven as an engine round-trip through `inbox_server.py`), its **`overlap` `paths_of`
+      fail-closed** landed (leg k — a failed body read refuses to schedule against an unknown touch-set via a
+      shared `failSchedule`, never mis-read as the empty-set DISJOINT nor as "declared nothing", proven with an
+      `OVERLAP_FAIL_ISSUE` toggle on `overlap_server.py`), its **`claim` stale-marker COLLECTION + notify**
+      landed (legs a, b, l — a won claim DELETEs the stale marker it claims over via a private `collectStale`,
+      TELLS each evicted worker on their own item, renews its OWN stale marker to exactly one, and treats a
+      concurrent-GC 404 as success; the outcome grew a collected-workers list, and `adopt` — which transfers
+      through `claim` — now GCs an adopted orphan's marker too, partly discharging the GC-on-transfer
+      follow-up), and its **`reap`/`claim` MUTATING interleavings** landed last (legs h, m, j — `Writes.reap`
+      RE-VERIFIES a stale marker against a fresh read immediately before the delete and returns a `ReapResult`,
+      so a claim heartbeated between the scan and the delete is SKIPPED and its marker survives (h) and a failed
+      delete is REPORTED, not swallowed, the marker left in place and the worker never told (m); and
+      `Writes.claim`'s "already ours" branch is now a distinct `Renewed` that RENEWS the marker IN PLACE (a
+      PATCH, not a duplicate) and WARNS on a shared id that it `adopted ITS lock` without running the CAS (j) —
+      new `reap_race_server.py`, a #93 leg on `casadversarial_server.py`, 10 parity + 5 `Writes` unit tests).
+      Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
       landed; case 34 is now FULL too — the read-only `overlap` command (#353 repo-scoped collision) plus
