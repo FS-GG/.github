@@ -429,6 +429,77 @@ module Cache =
 
     let private pendingFile () = Path.Combine(ensureRoot (), "pending.jsonl")
 
+    // THE QUEUE IS ONE FILE, SHARED BY EVERY WORKER ON THE MACHINE. `root ()` is keyed on neither the
+    // worktree, the worker, nor the board, so `pending.jsonl` is exactly the fan-out this protocol exists to
+    // support — and `defer` (append) and `dropPending` (read-all, filter, write-all) did not compose:
+    //
+    //   A: flush -> dropPending -> pending () reads [e1]
+    //   B:                         defer appends e2       <- file is now [e1; e2]
+    //   A:                         WriteAllText []        <- e2 is GONE
+    //
+    // B was told "QUEUED; flush replays it" and it never would be: the exact promise-not-kept that #510 was
+    // filed for, one layer down, landing on the worker who did nothing wrong (#881).
+    //
+    // THE LOCK IS ITS OWN FILE, and that is not incidental. `clearPending` UNLINKS `pending.jsonl` when the
+    // last entry drains — so a lock taken on the queue itself would be a lock on an inode that no longer has
+    // a name, and the next worker through `OpenOrCreate` would create a NEW file and take an uncontended
+    // lock on it. Two workers, two inodes, one queue, no exclusion. The lock file is therefore never
+    // unlinked; it is a mutex, not a queue.
+    let private pendingLockFile () = Path.Combine(ensureRoot (), "pending.lock")
+
+    [<Literal>]
+    let private LockPollMs = 25
+
+    [<Literal>]
+    let private DefaultLockTimeoutMs = 5000
+
+    let private lockTimeoutMs () =
+        match Environment.GetEnvironmentVariable "FSGG_COORD_LOCK_TIMEOUT_MS" with
+        | null
+        | "" -> DefaultLockTimeoutMs
+        | v ->
+            match Int32.TryParse v with
+            | true, n when n >= 0 -> n
+            // The opposite fallback to `scanTtlSeconds`, and deliberately so. A TTL we cannot parse degrades
+            // to "pay for the read", because the safe direction there is to spend. Here the safe direction is
+            // to WAIT: a timeout of zero would make every contended queue operation refuse instantly, which
+            // is a fail-open dressed as a config error.
+            | _ -> DefaultLockTimeoutMs
+
+    // ACQUISITION IS SEPARATE FROM THE BODY, so that an IOException thrown by `f` cannot be mistaken for
+    // contention and retried — which would run `f` twice and rewrite the queue twice.
+    let private tryAcquire (file: string) : FileStream option =
+        try
+            Some(new FileStream(file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+        with :? IOException ->
+            None
+
+    /// Run `f` with exclusive access to the queue, or answer `None` if the lock did not free in time.
+    ///
+    /// NO STALE-LOCK POLICY, AND NONE IS NEEDED. The lock is the open handle, not a record written into the
+    /// file, so the kernel drops it when the holder's last descriptor closes — including on SIGKILL, where no
+    /// cleanup code of ours runs at all. A worker that dies mid-flush frees the queue by dying. This is the
+    /// property that makes an advisory lock the cheap answer here rather than the one with a caretaker.
+    let private withPendingLock (f: unit -> 'a) : 'a option =
+        let file = pendingLockFile ()
+        let deadline = DateTime.UtcNow.AddMilliseconds(float (lockTimeoutMs ()))
+
+        let rec acquire () =
+            match tryAcquire file with
+            | Some fs -> Some fs
+            | None ->
+                if DateTime.UtcNow >= deadline then
+                    None
+                else
+                    Threading.Thread.Sleep LockPollMs
+                    acquire ()
+
+        match acquire () with
+        | None -> None
+        | Some handle ->
+            use _held = handle
+            Some(f ())
+
     let private renderDeferred (e: Deferred) =
         let o = JsonObject()
         o.["ref"] <- JsonValue.Create e.Ref
@@ -447,11 +518,24 @@ module Cache =
         if not (isQueueable error) then
             Error error
         else
-            try
-                File.AppendAllText(pendingFile (), renderDeferred entry + "\n")
-                Ok()
-            with :? IOException as e ->
-                Error(Transport $"the board write could not be queued: %s{e.Message}")
+            // UNDER THE LOCK, even though the write is a single append. An append races a concurrent
+            // `dropPending`'s rewrite, and it is the append that loses: see the lost-update sequence above.
+            let append () =
+                try
+                    File.AppendAllText(pendingFile (), renderDeferred entry + "\n")
+                    Ok()
+                with :? IOException as e ->
+                    Error(Transport $"the board write could not be queued: %s{e.Message}")
+
+            match withPendingLock append with
+            | Some r -> r
+            // REFUSING TO QUEUE IS THE HONEST ANSWER. The caller is told the write did not land, which is
+            // true. Appending without the lock to "not lose it" is what loses it.
+            | None ->
+                Error(
+                    Transport
+                        $"the board write could not be queued: the deferral queue stayed locked by another worker for %d{lockTimeoutMs ()}ms"
+                )
 
     let private parseDeferred (line: string) =
         try
@@ -475,7 +559,11 @@ module Cache =
         with :? JsonException ->
             None
 
-    let pending () : IoResult<Deferred list> =
+    // THE UNLOCKED INNER READ. `dropPending` must read and rewrite as ONE critical section, so it holds the
+    // lock across both and calls this; a `pending ()` that took the lock itself would deadlock against the
+    // lock its own caller already holds. Nothing outside this module may call it: an unlocked read can see a
+    // rewrite in progress, because `WriteAllText` is not atomic.
+    let private pendingUnlocked () : IoResult<Deferred list> =
         let file = pendingFile ()
 
         if not (File.Exists file) then
@@ -507,7 +595,19 @@ module Cache =
             with :? IOException as e ->
                 Error(Transport $"the deferred-write queue could not be read: %s{e.Message}")
 
-    let clearPending () =
+    /// Everything currently queued, read under the lock so it cannot observe a partial rewrite.
+    let pending () : IoResult<Deferred list> =
+        match withPendingLock pendingUnlocked with
+        | Some r -> r
+        | None ->
+            // A QUEUE WE COULD NOT READ IS NOT AN EMPTY QUEUE (#266). `Ok []` here would tell `flush` there
+            // was nothing to replay and let it report success over a queue it never opened.
+            Error(
+                Transport
+                    $"the deferred-write queue could not be read: it stayed locked by another worker for %d{lockTimeoutMs ()}ms"
+            )
+
+    let private clearPendingUnlocked () =
         try
             // UNLINK, never truncate. A zero-byte file is a claim — "there is a queue, and it is empty" —
             // and that is a statement about state that nobody made. When the last entry drains, the queue
@@ -516,22 +616,32 @@ module Cache =
         with :? IOException ->
             ()
 
+    let clearPending () = withPendingLock clearPendingUnlocked |> ignore
+
     let dropPending (entry: Deferred) =
-        match pending () with
-        | Error _ -> ()
-        | Ok entries ->
-            let remaining =
-                entries
-                |> List.filter (fun e ->
-                    not (e.Ref = entry.Ref && e.Field = entry.Field && e.Value = entry.Value))
+        // READ AND REWRITE UNDER ONE LOCK. This is the whole fix: the window that destroyed a concurrent
+        // `defer` was between the read and the write, so nothing that closes only one end of it is enough —
+        // an atomic replace fixes the torn write and loses the append just the same (#881).
+        withPendingLock (fun () ->
+            match pendingUnlocked () with
+            | Error _ -> ()
+            | Ok entries ->
+                let remaining =
+                    entries
+                    |> List.filter (fun e ->
+                        not (e.Ref = entry.Ref && e.Field = entry.Field && e.Value = entry.Value))
 
-            if List.isEmpty remaining then
-                clearPending ()
-            else
-                try
-                    let text =
-                        remaining |> List.map renderDeferred |> String.concat "\n"
+                if List.isEmpty remaining then
+                    clearPendingUnlocked ()
+                else
+                    try
+                        let text =
+                            remaining |> List.map renderDeferred |> String.concat "\n"
 
-                    File.WriteAllText(pendingFile (), text + "\n")
-                with :? IOException ->
-                    ()
+                        File.WriteAllText(pendingFile (), text + "\n")
+                    with :? IOException ->
+                        ())
+        // LOSING THE LOCK LEAVES THE ENTRY QUEUED, which is safe in the direction that matters: the entry has
+        // already been written to the board, so the next `flush` replays a write that is idempotent. The
+        // opposite default — dropping it unlocked — is the data loss.
+        |> ignore

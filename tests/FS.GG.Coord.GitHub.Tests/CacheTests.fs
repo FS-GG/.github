@@ -27,6 +27,7 @@ type private Sandbox() =
             Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", null)
             Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", null)
             Environment.SetEnvironmentVariable("FSGG_COORD_BOARD_TTL_SEC", null)
+            Environment.SetEnvironmentVariable("FSGG_COORD_LOCK_TIMEOUT_MS", null)
 
             try
                 Directory.Delete(dir, true)
@@ -341,3 +342,81 @@ let ``the cursor file is keyed on the slugged worker id (matches the bash client
     // `inbox-<slug>` is the shared contract with the bash client — a worker that switches engines mid-loop
     // must land on the SAME file, or it re-reads mail it already saw.
     Assert.True(File.Exists(Path.Combine(sandbox.Dir, "inbox-smew-f31")))
+
+// ---- #881: the deferral queue is one file, shared by every worker on the box ------------------------
+
+/// Take the queue lock the way another worker's PROCESS would, so the test contends for real rather than
+/// asserting against a mock of contention.
+let private holdQueueLock (sandbox: Sandbox) =
+    new FileStream(
+        Path.Combine(sandbox.Dir, "pending.lock"),
+        FileMode.OpenOrCreate,
+        FileAccess.ReadWrite,
+        FileShare.None
+    )
+
+[<Fact>]
+let ``#881 a concurrent defer is NOT destroyed by a flush's dropPending`` () =
+    use _sandbox = new Sandbox()
+
+    // A DEEP QUEUE, because the window IS the read-modify-write. `dropPending` reads every line, parses each
+    // as JSON, filters, re-renders and writes the lot back; over a one-entry queue that is microseconds long
+    // and no concurrent `defer` ever lands inside it. The first draft of this test seeded ONE entry, passed
+    // against the unfixed code, and proved nothing — a green test that could not see its subject (#266).
+    for i in 1..400 do
+        defer (RateLimited None) { entry with Ref = $"FS.GG.SDD#%d{i}" } |> ignore
+
+    let mutable lost = 0
+
+    for i in 1..40 do
+        // A distinct victim per round, so a survivor of an earlier round can never be read as this one's.
+        let victim =
+            { entry with
+                Ref = $"FS.GG.Game#%d{i}"
+                Value = "Ready" }
+
+        // The dropper drops one real entry, which is exactly what `flush` does per replayed write.
+        let dropper =
+            Threading.Tasks.Task.Run(fun () -> dropPending { entry with Ref = $"FS.GG.SDD#%d{i}" })
+
+        // Land INSIDE the dropper's read-modify-write rather than on either side of it.
+        Threading.Thread.Sleep 1
+        defer (RateLimited None) victim |> ignore
+        dropper.Wait()
+
+        match pending () with
+        | Ok entries when entries |> List.exists (fun e -> e.Ref = victim.Ref) -> ()
+        | _ -> lost <- lost + 1
+
+    // The deferrer was told "QUEUED; flush replays it", and unless the read and the rewrite are ONE critical
+    // section that promise is a lie: the dropper's `WriteAllText` lands on a snapshot that predates the
+    // append, so the board write of the worker who did nothing wrong is silently gone.
+    Assert.Equal(0, lost)
+
+[<Fact>]
+let ``#881 defer REFUSES while another worker holds the queue, rather than racing it`` () =
+    use sandbox = new Sandbox()
+    Environment.SetEnvironmentVariable("FSGG_COORD_LOCK_TIMEOUT_MS", "150")
+
+    use _held = holdQueueLock sandbox
+
+    // REFUSING IS THE HONEST ANSWER. The caller is told the write did not land, which is true. Appending
+    // anyway "so as not to lose it" is precisely what loses it.
+    match defer (RateLimited None) entry with
+    | Error(Transport m) -> Assert.Contains("locked", m)
+    | other -> failwith $"defer must refuse while the queue is held — got %A{other}"
+
+[<Fact>]
+let ``#881 a queue we could not read is not an EMPTY queue`` () =
+    use sandbox = new Sandbox()
+    defer (RateLimited None) entry |> ignore
+
+    Environment.SetEnvironmentVariable("FSGG_COORD_LOCK_TIMEOUT_MS", "150")
+    use _held = holdQueueLock sandbox
+
+    // #266's signature, in the queue: `Ok []` here would tell `flush` there was nothing to replay and let it
+    // report success over a queue it never managed to open. An absent queue is empty; a LOCKED one is unread.
+    match pending () with
+    | Ok [] -> failwith "a locked queue must never read as empty — that is a flush reporting success over unread work"
+    | Error(Transport _) -> ()
+    | other -> failwith $"a locked queue must refuse — got %A{other}"
