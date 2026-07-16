@@ -4,13 +4,17 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **25 full + 1 partial of 27 corpus cases** (~392 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **25 full + 1 partial of 27 corpus cases** (~405 assertions); D.2–D.4 not started.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
 command) scoping to the checkout you are standing in (#480), is proven: a bare `reap` from an SDD checkout
 considers only SDD's claims, from a Rendering checkout only Rendering's, and outside a checkout it REFUSES
-rather than fall back to the org-wide scan that once deleted across five repos.
+rather than fall back to the org-wide scan that once deleted across five repos. Case 24 (the last partial)
+has begun to close: its **lock-fails-closed adversarial legs** — a marker quoted in a message does not forge
+a lock, a malformed marker BLOCKS, an expired worker cannot resurrect its claim under a new holder, and a
+failed or empty CAS re-read is a LOSS that withdraws its own marker rather than orphaning it — now drive
+through the engine over HTTP.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -134,7 +138,7 @@ which are the differential harness D.4 disposes of, not engine-behaviour cases:
 | covered | case | note |
 |---|---|---|
 | ✓ | 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
-| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — `reap` now EXISTS (case 26), but its adversarial-interleaving legs are the remaining work |
+| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP are DONE; the lock's **fail-closed** adversarial reads (forged/malformed markers, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read) now land too; what remains is the lock's **mutating** interleavings — stale-marker collection + notify (`claim` leaves the stale marker for `reap`, a documented divergence), `reap` re-verify-before-delete + delete-before-notify, the shared-id re-claim warning, `overlap`'s `paths_of` fail-closed, and `say --to` normalization |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -157,7 +161,7 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 
 | case | what it needs | class |
 |---|---|---|
-| 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
+| 24-remainder | the lock's **fail-closed** adversarial reads are now DONE (forged marker does not hold, malformed marker BLOCKS, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read is a LOSS that withdraws its own marker); what remains is the **mutating** interleavings — stale-marker collection + notify (`claim`/`adopt` leave the stale marker for `reap`, the documented GC-on-transfer follow-up), `reap` re-verify-before-delete + delete-before-notify, the shared-id re-claim warning + `lease renewed` wording, `overlap`'s `paths_of` fail-closed, and `say --to` normalization | `reap`/`claim` mutating legs + `say --to` (genuine engine changes) |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
 Case **44 is now FULL** (#419): `whoami --mint` is one eval-able line, CSPRNG-unique per call, and
@@ -515,10 +519,35 @@ remote-read Rendering leg, explicit `--repo` wins + short-id resolves, the outsi
 nothing deleted across every leg). No new unit tests — the resolver and the guard were already covered by the
 `#480` scope section (`next`/`take`/`batch`) and the reap `--repo required` behaviour.
 
+Case 24's **lock-fails-closed adversarial reads** landed next (this slice): the interleavings in which two
+workers could end up believing they hold ONE item — the failure the whole ADR-0027 protocol exists to
+prevent — but the half the engine ALREADY implements, so a parity-proof slice. A claim marker is only a
+marker at the START of a comment body (`^<!--\s*fsgg:claim`), so a `fsgg:msg` that merely QUOTES one in prose
+does not forge a lock — the item is still claimable (leg e). A marker we cannot parse a worker out of FAILS
+CLOSED — it BLOCKS the item rather than reading as free, because a lock you cannot read is still a lock (leg
+f, engine "unparseable lock" for bash's "unparsed-marker"). An expired worker cannot HEARTBEAT its claim back
+to life once another worker legitimately holds the item — it is named the new holder and told to STOP working
+(leg c, the resurrection bug), and an expired lease is refused even when nobody else took the item (leg d,
+"EXPIRED — re-claim"); the refused renew patches NOTHING (proven at the fixture's `/_patches` ledger). And
+the two CAS re-read LOSSES: a transient read FAILURE on the re-read withdraws the marker we just posted
+rather than orphaning it (leg g, "removed our marker" proven at `/_deletes`), and an EMPTY re-read — our own
+marker vanished — is a LOSS too, never a lock announced on an observation we did not make (leg i, "marker
+vanished"). New `casadversarial_server.py` (one FS.GG.SDD world; legs g/i MUTATE it — `claim` POSTs, the
+re-read faults or comes back empty, and the withdraw DELETEs the posted marker); 13 parity assertions, no new
+unit tests (the marker anchor, the `BlockedByUnparseableMarker` outcome, the `verifyHeld` fail-closed, and
+the `withdraw` loss path are all already covered in `Reads`/`Writes` unit tests). Disposed on the record
+(ADR-0040 §5): where the engine's wording differs from bash's literal — (c) `held by heron-b71` vs `worker
+'heron-b71' does`, (d) `claim --force` vs `fsgg-coord claim`, (f) `unparseable lock` vs `unparsed-marker`,
+(g) `could not take … a LOSS` vs `removed our marker`/`nothing was claimed` — the PROPERTY is asserted (name
+the holder; point at re-claiming; BLOCK the item; DELETE the posted marker and claim nothing), one transport
+under. Case 24 stays PARTIAL: the MUTATING interleavings remain (see the remaining table).
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters into
-the **larger port gap** of `reap`'s adversarial-interleaving legs (case 24). The verify-paths repo-boundary divergences (case 23's
-SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
-the call-counting transformation is demonstrated end-to-end by case 10.
+the **larger port gap** of `reap`/`claim`'s MUTATING adversarial legs (case 24 — stale-marker collection +
+notify, `reap` re-verify-before-delete, the shared-id re-claim warning), the documented GC-on-transfer
+follow-up, and `say --to` normalization. The verify-paths repo-boundary divergences (case 23's SKIP-exit code
+and the absent `gh repo view` fallback) are now disposed on the record in the harness, and the call-counting
+transformation is demonstrated end-to-end by case 10.
 
 ### D.2 — Cut the shim
 
@@ -571,8 +600,12 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 25 full + 1 partial of 27 cases** ported to `tests/coord-engine-parity/` (~392
-      assertions); the rest remain (see the §5 D.1 ledger). Case 14 is now FULL — its whole `lint` command
+      **In progress: 25 full + 1 partial of 27 cases** ported to `tests/coord-engine-parity/` (~405
+      assertions); the rest remain (see the §5 D.1 ledger). Case 24 (the last partial) has begun to close —
+      its **lock-fails-closed** adversarial reads (a quoted marker does not forge a lock, a malformed marker
+      BLOCKS, an expired worker cannot resurrect its claim, and a failed/empty CAS re-read is a LOSS that
+      withdraws its own marker) now drive through the engine over HTTP (`casadversarial_server.py`); the
+      lock's MUTATING interleavings and `say --to` normalization are what remain of it. Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
       landed; case 34 is now FULL too — the read-only `overlap` command (#353 repo-scoped collision) plus
