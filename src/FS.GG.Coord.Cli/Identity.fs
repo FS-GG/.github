@@ -30,7 +30,7 @@ module Identity =
         | v -> Some v
 
     /// A filename/id-safe slug, matching the bash client's `slug` so an id round-trips identically.
-    let private slug (s: string) =
+    let slug (s: string) =
         let cleaned =
             s
             |> Seq.map (fun c -> if Char.IsLetterOrDigit c || c = '-' || c = '_' then Char.ToLowerInvariant c else '-')

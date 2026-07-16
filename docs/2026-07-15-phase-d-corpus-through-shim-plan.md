@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **25 full + 1 partial of 27 corpus cases** (~405 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **25 full + 1 partial of 27 corpus cases** (~407 assertions); D.2–D.4 not started.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
@@ -138,7 +138,7 @@ which are the differential harness D.4 disposes of, not engine-behaviour cases:
 | covered | case | note |
 |---|---|---|
 | ✓ | 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
-| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP are DONE; the lock's **fail-closed** adversarial reads (forged/malformed markers, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read) now land too; what remains is the lock's **mutating** interleavings — stale-marker collection + notify (`claim` leaves the stale marker for `reap`, a documented divergence), `reap` re-verify-before-delete + delete-before-notify, the shared-id re-claim warning, `overlap`'s `paths_of` fail-closed, and `say --to` normalization |
+| ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP are DONE; the lock's **fail-closed** adversarial reads (forged/malformed markers, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read) now land too; and `say --to` normalization (a mis-cased target is slugged to the id `inbox` matches, `*` stays literal) now lands too; what remains is the lock's **mutating** interleavings — stale-marker collection + notify (`claim` leaves the stale marker for `reap`, a documented divergence), `reap` re-verify-before-delete + delete-before-notify, the shared-id re-claim warning, and `overlap`'s `paths_of` fail-closed |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -161,7 +161,7 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 
 | case | what it needs | class |
 |---|---|---|
-| 24-remainder | the lock's **fail-closed** adversarial reads are now DONE (forged marker does not hold, malformed marker BLOCKS, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read is a LOSS that withdraws its own marker); what remains is the **mutating** interleavings — stale-marker collection + notify (`claim`/`adopt` leave the stale marker for `reap`, the documented GC-on-transfer follow-up), `reap` re-verify-before-delete + delete-before-notify, the shared-id re-claim warning + `lease renewed` wording, `overlap`'s `paths_of` fail-closed, and `say --to` normalization | `reap`/`claim` mutating legs + `say --to` (genuine engine changes) |
+| 24-remainder | the lock's **fail-closed** adversarial reads are DONE (forged marker does not hold, malformed marker BLOCKS, heartbeat resurrection + expired-lease refusal, failed/empty CAS re-read is a LOSS that withdraws its own marker), and `say --to` normalization is DONE (a mis-cased target is slugged to the id `inbox` matches, `*` stays literal); what remains is the **mutating** interleavings — stale-marker collection + notify (`claim`/`adopt` leave the stale marker for `reap`, the documented GC-on-transfer follow-up), `reap` re-verify-before-delete + delete-before-notify, the shared-id re-claim warning + `lease renewed` wording, and `overlap`'s `paths_of` fail-closed | `reap`/`claim` mutating legs (genuine engine changes) |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
 Case **44 is now FULL** (#419): `whoami --mint` is one eval-able line, CSPRNG-unique per call, and
@@ -542,10 +542,26 @@ the `withdraw` loss path are all already covered in `Reads`/`Writes` unit tests)
 the holder; point at re-claiming; BLOCK the item; DELETE the posted marker and claim nothing), one transport
 under. Case 24 stays PARTIAL: the MUTATING interleavings remain (see the remaining table).
 
+Case 24's **`say --to` normalization** landed next (leg n, this slice) — the smallest genuine engine change of
+the remainder, and a lock-safety one despite looking cosmetic. Worker ids are `slug()`'d at creation, and
+`inbox` matches a message's `.to` against a worker id by EXACT string, so an unslugged `say --to Heron-B71`
+posts a message addressed to `Heron-B71` that its real recipient — `heron-b71` — can never see: the message
+lands on the item but is addressed to an id nobody holds. The engine now runs the `--to` target through the
+SAME `Identity.slug` that creates ids (the #485 one-home — `slug` was `private`, now a documented public
+val), keeps `*` (anyone holding the item) as the one literal that is not a worker id, refuses a target that
+slugs to empty (`not a usable worker id`), and WARNS on stderr when it changed anything (`addressing worker
+'heron-b71' (normalized from 'Heron-B71')`). The parity proof rides the existing `inbox_server.py` as a pure
+engine round-trip: the engine `say`s `--to 'Heron-B71'` and the worker `heron-b71` INBOXES it back — delivery
+IS the proof the marker was normalized to the id `inbox` matches (had the engine posted `to=Heron-B71`
+verbatim, the exact-string match would never fire), and the existing broadcast assertion proves `*` stays
+literal. 2 parity assertions + 4 `Identity.slug` unit tests. Disposed on the record (ADR-0040 §5): the warning
+prefix is `fsgg-coord-engine:` where bash's is `fsgg-coord:`, re-expressed as the property (the message names
+the slug it normalized to and the original it came from).
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters into
 the **larger port gap** of `reap`/`claim`'s MUTATING adversarial legs (case 24 — stale-marker collection +
-notify, `reap` re-verify-before-delete, the shared-id re-claim warning), the documented GC-on-transfer
-follow-up, and `say --to` normalization. The verify-paths repo-boundary divergences (case 23's SKIP-exit code
+notify, `reap` re-verify-before-delete, the shared-id re-claim warning) and the documented GC-on-transfer
+follow-up. The verify-paths repo-boundary divergences (case 23's SKIP-exit code
 and the absent `gh repo view` fallback) are now disposed on the record in the harness, and the call-counting
 transformation is demonstrated end-to-end by case 10.
 
@@ -600,12 +616,14 @@ documented retirement is not.**
 ## 7. Definition of done
 
 - [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 25 full + 1 partial of 27 cases** ported to `tests/coord-engine-parity/` (~405
+      **In progress: 25 full + 1 partial of 27 cases** ported to `tests/coord-engine-parity/` (~407
       assertions); the rest remain (see the §5 D.1 ledger). Case 24 (the last partial) has begun to close —
       its **lock-fails-closed** adversarial reads (a quoted marker does not forge a lock, a malformed marker
       BLOCKS, an expired worker cannot resurrect its claim, and a failed/empty CAS re-read is a LOSS that
-      withdraws its own marker) now drive through the engine over HTTP (`casadversarial_server.py`); the
-      lock's MUTATING interleavings and `say --to` normalization are what remain of it. Case 14 is now FULL — its whole `lint` command
+      withdraws its own marker) now drive through the engine over HTTP (`casadversarial_server.py`), and its
+      **`say --to` normalization** landed too (a mis-cased target is slugged to the id `inbox` matches via the
+      now-public `Identity.slug`, `*` stays literal, an unslugged target is WARNED about — proven as an engine
+      round-trip through `inbox_server.py`); the lock's MUTATING interleavings are what remain of it. Case 14 is now FULL — its whole `lint` command
       (schedulability + epic-graph), its `done --flip` epic rollup, and its `done` PR-provenance legs
       (#342 latest-merged closer, #558 commit-subject/commit closer, #543 `--pr` can't launder a mention) all
       landed; case 34 is now FULL too — the read-only `overlap` command (#353 repo-scoped collision) plus

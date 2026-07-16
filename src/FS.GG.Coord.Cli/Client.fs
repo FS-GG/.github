@@ -1784,17 +1784,36 @@ module Client =
                 eprint "fsgg-coord-engine: say needs --message <text>."
                 ExitError
             | Some toW, Some msg ->
-                match parseRef ctx arg with
-                | Error m ->
-                    eprint $"fsgg-coord-engine: %s{m}"
+                // NORMALIZE the target to a worker id. Ids are slug()'d at creation and `inbox` matches
+                // `.to` by EXACT string, so an unslugged `--to Heron-B71` posts a message its recipient
+                // (heron-b71) can never see. `*` — anyone holding the item — is the one literal that is
+                // not a worker id. Slug via Identity.slug, the SAME normalization that creates ids (#485).
+                let normalizedTo =
+                    if toW = "*" then Ok "*"
+                    else
+                        match Identity.slug toW with
+                        | "" -> Error $"say: --to '%s{toW}' is not a usable worker id."
+                        | s -> Ok s
+
+                match normalizedTo with
+                | Error e ->
+                    eprint $"fsgg-coord-engine: %s{e}"
                     ExitError
-                | Ok ref ->
-                    // No lock required — the worker who most needs to speak is the one who just lost a race.
-                    match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId toW) ref msg with
-                    | Error e -> fail e
-                    | Ok() ->
-                        printfn "said to %s on %s" toW ref.Short
-                        ExitGreen
+                | Ok toSlug ->
+                    match parseRef ctx arg with
+                    | Error m ->
+                        eprint $"fsgg-coord-engine: %s{m}"
+                        ExitError
+                    | Ok ref ->
+                        // An unslugged target reached the wrong id silently; say we changed it.
+                        if toSlug <> toW then
+                            eprint $"fsgg-coord-engine: addressing worker '%s{toSlug}' (normalized from '%s{toW}')."
+                        // No lock required — the worker who most needs to speak is the one who just lost a race.
+                        match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId toSlug) ref msg with
+                        | Error e -> fail e
+                        | Ok() ->
+                            printfn "said to %s on %s" toSlug ref.Short
+                            ExitGreen
 
     let private renderInboxJson (msgs: (string * Reads.Message) list) : string =
         use stream = new MemoryStream()

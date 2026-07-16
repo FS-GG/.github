@@ -2797,6 +2797,22 @@ if [ -z "$IBX_PORT" ]; then bad "inbox fixture bound a port"; else
     && ok "inbox --peek: did NOT advance the cursor — the mail is still new (case 22)" \
     || bad "inbox --peek no-advance" "$plain"
 
+  # case 24 (n): `say --to` NORMALIZES its target to a worker id. Ids are slug()'d at creation and `inbox`
+  # matches `.to` by EXACT string, so an unslugged `--to Heron-B71` would post a message its recipient
+  # (heron-b71) could never see — the message lands on the item but is addressed to an id nobody holds.
+  # The engine slugs the target and WARNS that it did so; `*` stays the literal broadcast (proven above).
+  normerr="$(ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to 'Heron-B71' --message 'the impl is yours' 2>&1 >/dev/null)"
+  printf '%s' "$normerr" | grep -q "normalized from 'Heron-B71'" \
+    && ok "say: a mis-cased --to is normalized to the worker id (case 24 n)" \
+    || bad "say --to normalize warning" "$normerr"
+  # THE PROPERTY, round-tripped through the engine: the marker addresses the SLUG, so the slugged worker
+  # inboxes it. Had the engine posted `to=Heron-B71` verbatim, heron-b71 (exact-string match) would never
+  # see it — so delivery here IS the proof that `--to` was normalized to the id `inbox` matches.
+  inboxnorm="$(ibx inbox --worker heron-b71 --repo FS.GG.Rendering 2>/dev/null)"
+  printf '%s' "$inboxnorm" | grep -q 'the impl is yours' \
+    && ok "say: ...and the marker addresses the slug, so inbox matches it (case 24 n)" \
+    || bad "say --to slug round-trip" "$inboxnorm"
+
   kill "$IBX_SRV" 2>/dev/null
 fi
 
