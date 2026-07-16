@@ -3441,6 +3441,149 @@ if [ -z "$RR_PORT" ]; then bad "reap-race fixture bound a port"; else
   kill "$RR_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# CASE 43 (kit-digest-and-argv) — THE LAST CORPUS CASE. Two guarantees, and case 43 is FULL with them.
+# ==================================================================================================
+# (A) THE KIT-DIGEST OBLIGATION IS OBSERVED, NOT INFERRED (#469/#563/#588). `registry/repos.lock` pins a
+# content digest of every kit source (ADR-0019, #527); editing one and not relocking reds `main`. The
+# warning that names it used to INFER the obligation from what a worker DECLARED ("is `registry/repos.yml`
+# in your touch-set?"), which FAILED OPEN after #527 moved the digests into the generated `repos.lock`:
+# declaring `repos.yml` silenced the warning while the lock was still stale. A DECLARATION is not the
+# obligation; a MATCHING DIGEST is — so the engine recomputes the digest off the tree and LOOKS. That read
+# is a pure filesystem read (`FSGG_KIT_ROOT` stands a throwaway tree up), independent of the transport; the
+# fixture exists only so the `widen` it rides can LAND (#706 requires the widener to hold the lock). #74 is
+# held by kite-469 with no neighbour, so the widen lands and the #353 re-check is DISJOINT (exit 0).
+KITROOT="$(mktemp -d)/kitroot"
+mkdir -p "$KITROOT/.claude/skills/pnext-item" "$KITROOT/.agents/skills/pnext-item" \
+         "$KITROOT/scripts" "$KITROOT/registry"
+# (re)write the tree and relock it, so the lock is HONEST before each scenario (the corpus's `kit_seed`).
+kit_seed() {
+  printf 'skill body v1\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  cp "$KITROOT/.claude/skills/pnext-item/SKILL.md" "$KITROOT/.agents/skills/pnext-item/SKILL.md"
+  printf '#!/usr/bin/env bash\n# client v1\n' >"$KITROOT/scripts/fsgg-coord"
+  { printf '# registry/repos.lock — GENERATED.\n'
+    printf '%s  .claude/skills/pnext-item\n' "$(sha256sum "$KITROOT/.claude/skills/pnext-item/SKILL.md" | cut -d' ' -f1)"
+    printf '%s  scripts/fsgg-coord\n'        "$(sha256sum "$KITROOT/scripts/fsgg-coord" | cut -d' ' -f1)"
+  } >"$KITROOT/registry/repos.lock"
+}
+KIT_OUT="$(mktemp)"; python3 "$HERE/kit_server.py" >"$KIT_OUT" 2>/dev/null & KIT_SRV=$!; KIT_PORT=""
+for _ in $(seq 1 50); do KIT_PORT="$(head -n1 "$KIT_OUT" 2>/dev/null)"; [ -n "$KIT_PORT" ] && break; sleep 0.1; done
+rm -f "$KIT_OUT"
+if [ -z "$KIT_PORT" ]; then bad "kit fixture bound a port"; else
+  # widen with an EXPLICIT kit root, so the digest can be made genuinely stale.
+  kd() { FSGG_KIT_ROOT="$KITROOT" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" GITHUB_TOKEN=t \
+           FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+           FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" widen "$1" --worker kite-469 --paths "$2" 2>&1; }
+
+  # NEGATIVE CONTROL FIRST — a tree whose lock MATCHES must produce NO warning. If this ever goes green by
+  # accident (a broken root, an unreadable lock), every positive assertion below is vacuous (#563).
+  kit_seed; w_clean="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord')"
+  printf '%s' "$w_clean" | grep -q 'KIT DIGEST' \
+    && bad "#563: a lock that MATCHES must NOT warn — the obligation is met (case 43)" "$w_clean" \
+    || ok "#563: a lock that MATCHES must NOT warn — the obligation is met (case 43)"
+
+  # (1) A STALE CLIENT digest is OBSERVED and named — regardless of what the touch-set declares.
+  kit_seed; printf '# client v2 — edited\n' >>"$KITROOT/scripts/fsgg-coord"
+  w469="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord, tests/fsgg-coord/run.sh')"
+  printf '%s' "$w469" | grep -q 'KIT DIGEST' \
+    && ok "#469: widen NAMES a kit source whose digest is now STALE (case 43)" || bad "#469 KIT DIGEST" "$w469"
+  printf '%s' "$w469" | grep -q 'scripts/fsgg-coord' \
+    && ok "#469: ...naming the stale source itself (case 43)" || bad "#469 names the stale source" "$w469"
+  printf '%s' "$w469" | grep -q 'repos.sh relock' \
+    && ok "#469: ...and prints the CURRENT regenerate command (case 43)" || bad "#469 relock command" "$w469"
+  printf '%s' "$w469" | grep -q 'repos-registry-selftest' \
+    && ok "#469: ...and says which gate will red main (case 43)" || bad "#469 names the gate" "$w469"
+  printf '%s' "$w469" | grep -q 'do NOT reserve it' \
+    && ok "#469: ...and says NOT to reserve the generated lock (#309/#527) (case 43)" || bad "#469 do-not-reserve" "$w469"
+  # #588: the advice must NOT name `repos.sh digest` — it still exists but writes nothing now.
+  printf '%s' "$w469" | grep -q 'repos.sh digest' \
+    && bad "#588: the advice must not name repos.sh digest — it writes nothing now (case 43)" "$w469" \
+    || ok "#588: the advice does NOT name the no-op repos.sh digest (case 43)"
+  # ...and it STILL widens. Advisory, never fatal: `repos-registry-selftest` is the authority.
+  printf '%s' "$w469" | grep -q 'widened FS.GG.SDD#74' \
+    && ok "#469: ...while STILL widening (advisory, not fatal) (case 43)" || bad "#469 still widens" "$w469"
+
+  # (2) THE FAIL-OPEN, PINNED. Declaring `registry/repos.yml` used to SILENCE this. It must NOT: the lock
+  #     is still stale, and main is still red. This is the assertion #563 exists for.
+  w_yml="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord, registry/repos.yml')"
+  printf '%s' "$w_yml" | grep -q 'KIT DIGEST' \
+    && ok "#563: declaring registry/repos.yml must NOT silence a genuinely stale lock (case 43)" \
+    || bad "#563 repos.yml must not silence" "$w_yml"
+
+  # (3) A STALE SKILL digest is observed too — the coupling is not client-specific.
+  kit_seed; printf 'skill body v2\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  cp "$KITROOT/.claude/skills/pnext-item/SKILL.md" "$KITROOT/.agents/skills/pnext-item/SKILL.md"
+  w469s="$(kd 'FS.GG.SDD#74' '.claude/skills/pnext-item/**')"
+  printf '%s' "$w469s" | grep -q '.claude/skills/pnext-item' \
+    && ok "#469: a SKILL source is content-addressed too, and is named (case 43)" || bad "#469 skill source named" "$w469s"
+
+  # (4) SKILL ROOTS — the byte-identical union (ADR-0011/0014) is OBSERVED. Edit one root and not the other:
+  #     the `roots` gate reds main, and the tool must say so with the mirror command that fixes it.
+  kit_seed; printf 'skill body v2 — one root only\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  w_roots="$(kd 'FS.GG.SDD#74' '.claude/skills/pnext-item/**')"
+  printf '%s' "$w_roots" | grep -q 'SKILL ROOTS' \
+    && ok "#563: diverged skill roots are NAMED (case 43)" || bad "#563 SKILL ROOTS" "$w_roots"
+  printf '%s' "$w_roots" | grep -q '.agents/skills/pnext-item' \
+    && ok "#563: ...with the mirror command that fixes it (case 43)" || bad "#563 mirror command" "$w_roots"
+  # ...and a CLIENT kit has no mirror, so a client-only staleness must NOT nag about roots.
+  kit_seed; printf '# client v2\n' >>"$KITROOT/scripts/fsgg-coord"
+  w_client="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord')"
+  printf '%s' "$w_client" | grep -q 'SKILL ROOTS' \
+    && bad "#469: a CLIENT kit must NOT be told to mirror skill roots (case 43)" "$w_client" \
+    || ok "#469: a CLIENT kit is NOT told to mirror skill roots (case 43)"
+
+  # (5) No lock to read — a RECEIVER repo mirrors the kit but not the registry. Stay silent rather than
+  #     nagging every worker in every downstream repo about a file they do not have.
+  w469r="$(FSGG_KIT_ROOT="$(dirname "$KITROOT")/no-such-root" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" \
+             GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+             FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" widen 'FS.GG.SDD#74' --worker kite-469 --paths 'scripts/fsgg-coord' 2>&1)"
+  printf '%s' "$w469r" | grep -q 'KIT DIGEST' \
+    && bad "#469: no lock to read -> silent (receiver repos have no registry) (case 43)" "$w469r" \
+    || ok "#469: no lock to read -> silent (receiver repos have no registry) (case 43)"
+
+  kill "$KIT_SRV" 2>/dev/null
+fi
+
+# (B) THE CLAIM SCAN MUST NOT TRAVEL THROUGH `argv` (#497) — STRUCTURALLY ABSENT IN THE ENGINE, and proven.
+# bash's `active_claims` funnelled the whole candidate set back through the jq COMMAND LINE, so once the
+# org's open-issue bodies crossed MAX_ARG_STRLEN (128 KiB, July 2026), `execve` returned E2BIG, jq never
+# ran, and EVERY claim-aware read (who/reap/batch/take/inbox/widen) died at once — a loud outage (#461
+# refused to report the empty set as "nobody holds anything"), but one no waiting would clear. DISPOSED ON
+# THE RECORD (ADR-0040 §5, exactly as case 31 leg 9's argv-128 KiB cap): the engine reads each body as JSON
+# off `HttpClient` and never marshals the set through argv, so E2BIG is STRUCTURALLY ABSENT. The fixture
+# serves a candidate set BIGGER than the cap only to prove the engine READS a real-sized set — the property
+# the corpus pins — rather than the plumbing failing at size.
+ARGV_OUT="$(mktemp)"; python3 "$HERE/argv_server.py" >"$ARGV_OUT" 2>/dev/null & ARGV_SRV=$!; ARGV_PORT=""
+for _ in $(seq 1 50); do ARGV_PORT="$(head -n1 "$ARGV_OUT" 2>/dev/null)"; [ -n "$ARGV_PORT" ] && break; sleep 0.1; done
+rm -f "$ARGV_OUT"
+if [ -z "$ARGV_PORT" ]; then bad "argv fixture bound a port"; else
+  fatwho="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$ARGV_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" who --repo FS.GG.Audio --json 2>&1 || true)"
+  # The fixture really is over the cap — otherwise everything below is vacuous. Three ~50 KiB bodies.
+  fatbytes="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$ARGV_PORT" curl -s "http://127.0.0.1:$ARGV_PORT/repos/FS-GG/FS.GG.Audio/issues" | wc -c)"
+  [ "$fatbytes" -gt 131072 ] \
+    && ok "#497: the fixture candidate set really exceeds MAX_ARG_STRLEN ($fatbytes > 131072 bytes) (case 43)" \
+    || bad "#497: the fixture set must EXCEED 131072 bytes or it tests nothing" "$fatbytes"
+  # The scan READS it. Pre-fix bash died with `Argument list too long` / `invalid JSON text` / #461's
+  # `cannot read the claim set`; the engine never touches argv, so none of those can appear.
+  case "$fatwho" in
+    *"cannot read the claim set"*|*"Argument list too long"*|*"--argjson"*)
+      bad "#497: a claim set over the arg cap must still be READ, not die (case 43)" "$fatwho" ;;
+    *) ok "#497: a claim set over the arg cap is still READ, not died (structurally absent in the engine) (case 43)" ;;
+  esac
+  [ "$(printf '%s' "$fatwho" | jq -r '.[] | select(.number==530) | .worker' 2>/dev/null)" = "kite-497" ] \
+    && ok "#497: ...and the claim inside that oversized set is reported, with its holder (case 43)" \
+    || bad "#497: the claim in the oversized set must be reported" "$fatwho"
+  # The scan stays HONEST at size: the two chatty-but-markerless issues are not in-flight work, and a body
+  # big enough to break the plumbing must not become a claim.
+  [ "$(printf '%s' "$fatwho" | jq -c '[.[] | select(.number >= 530 and .number <= 532) | .number] | sort' 2>/dev/null)" = "[530]" ] \
+    && ok "#497: ...and chatty markerless issues in that set are still not claims (case 43)" \
+    || bad "#497: chatty markerless issues must not become claims" "$fatwho"
+
+  kill "$ARGV_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

@@ -28,6 +28,7 @@
     <Compile Include="LanesTests.fs" />
     <Compile Include="DivergenceTests.fs" />
     <Compile Include="LandableTests.fs" />
+    <Compile Include="KitTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
