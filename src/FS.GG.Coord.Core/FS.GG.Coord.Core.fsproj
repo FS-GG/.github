@@ -43,6 +43,8 @@
     <Compile Include="Lanes.fs" />
     <Compile Include="Landable.fsi" />
     <Compile Include="Landable.fs" />
+    <Compile Include="Chore.fsi" />
+    <Compile Include="Chore.fs" />
     <Compile Include="Kit.fsi" />
     <Compile Include="Kit.fs" />
   </ItemGroup>
