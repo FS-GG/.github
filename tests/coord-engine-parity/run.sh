@@ -735,6 +735,7 @@ childsrv() {  # childsrv <env-kv...> --  ; sets globals CHILD_PORT and CHILD_SRV
 # dependency (the same idiom the #533 `dclaims` leg uses to read state straight off its server).
 posts_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_posts").read().decode())' "$1" 2>/dev/null; }
 deletes_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_deletes").read().decode())' "$1" 2>/dev/null; }
+patches_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_patches").read().decode())' "$1" 2>/dev/null; }
 
 # 1. THE LINK. An empty parent, a fresh child: `child` links it, names the edge in the sub-issue's own
 #    vocabulary (case 15's "linked … as a sub-issue of …"), and POSTs the child's REST id as a NUMBER.
@@ -2390,6 +2391,36 @@ if [ -z "$WN_PORT" ]; then bad "widen-notify fixture bound a port"; else
     && ok "case34: the notify lands as exactly one comment on #403 (#353)" || bad "case34: #403 should get one notify" "$(posts_on "$WN_PORT")"
 
   kill "$WN_SRV" 2>/dev/null
+fi
+
+# ---- WIDEN re-checks BEFORE it writes (#523) — an unreadable scan REFUSES, body untouched -----------
+# The #523 defect: `widen` PATCHed the declaration and re-checked overlap AFTERWARDS, so on an exhausted
+# GraphQL budget the touch-set landed UNVERIFIED and the colliding workers were never told. The fix orders
+# the #353 collision scan BEFORE the write and lets its verdict gate the PATCH. This fixture lets the REST
+# legs (verifyHeld, issueBody) succeed and then rate-limits the scan's GraphQL: the widen must exit EX_RATE
+# and land ZERO writes. The PATCH/POST counts are read back, so a widen that wrote first cannot pass.
+WB_OUT="$(mktemp)"; python3 "$HERE/widenbudget_server.py" >"$WB_OUT" 2>/dev/null & WB_SRV=$!; WB_PORT=""
+for _ in $(seq 1 50); do WB_PORT="$(head -n1 "$WB_OUT" 2>/dev/null)"; [ -n "$WB_PORT" ] && break; sleep 0.1; done
+rm -f "$WB_OUT"
+if [ -z "$WB_PORT" ]; then bad "widen-budget fixture bound a port"; else
+  wb() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$WB_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" widen "$@" 2>&1; }
+  wbout="$(wb 'FS.GG.SDD#401' --worker kite-t01 --paths 'src/new/**')"; wbrc=$?
+
+  [ "$wbrc" -eq 75 ] \
+    && ok "#523: widen exits EX_RATE (75) when the pre-PATCH collision scan hits the budget" \
+    || bad "#523: widen should exit 75 on an exhausted scan" "rc=$wbrc :: $wbout"
+  printf '%s' "$wbout" | grep -qi 'budget' \
+    && ok "#523: ...and names the budget, not a protocol error or a lost race" || bad "#523: widen names the budget" "$wbout"
+  [ "$(patches_on "$WB_PORT" | jq -r '."401" // 0')" = "0" ] \
+    && ok "#523: ...and the body is UNTOUCHED — no PATCH landed before the verdict (the core of #523)" \
+    || bad "#523: widen must not PATCH before the scan verdict" "patches: $(patches_on "$WB_PORT")"
+  [ "$(posts_on "$WB_PORT" | jq -r 'to_entries | map(.value) | add // 0')" = "0" ] \
+    && ok "#523: ...and no notify was posted (there was no verdict to notify from)" \
+    || bad "#523: a refused widen must post no notify" "posts: $(posts_on "$WB_PORT")"
+
+  kill "$WB_SRV" 2>/dev/null
 fi
 
 # ---- REAP: an expired lease is EVIDENCE of abandonment, not PROOF (#581) — case 26 ----------------
