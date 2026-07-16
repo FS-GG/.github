@@ -196,6 +196,79 @@ let ``a SINGLE_SELECT value is routed to its OPTION ID`` () =
         Assert.True(transport.Logged "--id PVTI_coord123")
     | other -> failwith $"the option must resolve — got %A{other}"
 
+/// The document a write EMITS, captured. The sibling tests assert on `transport.Logged`, which is a
+/// human-readable DESCRIPTION of the request — it cannot carry a variable's declared type, so a whole class
+/// of defect is invisible to it. These read the document itself.
+let private emitted (write: IGitHubTransport -> Result<unit, IoError>) : string =
+    let mutable doc = ""
+
+    let transport =
+        Fake.Recorder(fun (req: Request) ->
+            match req.Body with
+            | Query(d, _) -> doc <- d
+            | _ -> ()
+
+            ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""")
+
+    match write transport with
+    | Ok() -> doc
+    | other -> failwith $"the write must be attempted — got %A{other}"
+
+[<Fact>]
+let ``a SINGLE_SELECT option id is declared String — the schema types it String, not ID (#848)`` () =
+    // GraphQL validates the DECLARATION against the argument's schema type and never looks at the value.
+    // `ProjectV2FieldValue.singleSelectOptionId` is `String`, so declaring `$optionId: ID!` is refused
+    // BEFORE the write is attempted — and Status, Phase, Repo Scope, Workstream and Effort are all
+    // single-selects, so that is every one of them.
+    //
+    // The test above already drove this exact path and passed throughout, because it asserts the option
+    // RESOLVES (`opt_wip`) — which it always did. The defect was one layer down, in a type no assertion
+    // read. A stub transport answers 200 to a document the real API would reject on sight, so covering the
+    // path proves nothing here; the DECLARATION has to be the subject.
+    let doc = emitted (fun t -> setField t board "PVTI_coord123" "Status" (Set "In progress"))
+
+    Assert.Contains("$optionId: String!", doc)
+    Assert.DoesNotContain("$optionId: ID!", doc)
+
+[<Fact>]
+let ``an ITERATION id is declared String too — same schema type, same fix (#848)`` () =
+    // Latent: no field on the board is an Iteration today. It would have been refused exactly as the
+    // single-select was, the day somebody added one — so it is pinned here rather than rediscovered there.
+    let iterationBoard =
+        { board with Fields = board.Fields |> Map.add "Sprint" { Id = "PVTIF_sprint"; Type = Iteration } }
+
+    let doc =
+        emitted (fun t -> setField t iterationBoard "PVTI_coord123" "Sprint" (Set "iter_abc"))
+
+    Assert.Contains("$iterationId: String!", doc)
+    Assert.DoesNotContain("$iterationId: ID!", doc)
+
+[<Fact>]
+let ``a DATE value is declared Date!, not String! — and this leg is REACHED (#848)`` () =
+    // The same defect as the two above, and the one that is NOT latent: the board carries two DATE fields
+    // (`Start`, `Target`), so `set-field <ref> Target 2026-08-01` was refused with
+    //     Type mismatch on variable $date and argument date (String! / Date)
+    // `Date` is a named scalar; "it is a string on the wire" is exactly the reasoning that produced the
+    // original bug.
+    let dateBoard =
+        { board with Fields = board.Fields |> Map.add "Target" { Id = "PVTF_target"; Type = Date } }
+
+    let doc =
+        emitted (fun t -> setField t dateBoard "PVTI_coord123" "Target" (Set "2026-08-01"))
+
+    Assert.Contains("$date: Date!", doc)
+    Assert.DoesNotContain("$date: String!", doc)
+
+[<Fact>]
+let ``the board's OWN ids stay ID! — the fix is per-argument, not a blanket retag`` () =
+    // The mirror of the two above: `projectId`/`itemId`/`fieldId` really ARE `ID!`, and a fix that moved
+    // everything to String would break all three while making the tests above pass.
+    let doc = emitted (fun t -> setField t board "PVTI_coord123" "Status" (Set "Ready"))
+
+    Assert.Contains("$projectId: ID!", doc)
+    Assert.Contains("$itemId: ID!", doc)
+    Assert.Contains("$fieldId: ID!", doc)
+
 [<Fact>]
 let ``an UNKNOWN single-select option is refused, and costs ZERO GraphQL`` () =
     // A rejected value must not spend the budget that dies first. And the refusal NAMES the options that

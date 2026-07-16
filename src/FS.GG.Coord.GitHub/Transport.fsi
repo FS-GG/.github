@@ -39,11 +39,23 @@ module Transport =
     /// formality: a NUMBER field wants `{"number": 42}` and rejects `{"number": "42"}`. Serialising every
     /// variable as a string is the kind of shortcut that works for every document you have and fails on the
     /// first one you write — so the type is carried, and the JSON is derived from it.
+    /// The tag picks the type the variable is DECLARED as, and GraphQL validates that declaration against
+    /// the argument's schema type without ever looking at the value. So a tag is a claim about the SCHEMA,
+    /// not about the shape of the string: `ID`, `String` and `Date` are all text on the wire and none of
+    /// them is substitutable for another in a declaration. Tag against the schema, never against the value
+    /// (#848).
     type Var =
         | VString of string
         /// A GraphQL `ID!`. It is a string on the wire, but it is NOT free text — keeping it apart from
         /// `VString` is what stops a field id being passed where an option id belongs.
+        ///
+        /// It is NOT for anything that merely LOOKS like an id: `singleSelectOptionId` and `iterationId`
+        /// are both typed `String` by the schema, and tagging them `VId` declared `ID!` against a `String`
+        /// argument — which refused every single-select write the tool made (#848).
         | VId of string
+        /// A GraphQL `Date!` (`YYYY-MM-DD`). Apart from `VString` for the same reason `VId` is: the scalar
+        /// is named `Date`, so `String!` against it is refused on sight.
+        | VDate of string
         | VNumber of double
 
     /// What travels in the request body.
