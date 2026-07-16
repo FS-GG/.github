@@ -251,6 +251,28 @@ let ``a stale marker we could not delete is LEFT for reap, never a reason to fai
         Assert.Empty(collected)
     | other -> failwith $"a failed collection does not fail a won claim — got %A{other}"
 
+[<Fact>]
+let ``a STALE unparseable marker is collected as debris but never notified (no worker to tell)`` () =
+    // A live unparseable marker BLOCKS (fails closed); a merely STALE one is debris. Collecting it is fine,
+    // but its `worker` is a sentinel — `say`ing to "unparsed-marker" would address no worker at all.
+    let staleUnparseable =
+        $"""{{"id":810,"body":"<!-- fsgg:claim lease=120 -->\nhalf-written","updated_at":"%s{stale}"}}"""
+
+    let transport =
+        scripted
+            [ ok (comments [ staleUnparseable ]) // 1. a STALE marker with no parseable worker
+              ok """{"id":901}""" // 2. post ours (the stale one does not block a live winner)
+              ok (comments [ staleUnparseable; marker 901 "vole-418" "" ]) // 3. re-read: we win
+              ok "" ] // 4. DELETE the stale debris
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Won(held, collected)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Empty(collected) // deleted, but there is no worker to notify
+    | other -> failwith $"a stale unparseable marker is debris, not a blocker on a won claim — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 810")
+
 // ---- #419: an id two workers share is not a lock ---------------------------------------------------
 
 [<Fact>]

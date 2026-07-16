@@ -206,7 +206,10 @@ module Writes =
                 match deleteComment transport ref m.Id with
                 | Ok() -> Some m.Worker
                 | Error _ -> None)
-            |> List.filter (fun w -> w <> worker)
+            // Our OWN stale marker is deleted but is not a notification (you do not message yourself); and an
+            // unparseable marker that is merely STALE is debris worth deleting, but its `worker` is a sentinel
+            // — `say`ing to "unparsed-marker" addresses no worker and posts a comment nobody reads.
+            |> List.filter (fun w -> w <> worker && w <> WorkerId UnparsedMarker)
 
         match liveBefore with
         // A MARKER HELD BY NOBODY BLOCKS. A half-written lock fails CLOSED — if it vanished, the item would
