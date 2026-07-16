@@ -280,13 +280,25 @@ on an **unreadable** PR too: adopting on a guess is how a verified command laund
 ### 2. Isolate → one branch + one git worktree per item
 
 A claimed item is worked on `item/<n>-<slug>` in its **own git worktree**, so parallel workers never
-share a working tree. `claim` prints the exact command.
+share a working tree. Construct the command yourself — `claim` prints only the claim line, not this
+(the bash engine printed it; ADR-0040's port dropped that output).
 
 ```sh
+git fetch origin                                                # NOTHING else does — see below
 git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main
 # ...work, commit, push, PR into main...
 git worktree remove ../<repo>-<n>
 ```
+
+**The fetch is not optional either, and it is the half that survives naming the base.** `git worktree
+add` does not fetch: it resolves `origin/main` against the *local* remote-tracking ref, which advances
+only when something in this checkout fetches. The same premise that makes the base ref necessary makes
+the fetch necessary — N workers are merging into `main`, so **the better this protocol works, the
+staler your `origin/main` is when you start** (three commits behind after 15 minutes on a two-worker
+board; five during a single item on a busy one). And a stale base is worse than an old one: you build
+and test from a tree that is internally consistent and simply *old*, so it reproduces already-fixed
+bugs faithfully while every gate goes green — none of them has an opinion about whether the tree is
+current (.github#622).
 
 The base ref is **not optional**. `git worktree add -b <new>` with no commit-ish branches from the
 shared checkout's `HEAD` — and the premise of this protocol is that N workers pass through that
@@ -758,7 +770,8 @@ scripts/fsgg-coord batch --repo <r> -n 4
 # each worker, independently — named, isolated, and safe against a lost race:
 eval "$(scripts/fsgg-coord whoami --mint)"    # MINT one; never invent or copy one (§0). Or let the
                                               # worktree name it (§0 rule 3).
-scripts/fsgg-coord take --repo <r>            # pick + claim + print the worktree, retrying on a lost race
+scripts/fsgg-coord take --repo <r>            # pick + claim the next SCHEDULABLE item, retrying on a lost race
+git fetch origin                              # NOTHING else does — the base is otherwise the PAST (§2)
 git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # name the base: HEAD is not `main` (§2)
 # ...implement; `heartbeat` if it runs long; `say`/`inbox` if work touches...
 scripts/fsgg-coord done <issue> --flip        # earn the stamp
