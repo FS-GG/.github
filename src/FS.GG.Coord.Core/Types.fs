@@ -88,6 +88,13 @@ module Types =
         | LeaseExpiredPrOpen of pr: int
         | LivenessUnknown
 
+    type PrState =
+        | PrGreen
+        | PrConflicted
+        | PrPending
+        | PrRed
+        | PrUnknown
+
     type Item =
         { Ref: Ref
           Status: BoardStatus

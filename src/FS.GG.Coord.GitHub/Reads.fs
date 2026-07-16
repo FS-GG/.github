@@ -5,6 +5,7 @@ module Reads =
     open System
     open System.Text.Json
     open System.Text.RegularExpressions
+    open FS.GG.Coord
     open FS.GG.Coord.Types
     open Errors
     open Transport
@@ -835,6 +836,168 @@ module Reads =
                         |> Seq.choose (fun f -> str f "filename")
                         |> List.ofSeq
                     )
+
+    /// A JSON element's `int64` property, or `None` — for `check_suite.id` / `check_suite_id`.
+    let private int64Of (e: JsonElement) (name: string) =
+        match e.TryGetProperty name with
+        | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
+        | _ -> None
+
+    /// A JSON element's `int` property, or `None`.
+    let private intOf (e: JsonElement) (name: string) =
+        match e.TryGetProperty name with
+        | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+        | _ -> None
+
+    /// The `workflow_runs[]` on a head SHA, as `Landable.RunRow`s — or `None` if the read failed. `None` is
+    /// distinct from `Some []` (no runs registered yet, a real observation the scorer reads as #606's empty
+    /// set), so a failed read collapses to `PrUnknown` while an honest empty stays a finding.
+    let private workflowRuns
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (sha: string)
+        : Landable.RunRow list option =
+
+        let subject = $"%s{owner}/%s{repo} runs @ %s{sha}"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/actions/runs"
+              Query = [ "head_sha", sha; "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error _ -> None
+        | Ok response ->
+            match parse subject response.Body with
+            | Error _ -> None
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "workflow_runs" with
+                | true, arr when arr.ValueKind = JsonValueKind.Array ->
+                    arr.EnumerateArray()
+                    |> Seq.map (fun r ->
+                        let prNumbers =
+                            match r.TryGetProperty "pull_requests" with
+                            | true, prs when prs.ValueKind = JsonValueKind.Array ->
+                                prs.EnumerateArray() |> Seq.choose (fun p -> intOf p "number") |> List.ofSeq
+                            | _ -> []
+
+                        ({ Path = str r "path" |> Option.defaultValue ""
+                           Event = str r "event" |> Option.defaultValue ""
+                           HeadBranch = str r "head_branch" |> Option.defaultValue ""
+                           PrNumbers = prNumbers
+                           RunNumber = intOf r "run_number" |> Option.defaultValue 0
+                           Status = str r "status" |> Option.defaultValue ""
+                           Conclusion = str r "conclusion"
+                           CheckSuiteId = int64Of r "check_suite_id" }
+                        : Landable.RunRow))
+                    |> List.ofSeq
+                    |> Some
+                | _ -> None
+
+    /// The `check_runs[]` on a head SHA, as `Landable.CheckRow`s — or `None` if the read failed.
+    let private checkRuns
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (sha: string)
+        : Landable.CheckRow list option =
+
+        let subject = $"%s{owner}/%s{repo} check-runs @ %s{sha}"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/commits/%s{sha}/check-runs"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error _ -> None
+        | Ok response ->
+            match parse subject response.Body with
+            | Error _ -> None
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "check_runs" with
+                | true, arr when arr.ValueKind = JsonValueKind.Array ->
+                    arr.EnumerateArray()
+                    |> Seq.map (fun c ->
+                        let suiteId =
+                            match c.TryGetProperty "check_suite" with
+                            | true, s when s.ValueKind = JsonValueKind.Object -> int64Of s "id"
+                            | _ -> None
+
+                        ({ CheckSuiteId = suiteId
+                           Status = str c "status" |> Option.defaultValue ""
+                           Conclusion = str c "conclusion" }
+                        : Landable.CheckRow))
+                    |> List.ofSeq
+                    |> Some
+                | _ -> None
+
+    let prLandable
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : PrState =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error _ -> PrUnknown
+        | Ok response ->
+            match parse subject response.Body with
+            | Error _ -> PrUnknown
+            | Ok doc ->
+                use doc = doc
+                let root = doc.RootElement
+
+                // `.mergeable` is `true` / `false` / `null` (computed lazily). Read all three APART: `false`
+                // is CONFLICTED, the one state we most need to name, and folding it into the `null` fallback
+                // (the jq `//` trap the corpus warns about) would report a conflict as `unknown`.
+                let mergeable =
+                    match root.TryGetProperty "mergeable" with
+                    | true, v when v.ValueKind = JsonValueKind.True -> Some true
+                    | true, v when v.ValueKind = JsonValueKind.False -> Some false
+                    // null, absent, or any other kind — UNKNOWN. (The lazy re-read that resolves a real
+                    // `null` is deferred to the `adopt` slice; here a null is fail-closed `PrUnknown`.)
+                    | _ -> None
+
+                match mergeable with
+                | None -> PrUnknown
+                | Some false -> PrConflicted
+                | Some true ->
+                    let sha =
+                        match root.TryGetProperty "head" with
+                        | true, h when h.ValueKind = JsonValueKind.Object -> str h "sha"
+                        | _ -> None
+
+                    match sha with
+                    | None -> PrUnknown
+                    | Some sha ->
+                        match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
+                        | Some runs, Some checks -> Landable.score (Some true) runs checks
+                        | _ -> PrUnknown
 
     [<Literal>]
     let private ClosingRefDoc =

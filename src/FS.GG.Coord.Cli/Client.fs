@@ -379,7 +379,12 @@ module Client =
           /// The item's own OPEN `item/<n>-*` PR, as (number, headRef), when the lease lapsed but the WORK
           /// did not (#581). Populated ONLY on a Stale row; `None` on held/unclaimed and on a genuinely dead
           /// stale claim a reaper may collect.
-          LivePr: (int * string) option }
+          LivePr: (int * string) option
+          /// WHAT that PR says (#697), when there is one — is the finished work landable? `Some` exactly when
+          /// `LivePr` is `Some`; `None` otherwise. It turns `STALE (#NNN OPEN)` into `STALE (#NNN OPEN —
+          /// GREEN: LAND IT)` and points a human at `adopt` instead of `reap`. A held/unclaimed row has no
+          /// PR to read, so it carries none.
+          PrState: PrState option }
 
     /// `who --json` — the machine contract cases 20/25 certify: a JSON array of the in-flight items, each
     /// carrying its `number`, `repo`, `state` (held/stale/unclaimed), the `worker` holding it (`null` when
@@ -418,6 +423,13 @@ module Client =
                 match row.LivePr with
                 | Some(pr, headRef) -> w.WriteString("livePr", $"#%d{pr} %s{headRef}")
                 | None -> w.WriteNull("livePr")
+
+                // ...and WHAT the PR says (#697). `null` when there is no PR (a bare stale a reaper may
+                // collect), the landable verdict (`green`/`conflicted`/`pending`/`red`/`unknown`) when
+                // there is — so a machine consumer can tell finished work from an abandoned branch.
+                match row.PrState with
+                | Some st -> w.WriteString("prState", Landable.name st)
+                | None -> w.WriteNull("prState")
             | Held _
             | Unclaimed -> ()
 
@@ -575,11 +587,24 @@ module Client =
                                     | Held _
                                     | Unclaimed -> None
 
+                                // #697: a bare `STALE (#NNN OPEN)` reads as an abandoned branch, and the
+                                // reader reaches for `reap` — the destructive verb — on FINISHED work. So
+                                // when there IS a live PR, read WHAT IT SAYS: `who` is what a human reads
+                                // immediately before deciding to reap, so it is exactly where "GREEN: LAND
+                                // IT" has to appear. Advisory (a `PrUnknown` just falls back to the bare
+                                // flag), and only on the rare stale-with-open-PR row, so the extra reads ride
+                                // the same cost budget as the #581 probe above.
+                                let prState =
+                                    match livePr with
+                                    | Some(pr, _) -> Some(Reads.prLandable ctx.Transport o r pr)
+                                    | None -> None
+
                                 results.Add(
                                     { Ref = ref
                                       State = st
                                       Paths = paths
-                                      LivePr = livePr }
+                                      LivePr = livePr
+                                      PrState = prState }
                                 )
 
                 match failure with
@@ -602,11 +627,19 @@ module Client =
                                         m.Worker.Value
                                         (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
                                 | Stale m ->
-                                    // #581: `STALE (#NNN OPEN)` when the work is demonstrably alive, a bare
-                                    // `STALE` (which a reaper may collect) otherwise.
+                                    // #581/#697: `STALE (#NNN OPEN — <what the PR says>)` when the work is
+                                    // demonstrably alive, a bare `STALE` (which a reaper may collect)
+                                    // otherwise. GREEN work says LAND IT — it is not an abandoned branch.
                                     let flag =
                                         match row.LivePr with
-                                        | Some(pr, _) -> $"STALE (#%d{pr} OPEN)"
+                                        | Some(pr, _) ->
+                                            match row.PrState with
+                                            | Some PrGreen -> $"STALE (#%d{pr} OPEN — GREEN: LAND IT)"
+                                            | Some PrConflicted -> $"STALE (#%d{pr} OPEN — conflicted)"
+                                            | Some PrPending -> $"STALE (#%d{pr} OPEN — checks running)"
+                                            | Some PrRed -> $"STALE (#%d{pr} OPEN — not green)"
+                                            | Some PrUnknown
+                                            | None -> $"STALE (#%d{pr} OPEN)"
                                         | None -> "STALE"
 
                                     printfn
@@ -619,6 +652,28 @@ module Client =
                                     printfn
                                         "  %-16s UNCLAIMED — In progress with NO claim marker"
                                         row.Ref.Short
+
+                    // #697: FINISHED work behind a dead worker gets its OWN stderr lines, and they come
+                    // FIRST — folding a green, mergeable PR into the generic "reap these" hint is how the
+                    // best work on the board ends up in the bin. `reap` is a destructive verb, and pointing
+                    // it at finished work is precisely the advice this change exists to delete: land it.
+                    let orphans =
+                        inFlight
+                        |> List.filter (fun r ->
+                            match r.State, r.PrState with
+                            | Stale _, Some PrGreen -> true
+                            | _ -> false)
+
+                    if not (List.isEmpty orphans) then
+                        let refs = orphans |> List.map (fun r -> r.Ref.Short) |> String.concat ", "
+
+                        eprint
+                            $"fsgg-coord-engine: %s{refs} — the claim is DEAD but the PR is GREEN and MERGEABLE: that work is FINISHED."
+
+                        eprint "fsgg-coord-engine:   Do NOT reap or close it. Land it:"
+
+                        for r in orphans do
+                            eprint $"fsgg-coord-engine:     fsgg-coord adopt %s{r.Ref.Short}"
 
                     // A markerless In-progress item is work happening OUTSIDE the protocol — warned on
                     // stderr (where case 20 looks for it) regardless of the stdout format, so a `who` piped
@@ -696,8 +751,47 @@ module Client =
                                 | Ok liveness ->
                                     match Writes.reapable ref marker liveness with
                                     | Error(Writes.WorkAlive pr) ->
-                                        eprint
-                                            $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{marker.Worker.Value}'s lease lapsed but PR #%d{pr} is OPEN on item/%d{number}-* (the lease lapsed, the WORK did not)."
+                                        // #697: refusing on the PR's mere EXISTENCE is right (#581), but the
+                                        // remedy that used to follow — "close it, then reap" — is a loaded
+                                        // gun pointed at the best work on the board. Read WHAT the PR says
+                                        // and tell the states apart: only ever advise closing the one that is
+                                        // genuinely abandoned (red/conflicted). The verdict is advisory — a
+                                        // `PrUnknown` chooses the "look yourself" wording, never a delete.
+                                        let idleM = marker.AgeSeconds / 60
+                                        let w = marker.Worker.Value
+
+                                        match Reads.prLandable ctx.Transport ref.Owner ref.Repo pr with
+                                        | PrGreen ->
+                                            eprint
+                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN, GREEN and MERGEABLE."
+
+                                            eprint
+                                                "fsgg-coord-engine:   This work is FINISHED — the worker died between \"green\" and \"merge\", the window this protocol leaves open on every item. Do NOT close it: that destroys a reviewed, passing fix. LAND IT:"
+
+                                            eprint $"fsgg-coord-engine:       fsgg-coord adopt %s{ref.Short}"
+                                        | PrPending ->
+                                            eprint
+                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (checks running). The lease lapsed; the WORK did not."
+
+                                            eprint
+                                                "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle and look again:"
+
+                                            eprint
+                                                $"fsgg-coord-engine:       fsgg-coord who --repo %s{repoName}        # green? then: fsgg-coord adopt %s{ref.Short}"
+                                        | PrUnknown ->
+                                            eprint
+                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (state unknown). The lease lapsed; the WORK did not."
+
+                                            eprint
+                                                $"fsgg-coord-engine:   Its state could NOT be determined (rate limit? network?). Do NOT close it on a guess — look at PR #%d{pr} yourself before deciding anything."
+                                        | (PrRed | PrConflicted) as verdict ->
+                                            // The one genuinely-abandoned case — and the ONLY one that may
+                                            // advise closing. A conflicted or red PR is not finished work.
+                                            eprint
+                                                $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (%s{Landable.name verdict}). The lease lapsed; the WORK did not."
+
+                                            eprint
+                                                $"fsgg-coord-engine:   It is %s{Landable.name verdict}, so there is nothing to land as it stands (`adopt` only lands green, mergeable work). If the PR really is abandoned, close it, then reap."
                                     | Error(Writes.Undetermined why) ->
                                         eprint
                                             $"fsgg-coord-engine: NOT reaping %s{ref.Short} — %s{why}; a lock we cannot rule dead we may not break."
