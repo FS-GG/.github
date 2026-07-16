@@ -16,6 +16,7 @@ with no bash in sight. The board lives in FS-GG/FS.GG.SDD, plus one clean FS-GG/
     #420  SDD   Ready         no Paths at all           -> NO-TOUCH-SET
     #421  SDD   Ready         ONLY a FENCED Paths line   -> NO-TOUCH-SET (a fenced decl is none, #277)
     #430  SDD   Ready         Paths: **/only-unmatchable -> BAD-TOUCH-SET (every token unmatchable)
+    #431  SDD   Ready         Paths: real ** /nope        -> BAD-TOUCH-SET (SOME tokens unmatchable, #646)
     #400  SDD   Ready [epic]  Paths: none                -> clean (the sentinel is the whole point)
     #422  SDD   Ready         Paths: none                -> clean (a decision item, declared none)
     #407  SDD   Ready         Paths: src/Real/**         -> clean (a real touch-set)
@@ -45,6 +46,7 @@ NODES = [
     node(420, "Ready", SDD, title="Real work, forgot the touch-set"),
     node(421, "Ready", SDD, title="Declares its paths only inside a fence"),
     node(430, "Ready", SDD, title="Every token unmatchable"),
+    node(431, "Ready", SDD, title="Some tokens unmatchable (#646)"),
     node(400, "Ready", SDD, title="[epic] rollup umbrella"),
     node(422, "Ready", SDD, title="A decision item"),
     node(407, "Ready", SDD, title="Ordinary work"),
@@ -68,6 +70,9 @@ BODIES = {
     420: "Real work here, but nobody remembered the touch-set.\n\nJust prose.",
     421: FENCED,
     430: "Paths: **/only-unmatchable",
+    # #646 — a PARTIAL declaration: one real subtree AND one unmatchable token. lint must fire BAD-TOUCH-SET
+    # and name ONLY the unmatchable one; the matchable `src/Partial/**` is fine and must not be flagged.
+    431: "Paths: src/Partial/** **/nope-unmatchable",
     400: "An umbrella epic.\n\nPaths: none",
     422: "Should we do X or Y? A decision.\n\nPaths: none",
     407: "Paths: src/Real/**",

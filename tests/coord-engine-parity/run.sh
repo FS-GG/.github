@@ -1991,18 +1991,32 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
                    *)     ok "case14: NO-TOUCH-SET does not fire on a closed issue" ;; esac
 
   # BAD-TOUCH-SET (#496, reopened for the unmatchable case): a declared touch-set the scheduler cannot use
-  # is just as dead. #430 declares only `**/only-unmatchable`.
+  # is just as dead. #430 declares only `**/only-unmatchable` (ALL unmatchable); #431 declares a real subtree
+  # AND `**/nope-unmatchable` (SOME unmatchable, #646) — which lint used to stay green over.
   bts="$(jq -r '[.[] | select(.code=="BAD-TOUCH-SET") | .id | sub("^[^/]+/";"")] | sort | join(",")' <<<"$ljson")"
-  [ "$bts" = "FS.GG.SDD#430" ] \
-    && ok "case14: BAD-TOUCH-SET fires on the item whose every token is unmatchable (#430)" \
-    || bad "case14: BAD-TOUCH-SET must fire on exactly 430" "$bts"
-  d430="$(jq -r '.[] | select(.code=="BAD-TOUCH-SET") | .detail' <<<"$ljson")"
+  [ "$bts" = "FS.GG.SDD#430,FS.GG.SDD#431" ] \
+    && ok "#646: BAD-TOUCH-SET fires on the ALL-unmatchable item (#430) AND the PARTIAL one (#431)" \
+    || bad "#646: BAD-TOUCH-SET must fire on exactly 430,431" "$bts"
+  d430="$(jq -r '.[] | select(.code=="BAD-TOUCH-SET" and (.id|test("430"))) | .detail' <<<"$ljson")"
   printf '%s' "$d430" | grep -q 'only-unmatchable' \
-    && ok "case14: BAD-TOUCH-SET names the unmatchable token" \
+    && ok "case14: BAD-TOUCH-SET names the unmatchable token (#430)" \
     || bad "case14: BAD-TOUCH-SET must name the token" "$d430"
   printf '%s' "$d430" | grep -q 'no worker can ever pick this up' \
-    && ok "case14: BAD-TOUCH-SET says nobody can ever pick it up" \
+    && ok "case14: the ALL-unmatchable detail says nobody can ever pick it up (#430)" \
     || bad "case14: BAD-TOUCH-SET detail" "$d430"
+
+  # #646 — the PARTIAL item: names ONLY the unmatchable token, NOT the matchable subtree, and says why a
+  # partial declaration is worse (the silent-reservation double-book).
+  d431="$(jq -r '.[] | select(.code=="BAD-TOUCH-SET" and (.id|test("431"))) | .detail' <<<"$ljson")"
+  printf '%s' "$d431" | grep -q 'nope-unmatchable' \
+    && ok "#646: the PARTIAL item's detail names the unmatchable token (#431)" \
+    || bad "#646: partial BAD-TOUCH-SET must name the offending token" "$d431"
+  printf '%s' "$d431" | grep -q 'src/Partial' \
+    && bad "#646: the partial detail must NOT flag the MATCHABLE token — only the offending subset" "$d431" \
+    || ok "#646: ...and does NOT flag the matchable subtree (src/Partial/**) — only the offending subset"
+  printf '%s' "$d431" | grep -qi 'invisible to every other worker' \
+    && ok "#646: ...and explains WHY a partial declaration is worse (silent reservation → double-book)" \
+    || bad "#646: partial detail must explain the silent-reservation risk" "$d431"
 
   # The --json scratch field of the (deferred) EPIC-UNLINKED-CHILD rule must never leak — a finding schema
   # with an `unlinked` key is the internal probe list, not the contract.
