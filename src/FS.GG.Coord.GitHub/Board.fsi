@@ -239,10 +239,38 @@ module Board =
         worker: string ->
             IoResult<WriteOutcome>
 
+    /// What one `flush` pass did. Every count is measured against the queue THIS pass read, so a caller
+    /// never has to reconstruct one by re-reading the file (#862).
+    ///
+    /// That reconstruction is not a hypothetical: `flush` used to return `IoResult<int>`, so a stop
+    /// DISCARDED the count it had already written and the caller re-read the queue to infer it. The
+    /// deferral queue is a single shared file (`~/.cache/fsgg-coord`, every worker on the machine), so a
+    /// concurrent `defer` in that window made the inference WRONG — reporting "nothing replayed" over
+    /// writes that had landed. The counts belong to the pass that made them.
+    type FlushOutcome =
+        { /// What the queue held when this pass started reading it.
+          Queued: int
+
+          /// Replayed, and landed.
+          Written: int
+
+          /// Permanently un-writable — an unparseable ref, or an item no longer on this board. Dropped,
+          /// never retried, and NEVER counted as written: `Written` is what a caller renders as "replayed
+          /// N of M", and counting a drop there reports a write that never happened (#266).
+          Dropped: int
+
+          /// A fresh rate limit STOPPED the pass. The remainder — `Queued - Written - Dropped` — is still
+          /// queued, untouched and not re-appended, and the caller must back off (`EX_RATE`).
+          Stopped: IoError option }
+
     /// Replay the deferred queue.
     ///
     /// An entry that succeeds is DROPPED. An exhausted budget STOPS the flush — the rest would fail
     /// identically, and spending REST calls to confirm that is exactly the back-off `EX_RATE` exists to
     /// prevent. An entry that is permanently un-writable is dropped LOUDLY: it will never land, and
     /// carrying it forever would mean the queue never drains and nobody is ever told why.
-    val flush: transport: IGitHubTransport -> board: BoardMap -> IoResult<int>
+    ///
+    /// `Error` is reserved for a queue that could not be READ. A rate-limit that stops the pass is NOT an
+    /// error here — it is `Stopped`, carried alongside the work that did land, because those are different
+    /// facts and a caller needs both.
+    val flush: transport: IGitHubTransport -> board: BoardMap -> IoResult<FlushOutcome>
