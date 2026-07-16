@@ -1191,7 +1191,7 @@ module Reads =
     /// ETag is pure budget savings. The cache key is the request AS A STRING (path + the query that shapes
     /// the result), so a different state or label is a different cache entry, exactly as bash slugs its path.
     ///
-    /// Returns the raw JSON body — the array bash's `issues` prints. The caller projects it with jq.
+    /// Returns the issue array as a JSON string — pull requests dropped (#641) — for the caller to jq.
     let issues
         (transport: IGitHubTransport)
         (owner: string)
@@ -1237,10 +1237,9 @@ module Reads =
             | _ ->
                 // 200: a body we could not parse is a FAILED READ, never "this repo has no issues" — the same
                 // #461 fail-closed rule the rest of this layer holds (a 200 carrying a proxy's HTML error or a
-                // truncated page is not an empty listing). We validate it is a JSON ARRAY, then emit the RAW
-                // bytes bash's `issues` prints (so the caller's jq sees exactly the REST body), and cache the
-                // body + its validator TOGETHER so the next read can revalidate. An empty-but-present `[]` is
-                // a real answer and passes; garbage does not.
+                // truncated page is not an empty listing). We validate it is a JSON ARRAY, drop pull requests
+                // (#641), then cache and emit that filtered array. An empty-but-present `[]` is a real answer
+                // and passes; garbage does not.
                 match parse subject response.Body with
                 | Error e -> Error e
                 | Ok doc ->
@@ -1249,5 +1248,21 @@ module Reads =
                     if doc.RootElement.ValueKind <> JsonValueKind.Array then
                         Error(Malformed(subject, "the issue-list response is not a JSON array"))
                     else
-                        Cache.putBody cacheKey response.ETag response.Body
-                        Ok response.Body
+                        // #641 — A PULL REQUEST IS AN ISSUE IN REST, and `issues` must not list it: the §4
+                        // duplicate-check reads a PR as "already filed" and silently suppresses a real finding.
+                        // Drop every element that carries a `pull_request` key (the same predicate `openIssues`
+                        // applies to the claim scan; here it guards the human/consumer listing), keeping each
+                        // genuine issue's FULL object and the array shape the caller's jq expects. We cache and
+                        // emit the FILTERED body, not the raw one, so a later 304 re-serves the same filtered
+                        // array — the ETag is GitHub's (sent as If-None-Match); the body is only ever re-served
+                        // to us, never back to GitHub, so storing the projection is correct.
+                        let kept = Nodes.JsonArray()
+
+                        for el in doc.RootElement.EnumerateArray() do
+                            match el.TryGetProperty "pull_request" with
+                            | true, _ -> ()
+                            | _ -> kept.Add(Nodes.JsonNode.Parse(el.GetRawText()))
+
+                        let filtered = kept.ToJsonString()
+                        Cache.putBody cacheKey response.ETag filtered
+                        Ok filtered

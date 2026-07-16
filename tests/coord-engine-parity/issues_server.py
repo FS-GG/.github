@@ -34,7 +34,8 @@ ETAG = 'W/"issues-corpus-v1"'
 
 # The listing content is irrelevant to #446 (the property under test is the RESOLVED PATH, not the body),
 # but a non-empty array proves the engine emits the REST body verbatim for the caller to jq. Two issues and
-# a PR: bash's `issues` prints the raw body, PRs and all — the #641 PR-filtering is a different command.
+# a PR (777 carries `pull_request`): #641 — `issues` must drop it, so the §4 duplicate-check never reads a
+# PR as an already-filed issue. The engine filters it out; only 501/502 (genuine issues) survive.
 BODY = [
     {"number": 501, "title": "a real issue", "state": "open"},
     {"number": 502, "title": "another issue", "state": "open"},
