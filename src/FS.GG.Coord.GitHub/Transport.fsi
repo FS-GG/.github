@@ -2,11 +2,13 @@ namespace FS.GG.Coord.GitHub
 
 /// The wire. One request in, one `IoResult<Response>` out — and NOTHING above this line knows about HTTP.
 ///
-/// THE SEAM IS HERE BECAUSE THE CORPUS COUNTS HERE. `tests/fsgg-coord` drives the client against a
-/// PATH-shim `gh` stub that counts calls, and ADR-0040 C1 makes that corpus the cut-over gate: *"no step
-/// of this port may land that reduces the corpus"*. A tool that reached for `HttpClient` inline would be
-/// INVISIBLE to it — every budget assertion, every ETag-304 assertion, every fail-closed assertion is
-/// written against a call counter, and a direct call is a call nobody counted.
+/// THE SEAM IS HERE BECAUSE THE CORPUS COUNTS HERE. The cut-over gate (ADR-0040 C1) is a call-counting
+/// corpus: *"no step of this port may land that reduces the corpus"*. The bash corpus counted `gh`
+/// invocations at a PATH-shim stub; the port re-expressed that one transport under, and `tests/coord-engine-parity/`
+/// now counts HTTP requests at the fixture (bash and its stub were deleted in ADR-0040 D.4). A tool that
+/// reached for `HttpClient` inline would be INVISIBLE to either — every budget assertion, every ETag-304
+/// assertion, every fail-closed assertion is written against a request counter, and a direct call is a
+/// call nobody counted.
 ///
 /// So the transport is an INTERFACE with two implementations: `HttpTransport` (the real one, pointed at a
 /// configurable API base) and `Fake` (the recording one, which counts calls exactly as the stub does and

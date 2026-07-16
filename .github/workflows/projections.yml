@@ -10,9 +10,9 @@
 # `FS.GG.Coord.Core/Protocol.fs`, the prose is emitted from them, and this gate fails on any drift. A
 # rule cannot land in one tier and not the others, because there are no tiers.
 #
-# It also asserts the ONE copy that must exist — bash's `TOUCHSET_GRAMMAR`, which the client needs before
-# it can build a snapshot at all — agrees with the engine's. That copy was typed in by hand while the
-# flip was being written, byte-identical purely by luck, with nothing holding the two in step.
+# Until ADR-0040 D.4 there was a SECOND copy of the touch-set grammar — bash's `TOUCHSET_GRAMMAR` — and this
+# gate asserted it agreed with the engine's. D.4 deleted the bash monolith, so the grammar now has one home
+# (`FS.GG.Coord.Core/Protocol.fs`) and there is nothing to cross-check it against.
 name: projections
 
 on:
@@ -20,7 +20,6 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
-      - "scripts/fsgg-coord-bash"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - ".claude/skills/**"
@@ -31,7 +30,6 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
-      - "scripts/fsgg-coord-bash"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - ".claude/skills/**"
