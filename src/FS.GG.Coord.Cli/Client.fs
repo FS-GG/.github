@@ -1706,6 +1706,131 @@ module Client =
 
                 scan [] candidates
 
+    // ---- the kit-digest obligation (#469/#563/#588) ----------------------------------------------------
+    //
+    // Editing a kit source obliges a re-digest of `registry/repos.lock` (ADR-0019), and declaration time —
+    // a `widen` — is the cheap moment to learn it, rather than from a red `main` after the merge (which is
+    // how #469 was found). The obligation is OBSERVED, not inferred from what was declared (#563 pinned the
+    // fail-open where declaring `registry/repos.yml` silenced a still-stale lock): the pure comparison lives
+    // in `Core.Kit`; this is the file IO under it. Silent whenever there is no tree or no lock to read — a
+    // receiver mirrors the kit but not the registry, and must not be nagged about a file it does not have.
+
+    /// The kit root: `FSGG_KIT_ROOT` (the fixture stands a throwaway tree up here), else the git toplevel.
+    /// `git rev-parse --show-toplevel` is FREE and offline; `None` outside a checkout, which is silent.
+    let private kitRoot () : string option =
+        match Environment.GetEnvironmentVariable "FSGG_KIT_ROOT" with
+        | null
+        | "" ->
+            try
+                let psi = ProcessStartInfo("git", "rev-parse --show-toplevel")
+                psi.RedirectStandardOutput <- true
+                psi.RedirectStandardError <- true
+                psi.UseShellExecute <- false
+                use p = Process.Start psi
+                let top = p.StandardOutput.ReadToEnd().Trim()
+                p.WaitForExit()
+                if p.ExitCode <> 0 || top = "" then None else Some top
+            with _ ->
+                None
+        | v -> Some v
+
+    /// The ACTUAL digest of a kit source, off the tree. A skill kit is content-addressed on its `SKILL.md`,
+    /// a client kit on the file itself. `None` when the entry names a file this tree does not carry (or one
+    /// we could not read) — `Kit.staleSources` reads that as "not here", never a staleness.
+    let private kitDigestOf (root: string) (src: string) : string option =
+        let path0 = Path.Combine(root, src)
+        let path = if Directory.Exists path0 then Path.Combine(path0, "SKILL.md") else path0
+
+        if File.Exists path then
+            try
+                use sha = System.Security.Cryptography.SHA256.Create()
+
+                Some(
+                    File.ReadAllBytes path
+                    |> sha.ComputeHash
+                    |> Array.map (fun b -> b.ToString "x2")
+                    |> String.concat ""
+                )
+            with _ ->
+                None
+        else
+            None
+
+    /// The skill kits whose two roots have diverged — enumerate every `.claude/skills/*/SKILL.md` and pair
+    /// it with its `.agents/skills/<name>/SKILL.md` mirror for `Kit.divergedRoots` to byte-compare. A client
+    /// kit (no skill root) yields nothing, so a client-only staleness never nags about roots.
+    let private kitDivergedRoots (root: string) : string list =
+        let claudeDir = Path.Combine(root, ".claude", "skills")
+        let agentsDir = Path.Combine(root, ".agents", "skills")
+
+        if not (Directory.Exists claudeDir) || not (Directory.Exists agentsDir) then
+            []
+        else
+            let readBytes p =
+                if File.Exists p then
+                    try
+                        Some(File.ReadAllBytes p)
+                    with _ ->
+                        None
+                else
+                    None
+
+            Directory.GetDirectories claudeDir
+            |> Array.toList
+            |> List.choose (fun d ->
+                let name = Path.GetFileName d
+                let claude = Path.Combine(d, "SKILL.md")
+
+                if File.Exists claude then
+                    Some(name, readBytes claude, readBytes (Path.Combine(agentsDir, name, "SKILL.md")))
+                else
+                    None)
+            |> Kit.divergedRoots
+
+    /// OBSERVE the kit-digest obligation and warn on stderr (advisory, never fatal — `repos-registry-selftest`
+    /// is the authority). Silent when there is no root or no lock to read.
+    let private kitDigestWarn () : unit =
+        match kitRoot () with
+        | None -> ()
+        | Some root ->
+            let lockPath =
+                match Environment.GetEnvironmentVariable "FSGG_REPOS_LOCK" with
+                | null
+                | "" -> Path.Combine(root, "registry", "repos.lock")
+                | v -> v
+
+            if File.Exists lockPath then
+                let lock =
+                    try
+                        Kit.parseLock (File.ReadAllText lockPath)
+                    with _ ->
+                        []
+
+                match Kit.staleSources (kitDigestOf root) lock with
+                | [] -> ()
+                | stale ->
+                    eprint ""
+                    eprint "fsgg-coord-engine: KIT DIGEST — a content-addressed kit source is STALE in `registry/repos.lock`:"
+
+                    for s in stale do
+                        eprint $"  %s{s}"
+
+                    eprint "`repos-registry-selftest` reds `main` until it is regenerated (ADR-0019, #469). Run:"
+                    eprint "  scripts/repos.sh relock"
+                    eprint "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
+                    eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
+                    eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
+
+                match kitDivergedRoots root with
+                | [] -> ()
+                | roots ->
+                    eprint ""
+                    eprint "fsgg-coord-engine: SKILL ROOTS — a skill kit must stay BYTE-IDENTICAL across every root"
+                    eprint "(ADR-0011/0014), or the `roots` gate reds `main`. These have diverged:"
+
+                    for name in roots do
+                        eprint $"  cp .claude/skills/%s{name}/SKILL.md .agents/skills/%s{name}/SKILL.md"
+
     let widen (ctx: Context) (opts: Options) : int =
         match oneArg opts "widen: an issue ref", worker opts with
         | Error c, _
@@ -1744,6 +1869,10 @@ module Client =
                                 | Error e -> fail e
                                 | Ok() ->
                                     printfn "widened %s → Paths: %s" ref.Short (String.Join(", ", opts.Paths))
+
+                                    // Declaration time is the cheap moment to learn that editing a kit source
+                                    // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
+                                    kitDigestWarn ()
 
                                     // #353 — ADR-0021's "re-declare AND re-check overlap before continuing", the
                                     // half a worker cannot do alone. The widen has LANDED (that is its job, and how

@@ -3,9 +3,9 @@
 **Date:** 2026-07-15
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
-**Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **26 full of 27 corpus cases** (~433 assertions); only case 43
-(kit digest/argv, which overlaps D.2) remains. D.2–D.4 not started.
+**Status:** In progress — **D.1 COMPLETE**. Phases A–C have landed. The corpus-through-engine parity
+harness has grown from the prototype to **all 27 of 27 corpus cases** (~445 assertions); the full corpus
+now drives the engine over HTTP, green, with the call counts intact. D.2–D.4 not started.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
@@ -132,16 +132,15 @@ fail-closed assertions re-expressed at the HTTP layer.
 - **Exit:** the corpus is green driving the engine (through the shim) locally, with call counts intact,
   and `50-shadow-engine` / `51-fs-flip` still green (bash still present, still agreeing).
 
-**Progress (as of the off-board `who` slice, 2026-07-15).** The harness is grown one defect/case
+**Progress (as of the case-43 slice, 2026-07-16 — D.1 COMPLETE).** The harness was grown one defect/case
 at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
-`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **26 of 27 cases fully covered**
-— the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which are the differential
-harness D.4 disposes of, not engine-behaviour cases. Only case 43 (kit digest/argv, which overlaps D.2)
-remains:
+`fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **ALL 27 of 27 cases are fully
+covered** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`, which are the
+differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
 |---|---|---|
-| ✓ | 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
+| ✓ | 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25, 26, 30, 31, 32, 33, 34, 35, 40, 41, 42, 43, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 
 Case **24 is now FULL**: the `--issue` boundary (#479/#494) and cross-repo CLOSING-ref SKIP (shared with 23),
 the lock's **fail-closed** adversarial reads (forged/malformed markers, heartbeat resurrection + expired-lease
@@ -170,11 +169,11 @@ repo's issue → SKIP naming the other repo, no verdict across the boundary). Th
 bash's `gh repo view` fallback are disposed on the record (the engine has no gh-repo-view leg, so its
 EX_RATE-vs-checkout failure modes are structurally absent).
 
-**Remaining (case 43 only), classified as a port gap or a deliberate divergence:**
-
-| case | what it needs | class |
-|---|---|---|
-| 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
+**Remaining: NONE.** Case 43 (kit-digest-and-argv) landed as the last slice — the kit-digest obligation is
+now OBSERVED off the tree in a pure `Core.Kit` wired into `widen`, and the #497 argv-128 KiB cap is disposed
+on the record as structurally absent (the engine reads bodies as JSON off `HttpClient`, never argv) while
+still proving `who` reads a >128 KiB candidate set. Every one of the 27 corpus cases now drives the engine
+over HTTP, green.
 
 Case **44 is now FULL** (#419): `whoami --mint` is one eval-able line, CSPRNG-unique per call, and
 round-trips through `whoami`; the shared-session warning points at the mint COMMAND and offers no literal id
@@ -646,10 +645,46 @@ survives; a failed delete is reported and the marker stands; a re-claim renews o
 at the HTTP layer via `/_deletes` and the /comments read-back.
 
 With case 24 full, the clean "engine already matches bash by construction" cases and the larger `reap`/`claim`
-MUTATING port gap are BOTH discharged; only case 43 (kit digest/argv, which overlaps D.2) remains of the 27.
+MUTATING port gap are BOTH discharged; only case 43 (kit digest/argv, which overlaps D.2) remained of the 27.
 The verify-paths repo-boundary divergences (case 23's SKIP-exit code and the absent `gh repo view` fallback)
 are disposed on the record in the harness, and the call-counting transformation is demonstrated end-to-end by
 case 10.
+
+Case 43's **kit-digest obligation, and the #497 argv cap**, landed LAST — and **case 43 is now FULL, so the
+FULL corpus (all 27) drives the engine over HTTP, green; D.1 is COMPLETE**. Two guarantees. (A) The
+kit-digest warning is OBSERVED, not INFERRED (#469/#563/#588): `registry/repos.lock` pins a content digest
+of every kit source (ADR-0019, #527), so editing one and not relocking reds `main`. The warning that named
+it used to infer the obligation from what a worker DECLARED — "is `registry/repos.yml` in your touch-set?"
+— which FAILED OPEN once #527 moved the digests into the generated `repos.lock`: declaring `repos.yml`
+silenced the warning while the lock was still stale, and the advice named `repos.sh digest` (which now
+writes nothing, #588) and told a worker to reserve the generated lock (the three-worker deadlock #527
+removed, #309/#428). A DECLARATION is not the obligation; a MATCHING DIGEST is — so `widen` now RECOMPUTES
+the digest off the tree and LOOKS, in a new pure `Core.Kit` (`parseLock`/`staleSources`/`divergedRoots`,
+unit-tested) whose file IO is wired in the CLI: it names each STALE source (client OR skill — content-
+addressed on the file itself or its `SKILL.md`), prints the CURRENT `repos.sh relock` command and the
+`repos-registry-selftest` gate, says NOT to reserve the generated lock, and — separately — names each
+DIVERGED skill root with the `cp` mirror command (the byte-identical union, ADR-0011/0014), while a
+client-only staleness never nags about roots. It is advisory (the widen still lands, `repos-registry-selftest`
+is the authority) and silent where there is no tree (`FSGG_KIT_ROOT`, else the git toplevel) or no lock to
+read — a receiver mirrors the kit but not the registry, and must not be nagged about a file it does not have.
+(B) The #497 argv cap: bash's `active_claims` funnelled the whole claim-scan candidate set back through the
+jq COMMAND LINE, so once the org's open-issue bodies crossed MAX_ARG_STRLEN (128 KiB, July 2026) `execve`
+returned E2BIG, jq never ran, and EVERY claim-aware read (who/reap/batch/take/inbox/widen) died at once — a
+loud outage (#461 refused to report the empty set as "nobody holds anything"), but one no waiting would
+clear. STRUCTURALLY ABSENT in the engine, which reads each body as JSON off `HttpClient` and never marshals
+the set through argv. New `kit_server.py` (the widen #74 world) is driven against a throwaway kit tree the
+harness stands up and edits; `argv_server.py` serves a >128 KiB candidate set to prove `who` READS it and
+still classifies honestly (the marked #530 held by kite-497; the two chatty-but-markerless fat issues are
+not claims). 17 parity assertions + 6 `Kit` unit tests. Disposed on the record (ADR-0040 §5): the KIT
+DIGEST / SKILL ROOTS wording is the engine's (`fsgg-coord-engine:` prefix), re-expressed as the property the
+corpus greps — name the stale source, print `repos.sh relock` not the no-op `digest`, name the gate, do NOT
+reserve the lock, name the diverged root's mirror; and the argv-128 KiB cap is proven BY CONSTRUCTION (the
+engine reads a real-sized set) rather than reproduced, exactly as case 31 leg 9's `MAX_ARG_STRLEN` cap was —
+the failure mode is structurally absent because the engine never touches argv.
+
+**D.1 IS COMPLETE — all 27 of 27 corpus cases now drive the engine over HTTP, green (~445 assertions), with
+the budget/ETag/fail-closed call counts intact at the HTTP layer.** Next: D.2 (cut the shim), D.3 (green in
+all six receivers), D.4 (delete bash, dispose the five differential assertions on the record).
 
 ### D.2 — Cut the shim
 
@@ -701,9 +736,11 @@ documented retirement is not.**
 
 ## 7. Definition of done
 
-- [~] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
-      **In progress: 26 full of 27 cases** ported to `tests/coord-engine-parity/` (~433
-      assertions); only case 43 (kit digest/argv, which overlaps D.2) remains (see the §5 D.1 ledger).
+- [x] D.1 — the full corpus green through the engine locally, call counts intact, shadow/flip still green.
+      **COMPLETE: all 27 of 27 cases** ported to `tests/coord-engine-parity/` (~445 assertions). Case 43
+      (kit digest/argv) landed last — the kit-digest obligation is OBSERVED off the tree in a pure `Core.Kit`
+      wired into `widen`, and the #497 argv-128 KiB cap is disposed on the record as structurally absent
+      (see the §5 D.1 ledger).
       **Case 24 is now FULL** — its **lock-fails-closed** adversarial reads (a quoted marker does not forge a
       lock, a malformed marker BLOCKS, an expired worker cannot resurrect its claim, and a failed/empty CAS
       re-read is a LOSS that withdraws its own marker) drive through the engine over HTTP

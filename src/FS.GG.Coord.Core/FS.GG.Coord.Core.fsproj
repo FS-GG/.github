@@ -45,6 +45,8 @@
     <Compile Include="Divergence.fs" />
     <Compile Include="Landable.fsi" />
     <Compile Include="Landable.fs" />
+    <Compile Include="Kit.fsi" />
+    <Compile Include="Kit.fs" />
   </ItemGroup>
 
   <ItemGroup>
