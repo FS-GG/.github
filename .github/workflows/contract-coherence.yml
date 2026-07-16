@@ -104,14 +104,39 @@ jobs:
           # H2 RECURRED, and .github#263 found why: `.github`'s own renovate.json carried no feed
           # `hostRules` token, so Renovate could not enumerate FS.GG.* versions here and never
           # opened a bump PR — the pin sat at 0.5.0 while the org shipped 0.6.0, 0.7.0 and 0.8.0.
-          # The token is now in place, and pin-coherence.yml gates BOTH halves daily: that this
-          # literal equals feed-newest, and that the bot is still configured to keep it there.
           #
-          # So this literal is bot-managed again, and no longer a release-runbook chore. If the
-          # annotation below is reworded or moved, or the pin is deleted, pin-coherence.yml fails —
-          # it is named in that gate's REQUIRED_PINS. Do not "fix" a red pin gate by deleting it.
+          # AND THEN IT FROZE TWICE MORE. This block used to end "The token is now in place ... so
+          # this literal is bot-managed again, and no longer a release-runbook chore." BOTH HALVES OF
+          # THAT ARE NOW FALSE, and saying so here is the point (.github#885):
+          #
+          #   * THE TOKEN IS GONE, and it was never needed. #576/#735 established that all 32 FS.GG.*
+          #     packages are PUBLIC on nuget.org, anonymously readable, at the same newest version. The
+          #     `hostRules` block was pointing Renovate at the one registry that needs a credential —
+          #     a Mend App Secret that never resolved — and a 401 on a datasource is not an error, it
+          #     is an EMPTY VERSION LIST. So the bot detected the dep, enumerated nothing, and opened
+          #     nothing. `default.json` now routes FS.GG.* to nuget.org, needing no credential at all.
+          #     (CI's restore above is a DIFFERENT mechanism on a different credential — GITHUB_TOKEN
+          #     with `packages: read`, against GitHub Packages — and is untouched by that.)
+          #
+          #   * THE LITERAL IS NOT BOT-MANAGED. That routing fix landed 2026-07-14 and the pin did NOT
+          #     bump in the days since, while Renovate ran and correctly DETECTED it (Dependency
+          #     Dashboard #54, under `regex`, naming this file). Why is unresolved and is tracked in
+          #     .github#576 — which stays OPEN. Every cause the config commits to in writing has been
+          #     ruled out; no root cause is named, because asserting an unverified one is exactly the
+          #     defect this family keeps repeating.
+          #
+          # This literal was hand-advanced at 0.2.1 (#127), 0.5.0 (#263), 0.9.0 (#566) and 0.10.0
+          # (#885), and froze again after each of the first three. TREAT A RED PIN GATE AS THE SIGNAL
+          # IT IS: report the freeze on #576. Do not hand-advance it a sixth time on the assumption
+          # that someone once decided this is bot-managed — this comment is what that assumption was
+          # made of, and it was wrong for two of the four freezes.
+          #
+          # pin-coherence.yml gates both halves daily: that this literal equals feed-newest, and that
+          # the bot is still configured to keep it there. If the annotation below is reworded or moved,
+          # or the pin is deleted, pin-coherence.yml fails — it is named in that gate's REQUIRED_PINS.
+          # Do not "fix" a red pin gate by deleting it.
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli
-          dotnet tool install --global FS.GG.SDD.Cli --version 0.10.0
+          dotnet tool install --global FS.GG.SDD.Cli --version 0.12.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Resolve actual FS.GG.Contracts version
