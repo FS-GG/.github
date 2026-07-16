@@ -49,6 +49,18 @@ module Client =
     [<Literal>]
     let ExitContended = 6
 
+    // #720/#724 — `landable`'s exit code is a POLL-LOOP CONTRACT: a recipe reads it to tell "keep waiting"
+    // from "stop" WITHOUT parsing the verdict word (/pnext-item §5, #724). PENDING is the ONE verdict worth
+    // retrying, so it gets its OWN code, distinct from every "stop" outcome — a red/conflicted verdict is the
+    // engine's ExitRed (do NOT wait), and an unknown is ExitNoVerdict (fail-closed, never a retry). Its value
+    // dodges the reserved codes (0 green, 1 error, 2 defect, 3 red, 4 no-verdict, 5/6 take, 75 EX_RATE).
+    // Disposed on the record (ADR-0040 §5): bash's `landable` numbers the poll loop 0/3/1 (green/pending/red),
+    // where the engine keeps 3 == red across every verdict command (`done`/`decide`/`adopt`) and gives pending
+    // its own 7 — the LITERALS differ, the PROPERTY does not (green is 0; pending is a distinct, retryable,
+    // non-zero code; red is a distinct do-not-wait code). #724's `--wait` recipe is rewritten against these.
+    [<Literal>]
+    let ExitPending = 7
+
     /// Board status → its name, qualified against BoardStatus (bare `Ready` would resolve to the
     /// `Command.Ready` opened below). One place, so every render agrees.
     let private statusName (s: BoardStatus) =
@@ -1129,6 +1141,49 @@ module Client =
                                         $"fsgg-coord-engine: could NOT determine the state of PR #%d{pnum} on %s{ref.Short} (rate limit? network? GitHub computes mergeability lazily and may not have done so yet). REFUSING to adopt on a guess — an 'adopt' that lands an unverified PR is exactly the destructive act this command exists to replace. Look at the PR, or re-run in a moment."
 
                                     ExitRed
+
+    /// `landable <pr> --repo NAME` — is this OPEN PR finished work? The #697/#720 verdict as a first-class
+    /// QUERY: the ONE word (`green`/`conflicted`/`pending`/`red`/`unknown`) on stdout, the DECISION in the
+    /// exit code so a poll loop reads "keep waiting" from "stop" without parsing prose (#724).
+    ///
+    /// IT IS THE READ `who`/`reap`/`adopt` ALREADY MAKE (`Reads.prLandable` → `Landable.score`), surfaced on
+    /// its own so the verdict has ONE home. §5 of the worker recipes used to re-derive it in ~40 lines of jq,
+    /// wrong four times (#547/#606/#698/#720) and fixed in a COPY each time because nothing executes a recipe.
+    /// A command a test can hold makes a fifth copy unwritable — this is that command.
+    ///
+    /// FAIL-CLOSED BY CONSTRUCTION. `Reads.prLandable`'s failure IS its answer — a read it could not make is
+    /// `PrUnknown`, an honest no-verdict, never a masqueraded green — so there is no separate error path here:
+    /// a rate limit, a 404, a `null` mergeability GitHub has not resolved all resolve to `unknown` (exit 4),
+    /// the fail-closed verdict on which the poll loop advises nothing.
+    let landable (ctx: Context) (opts: Options) : int =
+        match opts.Repo with
+        | None ->
+            eprint
+                "fsgg-coord-engine: landable: --repo required (no git remote here, so which repo the PR is in is undefined)."
+
+            ExitError
+        | Some repoName ->
+            match oneArg opts "landable: a PR number" with
+            | Error c -> c
+            | Ok arg ->
+                match Int32.TryParse arg with
+                | false, _ ->
+                    eprint
+                        $"fsgg-coord-engine: landable: '%s{arg}' is not a PR number (landable takes a PR, e.g. 'landable 801 --repo FS.GG.SDD')."
+
+                    ExitError
+                | true, pr ->
+                    // The verdict, over the head SHA's workflow runs UNIONED with its check-runs, a superseded
+                    // suite dropped (#720). One word on stdout; the exit code carries the decision.
+                    let state = Reads.prLandable ctx.Transport ctx.Owner repoName pr
+                    printfn "%s" (Landable.name state)
+
+                    match state with
+                    | PrGreen -> ExitGreen
+                    | PrPending -> ExitPending
+                    | PrRed
+                    | PrConflicted -> ExitRed
+                    | PrUnknown -> ExitNoVerdict
 
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with
@@ -2548,6 +2603,7 @@ module Client =
             | Who
             | Reap
             | Inbox
+            | Landable
             | Take -> { opts with Repo = scopedRepo opts }
             | _ -> opts
 
@@ -2573,6 +2629,7 @@ module Client =
             | Budget -> budget ctx
             | Claim -> claim ctx opts
             | Adopt -> adopt ctx opts
+            | Landable -> landable ctx opts
             | Take -> take ctx opts
             | Release -> release ctx opts
             | Heartbeat -> heartbeat ctx opts

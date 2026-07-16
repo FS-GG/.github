@@ -17,6 +17,7 @@ module Options =
         | Reap
         | Claim
         | Adopt
+        | Landable
         | Take
         | Release
         | Heartbeat
@@ -118,6 +119,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              --json for the machine contract, else a human table)
   reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
                                              an open item/<n>-* PR (#581); a DRY RUN without --apply
+  landable <pr> --repo NAME                  is this OPEN PR finished work? one verdict word on stdout
+                                             (green/conflicted/pending/red/unknown), the decision in the
+                                             exit code — the #697/#720 gate as a query (#724)
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
@@ -160,6 +164,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   3 red     ·   4 no-verdict   ·   75 EX_RATE (budget exhausted — back off, try again later)
   `take` (#585): 0 ONLY when it claimed an item · 5 EX_NONE (nothing startable) · 6 EX_CONTENDED
   (lost every race) · 75 EX_RATE · any other non-zero, could not read (never EX_NONE, #266)
+  `landable` (#720/#724): 0 green · 7 pending (the ONE verdict worth retrying) · 3 red or conflicted
+  (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
 
     let parse (args: string list) : Result<Options, string> =
@@ -310,6 +316,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "claim" :: rest -> flags { defaults with Command = Claim } rest
         // `adopt` reports as text (a precondition report the operator reads); it gates the `claim` transfer.
         | "adopt" :: rest -> flags { defaults with Command = Adopt; Render = Text } rest
+        // `landable` prints ONE verdict word on stdout and puts the decision in the exit code — a query, not
+        // a table, so no `Render` flip.
+        | "landable" :: rest -> flags { defaults with Command = Landable } rest
         | "take" :: rest -> flags { defaults with Command = Take } rest
         | "release" :: rest -> flags { defaults with Command = Release } rest
         | "heartbeat" :: rest -> flags { defaults with Command = Heartbeat } rest

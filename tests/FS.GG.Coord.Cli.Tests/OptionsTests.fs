@@ -189,3 +189,14 @@ module OptionsTests =
         Assert.Equal(Text, o.Render)
         Assert.Equal<string list>([ "FS.GG.SDD#970" ], o.Args)
         Assert.Equal(Some "heron-697", o.Worker)
+
+    // ---- landable (the #697/#720 verdict as a first-class query) -----------------------------------
+
+    [<Fact>]
+    let ``landable parses to its command and carries the PR arg and repo`` () =
+        // A QUERY, not a table — no Render flip (the verdict is one word on stdout, the decision in the exit
+        // code). The PR is a positional arg (`landable 801`), the repo an explicit --repo.
+        let o = parse [ "landable"; "801"; "--repo"; "FS-GG/FS.GG.SDD" ] |> ok
+        Assert.Equal(Landable, o.Command)
+        Assert.Equal<string list>([ "801" ], o.Args)
+        Assert.Equal(Some "FS-GG/FS.GG.SDD", o.Repo)
