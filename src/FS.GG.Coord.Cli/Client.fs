@@ -2826,45 +2826,42 @@ module Client =
 
             ExitGreen
 
-        | Ok entries ->
+        | Ok _ ->
             match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
             | Error e -> fail e
             | Ok board ->
-                let queued = List.length entries
 
+                // EVERY COUNT BELOW COMES FROM THE PASS ITSELF. An earlier cut of this read the queue here
+                // and again afterwards to infer what had landed — and the deferral queue is ONE file shared
+                // by every worker on the machine, so a concurrent `defer` in that window made the inference
+                // wrong in the worst direction: "nothing replayed" over writes that HAD landed. Nothing is
+                // reconstructed now.
                 match Board.flush ctx.Transport board with
-                | Ok written ->
-                    printfn "flush — replayed %d of %d queued write(s)." written queued
+                | Error e -> fail e
+                | Ok r ->
+                    printfn "flush — replayed %d of %d queued write(s)." r.Written r.Queued
 
-                    // WRITTEN < QUEUED WITHOUT AN ERROR IS NOT AN ANOMALY. `Board.flush` drops what it can
+                    // A DROP IS NOT A WRITE, AND IT IS NOT AN ERROR EITHER. `Board.flush` drops what it can
                     // never land — an unparseable ref, an item no longer on the board — rather than
                     // retrying it forever. Saying so is the difference between a queue that drained and a
                     // queue that gave up quietly.
-                    if written < queued then
+                    if r.Dropped > 0 then
                         eprint
-                            $"fsgg-coord-engine: %d{queued - written} queued write(s) were DROPPED, not replayed — permanently un-writable (an unparseable ref, or an item no longer on this board)."
+                            $"fsgg-coord-engine: %d{r.Dropped} queued write(s) were DROPPED, not replayed — permanently un-writable (an unparseable ref, or an item no longer on this board)."
 
-                    ExitGreen
+                    match r.Stopped with
+                    | None -> ExitGreen
 
-                // A FLUSH STOPPED BY A FRESH RATE LIMIT IS A PARTIAL, AND SILENCE HERE WOULD REBUILD THIS
-                // ISSUE. `Board.flush` surfaces the rate-limit as an `Error`, which loses the count it had
-                // written before stopping — so a bare `fail e` would report "budget exhausted" over a flush
-                // that DID land writes, and the worker could not tell "nothing landed" from "most landed".
-                // Re-reading the queue costs nothing (a file read) and answers exactly that.
-                | Error e ->
-                    let remaining =
-                        match Cache.pending () with
-                        | Ok rest -> List.length rest
-                        | Error _ -> queued
+                    // A PARTIAL IS REPORTED AS A PARTIAL. A bare `fail e` here would say "budget exhausted"
+                    // over a flush that DID land writes, and the worker could not tell "nothing landed"
+                    // from "most landed" — the same could-not-tell that #862 is about.
+                    | Some e ->
+                        let remaining = r.Queued - r.Written - r.Dropped
 
-                    if remaining < queued then
                         eprint
-                            $"fsgg-coord-engine: replayed %d{queued - remaining} of %d{queued} queued write(s) before the budget ran out; %d{remaining} REMAIN QUEUED — re-run flush after the reset."
-                    else
-                        eprint
-                            $"fsgg-coord-engine: nothing replayed; all %d{queued} write(s) REMAIN QUEUED — re-run flush after the reset."
+                            $"fsgg-coord-engine: the budget ran out mid-flush; %d{remaining} write(s) REMAIN QUEUED — re-run flush after the reset."
 
-                    fail e
+                        fail e
 
     // ---- lint: the board-health gate (#496) -----------------------------------------------------------
     //
