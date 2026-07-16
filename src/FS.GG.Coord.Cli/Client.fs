@@ -1457,30 +1457,47 @@ module Client =
                         // outcomes directly beneath a comment promising they were reported. `Deferred` is the
                         // one that bites hardest — an exhausted budget QUEUES the write and nothing replays it
                         // on its own (#510/#878), so a silent defer is a column that never lands.
-                        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                        | Ok board when name <> "" ->
-                            match
-                                Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
-                            with
-                            | Ok Board.Written -> ()
-                            | Ok Board.Deferred ->
-                                eprint
-                                    $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  fsgg-coord flush"
-                            | Ok Board.NotOnBoard ->
-                                eprint
-                                    $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
+                        let landed =
+                            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                            | Ok board when name <> "" ->
+                                match
+                                    Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
+                                with
+                                | Ok Board.Written -> true
+                                | Ok Board.Deferred ->
+                                    eprint
+                                        $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  fsgg-coord flush"
+
+                                    false
+                                | Ok Board.NotOnBoard ->
+                                    eprint
+                                        $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
+
+                                    false
+                                | Error e ->
+                                    eprint
+                                        $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
+
+                                    false
                             | Error e ->
                                 eprint
-                                    $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
-                        | Error e ->
-                            eprint
-                                $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
-                        | Ok _ -> ()
+                                    $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
 
-                        // Name the column. `release` reporting only "released <ref>" is what let the ignored
-                        // `--status` look like it worked; a caller who is told where the item landed can see
-                        // that it did not.
-                        printfn "released %s → %s" ref.Short name
+                                false
+                            | Ok _ -> false
+
+                        // NAME THE COLUMN ONLY IF IT LANDED. `release` reporting a bare "released <ref>" is
+                        // what let the ignored `--status` look like it had worked — but a line that names the
+                        // column unconditionally is the SAME defect wearing the fix's clothes: on a deferred
+                        // or failed write it asserts, on stdout and with a green exit, a column the board does
+                        // not hold. stderr already said otherwise, and a caller that reads one of the two
+                        // reads stdout. So stdout states only what is true; the reason it is not true is on
+                        // stderr, immediately above.
+                        if landed then
+                            printfn "released %s → %s" ref.Short name
+                        else
+                            printfn "released %s" ref.Short
+
                         ExitGreen
 
     let heartbeat (ctx: Context) (opts: Options) : int =
