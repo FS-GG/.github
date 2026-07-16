@@ -70,12 +70,42 @@
 # INVOCATION — a command it does not match never spawns this script at all — so any filtering
 # precision here would be moot behind it. Do not re-add one.
 #
+# WHAT THIS GUARD IS NOT — STATED, SO NOBODY HAS TO REDISCOVER IT
+#
+# It stops an agent pushing to main by ACCIDENT or OVERREACH. It is not a sandbox, and it is not
+# proof against a command written to defeat it. Two known gaps, both measured, both left open on
+# purpose:
+#
+#   * A push inside `$(…)` or backticks is not judged. `echo $(git push origin main)` is ALLOWED.
+#     Splitting into command substitutions would make a HEREDOC BODY a command position, which is
+#     the self-block that killed the first version of this guard (fixture leg 13) — prose about a
+#     push would deny the commit that documents it. A guard that reddens legitimate work gets
+#     switched off, and then it guards nothing. The trade is deliberate: the reachable-by-accident
+#     case is the bare/refspec push, and that one is covered.
+#   * `git push` reached through an alias, a wrapper script, or a shell function is not judged —
+#     the guard reads the command it is given, not what that command eventually runs.
+#
+# If you need a hard boundary rather than a safety net, the enforcement layer is the PERMISSION
+# system (a `deny` rule), not a PreToolUse hook: Claude Code's own docs say so, and this file
+# cannot be more than best-effort while it is parsing shell.
+#
 # CONTRACT: exit 2 = blocked, stderr is fed back to the model. exit 0 = allowed. Anything else
 # would be a hook that failed OPEN, which is the same defect class as #266 — so the script is
 # `set -uo pipefail` WITHOUT `-e`: no intermediate non-zero may abort it into a silent allow.
 set -uo pipefail
 
 payload="$(cat)"
+
+# CHEAP EXIT FIRST. settings.json wires this on every Bash call (see above), so the overwhelmingly
+# common case is a command that has nothing to do with pushing. A builtin substring test costs no
+# fork; jq does. If the payload does not contain "push" anywhere — prose, refspec or otherwise —
+# there is no `git push` in it. Erring toward running the full parse is free; erring the other way
+# would be a hook that failed open, so the test is deliberately over-broad.
+case "$payload" in
+  *push*) ;;
+  *) exit 0 ;;
+esac
+
 cmd="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null)"
 
 # No command to inspect = nothing to block. (Not a failure: other Bash payload shapes exist.)
@@ -104,15 +134,52 @@ deny() {
   exit 2
 }
 
+# --- split a segment into tokens, respecting quotes -------------------------------------------
+#
+# `read -a` splits on IFS and knows nothing about quoting, which is a HOLE, not an inconvenience:
+# `git -C "/has space" push origin main` tokenizes as [git, -C, "/has, space", push, …], so `-C`
+# eats `"/has`, the stray `space"` looks like a subcommand, and the scan gives up BEFORE reaching
+# `push` — the segment is never judged and the push to main is allowed. That is the same shape as
+# the bug this whole file is repairing (something between `git` and `push` hides the push), so a
+# tokenizer that cannot see through quotes would leave the job half done.
+#
+# Handles '…', "…" and backslash escapes. Sets TOKENS.
+tokenize() {
+  local s="$1" tok='' q='' c i n esc=0
+  TOKENS=()
+  n="${#s}"
+  for ((i = 0; i < n; i++)); do
+    c="${s:i:1}"
+    if [ "$esc" = 1 ]; then tok+="$c"; esc=0; continue; fi
+    case "$q" in
+      "'")  if [ "$c" = "'" ]; then q=''; else tok+="$c"; fi ;;
+      '"')  if [ "$c" = '"' ]; then q=''; elif [ "$c" = '\' ]; then esc=1; else tok+="$c"; fi ;;
+      *)
+        case "$c" in
+          "'"|'"') q="$c" ;;
+          '\')     esc=1 ;;
+          ' '|$'\t')
+            # A quoted empty string is still a token: `git -C "" push` must not let `-C` swallow
+            # `push`. Only an UNQUOTED run of spaces separates tokens, so track emptiness.
+            if [ -n "$tok" ]; then TOKENS+=("$tok"); tok=''; fi ;;
+          *) tok+="$c" ;;
+        esac ;;
+    esac
+  done
+  [ -n "$tok" ] && TOKENS+=("$tok")
+  return 0
+}
+
 # --- is this segment a `git … push …`? --------------------------------------------------------
 #
 # Walk the tokens after `git`, skipping GLOBAL options until the subcommand appears. An unknown
 # `-x` is SKIPPED rather than ending the scan: a future git option must not be able to hide a
-# `push` behind it. Sets PUSH_FOUND / PUSH_DIR / PUSH_ARGS.
+# `push` behind it. Sets PUSH_FOUND / PUSH_DIR / PUSH_ARGS (a token array).
 parse_push_segment() {
-  PUSH_FOUND=0; PUSH_DIR=''; PUSH_ARGS=''
+  PUSH_FOUND=0; PUSH_DIR=''; PUSH_ARGS=()
   local -a t
-  read -r -a t <<<"$1"
+  tokenize "$1"
+  t=("${TOKENS[@]+"${TOKENS[@]}"}")
   [ "${#t[@]}" -gt 0 ] || return 0
 
   # Leading VAR=value assignments are a command prefix, not the command (`GIT_DIR=x git push`).
@@ -141,7 +208,7 @@ parse_push_segment() {
       # The subcommand. Everything after it belongs to `push`.
       push)
         PUSH_FOUND=1
-        [ "$((i + 1))" -lt "$n" ] && PUSH_ARGS="${t[*]:$((i + 1))}"
+        [ "$((i + 1))" -lt "$n" ] && PUSH_ARGS=("${t[@]:$((i + 1))}")
         return 0 ;;
       # Any other flag: a valueless global option (--no-pager, --bare, -P, …) or one we do not
       # know. Skip it and keep hunting for the subcommand — never stop scanning on a flag.
@@ -160,20 +227,51 @@ parse_push_segment() {
 # or `domain` — the word boundary fails on both. Scans the push's OWN ARGUMENTS, so a `-C` path
 # or a repo directory containing "main" is not mistaken for a refspec.
 push_names_main() {
-  printf '%s' "$1" | grep -Eq '(^|:|\+|[[:space:]]|/)main\b'
+  printf '%s' "${PUSH_ARGS[*]+"${PUSH_ARGS[*]}"}" | grep -Eq '(^|:|\+|[[:space:]]|/)main\b'
 }
 
-# --- does this push leave the refspec IMPLICIT? ------------------------------------------------
+# --- the push's REFSPEC ARGUMENTS, with option values removed ----------------------------------
 #
-# `git push`, `git push -f`, `git push origin` — fewer than two non-option arguments means no
-# refspec was named, so git pushes the CURRENT branch (push.default). That is the case a pattern
-# match alone waves straight through, and the easiest way to hit main by accident.
-push_refspec_is_implicit() {
-  local a count=0
-  for a in $1; do
-    case "$a" in -*) ;; *) count=$((count + 1)) ;; esac
+# `push`'s OWN options are not all valueless: `-o <opt>`, `--repo <r>`, `--receive-pack <p>` and
+# `--exec <p>` each consume the token after them. Counting that value as a refspec is a fail-OPEN:
+# `git push -o ci.skip origin` on main looks like two refspec args, so the branch check below is
+# skipped and main is pushed. Sets REFSPEC_ARGS.
+push_refspec_args() {
+  local a i=0 n="${#PUSH_ARGS[@]}"
+  REFSPEC_ARGS=()
+  while [ "$i" -lt "$n" ]; do
+    a="${PUSH_ARGS[$i]}"
+    case "$a" in
+      -o|--push-option|--repo|--receive-pack|--exec) i=$((i + 2)) ;;
+      -*) i=$((i + 1)) ;;
+      *) REFSPEC_ARGS+=("$a"); i=$((i + 1)) ;;
+    esac
   done
-  [ "$count" -lt 2 ]
+  return 0
+}
+
+# --- does this push resolve to the CURRENT branch? ---------------------------------------------
+#
+# Two ways it can, and both must run the branch check:
+#
+#   * NO refspec at all — `git push`, `git push -f`, `git push origin`. git pushes the current
+#     branch (push.default). This is the easiest way to hit main by accident.
+#   * The refspec IS the current branch — `git push origin HEAD`, `origin @`, `origin +HEAD`.
+#     A pattern match sees no "main" here and waves it through, but on main it pushes main, and
+#     `git push origin HEAD` is a thoroughly common idiom.
+#
+# `HEAD:<branch>` is NOT this case: it pushes the current branch to a DIFFERENT ref, and if that
+# ref is main then push_names_main has already denied it.
+push_targets_current_branch() {
+  local a
+  push_refspec_args
+  [ "${#REFSPEC_ARGS[@]}" -lt 2 ] && return 0
+  for a in "${REFSPEC_ARGS[@]}"; do
+    case "$a" in
+      HEAD|@|+HEAD|+@) return 0 ;;
+    esac
+  done
+  return 1
 }
 
 # --- where will this push actually run? --------------------------------------------------------
@@ -202,6 +300,22 @@ resolve_push_dir() {
     /*) ;;
     *) [ -d "$base/$PUSH_DIR_RESOLVED" ] && PUSH_DIR_RESOLVED="$base/$PUSH_DIR_RESOLVED" ;;
   esac
+
+  # A HINT WE COULD NOT RESOLVE IS NOT EVIDENCE OF ANYTHING — FALL BACK, DO NOT WAVE THROUGH.
+  #
+  # This is the one way this rewrite could be WORSE than the guard it replaces, and it was: an
+  # unresolvable dir makes `git rev-parse` fail, branch_of returns '', '' is not 'main', and the
+  # push sails past a check the old guard would have made against the project dir. Two everyday
+  # commands hit it — `cd - && git push` (back to the shared checkout, i.e. ONTO main) and
+  # `cd $SOME_VAR && git push` (the hook sees the literal, unexpanded string). Both were BLOCKED
+  # before this file was touched and ALLOWED after, until this fallback went in.
+  #
+  # So: if the directory we picked is not a git work tree, we learned nothing from the command.
+  # Revert to the project dir and mark the answer a GUESS, which is exactly what it is.
+  if ! git -C "$PUSH_DIR_RESOLVED" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    PUSH_DIR_RESOLVED="$base"
+    DIR_IS_GUESS=1
+  fi
 }
 
 branch_of() {
@@ -225,12 +339,12 @@ while IFS= read -r raw_segment; do
   [ "$PUSH_FOUND" = 1 ] || continue
 
   # 1. An EXPLICIT main refspec. Independent of where it runs — always denied.
-  if push_names_main "$PUSH_ARGS"; then
+  if push_names_main; then
     deny "pushing to \`main\` is blocked."
   fi
 
-  # 2. An IMPLICIT one: no refspec named, so git pushes whatever branch that directory is on.
-  if push_refspec_is_implicit "$PUSH_ARGS"; then
+  # 2. The push resolves to whatever branch its directory is on — no refspec, or an explicit HEAD.
+  if push_targets_current_branch; then
     resolve_push_dir "$PUSH_DIR" "$cd_hint"
     dir="$PUSH_DIR_RESOLVED"
     branch="$(branch_of "$dir")"

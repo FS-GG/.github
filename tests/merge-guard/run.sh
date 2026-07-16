@@ -132,5 +132,33 @@ expect_in 0 "$FIXDIR/shared" "cd $FIXDIR/wt && git push"                     'cd
 expect_in 0 "$FIXDIR/shared" "git -C $FIXDIR/wt push origin item/909-guard"  '-C <worktree> + explicit branch'
 expect_in 0 "$FIXDIR/shared" "git -C $FIXDIR/main-repo push origin feature"  'a -C PATH containing "main" is not a refspec'
 
+
+# A repo whose PATH CONTAINS A SPACE — the quoting hole. Unquoted tokenizing splits the path and
+# loses the `push` behind it, so the guard never judges the segment at all.
+git_q init -b main "$FIXDIR/has space"
+git_q -C "$FIXDIR/has space" commit --allow-empty -m init
+
+echo
+echo "MUST BLOCK — these ALSO push main, and every one of them was ALLOWED at some point in review:"
+expect_in 2 "$FIXDIR/shared" "git -C \"$FIXDIR/has space\" push origin main" 'a QUOTED -C path with a space must not hide the push'
+expect_in 2 "$FIXDIR/shared" 'git push origin HEAD'                          'HEAD IS the current branch (on main)'
+expect_in 2 "$FIXDIR/shared" 'git push origin @'                             '@ is HEAD (on main)'
+expect_in 2 "$FIXDIR/shared" 'git push origin +HEAD'                         'force-push HEAD (on main)'
+expect_in 2 "$FIXDIR/shared" 'git push -o ci.skip origin'                    "-o's VALUE is not a refspec (on main)"
+expect_in 2 "$FIXDIR/shared" 'git push --repo origin'                        "--repo's VALUE is not a refspec (on main)"
+
+echo
+echo "MUST BLOCK — the #909 REGRESSION legs: an unresolvable dir hint must FALL BACK, not wave through:"
+expect_in 2 "$FIXDIR/shared" "cd $FIXDIR/shared && cd - && git push"         'cd - (back onto main)'
+expect_in 2 "$FIXDIR/shared" 'cd $UNSET_VAR && git push'                     'an unexpanded variable in the cd'
+expect_in 2 "$FIXDIR/shared" 'cd /nonexistent-xyz && git push'               'a cd to a dir that does not exist'
+expect_in 2 "$FIXDIR/shared" 'git -C /nonexistent-xyz push'                  'a -C to a dir that does not exist'
+
+echo
+echo "MUST ALLOW — the fixes above must not cost us the legitimate cases:"
+expect_in 0 "$FIXDIR/shared" "git -C $FIXDIR/wt push origin HEAD"            'HEAD from a worktree on a feature branch'
+expect_in 0 "$FIXDIR/shared" "git -C $FIXDIR/wt push -o ci.skip origin"      '-o from a worktree on a feature branch'
+expect_in 0 "$FIXDIR/shared" 'git push origin HEAD:feature'                  'HEAD:<other> pushes current to a DIFFERENT ref'
+
 printf '\nmerge-guard fixture: %s passed, %s failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1
