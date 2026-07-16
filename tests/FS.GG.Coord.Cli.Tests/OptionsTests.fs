@@ -252,3 +252,19 @@ module OptionsTests =
     [<Fact>]
     let ``issues --refresh drops the cache (an alias of the fresh flag)`` () =
         Assert.True((parse [ "issues"; "sdd"; "--refresh" ] |> ok).Fresh)
+
+    [<Fact>]
+    let ``#614 done --flip --partial captures the reason and keeps --flip`` () =
+        let o = parse [ "done"; "FS.GG.SDD#62"; "--flip"; "--partial"; "callers migration is a separate child" ] |> ok
+        Assert.True(o.Flip)
+        Assert.Equal(Some "callers migration is a separate child", o.Partial)
+
+    [<Fact>]
+    let ``#614 a bare done --flip leaves Partial None — the child completes its parent by default`` () =
+        let o = parse [ "done"; "FS.GG.SDD#62"; "--flip" ] |> ok
+        Assert.Equal(None, o.Partial)
+
+    [<Fact>]
+    let ``#614 --partial with no value is rejected — a partial fix must SAY why`` () =
+        let e = parse [ "done"; "FS.GG.SDD#62"; "--flip"; "--partial" ] |> rejected
+        Assert.Contains("--partial", e)
