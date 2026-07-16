@@ -80,6 +80,9 @@ module Options =
         | OptionId
         /// The board item id for an issue (`item-id <ref>`) — 1 GraphQL, then cached forever.
         | ItemId
+        /// Put an issue on the board, idempotently (`add <ref>`) — the metered verb the GraphQL monopoly
+        /// rule (#586) names in place of `gh project item-add`, restored in #861.
+        | Add
         /// Board-health gate: flag Ready/Backlog items no worker can pick up (`lint [--repo] [--strict]`, #496).
         | LintCmd
         /// List a repo's issues over REST, ETag-revalidated — the GraphQL-budget-free read

@@ -413,6 +413,139 @@ module Board =
                 Ok(Some id)
             | other -> other
 
+    // ---- add: put an issue on the board (#861) -------------------------------------------------------
+
+    [<Literal>]
+    let private IssueNodeIdDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { id } } rateLimit { cost remaining } }"
+
+    [<Literal>]
+    let private AddItemDoc =
+        "mutation($projectId: ID!, $contentId: ID!) { addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) { item { id } } }"
+
+    /// The issue's own node id — `addProjectV2ItemById`'s `contentId`, which is NOT the board item id.
+    let private issueNodeId
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<string> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number}"
+
+        let request =
+            query
+                IssueNodeIdDoc
+                [ "owner", VString owner
+                  "repo", VString repo
+                  "number", VNumber(double number) ]
+                subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+
+        match graphQlData subject response.Body with
+        | Error e -> Error e
+        | Ok data ->
+
+        try
+            let issue = data.GetProperty("repository").GetProperty("issue")
+
+            if issue.ValueKind = JsonValueKind.Null then
+                Error(NotFound subject)
+            else
+
+            match issue.TryGetProperty "id" with
+            | true, id when id.ValueKind = JsonValueKind.String -> Ok(id.GetString())
+            | _ -> Error(Malformed(subject, "the issue lookup response has no `id`"))
+
+        with :? KeyNotFoundException ->
+            Error(Malformed(subject, "the issue lookup response is missing `repository.issue`"))
+
+    /// What `addItem` did. The caller needs to tell these apart: adding a second copy of an item is the
+    /// failure this whole function is shaped around, so "it was already there" is a SUCCESS worth naming.
+    type AddOutcome =
+        /// The issue was already on this board. Nothing was written.
+        | AlreadyOnBoard of itemId: string
+        /// The issue was added. This is the only path that spends a mutation.
+        | AddedToBoard of itemId: string
+
+    /// Put an issue on the board, idempotently.
+    ///
+    /// #421 IS THE WHOLE FUNCTION, exactly as it is `itemId`'s: `Ok None` — a successful read that walked
+    /// the board and did not find this issue — is the only thing that licenses the mutation, and an
+    /// `Error` is a read that DID NOT HAPPEN. Unreachable is not absent. So the error propagates rather
+    /// than being folded into "not there", which is #266's class and the defect #421 actually reported.
+    ///
+    /// WHAT THE GUARD IS *NOT* FOR, because the next reader will assume it and be afraid to touch it:
+    /// it is not what stops a duplicate row. `addProjectV2ItemById` is idempotent SERVER-side — calling
+    /// it for an issue already on the board returns that item's existing id and adds nothing (measured
+    /// against the live board, #861). #421 said a duplicate "would have" been created had its remediation
+    /// been followed; that was a reasonable inference, and it does not reproduce.
+    ///
+    /// The guard earns its place anyway, for reasons that do hold: adding on a failed read would spend a
+    /// mutation on a budget that just refused a query, and it would report `AddedToBoard` for an issue
+    /// whose presence we never established — a definite answer built on no information, which is the
+    /// whole of #421.
+    ///
+    /// The lookup is deliberately the UNCACHED `itemId`: the forever-cache only ever memoises a FOUND id,
+    /// so a cache hit is already an `AlreadyOnBoard` answer and a miss proves nothing.
+    ///
+    /// COST: 3 GraphQL on a real add (lookup, node id, mutation), 1 when it is already there. Two would
+    /// do — `ItemIdDoc` already reads `repository.issue`, so `id` could ride along and retire
+    /// `issueNodeId`. It does not, on purpose: `itemId` owns the ONE implementation of "narrow to OUR
+    /// board", and an issue can sit on several. A second copy of that predicate to save a point on a
+    /// once-per-filing verb trades a cross-board write — a no-op here and vandalism over there — against
+    /// a rounding error on a 5,000/hr budget (#418).
+    let addItem
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<AddOutcome> =
+
+        match itemId transport board owner repo number with
+        | Error e -> Error e
+        | Ok(Some existing) ->
+            // Idempotent, and it costs one read and no write. Re-running `add` is how a close-out pass or a
+            // retried recipe behaves; it must not create a twin.
+            Cache.putItemId owner repo number board.Number existing
+            Ok(AlreadyOnBoard existing)
+
+        | Ok None ->
+
+        match issueNodeId transport owner repo number with
+        | Error e -> Error e
+        | Ok contentId ->
+
+        let subject = $"%s{owner}/%s{repo}#%d{number}"
+
+        let request =
+            query AddItemDoc [ "projectId", VId board.Id; "contentId", VId contentId ] subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+
+        match graphQlData subject response.Body with
+        | Error e -> Error e
+        | Ok data ->
+
+        try
+            let item = data.GetProperty("addProjectV2ItemById").GetProperty("item")
+
+            match item.TryGetProperty "id" with
+            | true, id when id.ValueKind = JsonValueKind.String ->
+                let newId = id.GetString()
+                Cache.putItemId owner repo number board.Number newId
+                Ok(AddedToBoard newId)
+            | _ -> Error(Malformed(subject, "the add response has no `addProjectV2ItemById.item.id`"))
+
+        with :? KeyNotFoundException ->
+            Error(Malformed(subject, "the add response is missing `addProjectV2ItemById.item`"))
+
     // ---- the pre-claim column (#481) ----------------------------------------------------------------
 
     [<Literal>]

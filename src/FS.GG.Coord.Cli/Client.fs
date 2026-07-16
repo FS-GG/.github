@@ -2706,6 +2706,43 @@ module Client =
             eprint "fsgg-coord-engine: item-id takes <ref>."
             ExitError
 
+    /// `add <ref>` — put an issue on the board (#861).
+    ///
+    /// The verb `check-graphql-monopoly` (#586) names as the compliant alternative to `gh project
+    /// item-add`, and the one the port dropped — so the rule spent its life with no path that obeyed it.
+    /// The raw `gh` call spends the shared 5,000 pt/hr fleet budget with nothing to meter, cache or refuse
+    /// it; this goes through the one transport, which does all three.
+    ///
+    /// Idempotent by #421's rule and not by a `try`: see `Board.addItem`. Re-running it is free of a write.
+    let addCmd (ctx: Context) (opts: Options) : int =
+        match opts.Args with
+        | [ refArg ] ->
+            match parseRef ctx refArg with
+            | Error msg ->
+                eprint $"fsgg-coord-engine: %s{msg}"
+                ExitError
+            | Ok ref ->
+                match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                | Error e -> fail e
+                | Ok board ->
+                    match Board.addItem ctx.Transport board ref.Owner ref.Repo ref.Number with
+                    | Error e -> fail e
+                    // ALREADY THERE IS A SUCCESS, and it exits 0. `add` is the second line of the recipe's
+                    // filing procedure, so a close-out pass, a retry, or two workers racing the same
+                    // follow-up all reach it — and none of them is an error. It says so on stderr and puts
+                    // the id on stdout, so a caller piping it gets an id either way.
+                    | Ok(Board.AlreadyOnBoard id) ->
+                        eprint $"fsgg-coord-engine: %s{ref.Short} is already on board '%s{ctx.Title}'."
+                        printfn "%s" id
+                        ExitGreen
+                    | Ok(Board.AddedToBoard id) ->
+                        eprint $"added %s{ref.Short} to board '%s{ctx.Title}'."
+                        printfn "%s" id
+                        ExitGreen
+        | _ ->
+            eprint "fsgg-coord-engine: add takes <ref> (a URL, owner/repo#n, or repo#n)."
+            ExitError
+
     // ---- lint: the board-health gate (#496) -----------------------------------------------------------
     //
     // The rule whose absence let `lint` report `0 error(s)` over a DEAD queue. A Ready/Backlog item that
@@ -3054,6 +3091,7 @@ module Client =
             | FieldId -> fieldId ctx opts
             | OptionId -> optionId ctx opts
             | ItemId -> itemIdCmd ctx opts
+            | Add -> addCmd ctx opts
             | LintCmd -> lint ctx opts
             | Issues -> issues ctx opts
             | other -> failwith $"Client.run received a non-IO command: %A{other}"

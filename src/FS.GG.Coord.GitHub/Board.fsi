@@ -121,6 +121,29 @@ module Board =
         number: int ->
             IoResult<string option>
 
+    /// What `addItem` did.
+    type AddOutcome =
+        /// The issue was already on this board. No mutation was spent, and re-running `add` is safe.
+        | AlreadyOnBoard of itemId: string
+        /// The issue was added — the only outcome that writes.
+        | AddedToBoard of itemId: string
+
+    /// Put an issue on the board, idempotently — the metered verb the GraphQL monopoly rule (#586) names,
+    /// and the one the port dropped (#861). It is what makes `gh project item-add` refusable: that call
+    /// spends the shared fleet budget with nothing to meter or cache it.
+    ///
+    /// **#421 is the whole function.** Only `Ok None` from the item lookup — a successful read that walked
+    /// the board and did not find this issue — licenses the mutation. An `Error` is a read that did not
+    /// happen; adding on one puts a SECOND item on the board for an issue that was already there, and the
+    /// board then has two rows nobody can reconcile. A failed lookup is not an absence, so it propagates.
+    val addItem:
+        transport: IGitHubTransport ->
+        board: BoardMap ->
+        owner: string ->
+        repo: string ->
+        number: int ->
+            IoResult<AddOutcome>
+
     /// Read ONE item's `Status` column — the pre-claim column of #481, so `release`/`reap` can restore what
     /// a claim overwrote instead of guessing `Ready`.
     ///
