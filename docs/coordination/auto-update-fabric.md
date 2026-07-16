@@ -137,7 +137,8 @@ jobs:
       app-private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
 ```
 
-On a `renovate/*` same-repo PR (fork PRs are skipped) it runs `dotnet restore --force-evaluate`,
+On a `renovate/*` or `build-config/*` same-repo PR (fork PRs are skipped) it runs
+`dotnet restore --force-evaluate`,
 then commits the refreshed `packages.lock.json` back to the PR branch. The commit is authored with
 the **`fs-gg-cross-repo-dispatch` App installation token** (the same `FSGG_DISPATCH_APP_*` secrets
 the dispatch sender uses), **not** `GITHUB_TOKEN` — App-token pushes re-trigger `on: pull_request`,

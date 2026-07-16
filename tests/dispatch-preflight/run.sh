@@ -123,9 +123,14 @@ meta = {
     },
     # sync must not be able to run without it.
     "sync_needs": [needs] if isinstance(needs, str) else list(needs or []),
-    # the two copies of the "would this actually sync?" condition, whitespace-normalised.
+    # the THREE copies of the "would this actually sync?" condition, whitespace-normalised.
+    # `installation` carries its own copy and grades its own severity from it (#842). Reading only
+    # `secrets`' copy left that third one pinned by nothing — so it could drift to a stale prefix
+    # list while S3 reported no drift, which is this file's own #266 signature: an assertion that
+    # passes because it cannot see its subject.
     "sync_if": " ".join(str(sync.get("if", "")).split()),
     "would_sync_env": " ".join(str(env.get("WOULD_SYNC", "")).split()),
+    "would_sync_install_env": " ".join(str((install_step.get("env") or {}).get("WOULD_SYNC", "")).split()),
     # the env the step actually receives — used to prove secret VALUES never enter it.
     "env": {k: str(v) for k, v in env.items()},
 }
@@ -271,7 +276,11 @@ red   "B8  RED points at the org-admin fix (#468)"                false false tr
 # Must be visible and must NOT block: redding every unrelated PR in a repo over a latent problem is
 # how a gate gets switched off, and a gate that is switched off is worth less than no gate at all.
 amber "B9  unprovisioned + ordinary PR    -> WARN, non-blocking"  false false false true 'FSGG_DISPATCH_APP_ID'
-amber "B10 the warning says it WILL fail later, not that it is fine" false false false true 'next renovate'
+# Grep the forward-looking CLAIM, not the bot's name. This assertion used to want "next renovate",
+# which pinned the amber text to the very premise #842 falsified — so broadening the gate to
+# `build-config/` reds B10, for no reason but the wording. What B10 means is in its own title: the
+# warning must promise a LATER failure rather than shrug. That sentence survives the next bot.
+amber "B10 the warning says it WILL fail later, not that it is fine" false false false true 'will fail on the next'
 amber "B11 half-provisioned + ordinary PR -> WARN, non-blocking"  true  false false true 'FSGG_DISPATCH_APP_PRIVATE_KEY'
 
 # FORK HEADS. GitHub withholds every secret but GITHUB_TOKEN from a workflow triggered from a fork,
@@ -309,14 +318,48 @@ fi
 # S3. Preflight's WOULD_SYNC is a hand-copy of sync's `if:`. It only grades severity (sync's own `if:`
 # still enforces), so drift is not a security hole — but it silently misgrades error-vs-warning, and
 # nothing else would ever notice.
+#
+# BOTH preflight steps carry a copy, and both grade their own severity from it. Checking only
+# `secrets`' copy is how the condition acquired an unpinned third instance: #842 broadened the gate
+# to `build-config/` and `installation`'s copy would have kept the stale one-prefix list, silently
+# amber-ing a build-config/* PR that needed a RED — while this very assertion reported no drift.
 SYNC_IF="$(jq_meta "['sync_if']")"
-WOULD="$(jq_meta "['would_sync_env']")"
-WOULD_BARE="$(printf '%s' "$WOULD" | sed -e 's/^\${{ *//' -e 's/ *}}$//')"
-if [ -n "$SYNC_IF" ] && [ "$SYNC_IF" = "$WOULD_BARE" ]; then
-  ok "S3  preflight's WOULD_SYNC is identical to sync's \`if:\` (no drift)"
+bare() { printf '%s' "$1" | sed -e 's/^\${{ *//' -e 's/ *}}$//'; }
+WOULD_BARE="$(bare "$(jq_meta "['would_sync_env']")")"
+INSTALL_BARE="$(bare "$(jq_meta "['would_sync_install_env']")")"
+if [ -n "$SYNC_IF" ] && [ "$SYNC_IF" = "$WOULD_BARE" ] && [ "$SYNC_IF" = "$INSTALL_BARE" ]; then
+  ok "S3  all three copies of the sync condition are identical (no drift)"
 else
-  bad "S3  preflight's WOULD_SYNC is identical to sync's \`if:\`" \
-      "$(printf 'the two copies of the sync condition have drifted, so preflight will misgrade error-vs-warning:\n  sync.if   = %s\n  WOULD_SYNC = %s' "$SYNC_IF" "$WOULD_BARE")"
+  bad "S3  all three copies of the sync condition are identical" \
+      "$(printf 'the copies of the sync condition have drifted, so preflight will misgrade error-vs-warning:\n  sync.if                 = %s\n  secrets.WOULD_SYNC      = %s\n  installation.WOULD_SYNC = %s' "$SYNC_IF" "$WOULD_BARE" "$INSTALL_BARE")"
+fi
+
+# S3b. S3 proves the copies AGREE. It cannot prove they are RIGHT — three identical copies of a wrong
+# condition pass it unanimously, and there are two ways to be wrong here. Both are silent, and each
+# is invisible to every other assertion in this file:
+#
+#   * MEMBERSHIP. `renovate/` was consistent everywhere and consistently missed `build-config/`, so
+#     `sync` skipped, the locks went stale, and every receiver sat NU1004-red with auto-merge armed
+#     and unable to fire (#842). A revert of the prefix list reds nothing but this.
+#   * STRUCTURE. The condition is `(A || B) && C`, and the parens are load-bearing: Actions binds
+#     `&&` tighter than `||`, so dropping them silently means `A || (B && C)` — a `renovate/` branch
+#     on a FORK head would satisfy the whole expression, and `sync` auto-commits to an untrusted
+#     head. The old flat `A && C` had no such hazard; broadening the list is what introduced it. So
+#     the change that created this risk is the change that owes it an assertion.
+#
+# Hence an EXACT pin rather than a substring search: `case "$SYNC_IF" in *"'renovate/'"*)` would
+# report both prefixes present in a condition whose parens had been stripped, which is this file's
+# own #266 signature — an assertion that passes because it cannot see its subject.
+#
+# The literal below is the intended expression, spelled out. It is deliberately the one place this
+# knowledge lives: adding a bot that moves a central `<PackageVersion>` WITHOUT running restore means
+# editing this line on purpose, which is exactly the review moment that should not be skippable.
+SYNC_IF_EXPECTED="(startsWith(github.event.pull_request.head.ref, 'renovate/') || startsWith(github.event.pull_request.head.ref, 'build-config/')) && github.event.pull_request.head.repo.full_name == github.repository"
+if [ "$SYNC_IF" = "$SYNC_IF_EXPECTED" ]; then
+  ok "S3b the sync condition is exactly the intended expression (membership AND parenthesisation)"
+else
+  bad "S3b the sync condition is exactly the intended expression" \
+      "$(printf 'the sync condition is not what this test pins. Check BOTH the prefix list and the parens —\n`&&` binds tighter than `||`, so `(A || B) && C` without its parens is `A || (B && C)`, and a\nrenovate/* branch on a FORK head would then sync (#842).\n  expected = %s\n  actual   = %s\nIf the change is intended, update SYNC_IF_EXPECTED here in the same commit.' "$SYNC_IF_EXPECTED" "$SYNC_IF")"
 fi
 
 # S4. The step must receive BOOLEANS, never the secret values. `${{ secrets.app-id }}` in the env
