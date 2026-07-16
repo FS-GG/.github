@@ -3,16 +3,26 @@
 **Date:** 2026-07-15
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
-**Status:** In progress — **D.1 COMPLETE; D.2 COMPLETE (the swap has landed)**. Phases A–C have landed. The
+**Status:** In progress — **D.1 COMPLETE; D.2 COMPLETE (the swap has landed); D.3 COMPLETE (green in all six receivers)**. Phases A–C have landed. The
 corpus-through-engine parity harness grew from the prototype to **all 27 of 27 corpus cases** (~445
 assertions); the full corpus drives the engine over HTTP, green, with the call counts intact. D.2 landed in
 two slices: slice 1 ([#831](https://github.com/FS-GG/.github/pull/831)) landed the ADR-0034 §4.4 shim as a
 proven artifact green THROUGH it; **slice 2 — THE SWAP — made `scripts/fsgg-coord` BE the shim**, preserving
 the ~7,132-line bash verbatim at `scripts/fsgg-coord-bash` for the `50`/`51` differential gates until D.4.
 Everything that executes `scripts/fsgg-coord` now runs the engine, and (C2/C3 having readied the receivers:
-the distributed manifest declares the published `fs.gg.coord.cli` 0.1.1) the merge's auto-propagation IS the
-D.3 delivery. **Next: D.3** — confirm the corpus is green through the shim in all six receivers; then D.4
-(delete bash, dispose the five `51-fs-flip` differential assertions on the record — the one-way door).
+the distributed manifest declares the published `fs.gg.coord.cli` 0.1.1) the merge's auto-propagation WAS the
+D.3 delivery. **D.3 is now COMPLETE** — the swap-merge fired `coordination-propagate` (10:31Z 2026-07-16),
+which opened/force-updated the rolling `coordination-kit/sync` PR in each of the six receivers with the shim's
+bytes; every one went green and merged on its own required checks (three small receivers — Templates, Game,
+Audio — landed at once; SDD [#465](https://github.com/FS-GG/FS.GG.SDD/pull/465)→`559efdc`, Governance
+[#224](https://github.com/FS-GG/FS.GG.Governance/pull/224)→`22b788d`, Rendering
+[#834](https://github.com/FS-GG/FS.GG.Rendering/pull/834)→`76df7e8` finished their native build+test `gate`
+minutes later). All six now carry `scripts/fsgg-coord` **byte-identical to canonical**
+(`sha256 3b884ccd…`), `coordination-coherence` green on each `main`, zero open sync PRs. Receivers only
+*byte-compare* the shim (`coordination-coherence.yml`); they never execute it in CI — the exec-the-client
+workflows (`touch-set-drift.yml`) live only in `.github`, so D.3 was, as designed, the *verification that
+they went green*, not a rollout with its own execution surface. **Next: D.4** — delete bash, remove
+`--engine=bash`, dispose the five `51-fs-flip` differential assertions on the record — the one-way door.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
@@ -759,13 +769,36 @@ every receiver workflow that shells out. So a receiver resolves the shim via **t
 `dotnet tool restore` + `dotnet` present). D.3 is now the *verification* that they went green, not a
 separate rollout.
 
-### D.3 — Green in all six receivers
+### D.3 — Green in all six receivers — **DONE (2026-07-16)**
 
 Roll the shim to the six `receives: coordination-kit` repos via the existing digest → byte-copy →
 byte-compare fabric. No receiver edits — the shim and its corpus are distributed like every other kit
 artifact.
 
-- **Exit:** the corpus is green through the shim in **all six receivers**.
+**What happened.** Merging the swap (#833) fired `coordination-propagate` at 10:31Z, which opened/force-updated
+the rolling `coordination-kit/sync` PR in each receiver with the shim's bytes and armed auto-merge. Each PR
+gated on the receiver's OWN required checks: `kit / coordination-kit` (the byte-compare coherence gate) went
+green immediately in all six, and every receiver's native build+test `gate` went green too, so auto-merge
+landed each PR without a human:
+
+| receiver | sync PR | merge | landed |
+|---|---|---|---|
+| FS.GG.Templates | (rolling) | — | at propagation |
+| FS.GG.Game | (rolling) | — | at propagation |
+| FS.GG.Audio | (rolling) | — | at propagation |
+| FS.GG.SDD | [#465](https://github.com/FS-GG/FS.GG.SDD/pull/465) | `559efdc` | 10:37Z |
+| FS.GG.Governance | [#224](https://github.com/FS-GG/FS.GG.Governance/pull/224) | `22b788d` | 10:40Z |
+| FS.GG.Rendering | [#834](https://github.com/FS-GG/FS.GG.Rendering/pull/834) | `76df7e8` | 10:42Z |
+
+All six now carry `scripts/fsgg-coord` **byte-identical to canonical** (`sha256 3b884ccd…`), with
+`coordination-coherence` green on each `main` and zero open sync PRs. Note a receiver never *executes* the
+shim in CI — it only byte-compares it (`coordination-coherence.yml`); the workflow that executes the client
+(`touch-set-drift.yml`, resolving the engine via tier 3) lives only in `.github`. So D.3 was, by design, the
+*verification that the receivers went green under the swap*, not a rollout with a per-receiver execution
+surface: coherence proves the bytes, the receivers' own CI proves the swap broke nothing, and C2/C3 already
+proved tier-3 resolution is available where the shim would run.
+
+- **Exit:** the corpus is green through the shim in **all six receivers**. **MET.**
 
 ### D.4 — Delete bash, dispose the five differential assertions on the record
 
@@ -910,7 +943,13 @@ documented retirement is not.**
       `schemaVersion` bump** (a client-content change, not schema growth — `repos.CHANGELOG.md`'s "re-locking
       is not changelog-worthy" rule); **shell-corpus retirement deferred to D.4** (it lives with bash). The
       three gates that read `fsgg-coord` as bash source repoint at `scripts/fsgg-coord-bash`.
-- [ ] D.3 — green through the shim in all six receivers.
+- [x] D.3 — green through the shim in all six receivers. **DONE (2026-07-16):** the swap-merge
+      propagation opened a `coordination-kit/sync` PR in each receiver; all six went green on their own
+      required checks (coherence byte-match + native build/test) and merged (SDD `559efdc`, Governance
+      `22b788d`, Rendering `76df7e8`; Templates/Game/Audio at propagation). Every receiver's
+      `scripts/fsgg-coord` is now byte-identical to canonical `sha256 3b884ccd…`, coherence green, zero
+      open sync PRs. Receivers byte-compare the shim but do not execute it — D.3 was the verification they
+      went green, not a rollout.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the
       record; the `engine-retires` label and epic [#729](https://github.com/FS-GG/.github/issues/729)'s
       "retires 22 of 40" re-derived honestly (ADR-0040 Consequences).
