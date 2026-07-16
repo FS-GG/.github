@@ -73,6 +73,10 @@ module Options =
           /// `ready --status S` — the board Status column to show, matched by NAME (case-insensitive), the
           /// way bash's `board_filter` matches it. Present ⇒ the default "not Done" filter is off: asking for
           /// a column is asking to SEE it, Done included.
+          ///
+          /// `release --status S` — the column to LAND the item in, matched the same way (#867/#331). It is
+          /// the caller stating the deliberate column, so it beats both the restore and the `Ready` fallback.
+          /// No other command reads this field; `statusCommands` refuses it everywhere else.
           Status: string option
           /// `ready --all` — widen past the "not Done" default without naming a column (#520: `ready` is a
           /// TRUTH read, so `--all` shows the whole board, Done and closed items and all).
@@ -169,7 +173,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
-  release <ref> [--worker W] [--force]       drop the lock, restoring the column it overwrote
+  release <ref> [--worker W] [--force]       drop the lock, restoring the column it overwrote;
+          [--status S]                       --status lands it in S instead (#867: name the column you
+                                             mean, e.g. `--status Blocked`, or it goes back to Ready)
   heartbeat <ref> [--worker W]               renew the lease
   adopt  <ref> [--worker W]                  take over an ORPHAN — a stale claim whose PR is FINISHED —
                                              and land it (#697/#720); reports the preconditions it checked,
@@ -225,10 +231,31 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
 
+    /// `--status` is parsed GLOBALLY — the parser is one flat pass, so every command accepts it — and only
+    /// `ready` and `release` read it. Nothing closed that gap, which is half of why `release --status
+    /// Blocked` could be accepted, ignored, and reported as success for the whole life of the port (#867):
+    /// `Options.fs`'s `unknown argument` refusal, the thing that would have caught it instantly, never fires
+    /// on a flag the parser knows.
+    ///
+    /// A flag ACCEPTED and IGNORED is worse than one refused: the caller is told, by a green exit, that a
+    /// thing happened which did not. So the accepting commands are named here, and every other command
+    /// refuses the flag rather than swallowing it.
+    let private statusCommands = [ Ready; Release ]
+
     let parse (args: string list) : Result<Options, string> =
+        /// Runs at the parse's ONE funnel — `flags`'s terminal case, which every verb reaches — so a new
+        /// command cannot quietly re-open the swallow. (`--help`/`--version` short-circuit before `flags`
+        /// and carry no flags to check.)
+        let validate (o: Options) : Result<Options, string> =
+            match o.Status with
+            | Some _ when not (List.contains o.Command statusCommands) ->
+                Error
+                    "--status is not a flag of this command — only `ready` (filter to a column) and `release` (name the column to land in) read it"
+            | _ -> Ok o
+
         let rec flags acc rest =
             match rest with
-            | [] -> Ok { acc with Args = List.rev acc.Args }
+            | [] -> validate { acc with Args = List.rev acc.Args }
 
             | "--snapshot" :: value :: _ when value.StartsWith "-" ->
                 Error $"--snapshot needs a value (got flag '%s{value}')"

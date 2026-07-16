@@ -1105,7 +1105,9 @@ rm -rf "$RLCACHE"
 #     its own read (bash's "release spends 1"), ported separately. #481 changes what release restores TO,
 #     not WHETHER it first reads the live column.
 #   • the human wording (`board: Backlog`, `restored`) is asserted here at the HTTP layer (the board write's
-#     option id), not on stdout — the engine's `release` reports `released <ref>` without naming the column.
+#     option id), not on stdout — the engine's `release` reports `released <ref> → <column>`, which names the
+#     column but not in bash's words (#867 added the column; the silent `released <ref>` is what let the
+#     ignored `--status` look like it had worked).
 rsrv() {  # rsrv <env-kv...> --  ; sets globals RS_PORT and RS_SRV for a FRESH restore fixture
   local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
   local out; out="$(mktemp)"
