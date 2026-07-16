@@ -43,6 +43,8 @@
     <Compile Include="Lanes.fs" />
     <Compile Include="Divergence.fsi" />
     <Compile Include="Divergence.fs" />
+    <Compile Include="Landable.fsi" />
+    <Compile Include="Landable.fs" />
   </ItemGroup>
 
   <ItemGroup>

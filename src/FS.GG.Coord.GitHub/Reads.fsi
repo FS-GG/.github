@@ -20,6 +20,7 @@ namespace FS.GG.Coord.GitHub
 /// dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 module Reads =
 
+    open FS.GG.Coord
     open FS.GG.Coord.Types
     open Errors
     open Transport
@@ -213,6 +214,27 @@ module Reads =
 
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
+
+    /// IS THIS OPEN PR FINISHED WORK? — #697/#720, over REST.
+    ///
+    /// Reads the PR (for `mergeable` + head SHA), the head SHA's WORKFLOW RUNS, and that SHA's CHECK RUNS,
+    /// and hands them to `Landable.score`. THREE reads, exactly as bash's `pr_landable`, and — like
+    /// `prAlive` — only ever on a claim that is ALREADY stale and ALREADY has an open PR, which is rare, and
+    /// on the ONE such item, never a scan.
+    ///
+    /// RETURNS A `PrState`, NOT AN `IoResult`, ON PURPOSE. This is the one read whose FAILURE IS ITS ANSWER:
+    /// `PrUnknown` is not a masqueraded empty (the thing this module forbids everywhere else), it is the
+    /// honest verdict "I could not tell", and its whole job is to make `reap`/`who`/`adopt` advise nothing
+    /// on a guess. So every read error, and a `mergeable` that is still `null`, collapse to `PrUnknown` —
+    /// the fail-closed direction — rather than propagating. The verdict is ADVISORY: it chooses which
+    /// refusal `reap` speaks, never whether it refuses.
+    ///
+    /// NOTE (deferred, honest): the runs/check-runs reads are SINGLE PAGE here. GitHub paginates them with a
+    /// `Link` header (bash passed `--paginate`, #547); the array-merging transport does not flatten the
+    /// OBJECT bodies these endpoints return, so a multi-page runs list degrades to `PrUnknown` (fail closed),
+    /// never a wrong verdict. The corpus's landable worlds are single-page; real multi-page runs pagination
+    /// is a follow-up.
+    val prLandable: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState
 
     /// The FIRST issue a pull request declares it closes (`closingIssuesReferences`), if any.
     ///

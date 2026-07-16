@@ -4,7 +4,7 @@
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
 **Status:** In progress — **D.1 underway**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **24 full + 2 partial of 27 corpus cases** (~322 assertions); D.2–D.4 not started.
+harness has grown from the prototype to **24 full + 3 partial of 27 corpus cases** (~338 assertions); D.2–D.4 not started.
 See [§5 D.1 progress](#d1--drive-the-full-corpus-through-the-engine-locally-green) for the ported/remaining ledger.
 
 ---
@@ -122,7 +122,7 @@ fail-closed assertions re-expressed at the HTTP layer.
 **Progress (as of the off-board `who` slice, 2026-07-15).** The harness is grown one defect/case
 at a time — each PR titled `parity: … (case N)` (the engine already matched bash — port the slice) or
 `fix(engine): … (#NNN)` (a real port gap — fix the engine, then prove it). **24 of 27 cases fully covered,
-plus 2 partial (13, 24)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
+plus 3 partial (13, 24, 30)** — the 27 being the full corpus's 29 minus `50-shadow-engine`/`51-fs-flip`,
 which are the differential harness D.4 disposes of, not engine-behaviour cases:
 
 | covered | case | note |
@@ -130,6 +130,7 @@ which are the differential harness D.4 disposes of, not engine-behaviour cases:
 | ✓ | 10, 11, 12, 14, 15, 20, 21, 22, 23, 25, 26, 32, 33, 34, 35, 40, 41, 42, 44, 45, 46, 52 | see the parity ledger in `tests/coord-engine-parity/run.sh` |
 | ◑ | 13 (§#480 scope only) | the git-remote repo scope for `next`/`take`/`batch`/`who` + short-id resolution; `issues`/`reap`/`Blocked by` legs deferred (see the remaining table) |
 | ◑ | 24 (`--issue` boundary + cross-repo close, shared with 23) | the #479/#494 `verify-paths --issue` legs and the cross-repo CLOSING-ref SKIP; the lock's adversarial interleavings (`reap`/`heartbeat` resurrection, forged/malformed markers) deferred — `reap` now EXISTS (case 26), but its adversarial-interleaving legs are the remaining work |
+| ◑ | 30 (#697 `who`/`reap` legs) | the **`landable` verdict** (#720) and its `who` flag (`STALE (#NNN OPEN — GREEN: LAND IT)` + `prState`) and `reap` refusal (FINISHED → `adopt`, never "close it, then reap") are DONE; the `adopt` command itself (parts 3–5) is the remaining work |
 
 Case **14 is now FULL** (#807): the `done` PR-**provenance** legs land — with no `--pr`, `done` stamps the
 LATEST-merged among the issue's TRUE closers (#342, `Facts.ClosingPrs` became a `ClosingPr list` carrying
@@ -154,7 +155,7 @@ EX_RATE-vs-checkout failure modes are structurally absent).
 |---|---|---|
 | 13-remainder | the `issues` short-id (#446), `Blocked by` canonicalization gate, `reap` scope — deferred on the record when the #480 scope slice landed (the whole `lint` command, schedulability + epic-graph, shipped in the case-14 slices); `reap` now exists (case 26), so its case-13 scope leg is a follow-up | new `issues` command; `reap` scope leg |
 | 24-remainder | the lock's adversarial interleavings (stale-marker collection, the heartbeat resurrection bug, forged/malformed markers, the empty-CAS-re-read loss, concurrent GC) + `say --to` normalization — the `--issue`/#479/#494 legs and the cross-repo CLOSING-ref SKIP are DONE, `overlap` (#809) and `widen`'s notify half (#353) shipped, and `reap` now EXISTS (case 26); the adversarial interleavings on top of it are the remaining work | `reap`'s adversarial legs (larger) |
-| 30 (pr-existence-697) | `who`/`adopt` land-the-finished-PR path (#697), incl. the `prState` (`green`/`conflicted`/`pending`/`red`) enrichment on `who`'s STALE row that `pr_landable` computes — the base `who` proof-of-life (`livePr`, `STALE (#NNN OPEN)`) landed with case 26; the landable colour of it is this | new `adopt`/`landable` command |
+| 30 (pr-existence-697) | the `adopt` command itself — land the finished PR (transfer the lock, the green/conflicted/zero-checks/live-claim/no-PR/pending gate, the lazy-`mergeable` re-read). The **`landable` verdict** and its `who`/`reap` legs are DONE: `who` flies `STALE (#NNN OPEN — GREEN: LAND IT)` + `prState`, and `reap` refuses finished work as FINISHED (never "close it, then reap") — see the slice below | new `adopt` command |
 | 31 (superseded-run-720) | `adopt`/`landable` superseded-run scoring (#720) | new `landable`/`adopt` command |
 | 43 (kit-digest-and-argv) | kit digest / argv passthrough | overlaps D.2 (the shim's own contract) |
 
@@ -353,8 +354,34 @@ already-recorded `say` divergence, re-expressed as the property (a message poste
 `inbox`); and the cursor's unreadable-file fallback is `0` (re-show old mail — noise), the OPPOSITE of the
 lock's fail-closed, because a cursor read too HIGH would hide new mail.
 
+The **`landable` verdict** landed next (case 30's `who`/`reap` legs, this slice): #581 reads WHETHER an
+`item/<n>-*` PR exists; #697 reads **what it SAYS**. That blind spot pointed the tool's own destructive verb
+at the best work on the board — `reap` refused a stale claim whose PR was open (right) and then offered
+exactly one exit, *"close it, then reap"*, which for a green, reviewed, mergeable PR DESTROYS a worker's
+finished work minutes from merge. The new pure `Landable.score` (Core) classifies a PR from its
+`mergeable` + the checks on its head SHA into `green`/`conflicted`/`pending`/`red`/`unknown`, scoring the
+**union of WORKFLOW RUNS and CHECK RUNS** (#720 — a run can fail with no check-runs, a check-run can fail
+while its run succeeds, and a non-Actions app appears only in check-runs), dropping a **superseded** run's
+suite (a `cancelled` run a later run of its own concurrency group replaced — keyed on
+`path`+`event`+`head_branch`+`prs`, not `path` alone, so a `workflow_dispatch` run can never license the
+drop, #703), and calling **zero live subjects `red`, never `green`** (#606 — "every check passed" and "CI
+never started" are the same empty set). `Reads.prLandable` does the three REST reads and hands them to the
+scorer; it returns a `PrState`, not an `IoResult`, because this is the one read whose FAILURE IS ITS ANSWER
+— `unknown` is the honest fail-closed verdict that makes `who`/`reap` advise nothing on a guess, not a
+masqueraded empty. On top of it, `who` now flies the right flag — `STALE (#701 OPEN — GREEN: LAND IT)` with
+a first-class `prState` in `--json` and an orphan block that points at `fsgg-coord adopt`, not `reap` — and
+`reap` speaks the right refusal per verdict: FINISHED work is named FINISHED and sent to `adopt` (never
+"close it, then reap"), a `pending` PR is UNFINISHED ("Do NOT close it — let CI settle"), and only a
+genuinely `red`/`conflicted` PR may be told to close. New `landable_server.py` (the #697 world — a green
+orphan and a mid-CI one, each scored off its head SHA's runs + check-runs); 16 parity assertions + 15
+`Landable` unit tests. Disposed on the record (ADR-0040 §5): the runs/check-runs reads are single-page
+(the array-merging transport does not flatten these endpoints' OBJECT bodies), so a real multi-page runs
+list degrades to `unknown` — fail closed, never a wrong verdict — with pagination (#547) a follow-up; the
+`adopt` command itself (case 30 parts 3–5), the lazy-`mergeable` re-read, and case 31's superseded-run
+scoring are the remaining case-30/31 legs.
+
 The clean "engine already matches bash by construction" cases are largely ported; what remains clusters
-into **new commands** (`adopt`/`landable`, `issues`) and **larger port gaps** (`reap`'s
+into **new commands** (`adopt`, `issues`) and **larger port gaps** (`reap`'s
 adversarial-interleaving legs, case 24). The verify-paths repo-boundary divergences (case 23's
 SKIP-exit code and the absent `gh repo view` fallback) are now disposed on the record in the harness, and
 the call-counting transformation is demonstrated end-to-end by case 10.
@@ -443,7 +470,12 @@ documented retirement is not.**
       together close case 23 in full (the cross-repo closing-ref SKIP ported alongside), the #419
       twin-session refusal + shared-id warning, which closes case 44 in full, and the #418 resolver cache
       (board id map day-cached, item ids cached forever), which closes case 10 in full — the §3
-      call-counting transformation, re-expressed as HTTP request counts.
+      call-counting transformation, re-expressed as HTTP request counts. Case 30's `who`/`reap` legs then
+      landed the **`landable` verdict** (#697/#720): `Landable.score` classifies a PR from `mergeable` + the
+      union of workflow runs and check runs (superseded suites dropped, zero-checks is `red` #606), so `who`
+      flies `STALE (#NNN OPEN — GREEN: LAND IT)` with a `prState` field and `reap` refuses FINISHED work as
+      FINISHED and sends it to `adopt` — never the "close it, then reap" loaded gun. The `adopt` command
+      itself (case 30 parts 3–5) and case 31's superseded-run scoring remain.
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the

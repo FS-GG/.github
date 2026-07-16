@@ -161,6 +161,28 @@ module Types =
         /// We could not ask. NOT the same as "no PR" — and this is the case that reaped live work.
         | LivenessUnknown
 
+    /// Whether an open PR is FINISHED WORK ready to land — the #697/#720 verdict `who`/`reap`/`adopt` speak.
+    ///
+    /// `Liveness` answers WHETHER a PR exists; this answers WHAT IT SAYS. The distinction is the whole of
+    /// #697: a stale claim whose PR is green and mergeable is not an abandoned branch to reap — it is a
+    /// worker's FINISHED work, minutes from merge, that `reap`'s old "close it, then reap" would have
+    /// destroyed. The verdict tells `reap` which refusal to speak and `who` which flag to fly.
+    ///
+    /// A MISSING SUBJECT IS A FINDING, NOT A PASS (#606): a mergeable PR with zero (live) checks is `PrRed`,
+    /// never `PrGreen` — "every check passed" and "CI never started" are the same empty set, and a
+    /// conflicted PR is permanently in it (GitHub builds no `refs/pull/N/merge` while it conflicts).
+    type PrState =
+        /// Mergeable AND every live check passed — and there IS at least one. Finished work; land it.
+        | PrGreen
+        /// Not mergeable — a conflict. Rebasing it is authoring, not landing, and it gets no CI at all.
+        | PrConflicted
+        /// Mergeable, checks exist, at least one is still running. "Not green YET" is not "not green".
+        | PrPending
+        /// Mergeable but a live check failed, OR there are zero checks at all (#606). Not finished work.
+        | PrRed
+        /// We could not tell — an unreadable read, or `mergeable` still null. Fail closed: advise nothing.
+        | PrUnknown
+
     /// An item, as the scheduler must see it.
     type Item =
         { Ref: Ref

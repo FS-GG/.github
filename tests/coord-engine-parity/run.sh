@@ -2539,6 +2539,88 @@ if [ -z "$IBX_PORT" ]; then bad "inbox fixture bound a port"; else
   kill "$IBX_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 30 (pr-existence-697) — WHAT the orphaned PR SAYS, not merely that it exists. `who`/`reap` legs.
+#
+# #581 taught the tools that an open `item/<n>-*` PR is proof of life, and stopped there — so `reap` refused
+# such a claim and offered exactly one exit, "close it, then reap". For a PR that is GREEN and MERGEABLE that
+# exit DESTROYS the best work on the board. #697 reads the landable verdict (#720) so `who` flies the right
+# flag and `reap` speaks the right refusal. World (case 30's #697 seeds, one transport over): two OFF-BOARD
+# stale claims — #970 whose PR #701 is GREEN and MERGEABLE (LAND IT), #976 whose PR #705 is mergeable but has
+# checks still RUNNING (pending). `landable_server.py` scores each off its head SHA's workflow runs + check
+# runs (#720). The `adopt` command itself (case 30 parts 3–5) and case 31's superseded-run scoring are
+# separate slices; this proves the two TRUTH READS speak the verdict.
+# ==================================================================================================
+LND_OUT="$(mktemp)"; python3 "$HERE/landable_server.py" >"$LND_OUT" 2>/dev/null & LND_SRV=$!; LND_PORT=""
+for _ in $(seq 1 50); do LND_PORT="$(head -n1 "$LND_OUT" 2>/dev/null)"; [ -n "$LND_PORT" ] && break; sleep 0.1; done
+rm -f "$LND_OUT"
+if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
+  lnd() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$LND_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+            "$ENGINE" "$@"; }
+
+  # 1. `who` SAYS the work is finished. It is what a human reads immediately before reaping, so it is
+  #    exactly where "GREEN: LAND IT" has to appear — a bare `STALE (#701 OPEN)` reads as an abandoned
+  #    branch and the reader reaches for `reap` (#697).
+  wtext="$(lnd who --repo FS.GG.SDD 2>&1)"
+  printf '%s' "$wtext" | grep -q 'FS.GG.SDD#970 .*STALE (#701 OPEN — GREEN: LAND IT)' \
+    && ok "#697: who says a stale claim's GREEN PR is FINISHED work — 'STALE (#701 OPEN — GREEN: LAND IT)' (case 30)" \
+    || bad "#697: who GREEN: LAND IT row" "$wtext"
+  printf '%s' "$wtext" | grep -q 'fsgg-coord adopt FS.GG.SDD#970' \
+    && ok "#697: ...and points at the command that LANDS it, not the one that bins it (case 30)" \
+    || bad "#697: who points at adopt" "$wtext"
+  # A conflicted/pending PR is NOT green: #976's checks are still running, so its row must NOT say LAND IT.
+  printf '%s' "$wtext" | grep -q 'FS.GG.SDD#976 .*STALE (#705 OPEN — checks running)' \
+    && ok "#697: a mergeable PR whose checks are RUNNING is 'checks running', not LAND IT (case 30)" \
+    || bad "#697: who pending row" "$wtext"
+
+  # 2. `who --json` carries the PR's STATE on the stale row, not just its existence.
+  wjson="$(lnd who --repo FS.GG.SDD --json 2>/dev/null)"
+  [ "$(printf '%s' "$wjson" | jq -r '.[] | select(.number==970) | .prState')" = "green" ] \
+    && ok "#697: who --json carries prState 'green' on the finished orphan (case 30)" \
+    || bad "#697: #970 prState" "$(printf '%s' "$wjson" | jq -c '.[] | select(.number==970)')"
+  [ "$(printf '%s' "$wjson" | jq -r '.[] | select(.number==976) | .prState')" = "pending" ] \
+    && ok "#697: ...and 'pending' on the one whose CI has not settled (case 30)" \
+    || bad "#697: #976 prState" "$(printf '%s' "$wjson" | jq -c '.[] | select(.number==976)')"
+
+  # 3. THE ONE THAT MATTERS. `reap` must not point the destructive verb at finished work: it REFUSES the
+  #    green orphan, calls it FINISHED, names `adopt`, and NEVER advises "close it, then reap".
+  rerp="$(lnd reap --repo FS.GG.SDD --apply 2>&1)"
+  g970="$(printf '%s' "$rerp" | grep -A2 'FS.GG.SDD#970')"
+  printf '%s' "$rerp" | grep -q 'REFUSING to reap FS.GG.SDD#970' \
+    && ok "#697: reap REFUSES a claim whose PR is green and mergeable (case 30)" \
+    || bad "#697: reap refuses #970" "$rerp"
+  printf '%s' "$rerp" | grep -q 'FS.GG.SDD#970.*GREEN and MERGEABLE' \
+    && ok "#697: ...and calls the work GREEN and MERGEABLE — FINISHED (case 30)" \
+    || bad "#697: reap #970 FINISHED" "$rerp"
+  printf '%s' "$rerp" | grep -q 'fsgg-coord adopt FS.GG.SDD#970' \
+    && ok "#697: ...and names \`adopt\` as the remedy (case 30)" \
+    || bad "#697: reap #970 names adopt" "$rerp"
+  case "$rerp" in
+    *"close it, then reap"*)
+      bad "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun" "$rerp" ;;
+    *) ok "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun (case 30)" ;;
+  esac
+
+  # 4. A MERGEABLE PR WHOSE CHECKS ARE STILL RUNNING is not abandoned — `reap` must refuse it too, and must
+  #    NOT tell anyone to close it: "Not green YET" is not "not green" (case 30, #697 4e's reap leg).
+  printf '%s' "$rerp" | grep -q 'REFUSING to reap FS.GG.SDD#976' \
+    && ok "#697: reap REFUSES a PR whose checks are still RUNNING — pending is not passing (case 30)" \
+    || bad "#697: reap refuses #976" "$rerp"
+  p976="$(printf '%s' "$rerp" | grep -A2 'FS.GG.SDD#976')"
+  printf '%s' "$p976" | grep -q 'Do NOT close it' \
+    && ok "#697: ...it says the work is UNFINISHED, and to look again — 'Do NOT close it' (case 30)" \
+    || bad "#697: reap #976 Do NOT close it" "$p976"
+
+  # 5. THE #581 GUARANTEE STILL HOLDS through the new verdict: a refusal DELETES NOTHING — both live claims
+  #    survive. A refusal that deleted anyway is the exact bug #581/#697 exist to prevent.
+  [ "$(deletes_on "$LND_PORT")" = '[]' ] \
+    && ok "#697: both claims SURVIVE the refusals — reap deleted NOTHING (case 30)" \
+    || bad "#697: reap refusal must not delete" "deletes: $(deletes_on "$LND_PORT")"
+
+  kill "$LND_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
