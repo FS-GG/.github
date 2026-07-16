@@ -367,6 +367,7 @@ let main argv =
             | Budget
             | Claim
             | Adopt
+            | Landable
             | Take
             | Release
             | Heartbeat

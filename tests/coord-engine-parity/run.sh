@@ -2716,6 +2716,111 @@ if [ -z "$ADP_PORT" ]; then bad "adopt fixture bound a port"; else
   kill "$ADP_SRV" 2>/dev/null
 fi
 
+# ==================================================================================================
+# case 31 (superseded-run-720) — a SUPERSEDED run is not a RED one, driven through the `landable` COMMAND.
+#
+# `Landable.score`/`supersede` (Core, unit-tested) fixed the scoring for case 30's SINGLE-run worlds. Case
+# 31's world is MULTIPLE runs on one SHA — a force-pushed PR whose first suite was `cancelled` when a second
+# trigger of its own concurrency group replaced it. The raw aggregate saw `cancelled` and called green,
+# mergeable, finished work red, and it was `adopt` (whose whole population is force-pushed PRs) that paid.
+# This slice surfaces the verdict as a first-class QUERY — `landable <pr> --repo` prints the word on stdout
+# and puts the decision in the exit code — and drives case 31's #720 legs through the engine over HTTP
+# (`landable_super_server.py`, one PR per leg, no board/claim machinery — the scoring, isolated).
+#
+# Disposed on the record (ADR-0040 §5): (a) the exit CODES — bash numbers the poll loop 0/3/1
+# (green/pending/red), the engine keeps 3==red across every verdict command and gives PENDING its own 7, so
+# the LITERALS differ while the PROPERTY (green 0; pending a distinct retryable code; red a distinct
+# do-not-wait code) does not; (b) leg 9's argv-128KB cap is bash's — the bash rollup piped both lists to jq
+# through argv and a real run set tripped MAX_ARG_STRLEN; the engine reads the JSON off HttpClient, so the
+# failure mode is STRUCTURALLY ABSENT, and the fat payload is served only to prove the engine rolls it up.
+# NOT covered here (a follow-up sub-slice, #724): `landable --wait` — the poll loop that does not believe an
+# early green and waits for the run set to STOP GROWING. Case 31 stays PARTIAL until it lands.
+# ==================================================================================================
+SUP_OUT="$(mktemp)"; python3 "$HERE/landable_super_server.py" >"$SUP_OUT" 2>/dev/null & SUP_SRV=$!; SUP_PORT=""
+for _ in $(seq 1 50); do SUP_PORT="$(head -n1 "$SUP_OUT" 2>/dev/null)"; [ -n "$SUP_PORT" ] && break; sleep 0.1; done
+rm -f "$SUP_OUT"
+if [ -z "$SUP_PORT" ]; then bad "landable-super fixture bound a port"; else
+  sup()    { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SUP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD 2>/dev/null || true; }
+  # >/dev/null 2>&1, BOTH: the command prints its VERDICT on stdout and the DECISION in the exit code —
+  # leaking stdout here would make this helper return "green0" and every leg compare against a word it
+  # never expected. `|| rc=$?` is not optional under `set -e`: the whole point of legs below is a NON-zero
+  # exit, and letting it escape would kill the run on a PASSING assertion.
+  sup_rc() { local rc=0; FSGG_GITHUB_API_BASE="http://127.0.0.1:$SUP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+
+  # 1. THE BUG, IN THE SHAPE .github#718 CARRIED. A cancelled run REPLACED by a later run of its own
+  #    concurrency group is superseded — evidence of nothing — and so are ITS check-runs; both drop.
+  [ "$(sup 801)" = "green" ] \
+    && ok "#720: a cancelled run REPLACED by a later run of its own group is superseded — the PR is GREEN (case 31)" \
+    || bad "#720: superseded -> green" "got: $(sup 801)"
+
+  # 2. ...and the drop rule is not a hole. A cancelled run NOBODY re-ran is still a finding.
+  [ "$(sup 802)" = "red" ] \
+    && ok "#720: a cancelled run with NO later run of its group is still RED — the drop is not a hole (case 31)" \
+    || bad "#720: lone cancelled -> red" "got: $(sup 802)"
+
+  # 3. THE TRAP THE OBVIOUS FIX FALLS INTO. A workflow_dispatch run shares the SHA and path but is a
+  #    DIFFERENT concurrency group, so it supersedes NOTHING — keying on the path alone would let its
+  #    vacuous green license the drop of a real cancelled run (#703).
+  [ "$(sup 803)" = "red" ] \
+    && ok "#720: a workflow_dispatch run does NOT supersede the pull_request run it shares a SHA with — still RED (case 31)" \
+    || bad "#720: cross-group no supersede -> red" "got: $(sup 803)"
+
+  # 4. #606 SURVIVES THE REWRITE. Zero runs is an EMPTY SUBJECT, not a clean one.
+  [ "$(sup 804)" = "red" ] \
+    && ok "#720/#606: ZERO workflow runs is a FINDING, not a pass — the rewrite does not fail open (case 31)" \
+    || bad "#720: zero runs -> red" "got: $(sup 804)"
+
+  # 5. A run still going is not a run that passed.
+  [ "$(sup 805)" = "pending" ] \
+    && ok "#720: an in-flight run is PENDING, never green (case 31)" \
+    || bad "#720: in_progress -> pending" "got: $(sup 805)"
+
+  # 6. THE FAIL-OPEN THE FIX ITSELF COULD HAVE INTRODUCED. Scoring runs ALONE would go blind to a
+  #    third-party app, which appears only in the check-runs — a failing codecov must still red the PR.
+  [ "$(sup 806)" = "red" ] \
+    && ok "#720: a FAILING third-party check still reds the PR — the Actions rollup does not go blind (case 31)" \
+    || bad "#720: foreign failing check -> red" "got: $(sup 806)"
+
+  # 7. A RUN CAN FAIL WITH NO CHECK RUNS. `startup_failure` (malformed YAML) concludes the RUN `failure`
+  #    and never creates a job — and its GREEN SIBLING is the assertion: a check-runs-only rollup would see
+  #    an all-green check set and merge a PR whose workflow never even parsed.
+  [ "$(sup 807)" = "red" ] \
+    && ok "#720: a startup_failure run reds the PR — even with NO check runs, and a green sibling workflow (case 31)" \
+    || bad "#720: startup_failure -> red" "got: $(sup 807)"
+
+  # 8. ...AND THE MIRROR: a CHECK RUN can fail while its RUN succeeds (job-level continue-on-error). Branch
+  #    protection scores check-runs, so scoring runs alone would call this green. The verdict is the UNION.
+  [ "$(sup 808)" = "red" ] \
+    && ok "#720: a FAILED check-run reds the PR even though its workflow run concluded success (case 31)" \
+    || bad "#720: failed check, green run -> red" "got: $(sup 808)"
+
+  # 9. A REAL-SIZED PAYLOAD. bash's rollup handed both lists to jq through ARGV and a ~150KB run set tripped
+  #    MAX_ARG_STRLEN (128KB) — jq died, the verdict was `unknown`, `adopt` refused every real PR. The
+  #    engine reads the JSON off HttpClient: no argv, the failure mode is structurally absent. Proven green.
+  [ "$(sup 809)" = "green" ] \
+    && ok "#720: a REAL-SIZED payload still rolls up GREEN — the engine reads JSON, never argv (128KB cap absent) (case 31)" \
+    || bad "#720: fat payload -> green" "got: $(sup 809)"
+
+  # 10. THE EXIT CODE carries the decision, so a poll loop tells "keep waiting" from "stop" without parsing
+  #    prose (#724, /pnext-item §5). green 0 · pending 7 (the ONE worth retrying) · red 3 (do NOT wait).
+  #    bash numbers these 0/3/1 — disposed above as the property (three distinguishable states, green 0).
+  [ "$(sup_rc 801)" = "0" ] \
+    && ok "#720: landable exits 0 on green (case 31)" \
+    || bad "#720: exit 0 on green" "got: $(sup_rc 801)"
+  [ "$(sup_rc 805)" = "7" ] \
+    && ok "#720: landable exits 7 on pending — the ONLY verdict worth retrying (bash 3, disposed) (case 31)" \
+    || bad "#720: exit 7 on pending" "got: $(sup_rc 805)"
+  [ "$(sup_rc 802)" = "3" ] \
+    && ok "#720: landable exits 3 on red — do not merge, and do not wait (bash 1, disposed) (case 31)" \
+    || bad "#720: exit 3 on red" "got: $(sup_rc 802)"
+
+  kill "$SUP_SRV" 2>/dev/null
+fi
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }

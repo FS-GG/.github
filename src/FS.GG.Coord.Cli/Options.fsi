@@ -44,6 +44,9 @@ module Options =
         | Claim
         /// Take over an ORPHAN — a stale claim whose PR is FINISHED — and land it (`adopt <ref> [--worker W]`, #697).
         | Adopt
+        /// Is an OPEN PR finished work? The #697/#720 verdict as a first-class QUERY
+        /// (`landable <pr> --repo NAME`) — one word on stdout, the decision in the exit code.
+        | Landable
         /// Schedule AND claim the next item in one step (`take [--repo] [--worker W]`).
         | Take
         /// Drop a lock, restoring the column it overwrote (`release <ref> [--worker W]`).
