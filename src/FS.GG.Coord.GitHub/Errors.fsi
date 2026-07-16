@@ -13,6 +13,31 @@ namespace FS.GG.Coord.GitHub
 /// cannot get at the value without saying what it will do when there isn't one.
 module Errors =
 
+    /// WHICH budget a rate limit was about.
+    ///
+    /// GitHub says this itself, in `X-RateLimit-Resource` on the 403 — so it is READ, never inferred from
+    /// which call site we happened to be in. That distinction is the whole fix: the caller's belief about
+    /// which budget it was spending is exactly the thing that was wrong.
+    ///
+    /// The two are NOT interchangeable and they do not die together. Measured on 2026-07-16, live: REST
+    /// core sat at 0/5000 and 403'd every read while GraphQL had 3,639/5,000 still on the clock — the
+    /// precise inverse of the asymmetry `Budget.fsi` is written around ("the GraphQL budget — the one the
+    /// whole fleet shares, and the first one to die").
+    type RateLimitResource =
+        /// `X-RateLimit-Resource: graphql`. The points budget.
+        | GraphQlBudget
+
+        /// `X-RateLimit-Resource: core` (or any other REST resource — `search`, `code_search`, …). The
+        /// request budget, and the one the CLAIM LOCK lives on by ADR-0034 §3.
+        | RestBudget
+
+        /// GitHub did not name a resource. A secondary/abuse-detector 403 arrives this way.
+        ///
+        /// This case exists so the tool can say "a rate limit, and I do not know which" rather than
+        /// guessing. An invented budget name is worse than an absent one, for the same reason an invented
+        /// reset is: it will be believed.
+        | UnknownBudget
+
     /// Why a read or a write did not produce an answer.
     ///
     /// Each case is a distinct fact the caller acts on DIFFERENTLY, and the bugs came from collapsing
@@ -20,15 +45,27 @@ module Errors =
     /// exhausted budget looked exactly like an absent board item, and the tool's own remediation advice
     /// then added a second copy of an item that was already there.
     type IoError =
-        /// The GraphQL budget (or a secondary limit) is exhausted. TEMPORARY — try again later.
+        /// A GitHub budget (or a secondary limit) is exhausted. TEMPORARY — try again later.
         ///
         /// This is `EX_RATE` (75, `EX_TEMPFAIL`), and it is NOT a protocol error. It is the one failure a
         /// board write may be QUEUED on (#510): every other failure is permanent, and replaying a
         /// permanent failure forever is how `flush` came to report success over writes it had dropped.
         ///
-        /// `ResetAt` is read from the FREE `rate_limit` endpoint — the meter read does not itself spend
-        /// budget, which is what makes "back off until the reset" a strategy rather than a guess.
-        | RateLimited of resetAt: System.DateTimeOffset option
+        /// `Resource` NAMES THE BUDGET THAT DIED, and it is why this case carries two fields instead of
+        /// one. It used to carry only `resetAt`, and `explain` therefore hardcoded the word "GraphQL" for
+        /// every rate limit it ever rendered — including REST ones. That is not a cosmetic slip: the
+        /// sentence went on to recommend REST ("REST-only work still runs") at the exact moment REST was
+        /// the budget that had stopped, which is the tool confidently pointing the worker at the one
+        /// remedy that cannot work. #266's signature — a verdict about a subject the check cannot see —
+        /// arriving in the error text instead of the read.
+        ///
+        /// `ResetAt` is read from the FAILING RESPONSE'S OWN `X-RateLimit-Reset` header, falling back to a
+        /// GraphQL body's `resetAt`. Both are attached to the 403 itself, so they cost nothing and they
+        /// describe the bucket that actually refused the call. This docstring used to claim the reset was
+        /// "read from the FREE `rate_limit` endpoint" — nothing ever did that, and on this account that
+        /// endpoint reports a DIFFERENT core counter than the one real requests are billed against, so
+        /// believing it would have been worse than not reading it.
+        | RateLimited of resource: RateLimitResource * resetAt: System.DateTimeOffset option
 
         /// The subject is not there. 404, and it MEANS it — the server said so.
         ///

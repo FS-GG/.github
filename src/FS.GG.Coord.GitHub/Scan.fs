@@ -255,7 +255,11 @@ module Scan =
                         |> List.ofSeq
 
                     if messages |> List.exists Budget.isRateLimited then
-                        Error(RateLimited None)
+                        // `GraphQlBudget` is asserted, not read, and here that is sound: this arm parses a
+                        // GraphQL `errors` array, so the response IS a GraphQL response. The reset stays
+                        // `None` — GitHub reports this shape as HTTP 200 with no rate-limit headers, and
+                        // the body carries no `resetAt`.
+                        Error(RateLimited(GraphQlBudget, None))
                     else
                         Error(GraphQlErrors messages)
 

@@ -448,6 +448,59 @@ if [ -n "$RLPORT" ]; then
   printf '%s' "$rlout" | grep -qi 'budget' \
     && ok "#418: ...and it names the budget, not a protocol error or a lost race" \
     || bad "#418: the message must name the exhausted budget" "$rlout"
+
+  # ...and it names the RIGHT one. This scan dies on the GraphQL POST (`items(first`), and the fixture
+  # says so in `x-ratelimit-resource: graphql` — exactly as GitHub does.
+  #
+  # THIS ASSERTION IS THE ONE THAT WAS MISSING. `explain` hardcoded the word "GraphQL" for every rate
+  # limit it ever rendered, so a grep for 'budget' — or even for 'GraphQL' — passed whether the engine
+  # had read the resource or merely assumed it. The REST leg below is the other half: the same engine,
+  # the same word, and it must come out DIFFERENT. Only the pair can tell reading from guessing.
+  printf '%s' "$rlout" | grep -q 'GraphQL budget EXHAUSTED' \
+    && ok "#418: ...and it names GRAPHQL — the budget this scan actually spent" \
+    || bad "#418: a graphql-resource 403 must name the GraphQL budget" "$rlout"
+
+  # ...and it names the RESET, read from `X-RateLimit-Reset`. `/pnext-item` §1 tells the worker to "back
+  # off until the reset it names"; before this, a rate limit could not name one.
+  printf '%s' "$rlout" | grep -q 'resets in ~' \
+    && ok "#418: ...and it names the RESET from X-RateLimit-Reset, so the back-off is a time, not a shrug" \
+    || bad "#418: the reset header must be read" "$rlout"
+
+  # ---- THE REST LEG: the same engine, a `core` 403, and it must NOT say "GraphQL" ----
+  #
+  # Measured live on 2026-07-16: REST core sat at 0/5000 and 403'd every read while GraphQL had 3,639
+  # points left, and the engine reported "GraphQL budget EXHAUSTED … REST-only work still runs" — naming
+  # the healthy budget and then recommending the dead one.
+  #
+  # `issues` is the probe because it is REST-FIRST: `who`/`take` scan the board over GraphQL before they
+  # touch a marker, so on this fixture they die on the POST leg and never reach the GET. `issues` is also
+  # the command that matters most here — §4 sends every worker to it for dedupe precisely BECAUSE it is
+  # REST, so it is the one that dies alone when REST is what went.
+  issout="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$RLPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" issues FS.GG.SDD 2>&1)"; issrc=$?
+
+  # EX_RATE, not a generic 1. `issues` hand-rolled `explain` + `ExitError` instead of calling `fail`, so it
+  # flattened a TEMPORARY back-off into the code a caller reads as a PERMANENT protocol error — in the one
+  # command a worker reaches for when the other budget is gone.
+  [ "$issrc" -eq 75 ] \
+    && ok "REST budget: issues on an exhausted REST budget exits EX_RATE (75), not a generic 1" \
+    || bad "REST budget: issues must exit 75 on a rate limit — a back-off is not a protocol error" "rc=$issrc: $issout"
+
+  printf '%s' "$issout" | grep -q 'REST budget EXHAUSTED' \
+    && ok "REST budget: ...and it names REST — the budget that ACTUALLY died" \
+    || bad "a core-resource 403 must name the REST budget, not GraphQL" "$issout"
+
+  # THE REGRESSION ITSELF. The old sentence recommended REST-only work at the exact moment REST was the
+  # thing that had stopped — the tool pointing the worker at the one remedy that cannot work.
+  printf '%s' "$issout" | grep -q 'REST-only work' \
+    && bad "a REST limit must NEVER recommend REST-only work — that is the #266 regression" "$issout" \
+    || ok "REST budget: ...and it does NOT recommend REST-only work on a REST limit"
+
+  # THE PAIR IS THE PROOF. One fixture, two legs, two DIFFERENT budget names out of the same binary. A
+  # hardcoded word cannot produce both, so this is what distinguishes reading the resource from assuming
+  # it — and it is the assertion whose absence let "GraphQL" stand in for every limit for so long.
+  printf '%s' "$rlout" | grep -q 'GraphQL budget EXHAUSTED' && printf '%s' "$issout" | grep -q 'REST budget EXHAUSTED' \
+    && ok "REST budget: ...and the SAME engine names GraphQL vs REST per X-RateLimit-Resource (read, not guessed)" \
+    || bad "the two legs must disagree — that is what proves the resource is read" "graphql-leg=$rlout || rest-leg=$issout"
 else
   bad "rate-limit fixture bound a port"
 fi

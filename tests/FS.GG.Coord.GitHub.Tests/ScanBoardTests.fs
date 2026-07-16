@@ -109,7 +109,7 @@ let ``a failed page ABORTS the scan - it never returns a partial board as a comp
 [<Fact>]
 let ``#421 a rate-limited scan PROPAGATES - it is not an empty board`` () =
     use _sandbox = new Sandbox()
-    let transport = Fake.Recorder(fun _ -> Error(RateLimited None))
+    let transport = Fake.Recorder(fun _ -> Error(RateLimited(UnknownBudget, None)))
 
     match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
     | Error(RateLimited _) -> ()

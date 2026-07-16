@@ -231,7 +231,13 @@ module Transport =
                     // NO RETRY ON A RATE LIMIT. An exhausted budget is not a transient blip — retrying it
                     // three times spends three more calls confirming the same 403, and delays the back-off
                     // the caller actually needs (EX_RATE) by exactly that long.
-                    Error(Budget.classify request.Subject status body)
+                    //
+                    // `headerValue` is handed over so the classifier can read `X-RateLimit-Resource` and
+                    // `X-RateLimit-Reset` OFF THIS VERY RESPONSE. Note what is deliberately NOT passed:
+                    // `request.Budget`. Which budget we BELIEVED we were spending is not evidence — the
+                    // 403 itself says which bucket refused, and on a redirect or a proxied call those two
+                    // can differ. Read the answer; do not infer it.
+                    Error(Budget.classify request.Subject status body headerValue)
 
             with
             | :? HttpRequestException as e ->

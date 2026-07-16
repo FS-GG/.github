@@ -161,7 +161,7 @@ let ``#510 a board write may be deferred ONLY on an exhausted budget`` () =
     // holding the failure that licenses it, and only one failure does. In bash this test was written at the
     // `claim` call site and not at the `set-field` one — so `set-field` printed "the write is QUEUED" over
     // failures it could never replay, and `flush` then reported success, confirming the lie.
-    match defer (RateLimited None) entry with
+    match defer (RateLimited(UnknownBudget, None)) entry with
     | Ok() -> ()
     | Error e -> failwith $"an exhausted budget must be queueable — got %A{e}"
 
@@ -187,7 +187,7 @@ let ``#510 a PERMANENT failure is refused, and nothing is queued`` () =
 let ``the queue is UNLINKED when it drains, not truncated`` () =
     use sandbox = new Sandbox()
 
-    defer (RateLimited None) entry |> ignore
+    defer (RateLimited(UnknownBudget, None)) entry |> ignore
     dropPending entry
 
     // An empty file is a CLAIM — "there is a queue, and it is empty" — and that is a statement about state
@@ -203,7 +203,7 @@ let ``the queue is UNLINKED when it drains, not truncated`` () =
 let ``a CORRUPT queue refuses to drain rather than silently dropping a board write`` () =
     use sandbox = new Sandbox()
 
-    defer (RateLimited None) entry |> ignore
+    defer (RateLimited(UnknownBudget, None)) entry |> ignore
     File.AppendAllText(Path.Combine(sandbox.Dir, "pending.jsonl"), "this is not a queue entry\n")
 
     // Skipping the unreadable line would silently drop a queued board write — the exact promise-not-kept
@@ -364,7 +364,7 @@ let ``#881 a concurrent defer is NOT destroyed by a flush's dropPending`` () =
     // and no concurrent `defer` ever lands inside it. The first draft of this test seeded ONE entry, passed
     // against the unfixed code, and proved nothing — a green test that could not see its subject (#266).
     for i in 1..400 do
-        defer (RateLimited None) { entry with Ref = $"FS.GG.SDD#%d{i}" } |> ignore
+        defer (RateLimited(UnknownBudget, None)) { entry with Ref = $"FS.GG.SDD#%d{i}" } |> ignore
 
     let mutable lost = 0
 
@@ -381,7 +381,7 @@ let ``#881 a concurrent defer is NOT destroyed by a flush's dropPending`` () =
 
         // Land INSIDE the dropper's read-modify-write rather than on either side of it.
         Threading.Thread.Sleep 1
-        defer (RateLimited None) victim |> ignore
+        defer (RateLimited(UnknownBudget, None)) victim |> ignore
         dropper.Wait()
 
         match pending () with
@@ -402,14 +402,14 @@ let ``#881 defer REFUSES while another worker holds the queue, rather than racin
 
     // REFUSING IS THE HONEST ANSWER. The caller is told the write did not land, which is true. Appending
     // anyway "so as not to lose it" is precisely what loses it.
-    match defer (RateLimited None) entry with
+    match defer (RateLimited(UnknownBudget, None)) entry with
     | Error(Transport m) -> Assert.Contains("locked", m)
     | other -> failwith $"defer must refuse while the queue is held — got %A{other}"
 
 [<Fact>]
 let ``#881 a queue we could not read is not an EMPTY queue`` () =
     use sandbox = new Sandbox()
-    defer (RateLimited None) entry |> ignore
+    defer (RateLimited(UnknownBudget, None)) entry |> ignore
 
     Environment.SetEnvironmentVariable("FSGG_COORD_LOCK_TIMEOUT_MS", "150")
     use _held = holdQueueLock sandbox

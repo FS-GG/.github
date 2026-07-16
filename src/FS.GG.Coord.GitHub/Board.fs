@@ -75,7 +75,9 @@ module Board =
 
                 // RATE LIMIT FIRST. See above — this ordering is load-bearing.
                 if messages |> List.exists Budget.isRateLimited then
-                    Error(RateLimited None)
+                    // Asserted, not read: this arm parses a GraphQL `errors` array (same reasoning as
+                    // `Scan.fs`).
+                    Error(RateLimited(GraphQlBudget, None))
                 else
                     Error(GraphQlErrors messages)
 
@@ -829,7 +831,10 @@ module Board =
 
         // A rate limit is not a partial write. `graphQlData` tests for it FIRST, so by the time we get a
         // `GraphQlErrors` we know the budget was not the cause.
-        | Error(RateLimited r) -> Error(RateLimited r)
+        //
+        // PROPAGATE THE VALUE, do not rebuild it: re-tupling the fields here would silently drop any the
+        // case grows later, and this arm has no opinion about which budget died.
+        | Error(RateLimited _ as e) -> Error e
 
         | Error(GraphQlErrors _) ->
             try

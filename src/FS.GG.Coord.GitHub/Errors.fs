@@ -4,8 +4,13 @@ module Errors =
 
     open System
 
+    type RateLimitResource =
+        | GraphQlBudget
+        | RestBudget
+        | UnknownBudget
+
     type IoError =
-        | RateLimited of resetAt: DateTimeOffset option
+        | RateLimited of resource: RateLimitResource * resetAt: DateTimeOffset option
         | NotFound of subject: string
         | Unauthorized of subject: string
         | Malformed of subject: string * detail: string
@@ -58,7 +63,7 @@ module Errors =
 
     let explain (error: IoError) =
         match error with
-        | RateLimited resetAt ->
+        | RateLimited(resource, resetAt) ->
             let waitFor =
                 match resetAt with
                 | Some at ->
@@ -75,7 +80,33 @@ module Errors =
                     // one, because it will be believed.
                     " The reset time could not be read."
 
-            $"GraphQL budget EXHAUSTED.%s{waitFor} This is not a protocol error and it is not a lost race — REST-only work still runs."
+            // NAME THE BUDGET THAT DIED, AND ONLY IT. The sentence used to open "GraphQL budget
+            // EXHAUSTED" unconditionally and close with "REST-only work still runs" — advice that is
+            // actively harmful on a REST limit, because it sends the worker to the budget that is gone.
+            // Each arm now states what is exhausted and says nothing about the other budget beyond what
+            // we actually observed.
+            //
+            // "MAY still run", not "still runs", and the hedge is the point. A 403 is evidence about the
+            // bucket that refused THIS call and about nothing else — we did not observe the other budget,
+            // so we do not get to certify it. The old text asserted REST was up while holding no evidence
+            // either way, which is how it came to promise REST at the exact moment REST was gone. Both
+            // budgets CAN be dead at once; a sentence that rules that out by construction is the same
+            // defect, merely pointing the other way.
+            match resource with
+            | GraphQlBudget ->
+                $"GraphQL budget EXHAUSTED.%s{waitFor} This is not a protocol error and it is not a lost race — REST-only work may still run."
+
+            | RestBudget ->
+                // THE LOCK LIVES HERE (ADR-0034 §3), so this arm is the one that stops the protocol dead:
+                // `claim`/`take`/`who` read and write the marker over REST. Say that, rather than let a
+                // worker read "rate limited" and assume the GraphQL back-off advice applies.
+                $"REST budget EXHAUSTED.%s{waitFor} This is not a protocol error and it is not a lost race — but the claim lock lives on REST (ADR-0034 §3), so `claim`/`take`/`who` cannot run until it resets. GraphQL-only work may still run."
+
+            | UnknownBudget ->
+                // GitHub named no resource — a secondary limit or the abuse detector. Do NOT guess which
+                // budget: the remedy (wait) is the same, and a guessed name is the exact failure this
+                // change exists to end.
+                $"A GitHub rate limit is EXHAUSTED (GitHub did not name which budget).%s{waitFor} This is not a protocol error and it is not a lost race."
 
         | NotFound subject -> $"not found: %s{subject}. The server said so — this is an absence, not a failed read."
 

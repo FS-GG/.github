@@ -45,7 +45,7 @@ let ``a FAILED call still counts - you were charged for it`` () =
     // back rate-limited is a call you made and were billed for. Counting only successes would report a
     // budget you did not spend — and the one thing a meter exists to do is tell you what you spent.
     let recorder =
-        Fake.Recorder(fun _ -> Error(RateLimited None))
+        Fake.Recorder(fun _ -> Error(RateLimited(UnknownBudget, None)))
 
     let transport = recorder :> IGitHubTransport
 

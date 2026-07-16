@@ -3182,9 +3182,18 @@ module Client =
             | Ok body ->
                 printfn "%s" (body.TrimEnd())
                 ExitGreen
-            | Error e ->
-                eprint $"fsgg-coord-engine: %s{Errors.explain e}"
-                ExitError
+            // `fail`, NOT a hand-rolled `explain` + `ExitError`. This arm was the latter, and the two are
+            // not the same: `fail` returns the ERROR'S OWN code, so a rate limit exits EX_RATE (75) — the
+            // back-off signal — while `ExitError` flattened it to a generic 1, the code a caller reads as a
+            // PERMANENT protocol error. `fail`'s own docstring names the failure exactly: "a caller that
+            // saw a generic 1 would treat a temporary condition as permanent."
+            //
+            // It bit hardest here of all places. `issues` is the REST-only read `/pnext-item` §4 sends
+            // every worker to for its dedupe step *because* REST survives a GraphQL outage — so it is the
+            // one command still standing when GraphQL dies, and the one that dies alone when REST goes
+            // instead (2026-07-16: REST core 0/5000, GraphQL 3,639 spare). Either way it reported the one
+            // condition worth retrying as the one condition never worth retrying.
+            | Error e -> fail e
 
     let run (opts: Options) : int =
         // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
