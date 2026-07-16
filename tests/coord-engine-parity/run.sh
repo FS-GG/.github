@@ -2428,6 +2428,39 @@ if [ -z "$WB_PORT" ]; then bad "widen-budget fixture bound a port"; else
   kill "$WB_SRV" 2>/dev/null
 fi
 
+# ---- #651: a MARKERLESS item with an open item/<n>-* PR is NOT offered ------------------------------
+# #581 read the open-PR proof-of-life only THROUGH a claim marker; a Ready item with NO marker but an open
+# `item/<n>-*` PR fell through to Startable and was handed out twice. The board carries #700 (markerless, an
+# open PR on item/700-*) and #701 (markerless, no PR): #700 must be skipped as `item-pr-open`, #701 offered.
+IP_OUT="$(mktemp)"; python3 "$HERE/itempr_server.py" >"$IP_OUT" 2>/dev/null & IP_SRV=$!; IP_PORT=""
+for _ in $(seq 1 50); do IP_PORT="$(head -n1 "$IP_OUT" 2>/dev/null)"; [ -n "$IP_PORT" ] && break; sleep 0.1; done
+rm -f "$IP_OUT"
+if [ -z "$IP_PORT" ]; then bad "item-pr fixture bound a port"; else
+  ipenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$IP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+                FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+                "$ENGINE" "$@"; }
+
+  ipjson="$(ipenv batch --repo FS.GG.SDD --json 2>/dev/null)"
+  [ "$ipjson" = '["FS.GG.SDD#701"]' ] \
+    && ok "#651: batch offers the markerless-no-PR item (#701) and SKIPS the markerless-open-PR item (#700)" \
+    || bad "#651: batch must skip a markerless item with an open item/<n> PR" "got: $ipjson"
+
+  iperr="$(ipenv batch --repo FS.GG.SDD 2>&1 >/dev/null)"
+  { printf '%s' "$iperr" | grep 'FS.GG.SDD#700' | grep -qi 'already in flight'; } \
+    && ok "#651: ...and the #700 skip names it as an implementation ALREADY IN FLIGHT (its open PR)" \
+    || bad "#651: the #700 skip must name the open-PR reason" "$iperr"
+  printf '%s' "$iperr" | grep 'FS.GG.SDD#700' | grep -q '812' \
+    && ok "#651: ...naming the PR (#812), so the refusal is checkable" \
+    || bad "#651: the skip should name the PR number" "$iperr"
+
+  ipnext="$(ipenv next --repo FS.GG.SDD 2>/dev/null)"
+  [ "$ipnext" = "FS.GG.SDD#701" ] \
+    && ok "#651: next returns #701 — a markerless item with NO PR is STILL startable (the control)" \
+    || bad "#651: a markerless-no-PR item must stay startable" "got: $ipnext"
+
+  kill "$IP_SRV" 2>/dev/null
+fi
+
 # ---- REAP: an expired lease is EVIDENCE of abandonment, not PROOF (#581) — case 26 ----------------
 # The false positive is SYSTEMATIC: work that simply outlasts its lease. bash's reaper broke a lock on
 # expiry alone and collected the claims of workers who were visibly still working, TWICE. #581's fix: an

@@ -101,7 +101,11 @@ module Types =
           State: IssueState
           TouchSet: TouchSet
           Blockers: Blocker list
-          Claim: (Claim * Liveness) option }
+          Claim: (Claim * Liveness) option
+          /// The open `item/<n>-*` PR when this item carries NO live-held claim marker — a duplicate
+          /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
+          /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
+          ItemPr: int option }
 
     type Verdict<'a> =
         | Green of 'a

@@ -263,8 +263,15 @@ module Snapshot =
                     |> collect)
                 |> Result.map Some
 
-        match r, status, state, touchSet, blockers, claimR, bashPaths with
-        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp ->
+        // #651 — the open `item/<n>-*` PR the scan found on a MARKERLESS item. Absent for the common case
+        // (no such PR, or a claim marker already carries its own liveness), so it is optional.
+        let itemPr =
+            match optProp "itemPr" el with
+            | None -> Ok None
+            | Some _ -> intField path "itemPr" el |> Result.map Some
+
+        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr with
+        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip ->
             Ok
                 { Item =
                     { Ref = r
@@ -272,16 +279,18 @@ module Snapshot =
                       State = state
                       TouchSet = ts
                       Blockers = bl
-                      Claim = cl }
+                      Claim = cl
+                      ItemPr = ip }
                   BashPaths = bp }
-        | a, b, c, d, e, f, g ->
+        | a, b, c, d, e, f, g, h ->
             [ a |> Result.map ignore
               b |> Result.map ignore
               c |> Result.map ignore
               d |> Result.map ignore
               e |> Result.map ignore
               f |> Result.map ignore
-              g |> Result.map ignore ]
+              g |> Result.map ignore
+              h |> Result.map ignore ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Candidate>)
 
@@ -445,6 +454,7 @@ module Snapshot =
         | BlockedBy _ -> "blocked-by"
         | HeldBy _ -> "held-by"
         | HeldByLiveWork _ -> "held-by-live-work"
+        | ItemPrOpen _ -> "item-pr-open"
         | OverlapsInFlight _ -> "overlaps-in-flight"
         | Undetermined _ -> "undetermined"
 
@@ -520,6 +530,7 @@ module Snapshot =
         | HeldByLiveWork(WorkerId worker, pr) ->
             w.WriteString("worker", worker)
             w.WriteNumber("pr", pr)
+        | ItemPrOpen pr -> w.WriteNumber("pr", pr)
         | OverlapsInFlight hits ->
             w.WriteStartArray("hits")
 
