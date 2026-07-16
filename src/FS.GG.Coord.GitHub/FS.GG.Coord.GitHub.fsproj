@@ -14,11 +14,12 @@
        EVERY write, so "delete the bash implementation" was never reachable — deleting it would delete the
        only thing that can read a board or post a claim marker.
 
-       THE CORPUS IS THE GATE (ADR-0038, re-affirmed by ADR-0040 C1). `tests/fsgg-coord` drives the client
-       against a call-counting `gh` stub. A tool that reached for HttpClient inline would be INVISIBLE to
-       it, so the IO layer is a PORT, not a set of call sites: an `IGitHubTransport` seam with two
-       implementations — an HTTP adapter behind a configurable API base, and a recording fake that counts
-       calls exactly as the stub does. No step of this port may land that reduces the corpus. -->
+       THE CORPUS IS THE GATE (ADR-0038, re-affirmed by ADR-0040 C1). The cut-over corpus counts calls; a
+       tool that reached for HttpClient inline would be INVISIBLE to it, so the IO layer is a PORT, not a
+       set of call sites: an `IGitHubTransport` seam with two implementations — an HTTP adapter behind a
+       configurable API base, and a recording fake that counts requests. The bash corpus counted `gh`
+       invocations; `tests/coord-engine-parity/` now counts HTTP requests one transport under (bash was
+       deleted in ADR-0040 D.4). No step of this port may land that reduces the corpus. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

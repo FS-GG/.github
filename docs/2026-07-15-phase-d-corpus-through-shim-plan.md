@@ -3,7 +3,7 @@
 **Date:** 2026-07-15
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
-**Status:** In progress — **D.1 COMPLETE; D.2 COMPLETE (the swap has landed); D.3 COMPLETE (green in all six receivers)**. Phases A–C have landed. The
+**Status:** **COMPLETE — D.1 through D.4 have all landed. Bash is deleted; the port is done.** Phases A–C have landed. The
 corpus-through-engine parity harness grew from the prototype to **all 27 of 27 corpus cases** (~445
 assertions); the full corpus drives the engine over HTTP, green, with the call counts intact. D.2 landed in
 two slices: slice 1 ([#831](https://github.com/FS-GG/.github/pull/831)) landed the ADR-0034 §4.4 shim as a
@@ -21,8 +21,23 @@ minutes later). All six now carry `scripts/fsgg-coord` **byte-identical to canon
 (`sha256 3b884ccd…`), `coordination-coherence` green on each `main`, zero open sync PRs. Receivers only
 *byte-compare* the shim (`coordination-coherence.yml`); they never execute it in CI — the exec-the-client
 workflows (`touch-set-drift.yml`) live only in `.github`, so D.3 was, as designed, the *verification that
-they went green*, not a rollout with its own execution surface. **Next: D.4** — delete bash, remove
-`--engine=bash`, dispose the five `51-fs-flip` differential assertions on the record — the one-way door.
+they went green*, not a rollout with its own execution surface. **D.4 is now COMPLETE — the one-way door
+is through.** The ~7,132-line `scripts/fsgg-coord-bash` monolith and the entire `tests/fsgg-coord/` shell
+corpus (all 29 cases, incl. `50-shadow-engine`/`51-fs-flip`) are deleted; `--engine=bash` is gone *because
+there is no bash left to be* (the shim never parsed `--engine`; the flag lived only in the monolith). The
+five `51-fs-flip` differential assertions are recorded, with their disposition, in a standalone manifest —
+[the D.4 differential disposition](2026-07-16-d4-differential-disposition.md) — so the drop is a decision in
+the diff, never a silent gap (1–2 subsumed by the ADR-0038 corpus-against-`fs`, now the ~445-assertion
+`tests/coord-engine-parity/` corpus; 3–5 retired with the escape hatch). The three gates that had been
+repointed at `-bash` in D.2 now interrogate the ENGINE: `recipe-landable` greps `src/FS.GG.Coord.Cli/`
+(`Options.fs` routes the `landable` token, `Client.fs` dispatches it), `generate-projections` dropped its
+second-engine grammar cross-check (one engine, one home), and the `touch-set-drift` selftest compares the
+gate's `FSGG-PATHS` vocabulary against `Client.fs`'s markers. `fsgg-coord-selftest.yml` (which drove the
+shell corpus against bash) is deleted, and `coord-engine.yml` lost its shadow step. The shim's own bytes
+changed (its doc-comment no longer references a deleted `-bash`), so `repos.lock` was relocked — a
+kit-client-content change, not schema growth, which propagates to the six receivers on merge exactly as the
+D.2 swap did. Green end-to-end: parity 445/445, shim 5/5, e2e 6/6 + writes 17/17, Core/GitHub/Cli
+183/217/92, projections/touch-set-drift/recipe-landable/repos-registry selftests all green.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
@@ -800,23 +815,33 @@ proved tier-3 resolution is available where the shim would run.
 
 - **Exit:** the corpus is green through the shim in **all six receivers**. **MET.**
 
-### D.4 — Delete bash, dispose the five differential assertions on the record
+### D.4 — Delete bash, dispose the five differential assertions on the record — **DONE (2026-07-16)**
 
-Delete the ~4,000 lines of `bash scripts/fsgg-coord`. `--engine=bash` is removed *because there is no
-bash left to be*. Per ADR-0040's "Phase D contradiction, and its resolution", the five `51-fs-flip.sh`
-differential assertions are **retired on the record** — not silently dropped:
+Deleted `scripts/fsgg-coord-bash` (the ~7,132-line monolith) and the whole `tests/fsgg-coord/` shell corpus
+that drove it. `--engine=bash` is removed *because there is no bash left to be* — the flag was parsed only
+by the monolith; the shim `scripts/fsgg-coord` is a transparent pass-through that never knew `--engine`, and
+the engine rejects it as an unknown flag. Per ADR-0040's "Phase D contradiction, and its resolution", the
+five `51-fs-flip.sh` differential assertions are **retired on the record** — not silently dropped:
 
 | # | assertion | disposition |
 |---|---|---|
-| 1–2 | `fs` returns bash's items / same exit code | **subsumed** by the ADR-0038 defect-corpus-against-`fs` (a precondition of D.1) |
+| 1–2 | `fs` returns bash's items / same exit code | **subsumed** by the ADR-0038 defect-corpus-against-`fs` (a precondition of D.1), now the ~445-assertion `tests/coord-engine-parity/` corpus that holds the engine to the certified golden |
 | 3–5 | `--engine=bash` is byte-exact / never consults the engine | **retired** — the escape hatch is the thing being deleted |
 
-Land a `51-fs-flip.sh` (or sibling manifest) that **records** the five and their disposition, so the drop
-is a decision in the diff, reviewable, never a silent gap. **A silently shrinking gate is the failure; a
-documented retirement is not.**
+The five and their disposition are recorded in [the D.4 differential disposition
+manifest](2026-07-16-d4-differential-disposition.md), so the drop is a decision in the diff, reviewable,
+never a silent gap. **A silently shrinking gate is the failure; a documented retirement is not.**
 
-- **Exit:** bash is gone; the corpus is green through the shim in all six receivers; the disposition
-  manifest is on the record.
+Consequential edits that kept the tree green: `.github/workflows/fsgg-coord-selftest.yml` deleted (it drove
+the shell corpus against bash); `coord-engine.yml` lost its shadow step and its `tests/fsgg-coord/**` /
+`-bash` triggers; the three D.2-repointed gates now interrogate the engine (`recipe-landable` greps
+`src/FS.GG.Coord.Cli/{Options,Client}.fs`; `generate-projections` dropped the two-engine grammar
+cross-check; the `touch-set-drift` selftest compares against `Client.fs`'s `FSGG-PATHS` markers); and the
+shim's own doc-comment lost its `-bash` reference, so `repos.lock` was relocked (a kit-client-content change,
+propagating to the six receivers on merge as the D.2 swap did).
+
+- **Exit:** bash is gone; the corpus is green through the shim; the disposition manifest is on the record.
+  **DONE.**
 
 ## 6. Risks and rollback
 
@@ -950,9 +975,16 @@ documented retirement is not.**
       `scripts/fsgg-coord` is now byte-identical to canonical `sha256 3b884ccd…`, coherence green, zero
       open sync PRs. Receivers byte-compare the shim but do not execute it — D.3 was the verification they
       went green, not a rollout.
-- [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the
-      record; the `engine-retires` label and epic [#729](https://github.com/FS-GG/.github/issues/729)'s
-      "retires 22 of 40" re-derived honestly (ADR-0040 Consequences).
+- [x] D.4 — **DONE (2026-07-16).** `scripts/fsgg-coord-bash` and the whole `tests/fsgg-coord/` shell corpus
+      deleted; `--engine=bash` gone (no bash left to be); the five `51-fs-flip.sh` assertions disposed of on
+      the record in [the D.4 differential disposition manifest](2026-07-16-d4-differential-disposition.md)
+      (1–2 subsumed by the ADR-0038 corpus-against-`fs`; 3–5 retired with the escape hatch). The three
+      D.2-repointed gates now interrogate the engine, `fsgg-coord-selftest.yml` is deleted, `coord-engine.yml`
+      lost its shadow step, and `repos.lock` was relocked for the shim's comment change. Epic
+      [#729](https://github.com/FS-GG/.github/issues/729)'s "retires 22 of 40" re-derived honestly per
+      ADR-0040 Consequences (the flip retired four to six; the completed port retires the write-path/IO
+      family it was *for*). Green: parity 445/445, shim 5/5, e2e 23/23, Core/GitHub/Cli 183/217/92,
+      projections/touch-set-drift/recipe-landable/repos-registry selftests all green.
 
 ---
 
