@@ -146,8 +146,18 @@ or the `architecture-map:unaffected` label. Loud, but never in the way.
 
 The registry is not just documentation: the reusable
 [contract-coherence gate](contract-coherence-gate.md) (`workflow_call`) makes every repo's CI go
-red when its actual pins/build-config stop matching the registry's declared values. Wire it into
-each repo's CI (see the doc for the snippet).
+red when its actual build config stops matching the registry's declared values, and when the
+registry itself stops being schema-valid. Wire it into each repo's CI (see the doc for the snippet).
+
+That gate asserts only what a **caller's own PR can fix** — the rule .github#741 established, after
+its `fsgg-contracts` version assertion (against another repo's `main`) turned every Contracts bump
+into an org-wide wedge with no safe landing order. Registry-vs-reality is asserted instead by two
+**`.github`-local** gates, on PR + push + a daily schedule, so a red stops only the repo that can
+flip the registry: [`source-coherence`](../../.github/workflows/source-coherence.yml) (`version` ==
+the `FS.GG.Contracts` source SemVer on SDD's `main`) and
+[`feed-coherence`](../../.github/workflows/feed-coherence.yml) (`package-version` == newest live on
+the org feed). Both need the schedule for the same reason `skill-registry-coherence` does, below: an
+SDD bump or a publish stales this registry with no `.github` commit to trigger on.
 
 A second reusable gate, the [skill-union assertion](skill-union-assertion.md) (`workflow_call`),
 proves a scaffolded workspace's agent-skill roots are the **byte-identical union** of process +

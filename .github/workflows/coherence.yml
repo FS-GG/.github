@@ -1,10 +1,21 @@
 # FS-GG/.github's own contract-coherence gate (#18).
 #
 # .github OWNS the registry and the shared build config, so it is not a build-config
-# *consumer* (check-build-config: false). This gate proves its own registry is schema-valid
-# and that the registry's declared fsgg-contracts pin still equals the actual FS.GG.Contracts
-# package version in FS-GG/FS.GG.SDD. The four product repos call the same reusable workflow
-# with check-build-config: true (their CI adopts it as an H3 follow-up).
+# *consumer* (check-build-config: false). This gate proves its own registry is SCHEMA-VALID. The
+# four product repos call the same reusable workflow with check-build-config: true (their CI adopts
+# it as an H3 follow-up).
+#
+# IT NO LONGER PROVES THE fsgg-contracts PIN AGAINST FS.GG.SDD, and that is deliberate (.github#741).
+# The reusable contract-coherence.yml used to assert `registry.version == FS.GG.SDD@main`'s Contracts
+# SOURCE — an assertion this repo cannot fix from a caller's PR, and which therefore wedged all six
+# repos on any Contracts bump (no PR spans both repos; FS.GG.SDD#432). That assertion now lives in
+# source-coherence.yml, where a red reds only `.github` — the repo that owns the registry.
+#
+# THAT IS THIS FILE'S OWN ESTABLISHED PATTERN, not a new idea: the `projection` job below already
+# runs here rather than in the reusable workflow, for the same reason and in the same words — it is
+# a .github-INTERNAL invariant. registry-vs-SDD-source is one too; it was simply in the wrong place.
+# source-coherence.yml is NOT called from here: it carries its own path-filtered triggers plus the
+# daily schedule that is the only way to see SDD bump a version without touching a file in this repo.
 name: coherence
 
 on:

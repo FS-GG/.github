@@ -426,16 +426,29 @@ resolution.** The registry is validated in CI on three axes, and the third is th
 one that keeps it honest:
 
 - against its **schema** — the typed `Fsgg.Registry` validator (`fsgg-sdd registry
-  validate`), plus a gate asserting the declared `fsgg-contracts` version equals the
-  actual `FS.GG.Contracts` package version read from SDD source;
+  validate`), run by the reusable `contract-coherence.yml`;
 - against its **projection** — `scripts/check-projection.py`, so `compatibility.md`
   cannot drift from the registry it projects;
-- against **reality** — [`scripts/check-feed-coherence.py`](../scripts/check-feed-coherence.py)
+- against **reality** — two gates, one per subject, because `version` and
+  `package-version` name **different facts**:
+  [`scripts/check-source-coherence.py`](../scripts/check-source-coherence.py)
+  ([.github#741](https://github.com/FS-GG/.github/issues/741)) asserts `fsgg-contracts`'
+  `version` equals the `FS.GG.Contracts` **source** SemVer on `FS.GG.SDD@main`, and
+  [`scripts/check-feed-coherence.py`](../scripts/check-feed-coherence.py)
   (coherence id `registry-feed-coherence`, [.github#267](https://github.com/FS-GG/.github/issues/267))
   asserts every `package-version` equals the newest version **live on the org feed**, in both
-  directions, on every registry PR *and daily* — because a release that publishes without
-  flipping the registry touches no file here, so nothing else can see it. Until this existed,
-  publish-before-flip (FR-007) step 2 was gated by nobody noticing, and drifted three times.
+  directions. Both run on every registry PR *and daily* — because an SDD source bump, or a
+  release that publishes without flipping the registry, touches no file here, so nothing else
+  can see it. Until the feed half existed, publish-before-flip (FR-007) step 2 was gated by
+  nobody noticing, and drifted three times.
+
+The source half **used to live under the schema axis**, inside the reusable
+`contract-coherence.yml` that all six repos call — which was wrong twice over. It is not a
+schema fact, and asserting another repo's `main` from an org-wide required check meant a
+Contracts bump wedged every repo at once with no safe landing order, since no PR spans both
+repos ([FS.GG.SDD#432](https://github.com/FS-GG/FS.GG.SDD/issues/432)). **The reusable gate now
+asserts only pure functions of committed files**; registry-vs-reality is `.github`-local, so a
+red stops the repo that owns the registry rather than the org.
 
 A gate that passes when its subject is absent manufactures confidence, so each of these
 **fails closed**: "nothing to check" and "checked, and it's fine" must not share an exit code

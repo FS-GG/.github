@@ -1,0 +1,110 @@
+# Gate the registry's `fsgg-contracts` version against FS.GG.Contracts' SOURCE (.github#741, epic #266).
+#
+# scripts/check-source-coherence.py asserts:
+#
+#     registry.contracts[fsgg-contracts].version  ==  FS.GG.Contracts source SemVer on FS.GG.SDD@main
+#
+# THIS ASSERTION USED TO LIVE IN contract-coherence.yml, AND THAT IS THE DEFECT .github#741 FIXED.
+# contract-coherence.yml is REUSABLE — all six FS-GG repos call it — so a disagreement between this
+# repo's registry and SDD's `main` was a REQUIRED-check failure in every repo at once, at
+# `enforce_admins` level. No landing order avoided it, because no PR spans both repos: bump SDD and
+# every caller reds on merge; flip the registry first and every .github PR wedges instead
+# (FS.GG.SDD#432). SDD calls that workflow too, so a bare source bump wedged SDD's own merges.
+#
+# Nothing about the assertion is weaker here. What changed is WHO GOES RED: this repo, the one that
+# owns registry/dependencies.yml and is the only one that can flip it. The other five keep merging
+# through a publish-before-flip window instead of being held at "Expected — waiting for status".
+#
+# THE TRIGGERS ARE THE THREE WAYS THE FACT CAN CHANGE, AND THE THIRD IS THE ONE THAT MATTERS:
+#   * pull_request — a PR that flips `version` to something SDD's source does not say fails CI.
+#   * push to main — the same, after the fact, for anything that landed another way.
+#   * schedule     — SDD BUMPING ITS SOURCE TOUCHES NO FILE IN THIS REPO. No path-filtered trigger
+#                    can ever see it; only a periodic read of SDD@main can. This is the leg that
+#                    catches "SDD released and nobody flipped the registry", and without it the gate
+#                    would be blind to the exact event it exists for. Mirrors feed-coherence.yml.
+#
+# The `paths:` lists on pull_request and push are IDENTICAL, and must stay so — check-paths-coherence.py
+# (.github#899) fails this workflow if they drift. They are duplicated because GitHub offers no way
+# to share them, not because the two triggers differ.
+#
+# FAILS CLOSED (epic #266): an unreadable registry, an unreadable SDD checkout, or a Contracts tree
+# whose two version literals disagree are ERRORS, never skips. This workflow must never gain a
+# `continue-on-error` or a conditional that lets the live job be skipped into green — "nothing to
+# check" and "checked, and it's fine" must not share an exit code.
+name: source-coherence
+
+on:
+  pull_request:
+    paths:
+      - "registry/dependencies.yml"
+      - "scripts/check-source-coherence.py"
+      - "tests/source-coherence/**"
+      - ".github/workflows/source-coherence.yml"
+  push:
+    branches: [main]
+    paths:
+      - "registry/dependencies.yml"
+      - "scripts/check-source-coherence.py"
+      - "tests/source-coherence/**"
+      - ".github/workflows/source-coherence.yml"
+  schedule:
+    # Daily, offset from feed-coherence (06:17), permission-coherence (06:29) and pin-coherence
+    # (06:43) so one upstream outage does not red them all at once.
+    - cron: "53 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read # checkout this repo + FS-GG/FS.GG.SDD (public)
+
+concurrency:
+  group: source-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate goes red on every drift/fails-open condition before we trust its green.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the source-coherence fixture (no network)
+        run: bash tests/source-coherence/run.sh
+
+  # The actual coherence signal, against SDD's real source.
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+
+      # `main`, deliberately and always. This gate's SUBJECT is "what does SDD's main say the
+      # Contracts source version is" — that is what `version` is defined to mean. Do not pin this to
+      # a tag to make a red go away: the red is the registry flip being owed, and pinning would make
+      # the gate assert a version nobody is developing against. (A tag pin would also be a
+      # hand-maintained literal in a repo whose pins have frozen four times — see #576.)
+      - name: Checkout FS.GG.Contracts source (the subject)
+        uses: actions/checkout@v7
+        with:
+          repository: FS-GG/FS.GG.SDD
+          ref: main
+          path: sdd
+          sparse-checkout: src/FS.GG.Contracts
+          sparse-checkout-cone-mode: true
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Assert fsgg-contracts `version` == FS.GG.Contracts source SemVer
+        run: |
+          python scripts/check-source-coherence.py registry/dependencies.yml \
+            --contracts-src sdd/src/FS.GG.Contracts
