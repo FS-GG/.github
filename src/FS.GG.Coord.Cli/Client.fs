@@ -138,7 +138,7 @@ module Client =
                 // #419: point at the mint COMMAND, not a literal — the same remedy `whoami` gives, so the
                 // command path agents actually run most does not re-introduce the copy-a-literal attractor.
                 // The id is named as DIAGNOSIS (which id you are using now), never as one to invent.
-                eprint $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Give EACH worker a unique id (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
+                eprint $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' was derived from a session where %s{why}. Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
             | _ -> ()
 
             Ok w
@@ -1336,7 +1336,7 @@ module Client =
                                 $"fsgg-coord-engine: NOTE — this renewed an EXISTING marker for worker '%s{w.Id}' without running the claim CAS. If another worker shares this id, you have just adopted ITS lock."
 
                             eprint
-                                $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' may not be unique to this worker. Give EACH worker its own id (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
+                                $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' may not be unique to this worker. Give EACH worker its own id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
                         | _ -> ()
 
                         ExitGreen
@@ -1352,7 +1352,7 @@ module Client =
                         eprint
                             $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{w.Id}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Adopting it would put both of you on this item, which is the double-claim ADR-0027 exists to prevent."
 
-                        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
+                        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
                         ExitRed
                     | Ok(Writes.Undecided reason) ->
                         eprint $"fsgg-coord-engine: could not take %s{ref.Short}: %s{reason}. This is a LOSS, not a win — retry."
@@ -2828,7 +2828,7 @@ module Client =
                     eprint
                         "fsgg-coord-engine: WARNING — this id was derived from a session that shares one id across every subagent, so a fan-out of workers would all draw it and collide on each other's locks (#419)."
 
-                    eprint "  Give EACH worker a unique id (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
+                    eprint "  Give EACH worker a unique id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
                 | _ -> ()
 
                 ExitGreen

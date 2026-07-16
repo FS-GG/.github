@@ -73,6 +73,13 @@ expect "a clean surface — placeholder trailer, one mint, no literal — is gre
 REAL="$WORK/real"; mkdir -p "$REAL"
 cp -r "$REPO_ROOT/.claude" "$REPO_ROOT/.agents" "$REPO_ROOT/docs" \
       "$REPO_ROOT/.agent-skill-roots" "$REAL/"
+# ...and the ENGINE SOURCE, for rule 4 (#569). The remedy a worker runs is the one the TOOL prints,
+# so the tool's own strings are part of the shipped surface — copying only the docs is the blind spot
+# #569 lived in. `bin/`/`obj/` are excluded: build output is not a surface anybody edits.
+mkdir -p "$REAL/src" "$REAL/scripts"
+cp -r "$REPO_ROOT/src/FS.GG.Coord.Cli" "$REAL/src/"
+rm -rf "$REAL/src/FS.GG.Coord.Cli/bin" "$REAL/src/FS.GG.Coord.Cli/obj"
+cp "$REPO_ROOT/scripts/fsgg-coord" "$REAL/scripts/"
 
 # Sanity: the shipped tree, copied, is green. Everything below is a mutation of THIS.
 expect "the SHIPPED tree, copied verbatim, is green (so every mutation below is the only variable)" \
@@ -104,6 +111,21 @@ REAL_C="$WORK/real-c"; cp -r "$REAL" "$REAL_C"
 printf '\n```\nFSGG-Worker: w-4f2a91c7\n```\n' >> "$REAL_C/docs/coordination/parallel-work.md"
 expect "REGRESSION #532: the \`FSGG-Worker:\` TRAILER spelling of a literal id is caught too" \
   1 "\`FSGG-Worker:w-4f2a91c7\` is a LITERAL worker id" "$REAL_C"
+
+# (d) #569 — THE TOOL'S OWN REMEDY. Every doc said `scripts/fsgg-coord`; the ENGINE said
+#     `fsgg-coord-engine`, which is on nobody's PATH. So the one mint idiom's own remedy was
+#     `command not found`, printed to the one reader who is holding a warning and doing as they are
+#     told. A gate over docs alone reported green through the whole life of the bug — the same shape
+#     as (b), one level down: (b) was the doc the skills project FROM, this is the TOOL they describe.
+REAL_D="$WORK/real-d"; cp -r "$REAL" "$REAL_D"
+sed -i 's|eval \\"\$(scripts/fsgg-coord whoami --mint)\\"|eval \\"$(fsgg-coord-engine whoami --mint)\\"|g' \
+  "$REAL_D/src/FS.GG.Coord.Cli/Client.fs"
+expect "REGRESSION #569: the ENGINE printing a remedy that is not on PATH is caught" \
+  1 "which is not on PATH" "$REAL_D"
+expect "REGRESSION #569: and the finding names the ENGINE source, not just the docs" \
+  1 "src/FS.GG.Coord.Cli/Client.fs" "$REAL_D"
+expect "REGRESSION #569: and it names the command that DOES run, so the fix is on the page" \
+  1 "eval \"\$(scripts/fsgg-coord whoami --mint)\"" "$REAL_D"
 
 # =============================================================================================
 # 2. Rule 1 — a literal id, in every spelling. And the placeholders that must NOT be flagged.
@@ -193,6 +215,73 @@ expect "a surface that mentions the worker id but TEACHES NO MINT is a finding" 
   1 "no longer shows the sanctioned mint" "$NOMINT"
 
 # =============================================================================================
+# 4b. Rule 4 — the remedy the TOOL prints must RUN as printed (#569).
+# =============================================================================================
+# A synthetic engine, so these legs test the RULE rather than today's tree.
+mkengine() {  # mkengine <surface-dir> <remedy-line>
+  local d="$1"
+  mkdir -p "$d/src/FS.GG.Coord.Cli"
+  printf 'let warn () =\n    eprint "  Mint one (do NOT invent one):  %s"\n' "$2" \
+    > "$d/src/FS.GG.Coord.Cli/Client.fs"
+  echo "$d"
+}
+
+ENG_BAD="$(mksurface "$WORK/eng-bad")"
+mkengine "$ENG_BAD" 'eval \"$(fsgg-coord-engine whoami --mint)\"' >/dev/null
+expect "an engine printing \`fsgg-coord-engine\` — not on PATH — is a finding" \
+  1 "which is not on PATH" "$ENG_BAD"
+
+ENG_BARE="$(mksurface "$WORK/eng-bare")"
+mkengine "$ENG_BARE" 'eval \"$(fsgg-coord whoami --mint)\"' >/dev/null
+expect "a BARE \`fsgg-coord\` is caught too — it is not on PATH either, which is #569 as filed" \
+  1 "naming \`fsgg-coord\`" "$ENG_BARE"
+
+ENG_OK="$(mksurface "$WORK/eng-ok")"
+mkengine "$ENG_OK" 'eval \"$(scripts/fsgg-coord whoami --mint)\"' >/dev/null
+expect "the RESOLVER path — the one spelling that runs from a plain checkout — is never flagged" \
+  0 "ok: no literal worker id" "$ENG_OK"
+
+# Prose ABOUT the ritual is not a line anybody pastes, and flagging it would be the gate crying wolf
+# at the sentence that teaches the rule — the carve-out `is_literal_trailer` already makes.
+ENG_ELL="$(mksurface "$WORK/eng-ell")"
+mkengine "$ENG_ELL" 'eval "$(… whoami --mint)"' >/dev/null
+expect "an ELLIPSIS placeholder in a doc comment is prose, not a remedy — not flagged" \
+  0 "ok: no literal worker id" "$ENG_ELL"
+
+# Build output carries a copy of every doc comment. A finding there is one nobody can act on: you
+# cannot fix a generated file, and the regeneration would put it straight back.
+ENG_GEN="$(mksurface "$WORK/eng-gen")"
+mkengine "$ENG_GEN" 'eval \"$(scripts/fsgg-coord whoami --mint)\"' >/dev/null
+mkdir -p "$ENG_GEN/src/FS.GG.Coord.Cli/obj/Debug" "$ENG_GEN/src/FS.GG.Coord.Cli/bin/Release"
+printf 'eval "$(fsgg-coord-engine whoami --mint)"\n' > "$ENG_GEN/src/FS.GG.Coord.Cli/obj/Debug/g.fs"
+printf 'eval "$(fsgg-coord-engine whoami --mint)"\n' > "$ENG_GEN/src/FS.GG.Coord.Cli/bin/Release/g.fs"
+expect "BUILD OUTPUT (bin/, obj/) is not audited — a finding nobody can fix is noise, not a gate" \
+  0 "ok: no literal worker id" "$ENG_GEN"
+
+# The gate must NAME the broken idiom to forbid it. Reding on its own docstring would be the gate
+# failing its own rule by stating it — and it must stay exempt when audited as a COPY, or the fixture
+# above red-lights a verbatim copy of a tree the gate calls green.
+ENG_SELF="$(mksurface "$WORK/eng-self")"
+mkengine "$ENG_SELF" 'eval \"$(scripts/fsgg-coord whoami --mint)\"' >/dev/null
+mkdir -p "$ENG_SELF/scripts"; cp "$GATE" "$ENG_SELF/scripts/"
+expect "the gate does not red on a COPY of ITSELF — it must quote the counter-example to forbid it" \
+  0 "ok: no literal worker id" "$ENG_SELF"
+
+# Fail closed on rule 4's own subject. The engine PRINTS these remedies; finding none means the glob,
+# the suffix list, or the regex broke — and every leg above is then worthless rather than clean.
+ENG_MUTE="$(mksurface "$WORK/eng-mute")"
+mkdir -p "$ENG_MUTE/src/FS.GG.Coord.Cli"
+echo 'let warn () = eprint "nothing about minting here"' > "$ENG_MUTE/src/FS.GG.Coord.Cli/Client.fs"
+expect "an ENGINE that prints NO remedy at all is exit 3 — the extractor is broken, not the tree" \
+  3 "found NO mint remedy in" "$ENG_MUTE"
+
+# ...but a tree with no engine in it has genuinely nothing to audit, and must stay green. This is the
+# line between "I looked and there is nothing" and "I could not look" (#266) — the doc-only fixtures
+# above depend on it.
+expect "a doc-only tree (no engine at all) is green — nothing there prints a remedy" \
+  0 "ok: no literal worker id" "$CLEAN"
+
+# =============================================================================================
 # 5. Fail closed. "I could not check" is never green, and never a finding either (#266/#320).
 # =============================================================================================
 EMPTY="$WORK/empty"; mkdir -p "$EMPTY/.claude/skills" "$EMPTY/docs"
@@ -227,6 +316,24 @@ expect "an .agent-skill-roots that declares NO roots is exit 3" \
 # =============================================================================================
 expect "the SHIPPED surface of this repo is clean — no literal id, exactly one mint idiom" \
   0 "ok: no literal worker id" "$REPO_ROOT"
+
+# THE REMEDY NAMES SOMETHING THAT IS ACTUALLY THERE. Rule 4 asserts every printed remedy names
+# `scripts/fsgg-coord` — which is worth exactly nothing if `scripts/fsgg-coord` is not a runnable
+# command. That is #569's whole complaint (the remedy named a program that does not exist), so a gate
+# that swapped one absent name for another would satisfy every leg above and still ship the bug.
+if [ -x "$REPO_ROOT/scripts/fsgg-coord" ]; then
+  ok "the command every remedy names (\`scripts/fsgg-coord\`) exists and is executable — #569's actual ask"
+else
+  bad "scripts/fsgg-coord is not an executable file — the sanctioned remedy names a program that is not there"
+fi
+
+# ...and it is on nobody's PATH, which is WHY the remedy must name the path. If `fsgg-coord-engine`
+# ever ships on PATH this leg goes red, and rule 4 should be revisited rather than worked around.
+if command -v fsgg-coord-engine >/dev/null 2>&1 || command -v fsgg-coord >/dev/null 2>&1; then
+  bad "an fsgg-coord binary is on PATH — rule 4 assumes it is not; revisit #569 rather than skip this"
+else
+  ok "no fsgg-coord binary is on PATH — so a bare name in a remedy really is \`command not found\` (#569)"
+fi
 
 # ...and the surface it audits really is the roots + docs, not a hardcoded guess.
 if grep -q '^\.claude/skills$' "$REPO_ROOT/.agent-skill-roots" \

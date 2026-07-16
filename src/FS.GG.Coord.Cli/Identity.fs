@@ -114,7 +114,7 @@ module Identity =
                     // under a fan-out sharing one checkout — the exact thing ADR-0027 forbids. Make the
                     // caller say who they are.
                     Error
-                        "could not derive a worker id: no --worker, no $FSGG_WORKER, and no agent session to derive one from. Pass --worker <id>, or run: eval \"$(fsgg-coord-engine whoami --mint)\" in EACH worker's shell (do NOT invent one — N workers sharing an id is the double-claim ADR-0027 exists to prevent)."
+                        "could not derive a worker id: no --worker, no $FSGG_WORKER, and no agent session to derive one from. Pass --worker <id>, or run: eval \"$(scripts/fsgg-coord whoami --mint)\" in EACH worker's shell (do NOT invent one — N workers sharing an id is the double-claim ADR-0027 exists to prevent)."
 
     let mint () =
         // Genuinely random, INCLUDING the word — a pid+time seed draws the same word for every agent a
