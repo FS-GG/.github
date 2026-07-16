@@ -101,6 +101,14 @@ module Options =
           Tries: int option
           /// `--interval N` (`landable --wait`) — seconds to sleep between polls. Default 20.
           Interval: int option
+          /// `landable --require NAME` (repeatable) — check-run names that must have REPORTED. For a check
+          /// branch protection does NOT require but which is the reason the PR exists; absent, it reads
+          /// exactly like a passing one (#606/#737). Missing ⇒ `pending`, never `green`.
+          Require: string list
+          /// `landable --sha SHA` — the head SHA the caller believes it is gating. `pulls/{n}` is eventually
+          /// consistent after a force-push, so a caller that just pushed says which commit it means; a
+          /// disagreement is `pending`, never a verdict about the previous commit (#737).
+          Sha: string option
 
           /// `issues --label L` — restrict the REST listing to issues carrying this label (absent ⇒ all).
           Label: string option
@@ -140,7 +148,12 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              exit code — the #697/#720 gate as a query (#724). --wait polls
                                              until the verdict SETTLES: it never believes an early green (it
                                              waits for the run set to STOP GROWING), and keeps waiting while
-                                             zero runs have registered (default --tries 30, --interval 20s)
+                                             zero runs have registered (default --tries 30, --interval 20s).
+    [--require NAME]... [--sha SHA]           --require NAME (repeatable): this check must have REPORTED —
+                                             for one branch protection does NOT require but that decides the
+                                             PR; absent, it reads like a passing one (#606). --sha SHA: the
+                                             head you MEAN to gate, for a caller that just force-pushed (the
+                                             PR object lags). Neither can green; both are pending (#737)
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
@@ -290,6 +303,22 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 | _ -> Error $"--interval needs a number of seconds (got '%s{value}')"
             | [ "--interval" ] -> Error "--interval needs a value"
 
+            // REPEATABLE: each `--require` APPENDS. A check-set is a set, and a caller naming two checks
+            // means both, not the last one — a last-wins parse would silently drop a required check, which
+            // is the fail-open direction this whole command exists to close (#737).
+            | "--require" :: value :: _ when value.StartsWith "-" ->
+                Error $"--require needs a check name (got flag '%s{value}')"
+            | "--require" :: value :: t when System.String.IsNullOrWhiteSpace value ->
+                Error "--require needs a check name (got an empty one)"
+            | "--require" :: value :: t -> flags { acc with Require = acc.Require @ [ value ] } t
+            | [ "--require" ] -> Error "--require needs a check name"
+
+            | "--sha" :: value :: _ when value.StartsWith "-" -> Error $"--sha needs a value (got flag '%s{value}')"
+            | "--sha" :: value :: t when System.String.IsNullOrWhiteSpace value ->
+                Error "--sha needs a commit SHA (got an empty one)"
+            | "--sha" :: value :: t -> flags { acc with Sha = Some value } t
+            | [ "--sha" ] -> Error "--sha needs a value"
+
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
             // (both mean "ignore the cache, re-read"); the remediation text elsewhere names `--refresh`.
@@ -353,6 +382,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Wait = false
               Tries = None
               Interval = None
+              Require = []
+              Sha = None
               Label = None
               IssueState = None }
 

@@ -244,6 +244,31 @@ module Reads =
     /// `prLandable`.
     val prLandableN: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState * int
 
+    /// `prLandableN`, plus the two assertions a caller may add to it (#737). `prLandableN` is this with
+    /// `required = []` and `expected = None`.
+    ///
+    /// `required` — check-run names that must have REPORTED (`Landable.scoreRequired`). For a check that is
+    /// not REQUIRED by branch protection but IS the reason the PR exists; absent, it reads exactly like a
+    /// passing one (#606).
+    ///
+    /// `expected` — the head SHA the caller believes it is gating. `pulls/{n}` is EVENTUALLY CONSISTENT
+    /// after a force-push: for a moment it still names the previous commit, whose checks are green and are
+    /// not about the code that would be merged. A caller that just pushed knows the SHA it pushed and can
+    /// say so; a disagreement is `PrPending` (a read taken too early — never a verdict about the wrong
+    /// commit), which `--wait` rides out. Callers that did not just push should omit it.
+    ///
+    /// The third element is the caller's assertions that are NOT met, each as a human phrase — DIAGNOSTICS
+    /// ONLY, so a `pending` can say what it is waiting for instead of being one word with no thread to pull.
+    /// The verdict never depends on it. Same single-page caveat as `prLandable`.
+    val prLandableRequire:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        pr: int ->
+        required: string list ->
+        expected: string option ->
+            PrState * int * string list
+
     /// The FIRST issue a pull request declares it closes (`closingIssuesReferences`), if any.
     ///
     /// `Ok None` means it closes nothing by that record — a real answer (the PR may implement an item by

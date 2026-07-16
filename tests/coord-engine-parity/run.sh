@@ -3295,6 +3295,113 @@ if [ -z "$WAIT_PORT" ]; then bad "landable-wait fixture bound a port"; else
 fi
 
 # ==================================================================================================
+# case 32 (#737) — `--require NAME` / `--sha SHA`, the assertions the CALLER adds to the verdict.
+#
+# These are what let the LAST hand-rolled copy of this gate — `skill-registry-autofix.yml`, which merges
+# unattended — call `landable` rather than carry its own rollup (#724). Each closes a hole the command
+# could not see:
+#
+#   --require  the check that DECIDES the bot's PR (`registry-coherence`) is NOT required by branch
+#              protection and must not be (#549), so nothing else ever looks at it — and an ABSENT check
+#              reads exactly like a passing one to any "is anything red?" rollup (#606).
+#   --sha      the bot force-pushes and then gates; `pulls/{n}` lags, so for a moment it names the
+#              PREVIOUS commit, whose checks are green and are about code that would not be merged.
+#
+# THE LOAD-BEARING LEGS ARE THE PAIRS (902 and 905): the SAME fixture world scores GREEN without the flag
+# and PENDING with it. Anything less than that contrast would not prove the flag does anything.
+#
+# An unmet assertion is PENDING (exit 7), never green: it is usually transient (registration, a superseded
+# suite's replacement, GitHub catching up with a push), so `--wait` rides it out and refuses when the tries
+# run out. Single-shot here — one read, one verdict, no wall-clock.
+# ==================================================================================================
+REQ_OUT="$(mktemp)"; python3 "$HERE/landable_require_server.py" >"$REQ_OUT" 2>/dev/null & REQ_SRV=$!; REQ_PORT=""
+for _ in $(seq 1 50); do REQ_PORT="$(head -n1 "$REQ_OUT" 2>/dev/null)"; [ -n "$REQ_PORT" ] && break; sleep 0.1; done
+rm -f "$REQ_OUT"
+if [ -z "$REQ_PORT" ]; then bad "landable-require fixture bound a port"; else
+  # `lndr <pr> [extra flags...]` -> the verdict WORD on stdout. `lndr_rc` -> the exit code.
+  lndr() { local pr="$1"; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$REQ_PORT" GITHUB_TOKEN=t \
+             FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+             FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" 2>/dev/null || true; }
+  lndr_rc() { local pr="$1" rc=0; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$REQ_PORT" GITHUB_TOKEN=t \
+                FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+                FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+                "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+
+  # 1. The required check reported and is green — so is the PR. --require must not make a green PR unlandable.
+  r="$(lndr 901 --require registry-coherence)"
+  [ "$r" = "green" ] \
+    && ok "#737: --require is satisfied by a green check of that name -> green (case 32)" \
+    || bad "#737: --require satisfied -> green" "got: $r"
+
+  # 2. THE LOAD-BEARING LEG. 902 is green on every check it HAS, and the subject is absent. Without
+  #    --require that is a GREEN — the merge the bot's own gate exists to refuse (#642/#425).
+  r="$(lndr 902)"
+  [ "$r" = "green" ] \
+    && ok "#737: WITHOUT --require, a PR whose subject never reported is GREEN — the #606 hole (case 32)" \
+    || bad "#737: 902 without --require -> green" "got: $r"
+
+  # ...and WITH it, the same world is pending. The flag is the whole difference.
+  r="$(lndr 902 --require registry-coherence)"
+  [ "$r" = "pending" ] \
+    && ok "#737: WITH --require, the SAME world is PENDING — an absent check is never a green (case 32)" \
+    || bad "#737: 902 with --require -> pending" "got: $r"
+
+  # ...and it is exit 7 (pending), not 0. The exit code is what the bot's `|| exit` reads.
+  r="$(lndr_rc 902 --require registry-coherence)"
+  [ "$r" = "7" ] \
+    && ok "#737: an unmet --require exits 7 (pending), never 0 (case 32)" \
+    || bad "#737: 902 --require -> exit 7" "got: $r"
+
+  # 3. A RED check outranks a missing required one. `red` is settled and must be reported AT ONCE; making
+  #    --wait spin out its whole budget before announcing a failure it already knew would be a nuisance
+  #    gate, and a nuisance gate is one people learn to skip (#498).
+  r="$(lndr 903 --require registry-coherence)"
+  [ "$r" = "red" ] \
+    && ok "#737: a RED check outranks a missing required one — a finding is not a 'not yet' (case 32)" \
+    || bad "#737: 903 -> red" "got: $r"
+
+  # 4. A SUPERSEDED copy of the required check does NOT satisfy it (#710). The cancelled suite's
+  #    registry-coherence is dropped with its run — and it is exactly the check whose verdict we lack.
+  r="$(lndr 904 --require registry-coherence)"
+  [ "$r" = "pending" ] \
+    && ok "#737: a SUPERSEDED copy of the required check does NOT satisfy it (case 32)" \
+    || bad "#737: 904 -> pending" "got: $r"
+
+  # 5. THE OTHER LOAD-BEARING LEG. 905's PR still names shaOld, whose checks are green. Without --sha the
+  #    command takes the PR's head on trust and scores the OLD commit: GREEN. That is the read the bot's
+  #    gate avoids by pinning `git rev-parse HEAD`, and it is why --sha exists.
+  r="$(lndr 905)"
+  [ "$r" = "green" ] \
+    && ok "#737: WITHOUT --sha, a lagging PR object scores the PREVIOUS commit's green checks (case 32)" \
+    || bad "#737: 905 without --sha -> green" "got: $r"
+
+  # ...and naming the commit we MEAN refuses it until GitHub catches up.
+  r="$(lndr 905 --sha shaNew)"
+  [ "$r" = "pending" ] \
+    && ok "#737: WITH --sha, a PR that still names another head is PENDING, never green (case 32)" \
+    || bad "#737: 905 with --sha -> pending" "got: $r"
+
+  # ...and --sha naming the head the PR ACTUALLY has is a no-op: the assertion is met, so it scores as before.
+  r="$(lndr 905 --sha shaOld)"
+  [ "$r" = "green" ] \
+    && ok "#737: --sha that AGREES with the PR's head changes nothing (case 32)" \
+    || bad "#737: 905 --sha shaOld -> green" "got: $r"
+
+  # 6. The pending verdict SAYS WHICH assertion is unmet, on stderr. One word is honest and useless on the
+  #    case that never resolves (a RENAMED job): the operator is left with no thread to pull.
+  err="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$REQ_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+           FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+           FSGG_COORD_CACHE="$(mktemp -d)" \
+           "$ENGINE" landable 902 --repo FS.GG.SDD --require registry-coherence 2>&1 >/dev/null || true)"
+  printf '%s' "$err" | grep -q 'registry-coherence' \
+    && ok "#737: a pending on an unmet assertion NAMES it on stderr (case 32)" \
+    || bad "#737: pending names the check" "got: $err"
+
+  kill "$REQ_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
 # case 24 — THE LOCK FAILS CLOSED UNDER ADVERSARIAL INTERLEAVINGS.
 #
 # Case 24's hardest legs are the interleavings in which two workers could end up believing they hold ONE

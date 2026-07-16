@@ -204,6 +204,9 @@ module OptionsTests =
         Assert.False(o.Wait)
         Assert.Equal(None, o.Tries)
         Assert.Equal(None, o.Interval)
+        // ...and no caller assertions: an empty --require and no --sha score exactly as before (#737).
+        Assert.Empty(o.Require)
+        Assert.Equal(None, o.Sha)
 
     [<Fact>]
     let ``landable --wait carries the poll knobs, and --interval permits 0 (#724)`` () =
@@ -224,6 +227,39 @@ module OptionsTests =
     let ``landable --interval refuses a negative delay`` () =
         let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--interval"; "-3" ] |> rejected
         Assert.Contains("--interval", e)
+
+    [<Fact>]
+    let ``landable --require is REPEATABLE and APPENDS — a set is not its last element (#737)`` () =
+        // Last-wins would silently drop a required check, which is the fail-open direction the flag exists
+        // to close. Order is preserved so the diagnostic names them as the caller wrote them.
+        let o =
+            parse [ "landable"; "9"; "--repo"; "R"; "--require"; "registry-coherence"; "--require"; "drift" ]
+            |> ok
+
+        Assert.Equal<string list>([ "registry-coherence"; "drift" ], o.Require)
+
+    [<Fact>]
+    let ``landable --require refuses an empty check name`` () =
+        // An empty name matches no check, so it could only ever hold the PR pending forever. A typo, not a
+        // requirement.
+        let e = parse [ "landable"; "9"; "--repo"; "R"; "--require"; "" ] |> rejected
+        Assert.Contains("--require", e)
+
+    [<Fact>]
+    let ``landable --require refuses a bare flag at the end, and will not eat the next flag`` () =
+        Assert.Contains("--require", parse [ "landable"; "9"; "--repo"; "R"; "--require" ] |> rejected)
+        // `--require --wait` must not silently require a check called "--wait".
+        Assert.Contains("--require", parse [ "landable"; "9"; "--repo"; "R"; "--require"; "--wait" ] |> rejected)
+
+    [<Fact>]
+    let ``landable --sha carries the head the caller MEANS to gate (#737)`` () =
+        let o = parse [ "landable"; "9"; "--repo"; "R"; "--sha"; "deadbeef" ] |> ok
+        Assert.Equal(Some "deadbeef", o.Sha)
+
+    [<Fact>]
+    let ``landable --sha refuses an empty or missing value`` () =
+        Assert.Contains("--sha", parse [ "landable"; "9"; "--repo"; "R"; "--sha"; "" ] |> rejected)
+        Assert.Contains("--sha", parse [ "landable"; "9"; "--repo"; "R"; "--sha" ] |> rejected)
 
     // ---- issues: the ETag-revalidated REST list (#446) --------------------------------------------
 

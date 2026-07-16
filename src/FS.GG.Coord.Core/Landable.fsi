@@ -37,8 +37,15 @@ module Landable =
     /// A check run is the ONLY place a non-Actions app appears, and the only place a job-level
     /// `continue-on-error` failure shows (its run concludes `success`). Both are scored, or the rollup
     /// fails open on coverage the workflow-run list can never carry (#720).
+    ///
+    /// `Name` is the JOB name, and it COLLIDES ACROSS WORKFLOWS — measured on `.github`: seven check runs
+    /// named `fixture`, from six workflows (#698). So it is fit for `scoreRequired`'s PRESENCE test (did
+    /// anything by this name report?) and for nothing else. In particular it must never key supersession:
+    /// "latest check run per name" is what branch protection does, and here it would let one workflow's
+    /// green `fixture` hide another's red one.
     type CheckRow =
-        { CheckSuiteId: int64 option
+        { Name: string
+          CheckSuiteId: int64 option
           Status: string
           Conclusion: string option }
 
@@ -62,6 +69,31 @@ module Landable =
     /// finding, and only the count tells them apart (#606/#724). Conflicted/unknown are reached before any
     /// subject is scored, so their count is 0.
     val scoreN: mergeable: bool option -> runs: RunRow list -> checks: CheckRow list -> PrState * int
+
+    /// `scoreN`, plus checks that MUST have reported by name (#737) — `scoreN` is this with `required = []`.
+    ///
+    /// The rollup asks "is anything red?", which is blind to a check that is ABSENT; an absent subject reads
+    /// exactly like a passing one (#606). Branch protection already covers the REQUIRED set, so what this is
+    /// for is a NON-required check that is nonetheless the whole reason a PR exists — `registry-coherence`
+    /// on the autofix bot's standing PR, which GitHub's native auto-merge merges straight past (#642/#425).
+    ///
+    /// A missing required check scores `PrPending`, NOT `PrRed`: it is the pending sentence ("it has not
+    /// reported"), it is usually transient (registration, or the seconds between a suite being SUPERSEDED
+    /// and its replacement registering — which a bot that force-pushes manufactures on every run, #710), and
+    /// `pending` never settles, so `--wait` rides out the transient case and refuses the permanent one when
+    /// its tries run out. It ranks BELOW a red, so a real failure is still reported at once.
+    val scoreRequired:
+        required: string list ->
+        mergeable: bool option ->
+        runs: RunRow list ->
+        checks: CheckRow list ->
+            PrState * int
+
+    /// Which `required` checks are absent from the LIVE check-runs (superseded suites dropped). Diagnostics
+    /// only — `scoreRequired` owns the verdict — so the CLI can name the check that never reported instead
+    /// of printing a bare `pending`. On the renamed-job case that is the difference between a diagnosis and
+    /// a mystery.
+    val missing: required: string list -> runs: RunRow list -> checks: CheckRow list -> string list
 
     /// The `--wait` poll decision (#724): given this poll's verdict, its subject count `n`, and the PREVIOUS
     /// poll's count `prev`, has the verdict SETTLED (stop) or must the loop keep waiting? `conflicted`/

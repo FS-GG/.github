@@ -95,9 +95,13 @@
 # are the same empty set), and on a `registry-coherence` that did not report at all (an absent subject
 # reads exactly like a passing one). Branch protection still applies underneath — a direct merge is
 # refused by GitHub exactly as `--auto` would be — so this ADDS a gate rather than routing around one.
-# `skill-registry-merge-gate` decides it; like the retire gate it is a SCRIPT, because a merge is the
-# other branch here that DESTROYS state (it lands a commit on `main`) and so must be driven over its
-# full truth table by tests/skill-registry.
+# `scripts/fsgg-coord landable --wait --require registry-coherence --sha <head>` decides it (#737). A
+# merge is the other branch here that DESTROYS state — it lands a commit on `main` — so the decision may
+# not live in an inline block nothing can test. It USED to be a local script for exactly that reason;
+# it is now the org's ONE merge gate, because a local script is a COPY, and this rollup has been wrong
+# four times in five copies (#547, #606, #698, #710, #720) with every fix editing a copy. `--require` is
+# what makes calling it strictly stronger than `--auto` rather than weaker: it asserts the non-required
+# check BY NAME, which is the one thing native auto-merge structurally cannot do.
 #
 # MERGE AND RETIRE CANNOT RACE, AND NOT BY LUCK. Merge hangs off `changed == 'true'`, retire off
 # `changed == 'false'` — mutually exclusive branches of one boolean, so no run takes both, and the
@@ -141,6 +145,13 @@ permissions:
   # and grants no new write: the rule above — that no step here can quietly fall back to a GITHUB_TOKEN
   # push — still holds.
   actions: read
+  # `checks: read` is what `GET /commits/{sha}/check-runs` costs. The merge gate USED to make that read
+  # with the App token; since #737 it runs entirely under GITHUB_TOKEN (`fsgg-coord landable` takes one
+  # token for all three of its reads), so the scope moves here — which is the rationale directly above,
+  # applied to the read it had not yet reached rather than bent around. EVERY read the gate makes is now
+  # scoped by a grant in this block. Read-only: the App token remains the only thing that can write, and
+  # the merge is the only write.
+  checks: read
 
 concurrency:
   # Never let two runs (a schedule and a manual dispatch) race on the standing branch.
@@ -182,6 +193,26 @@ jobs:
 
       - name: Install PyYAML
         run: python -m pip install --disable-pip-version-check pyyaml
+
+      # THE MERGE GATE IS `scripts/fsgg-coord landable` (#737), and in `.github` the shim resolves the
+      # engine from a REPO-LOCAL RELEASE BUILD — this repo builds coord from source and never from the
+      # feed, so that fixing coord never requires publishing coord (ADR-0034 §4.3). The shim does not
+      # build; it expects the binary to be there, and says so if it is not. So: build it, here, once.
+      #
+      # This costs the daily bot ~1 min and buys the end of a five-copy duplication that produced five
+      # bugs. If the build fails the gate step cannot run, `$GITHUB_OUTPUT` gets no `merge` key, and
+      # nothing is merged — the same fail-closed direction as every other way this gate can die.
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Build the coord engine (the merge gate)
+        run: |
+          set -euo pipefail
+          # --locked-mode: a silent version SUBSTITUTION fails here rather than quietly changing what the
+          # gate is (ADR-0006) — this binary decides whether a commit lands on `main`.
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
 
       # The producer bodies whose digests the registry declares, at `main`. Public, so the default
       # token suffices. `.repos` holds ONLY these — the clean root the check requires (see header).
@@ -350,123 +381,95 @@ jobs:
           # commit nothing ever checked.
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # WAIT FOR THE PR's OWN CHECKS, then let the gate judge them. This step deliberately makes NO
-      # decision: it polls until the checks settle (or the budget runs out) and dumps what it saw. The
-      # verdict is the gate's, and the gate is a tested script — because a merge lands a commit on
-      # `main`, and a decision that destroys state does not belong in an untestable inline block.
+      # IS THE STANDING PR LANDABLE? — ASKED OF THE TOOL, NOT RE-DERIVED HERE (#737, #724).
       #
-      # Measured: `.github`'s PR checks complete in ~90s. The ceiling here is ~8 min, which is slack,
-      # not an expectation. Running out is NOT a failure — the gate simply sees pending checks and
-      # refuses, and tomorrow's run re-pushes and re-gates. Latency is not a failure mode; merging
-      # early is.
+      # This step WAS ~90 lines: a check-runs wait loop with a stable-count guard, a workflow-runs read for
+      # supersession evidence, a `mergeStateStatus` poll, and a tested Python gate to judge the three
+      # payloads. It was CORRECT. It was also the FIFTH COPY of a rollup that has been wrong four times
+      # (#547 unpaginated, #606 zero-checks-is-green, #698 superseded-reads-as-red, #710 THIS bot reading
+      # its own superseded runs, #720 `pr_landable`), and every one of those fixes edited a copy. #724 put
+      # the logic in ONE tested place — eleven legs in the engine's corpus, plus unit tests over the pure
+      # scorer — and made a copy unwritable in a RECIPE. This was the last copy anywhere, and the reason it
+      # outlived the others is that it needed two things the command could not do. It can now:
       #
-      # `|| true` on the reads: a failed API call must leave an EMPTY payload for the gate to refuse
-      # on, not kill the step with `set -e` and skip straight past the merge with no verdict recorded.
-      - name: Wait for the standing PR's own checks
-        id: checks
+      #   --require registry-coherence   THE ASSERTION THIS BOT EXISTS FOR. `registry-coherence` decides
+      #                                  whether the reconcile is CORRECT, and it is NOT a required check
+      #                                  on `main` — nor may it become one: its verdict is a function of
+      #                                  OTHER repos' `main`s, so requiring it would let a producer's merge
+      #                                  block every open PR here until the next 06:42 run (#549). So
+      #                                  nothing but this flag will ever look at it, and an ABSENT check
+      #                                  reads exactly like a passing one to any "is anything red?" rollup
+      #                                  (#606). A renamed job or a narrowed `paths:` filter would
+      #                                  otherwise green this PR having verified nothing.
+      #
+      #   --sha "$SHA"                   THE HEAD WE MEAN. `steps.pr.outputs.sha` is `git rev-parse HEAD`
+      #                                  of the branch we just FORCE-PUSHED, deliberately not read from the
+      #                                  API: `pulls/{n}` is eventually consistent, so for a moment it
+      #                                  still names the PREVIOUS commit — whose checks are green and are
+      #                                  not about the code that would be merged. Handing `landable` the PR
+      #                                  number alone would restore exactly that hazard. It refuses
+      #                                  (`pending`) until GitHub agrees the PR's head is the commit we
+      #                                  pushed.
+      #
+      # WHAT WAS DROPPED, AND WHY IT IS SAFE. The old gate also required `mergeStateStatus` ∈ {CLEAN,
+      # HAS_HOOKS}. `landable` asserts REST `mergeable` instead, and the delta is covered:
+      #   * DIRTY (conflicted) -> `landable` returns `conflicted`, immediately and by name.
+      #   * UNKNOWN            -> `landable` returns `unknown` (fail-closed), after its own lazy re-read.
+      #   * UNSTABLE ("something is red") -> `landable`'s rollup is STRICTLY STRONGER: it scores workflow
+      #     runs UNIONED with check-runs, so it sees a `startup_failure` run that makes no check-run at all.
+      #   * BLOCKED (a required check or review missing) -> GitHub REFUSES the merge below, authoritatively,
+      #     and that refusal is already a hard error this workflow must not route around. We lose a tidier
+      #     message, not a gate.
+      #   * BEHIND -> merging a green, non-conflicted, behind-`main` branch is normal, and branch protection
+      #     refuses it anyway if the repo demands an up-to-date branch.
+      # It is also why the gate stays REST-only: `mergeStateStatus` is GraphQL, and `landable` is the
+      # command every worker recipe calls on a budget that is routinely exhausted (#587/#528).
+      #
+      # THE TOKEN, WHICH IS THE OTHER REASON THIS WAITED. The old step split its reads across two tokens:
+      # the App token for check-runs and `gh pr view`, and GITHUB_TOKEN for `actions/runs` — because that
+      # read needs `Actions: read`, a scope THIS FILE grants and can therefore prove, where the App's
+      # installation permissions are configured outside this repo and cannot be asserted from inside it.
+      # `landable` takes ONE token, so the choice had to be made rather than assumed: it is GITHUB_TOKEN,
+      # which strengthens that rationale rather than bending it. Every read the gate makes is now scoped by
+      # a grant in the permissions block above — `actions: read` (runs), `checks: read` (check-runs),
+      # `pull-requests: write` (the PR). It is read-only; the App token is still the only thing that can
+      # write, and it is used for exactly one thing below: the merge.
+      #
+      # FAIL-CLOSED BY CONSTRUCTION, unchanged: if this step dies, `$GITHUB_OUTPUT` gets no `merge` key, the
+      # merge step's `if` cannot match, and nothing is merged.
+      - name: Is the standing PR landable?
+        id: merge-gate
         if: steps.pr.outputs.number != ''
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          # The `actions: read` token, for the workflow-runs read ONLY — see the permissions block. Bound
-          # through the environment, never `${{ }}` inside the script, which is this workflow's standing
-          # rule: `${{ }}` is substituted textually BEFORE bash parses the line.
-          RO_TOKEN: ${{ github.token }}
+          # The read-only token, for EVERY read — see above. `landable` prefers GITHUB_TOKEN over GH_TOKEN,
+          # and no App token is in scope here, so it cannot silently pick one up.
+          GITHUB_TOKEN: ${{ github.token }}
+          # Through the ENVIRONMENT, never `${{ }}` inside the script: this workflow's standing rule, because
+          # `${{ }}` is substituted textually BEFORE bash parses the line.
           PR: ${{ steps.pr.outputs.number }}
           SHA: ${{ steps.pr.outputs.sha }}
         run: |
           set -uo pipefail
-          # `?head_sha=` IS A FILTER, AND AN EMPTY FILTER MATCHES EVERYTHING (#700, #698).
-          #
-          # The check-runs read below names its subject in the URL PATH (`commits/<sha>/check-runs`),
-          # where an empty SHA 404s and yields `[]` — it fails CLOSED by construction. The workflow-runs
-          # read is a QUERY PARAMETER and does the exact opposite: if `$SHA` is empty because the
-          # `.head.sha` read failed, GitHub IGNORES the filter and hands back the repo's ENTIRE run
-          # history (3,709 runs, measured on this repo). Supersession would then be computed from runs
-          # belonging to OTHER COMMITS — and since the concurrency group does not include the SHA, a
-          # cancelled run on THIS head could be "superseded" by a later run of the same workflow on a
-          # DIFFERENT commit, dropping a real red check. That is a fail-OPEN, so it is asserted, loudly,
-          # before a single byte is fetched.
-          : "${SHA:?the head SHA is empty — refusing to read workflow runs, because an empty head_sha= filter matches EVERY run in the repo and would compute supersession from other commits}"
-          echo "gating standing PR #$PR at $SHA"
-          # WAIT FOR THE CHECKS TO REGISTER, NOT MERELY TO FINISH. GitHub schedules a PR's workflows
-          # over 20-60s, so the rollup GROWS: an early poll can legitimately show "3 checks, 0 pending"
-          # while four more have not been created yet. Breaking there would hand the gate a PARTIAL
-          # rollup and call it complete — and a check that has not registered is indistinguishable from
-          # one that passed, which is #606's defect at one remove.
-          #
-          # `mergeStateStatus` catches a missing REQUIRED check (it reports BLOCKED), so the sharp edge
-          # is the NON-required ones — `registry-coherence` above all, which is the whole subject here.
-          # The gate asserts that one by name; this loop is what stops the others being missed. So:
-          # break only when the count has been STABLE across two consecutive polls with nothing pending.
-          # It costs one extra 20s on the happy path, which is the cheapest insurance in this workflow.
-          prev=-1
-          for attempt in $(seq 24); do
-            # --paginate, ALWAYS. check-runs pages at 30 and this repo has ~30 workflows; a truncated
-            # read does not look truncated, it looks like an answer — and here the answer would be
-            # "nothing is pending, nothing is red" over a page-2 failure (#547).
-            gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/check-runs" --paginate --slurp > checks.json 2>/dev/null || echo '[]' > checks.json
-            n="$(jq '[.[].check_runs[]] | length' checks.json 2>/dev/null || echo 0)"
-            pending="$(jq '[.[].check_runs[] | select(.status != "completed")] | length' checks.json 2>/dev/null || echo 1)"
-            echo "  attempt $attempt/24: $n check(s), $pending pending (previous count: $prev)"
-            [ "$n" -gt 0 ] && [ "$pending" -eq 0 ] && [ "$n" -eq "$prev" ] && break
-            prev="$n"
-            [ "$attempt" -eq 24 ] || sleep 20
-          done
-          # THE SUPERSESSION EVIDENCE (#700). Read ONCE, after the wait has settled — this bot cancels
-          # its OWN checks on every reconcile (the force-push's `synchronize` run is killed by the PR
-          # body edit's `edited` run, same `pull_request` ref, so ONE cancel-in-progress group), and
-          # without this the gate reads those corpses as RED and refuses to merge the PR it just pushed.
-          #
-          # GITHUB_TOKEN, not the App token this step otherwise holds: `actions/runs` needs `Actions:
-          # read`, which this workflow GRANTS ITSELF above and can therefore prove it has. See that
-          # block for why an App permission would have been the wrong thing to depend on.
-          #
-          # --paginate, for the same reason as the check-runs read. A run we fail to read can only make
-          # the gate MORE conservative — an unproven cancellation stays RED — never less.
-          if GH_TOKEN="$RO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$SHA" \
-               --paginate --slurp > runs.json 2>runs.err; then
-            echo "  workflow runs on $SHA: $(jq '[.[].workflow_runs[]] | length' runs.json)" \
-                 "($(jq '[.[].workflow_runs[] | select(.conclusion == "cancelled")] | length' runs.json) cancelled)"
+          # `|| rc=$?`: a non-zero exit means "do not merge", which is a NORMAL outcome (pending checks on a
+          # slow day), not an error. The decision is the exit code — 0 green, 7 pending, 3 red/conflicted,
+          # 4 unknown — and only 0 merges. `--tries 24 --interval 20` is the ~8 min ceiling the old loop
+          # had: measured, `.github`'s PR checks complete in ~90s, so this is slack, not an expectation.
+          # Running out is not a failure — tomorrow's run re-pushes and re-gates. Latency is not a failure
+          # mode; merging early is.
+          rc=0
+          scripts/fsgg-coord landable "$PR" \
+            --repo "$GITHUB_REPOSITORY" \
+            --wait --tries 24 --interval 20 \
+            --require registry-coherence \
+            --sha "$SHA" || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+            echo "landable: GREEN — every check on $SHA passed, including \`registry-coherence\` (which is"
+            echo "not a required check, so nothing else would ever have looked at it). Safe to land."
           else
-            # A FAILED READ IS NOT AN ABSENCE OF SUPERSEDING RUNS, and it must not pass for one silently.
-            # It cannot merge anything — no evidence means nothing is dropped, so every cancelled check
-            # stays red and the gate refuses — but that refusal IS the #700 bug, restored quietly. The
-            # empty payload keeps it fail-CLOSED; this warning keeps it fail-LOUD.
-            echo "::warning::could not read workflow runs ($(head -1 runs.err)) — supersession cannot be resolved, so a cancelled check run will refuse this merge (#700). Has \`actions: read\` been removed?"
-            echo '[]' > runs.json
+            echo "merge=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::not merging standing PR #$PR: \`landable\` exited $rc (0=green 7=pending 3=red/conflicted 4=unknown). Its reason is above."
           fi
-          # GitHub computes mergeability lazily, so an immediate read is routinely UNKNOWN. Poll it too
-          # rather than handing the gate an UNKNOWN it can only refuse on.
-          state=""
-          for attempt in 1 2 3 4 5; do
-            state="$(gh pr view "$PR" --json mergeStateStatus --jq '.mergeStateStatus' 2>/dev/null || echo '')"
-            [ "$state" = "UNKNOWN" ] || [ -z "$state" ] || break
-            echo "  mergeStateStatus=$state (attempt $attempt/5) — GitHub is still computing it."
-            [ "$attempt" -eq 5 ] || sleep 5
-          done
-          echo "state=$state" >> "$GITHUB_OUTPUT"
-          echo "mergeStateStatus=$state"
-
-      # THE VERDICT. Fail-closed by construction: if the gate dies, $GITHUB_OUTPUT gets no `merge` key,
-      # the merge step's `if` cannot match, and nothing is merged. Exactly as the retire gate is wired.
-      - name: Decide whether the standing PR may be merged
-        id: merge-gate
-        if: steps.pr.outputs.number != ''
-        env:
-          # Through the ENVIRONMENT, never `${{ }}` inside the script — the same rule the stamp follows,
-          # and for the same reason: `${{ }}` is substituted textually BEFORE bash parses the line. This
-          # value is a GitHub enum today, so it is not the live injection the stamp is, but "it happens
-          # to be safe" is not the invariant this workflow keeps; "no step output is ever re-parsed as
-          # shell" is, and an exception is how the rule stops being one.
-          MERGE_STATE: ${{ steps.checks.outputs.state }}
-        run: |
-          set -uo pipefail
-          # `|| true`: a non-zero exit means "do not merge", which is a NORMAL outcome (pending checks
-          # on a slow day), not an error. The merge reads the payload, never the exit code.
-          python scripts/skill-registry-merge-gate \
-            --checks checks.json \
-            --runs runs.json \
-            --merge-state "$MERGE_STATE" >> "$GITHUB_OUTPUT" || true
 
       # LAND IT. The App token merges, for the same reason it pushed (#514): GITHUB_TOKEN is held at
       # `contents: read` precisely so no step here can quietly fall back to it.
@@ -484,9 +487,13 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh pr merge "$PR" --squash --delete-branch=false; then
-            echo "::error::#$PR is green on every check and CLEAN, but GitHub refused the merge. The" >&2
-            echo "::error::reconcile will NOT land without a human. If that is a branch-protection" >&2
-            echo "::error::refusal, it is authoritative — do not route around it." >&2
+            echo "::error::#$PR is green on every check, but GitHub refused the merge. The reconcile will" >&2
+            echo "::error::NOT land without a human. If that is a branch-protection refusal, it is" >&2
+            echo "::error::authoritative — do not route around it." >&2
+            echo "::error::A BLOCKED PR reaches here rather than being refused by the gate: since #737 the" >&2
+            echo "::error::gate asserts REST \`mergeable\` (via \`fsgg-coord landable\`) and not GraphQL" >&2
+            echo "::error::\`mergeStateStatus\`, so 'a required check or review is missing' is GitHub's" >&2
+            echo "::error::verdict to give, here, and it just gave it. Read what it said." >&2
             exit 1
           fi
           echo "Merged standing PR #$PR — the registry on \`main\` is now reconciled."

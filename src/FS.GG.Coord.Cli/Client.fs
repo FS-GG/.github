@@ -1239,6 +1239,14 @@ module Client =
     /// the run set to STOP GROWING and keeps waiting while zero runs have registered — so a recipe can NAME
     /// this gate instead of embedding the ~40 lines of jq the four recipe copies drifted on. The
     /// break-vs-wait decision is `Landable.settled` (pure, unit-tested); the loop here only threads the read.
+    ///
+    /// `--require NAME` and `--sha SHA` (#737) are what let the LAST hand-rolled copy — the skill-registry
+    /// autofix BOT, which merges unattended — call this command rather than carry its own rollup. Both are
+    /// assertions that can only REFUSE: `--require` names a check that must have reported (the bot's
+    /// `registry-coherence` is not required by branch protection, so nothing else would ever look at it),
+    /// and `--sha` names the head the caller MEANS (the bot force-pushes, and `pulls/{n}` lags). Each
+    /// unsatisfied assertion is `pending`, so `--wait` rides out the transient case and refuses the
+    /// permanent one; neither can produce a `green`.
     let landable (ctx: Context) (opts: Options) : int =
         match opts.Repo with
         | None ->
@@ -1257,11 +1265,23 @@ module Client =
 
                     ExitError
                 | true, pr ->
+                    // `--require`/`--sha` (#737): assertions the caller adds to the rollup, both of which can
+                    // only ever REFUSE. A required check that has not reported and a PR object that still
+                    // names the previous commit are both `pending` — "the evidence is not here yet" — so
+                    // `--wait` rides out the transient case (registration, a superseded suite's replacement,
+                    // GitHub catching up with a force-push) and refuses when the tries run out.
+                    let required = opts.Require
+                    let expected = opts.Sha
+
+                    let read () =
+                        Reads.prLandableRequire ctx.Transport ctx.Owner repoName pr required expected
+
                     // The verdict, over the head SHA's workflow runs UNIONED with its check-runs, a superseded
                     // suite dropped (#720). One word on stdout; the exit code carries the decision.
-                    let state =
+                    let state, missing =
                         if not opts.Wait then
-                            Reads.prLandable ctx.Transport ctx.Owner repoName pr
+                            let v, _, missing = read ()
+                            v, missing
                         else
                             // --wait: poll until the verdict SETTLES (#724). A single-shot verdict cannot do
                             // the ONE thing the recipe's loop did — refuse to believe an EARLY green. GitHub
@@ -1274,11 +1294,11 @@ module Client =
                             let tries = defaultArg opts.Tries 30
                             let interval = defaultArg opts.Interval 20
 
-                            let rec poll (i: int) (prev: int) : PrState =
-                                let v, n = Reads.prLandableN ctx.Transport ctx.Owner repoName pr
+                            let rec poll (i: int) (prev: int) : PrState * string list =
+                                let v, n, missing = read ()
 
-                                if Landable.settled v n prev then v
-                                elif i >= tries then v
+                                if Landable.settled v n prev then v, missing
+                                elif i >= tries then v, missing
                                 else
                                     if interval > 0 then
                                         System.Threading.Thread.Sleep(interval * 1000)
@@ -1288,6 +1308,17 @@ module Client =
                             poll 1 -1
 
                     printfn "%s" (Landable.name state)
+
+                    // WHY it is pending, when the reason is an assertion the CALLER added. `pending` alone is
+                    // honest but useless on the case that does not resolve: a required check absent because
+                    // its job was RENAMED polls for the whole budget and then refuses, leaving the operator
+                    // one word and no thread to pull. stdout — the verdict — is untouched; this is stderr.
+                    if state = PrPending && not missing.IsEmpty then
+                        for reason in missing do
+                            eprint $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — %s{reason}."
+
+                        eprint
+                            "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
 
                     match state with
                     | PrGreen -> ExitGreen

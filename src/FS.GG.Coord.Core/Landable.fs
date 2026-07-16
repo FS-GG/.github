@@ -15,7 +15,8 @@ module Landable =
           CheckSuiteId: int64 option }
 
     type CheckRow =
-        { CheckSuiteId: int64 option
+        { Name: string
+          CheckSuiteId: int64 option
           Status: string
           Conclusion: string option }
 
@@ -47,6 +48,30 @@ module Landable =
 
         live, dead
 
+    /// The check-runs still worth scoring: every one whose suite was NOT superseded. A non-Actions app's
+    /// suite is never in the runs list, so it is never dropped — it is scored by construction, with no
+    /// special case (#720).
+    ///
+    /// ONE derivation, because `scoreRequired` and `missing` must agree about which checks are live: the
+    /// first decides that a required check is absent, the second says WHICH. Two copies could drift into
+    /// `pending` with an empty reason — a verdict that refuses and cannot say why, which is the one thing
+    /// worse than either answer alone.
+    let private liveChecks (runs: RunRow list) (checks: CheckRow list) : CheckRow list =
+        let _, dead = supersede runs
+        let deadSet = Set.ofList dead
+
+        checks
+        |> List.filter (fun c ->
+            match c.CheckSuiteId with
+            | Some sid -> not (deadSet.Contains sid)
+            | None -> true)
+
+    /// Which `required` names no check in `live` carries. The single answer `scoreRequired` decides on and
+    /// `missing` reports.
+    let private missingFrom (required: string list) (live: CheckRow list) : string list =
+        let names = live |> List.map (fun c -> c.Name) |> Set.ofList
+        required |> List.filter (fun name -> not (names.Contains name))
+
     /// A subject (run or check) is a FINDING unless it COMPLETED and concluded `success` or `skipped`.
     let private isPending (status: string) = status <> "completed"
 
@@ -58,7 +83,30 @@ module Landable =
     /// ZERO subjects is "CI has not started YET" (normal for the first 20-60s after a push), a `red` over
     /// some is a real finding, and only the count tells them apart (#606/#724). A conflicted or unknown
     /// verdict is reached before any subject is scored, so its count is 0.
-    let scoreN (mergeable: bool option) (runs: RunRow list) (checks: CheckRow list) : PrState * int =
+    ///
+    /// `required` NAMES CHECKS THAT MUST HAVE REPORTED (#737). The rollup above answers "is anything red?",
+    /// and that question is blind to a check that is ABSENT: an absent subject reads exactly like a passing
+    /// one in any "are all checks green?" test, which is #606's whole lesson. Branch protection covers the
+    /// REQUIRED set, so the sharp edge is a NON-required check that is nonetheless the reason the PR exists
+    /// — `registry-coherence` on the skill-registry autofix bot's standing PR, whose redness means "this
+    /// snapshot is OBSOLETE" and which GitHub's native auto-merge would merge straight past (#642/#425).
+    /// Naming it here is what lets that bot call this command instead of hand-rolling a fifth copy of the
+    /// gate (#724).
+    ///
+    /// A MISSING REQUIRED CHECK IS `pending`, NOT `red` — deliberately, and it is the one subtle call here.
+    /// "The check has not reported" is literally the pending sentence, and the state is usually TRANSIENT:
+    /// GitHub registers a PR's checks over 20-60s, and — worse for a bot that manufactures supersession on
+    /// every reconcile — a required check whose suite was just SUPERSEDED is absent for the seconds between
+    /// the drop and its replacement registering. Calling that red would refuse the PR the bot had just
+    /// pushed, which is #710 restored. `pending` never settles, so `--wait` rides it out on the transient
+    /// case and, when the check is absent because it was RENAMED, exhausts its tries and refuses — the same
+    /// no-merge, reached honestly. It cannot fail open: `pending` is never a green.
+    let scoreRequired
+        (required: string list)
+        (mergeable: bool option)
+        (runs: RunRow list)
+        (checks: CheckRow list)
+        : PrState * int =
         match mergeable with
         // `null` after the read is UNKNOWN — it is not "conflicted", and it is emphatically not "mergeable".
         // Fail closed: advise nothing on a guess (#697).
@@ -67,18 +115,8 @@ module Landable =
         // check set is permanently empty — the verdict must come from mergeability, before the checks.
         | Some false -> PrConflicted, 0
         | Some true ->
-            let live, dead = supersede runs
-            let deadSet = Set.ofList dead
-
-            // Every check-run whose suite was NOT superseded is scored. A non-Actions app's suite is never
-            // in the runs list, so it is never in `dead`, so it is never dropped — it is scored by
-            // construction, with no special case (#720).
-            let liveChecks =
-                checks
-                |> List.filter (fun c ->
-                    match c.CheckSuiteId with
-                    | Some sid -> not (deadSet.Contains sid)
-                    | None -> true)
+            let live, _ = supersede runs
+            let liveChecks = liveChecks runs checks
 
             // The rollup is over BOTH lists (#606): a run can fail with no check-runs at all
             // (`startup_failure`), and a check-run can fail while its run SUCCEEDS (job-level
@@ -93,15 +131,37 @@ module Landable =
 
             let total = List.length live + List.length liveChecks
 
+            // A `--require`d check that is not among the LIVE check-runs has not reported. Matched on the
+            // live set, so a superseded suite's copy cannot satisfy it — the check that was cancelled is
+            // exactly the one whose verdict we do not have. Same derivation `missing` reports from, so the
+            // verdict and its reason cannot disagree.
+            let missingRequired = missingFrom required liveChecks
+
             // ZERO SUBJECTS IS NOT GREEN (#606). "Every check passed" and "CI never started" are the same
             // empty set. A missing subject is a finding, not a pass.
+            //
+            // The missing-required test sits BELOW `bad` on purpose: a red check is a settled finding and
+            // must be reported as `red` at once, whereas a missing required check is a "not yet" that
+            // `--wait` should ride out. Reporting the softer verdict over a hard red would make the loop
+            // spin for its whole budget before announcing a failure it already knew.
             let state =
                 if total = 0 then PrRed
                 elif pending > 0 then PrPending
                 elif bad > 0 then PrRed
+                elif not missingRequired.IsEmpty then PrPending
                 else PrGreen
 
             state, total
+
+    /// The names a `--require`d check could not be matched against: the LIVE check-runs, superseded suites
+    /// already dropped. Diagnostics only — the verdict is `scoreRequired`'s. It exists so the CLI can say
+    /// WHICH check never reported rather than printing a bare `pending`, which on the renamed-job case is
+    /// the difference between a diagnosis and a mystery.
+    let missing (required: string list) (runs: RunRow list) (checks: CheckRow list) : string list =
+        missingFrom required (liveChecks runs checks)
+
+    let scoreN (mergeable: bool option) (runs: RunRow list) (checks: CheckRow list) : PrState * int =
+        scoreRequired [] mergeable runs checks
 
     let score (mergeable: bool option) (runs: RunRow list) (checks: CheckRow list) : PrState =
         scoreN mergeable runs checks |> fst
