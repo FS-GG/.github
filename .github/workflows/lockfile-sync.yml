@@ -1,4 +1,4 @@
-# Reusable Renovate lockfile-sync (FS-GG/.github#145, epic #16 Pillar 4).
+# Reusable lockfile-sync (FS-GG/.github#145, epic #16 Pillar 4).
 #
 # The gap this closes is org-wide: every FS-GG consumer's gate.yml enforces
 # `dotnet restore --locked-mode` against a committed packages.lock.json (Feature 211,
@@ -8,6 +8,10 @@
 # NU1004 (`Lock file [old,) != central [new,)`) until a human runs --force-evaluate by hand.
 # This job does that automatically and pushes the freshened lockfiles back to the PR branch —
 # the .github#6 "auto-PR" half made real.
+#
+# RENOVATE IS NO LONGER THE ONLY SUCH BOT, and this file was named for the assumption that it was
+# (#842). `build-config-propagate` (#638) produces the same NU1004 the same way. The `sync` job's
+# `if:` carries the list of branch prefixes this applies to, and the reasoning behind it.
 #
 # FS.GG.Rendering proved this in FS.GG.Rendering#61 (merged 2026-07-03) as a repo-local
 # workflow; this is that workflow promoted into the shared preset (alongside coherence.yml,
@@ -118,7 +122,7 @@ jobs:
   # Can this repo actually AUTHENTICATE? (.github#482, epic #266 — "a gate that cannot fail on its
   # subject is not a gate".)
   #
-  # Runs on EVERY call, deliberately UNGATED. `sync` only fires on renovate/* branches, so gating this
+  # Runs on EVERY call, deliberately UNGATED. `sync` only fires on the bot branches in its `if:`, so gating this
   # the same way would mean an unprovisioned repo learns it is unprovisioned at the worst possible
   # moment — inside a dependency-bump PR it did not open, from an opaque create-github-app-token
   # error. Running it on every call turns "is this repo provisioned?" into a continuously-checked
@@ -161,9 +165,11 @@ jobs:
           # single ENFORCEMENT point — it is the security boundary (never auto-commit to a fork head)
           # and must stay readable in place, not hidden behind a job output. This copy only chooses
           # error-vs-warning, so the worst a drift could do is misgrade a message while `sync`'s own
-          # `if:` still gates the push. tests/dispatch-preflight asserts the two stay identical.
+          # `if:` still gates the push. There are THREE copies — this one, `installation`'s, and
+          # `sync`'s `if:` — and tests/dispatch-preflight (S3) asserts all three stay identical.
           WOULD_SYNC: >-
-            ${{ startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+            ${{ (startsWith(github.event.pull_request.head.ref, 'renovate/') ||
+            startsWith(github.event.pull_request.head.ref, 'build-config/')) &&
             github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           set -eu
@@ -230,11 +236,11 @@ jobs:
           fix="Add it to the secrets' selected-repositories list + the fs-gg-cross-repo-dispatch App installation (FS-GG/.github#468)."
 
           if [ "$WOULD_SYNC" = 'true' ]; then
-            echo "::error title=lockfile-sync is not provisioned in this repo::$summary This renovate/* PR needs it NOW and the token step would have failed opaquely. $fix"
+            echo "::error title=lockfile-sync is not provisioned in this repo::$summary This PR needs it NOW and the token step would have failed opaquely. $fix"
             exit 1
           fi
 
-          echo "::warning title=lockfile-sync will fail on the next renovate/* PR::$summary It is not blocking THIS PR (sync only runs on renovate/* branches), but it will fail the first one that opens. $fix"
+          echo "::warning title=lockfile-sync will fail on the next bot PR::$summary It is not blocking THIS PR (sync only runs on renovate/* and build-config/* branches), but it will fail the first one that opens. $fix"
           exit 0
 
       # --- PREREQUISITE 1: is this repo actually IN the App installation? (.github#522) -------------
@@ -265,7 +271,8 @@ jobs:
           # Not a secret: an installation token, minted seconds ago, scoped to reading the installation.
           GH_TOKEN: ${{ steps.install-token.outputs.token }}
           WOULD_SYNC: >-
-            ${{ startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+            ${{ (startsWith(github.event.pull_request.head.ref, 'renovate/') ||
+            startsWith(github.event.pull_request.head.ref, 'build-config/')) &&
             github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
           set -eu
@@ -279,7 +286,7 @@ jobs:
           #
           # This is the step the `continue-on-error` on the mint hands control to, so it is where the
           # gate must NOT fail open. Same split-severity rule as everywhere else in this job: a
-          # renovate/* PR needs the token NOW and would die at `sync`'s own mint, so RED it; an
+          # PR that WOULD sync needs the token NOW and would die at `sync`'s own mint, so RED it; an
           # unrelated PR gets a loud warning rather than a block it cannot act on. What must never
           # happen is a silent pass, which is what an unconditional `exit 0` here would be.
           if [ -z "${GH_TOKEN:-}" ]; then
@@ -288,10 +295,10 @@ jobs:
             echo "shared with $GITHUB_REPOSITORY do not mint against ${GITHUB_REPOSITORY%%/*}."
             summary="The App secrets resolve in $GITHUB_REPOSITORY but minting an owner-scoped token FAILED, so sync would die at its own token step. Check FSGG_DISPATCH_APP_ID / _PRIVATE_KEY against the fs-gg-cross-repo-dispatch App."
             if [ "$WOULD_SYNC" = 'true' ]; then
-              echo "::error title=lockfile-sync: the dispatch App token would not mint::$summary This renovate/* PR needs it NOW."
+              echo "::error title=lockfile-sync: the dispatch App token would not mint::$summary This PR needs it NOW."
               exit 1
             fi
-            echo "::warning title=lockfile-sync: the dispatch App token would not mint::$summary Not blocking THIS PR, but the first renovate/* PR will fail."
+            echo "::warning title=lockfile-sync: the dispatch App token would not mint::$summary Not blocking THIS PR, but the first renovate/* or build-config/* PR will fail."
             exit 0
           fi
 
@@ -325,13 +332,13 @@ jobs:
 
           # Same split-severity rule as prerequisite 2, and for the same reason: a repo that is not
           # about to sync must not have an unrelated PR redded over an adoption gap it can fix at
-          # leisure — but a renovate/* PR needs this NOW and would otherwise die opaquely at the push.
+          # leisure — but a PR that WOULD sync needs this NOW and would otherwise die opaquely at the push.
           if [ "$WOULD_SYNC" = 'true' ]; then
-            echo "::error title=lockfile-sync: this repo is not in the dispatch App installation::$summary This renovate/* PR needs it NOW. $fix"
+            echo "::error title=lockfile-sync: this repo is not in the dispatch App installation::$summary This PR needs it NOW. $fix"
             exit 1
           fi
 
-          echo "::warning title=lockfile-sync will 403 on the next renovate/* PR::$summary It is not blocking THIS PR (sync only runs on renovate/* branches), but the first one that opens will 403 on the push. $fix"
+          echo "::warning title=lockfile-sync will 403 on the next bot PR::$summary It is not blocking THIS PR (sync only runs on renovate/* and build-config/* branches), but the first one that opens will 403 on the push. $fix"
           exit 0
 
   sync:
@@ -341,10 +348,22 @@ jobs:
     # The gate above must have passed. Without this, an unprovisioned repo would still reach the
     # token step and fail there — with the opaque error preflight exists to replace.
     needs: preflight
-    # Renovate branches only, same-repo only (never fork PRs — a fork push would 403, and we
-    # never want to auto-commit to an untrusted head). Evaluated in the caller's event context.
+    # BOT BRANCHES THAT MOVE A CENTRAL `<PackageVersion>` WITHOUT RUNNING RESTORE, same-repo only
+    # (never fork PRs — a fork push would 403, and we never want to auto-commit to an untrusted
+    # head). Evaluated in the caller's event context.
+    #
+    # `renovate/` was once the whole list, and the prefix encoded a true premise: Renovate was the
+    # only bot that edited a central `<PackageVersion>` and left the committed locks behind. That
+    # stopped being true when `build-config-propagate` (#638) started opening `build-config/sync`
+    # PRs that bump an org baseline in `dist/dotnet/Directory.Packages.props` — a referenced package
+    # like FSharp.Core moves the restore graph, so the locks MUST be regenerated, and the propagate
+    # bot does not run restore either. The gate was never broadened, so `sync` skipped, the locks
+    # went stale, and every receiver stayed NU1004-red with auto-merge armed and unable to fire
+    # (#842). The membership test is "does this bot move the graph without regenerating?", and the
+    # answer is now two prefixes, not one.
     if: >-
-      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+      (startsWith(github.event.pull_request.head.ref, 'renovate/') ||
+      startsWith(github.event.pull_request.head.ref, 'build-config/')) &&
       github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Mint App installation token (contents:write on this repo)
