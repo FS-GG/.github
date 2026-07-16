@@ -25,6 +25,14 @@ module Budget =
     /// only the first would leave every board write mis-classified as a permanent refusal — and a
     /// permanent refusal is never queued, so the write would be silently dropped. That is #510 arriving
     /// through the classifier instead of through the queue.
+    /// `DateTimeOffset.FromUnixTimeSeconds`'s documented domain — 0001-01-01 to 9999-12-31. Outside it the
+    /// call THROWS rather than returning a sentinel, so the bound is checked before the conversion.
+    [<Literal>]
+    let private UnixSecondsMin = -62135596800L
+
+    [<Literal>]
+    let private UnixSecondsMax = 253402300799L
+
     let private rateLimitPattern =
         Regex(
             @"rate limit (already )?exceeded|API rate limit|secondary rate limit|was submitted too quickly|abuse detection",
@@ -145,9 +153,17 @@ module Budget =
             match header "X-RateLimit-Reset" with
             | Some v ->
                 match Int64.TryParse(v.Trim()) with
-                | true, epoch -> Some(DateTimeOffset.FromUnixTimeSeconds epoch)
-                // A header we cannot parse is not a reset of zero — 1970 would render as "retry now",
-                // which is the one answer guaranteed to be wrong on a limit that just fired.
+                // RANGE-CHECKED, because `FromUnixTimeSeconds` THROWS on an epoch outside
+                // `DateTimeOffset`'s range — and an `Int64` that parses is not an epoch that converts.
+                // This runs on the FAILURE path, inside a `try` that catches only `HttpRequestException`
+                // and `TaskCanceledException`, so the exception would escape the transport and take the
+                // process down. A garbage header would turn "back off for 3 minutes" into a crash: the
+                // tool falling over precisely when it is trying to tell you why it cannot work.
+                | true, epoch when epoch >= UnixSecondsMin && epoch <= UnixSecondsMax ->
+                    Some(DateTimeOffset.FromUnixTimeSeconds epoch)
+                // A header we cannot READ is not a reset of zero — 1970 would render as "retry now",
+                // which is the one answer guaranteed to be wrong on a limit that just fired. Falls
+                // through to the body, then to an honest "could not be read".
                 | _ -> None
             | None -> None
 

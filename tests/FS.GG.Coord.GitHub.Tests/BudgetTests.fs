@@ -117,7 +117,7 @@ let ``a REST rate limit says REST - it must NEVER be reported as the GraphQL bud
     // THE REGRESSION, PINNED. The old sentence opened with the wrong budget and closed by recommending
     // the dead one. Neither may ever appear on a REST limit again.
     Assert.DoesNotContain("GraphQL budget EXHAUSTED", sentence)
-    Assert.DoesNotContain("REST-only work still runs", sentence)
+    Assert.DoesNotContain("REST-only work", sentence)
 
 [<Fact>]
 let ``a GraphQL rate limit still says GraphQL`` () =
@@ -132,7 +132,15 @@ let ``a GraphQL rate limit still says GraphQL`` () =
     | RateLimited(GraphQlBudget, _) -> ()
     | other -> failwith $"a `graphql` 403 is the GraphQL budget — got %A{other}"
 
-    Assert.Contains("GraphQL budget EXHAUSTED", explain error)
+    let sentence = explain error
+    Assert.Contains("GraphQL budget EXHAUSTED", sentence)
+
+    // "MAY still run", never "still runs". A 403 is evidence about the bucket that refused THIS call and
+    // nothing else — both budgets can be dead at once, and the old assertive wording is what let this
+    // sentence promise REST at the exact moment REST was the thing that had stopped. The hedge is the
+    // difference between reporting an observation and certifying a guess.
+    Assert.Contains("REST-only work may still run", sentence)
+    Assert.DoesNotContain("REST-only work still runs", sentence)
 
 [<Fact>]
 let ``the resource is READ from the header, not inferred - and an UNNAMED budget is not guessed`` () =
@@ -190,6 +198,25 @@ let ``an UNPARSEABLE reset header is no reset - never 1970, which renders as 're
     match error with
     | RateLimited(RestBudget, None) -> Assert.Contains("could not be read", explain error)
     | other -> failwith $"an unreadable reset is None, not an epoch of 0 — got %A{other}"
+
+[<Fact>]
+let ``an OUT-OF-RANGE reset header does not CRASH - Int64 parses where DateTimeOffset cannot convert`` () =
+    // `FromUnixTimeSeconds` throws `ArgumentOutOfRangeException` outside 0001..9999, and an Int64 that
+    // parses is not an epoch that converts. This runs on the FAILURE path, inside a transport `try` that
+    // catches only HttpRequestException/TaskCanceledException — so an unguarded conversion escapes and
+    // kills the process. A garbage header would turn "back off for 3 minutes" into a crash, in the code
+    // whose whole job is to explain why nothing can run.
+    for hostile in [ "99999999999999"; "-99999999999999"; "9223372036854775807" ] do
+        let error =
+            Budget.classify
+                "FS-GG/.github#1"
+                403
+                """{"message":"API rate limit exceeded."}"""
+                (headers [ "X-RateLimit-Resource", "core"; "X-RateLimit-Reset", hostile ])
+
+        match error with
+        | RateLimited(RestBudget, None) -> Assert.Contains("could not be read", explain error)
+        | other -> failwith $"an out-of-range epoch (%s{hostile}) must read as NO reset — got %A{other}"
 
 [<Fact>]
 let ``a GraphQL body's resetAt answers when no header does - INCLUDING inside errors[]`` () =

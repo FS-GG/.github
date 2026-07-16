@@ -491,7 +491,7 @@ if [ -n "$RLPORT" ]; then
 
   # THE REGRESSION ITSELF. The old sentence recommended REST-only work at the exact moment REST was the
   # thing that had stopped — the tool pointing the worker at the one remedy that cannot work.
-  printf '%s' "$issout" | grep -q 'REST-only work still runs' \
+  printf '%s' "$issout" | grep -q 'REST-only work' \
     && bad "a REST limit must NEVER recommend REST-only work — that is the #266 regression" "$issout" \
     || ok "REST budget: ...and it does NOT recommend REST-only work on a REST limit"
 
