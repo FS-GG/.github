@@ -812,9 +812,38 @@ module Client =
                                             // DRY RUN — say what --apply would collect, and touch nothing.
                                             printfn "would reap  %s  worker %s" ref.Short marker.Worker.Value
                                         else
-                                            match Writes.reap ctx.Transport reapable with
-                                            | Error e -> failure <- Some e
-                                            | Ok() ->
+                                            match Writes.reap ctx.Transport opts.LeaseMinutes reapable with
+                                            | Error e ->
+                                                // A FAILED DELETE IS REPORTED, NOT SWALLOWED, and the scan
+                                                // moves on to the next item. The marker is still there, so the
+                                                // item is still HELD — the board is left untouched and the
+                                                // worker is NOT told it was released. `reap` deletes BEFORE it
+                                                // would ever notify (and this engine's reap posts no notify at
+                                                // all): a notify ahead of a failed delete would tell a worker
+                                                // to stop while its marker still holds the item for a full
+                                                // lease — released to its owner, held against everyone else,
+                                                // and nothing clears it. One failed collect is not fatal to
+                                                // the whole reap; the other items still collect.
+                                                eprint
+                                                    $"fsgg-coord-engine: FAILED  %s{ref.Short}  worker %s{marker.Worker.Value}  — could not remove the marker (%s{Errors.explain e}); board left untouched, worker not notified."
+                                            | Ok(Writes.RenewedSinceScan ageSeconds) ->
+                                                // The holder HEARTBEATED between the scan and this delete: the
+                                                // lock is live again, so reap SKIPS it rather than break a
+                                                // lease that was renewed under it — the one way reap could
+                                                // itself cause the double-hold it exists to clean up.
+                                                printfn
+                                                    "skipped  %s  worker %s  — renewed since the scan (%dm), still alive"
+                                                    ref.Short
+                                                    marker.Worker.Value
+                                                    (ageSeconds / 60)
+                                            | Ok Writes.AlreadyGone ->
+                                                // A peer collected the same stale marker first — nothing left
+                                                // to break, which is a collector's goal state, not a failure.
+                                                printfn
+                                                    "skipped  %s  worker %s  — marker already gone"
+                                                    ref.Short
+                                                    marker.Worker.Value
+                                            | Ok Writes.Reaped ->
                                                 printfn "reaped  %s  worker %s" ref.Short marker.Worker.Value
 
                                                 // Restore the freed column — best-effort, the lock is already
@@ -1002,6 +1031,40 @@ module Client =
                                 ignore held
                                 printfn "claimed %s by worker %s" ref.Short w.Id
                                 ExitGreen
+                    | Ok(Writes.Renewed(held, collected)) ->
+                        // A live marker already ours — the claim RENEWED it in place rather than posting a
+                        // second (a `take` retry, or a worker beating its own lease). Any stale debris it
+                        // claimed over was still collected, so tell the evicted workers exactly as a fresh
+                        // win does.
+                        for evicted in collected do
+                            printfn "collected worker '%s' expired claim" evicted.Value
+
+                            Writes.say
+                                ctx.Transport
+                                (WorkerId w.Id)
+                                evicted
+                                ref
+                                $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
+                            |> ignore
+
+                        ignore held
+                        printfn "held %s by worker %s (lease renewed)" ref.Short w.Id
+
+                        // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
+                        // it renewed a marker on the strength of its worker id alone — and a marker bearing
+                        // our id is not proof it is ours: rules 4/5 (#419) can hand one id to several workers.
+                        // The fresh-claim CAS never runs here, so its shared-id refusal is never reached; this
+                        // is the one place to say a same-id sibling may have just had its lock adopted.
+                        match w.Provenance with
+                        | Identity.FromSharedSession _ ->
+                            eprint
+                                $"fsgg-coord-engine: NOTE — this renewed an EXISTING marker for worker '%s{w.Id}' without running the claim CAS. If another worker shares this id, you have just adopted ITS lock."
+
+                            eprint
+                                $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' may not be unique to this worker. Give EACH worker its own id (do NOT invent one):  eval \"$(fsgg-coord-engine whoami --mint)\""
+                        | _ -> ()
+
+                        ExitGreen
                     | Ok(Writes.Lost holder) ->
                         eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
                         ExitRed

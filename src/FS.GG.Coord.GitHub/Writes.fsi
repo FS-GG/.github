@@ -91,6 +91,17 @@ module Writes =
         /// LEFT for `reap`, never a reason to fail a claim we have already won.
         | Won of held: Held * collected: WorkerId list
 
+        /// **WE ALREADY HELD IT — this is a RE-CLAIM, not a fresh win.** A live marker already bearing our
+        /// worker id is renewed IN PLACE (a PATCH of the one marker we have, never a second POST that we
+        /// would then lose to our own first), so a slow worker re-claiming ends with ONE marker, and `take`
+        /// retries stay idempotent. It carries the collected stale debris exactly as `Won` does.
+        ///
+        /// It is a SEPARATE outcome from `Won` because this path **bypasses the CAS entirely** — and an id
+        /// is not proof of ownership (#419: rules 4/5 can hand one id to several workers). So a caller whose
+        /// id is shared must WARN here that it adopted an existing marker without running the CAS, the one
+        /// place the fresh-claim path's shared-id warning would otherwise never be reached.
+        | Renewed of held: Held * collected: WorkerId list
+
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
         | Lost of WorkerId
 
@@ -264,14 +275,34 @@ module Writes =
     /// owns the proof-of-life gate on top of it.
     val reapable: ref: Ref -> marker: Reads.Marker -> liveness: Liveness -> Result<Reapable, ReapRefusal>
 
-    /// COLLECT a reaped claim — delete the stale marker so the lease self-heals.
+    /// What `reap` did once it RE-VERIFIED the marker against a fresh read. `reapable` was minted from a
+    /// SNAPSHOT — the scan — and a holder may have heartbeated between the scan and this delete. Deleting a
+    /// lock because it USED TO BE stale is the one way `reap` can itself cause the double-hold it exists to
+    /// clean up, so the marker's freshness is re-checked immediately before the delete, and the three
+    /// outcomes are kept apart because each is a different line the operator must read.
+    type ReapResult =
+        /// The marker was still stale on the fresh read, and it was DELETED — the lock self-heals.
+        | Reaped
+
+        /// The holder HEARTBEATED between the scan and now: the marker is live again, so it was LEFT alone.
+        /// Carries its now-current age so the report can say how recently it was renewed.
+        | RenewedSinceScan of ageSeconds: int
+
+        /// The marker was already gone by the time we re-read — a peer collected it first. Nothing to do.
+        | AlreadyGone
+
+    /// COLLECT a reaped claim — RE-VERIFY the marker is still stale, then delete it so the lease self-heals.
     ///
     /// Takes the `Reapable`, so #581 is unexpressible here: a live or unreadable claim has no way to reach
-    /// this call. It deletes by COMMENT ID (a 404 is success — two reapers collecting the same marker must
-    /// not turn the loser's benign miss into an error), and it does NOT touch the board: what the freed
-    /// column becomes is the caller's decision (`PreviousStatus`), made after the lock is already gone, so a
-    /// board it cannot read or write leaves the column alone rather than stranding a lock behind a failure.
-    val reap: transport: IGitHubTransport -> reapable: Reapable -> IoResult<unit>
+    /// this call. But `Reapable` was proven against the SCAN, and the scan is a snapshot — so this re-reads
+    /// the markers and confirms the one it is about to delete is STILL stale (`RenewedSinceScan` if the
+    /// holder heartbeated since; `AlreadyGone` if a peer collected it first), because reaping a lock that
+    /// went live again between the scan and the delete is exactly how `reap` would cause the double-hold it
+    /// exists to clean up. It deletes by COMMENT ID (a 404 is success — two reapers collecting the same
+    /// marker must not turn the loser's benign miss into an error), and it does NOT touch the board: what the
+    /// freed column becomes is the caller's decision (`PreviousStatus`), made after the lock is already gone,
+    /// so a board it cannot read or write leaves the column alone rather than stranding a lock behind.
+    val reap: transport: IGitHubTransport -> leaseMinutes: int -> reapable: Reapable -> IoResult<ReapResult>
 
     /// Post a message to another worker (`fsgg:msg`).
     ///
