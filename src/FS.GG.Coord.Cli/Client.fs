@@ -2793,24 +2793,42 @@ module Client =
                                   r
                                   $"%s{statusName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)." ]
                         | Declared tokens when
-                            (not (List.isEmpty tokens))
-                            && tokens
-                               |> List.forall (function
-                                   | Unmatchable _ -> true
-                                   | Matchable _ -> false)
+                            // #646 — ANY unmatchable token, not just ALL of them. A PARTIAL declaration
+                            // (some matchable, some not) was worse than a wholly dead one and yet lint stayed
+                            // green over it: `exists`, not `forall`.
+                            tokens
+                            |> List.exists (function
+                                | Unmatchable _ -> true
+                                | Matchable _ -> false)
                             ->
+                            // Name ONLY the offending subset — the matchable tokens are fine and pointing at
+                            // them would send the author to spell out a path that already works.
                             let bad =
                                 tokens
-                                |> List.map (function
-                                    | Unmatchable t -> t
-                                    | Matchable t -> t)
+                                |> List.choose (function
+                                    | Unmatchable t -> Some t
+                                    | Matchable _ -> None)
                                 |> String.concat ", "
 
-                            [ mk
-                                  "BAD-TOUCH-SET"
-                                  "error"
-                                  r
-                                  $"%s{statusName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`." ]
+                            let allUnmatchable =
+                                tokens
+                                |> List.forall (function
+                                    | Unmatchable _ -> true
+                                    | Matchable _ -> false)
+
+                            let detail =
+                                if allUnmatchable then
+                                    $"%s{statusName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+                                else
+                                    // #646 — the PARTIAL case, and it is worse than the whole being dead: the
+                                    // item looks declared and its matchable tokens reserve something, but each
+                                    // unmatchable token silently reserves NOTHING, so the files it names are
+                                    // invisible to every other worker's overlap check — two workers can be
+                                    // handed them at once. `batch` already refuses the item (#273); lint must
+                                    // catch it at filing time, not leave it to be discovered by a double-book.
+                                    $"%s{statusName r.Status}, and at least one of its `Paths:` tokens is unmatchable: %s{bad}. This is WORSE than every token being so: the item looks declared and its other tokens reserve work, but an unmatchable token silently reserves NOTHING — the files it names are invisible to every other worker's overlap check, so two workers can be handed them at once. Spell the path(s) out — not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+
+                            [ mk "BAD-TOUCH-SET" "error" r detail ]
                         | _ -> []
                     else
                         []
