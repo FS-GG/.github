@@ -1,0 +1,82 @@
+# Self-test for the suite selector (scripts/test) — .github#860, epic #266.
+#
+# scripts/test derives "which suites should this change run" from the `paths:` filters in the
+# workflows in this directory. That is the point of it: the mapping already exists there, and a
+# selector that RESTATES it becomes a second copy that drifts from the first (#520, #587/#599, #710,
+# #724 are all "the second copy disagreed"). Deriving means there is no table to rot.
+#
+# It also means THIS DIRECTORY IS THE SELECTOR'S INPUT, which is what the trigger below is about.
+#
+# WHY `paths:` IS BROAD HERE, DELIBERATELY. The fixture's headline legs run against the REAL working
+# tree: that the shipped filters are still readable, that every suite the workflows name is on disk,
+# and that discovery still finds a floor of suites. So an edit to ANY workflow — a `paths-ignore:`
+# the selector refuses, a renamed suite script, a deleted `run:` line — changes this fixture's
+# subject. A filter naming only `scripts/test` would be a selftest whose trigger omits its own
+# input: exactly #334 (the kit digest gate covering 1 of 3 sources) and #508 (sync-build-config's
+# filter omitting `dist/dotnet/**`), which this repo has now hand-fixed three times.
+#
+# #334 settled the tradeoff in as many words: *"A wildcard over-triggers on a non-kit skill; a
+# hand-maintained list fails open, which is strictly worse."* The same reasoning gives `tests/**`:
+# deleting a suite script that a workflow still invokes breaks `scripts/test` on main, and only a
+# filter that watches `tests/` catches it on the PR that did it. This fixture is static and offline
+# — no SDK, no restore, no network — so over-triggering costs seconds, and under-triggering costs a
+# gate that reports green having never run.
+#
+# The two lists are IDENTICAL on purpose. `adr-coherence.yml` and `skill-registry-coherence.yml` have
+# already drifted apart across this exact boundary (their push copy omits patterns the PR copy has);
+# do not let this one join them.
+name: test-selector-selftest
+
+on:
+  pull_request:
+    paths:
+      - "scripts/test"
+      - "tests/**"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/test"
+      - "tests/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-selector-selftest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The fixture builds synthetic git repos and also reads THIS tree's real workflows, so it needs
+      # real history-less checkout only — no fetch-depth games.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Run the test-selector fixture
+        run: bash tests/test-selector/run.sh
+
+      # A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266, #436). The fixture prints its own count and
+      # exits non-zero on any failure — but a fixture that silently stopped asserting would still
+      # exit 0. Pin a floor, so a gutted fixture is a red gate rather than a quiet one.
+      - name: Non-vacuity — the fixture must have asserted something
+        run: |
+          set -euo pipefail
+          out="$(bash tests/test-selector/run.sh 2>&1)"
+          n="$(printf '%s' "$out" | grep -oE '[0-9]+ assertion\(s\)' | grep -oE '^[0-9]+' | head -1 || echo 0)"
+          if [ "${n:-0}" -lt 25 ]; then
+            echo "::error title=test-selector: the fixture audited nothing::Only ${n:-0} assertion(s) ran. The selector decides what CI runs locally; a green gate over an unasserted one is the bug this repo keeps re-finding (#266)."
+            exit 1
+          fi
+          echo "test-selector: $n assertion(s) ran" >> "$GITHUB_STEP_SUMMARY"
