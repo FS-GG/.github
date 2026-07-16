@@ -1000,6 +1000,214 @@ module Client =
 
                 scan [] inFlight
 
+    // ---- the kit-digest obligation (#469/#563/#588/#509) -----------------------------------------------
+    //
+    // Editing a kit source obliges a re-digest of `registry/repos.lock` (ADR-0019), and the cheap moment to
+    // learn that is BEFORE a red `main` after the merge — which is how #469 was found. The pure comparisons
+    // live in `Core.Kit`; this is the file IO under them. Silent whenever there is no tree or no lock to
+    // read: a receiver mirrors the kit but not the registry, and must not be nagged about a file it has not
+    // got.
+    //
+    // THERE ARE TWO QUESTIONS HERE, AND #563 IS ONLY THE ANSWER TO ONE OF THEM.
+    //
+    //   * *Is the lock stale?* — `kitDigestWarn`, OBSERVED off the tree. Never inferred from what was
+    //     declared: #563 pinned the fail-open where declaring `registry/repos.yml` marked the obligation met
+    //     while the lock went stale. A declaration cannot prove a digest matches, so it is never asked to.
+    //   * *Will this worker owe a relock?* — `kitDeclaredWarn`, read off the DECLARATION, because at claim
+    //     time nothing is edited yet and there is no digest to compare. `staleSources` is silent by
+    //     construction on a clean tree, which is exactly why the obligation went unnamed until CI (#509).
+    //
+    // The second is not a re-run of the inference the first replaced: it can only ADD advice, never suppress
+    // it, so it cannot fail open the way its ancestor did. `Kit.declaredSources` carries that argument.
+    //
+    // BOTH ARE ADVISORY AND NEITHER IS A GATE. CI is authoritative; over-warning mis-gates nothing.
+
+    /// The kit root: `FSGG_KIT_ROOT` (the fixture stands a throwaway tree up here), else the git toplevel.
+    /// `git rev-parse --show-toplevel` is FREE and offline; `None` outside a checkout, which is silent.
+    let private kitRoot () : string option =
+        match Environment.GetEnvironmentVariable "FSGG_KIT_ROOT" with
+        | null
+        | "" ->
+            try
+                let psi = ProcessStartInfo("git", "rev-parse --show-toplevel")
+                psi.RedirectStandardOutput <- true
+                psi.RedirectStandardError <- true
+                psi.UseShellExecute <- false
+                use p = Process.Start psi
+                let top = p.StandardOutput.ReadToEnd().Trim()
+                p.WaitForExit()
+                if p.ExitCode <> 0 || top = "" then None else Some top
+            with _ ->
+                None
+        | v -> Some v
+
+    /// The ACTUAL digest of a kit source, off the tree. A skill kit is content-addressed on its `SKILL.md`,
+    /// a client kit on the file itself. `None` when the entry names a file this tree does not carry (or one
+    /// we could not read) — `Kit.staleSources` reads that as "not here", never a staleness.
+    let private kitDigestOf (root: string) (src: string) : string option =
+        let path0 = Path.Combine(root, src)
+        let path = if Directory.Exists path0 then Path.Combine(path0, "SKILL.md") else path0
+
+        if File.Exists path then
+            try
+                use sha = System.Security.Cryptography.SHA256.Create()
+
+                Some(
+                    File.ReadAllBytes path
+                    |> sha.ComputeHash
+                    |> Array.map (fun b -> b.ToString "x2")
+                    |> String.concat ""
+                )
+            with _ ->
+                None
+        else
+            None
+
+    /// The skill kits whose two roots have diverged — enumerate every `.claude/skills/*/SKILL.md` and pair
+    /// it with its `.agents/skills/<name>/SKILL.md` mirror for `Kit.divergedRoots` to byte-compare. A client
+    /// kit (no skill root) yields nothing, so a client-only staleness never nags about roots.
+    let private kitDivergedRoots (root: string) : string list =
+        let claudeDir = Path.Combine(root, ".claude", "skills")
+        let agentsDir = Path.Combine(root, ".agents", "skills")
+
+        if not (Directory.Exists claudeDir) || not (Directory.Exists agentsDir) then
+            []
+        else
+            let readBytes p =
+                if File.Exists p then
+                    try
+                        Some(File.ReadAllBytes p)
+                    with _ ->
+                        None
+                else
+                    None
+
+            Directory.GetDirectories claudeDir
+            |> Array.toList
+            |> List.choose (fun d ->
+                let name = Path.GetFileName d
+                let claude = Path.Combine(d, "SKILL.md")
+
+                if File.Exists claude then
+                    Some(name, readBytes claude, readBytes (Path.Combine(agentsDir, name, "SKILL.md")))
+                else
+                    None)
+            |> Kit.divergedRoots
+
+    /// OBSERVE the kit-digest obligation and warn on stderr (advisory, never fatal — `repos-registry-selftest`
+    /// is the authority). Silent when there is no root or no lock to read.
+    let private kitDigestWarn () : unit =
+        match kitRoot () with
+        | None -> ()
+        | Some root ->
+            let lockPath =
+                match Environment.GetEnvironmentVariable "FSGG_REPOS_LOCK" with
+                | null
+                | "" -> Path.Combine(root, "registry", "repos.lock")
+                | v -> v
+
+            if File.Exists lockPath then
+                let lock =
+                    try
+                        Kit.parseLock (File.ReadAllText lockPath)
+                    with _ ->
+                        []
+
+                match Kit.staleSources (kitDigestOf root) lock with
+                | [] -> ()
+                | stale ->
+                    eprint ""
+                    eprint "fsgg-coord-engine: KIT DIGEST — a content-addressed kit source is STALE in `registry/repos.lock`:"
+
+                    for s in stale do
+                        eprint $"  %s{s}"
+
+                    eprint "`repos-registry-selftest` reds `main` until it is regenerated (ADR-0019, #469). Run:"
+                    eprint "  scripts/repos.sh relock"
+                    eprint "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
+                    eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
+                    eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
+
+                match kitDivergedRoots root with
+                | [] -> ()
+                | roots ->
+                    eprint ""
+                    eprint "fsgg-coord-engine: SKILL ROOTS — a skill kit must stay BYTE-IDENTICAL across every root"
+                    eprint "(ADR-0011/0014), or the `roots` gate reds `main`. These have diverged:"
+
+                    for name in roots do
+                        eprint $"  cp .claude/skills/%s{name}/SKILL.md .agents/skills/%s{name}/SKILL.md"
+
+    /// Name the relock a worker has just signed up for, off the touch-set they claimed (#509).
+    ///
+    /// **THE READ IS ON THE WIN PATH ONLY, AND THAT IS NOT AN OPTIMISATION.** `claim` is the hottest command
+    /// in the org and REST is the budget that dies first under fan-out (#895, measured: core at 0/5,000 while
+    /// GraphQL had 3,639 spare). So this costs ONE issue read, once, and only when a worker actually took the
+    /// item — never on a lost race, never on an idempotent re-claim. It is the same discipline the `board`
+    /// thunk keeps below, for the same reason (#418).
+    ///
+    /// A read we could not make is SILENT. This is advice, not a gate: refusing a claim whose lock is held
+    /// and whose marker is posted, because an advisory read failed, would trade a real lock for a courtesy.
+    let private kitDeclaredWarn (ctx: Context) (ref: Ref) : unit =
+        match kitRoot () with
+        | None -> ()
+        | Some root ->
+            let lockPath =
+                match Environment.GetEnvironmentVariable "FSGG_REPOS_LOCK" with
+                | null
+                | "" -> Path.Combine(root, "registry", "repos.lock")
+                | v -> v
+
+            if File.Exists lockPath then
+                let lock =
+                    try
+                        Kit.parseLock (File.ReadAllText lockPath)
+                    with _ ->
+                        []
+
+                match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+                | Error _ -> () // an advisory read that failed says nothing, and must not say something
+                | Ok body ->
+                    let declared =
+                        match TouchSet.parse body with
+                        // MATCHABLE TOKENS ONLY. An unmatchable token reserves nothing and covers nothing
+                        // (#273), so it cannot name a kit source either — the same asymmetry `TouchSet.covers`
+                        // keeps. Reading one as a declaration here would warn about an obligation the worker
+                        // has provably not taken on.
+                        | Declared tokens ->
+                            tokens
+                            |> List.choose (function
+                                | Matchable t -> Some t
+                                | Unmatchable _ -> None)
+                        // Undeclared / `Paths: none` — no declaration to read an obligation off.
+                        | Undeclared
+                        | DeclaredNone -> []
+                        // WE DID NOT READ THE BODY — unknown, not absent, and the two are not one fact
+                        // (#266). Here that distinction costs nothing to honour and is still worth honouring:
+                        // this is ADVICE, and advice can only ever ADD. An unread body yields no obligation to
+                        // name, so it names none. What it must NOT do is what the caller of a SCHEDULING read
+                        // must never do — coerce this to `Undeclared` and make a confident claim about an item
+                        // nobody looked at.
+                        | Unreadable _ -> []
+
+                    match Kit.declaredSources lock declared with
+                    | [] -> ()
+                    | sources ->
+                        eprint ""
+                        eprint "fsgg-coord-engine: KIT DIGEST — the touch-set you just claimed names a content-addressed kit source:"
+
+                        for s in sources do
+                            eprint $"  %s{s}"
+
+                        eprint "If you EDIT it, `registry/repos.lock` goes stale and `repos-registry-selftest` reds `main`"
+                        eprint "(ADR-0019, #469). Before you open the PR:"
+                        eprint "  scripts/repos.sh relock"
+                        eprint "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
+                        eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
+                        eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
+                        eprint "If you only READ it, ignore this — and give the path back (`widen`), so it stops"
+                        eprint "reserving files nobody is editing (#601)."
+
     let claim (ctx: Context) (opts: Options) : int =
         match oneArg opts "claim: an issue ref", worker opts with
         | Error c, _
@@ -1081,6 +1289,9 @@ module Client =
                             // un-hold it. Report the claim, note the board.
                             printfn "claimed %s by worker %s" ref.Short w.Id
                             eprint $"fsgg-coord-engine: note — the lock is held, but the board column could not be moved: %s{Errors.explain e}"
+                            // The LOCK is held, so the touch-set is reserved and the obligation is real —
+                            // whatever the board column says. #509.
+                            kitDeclaredWarn ctx ref
                             ExitGreen
                         | Ok b ->
                             match
@@ -1090,6 +1301,10 @@ module Client =
                             | Error _ ->
                                 ignore held
                                 printfn "claimed %s by worker %s" ref.Short w.Id
+
+                                // Declaration time is the cheap moment to learn that editing a kit source
+                                // obliges a relock (#469/#509) — one REST read, on the WIN path only.
+                                kitDeclaredWarn ctx ref
                                 ExitGreen
                     | Ok(Writes.Renewed(held, collected)) ->
                         // A live marker already ours — the claim RENEWED it in place rather than posting a
@@ -1868,130 +2083,6 @@ module Client =
 
                 scan [] candidates
 
-    // ---- the kit-digest obligation (#469/#563/#588) ----------------------------------------------------
-    //
-    // Editing a kit source obliges a re-digest of `registry/repos.lock` (ADR-0019), and declaration time —
-    // a `widen` — is the cheap moment to learn it, rather than from a red `main` after the merge (which is
-    // how #469 was found). The obligation is OBSERVED, not inferred from what was declared (#563 pinned the
-    // fail-open where declaring `registry/repos.yml` silenced a still-stale lock): the pure comparison lives
-    // in `Core.Kit`; this is the file IO under it. Silent whenever there is no tree or no lock to read — a
-    // receiver mirrors the kit but not the registry, and must not be nagged about a file it does not have.
-
-    /// The kit root: `FSGG_KIT_ROOT` (the fixture stands a throwaway tree up here), else the git toplevel.
-    /// `git rev-parse --show-toplevel` is FREE and offline; `None` outside a checkout, which is silent.
-    let private kitRoot () : string option =
-        match Environment.GetEnvironmentVariable "FSGG_KIT_ROOT" with
-        | null
-        | "" ->
-            try
-                let psi = ProcessStartInfo("git", "rev-parse --show-toplevel")
-                psi.RedirectStandardOutput <- true
-                psi.RedirectStandardError <- true
-                psi.UseShellExecute <- false
-                use p = Process.Start psi
-                let top = p.StandardOutput.ReadToEnd().Trim()
-                p.WaitForExit()
-                if p.ExitCode <> 0 || top = "" then None else Some top
-            with _ ->
-                None
-        | v -> Some v
-
-    /// The ACTUAL digest of a kit source, off the tree. A skill kit is content-addressed on its `SKILL.md`,
-    /// a client kit on the file itself. `None` when the entry names a file this tree does not carry (or one
-    /// we could not read) — `Kit.staleSources` reads that as "not here", never a staleness.
-    let private kitDigestOf (root: string) (src: string) : string option =
-        let path0 = Path.Combine(root, src)
-        let path = if Directory.Exists path0 then Path.Combine(path0, "SKILL.md") else path0
-
-        if File.Exists path then
-            try
-                use sha = System.Security.Cryptography.SHA256.Create()
-
-                Some(
-                    File.ReadAllBytes path
-                    |> sha.ComputeHash
-                    |> Array.map (fun b -> b.ToString "x2")
-                    |> String.concat ""
-                )
-            with _ ->
-                None
-        else
-            None
-
-    /// The skill kits whose two roots have diverged — enumerate every `.claude/skills/*/SKILL.md` and pair
-    /// it with its `.agents/skills/<name>/SKILL.md` mirror for `Kit.divergedRoots` to byte-compare. A client
-    /// kit (no skill root) yields nothing, so a client-only staleness never nags about roots.
-    let private kitDivergedRoots (root: string) : string list =
-        let claudeDir = Path.Combine(root, ".claude", "skills")
-        let agentsDir = Path.Combine(root, ".agents", "skills")
-
-        if not (Directory.Exists claudeDir) || not (Directory.Exists agentsDir) then
-            []
-        else
-            let readBytes p =
-                if File.Exists p then
-                    try
-                        Some(File.ReadAllBytes p)
-                    with _ ->
-                        None
-                else
-                    None
-
-            Directory.GetDirectories claudeDir
-            |> Array.toList
-            |> List.choose (fun d ->
-                let name = Path.GetFileName d
-                let claude = Path.Combine(d, "SKILL.md")
-
-                if File.Exists claude then
-                    Some(name, readBytes claude, readBytes (Path.Combine(agentsDir, name, "SKILL.md")))
-                else
-                    None)
-            |> Kit.divergedRoots
-
-    /// OBSERVE the kit-digest obligation and warn on stderr (advisory, never fatal — `repos-registry-selftest`
-    /// is the authority). Silent when there is no root or no lock to read.
-    let private kitDigestWarn () : unit =
-        match kitRoot () with
-        | None -> ()
-        | Some root ->
-            let lockPath =
-                match Environment.GetEnvironmentVariable "FSGG_REPOS_LOCK" with
-                | null
-                | "" -> Path.Combine(root, "registry", "repos.lock")
-                | v -> v
-
-            if File.Exists lockPath then
-                let lock =
-                    try
-                        Kit.parseLock (File.ReadAllText lockPath)
-                    with _ ->
-                        []
-
-                match Kit.staleSources (kitDigestOf root) lock with
-                | [] -> ()
-                | stale ->
-                    eprint ""
-                    eprint "fsgg-coord-engine: KIT DIGEST — a content-addressed kit source is STALE in `registry/repos.lock`:"
-
-                    for s in stale do
-                        eprint $"  %s{s}"
-
-                    eprint "`repos-registry-selftest` reds `main` until it is regenerated (ADR-0019, #469). Run:"
-                    eprint "  scripts/repos.sh relock"
-                    eprint "Then name `registry/repos.lock` as EXPECTED DRIFT in the PR — do NOT reserve it in the"
-                    eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
-                    eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
-
-                match kitDivergedRoots root with
-                | [] -> ()
-                | roots ->
-                    eprint ""
-                    eprint "fsgg-coord-engine: SKILL ROOTS — a skill kit must stay BYTE-IDENTICAL across every root"
-                    eprint "(ADR-0011/0014), or the `roots` gate reds `main`. These have diverged:"
-
-                    for name in roots do
-                        eprint $"  cp .claude/skills/%s{name}/SKILL.md .agents/skills/%s{name}/SKILL.md"
 
     let widen (ctx: Context) (opts: Options) : int =
         match oneArg opts "widen: an issue ref", worker opts with
@@ -2686,6 +2777,18 @@ module Client =
                             let drift =
                                 files
                                 |> List.filter (fun f -> not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
+
+                            // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
+                            // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
+                            // edits a kit source and never relocks reds `main` whether or not it drifted, so an
+                            // `OK` verdict must not read as "safe to merge" (#469). That is exactly #509's
+                            // complaint — the worker's own pre-merge check is green while `main` is about to go
+                            // red — and it is the reason bash armed this here (`kit_digest_warn "$changed" "PR
+                            // #$pr"`). THE PORT DROPPED IT: the D-phase swap carried the `widen` call site over
+                            // and left this one behind, so the warning stopped firing on the one command §5
+                            // tells every worker to run. A gate that silently stops running is #266's whole
+                            // shape, which is why it is restored here rather than left to the merge.
+                            kitDigestWarn ()
 
                             if List.isEmpty drift then
                                 printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short

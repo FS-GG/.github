@@ -22,6 +22,29 @@ module Kit =
     /// the kit but not a given source is never nagged about it. Order follows the lock.
     val staleSources: resolve: (string -> string option) -> lock: (string * string) list -> string list
 
+    /// The kit sources a touch-set NAMES — the obligation a worker is about to take on, read off the
+    /// declaration rather than off the tree.
+    ///
+    /// **THIS IS NOT THE INFERENCE #563 REMOVED, AND THE DIFFERENCE IS THE WHOLE REASON IT MAY EXIST.** The
+    /// old warning asked the declaration whether the obligation was MET (*"is `registry/repos.yml` in your
+    /// touch-set?"*) and fell silent when it was named — so declaring it marked the obligation satisfied
+    /// while `repos.lock` went stale, which is the fail-open #563 closed by recomputing the digest instead.
+    /// That rule stands, and it is about SATISFACTION: a declaration can never prove the lock is current,
+    /// and `staleSources` remains the only thing that says so.
+    ///
+    /// This asks a different question, and one only the declaration CAN answer: *which kit sources is this
+    /// worker about to edit?* At claim time nothing is edited yet, so there is no digest to compare and
+    /// `staleSources` is silent by construction — which is exactly why the obligation went unnamed until a
+    /// red `main` (#469, #509). The answer here can only ADD a warning; it can never suppress one, so it
+    /// cannot fail open the way its ancestor did.
+    ///
+    /// Overlap is `TouchSet.tokensOverlap` — exact equality or subtree containment in EITHER direction — so
+    /// `.claude/skills/pnext-item/**` names the kit source `.claude/skills/pnext-item`, and so does a bare
+    /// parent like `.claude/skills`. That is the same conservative rule the scheduler reserves by (#309), and
+    /// erring toward naming an obligation the worker may not incur is the safe direction: the cost is a line
+    /// of advice, and the cost of missing it is a red `main`. Order follows the lock.
+    val declaredSources: lock: (string * string) list -> declared: string list -> string list
+
     /// A skill kit carries the BYTE-IDENTICAL union across its two roots (ADR-0011/0014); a divergence reds
     /// the `roots` gate. Given, per skill name, the two roots' `SKILL.md` bytes (`None` = that root is
     /// missing the file), the names whose roots are NOT byte-identical — a missing mirror counts as
