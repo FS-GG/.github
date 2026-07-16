@@ -555,6 +555,79 @@ else
 fi
 
 echo
+echo "--- the synced receiver file must be UNMANAGED, and by the right mechanism (#678) ---"
+# Renovate bumping a receiver's SYNCED .config/dotnet-tools.json opens a PR the build-config drift
+# gate must reject, in every receiver, forever (FS.GG.Game#278). The rule that stops it is easy to
+# write in two ways that are silently wrong, and renovate-config-validator calls both valid — so
+# each wrong way gets a leg here.
+
+# The trap #678 itself proposed. ignorePaths matches by SUBSTRING (`file.includes(ignorePath)`), so
+# this ALSO un-manages dist/dotnet/.config/dotnet-tools.json — the org source of truth, and the one
+# pin Renovate has ever bumped in this repo (#660). It would freeze the baseline while looking like
+# a fix.
+IGN="$(make_repo ignorepaths)"
+edit_json "$IGN/default.json" 'd["ignorePaths"] = [".config/dotnet-tools.json"]'
+must_fail "ignorePaths on a synced file is refused (it swallows dist/dotnet/ by substring)" \
+  "$IGN" "$FEED" "matches by SUBSTRING"
+
+# The over-broad glob. `**/` reaches dist/dotnet/ exactly as ignorePaths did, and this is the shape
+# someone reaches for when the anchored one "looks too specific".
+BROAD="$(make_repo broad-glob)"
+edit_json "$BROAD/default.json" '
+for r in d["packageRules"]:
+    if r.get("matchFileNames") == [".config/dotnet-tools.json"]:
+        r["matchFileNames"] = ["**/.config/dotnet-tools.json"]
+'
+must_fail "a leading **/ on the synced-file rule is refused (it reaches dist/dotnet/)" \
+  "$BROAD" "$FEED" "reaches beyond the receiver's copy"
+
+# The rule deleted outright — the un-mergeable receiver PR returns.
+NORULE="$(make_repo no-synced-rule)"
+edit_json "$NORULE/default.json" '
+d["packageRules"] = [r for r in d["packageRules"]
+                     if r.get("matchFileNames") != [".config/dotnet-tools.json"]]
+'
+must_fail "deleting the synced-file rule is refused" \
+  "$NORULE" "$FEED" "declares no \`matchFileNames:"
+
+# SHORTER ignorePaths entries are STRICTLY MORE dangerous, because the match is a substring of the
+# FILE, not of the entry. A gate that only catches the one spelling #678 proposed would wave every
+# one of these through — each freezes dist/dotnet/ (measured against renovate 43.265.2).
+for e in ".config" "dist/" ".json" "/"; do
+  SUB="$(make_repo "substr-$(printf '%s' "$e" | tr -c '[:alnum:]' '-')")"
+  edit_json "$SUB/default.json" "d[\"ignorePaths\"] = [\"$e\"]"
+  must_fail "ignorePaths ['$e'] is refused (it is a substring of the source-of-truth path)" \
+    "$SUB" "$FEED" "is a SUBSTRING of dist/dotnet/.config/dotnet-tools.json"
+done
+
+# A glob spelling that HAPPENS to work (it escapes the substring branch and anchors) is still
+# refused — resting the baseline on that coincidence is the thing being prevented. This leg exists
+# to pin the reason: the gate must reject it for naming the file, not for "not working".
+GLOB="$(make_repo glob-ignorepath)"
+edit_json "$GLOB/default.json" 'd["ignorePaths"] = ["[.]config/dotnet-tools.json"]'
+must_fail "even a WORKING ignorePaths glob is refused (fragile by coincidence)" \
+  "$GLOB" "$FEED" "whose only safe home is a matchFileNames packageRule"
+
+# Renovate merges packageRules IN ORDER and the last match wins. A later rule re-enabling the file
+# leaves every earlier `enabled: false` sitting in the config looking correct.
+REEN="$(make_repo reenabled-later)"
+edit_json "$REEN/default.json" '
+d["packageRules"].append({"matchFileNames": [".config/dotnet-tools.json"], "enabled": True})
+'
+must_fail "a LATER rule re-enabling the synced file is refused (last rule wins)" \
+  "$REEN" "$FEED" "is the LAST rule matching"
+
+# A narrowed disable still proposes the un-mergeable PR for everything it no longer covers.
+NARROW="$(make_repo narrowed-rule)"
+edit_json "$NARROW/default.json" '
+for r in d["packageRules"]:
+    if r.get("matchFileNames") == [".config/dotnet-tools.json"]:
+        r["matchUpdateTypes"] = ["major"]
+'
+must_fail "narrowing the disable with an extra matcher is refused" \
+  "$NARROW" "$FEED" "Every additional key NARROWS the rule"
+
+echo
 echo "--- CI guard on the real repo (no network: structure only) ---"
 # Proves REQUIRED_PINS still names a pin that exists here, and that this repo's own routing is one
 # Renovate can actually read — the two things a refactor of this repo could quietly break. Feed
@@ -576,7 +649,22 @@ rx, mp = gate.load_annotation_manager(f"{root}/default.json")
 pins = gate.scan_pins(root, rx, mp)
 gate.assert_required_pins(pins)
 assert pins, "no pins found in the real repo"
+
+# The REAL preset must disable every synced receiver file, anchored (#678).
+gate.assert_synced_files_unmanaged(f"{root}/default.json")
+
+# ...and the org source of truth must still be a pin this gate can SEE. The whole hazard of #678 is
+# a rule that un-manages dist/dotnet/ while looking like a fix, so assert the positive half against
+# the real tree rather than trusting the shape check alone: sync-build-config.sh's canonical copy
+# must exist and carry the tool pin Renovate bumps here (#660).
+tools = f"{root}/dist/dotnet/{gate.SYNCED_RECEIVER_FILES[0]}"
+import json as _json, os as _os
+assert _os.path.exists(tools), f"the org source of truth is missing: {tools}"
+_pins = _json.load(open(tools, encoding="utf-8")).get("tools") or {}
+assert _pins, f"{tools} declares no tools — nothing for Renovate to keep fresh (#660)"
 print(f"ok: {len(pins)} pin(s); every REQUIRED_PINS entry present; FS.GG.* routed to {', '.join(hosts)}")
+print(f"ok: receiver {gate.SYNCED_RECEIVER_FILES[0]} disabled; dist/dotnet/ still declares "
+      f"{len(_pins)} managed tool pin(s)")
 PY
 )" && rc=0 || rc=$?
 if [ "${rc:-0}" -eq 0 ]; then ok "real repo: required pins present, bump mechanism configured"; else bad "real repo structure" "$out"; fi
