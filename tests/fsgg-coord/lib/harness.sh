@@ -20,7 +20,11 @@ set -euo pipefail
 
 # Resolve against THIS file, not $0 — the caller lives in cases/.
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COORD="$HERE/../../scripts/fsgg-coord"      # always invoked as `bash "$COORD"`
+COORD="$HERE/../../scripts/fsgg-coord-bash" # always invoked as `bash "$COORD"`
+# ADR-0040 D.2: `scripts/fsgg-coord` is now the ~40-line shim (it execs the engine). This corpus drives
+# the ~7,000-line BASH monolith — preserved verbatim at `scripts/fsgg-coord-bash` — because the shadow /
+# differential cases (50-shadow-engine, 51-fs-flip) compare bash against the engine, and the escape-hatch
+# cases hold bash exact. Both live until D.4 deletes bash; this harness points at the file they test.
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/fsgg-coord-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT

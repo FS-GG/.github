@@ -36,7 +36,7 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
-      - "scripts/fsgg-coord-shim"
+      - "scripts/fsgg-coord-bash"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -52,7 +52,7 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
-      - "scripts/fsgg-coord-shim"
+      - "scripts/fsgg-coord-bash"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -113,11 +113,12 @@ jobs:
       - name: Parity — the engine matches the corpus's certified batch answer
         run: bash tests/coord-engine-parity/run.sh
 
-      # SHIM PARITY (ADR-0040 Phase D.2). The same corpus, re-decided through `scripts/fsgg-coord-shim`
-      # — the ~40-line ADR-0034 §4.4 resolver that will REPLACE the ~7,000-line bash. It re-runs the
-      # parity corpus with the engine indirected through the shim (a shim that dropped an arg, swallowed
-      # output, or mangled an exit code would red one of the 445), and proves the shim resolves the engine
-      # or REFUSES — never the silent no-op (#266) that is the whole reason the bash grew a resolver.
+      # SHIM PARITY (ADR-0040 Phase D.2). The same corpus, re-decided through `scripts/fsgg-coord` —
+      # which the swap cut down to the ~40-line ADR-0034 §4.4 resolver that REPLACED the ~7,000-line bash
+      # (preserved at `scripts/fsgg-coord-bash` for the shadow/flip gates until D.4). It re-runs the parity
+      # corpus with the engine indirected through the shim (a shim that dropped an arg, swallowed output,
+      # or mangled an exit code would red one of the 445), and proves the shim resolves the engine or
+      # REFUSES — never the silent no-op (#266) that is the whole reason the bash grew a resolver.
       - name: Shim parity — the corpus is green THROUGH the ADR-0034 §4.4 shim
         run: bash tests/coord-engine-parity/shim.sh
 

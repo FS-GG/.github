@@ -38,25 +38,33 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # ADR-0040 Phase C (C2). This is the ONE workflow in the org that EXECUTES the coordination client on
+      # ADR-0040 Phase C/D. This is the ONE workflow in the org that EXECUTES the coordination client on
       # a CI runner — `bash scripts/fsgg-coord verify-paths`, below. Every other `fsgg-coord` reference in
-      # CI is a comment, a path filter, or `coordination-sync` byte-COPYING the client (never running it),
-      # and the corpus workflows already build the engine. So when `scripts/fsgg-coord` becomes the §4.4
-      # shim that execs a compiled `fsgg-coord-engine`, THIS is the runner that would otherwise break — and
-      # it is the whole of the C2 rollout, not the ten-workflows-across-six-receivers the ADR assumed.
+      # CI is a comment, a path filter, or `coordination-sync` byte-COPYING the client (never running it).
+      # The D.2 swap cut `scripts/fsgg-coord` to the §4.4 shim that execs a compiled `fsgg-coord-engine`,
+      # so THIS is the runner that would otherwise break — and it is the whole of the C2 rollout, not the
+      # ten-workflows-across-six-receivers the ADR assumed.
       #
-      # `setup-dotnet` lands FIRST (ADR-0040 C2: before the shim, not with it), so the runner has .NET ready
-      # and the shim's cutover PR does not also have to touch runner setup. It is a no-op today — the bash
-      # client ignores it — until the shim arrives, when this step gains the engine build + `FSGG_COORD_ENGINE_BIN`
-      # wiring (.github builds the engine from source, ADR-0034, rather than restoring it from the feed).
+      # `setup-dotnet` landed FIRST under C2 (before the shim, not with it) so the swap did not also have to
+      # touch runner setup. With the shim now in place, this job BUILDS the engine from source (.github never
+      # restores it from the feed, ADR-0034 §4.3) and hands the shim its path via `FSGG_COORD_ENGINE_BIN`
+      # (tier 1) — the same wiring the corpus/e2e gates use, so `verify-paths` resolves an engine here rather
+      # than dying #266-loud on a runner with no built binary.
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
+
+      - name: Build the engine (the shim execs it, ADR-0040 D.2)
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
 
       - name: Check the PR against its issue's declared touch-set
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
         run: |
           set -euo pipefail
           # --warn: report drift, exit 0. The gate is advisory by decision, not by accident. Under

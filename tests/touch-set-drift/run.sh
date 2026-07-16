@@ -64,13 +64,16 @@ PY
 #   client ⊄ gate — the client emits a marker the gate does not classify: same fall-through, on a
 #                   verdict that was supposed to be handled.
 #
-# This is what earns `scripts/fsgg-coord` its place in the selftest's `paths:` trigger.
-markers_err="$(python3 - "$WORK/check.sh" "$REPO_ROOT/scripts/fsgg-coord" 2>&1 <<'PY'
+# This is what earns `scripts/fsgg-coord-bash` its place in the selftest's `paths:` trigger.
+# (ADR-0040 D.2 cut `scripts/fsgg-coord` to the engine shim, which prints no markers; the bash client
+# that emits FSGG-PATHS lives at `scripts/fsgg-coord-bash` until D.4. The ENGINE's verify-paths markers
+# are held to the gate's vocabulary by the D.1/shell corpus case 23, so this stays covered end to end.)
+markers_err="$(python3 - "$WORK/check.sh" "$REPO_ROOT/scripts/fsgg-coord-bash" 2>&1 <<'PY'
 import sys, re
 gate   = set(re.findall(r"grep -q '(FSGG-PATHS [A-Z]+)'", open(sys.argv[1]).read()))
 client = set(re.findall(r"(FSGG-PATHS [A-Z]+)", open(sys.argv[2]).read()))
 if not gate:   sys.exit("the gate greps for no FSGG-PATHS markers at all")
-if not client: sys.exit("scripts/fsgg-coord prints no FSGG-PATHS markers at all")
+if not client: sys.exit("scripts/fsgg-coord-bash prints no FSGG-PATHS markers at all")
 if gate != client:
     sys.exit("gate greps %s; client prints %s; only-in-gate=%s only-in-client=%s" % (
         sorted(gate), sorted(client), sorted(gate - client) or "-", sorted(client - gate) or "-"))

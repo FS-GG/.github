@@ -1,4 +1,8 @@
-# Self-test for scripts/fsgg-coord — the GraphQL-budget-thrifty Coordination-board client.
+# Self-test for scripts/fsgg-coord-bash — the GraphQL-budget-thrifty Coordination-board client.
+#
+# ADR-0040 D.2 cut `scripts/fsgg-coord` down to the ~40-line engine shim; the ~7,000-line bash monolith
+# this corpus certifies is preserved at `scripts/fsgg-coord-bash` and driven here (bash exact + the
+# shadow/flip differential) until D.4 deletes it. The `paths:` filter watches that file, not the shim.
 #
 # Runs tests/fsgg-coord/run-cases.sh, which drives the TIERED fixture: each case in
 # tests/fsgg-coord/cases/ builds its OWN world (fixtures + a PATH-shim `gh` stub that COUNTS calls +
@@ -19,7 +23,7 @@ name: fsgg-coord-selftest
 on:
   pull_request:
     paths:
-      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-bash"
       - "tests/fsgg-coord/**"
       - "src/FS.GG.Coord.Cli/**"
       - "src/FS.GG.Coord.Core/**"
@@ -27,7 +31,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-bash"
       - "tests/fsgg-coord/**"
       - "src/FS.GG.Coord.Cli/**"
       - "src/FS.GG.Coord.Core/**"

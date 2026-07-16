@@ -3,13 +3,16 @@
 **Date:** 2026-07-15
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
-**Status:** In progress — **D.1 COMPLETE; D.2 STARTED**. Phases A–C have landed. The corpus-through-engine
-parity harness has grown from the prototype to **all 27 of 27 corpus cases** (~445 assertions); the full
-corpus now drives the engine over HTTP, green, with the call counts intact. D.2's first slice landed
-([#831](https://github.com/FS-GG/.github/pull/831)): the ADR-0034 §4.4 shim (`scripts/fsgg-coord-shim`)
-exists as a proven artifact and the D.1 corpus is **green THROUGH it** (`tests/coord-engine-parity/shim.sh`,
-wired into `coord-engine.yml`). The remaining D.2 work is the swap itself (make `scripts/fsgg-coord` the
-shim, retire the shell corpus, take the ADR-0015 kit-row `schemaVersion` bump); D.3–D.4 not started.
+**Status:** In progress — **D.1 COMPLETE; D.2 COMPLETE (the swap has landed)**. Phases A–C have landed. The
+corpus-through-engine parity harness grew from the prototype to **all 27 of 27 corpus cases** (~445
+assertions); the full corpus drives the engine over HTTP, green, with the call counts intact. D.2 landed in
+two slices: slice 1 ([#831](https://github.com/FS-GG/.github/pull/831)) landed the ADR-0034 §4.4 shim as a
+proven artifact green THROUGH it; **slice 2 — THE SWAP — made `scripts/fsgg-coord` BE the shim**, preserving
+the ~7,132-line bash verbatim at `scripts/fsgg-coord-bash` for the `50`/`51` differential gates until D.4.
+Everything that executes `scripts/fsgg-coord` now runs the engine, and (C2/C3 having readied the receivers:
+the distributed manifest declares the published `fs.gg.coord.cli` 0.1.1) the merge's auto-propagation IS the
+D.3 delivery. **Next: D.3** — confirm the corpus is green through the shim in all six receivers; then D.4
+(delete bash, dispose the five `51-fs-flip` differential assertions on the record — the one-way door).
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
@@ -697,11 +700,8 @@ Replace `scripts/fsgg-coord` with the ~40-line resolver of ADR-0034 §4.4: resol
 digests, still byte-copies, still byte-compares — none of that machinery changes (why Option D was
 chosen).
 
-**Slice 1 landed ([#831](https://github.com/FS-GG/.github/pull/831)).** The shim exists as a proven
-artifact and the D.1 corpus is green THROUGH it — *without yet swapping the 7,132-line bash*, because the
-shadow/differential gates (`50-shadow-engine`/`51-fs-flip`) still need bash present until D.4, and the
-ADR-0015 kit-row contract change is deferred to the swap slice. `scripts/fsgg-coord-shim` resolves ONE
-engine and execs it (argv + exit code passed through unchanged, no output of its own on the happy path),
+**Slice 1 landed ([#831](https://github.com/FS-GG/.github/pull/831)).** The shim existed as a proven
+artifact and the D.1 corpus was green THROUGH it (`scripts/fsgg-coord-shim` beside the bash, not over it),
 with the 4-tier resolution order lifted verbatim from bash's proven `engine_resolve`: explicit
 `FSGG_COORD_ENGINE_BIN` (honoured or REFUSED, never fallen back from) → a global tool on PATH → a local
 `.config/dotnet-tools.json` manifest (restored if only declared, #655) → the from-source `.github` build;
@@ -709,11 +709,55 @@ nothing resolvable is a loud non-zero with advice, never the silent no-op (#266)
 end. `tests/coord-engine-parity/shim.sh` re-runs the full D.1 parity corpus with the engine indirected
 through the shim (all 445 assertions green through it — a dropped arg / swallowed byte / mangled exit code
 would red one) plus the resolution/refusal legs pass-through cannot show; `coord-engine.yml` runs it after
-the parity gate. C2/C3 were already done. **Remaining:** the swap (make `scripts/fsgg-coord` the shim,
-retire the shell corpus into the D.1 HTTP corpus, take the ADR-0015 `schemaVersion` bump).
+the parity gate. C2/C3 were already done.
+
+**Slice 2 landed — THE SWAP.** `scripts/fsgg-coord` IS the shim now: slice 1's `scripts/fsgg-coord-shim`
+body moved onto the canonical path (its doc-comment rewritten from "ships beside bash" to "IS the
+entrypoint"), and the standalone `-shim` file was folded away. The ~7,132-line bash monolith is preserved
+**verbatim** (a pure `git mv`, zero content diff) at **`scripts/fsgg-coord-bash`**, where the shadow /
+differential gates (`50-shadow-engine`/`51-fs-flip`) and the escape-hatch corpus keep driving it against
+the engine until D.4 deletes it. Everything that *executes* `scripts/fsgg-coord` now transparently runs the
+engine; `registry/repos.lock` was re-locked so the kit distributes the shim's bytes. Proven locally green
+end-to-end: the swapped entrypoint resolves the from-source engine (tier 4) and execs every subcommand;
+D.1 parity **445/445** and shim parity **5/5** through the new `scripts/fsgg-coord`; the shell corpus
+**891/891** (incl. `50-shadow-engine` 96 + `51-fs-flip` 28) driving the preserved bash against the engine,
+in both default and `FSGG_COORD_ENGINE=fs` modes; Cli unit tests 92/92; coordination-sync 86/86,
+touch-set-drift selftest 14/14, repos-registry 95/95, repos-audit 46/46; `repos.sh validate` OK.
+
+Three decisions on the record:
+
+1. **No `schemaVersion` bump, no CHANGELOG entry.** The swap changes a kit *client's content*, not the
+   registry *schema shape* (the `fsgg-coord` row is structurally identical — `kind: client, source:
+   scripts/fsgg-coord`). `registry/repos.CHANGELOG.md` states the rule outright: "Re-locking a kit digest
+   is not [changelog-worthy]." So the memory's anticipated ADR-0015 bump was **not in fact required** —
+   there is no ADR-0037 publish-before-flip to run, only a `repos.sh relock`. (Had the row's *kind* or a
+   *field* changed, that would be schema growth; it did not.)
+2. **The shell-corpus retirement moves to D.4, not here.** Retiring `tests/fsgg-coord/*` is inseparable
+   from deleting bash: `50-shadow-engine`/`51-fs-flip` need bash *and its whole harness world*, and the
+   escape-hatch cases hold bash exact — all of which live until D.4. So the harness `COORD` var was
+   repointed at `scripts/fsgg-coord-bash` (keeping all 29 cases green against bash) rather than the corpus
+   retired; D.4 deletes bash and the corpus together.
+3. **The three "read-`fsgg-coord`-as-bash-source" gates were repointed at `scripts/fsgg-coord-bash`**, not
+   rewritten to interrogate the engine (that is D.4 work, when bash is gone): `recipe-landable`'s two
+   `landable`-existence greps, `generate-projections`'s `TOUCHSET_GRAMMAR` drift scrape, and the
+   `touch-set-drift` selftest's FSGG-PATHS marker-vocabulary check. The engine's copies of all three are
+   already held to the same contract by the D.1/shell corpus (case 23 verify-paths, `facts` grammar), so
+   nothing goes uncovered. `touch-set-drift.yml` — the ONE workflow that *executes* the client on a runner
+   — gained the engine build + `FSGG_COORD_ENGINE_BIN` wiring C2 pre-staged, so `verify-paths` resolves an
+   engine there instead of dying #266-loud.
 
 - **Exit:** the corpus (D.1) is green *through the shim* on `.github@main`; every workflow that shells
-  out is green (C2); the restore gate is green (C3). *(Corpus-green-through-shim: DONE. Swap: remaining.)*
+  out is green (C2); the restore gate is green (C3). **DONE** — the swap has landed on `.github@main`.
+
+**Receiver readiness for D.3 (confirmed here, not assumed).** Merging the swap auto-fires
+`coordination-propagate` (it triggers on a push touching `scripts/fsgg-coord`), byte-copying the shim to
+the six receivers — which is the *intended* D.3 delivery, not a hazard, **because C2/C3 made the receivers
+ready**: the distributed `dist/dotnet/.config/dotnet-tools.json` (sync'd to every receiver via
+`build-config`) declares `fs.gg.coord.cli` **0.1.1** → `fsgg-coord-engine`, that version **is published**
+to the org feed (tags `coord-engine/v0.1.0`/`v0.1.1`, `release-coord-engine.yml`), and `setup-dotnet` is in
+every receiver workflow that shells out. So a receiver resolves the shim via **tier 3** (declared manifest +
+`dotnet tool restore` + `dotnet` present). D.3 is now the *verification* that they went green, not a
+separate rollout.
 
 ### D.3 — Green in all six receivers
 
@@ -853,12 +897,19 @@ documented retirement is not.**
       `scopedRepo` resolver; this slice proved it over HTTP from FAKE CHECKOUTS against a MULTI-REPO
       `reap_scope_server.py` (a dead stale claim in SDD AND Rendering, a leak visible in the dry-run line and
       the `/_requests` ledger). 7 parity assertions; no new unit tests (resolver + guard already covered).
-- [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
-      **STARTED ([#831](https://github.com/FS-GG/.github/pull/831)):** the ADR-0034 §4.4 shim
-      (`scripts/fsgg-coord-shim`) landed as a proven artifact and the D.1 corpus is green THROUGH it
-      (`tests/coord-engine-parity/shim.sh`, gated in `coord-engine.yml`); C2/C3 already done. Remaining: the
-      **swap** — make `scripts/fsgg-coord` the shim, retire the shell corpus into the D.1 HTTP corpus, and
-      take the ADR-0015 kit-row `schemaVersion` bump (bash stays present for `50`/`51` until D.4).
+- [x] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green. **DONE.**
+      Slice 1 ([#831](https://github.com/FS-GG/.github/pull/831)) landed the ADR-0034 §4.4 shim as a proven
+      artifact (`tests/coord-engine-parity/shim.sh`). **Slice 2 — THE SWAP —** made `scripts/fsgg-coord` BE
+      the shim: the ~7,132-line bash is preserved verbatim (pure `git mv`) at `scripts/fsgg-coord-bash` for
+      the `50`/`51` differential gates until D.4, the standalone `-shim` file folded onto the canonical path,
+      and `repos.lock` re-locked to the shim's bytes. Everything that executes `scripts/fsgg-coord` now runs
+      the engine; `touch-set-drift.yml` (the one runner that executes it) gained the C2-staged engine build +
+      `FSGG_COORD_ENGINE_BIN`. Green locally end-to-end: parity 445/445 and shim parity 5/5 through the new
+      entrypoint, the shell corpus 891/891 (bash vs engine, default + `fs`), Cli 92/92, coordination-sync /
+      touch-set-drift / repos-registry / repos-audit selftests all green, `repos.sh validate` OK. **No
+      `schemaVersion` bump** (a client-content change, not schema growth — `repos.CHANGELOG.md`'s "re-locking
+      is not changelog-worthy" rule); **shell-corpus retirement deferred to D.4** (it lives with bash). The
+      three gates that read `fsgg-coord` as bash source repoint at `scripts/fsgg-coord-bash`.
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the
       record; the `engine-retires` label and epic [#729](https://github.com/FS-GG/.github/issues/729)'s

@@ -15,9 +15,10 @@
 #                                     — the RECIPES it governs. This is the one that matters: a PR
 #                                       that hand-rolls a merge gate touches ONLY a SKILL.md, and if
 #                                       that did not trigger this workflow the rule would be decorative.
-#   scripts/fsgg-coord                — the one sanctioned implementation. If `landable` is removed or
-#                                       renamed, every recipe's instruction to call it becomes a lie,
-#                                       and this gate should be the thing that says so.
+#   scripts/fsgg-coord-bash           — the bash implementation this gate greps for `landable` (ADR-0040
+#                                       D.2 cut `scripts/fsgg-coord` to the engine shim; bash is preserved
+#                                       here until D.4). If `landable` is removed or renamed, every recipe's
+#                                       instruction to call it becomes a lie, and this gate says so.
 name: recipe-landable
 
 on:
@@ -28,7 +29,7 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
-      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-bash"
       - ".github/workflows/recipe-landable.yml"
   push:
     branches: [main]
@@ -38,7 +39,7 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
-      - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-bash"
       - ".github/workflows/recipe-landable.yml"
   workflow_dispatch:
 
@@ -65,7 +66,11 @@ jobs:
       - name: Assert the command the recipes name still exists
         run: |
           scripts/fsgg-coord landable --help >/dev/null 2>&1 || true
-          grep -q '^landable_cmd()' scripts/fsgg-coord \
-            || { echo "::error::scripts/fsgg-coord has no 'landable' command, but every recipe tells workers to call it."; exit 1; }
-          grep -q 'landable)' scripts/fsgg-coord \
+          # ADR-0040 D.2: `scripts/fsgg-coord` is now the engine shim; the bash implementation this gate
+          # greps lives at `scripts/fsgg-coord-bash` until D.4 deletes it (at which point this check moves
+          # to interrogate the engine's command surface). Both engines carry `landable`; asserting bash's
+          # copy keeps recipe↔implementation coherence honest while bash is still shipped.
+          grep -q '^landable_cmd()' scripts/fsgg-coord-bash \
+            || { echo "::error::scripts/fsgg-coord-bash has no 'landable' command, but every recipe tells workers to call it."; exit 1; }
+          grep -q 'landable)' scripts/fsgg-coord-bash \
             || { echo "::error::'landable' is not wired into fsgg-coord's command dispatch."; exit 1; }
