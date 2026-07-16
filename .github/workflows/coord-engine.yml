@@ -36,6 +36,7 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-shim"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -51,6 +52,7 @@ on:
       - "tests/coord-engine-parity/**"
       - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
+      - "scripts/fsgg-coord-shim"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
       - "Directory.Packages.props"
@@ -110,6 +112,14 @@ jobs:
       # corpus's own contract, so the two cannot drift.
       - name: Parity — the engine matches the corpus's certified batch answer
         run: bash tests/coord-engine-parity/run.sh
+
+      # SHIM PARITY (ADR-0040 Phase D.2). The same corpus, re-decided through `scripts/fsgg-coord-shim`
+      # — the ~40-line ADR-0034 §4.4 resolver that will REPLACE the ~7,000-line bash. It re-runs the
+      # parity corpus with the engine indirected through the shim (a shim that dropped an arg, swallowed
+      # output, or mangled an exit code would red one of the 445), and proves the shim resolves the engine
+      # or REFUSES — never the silent no-op (#266) that is the whole reason the bash grew a resolver.
+      - name: Shim parity — the corpus is green THROUGH the ADR-0034 §4.4 shim
+        run: bash tests/coord-engine-parity/shim.sh
 
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
