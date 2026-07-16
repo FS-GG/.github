@@ -21,6 +21,17 @@ module Kit =
             | Some have when have <> want -> Some src // present AND its digest differs → stale
             | _ -> None) // matches, or the file is not in this tree → not a staleness
 
+    let declaredSources (lock: (string * string) list) (declared: string list) : string list =
+        lock
+        |> List.choose (fun (_want, src) ->
+            // EITHER DIRECTION, and that is `tokensOverlap`'s contract, not an accident of using it: a
+            // worker declaring `.claude/skills/pnext-item/**` names the source, and so does one declaring
+            // the bare parent `.claude/skills` — which reserves it just as effectively (#309).
+            if declared |> List.exists (fun token -> TouchSet.tokensOverlap token src) then
+                Some src
+            else
+                None)
+
     let divergedRoots (roots: (string * byte[] option * byte[] option) list) : string list =
         roots
         |> List.choose (fun (name, a, b) ->
