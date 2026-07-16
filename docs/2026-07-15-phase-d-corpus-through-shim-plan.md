@@ -3,9 +3,13 @@
 **Date:** 2026-07-15
 **Owner:** `.github` (the coordination engine)
 **Governs:** the execution of [ADR-0040](adr/0040-port-the-io-layer.md) Phase D
-**Status:** In progress — **D.1 COMPLETE**. Phases A–C have landed. The corpus-through-engine parity
-harness has grown from the prototype to **all 27 of 27 corpus cases** (~445 assertions); the full corpus
-now drives the engine over HTTP, green, with the call counts intact. D.2–D.4 not started.
+**Status:** In progress — **D.1 COMPLETE; D.2 STARTED**. Phases A–C have landed. The corpus-through-engine
+parity harness has grown from the prototype to **all 27 of 27 corpus cases** (~445 assertions); the full
+corpus now drives the engine over HTTP, green, with the call counts intact. D.2's first slice landed
+([#831](https://github.com/FS-GG/.github/pull/831)): the ADR-0034 §4.4 shim (`scripts/fsgg-coord-shim`)
+exists as a proven artifact and the D.1 corpus is **green THROUGH it** (`tests/coord-engine-parity/shim.sh`,
+wired into `coord-engine.yml`). The remaining D.2 work is the swap itself (make `scripts/fsgg-coord` the
+shim, retire the shell corpus, take the ADR-0015 kit-row `schemaVersion` bump); D.3–D.4 not started.
 Case 31 is now FULL — its #720 superseded-run verdict drives through the engine's first-class `landable`
 command, and its #724 `--wait` poll loop (which never believes an early green — it waits for the run set to
 STOP GROWING) landed on top of it. Case 13 is now FULL too — its last leg, `reap` (the DESTRUCTIVE worker
@@ -693,8 +697,23 @@ Replace `scripts/fsgg-coord` with the ~40-line resolver of ADR-0034 §4.4: resol
 digests, still byte-copies, still byte-compares — none of that machinery changes (why Option D was
 chosen).
 
+**Slice 1 landed ([#831](https://github.com/FS-GG/.github/pull/831)).** The shim exists as a proven
+artifact and the D.1 corpus is green THROUGH it — *without yet swapping the 7,132-line bash*, because the
+shadow/differential gates (`50-shadow-engine`/`51-fs-flip`) still need bash present until D.4, and the
+ADR-0015 kit-row contract change is deferred to the swap slice. `scripts/fsgg-coord-shim` resolves ONE
+engine and execs it (argv + exit code passed through unchanged, no output of its own on the happy path),
+with the 4-tier resolution order lifted verbatim from bash's proven `engine_resolve`: explicit
+`FSGG_COORD_ENGINE_BIN` (honoured or REFUSED, never fallen back from) → a global tool on PATH → a local
+`.config/dotnet-tools.json` manifest (restored if only declared, #655) → the from-source `.github` build;
+nothing resolvable is a loud non-zero with advice, never the silent no-op (#266) the resolver exists to
+end. `tests/coord-engine-parity/shim.sh` re-runs the full D.1 parity corpus with the engine indirected
+through the shim (all 445 assertions green through it — a dropped arg / swallowed byte / mangled exit code
+would red one) plus the resolution/refusal legs pass-through cannot show; `coord-engine.yml` runs it after
+the parity gate. C2/C3 were already done. **Remaining:** the swap (make `scripts/fsgg-coord` the shim,
+retire the shell corpus into the D.1 HTTP corpus, take the ADR-0015 `schemaVersion` bump).
+
 - **Exit:** the corpus (D.1) is green *through the shim* on `.github@main`; every workflow that shells
-  out is green (C2); the restore gate is green (C3).
+  out is green (C2); the restore gate is green (C3). *(Corpus-green-through-shim: DONE. Swap: remaining.)*
 
 ### D.3 — Green in all six receivers
 
@@ -835,6 +854,11 @@ documented retirement is not.**
       `reap_scope_server.py` (a dead stale claim in SDD AND Rendering, a leak visible in the dry-run line and
       the `/_requests` ledger). 7 parity assertions; no new unit tests (resolver + guard already covered).
 - [ ] D.2 — the shim cut; corpus green through it on `.github@main`; C2 + C3 green.
+      **STARTED ([#831](https://github.com/FS-GG/.github/pull/831)):** the ADR-0034 §4.4 shim
+      (`scripts/fsgg-coord-shim`) landed as a proven artifact and the D.1 corpus is green THROUGH it
+      (`tests/coord-engine-parity/shim.sh`, gated in `coord-engine.yml`); C2/C3 already done. Remaining: the
+      **swap** — make `scripts/fsgg-coord` the shim, retire the shell corpus into the D.1 HTTP corpus, and
+      take the ADR-0015 kit-row `schemaVersion` bump (bash stays present for `50`/`51` until D.4).
 - [ ] D.3 — green through the shim in all six receivers.
 - [ ] D.4 — bash deleted; `--engine=bash` removed; the five `51-fs-flip.sh` assertions disposed of on the
       record; the `engine-retires` label and epic [#729](https://github.com/FS-GG/.github/issues/729)'s
