@@ -76,7 +76,7 @@ jobs:
       # in its subject. Reading the pin is the same de-duplication #609 itself made when it collapsed
       # four hand-set .fsproj copies of these properties into one file. (Sibling workflows pin the
       # version literally; this one does not need to, because it is the one that evaluates global.json.)
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
       - name: Run the sync-build-config fixture
