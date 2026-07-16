@@ -43,6 +43,7 @@ module Fake =
         match v with
         | VString s -> s
         | VId s -> s
+        | VDate s -> s
         | VNumber n ->
             if Double.IsInteger n then
                 string (int64 n)

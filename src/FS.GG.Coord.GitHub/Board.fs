@@ -522,7 +522,11 @@ module Board =
             match field.Type with
             | SingleSelect options ->
                 match Map.tryFind value options with
-                | Some optionId -> Ok("value: {singleSelectOptionId: $optionId}", [ "optionId", VId optionId ])
+                // `VString`, NOT `VId` — an option id LOOKS like an id, and the schema types it `String`.
+                // GraphQL checks the DECLARATION against the argument, never against the value, so `VId`
+                // here declares `$optionId: ID!` against a `String` argument and every single-select write
+                // is refused before it is attempted (#848).
+                | Some optionId -> Ok("value: {singleSelectOptionId: $optionId}", [ "optionId", VString optionId ])
                 | None ->
                     let known = options |> Map.keys |> String.concat ", "
 
@@ -535,8 +539,14 @@ module Board =
                 | true, n -> Ok("value: {number: $number}", [ "number", VNumber n ])
                 | _ -> Error $"'%s{value}' is not a number, and a NUMBER field cannot hold it."
 
-            | Date -> Ok("value: {date: $date}", [ "date", VString value ])
-            | Iteration -> Ok("value: {iterationId: $iterationId}", [ "iterationId", VId value ])
+            // `VDate`, NOT `VString` — the scalar is named `Date`, so `$date: String!` is refused against
+            // it exactly as `$optionId: ID!` was against `String`. The board has two DATE fields (`Start`,
+            // `Target`), so unlike the iteration leg below this one is reached today (#848).
+            | Date -> Ok("value: {date: $date}", [ "date", VDate value ])
+            // `iterationId` is `String` in the schema too, for the same reason and with the same fix. No
+            // field on the board is an Iteration today, so this path is unreached — and it would have been
+            // refused identically the day somebody added one.
+            | Iteration -> Ok("value: {iterationId: $iterationId}", [ "iterationId", VString value ])
 
     let setField
         (transport: IGitHubTransport)
@@ -584,6 +594,7 @@ module Board =
                             | VId _ -> "ID!"
                             | VNumber _ -> "Float!"
                             | VString _ -> "String!"
+                            | VDate _ -> "Date!"
 
                         $"$%s{name}: %s{t}")
                     |> String.concat ", "
@@ -651,6 +662,9 @@ module Board =
                                 match v with
                                 | VId s -> gqlStr s
                                 | VString s -> gqlStr s
+                                // A `Date` literal is a quoted string in GraphQL source, like the two above.
+                                // The tag matters for the DECLARATION, which this path does not emit.
+                                | VDate s -> gqlStr s
                                 | VNumber n -> string n
 
                             let key =
