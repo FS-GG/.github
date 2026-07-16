@@ -59,8 +59,8 @@ let private renderText (leaseMinutes: int) (decision: Verdict<Batch.BatchResult>
             for d in passed do
                 eprint $"  %s{Batch.explainDecision leaseMinutes d}"
 
-        // #428 — the starved-queue banner. `decide` feeds a pre-built snapshot (shadow/flip), so a bash
-        // snapshot that carried the same off-board and markerless reservations produces the same aggregate.
+        // #428 — the starved-queue banner. `decide` feeds a pre-built snapshot, so any snapshot that
+        // carried the same off-board and markerless reservations produces the same aggregate.
         for line in Batch.starvedBanner leaseMinutes result do
             eprint line
 
@@ -99,51 +99,6 @@ let private facts (opts: Options) =
             printfn "- **%s** — %s" v.Kind v.Meaning
 
     ExitGreen
-
-/// Fold the fleet divergence ledger into the cut-over verdict (#634).
-///
-/// The exit code IS the gate. `no-verdict` is 4 and `red` is 3 — neither is 0, so a caller that only
-/// checks `if engine fleet; then flip; fi` cannot flip on an empty ledger, a one-worker ledger, or a
-/// ledger full of somebody else's engine build. That is the whole point: the criterion had no
-/// implementation at all, so it could only ever be met by a human deciding it had been.
-let private fleet (opts: Options) =
-    let json = readInput opts
-
-    if String.IsNullOrWhiteSpace json then
-        // An EMPTY document is not an empty ledger. The client is meant to hand us what it read; if it
-        // handed us nothing, we did not observe a fleet that never diverged — we failed to observe
-        // anything, and the difference between those two is this entire module.
-        eprint
-            "fsgg-coord-engine: the ledger document is empty. That is a failed read, not an empty ledger — refusing to decide."
-
-        ExitError
-    else
-
-    match Fleet.parse json with
-    | Error errors ->
-        eprint "fsgg-coord-engine: the ledger is malformed, so no verdict was reached:"
-
-        for e in errors do
-            eprint $"  %s{e.Path}: %s{e.Message}"
-
-        ExitError
-
-    | Ok query ->
-        let verdict =
-            Divergence.evaluate query.Engine query.RequiredDays query.MinWorkers query.Today query.Reports
-
-        match opts.Render with
-        | Json -> printfn "%s" (Fleet.render verdict)
-        | Text ->
-            for line in Divergence.explain verdict do
-                match verdict with
-                | Green _ -> printfn "%s" line
-                | _ -> eprint line
-
-        match verdict with
-        | Green _ -> ExitGreen
-        | Red _ -> ExitRed
-        | NoVerdict _ -> ExitNoVerdict
 
 /// Partition the board into lanes (#428). Reads the SAME snapshot `decide` does, so lanes and the
 /// scheduler can never disagree about which items exist or what they reserve — that divergence is #485
@@ -348,8 +303,6 @@ let main argv =
 
             | Decide -> decide opts
 
-            | FleetVerdict -> fleet opts
-
             | LanesView -> lanes opts
 
             | Facts -> facts opts
@@ -389,7 +342,7 @@ let main argv =
 
     with e ->
         // A DEFECT IS ITS OWN EXIT CODE, and it is not `1`. The client must be able to tell "the engine
-        // is broken" from "the caller is wrong" — because the first means the shadow is untrustworthy
+        // is broken" from "the caller is wrong" — because the first means the engine is untrustworthy
         // and the second means the snapshot is. Collapsing them would hide a broken engine behind a
         // stream of what look like bad inputs.
         eprint $"fsgg-coord-engine: DEFECT — %s{e.GetType().Name}: %s{e.Message}"
