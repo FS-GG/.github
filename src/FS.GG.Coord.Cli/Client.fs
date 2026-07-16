@@ -995,6 +995,141 @@ module Client =
                         eprint $"fsgg-coord-engine: %s{ref.Short} carries a marker held by nobody (an unparseable lock). It blocks until reaped."
                         ExitRed
 
+    /// #697 — take over an ORPHAN (a stale claim whose PR is FINISHED) and land it.
+    ///
+    /// `reap` refuses a stale claim whose PR is open (#581, correct) and then offers exactly one exit,
+    /// "close it, then reap". For a PR that is green, reviewed and mergeable that exit DESTROYS the best work
+    /// on the board — and it is the path of least resistance. `adopt` lets a worker land another worker's
+    /// orphaned PR through ONE verified command that cannot be talked into landing anything else.
+    ///
+    /// WHAT MAKES THIS SAFE IS THE GATE, NOT THE TRANSFER. Each refusal below is a state in which "adopt"
+    /// would mean something other than *finish somebody's finished work*: a LIVE claim is not an orphan
+    /// (taking it is a steal); no open PR is nothing to land (the claim is merely dead — `reap` it); a PR
+    /// that is not GREEN AND MERGEABLE is not finished (rebasing a conflict or fixing a red is AUTHORING);
+    /// and `unknown` refuses too, because adopting on a guess is how a "verified" command launders the
+    /// unverified, destructive act it exists to replace.
+    ///
+    /// THE TRANSFER ITSELF IS `claim`'s, ON PURPOSE. `claim` already runs the comment-id CAS, carries the
+    /// original `prev` across (#481), and refuses a lost race or a #516 second hold. Re-implementing it here
+    /// would be a SECOND lock, and the second one is the one with the bug. `adopt` is a GATE IN FRONT OF
+    /// `claim`, not a rival to it — so the "GREEN and MERGEABLE" line is a PRECONDITION report, not a success
+    /// banner: the `claim` below can still refuse, and the ADOPTED epilogue prints only when it truly won.
+    let adopt (ctx: Context) (opts: Options) : int =
+        match oneArg opts "adopt: an issue ref", worker opts with
+        | Error c, _
+        | _, Error c -> c
+        | Ok arg, Ok w ->
+            match parseRef ctx arg with
+            | Error msg ->
+                eprint $"fsgg-coord-engine: %s{msg}"
+                ExitError
+            | Ok ref ->
+                // Read the LOCK off the item (fresh — the lock is never cached).
+                match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
+                | Error e -> fail e
+                | Ok markers ->
+                    match Reads.winner opts.LeaseMinutes markers with
+                    // 1. A LIVE claim is not an orphan. Its worker is alive, and taking their item is a STEAL.
+                    | Some live ->
+                        eprint
+                            $"fsgg-coord-engine: %s{ref.Short} is held by a LIVE claim — worker '%s{live.Worker.Value}', renewed %d{live.AgeSeconds / 60}m ago (lease %d{opts.LeaseMinutes}m). A worker that is alive is not an orphan, and taking their item is a steal, not an adoption."
+
+                        eprint
+                            $"  Talk to them:  fsgg-coord-engine say %s{ref.Short} --to %s{live.Worker.Value} --message '<message>'"
+
+                        eprint
+                            $"  If you genuinely mean to take it anyway, that is a steal, and the flag says so:  fsgg-coord-engine claim %s{ref.Short} --force"
+
+                        ExitRed
+                    | None ->
+                        // 2. There must be an EXPIRED claim to adopt — the lowest-id marker (`reap`'s rule).
+                        match markers |> List.sortBy (fun m -> m.Id) |> List.tryHead with
+                        | None ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short} carries no expired claim — there is no orphan here to adopt."
+
+                            eprint
+                                $"  If it is simply unclaimed, take it the ordinary way:  fsgg-coord-engine claim %s{ref.Short}"
+
+                            ExitRed
+                        | Some stale ->
+                            let ow = stale.Worker.Value
+                            let oage = stale.AgeSeconds / 60
+
+                            // 3. There must be FINISHED WORK: an open PR on the item's `item/<n>-*` branch.
+                            match Reads.prAlive ctx.Transport ref.Owner ref.Repo ref.Number with
+                            | Error e -> fail e
+                            | Ok LeaseExpiredNoPr ->
+                                eprint
+                                    $"fsgg-coord-engine: worker '%s{ow}' claim on %s{ref.Short} is expired (idle %d{oage}m), but there is NO open PR on 'item/%d{ref.Number}-*' — so there is no finished work to adopt. That claim is simply dead."
+
+                                eprint
+                                    $"  Collect it and take the item normally:  fsgg-coord-engine reap --repo %s{ref.Repo} --apply && fsgg-coord-engine claim %s{ref.Short}"
+
+                                ExitRed
+                            | Ok LeaseHeld
+                            | Ok LivenessUnknown ->
+                                // We could not establish the PR's existence — fail closed. Adopting on a read
+                                // we could not make is the guess this command exists to refuse.
+                                eprint
+                                    $"fsgg-coord-engine: could NOT determine whether %s{ref.Short} has an open PR (rate limit? network?). REFUSING to adopt on a guess — look at the item yourself."
+
+                                ExitRed
+                            | Ok(LeaseExpiredPrOpen pnum) ->
+                                // 4. THE GATE. `adopt` lands FINISHED work and nothing else.
+                                match Reads.prLandable ctx.Transport ref.Owner ref.Repo pnum with
+                                | PrGreen ->
+                                    // A PRECONDITION report, not a success banner — `claim` below can still
+                                    // refuse (a lost CAS, #516, a twin), and announcing success before it wins
+                                    // would leave the operator unable to tell whether the lock was taken.
+                                    eprint
+                                        $"fsgg-coord-engine: PR #%d{pnum} on 'item/%d{ref.Number}-*' is GREEN and MERGEABLE — worker '%s{ow}' FINISHED this work and died before landing it (idle %d{oage}m). Taking the claim..."
+
+                                    // 5. Take the lock. `claim` does the transfer under the same CAS as every
+                                    //    other lock; it DIES on a lost race, so the epilogue runs only on a win.
+                                    let rc = claim ctx opts
+
+                                    if rc = ExitGreen then
+                                        eprint
+                                            $"fsgg-coord-engine: ADOPTED %s{ref.Short} from worker '%s{ow}' — the claim is now yours."
+
+                                        eprint
+                                            $"  The work is FINISHED. Do NOT rebuild it, and do NOT close PR #%d{pnum}. Land it:"
+
+                                        eprint
+                                            $"    gh api -X PUT repos/%s{ref.Owner}/%s{ref.Repo}/pulls/%d{pnum}/merge -f merge_method=squash"
+
+                                        eprint $"    fsgg-coord-engine done %s{ref.Short} --flip"
+                                        ExitGreen
+                                    else
+                                        rc
+                                | PrConflicted ->
+                                    eprint
+                                        $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is OPEN but CONFLICTED with its base — so it is not landable as it stands, and it is not finished work. Rebasing it is AUTHORING, not landing; and GitHub gives a conflicted PR no CI at all (it cannot build refs/pull/%d{pnum}/merge), so nothing about it has been verified since the conflict appeared."
+
+                                    eprint
+                                        $"  Take the item the ordinary way and finish the job:  fsgg-coord-engine reap --repo %s{ref.Repo} --apply && fsgg-coord-engine claim %s{ref.Short}"
+
+                                    ExitRed
+                                | PrPending ->
+                                    eprint
+                                        $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} still has checks RUNNING — it is not finished yet, and a pending check is not a passing one. Let CI settle, then adopt."
+
+                                    ExitRed
+                                | PrRed ->
+                                    eprint
+                                        $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is NOT green — either a check failed, or it has NO check runs at all. Both are one verdict here: a missing subject is a finding, not a pass (#606), and CI that never started has proved nothing. A red PR is not finished work."
+
+                                    eprint
+                                        $"  If it is genuinely abandoned, close the PR and reap the claim. If it is salvageable, take the item and finish it:  fsgg-coord-engine reap --repo %s{ref.Repo} --apply && fsgg-coord-engine claim %s{ref.Short}"
+
+                                    ExitRed
+                                | PrUnknown ->
+                                    eprint
+                                        $"fsgg-coord-engine: could NOT determine the state of PR #%d{pnum} on %s{ref.Short} (rate limit? network? GitHub computes mergeability lazily and may not have done so yet). REFUSING to adopt on a guess — an 'adopt' that lands an unverified PR is exactly the destructive act this command exists to replace. Look at the PR, or re-run in a moment."
+
+                                    ExitRed
+
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with
         | Error c, _
@@ -2437,6 +2572,7 @@ module Client =
             | Reap -> reap ctx opts
             | Budget -> budget ctx
             | Claim -> claim ctx opts
+            | Adopt -> adopt ctx opts
             | Take -> take ctx opts
             | Release -> release ctx opts
             | Heartbeat -> heartbeat ctx opts

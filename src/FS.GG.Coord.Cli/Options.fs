@@ -16,6 +16,7 @@ module Options =
         | Who
         | Reap
         | Claim
+        | Adopt
         | Take
         | Release
         | Heartbeat
@@ -307,6 +308,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `--apply`, so the bare form is a DRY RUN.
         | "reap" :: rest -> flags { defaults with Command = Reap; Render = Text } rest
         | "claim" :: rest -> flags { defaults with Command = Claim } rest
+        // `adopt` reports as text (a precondition report the operator reads); it gates the `claim` transfer.
+        | "adopt" :: rest -> flags { defaults with Command = Adopt; Render = Text } rest
         | "take" :: rest -> flags { defaults with Command = Take } rest
         | "release" :: rest -> flags { defaults with Command = Release } rest
         | "heartbeat" :: rest -> flags { defaults with Command = Heartbeat } rest
