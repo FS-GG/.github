@@ -42,7 +42,9 @@ module Identity =
     /// Resolve the worker id. `worker` is the `--worker` flag value, if any.
     ///
     /// `Error` when no id can be derived without inventing a shared one — with a message telling the caller
-    /// to pass `--worker` or `eval "$(fsgg-coord-engine whoami --mint)"`, exactly as the bash client does.
+    /// to pass `--worker` or `eval "$(scripts/fsgg-coord whoami --mint)"`. The remedy names the RESOLVER
+    /// (`scripts/fsgg-coord`), never this engine's own binary: `fsgg-coord-engine` is not on PATH, so a
+    /// worker who pastes it gets `command not found` (#569).
     val resolve: worker: string option -> Result<Worker, string>
 
     /// Mint a fresh, genuinely-random id (`whoami --mint`). One `word-hhhh` line, so

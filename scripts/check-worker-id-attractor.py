@@ -45,6 +45,23 @@ WHAT IT ASSERTS, over every Markdown file in the agent-skill roots and in docs/:
      that no longer shows anyone how to mint an id is a surface whose readers will invent one, which
      is #419 again from the other end.
 
+...and over the ENGINE SOURCE (`src/`, `scripts/`), one more:
+
+  4. THE REMEDY THE TOOL PRINTS RUNS AS PRINTED (#569). Rule 2 says there is exactly one mint idiom
+     — but nothing read the TOOL's own strings, so the tool was exempt, and it drifted:
+
+         eval "$(fsgg-coord-engine whoami --mint)"     <- what all five sites printed
+         eval "$(scripts/fsgg-coord whoami --mint)"    <- what every doc teaches, and what runs
+
+     `fsgg-coord-engine` is not on PATH. `scripts/fsgg-coord` is the ADR-0034 §4.4 resolver that
+     finds the engine and execs it, and it is the only spelling that runs from a plain checkout.
+
+     This is #551's own bug one level down — the tool and the docs teaching two forms of one command
+     — except that this fork was a BROKEN one, so it was worse: the divergent idiom at least worked.
+     And the surface it broke on has the highest readership of any, because a worker meets it at the
+     moment `whoami` warns, before they have read anything else. #551 unified the docs; the tool was
+     the last holdout, for the structural reason that a doc-only gate could not see it.
+
 FAILS CLOSED (epic #266). Auditing zero files is a failure to audit, not a clean audit — and so is
 auditing files in which the extractor finds no worker-id mention at all, because these documents
 demonstrably carry them. If the glob breaks, the gate goes RED, not green.
@@ -85,9 +102,66 @@ FALLBACK_ROOTS = (".claude/skills", ".agents/skills")
 # entire window that #551 was needed to close.
 DOC_SURFACE = ("docs",)
 
+# ...plus the ENGINE SOURCE, because the remedy a worker actually runs is the one the TOOL prints,
+# and it is the copy with the highest readership: a worker meets it the moment `whoami` warns, before
+# they have read any doc. #569: all five sites printed `eval "$(fsgg-coord-engine whoami --mint)"`,
+# and `fsgg-coord-engine` is not on PATH — so the one mint idiom's own remedy was `command not
+# found`, and a worker who did exactly as told got nothing. A doc-only gate cannot see that. This is
+# rule 2 ("exactly one mint idiom") applied to the surface that was exempt from it, which is why the
+# tool was the last holdout after #551 unified the docs.
+CODE_SURFACE = ("src", "scripts")
+CODE_SUFFIXES = (".fs", ".fsi", ".py", ".sh")
+# The engine, specifically. Its remedies are the non-vacuity subject below: this program demonstrably
+# prints them, so finding none means the extractor is broken, not that the tree is clean.
+ENGINE_SURFACE = "src/FS.GG.Coord.Cli"
+# Build output carries a COPY of every doc comment (bin|obj/…/*.xml, and .fs the compiler generates).
+# It is not a surface anybody edits, so a finding there is one nobody can act on.
+CODE_EXCLUDE_DIRS = frozenset(("bin", "obj"))
+
+# THIS GATE ITSELF is exempt from rule 4, and only from rule 4. It is the one file that must NAME the
+# broken idiom in order to forbid it: the docstring above quotes `fsgg-coord-engine whoami --mint` as
+# the counter-example, and the finding message below builds the sanctioned line from a constant. Both
+# read as violations to a scanner and are the opposite — they are the rule being STATED. This is the
+# same carve-out `is_literal_trailer` makes for prose ABOUT the trailer: a gate that reds on the
+# sentence teaching its own rule is a gate somebody deletes.
+#
+# Matched by BASENAME, not by `__file__`: the fixture audits a COPY of the shipped tree, and a
+# path-identity check would exempt the running gate while red-lighting its own copy — the gate
+# passing on the real tree and failing on a verbatim copy of it. Narrow enough: this program prints
+# no remedy to any worker, so it has nothing rule 4 protects. The TOOL does, and the tool is not
+# exempt — which is the entire point of #569.
+SELF_BASENAME = "check-worker-id-attractor.py"
+
 # The ONE sanctioned mint. `fsgg-coord whoami --mint` prints one shell line and nothing else on
 # stdout, so `eval "$(...)"` is the whole ritual.
 SANCTIONED_MINT = re.compile(r"fsgg-coord\s+whoami\s+--mint")
+
+# A mint remedy a reader can PASTE, captured by the COMMAND it names rather than by the `eval "$(…)"`
+# wrapper around it. Keying on the wrapper is the obvious way to write this and it FAILS OPEN: a site
+# printing `run: fsgg-coord-engine whoami --mint` — the same `command not found`, minus the eval —
+# sails past, and the summary then asserts that N remedies "run as printed" while one of them does
+# not. The command is the subject; the wrapper is decoration.
+#
+# The character class is what keeps this off prose. A command token is `[\w./-]+`, so the forms that
+# legitimately mention the mint without naming a command do not match, and are not findings:
+#     `whoami --mint` prints one line       <- prose ABOUT the ritual: no command token
+#     eval "$(… whoami --mint)"             <- an ellipsis placeholder: `…` is not in the class
+#     grep -q 'whoami --mint'               <- a test asserting on the string: quote, not a token
+#     "$ENGINE" whoami --mint               <- a test invoking a built binary: quote, not a token
+MINT_CALL = re.compile(r"(?P<cmd>[\w./-]+)\s+whoami\s+--mint")
+
+# The one command that RUNS as printed, from a plain checkout, with nothing on PATH: the ADR-0034
+# §4.4 resolver, whose whole job is to find the engine and exec it. The engine's own binary
+# (`fsgg-coord-engine`) is NOT installed on PATH — that is exactly what #569 got wrong.
+RUNNABLE_MINT_CMD = "scripts/fsgg-coord"
+
+# A placeholder is prose REFERRING to the ritual (`eval "$(... whoami --mint)"` in a doc comment
+# about minting), not a line anybody pastes — fine here for the same reason `<id>` is fine above:
+# nobody runs a placeholder and gets `command not found`.
+#
+# Only the ASCII spelling needs listing. The unicode `…` is not in MINT_CALL's command class, so it
+# never reaches this check at all — listing it would claim a guard that does no work.
+MINT_PLACEHOLDER = frozenset(("...",))
 
 # What an actual worker id looks like: a word, a hyphen, and a hex-ish tail (`w-4f2a91c7`,
 # `finch-a3f`). Anything with `<`, `$`, or a backtick in it is a placeholder or a substitution, and
@@ -170,6 +244,39 @@ def surface_files(root: Path, surfaces: list[str]) -> list[tuple[Path, str]]:
     return files
 
 
+def code_files(root: Path) -> list[tuple[Path, str]]:
+    """The source files that can PRINT a mint remedy.
+
+    Unlike the doc surface, a missing directory is not an error: a tree with no engine in it has
+    nothing that prints a remedy, so there is genuinely nothing to audit. The fail-closed guard for
+    this surface is the engine's own non-vacuity check in main() — this program demonstrably prints
+    the remedy, so finding NO remedy in it means the extractor broke.
+    """
+    files: list[tuple[Path, str]] = []
+    for d in CODE_SURFACE:
+        base = root / d
+        if not base.is_dir():
+            continue
+        # PRUNE at the directory, rather than rglob-ing everything and discarding: on a built
+        # checkout `bin/`/`obj/` hold thousands of artifacts, and rglob("*") would stat and sort
+        # every one of them only to throw them away — work that grows with the build output instead
+        # of with the source.
+        stack = [base]
+        found: list[Path] = []
+        while stack:
+            for p in sorted(stack.pop().iterdir()):
+                if p.is_dir():
+                    if p.name not in CODE_EXCLUDE_DIRS:
+                        stack.append(p)
+                elif p.name != SELF_BASENAME:
+                    # `scripts/fsgg-coord` is extensionless, and it is the resolver the remedy names.
+                    if p.suffix in CODE_SUFFIXES or (d == "scripts" and p.suffix == ""):
+                        found.append(p)
+        for p in sorted(found):
+            files.append((p, str(p.relative_to(root))))
+    return files
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
@@ -178,7 +285,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--root", default=".", help="repo root (default: .)")
     ap.add_argument(
         "--surface", action="append", default=None,
-        help=f"directory to audit, repeatable (default: the roots in {ROOTS_DECL}, plus docs/)",
+        help=f"DOC directory to audit for rules 1-3, repeatable (default: the roots in "
+             f"{ROOTS_DECL}, plus docs/). Does not affect rule 4, whose surface is the code that "
+             f"prints a remedy ({', '.join(CODE_SURFACE)}/) and is not selectable — a flag that "
+             f"could switch the tool's own strings off is a way to green a tree without fixing it.",
     )
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
@@ -261,6 +371,52 @@ def main(argv: list[str]) -> int:
                             f"second idiom is a second thing to keep correct, in a place nobody looks."
                         )
 
+    # 4. THE REMEDY THE TOOL PRINTS MUST RUN AS PRINTED (#569).
+    #
+    # Rule 2 says there is exactly one mint idiom. The engine was exempt from it — nothing read the
+    # tool's own strings — so it drifted to `fsgg-coord-engine whoami --mint`, a command that is on
+    # nobody's PATH. Every doc said `scripts/fsgg-coord`; the tool said otherwise, to the one reader
+    # who is holding a warning and looking for what to do about it.
+    engine_sites = 0
+    for path, rel in code_files(root):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            # Not a text file, or unreadable: it prints nothing a worker pastes.
+            continue
+
+        # A path-component prefix, not a string prefix: `startswith` would count a future
+        # `src/FS.GG.Coord.Cli.Tests/` as the engine, and remedies in a TEST project would then
+        # satisfy the non-vacuity guard below while the real engine printed nothing — the exact
+        # vacuity it exists to prevent.
+        in_engine = rel == ENGINE_SURFACE or rel.startswith(ENGINE_SURFACE + "/")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for m in MINT_CALL.finditer(line):
+                if in_engine:
+                    engine_sites += 1
+                cmd = m.group("cmd")
+                if cmd == RUNNABLE_MINT_CMD or cmd in MINT_PLACEHOLDER:
+                    continue
+                findings.append(
+                    f"{rel}:{lineno}: this prints a mint remedy naming `{cmd}`, which is not on "
+                    f"PATH — a worker who pastes it, exactly as the tool told them to, gets "
+                    f"`command not found` (#569). Print the command the docs teach and the resolver "
+                    f"ships: `eval \"$({RUNNABLE_MINT_CMD} whoami --mint)\"`. A remedy that does not "
+                    f"run is worse than no remedy: it is read at the one moment the worker is doing "
+                    f"as they are told."
+                )
+
+    # Fail closed for the code surface, on its real subject. The engine PRINTS these remedies — five
+    # of them, at #569. If we found none, the glob, the suffix list, or MINT_CALL is broken, and the
+    # leg above is worthless rather than clean. Skipped when there is no engine in the tree at all
+    # (a doc-only fixture): nothing there prints a remedy, so auditing nothing is honest.
+    if (root / ENGINE_SURFACE).is_dir() and engine_sites == 0:
+        raise GateError(
+            f"found NO mint remedy in {ENGINE_SURFACE}, which prints them — the extractor is "
+            f"broken, not the tree. Examining nothing is a failure to audit, not a clean audit "
+            f"(#266)."
+        )
+
     # Fail closed: an extractor that sees nothing must not be mistaken for a clean surface. These
     # documents demonstrably discuss the worker id — if we found no mention of it at all, the glob or
     # the regex is broken, and every "ok" above is worthless.
@@ -292,7 +448,8 @@ def main(argv: list[str]) -> int:
 
     print(
         f"ok: no literal worker id, and exactly one mint idiom — {mentions} worker-id mention(s) "
-        f"audited, {sanctioned} showing the sanctioned mint."
+        f"audited, {sanctioned} showing the sanctioned mint; {engine_sites} printed remedy(s) in "
+        f"{ENGINE_SURFACE} run as printed."
     )
     return OK
 
