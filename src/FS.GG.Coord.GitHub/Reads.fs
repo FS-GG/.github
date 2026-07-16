@@ -100,9 +100,14 @@ module Reads =
     /// two-page set. A red run invisible on page two then scores GREEN: #461 (a partial read wearing a
     /// complete one's clothes) deciding whether to merge.
     ///
-    /// The obvious guard — *don't memoise a response that paginated* — does NOT close that, because it never
-    /// runs on the case that matters: the unsound read is precisely the one where page one 304s and the
-    /// pagination never happens.
+    /// `Transport.Send` now closes the FIRST half of that: a merged response carries no ETag at all, dropped
+    /// at the only layer that knows a merge happened. So page one's validator can no longer escape onto a
+    /// merged body, and the `NextLink` arm below is a backstop, not the guard.
+    ///
+    /// It is only half, and the second half is the one that bites. *Don't memoise a response that paginated*
+    /// never runs on the case that matters: the unsound read is precisely the one where the collection has
+    /// grown, page one 304s, and the pagination never happens at all — so there is no merge for anyone to
+    /// notice, at this layer or any other.
     ///
     /// **HEADROOM CLOSES IT.** Memoise a page only when it carries FEWER items than the `per_page` it asked
     /// for. Then, writing `n` for the stored page's item count and `m` for the collection's true size later:
@@ -117,7 +122,9 @@ module Reads =
     /// at `n = perPage` exactly (a full page, no `Link`) growth could leave page one untouched and 304 over
     /// the items that landed on page two — the one boundary this whole rule exists to refuse.
     let private memoisable (shape: PageShape) (response: Response) : bool =
-        // A merged response's validator is page one's alone — never store it, whatever the shape.
+        // BELT AND BRACES. `Transport.Send` already strips the ETag from a merged response, so there is
+        // nothing here to store — but a merged body must not be memoisable on its own terms either, and a
+        // guard that depends on another layer having done its job is one that fails silently when it stops.
         if response.NextLink.IsSome then
             false
         else

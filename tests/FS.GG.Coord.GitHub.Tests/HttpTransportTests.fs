@@ -155,6 +155,59 @@ let ``the adapter FOLLOWS Link rel=next and CONCATENATES the pages`` () =
     | Error e -> failwith $"pagination must succeed — got %A{e}"
 
 [<Fact>]
+let ``a MERGED response carries NO ETag - page one's validator dies at the merge`` () =
+    // THE VALIDATOR BELONGS TO THE REQUEST THAT RETURNED IT, AND THAT REQUEST WAS PAGE ONE. The adapter
+    // concatenates the pages above; the ETag describes only the first of them. Hand it back on a merged body
+    // and a caller may store the two together, then revalidate the WHOLE collection against its first page —
+    // and a set that grows a page while page one stays byte-identical answers 304, so the merge never runs
+    // again and a one-page body is served for a two-page set. #461, deciding whether to merge.
+    //
+    // This is asserted HERE because this is the only layer that can know: a caller receives one `Response`
+    // and cannot tell how many round trips paid for it.
+    use server = new Server()
+
+    server.On(fun req res ->
+        if req.Url.PathAndQuery.Contains "page=2" then
+            server.Json res 200 """[{"number":3}]""" [ "ETag", "W/\"page-two\"" ]
+        else
+            server.Json
+                res
+                200
+                """[{"number":1},{"number":2}]"""
+                [ "ETag", "W/\"page-one\""
+                  "Link", $"<%s{server.Base}/repos/o/r/issues?page=2>; rel=\"next\", <%s{server.Base}/x>; rel=\"last\"" ])
+
+    use transport = new HttpTransport(server.Base, "t")
+    let t = transport :> IGitHubTransport
+
+    match t.Send(get "repos/o/r/issues") with
+    | Ok response ->
+        // The merge really happened...
+        use doc = Text.Json.JsonDocument.Parse response.Body
+        Assert.Equal(3, doc.RootElement.GetArrayLength())
+
+        // ...and it carries NO validator. Not page one's, and not the last page's either — neither of them
+        // describes this body.
+        Assert.Equal(None, response.ETag)
+
+    | Error e -> failwith $"pagination must succeed — got %A{e}"
+
+[<Fact>]
+let ``a SINGLE-page response KEEPS its ETag - the counterweight`` () =
+    // The counterweight, and it is what stops the rule above being satisfied by dropping every ETag always.
+    // When there is no `Link`, page one IS the whole answer and its validator describes the whole body — so
+    // it survives, and the conditional re-read that saves the fleet's REST budget is still possible.
+    use server = new Server()
+    server.On(fun _ res -> server.Json res 200 """[{"number":1}]""" [ "ETag", "W/\"whole-thing\"" ])
+
+    use transport = new HttpTransport(server.Base, "t")
+    let t = transport :> IGitHubTransport
+
+    match t.Send(get "repos/o/r/issues") with
+    | Ok response -> Assert.Equal(Some "W/\"whole-thing\"", response.ETag)
+    | Error e -> failwith $"a single-page read must succeed — got %A{e}"
+
+[<Fact>]
 let ``a page that is NOT a JSON array refuses - it is never silently truncated to the first page`` () =
     // `gh` exits 0 on a truncated page or a proxy's HTML error body. If the adapter quietly kept page one
     // and dropped the rest, a claim scan would report a partial set as a complete one — #461's shape,
