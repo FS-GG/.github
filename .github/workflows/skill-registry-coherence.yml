@@ -31,6 +31,7 @@ on:
     paths:
       - "registry/skills.yml"
       - "scripts/fsgg-skill-registry-check"
+      - "tests/skill-registry/**"
       - ".github/workflows/skill-registry-coherence.yml"
   # A producer body change stales the registry with no .github commit — only the schedule catches it.
   schedule:
