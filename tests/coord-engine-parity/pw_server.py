@@ -157,6 +157,20 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?", 1)[0]
+        # THE OFF-BOARD CLAIM SCAN (case 25): `who` scans the repo's OPEN ISSUES, not just the board. On
+        # THIS board every claim is also a board item, so the list is the same seven issues — but it is
+        # REPO-SCOPED: FS.GG.Rendering has none here, so its scan legitimately finds nothing (#461's
+        # positive control). No `pull_request` key — these are issues, and `openIssues` filters PRs out.
+        m = re.match(r"^/repos/([^/]+)/([^/]+)/issues/?$", p)
+        if m:
+            if m.group(2) != "FS.GG.SDD":
+                return self._send(200, [])
+            return self._send(200, [{"number": n, "title": TITLES[n], "state": "open",
+                                     "body": BODIES[n]} for n in sorted(BODIES)])
+        # Proof of life (#581): `who` probes a STALE row's own `item/<n>-*` PR. There are none on this
+        # board (#43's stale claim is a genuinely dead one → a bare STALE), so the list is empty.
+        if re.match(r"^/repos/[^/]+/[^/]+/pulls/?$", p):
+            return self._send(200, [])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", p)
         if m:
             n = int(m.group(1))

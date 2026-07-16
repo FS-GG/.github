@@ -20,6 +20,7 @@ namespace FS.GG.Coord.GitHub
 /// dies first** (ADR-0034 §3, re-ratified by ADR-0040 C4).
 module Reads =
 
+    open FS.GG.Coord
     open FS.GG.Coord.Types
     open Errors
     open Transport
@@ -79,6 +80,33 @@ module Reads =
     /// not enforce has a silent failure mode, and this one's is that two racers compute different winners
     /// and both believe they hold the lock — the exact outcome the CAS exists to prevent.
     val winner: leaseMinutes: int -> markers: Marker list -> Marker option
+
+    /// THE MARKER THAT HOLDS THE LOCK, REGARDLESS OF LEASE — the live `winner` if there is one, else the
+    /// lowest-id marker whose lease has lapsed.
+    ///
+    /// `winner` decides IDENTITY (only a live marker answers a heartbeat or loses a CAS); this decides
+    /// RESERVATION. A lease is a clock, but a lock is broken only by `reap` (#461/#581): the scheduler must
+    /// reserve a stale-but-unreaped claim's touch-set exactly as it reserves a live one, or hand a second
+    /// worker the tree its holder is standing in. This is the choice `who` makes classifying a row Held vs
+    /// Stale, expressed for the scheduler.
+    val reserver: leaseMinutes: int -> markers: Marker list -> Marker option
+
+    /// A worker-to-worker message parsed off an issue comment — the `say` / `inbox` channel.
+    type Message =
+        { Id: int64
+          From: string
+          To: string
+          At: string
+          Text: string }
+
+    /// The `fsgg:msg` messages on an issue, in comment-id order (lowest first).
+    ///
+    /// **NEVER CONDITIONAL**, exactly like `markers`: a 304 could serve a comments page captured before a
+    /// `say`, hiding a message. A message is not a lock, so the failure mode differs — a message with no
+    /// orderable id, or with no parseable `from`/`to`, is DROPPED rather than (as a marker must) failing
+    /// closed and blocking — but the read itself is as unconditional as the lock's, because a lost message
+    /// is still a coordination failure. A malformed page is an error, never an empty mailbox (#461).
+    val messages: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<Message list>
 
     /// An issue's body — the touch-set lives in it.
     ///
@@ -144,6 +172,32 @@ module Reads =
     /// and blame the token — an unreachable subject reported as an absent one.
     val subIssueIds: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<int64 list>
 
+    /// One node of an epic's sub-issue GRAPH: its ref (`owner/repo#n`) and whether it is still open.
+    type SubIssue = { Ref: string; Open: bool }
+
+    /// An epic's sub-issue graph, with the TOTAL count kept apart from the visible nodes.
+    ///
+    /// `Total > Children.length` is a TRUNCATED graph, and the distinction is load-bearing: the rollup and
+    /// EPIC-UNLINKED-CHILD may only reason about "all children" when they have all of them. Concluding
+    /// "every child is done" — or "this declared child is unlinked" — over a list already known to be short
+    /// is the #266 shape (a verdict on a subject not wholly seen).
+    type SubIssueSet = { Total: int; Children: SubIssue list }
+
+    /// An epic's sub-issue graph: the total count and each child's ref + open/closed state.
+    ///
+    /// FAILS CLOSED, like every read here: an unreadable graph is an ERROR, never an empty set — an epic
+    /// whose children could not be read must not roll up as "no children" or "all done".
+    val subIssues: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<SubIssueSet>
+
+    /// Does this ref name a PULL REQUEST rather than an issue? (`issues/{n}` carries `pull_request` iff so.)
+    ///
+    /// GitHub refuses to link a PR as a sub-issue, so a task-list line citing the PR that closed a checklist
+    /// item declares a ref the graph can never hold. EPIC-UNLINKED-CHILD re-resolves its otherwise-unlinked
+    /// refs through this and drops the PRs — else the gate wedges red forever on genuinely-complete work
+    /// (#346). The CALLER owns the fail-closed policy (#266): a ref this cannot resolve is KEPT, because "I
+    /// could not check" is not "it is a PR".
+    val refIsPullRequest: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<bool>
+
     /// The rate-limit meter.
     ///
     /// FREE — this read does not spend the budget it reports, which is what makes "back off until the
@@ -161,6 +215,60 @@ module Reads =
     /// A pull request's changed files (`pulls/{n}/files`), paginated.
     val prFiles: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> IoResult<string list>
 
+    /// IS THIS OPEN PR FINISHED WORK? — #697/#720, over REST.
+    ///
+    /// Reads the PR (for `mergeable` + head SHA), the head SHA's WORKFLOW RUNS, and that SHA's CHECK RUNS,
+    /// and hands them to `Landable.score`. THREE reads, exactly as bash's `pr_landable`, and — like
+    /// `prAlive` — only ever on a claim that is ALREADY stale and ALREADY has an open PR, which is rare, and
+    /// on the ONE such item, never a scan.
+    ///
+    /// RETURNS A `PrState`, NOT AN `IoResult`, ON PURPOSE. This is the one read whose FAILURE IS ITS ANSWER:
+    /// `PrUnknown` is not a masqueraded empty (the thing this module forbids everywhere else), it is the
+    /// honest verdict "I could not tell", and its whole job is to make `reap`/`who`/`adopt` advise nothing
+    /// on a guess. So every read error, and a `mergeable` that is still `null`, collapse to `PrUnknown` —
+    /// the fail-closed direction — rather than propagating. The verdict is ADVISORY: it chooses which
+    /// refusal `reap` speaks, never whether it refuses.
+    ///
+    /// NOTE (deferred, honest): the runs/check-runs reads are SINGLE PAGE here. GitHub paginates them with a
+    /// `Link` header (bash passed `--paginate`, #547); the array-merging transport does not flatten the
+    /// OBJECT bodies these endpoints return, so a multi-page runs list degrades to `PrUnknown` (fail closed),
+    /// never a wrong verdict. The corpus's landable worlds are single-page; real multi-page runs pagination
+    /// is a follow-up.
+    val prLandable: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState
+
+    /// `prLandable`, plus the NUMBER of subjects the verdict was scored over (`Landable.scoreN`) — the read
+    /// `landable --wait` polls on (#724). The count distinguishes a `red` over zero subjects (the
+    /// registration race — "CI has not started yet") from a `red` over real ones (a finding), and the
+    /// `--wait` loop must not believe an early `green` until that count has stopped growing. It is 0 for
+    /// every verdict reached before the runs are scored (conflicted, unknown). Same single-page caveat as
+    /// `prLandable`.
+    val prLandableN: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState * int
+
+    /// `prLandableN`, plus the two assertions a caller may add to it (#737). `prLandableN` is this with
+    /// `required = []` and `expected = None`.
+    ///
+    /// `required` — check-run names that must have REPORTED (`Landable.scoreRequired`). For a check that is
+    /// not REQUIRED by branch protection but IS the reason the PR exists; absent, it reads exactly like a
+    /// passing one (#606).
+    ///
+    /// `expected` — the head SHA the caller believes it is gating. `pulls/{n}` is EVENTUALLY CONSISTENT
+    /// after a force-push: for a moment it still names the previous commit, whose checks are green and are
+    /// not about the code that would be merged. A caller that just pushed knows the SHA it pushed and can
+    /// say so; a disagreement is `PrPending` (a read taken too early — never a verdict about the wrong
+    /// commit), which `--wait` rides out. Callers that did not just push should omit it.
+    ///
+    /// The third element is the caller's assertions that are NOT met, each as a human phrase — DIAGNOSTICS
+    /// ONLY, so a `pending` can say what it is waiting for instead of being one word with no thread to pull.
+    /// The verdict never depends on it. Same single-page caveat as `prLandable`.
+    val prLandableRequire:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        pr: int ->
+        required: string list ->
+        expected: string option ->
+            PrState * int * string list
+
     /// The FIRST issue a pull request declares it closes (`closingIssuesReferences`), if any.
     ///
     /// `Ok None` means it closes nothing by that record — a real answer (the PR may implement an item by
@@ -175,3 +283,18 @@ module Reads =
     /// The bodies ride along because they are free here — one list read serves both the marker scan and the
     /// touch-set extraction, where two reads per item would double the REST cost of the scheduling loop.
     val openIssues: transport: IGitHubTransport -> owner: string -> repo: string -> IoResult<(int * string) list>
+
+    /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
+    /// serves the cached body for zero cost.
+    ///
+    /// CONDITIONAL, unlike `openIssues` — its subject is a listing, not the lock, so a 304 serving the
+    /// cached body is exactly right (no marker can hide in a list nobody scans for markers). `fresh`
+    /// (`--refresh`) drops the stored ETag and forces a full re-read. Returns the raw JSON body bash prints.
+    val issues:
+        transport: IGitHubTransport ->
+        owner: string ->
+        repo: string ->
+        state: string ->
+        label: string option ->
+        fresh: bool ->
+            IoResult<string>

@@ -19,13 +19,16 @@
 
   <ItemGroup>
     <Compile Include="TouchSetTests.fs" />
+    <Compile Include="EpicBodyTests.fs" />
     <Compile Include="CoversTests.fs" />
     <Compile Include="BlockerTests.fs" />
     <Compile Include="SchedulabilityTests.fs" />
     <Compile Include="BatchTests.fs" />
     <Compile Include="ProtocolTests.fs" />
     <Compile Include="LanesTests.fs" />
-    <Compile Include="DivergenceTests.fs" />
+    <Compile Include="LandableTests.fs" />
+    <Compile Include="ChoreTests.fs" />
+    <Compile Include="KitTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

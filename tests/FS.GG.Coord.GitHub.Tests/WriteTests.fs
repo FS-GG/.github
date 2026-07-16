@@ -21,6 +21,14 @@ let private marker (id: int) (worker: string) (extra: string) =
     let body = $"<!-- fsgg:claim worker=%s{worker} lease=120%s{extra} -->"
     $"""{{"id":%d{id},"body":"%s{body}","updated_at":"%s{now}"}}"""
 
+/// A marker whose lease LAPSED — last heartbeated 3h ago, well past the 120m lease used throughout. The
+/// next claimant must COLLECT it, never merely out-order it.
+let private stale = System.DateTimeOffset.UtcNow.AddHours(-3.0).ToString("o")
+
+let private staleClaimJson (id: int) (worker: string) (extra: string) =
+    let body = $"<!-- fsgg:claim worker=%s{worker} lease=120%s{extra} -->"
+    $"""{{"id":%d{id},"body":"%s{body}","updated_at":"%s{stale}"}}"""
+
 /// The comments endpoint answers with a JSON array. F# will not let a string literal sit inside an
 /// interpolation hole, so the array is built here rather than spelled inline at every call site.
 let private comments (ms: string list) = "[" + String.concat "," ms + "]"
@@ -54,7 +62,7 @@ let ``the CAS WINS when our marker is the lowest live id`` () =
               ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we are the lowest
 
     match claim transport 120 me None aRef (fun () -> None) with
-    | Ok(Won held) ->
+    | Ok(Won(held, _)) ->
         Assert.Equal(901L, held.MarkerId)
         Assert.Equal(me, held.Worker)
     | other -> failwith $"we should have won — got %A{other}"
@@ -156,17 +164,120 @@ let ``an UNPARSEABLE marker blocks the item - it is a claim held by nobody`` () 
     Assert.Equal(0, transport.Count "comment-post")
 
 [<Fact>]
-let ``re-claiming an item we ALREADY hold does not post a second marker`` () =
+let ``re-claiming an item we ALREADY hold renews it in place and posts no second marker`` () =
     // Running the CAS again would post a SECOND marker of ours with a HIGHER id — which we would then lose
     // to our own first one, withdraw, and report as a loss on an item we hold. A worker would be told to
-    // stop working on the thing it is holding the lock for.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" "" ]) ]
+    // stop working on the thing it is holding the lock for. So a re-claim RENEWS the one marker we have (a
+    // PATCH), never posts another — a `Renewed`, not a fresh `Won`.
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
+              ok """{"id":901}""" ] // 2. PATCH: renew the lease in place
 
     match claim transport 120 me None aRef (fun () -> None) with
-    | Ok(Won held) -> Assert.Equal(901L, held.MarkerId)
-    | other -> failwith $"re-claiming our own live lock is a no-op win — got %A{other}"
+    | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"re-claiming our own live lock renews it in place — got %A{other}"
 
+    // No second marker POSTed — the renew is a PATCH of the one we already hold.
     Assert.Equal(0, transport.Count "comment-post")
+    Assert.True(transport.Logged "comment-patch FS-GG/FS.GG.SDD 901")
+
+// ---- case 24 (a)/(b)/(l): a won claim COLLECTS the stale marker it claimed over --------------------
+
+[<Fact>]
+let ``a won claim COLLECTS a stale OTHER worker's marker and names the evicted worker`` () =
+    // (a) A stale marker must be COLLECTED by the next claimant, never merely ignored. An ignored marker is
+    // what `heartbeat` later resurrects underneath the new holder — two live markers, one item.
+    let transport =
+        scripted
+            [ ok (comments [ staleClaimJson 810 "ghost-111" "" ]) // 1. read: a STALE claim by ghost-111
+              ok """{"id":901}""" // 2. post ours (ghost-111's lease has lapsed, so nobody live blocks us)
+              ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ]) // 3. re-read: we win
+              ok "" ] // 4. DELETE ghost-111's stale marker
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Won(held, collected)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Equal<WorkerId list>([ WorkerId "ghost-111" ], collected)
+    | other -> failwith $"a claim over a stale marker wins and collects it — got %A{other}"
+
+    // Exactly one marker survives: the stale one is gone.
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 810")
+
+[<Fact>]
+let ``a claim renewing our OWN stale marker ends with ONE marker and reports no eviction`` () =
+    // (b) Re-claiming when MY OWN marker went stale must renew a single marker, not mint a second — and it
+    // is not an eviction to report, because you do not message yourself.
+    let transport =
+        scripted
+            [ ok (comments [ staleClaimJson 811 "vole-418" "" ]) // 1. OUR OWN marker, gone stale
+              ok """{"id":901}""" // 2. post a fresh one
+              ok (comments [ staleClaimJson 811 "vole-418" ""; marker 901 "vole-418" "" ]) // 3. re-read: fresh wins
+              ok "" ] // 4. DELETE our own superseded stale marker
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Won(held, collected)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Empty(collected)
+    | other -> failwith $"renewing our own stale marker is a win — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 811")
+
+[<Fact>]
+let ``collecting a stale marker a peer already removed (404) is not fatal`` () =
+    // (l) Two claimants collecting the SAME expired marker: the loser's DELETE 404s because the winner
+    // already removed it. "Already gone" is the goal state of a collector, so the claim still wins.
+    let transport =
+        scripted
+            [ ok (comments [ staleClaimJson 818 "ghost-444" "" ])
+              ok """{"id":901}"""
+              ok (comments [ staleClaimJson 818 "ghost-444" ""; marker 901 "vole-418" "" ])
+              Error(NotFound "already gone") ] // 4. the winner's delete landed first
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Won(held, collected)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Equal<WorkerId list>([ WorkerId "ghost-444" ], collected) // a 404 IS a successful collect
+    | other -> failwith $"a benign 404 on collection is still a win — got %A{other}"
+
+[<Fact>]
+let ``a stale marker we could not delete is LEFT for reap, never a reason to fail a won claim`` () =
+    // Collection is best-effort. A genuine (non-404) delete failure leaves the stale marker for `reap` and
+    // is NOT reported as an eviction — but the claim we already won stands.
+    let transport =
+        scripted
+            [ ok (comments [ staleClaimJson 810 "ghost-111" "" ])
+              ok """{"id":901}"""
+              ok (comments [ staleClaimJson 810 "ghost-111" ""; marker 901 "vole-418" "" ])
+              Error(RateLimited None) ] // 4. DELETE faults — leave it for reap
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Won(held, collected)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Empty(collected)
+    | other -> failwith $"a failed collection does not fail a won claim — got %A{other}"
+
+[<Fact>]
+let ``a STALE unparseable marker is collected as debris but never notified (no worker to tell)`` () =
+    // A live unparseable marker BLOCKS (fails closed); a merely STALE one is debris. Collecting it is fine,
+    // but its `worker` is a sentinel — `say`ing to "unparsed-marker" would address no worker at all.
+    let staleUnparseable =
+        $"""{{"id":810,"body":"<!-- fsgg:claim lease=120 -->\nhalf-written","updated_at":"%s{stale}"}}"""
+
+    let transport =
+        scripted
+            [ ok (comments [ staleUnparseable ]) // 1. a STALE marker with no parseable worker
+              ok """{"id":901}""" // 2. post ours (the stale one does not block a live winner)
+              ok (comments [ staleUnparseable; marker 901 "vole-418" "" ]) // 3. re-read: we win
+              ok "" ] // 4. DELETE the stale debris
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Won(held, collected)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Empty(collected) // deleted, but there is no worker to notify
+    | other -> failwith $"a stale unparseable marker is debris, not a blocker on a won claim — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 810")
 
 // ---- #419: an id two workers share is not a lock ---------------------------------------------------
 
@@ -189,19 +300,21 @@ let ``#419 a SESSIONLESS marker with our id is genuinely ours - a heartbeat, not
     // The boundary of the rule (#419 leg 4). A marker with no `session=` — a human, a harness exporting
     // none, any pre-#419 marker — is indistinguishable from ours. Failing closed on it would lock a worker
     // out of an item they really hold, so it keeps the old behaviour: ours.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" "" ]) ]
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" "" ]); ok """{"id":901}""" ] // read, then PATCH the renew
 
     match claim transport 120 me (Some(SessionId "ed60050b")) aRef (fun () -> None) with
-    | Ok(Won held) -> Assert.Equal(901L, held.MarkerId)
+    | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"a sessionless marker with our id must stay ours — got %A{other}"
 
 [<Fact>]
 let ``#419 the SAME session re-claiming its own marker is a heartbeat, not a twin`` () =
     // Without this, the refusal would fire on the worker itself — it could never renew its own claim.
-    let transport = scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]) ]
+    let transport =
+        scripted [ ok (comments [ marker 901 "vole-418" " session=79b9e347" ]); ok """{"id":901}""" ] // read, then PATCH
 
     match claim transport 120 me (Some(SessionId "79b9e347")) aRef (fun () -> None) with
-    | Ok(Won held) -> Assert.Equal(901L, held.MarkerId)
+    | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"our own session re-claiming is a heartbeat, not a twin — got %A{other}"
 
 [<Fact>]
@@ -225,7 +338,7 @@ let ``#481 the claim RECORDS the column it overwrote, so release can put it back
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) ]
 
     match claim transport 120 me None aRef (fun () -> Some InReview) with
-    | Ok(Won held) ->
+    | Ok(Won(held, _)) ->
         // The marker we POST carries `prev=`, percent-encoded — and the capability carries it forward, so
         // `release` restores the column somebody chose rather than guessing `Ready`.
         Assert.True(transport.Logged "comment-post")
@@ -238,7 +351,7 @@ let ``#481 a column NOBODY recorded is not restored - release says so rather tha
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" "" ]); ok "" ]
 
     match claim transport 120 me None aRef (fun () -> None) with
-    | Ok(Won held) ->
+    | Ok(Won(held, _)) ->
         match release transport held with
         | Ok None -> ()
         | other -> failwith $"a column nobody recorded cannot be restored — got %A{other}"
@@ -446,3 +559,92 @@ let ``say does NOT require the lock - the worker who lost the race must still be
     match say transport me them aRef "our touch-sets overlap on src/Audio" with
     | Ok() -> Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 42")
     | Error e -> failwith $"a message needs no lock — got %A{e}"
+
+// ---- reap: an expired lease is EVIDENCE of abandonment, not PROOF (#581) ----------------------------
+
+let private staleMarker =
+    { Reads.Id = 880L
+      Reads.Worker = WorkerId "ghost-222"
+      Reads.Session = None
+      Reads.AgeSeconds = 10800 // 3h — well past a 120-minute lease
+      Reads.PreviousStatus = None
+      Reads.Raw = "<!-- fsgg:claim worker=ghost-222 lease=120 -->" }
+
+[<Fact>]
+let ``#581 reapable is GREEN only when the lease lapsed AND no PR is open`` () =
+    // The single door to the capability `reap` consumes. `LeaseExpiredNoPr` is the one Liveness that
+    // licenses a break: the lease lapsed and we LOOKED for the item's PR and found none.
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Ok r ->
+        Assert.Equal(880L, r.MarkerId)
+        Assert.Equal("ghost-222", r.Worker.Value)
+        Assert.Equal(42, r.Ref.Number)
+    | Error e -> failwith $"a lapsed lease with no open PR is reapable — got %A{e}"
+
+[<Fact>]
+let ``#581 reapable REFUSES a claim whose item PR is open - the work is alive, not abandoned`` () =
+    // The leg that reaped live work twice: the lease lapsed but an `item/<n>-*` PR is open, so the work is
+    // demonstrably still happening. The refusal names the PR so it is checkable.
+    match reapable aRef staleMarker (LeaseExpiredPrOpen 433) with
+    | Error(WorkAlive pr) -> Assert.Equal(433, pr)
+    | other -> failwith $"an open PR must block the reap — got %A{other}"
+
+[<Fact>]
+let ``#581 reapable FAILS CLOSED when liveness is unknown - a lock we cannot rule dead we may not break`` () =
+    // "We could not ask" is NOT "there is no PR". A transient read failure must not become a reaped claim.
+    match reapable aRef staleMarker LivenessUnknown with
+    | Error(Undetermined _) -> ()
+    | other -> failwith $"an unreadable liveness must refuse the reap — got %A{other}"
+
+[<Fact>]
+let ``#581 reapable refuses a lease that is not even expired`` () =
+    // A live lease should never have reached here; reap it and the whole gate is a lie. Refuse rather than
+    // manufacture a capability out of a held lock.
+    match reapable aRef staleMarker LeaseHeld with
+    | Error(Undetermined _) -> ()
+    | other -> failwith $"a held lease is not reapable — got %A{other}"
+
+[<Fact>]
+let ``#581 reap RE-VERIFIES the marker is still stale, then DELETES it by its comment id`` () =
+    // The lock IS the comment id: reap addresses the marker by id, never by worker string (a twin's id
+    // would name the wrong comment, #550 one command over). A 404 would be success too, but here it lands.
+    // It re-reads the markers first — `Reapable` was proven against a SNAPSHOT — and only deletes because
+    // the marker is STILL stale on the fresh read.
+    let transport =
+        scripted
+            [ ok (comments [ staleClaimJson 880 "ghost-222" "" ]) // 1. re-verify: still stale
+              ok "" ] // 2. DELETE lands
+
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
+    | Ok r ->
+        match reap transport 120 r with
+        | Ok Reaped -> Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | other -> failwith $"the reap should have deleted the marker — got %A{other}"
+
+[<Fact>]
+let ``reap SKIPS a marker the holder RENEWED between the scan and the delete`` () =
+    // The re-verify's whole point: `Reapable` is a snapshot verdict, and a holder that heartbeated since is
+    // ALIVE. Reaping it would be `reap` causing the double-hold it exists to clean up. The fresh read shows
+    // marker 880 renewed (a `now` timestamp), so it is left alone and NOTHING is deleted.
+    let transport = scripted [ ok (comments [ marker 880 "ghost-222" "" ]) ] // fresh — renewed since the scan
+
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
+    | Ok r ->
+        match reap transport 120 r with
+        | Ok(RenewedSinceScan _) -> Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | other -> failwith $"a marker renewed since the scan must be SKIPPED, not reaped — got %A{other}"
+
+[<Fact>]
+let ``reap treats a marker a peer already collected as AlreadyGone, deleting nothing`` () =
+    // A peer collected the same stale marker between our scan and our re-verify — "already gone" is a
+    // collector's goal state, not a failure, and there is nothing to delete.
+    let transport = scripted [ ok "[]" ] // the marker is gone on the fresh read
+
+    match reapable aRef staleMarker LeaseExpiredNoPr with
+    | Error e -> failwith $"the fixture marker is reapable — got %A{e}"
+    | Ok r ->
+        match reap transport 120 r with
+        | Ok AlreadyGone -> Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
+        | other -> failwith $"a marker a peer already collected must read AlreadyGone — got %A{other}"

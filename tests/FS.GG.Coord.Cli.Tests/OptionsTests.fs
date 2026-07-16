@@ -158,3 +158,149 @@ module OptionsTests =
     [<Fact>]
     let ``--strict is off by default - a note is advisory unless asked otherwise`` () =
         Assert.False((parse [ "lint" ] |> ok).Strict)
+
+    // ---- overlap (the #353 repo-scoped touch-set diagnostic) --------------------------------------
+
+    [<Fact>]
+    let ``overlap parses to its command and defaults to the text projection`` () =
+        let o = parse [ "overlap"; "FS.GG.SDD#401"; "--active" ] |> ok
+        Assert.Equal(Overlap, o.Command)
+        Assert.Equal(Text, o.Render)
+        Assert.True(o.Active)
+        Assert.Equal<string list>([ "FS.GG.SDD#401" ], o.Args)
+
+    [<Fact>]
+    let ``overlap takes two positional refs for the pairwise form`` () =
+        let o = parse [ "overlap"; "FS.GG.SDD#401"; "FS-GG/FS.GG.Rendering#402" ] |> ok
+        Assert.Equal(Overlap, o.Command)
+        Assert.False(o.Active)
+        Assert.Equal<string list>([ "FS.GG.SDD#401"; "FS-GG/FS.GG.Rendering#402" ], o.Args)
+
+    [<Fact>]
+    let ``--active is off by default`` () =
+        Assert.False((parse [ "overlap"; "FS.GG.SDD#401"; "FS.GG.SDD#403" ] |> ok).Active)
+
+    // ---- adopt (the #697 land-the-orphan command) -------------------------------------------------
+
+    [<Fact>]
+    let ``adopt parses to its command, defaults to text, and carries the ref`` () =
+        let o = parse [ "adopt"; "FS.GG.SDD#970"; "--worker"; "heron-697" ] |> ok
+        Assert.Equal(Adopt, o.Command)
+        Assert.Equal(Text, o.Render)
+        Assert.Equal<string list>([ "FS.GG.SDD#970" ], o.Args)
+        Assert.Equal(Some "heron-697", o.Worker)
+
+    // ---- landable (the #697/#720 verdict as a first-class query) -----------------------------------
+
+    [<Fact>]
+    let ``landable parses to its command and carries the PR arg and repo`` () =
+        // A QUERY, not a table — no Render flip (the verdict is one word on stdout, the decision in the exit
+        // code). The PR is a positional arg (`landable 801`), the repo an explicit --repo.
+        let o = parse [ "landable"; "801"; "--repo"; "FS-GG/FS.GG.SDD" ] |> ok
+        Assert.Equal(Landable, o.Command)
+        Assert.Equal<string list>([ "801" ], o.Args)
+        Assert.Equal(Some "FS-GG/FS.GG.SDD", o.Repo)
+        // Without --wait, the poll knobs are unset (the single-shot verdict).
+        Assert.False(o.Wait)
+        Assert.Equal(None, o.Tries)
+        Assert.Equal(None, o.Interval)
+        // ...and no caller assertions: an empty --require and no --sha score exactly as before (#737).
+        Assert.Empty(o.Require)
+        Assert.Equal(None, o.Sha)
+
+    [<Fact>]
+    let ``landable --wait carries the poll knobs, and --interval permits 0 (#724)`` () =
+        let o =
+            parse [ "landable"; "810"; "--repo"; "FS.GG.SDD"; "--wait"; "--tries"; "4"; "--interval"; "0" ]
+            |> ok
+        Assert.True(o.Wait)
+        Assert.Equal(Some 4, o.Tries)
+        // A delay, not a count — 0 is meaningful (the test harness drives the poll with no wall-clock).
+        Assert.Equal(Some 0, o.Interval)
+
+    [<Fact>]
+    let ``landable --tries must be positive`` () =
+        let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--tries"; "0" ] |> rejected
+        Assert.Contains("--tries", e)
+
+    [<Fact>]
+    let ``landable --interval refuses a negative delay`` () =
+        let e = parse [ "landable"; "801"; "--repo"; "R"; "--wait"; "--interval"; "-3" ] |> rejected
+        Assert.Contains("--interval", e)
+
+    [<Fact>]
+    let ``landable --require is REPEATABLE and APPENDS — a set is not its last element (#737)`` () =
+        // Last-wins would silently drop a required check, which is the fail-open direction the flag exists
+        // to close. Order is preserved so the diagnostic names them as the caller wrote them.
+        let o =
+            parse [ "landable"; "9"; "--repo"; "R"; "--require"; "registry-coherence"; "--require"; "drift" ]
+            |> ok
+
+        Assert.Equal<string list>([ "registry-coherence"; "drift" ], o.Require)
+
+    [<Fact>]
+    let ``landable --require refuses an empty check name`` () =
+        // An empty name matches no check, so it could only ever hold the PR pending forever. A typo, not a
+        // requirement.
+        let e = parse [ "landable"; "9"; "--repo"; "R"; "--require"; "" ] |> rejected
+        Assert.Contains("--require", e)
+
+    [<Fact>]
+    let ``landable --require refuses a bare flag at the end, and will not eat the next flag`` () =
+        Assert.Contains("--require", parse [ "landable"; "9"; "--repo"; "R"; "--require" ] |> rejected)
+        // `--require --wait` must not silently require a check called "--wait".
+        Assert.Contains("--require", parse [ "landable"; "9"; "--repo"; "R"; "--require"; "--wait" ] |> rejected)
+
+    [<Fact>]
+    let ``landable --sha carries the head the caller MEANS to gate (#737)`` () =
+        let o = parse [ "landable"; "9"; "--repo"; "R"; "--sha"; "deadbeef" ] |> ok
+        Assert.Equal(Some "deadbeef", o.Sha)
+
+    [<Fact>]
+    let ``landable --sha refuses an empty or missing value`` () =
+        Assert.Contains("--sha", parse [ "landable"; "9"; "--repo"; "R"; "--sha"; "" ] |> rejected)
+        Assert.Contains("--sha", parse [ "landable"; "9"; "--repo"; "R"; "--sha" ] |> rejected)
+
+    // ---- issues: the ETag-revalidated REST list (#446) --------------------------------------------
+
+    [<Fact>]
+    let ``issues takes a repo positional and defaults its state and label`` () =
+        let o = parse [ "issues"; "sdd" ] |> ok
+        Assert.Equal(Issues, o.Command)
+        Assert.Equal<string list>([ "sdd" ], o.Args)
+        // No --state / --label ⇒ None (the command applies bash's `open` default itself).
+        Assert.Equal(None, o.IssueState)
+        Assert.Equal(None, o.Label)
+        // `issues` emits the raw JSON array — the default projection, so the caller jq's it.
+        Assert.Equal(Json, o.Render)
+
+    [<Fact>]
+    let ``issues --state and --label are carried through`` () =
+        let o = parse [ "issues"; "FS-GG/FS.GG.Game"; "--state"; "closed"; "--label"; "bug" ] |> ok
+        Assert.Equal(Some "closed", o.IssueState)
+        Assert.Equal(Some "bug", o.Label)
+
+    [<Fact>]
+    let ``issues --state refuses a value that is not open, closed, or all`` () =
+        let e = parse [ "issues"; "sdd"; "--state"; "reopened" ] |> rejected
+        Assert.Contains("--state", e)
+
+    [<Fact>]
+    let ``issues --refresh drops the cache (an alias of the fresh flag)`` () =
+        Assert.True((parse [ "issues"; "sdd"; "--refresh" ] |> ok).Fresh)
+
+    [<Fact>]
+    let ``#614 done --flip --partial captures the reason and keeps --flip`` () =
+        let o = parse [ "done"; "FS.GG.SDD#62"; "--flip"; "--partial"; "callers migration is a separate child" ] |> ok
+        Assert.True(o.Flip)
+        Assert.Equal(Some "callers migration is a separate child", o.Partial)
+
+    [<Fact>]
+    let ``#614 a bare done --flip leaves Partial None — the child completes its parent by default`` () =
+        let o = parse [ "done"; "FS.GG.SDD#62"; "--flip" ] |> ok
+        Assert.Equal(None, o.Partial)
+
+    [<Fact>]
+    let ``#614 --partial with no value is rejected — a partial fix must SAY why`` () =
+        let e = parse [ "done"; "FS.GG.SDD#62"; "--flip"; "--partial" ] |> rejected
+        Assert.Contains("--partial", e)

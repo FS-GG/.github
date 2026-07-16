@@ -9,10 +9,23 @@ module Done =
     open Transport
 
     type Closure =
-        | ClosedByPullRequest of pr: int
+        | ClosedByPullRequest of pr: int * oid: string * day: string
         | ResolvedWithoutPr of evidence: string
         | ClosedByNobody
         | StillOpen
+
+    /// A pull request GitHub associates with closing this issue (`closedByPullRequestsReferences`). This
+    /// list is a SUPERSET: it also carries PRs that merely MENTION the issue in prose, so which one is the
+    /// closer is decided by `ClosesThis` (the `Closes #N` in the PR body) OR the issue's own CLOSED_EVENT.
+    type ClosingPr =
+        { Number: int
+          Merged: bool
+          /// ISO-8601 merge time, "" if unknown — the LATEST-merged among true closers wins (#342).
+          MergedAt: string
+          /// The merge commit's abbreviated oid, "" if unknown — named in the stamp.
+          Oid: string
+          /// Its own `closingIssuesReferences` names THIS issue (the `Closes #N` in the PR body).
+          ClosesThis: bool }
 
     type Children =
         | NoChildren
@@ -27,8 +40,11 @@ module Done =
     type Facts =
         { Ref: Ref
           State: IssueState
-          ClosingPrs: int list
-          ClosedByEvent: int option
+          /// Every PR GitHub associates with closing this issue — a superset that also lists mentions.
+          ClosingPrs: ClosingPr list
+          /// The PR numbers GitHub's own `CLOSED_EVENT` names as the closer: a PullRequest closer directly,
+          /// or the PR(s) associated with the Commit that closed it (#558 — a commit-subject keyword).
+          CloserPrs: int list
           Children: Children
           BoardStatus: BoardStatus
           Parent: Ref option }
@@ -40,7 +56,7 @@ module Done =
 
     // ---- THE PRECONDITIONS, PURE -------------------------------------------------------------------
 
-    let verify (resolvedWithoutPr: string option) (facts: Facts) : Verdict<Closure> =
+    let verify (prOverride: int option) (resolvedWithoutPr: string option) (facts: Facts) : Verdict<Closure> =
         match facts.Children with
         // TRUNCATION FIRST, AND IT IS NOT NEGOTIABLE. `totalCount` and the nodes we were handed disagree, so
         // the page was cut short. An unverifiable subject must not report green — and a truncated page that
@@ -69,21 +85,40 @@ module Done =
 
         | Closed ->
 
-        // THE CLOSING ACT, FROM GITHUB'S OWN RECORD — never from the prose.
+        // THE CLOSING ACT, FROM GITHUB'S OWN RECORD — never from the prose, and NEVER the first merge that
+        // merely mentions the issue (#342).
         //
-        // Two sources, because one is not enough. `closingIssuesReferences` reads the `Closes #N` in the PR
-        // BODY; but `gh pr create --fill` maps the COMMIT SUBJECT to the PR TITLE, so a commit reading
-        // `fix: the thing (closes #NNN)` puts the keyword where that field never looks. The squash commit
-        // still closes the issue — so a correct, merged, green PR stamped RED, permanently, because editing
-        // a merged PR's body does not backfill the reference. The CLOSED_EVENT's closer is the record of the
-        // ACT, and it is checked too.
-        let closingPr =
-            match facts.ClosingPrs with
-            | pr :: _ -> Some pr
-            | [] -> facts.ClosedByEvent
+        // A PR CLOSES this issue if EITHER of GitHub's own records says so — both are records of the act,
+        // neither is a mention:
+        //   (A) its `closingIssuesReferences` names this issue — the `Closes #N` in the PR BODY (`ClosesThis`);
+        //   (B) the issue's own `CLOSED_EVENT` names it as the closer, directly (a PullRequest) or as the PR
+        //       associated with the closing Commit (`CloserPrs`). This is the leg #558/#543 needed: the
+        //       recipe's `gh pr create --fill` routes a closing keyword in the commit SUBJECT to the PR TITLE,
+        //       where (A) cannot see it — so a correctly merged, correctly closing PR stamped RED forever.
+        //
+        // Among those, the LATEST-MERGED wins. `closedByPullRequestsReferences` lists mentions too, and GitHub
+        // returns them lowest-number-first — so taking the first stamped an earlier prose mention, or a merge
+        // that never touched the work (#342). It is provenance, not just outcome.
+        //
+        // `--pr` overrides WHICH pull request the stamp names — NEVER whether it closed the issue. Selecting by
+        // number alone (#543 leg 2) was a soundness hole: point it at any merged PR that mentions the issue and
+        // the stamp went green. Same predicate, both paths.
+        let closerSet = Set.ofList facts.CloserPrs
+        let closes (p: ClosingPr) = p.ClosesThis || closerSet.Contains p.Number
 
-        match closingPr with
-        | Some pr -> Green(ClosedByPullRequest pr)
+        let chosen =
+            match prOverride with
+            | Some n -> facts.ClosingPrs |> List.filter (fun p -> p.Number = n && p.Merged && closes p) |> List.tryHead
+            | None ->
+                facts.ClosingPrs
+                |> List.filter (fun p -> p.Merged && closes p)
+                |> List.sortBy (fun p -> p.MergedAt)
+                |> List.tryLast
+
+        match chosen with
+        | Some p ->
+            let day = if p.MergedAt.Length >= 10 then p.MergedAt.Substring(0, 10) else p.MergedAt
+            Green(ClosedByPullRequest(p.Number, p.Oid, day))
 
         | None ->
             // #600 — THE GREEN PATH FOR WORK RESOLVED WITHOUT A PR.
@@ -105,13 +140,24 @@ module Done =
                     [ "no PR closes this issue, and the evidence offered for resolving it without one is blank. Say what finished it." ]
 
             | None ->
-                Red
-                    [ "the issue is CLOSED, but nothing records what closed it — no merged PR references it, and its close event names no PR or commit."
-                      "If it was resolved WITHOUT a pull request (obsolete, a duplicate, resolved by other work, a decision recorded elsewhere), say so with evidence — that is a green path, not a workaround (#600)." ]
+                match prOverride with
+                | Some n ->
+                    // #543 leg 2 — `--pr` pointed at a PR that does NOT close this issue (it is not merged, or
+                    // it only mentions the issue). `--pr` cannot launder a mention into a stamp.
+                    Red
+                        [ $"PR #%d{n} does not close this issue — it must be merged, and either name this issue in its body (Closes #%d{facts.Ref.Number}) or be what GitHub recorded as closing it. `--pr` overrides WHICH pull request the stamp names, never WHETHER it closed the issue (#543)." ]
+
+                | None ->
+                    Red
+                        [ "no merged PR closes this issue, and nothing records what closed it — no merged PR names it, and its close event names no PR or commit."
+                          "If it was resolved WITHOUT a pull request (obsolete, a duplicate, resolved by other work, a decision recorded elsewhere), say so with evidence — that is a green path, not a workaround (#600)." ]
 
     let render (ref: Ref) (verdict: Verdict<Closure>) =
         match verdict with
-        | Green(ClosedByPullRequest pr) -> $"✓✓ FSGG-DONE   %s{ref.Short}  ·  merged PR #%d{pr}"
+        | Green(ClosedByPullRequest(pr, oid, day)) ->
+            let sha = if String.IsNullOrEmpty oid then "?" else oid
+            let dsuffix = if String.IsNullOrEmpty day then "" else $" (%s{day})"
+            $"✓✓ FSGG-DONE   %s{ref.Short}  ·  merged PR #%d{pr} @ %s{sha}%s{dsuffix}"
         | Green(ResolvedWithoutPr evidence) -> $"✓✓ FSGG-DONE   %s{ref.Short}  ·  resolved without a PR: %s{evidence}"
         | Green ClosedByNobody
         | Green StillOpen ->
@@ -133,8 +179,8 @@ module Done =
          repository(owner: $owner, name: $repo) { \
            issue(number: $number) { \
              number state \
-             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number merged } } \
-             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number } } } } } \
+             closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } closingIssuesReferences(first: 10) { nodes { number repository { nameWithOwner } } } } } \
+             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number } ... on Commit { oid associatedPullRequests(first: 5) { nodes { number } } } } } } } \
              subIssues(first: 100) { totalCount nodes { number state } } \
              projectItems(first: 20) { nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } \
              parent { number repository { name owner { login } } } \
@@ -207,9 +253,15 @@ module Done =
                     if s.GetString().ToUpperInvariant() = "CLOSED" then Closed else Open
                 | _ -> Open
 
-            // ONLY *MERGED* PRs COUNT. An OPEN or ABANDONED pull request that merely references the issue
-            // has closed nothing — and treating it as the closing act would stamp work done on the strength
-            // of a PR somebody threw away.
+            // The whole `closedByPullRequestsReferences` set, MERGE STATE AND PROVENANCE INTACT. `verify`
+            // decides which one closed the issue (the latest-merged true closer), so the read must not collapse
+            // the set to a single number: a mention and the real closer look identical until you keep their
+            // `mergedAt` and their `closingIssuesReferences`.
+            let strOf (el: JsonElement) (name: string) =
+                match el.TryGetProperty name with
+                | true, v when v.ValueKind = JsonValueKind.String -> v.GetString()
+                | _ -> ""
+
             let closingPrs =
                 match issue.TryGetProperty "closedByPullRequestsReferences" with
                 | true, refs ->
@@ -217,36 +269,83 @@ module Done =
                     | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
                         nodes.EnumerateArray()
                         |> Seq.choose (fun n ->
-                            let merged =
-                                match n.TryGetProperty "merged" with
-                                | true, m -> m.ValueKind = JsonValueKind.True
-                                | _ -> false
+                            match n.TryGetProperty "number" with
+                            | true, num when num.ValueKind = JsonValueKind.Number ->
+                                let merged =
+                                    match n.TryGetProperty "merged" with
+                                    | true, m -> m.ValueKind = JsonValueKind.True
+                                    | _ -> false
 
-                            if not merged then
-                                None
-                            else
-                                match n.TryGetProperty "number" with
-                                | true, num when num.ValueKind = JsonValueKind.Number -> Some(num.GetInt32())
-                                | _ -> None)
+                                let oid =
+                                    match n.TryGetProperty "mergeCommit" with
+                                    | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "abbreviatedOid"
+                                    | _ -> ""
+
+                                // `closesThis`: this PR's body names THIS issue in its own repo (#342/#543).
+                                let closesThis =
+                                    match n.TryGetProperty "closingIssuesReferences" with
+                                    | true, cir ->
+                                        match cir.TryGetProperty "nodes" with
+                                        | true, cn when cn.ValueKind = JsonValueKind.Array ->
+                                            cn.EnumerateArray()
+                                            |> Seq.exists (fun c ->
+                                                let num =
+                                                    match c.TryGetProperty "number" with
+                                                    | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                                    | _ -> None
+
+                                                let nwo =
+                                                    match c.TryGetProperty "repository" with
+                                                    | true, r when r.ValueKind = JsonValueKind.Object -> strOf r "nameWithOwner"
+                                                    | _ -> ""
+
+                                                num = Some ref.Number
+                                                && String.Equals(nwo, $"%s{ref.Owner}/%s{ref.Repo}", StringComparison.OrdinalIgnoreCase))
+                                        | _ -> false
+                                    | _ -> false
+
+                                Some
+                                    { Number = num.GetInt32()
+                                      Merged = merged
+                                      MergedAt = strOf n "mergedAt"
+                                      Oid = oid
+                                      ClosesThis = closesThis }
+                            | _ -> None)
                         |> List.ofSeq
                     | _ -> []
                 | _ -> []
 
-            let closedByEvent =
+            // THE CLOSED_EVENT CLOSERS. A PullRequest closer names its own number; a Commit closer (a squash
+            // whose subject carried the keyword) names the PR(s) associated with it (#558). Both are the PR that
+            // actually closed the issue, per GitHub's own record.
+            let closerPrs =
                 match issue.TryGetProperty "timelineItems" with
                 | true, tl ->
                     match tl.TryGetProperty "nodes" with
                     | true, nodes when nodes.ValueKind = JsonValueKind.Array ->
                         nodes.EnumerateArray()
-                        |> Seq.tryPick (fun n ->
+                        |> Seq.collect (fun n ->
                             match n.TryGetProperty "closer" with
                             | true, c when c.ValueKind = JsonValueKind.Object ->
                                 match c.TryGetProperty "number" with
-                                | true, num when num.ValueKind = JsonValueKind.Number -> Some(num.GetInt32())
-                                | _ -> None
-                            | _ -> None)
-                    | _ -> None
-                | _ -> None
+                                | true, num when num.ValueKind = JsonValueKind.Number -> Seq.singleton (num.GetInt32())
+                                | _ ->
+                                    match c.TryGetProperty "associatedPullRequests" with
+                                    | true, apr ->
+                                        match apr.TryGetProperty "nodes" with
+                                        | true, an when an.ValueKind = JsonValueKind.Array ->
+                                            an.EnumerateArray()
+                                            |> Seq.choose (fun a ->
+                                                match a.TryGetProperty "number" with
+                                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                                | _ -> None)
+                                        | _ -> Seq.empty
+                                    | _ -> Seq.empty
+                            | _ -> Seq.empty)
+                        |> List.ofSeq
+                        |> List.distinct
+                    | _ -> []
+                | _ -> []
 
             let children =
                 match issue.TryGetProperty "subIssues" with
@@ -344,7 +443,7 @@ module Done =
                 { Ref = ref
                   State = state
                   ClosingPrs = closingPrs
-                  ClosedByEvent = closedByEvent
+                  CloserPrs = closerPrs
                   Children = children
                   BoardStatus = boardStatus
                   Parent = parent }
@@ -373,10 +472,56 @@ module Done =
 
         transport.Send request |> Result.map ignore
 
+    // ---- the EPIC-UNLINKED-CHILD set (shared with `lint`, #485) --------------------------------------
+
+    let bodyUnlinkedChildren
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (body: string)
+        (graphRefs: string list)
+        : IoResult<string list> =
+
+        let inGraph = Set.ofList graphRefs
+
+        // The body declares these; the graph contains those; the difference is the candidate unlinked set.
+        let declared =
+            FS.GG.Coord.EpicBody.childRefs owner repo body
+            |> List.filter (fun d -> not (inGraph.Contains d))
+
+        let ownerRepoNum (r: string) =
+            let m = Text.RegularExpressions.Regex.Match(r, @"^([^/]+)/([^#]+)#(\d+)$")
+
+            if m.Success then
+                Some(m.Groups.[1].Value, m.Groups.[2].Value, int m.Groups.[3].Value)
+            else
+                None
+
+        // Drop the refs GitHub confirms are PRs (#346); KEEP one the probe cannot resolve (#266).
+        let rec prune (kept: string list) (refs: string list) : IoResult<string list> =
+            match refs with
+            | [] -> Ok(List.rev kept)
+            | r :: rest ->
+                match ownerRepoNum r with
+                | None -> prune (r :: kept) rest
+                | Some(o, rp, n) ->
+                    match Reads.refIsPullRequest transport o rp n with
+                    | Ok true -> prune kept rest
+                    | Ok false -> prune (r :: kept) rest
+                    | Error _ -> prune (r :: kept) rest
+
+        prune [] declared
+
     // ---- the climb ----------------------------------------------------------------------------------
 
     [<Literal>]
     let private MaxHops = 10
+
+    /// Strip the owner from an `owner/repo#n` ref → `repo#n`, the form a reason NAMES a ref in.
+    let private shortRef (r: string) =
+        match r.IndexOf '/' with
+        | i when i >= 0 -> r.Substring(i + 1)
+        | _ -> r
 
     let rollUp
         (transport: IGitHubTransport)
@@ -464,6 +609,43 @@ module Done =
                 Ok()
 
             | AllResolved _ ->
+
+            // THE EPIC-UNLINKED-CHILD RULE, APPLIED TO THE ROLL-UP (#325). "All children resolved" is a
+            // claim about the sub-issue GRAPH — but if the parent's BODY declares a child the graph does not
+            // contain, that claim is about a set the body itself says is incomplete, and the roll-up would
+            // close the parent over a criterion it split out and lost track of. So the same check `lint`
+            // makes is made here: a body-cited PR ref is dropped (#346), an unresolvable one is kept (#266).
+            // (`facts`' graph is summarised to counts, so the refs are re-read; a parent about to flip is rare.)
+            match Reads.issueBody transport current.Owner current.Repo current.Number with
+            | Error e -> Error e
+            | Ok parentBody ->
+
+            match Reads.subIssues transport current.Owner current.Repo current.Number with
+            | Error e -> Error e
+            | Ok graph ->
+
+            match
+                bodyUnlinkedChildren
+                    transport
+                    current.Owner
+                    current.Repo
+                    parentBody
+                    (graph.Children |> List.map (fun c -> c.Ref))
+            with
+            | Error e -> Error e
+            | Ok unlinked when not (List.isEmpty unlinked) ->
+                let named = unlinked |> List.map shortRef |> String.concat ", "
+
+                results.Add(
+                    ParentLeftOpen(
+                        current,
+                        [ $"the epic body declares %d{List.length unlinked} child(ren) the sub-issue graph does not contain: %s{named}. Link them with `fsgg-coord child`, or drop them from the body, before it can roll up (#325)." ]
+                    )
+                )
+
+                Ok()
+
+            | Ok _ ->
 
             // BOARD *AND* ISSUE, TOGETHER. #613: the roll-up stamped the parent `Done` on the board and
             // never CLOSED THE ISSUE — so the upward climb died at the next hop (which reads an OPEN child),

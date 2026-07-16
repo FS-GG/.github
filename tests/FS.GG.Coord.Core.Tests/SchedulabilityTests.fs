@@ -22,7 +22,8 @@ module SchedulabilityTests =
           State = Open
           TouchSet = Declared [ Matchable "src/Scene/**" ]
           Blockers = []
-          Claim = None }
+          Claim = None
+          ItemPr = None }
 
     let private claim w =
         { Worker = WorkerId w
@@ -193,6 +194,30 @@ module SchedulabilityTests =
         // Without this, the assertion above is satisfied by a scheduler that simply stopped scheduling.
         let dead = Some(claim "ghost-000", LeaseExpiredNoPr)
         Assert.Equal(Startable, ask { item 11 with Claim = dead })
+
+    [<Fact>]
+    let ``#651 a MARKERLESS item with an open item PR is NOT offered — an implementation is already in flight`` () =
+        // No claim marker (Claim = None), but the scan found an open `item/<n>-*` PR. #581 read that
+        // proof-of-life only through a marker, so this item used to fall straight through to Startable and
+        // get handed out a second time. It must now be ItemPrOpen — not offered.
+        match ask { item 651 with Claim = None; ItemPr = Some 812 } with
+        | ItemPrOpen 812 -> ()
+        | other -> failwith $"a markerless item with an open PR must not be offered; got %A{other}"
+
+    [<Fact>]
+    let ``#651 negative control — a markerless item with NO item PR is still Startable`` () =
+        // Without this, the assertion above is satisfied by a scheduler that stopped offering markerless
+        // items altogether. The common case (no PR) must stay startable.
+        Assert.Equal(Startable, ask { item 652 with Claim = None; ItemPr = None })
+
+    [<Fact>]
+    let ``#651 a LIVE claim outranks the item PR — a claimed item is never double-counted`` () =
+        // ItemPr is the MARKERLESS signal only; when a marker holds the lock, its own liveness governs and
+        // the item PR (if any) is the claim's LeaseExpiredPrOpen, checked above. A live claim wins here.
+        Assert.Equal(
+            HeldBy(WorkerId "heron-b71"),
+            ask { item 653 with Claim = Some(claim "heron-b71", LeaseHeld); ItemPr = Some 999 }
+        )
 
     [<Fact>]
     let ``#581 we could not ask about the PR -> UNDETERMINED, never 'free'`` () =

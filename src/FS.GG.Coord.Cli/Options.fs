@@ -5,7 +5,6 @@ module Options =
     type Command =
         | Decide
         | Scan
-        | FleetVerdict
         | LanesView
         | Facts
         | WhoAmI
@@ -14,14 +13,19 @@ module Options =
         | BatchCmd
         | Ready
         | Who
+        | Reap
         | Claim
+        | Adopt
+        | Landable
         | Take
         | Release
         | Heartbeat
         | SetField
         | Child
         | Widen
+        | Overlap
         | Say
+        | Inbox
         | DoneCmd
         | VerifyPaths
         | Bootstrap
@@ -29,7 +33,9 @@ module Options =
         | FieldId
         | OptionId
         | ItemId
+        | Add
         | LintCmd
+        | Issues
         | Help
         | Version
 
@@ -52,6 +58,9 @@ module Options =
           Mint: bool
           Flip: bool
           Evidence: string option
+          /// `done --flip --partial "<why>"` — this child is a PARTIAL fix and does NOT discharge its
+          /// parent, so the roll-up must leave the parent OPEN (#614). Absent means the child completes it.
+          Partial: string option
           ToWorker: string option
           Message: string option
           Paths: string list
@@ -72,7 +81,40 @@ module Options =
           Batch: bool
           /// `lint --strict` — a NOTE (not just an error) is fatal. Off, a note is advisory and lint still
           /// exits 0; on, any note fails the gate too (the pedantic board-health pass).
-          Strict: bool }
+          Strict: bool
+          /// `overlap <ref> --active` — check the item's touch-set against the LIVE claims in its own repo,
+          /// rather than against a second named item. Repo-scoped: a same-named token in another repo is not
+          /// a collision (#353).
+          Active: bool
+
+          /// `reap --apply` — actually DELETE the expired markers; without it, reap is a DRY RUN (#581).
+          Apply: bool
+
+          /// `inbox --peek` — show new messages WITHOUT advancing the per-worker cursor, so the same mail
+          /// is still "new" on the next read. Off, `inbox` consumes what it shows.
+          Peek: bool
+
+          /// `landable --wait` — poll until the verdict SETTLES instead of reading it once (#724). A `green`
+          /// is believed only once the subject count has stopped growing; a `red` at zero subjects is the
+          /// registration race and keeps waiting; conflicted/unknown return at once.
+          Wait: bool
+          /// `--tries N` (`landable --wait`) — the maximum number of polls. Default 30.
+          Tries: int option
+          /// `--interval N` (`landable --wait`) — seconds to sleep between polls. Default 20.
+          Interval: int option
+          /// `landable --require NAME` (repeatable) — check-run names that must have REPORTED. For a check
+          /// branch protection does NOT require but which is the reason the PR exists; absent, it reads
+          /// exactly like a passing one (#606/#737). Missing ⇒ `pending`, never `green`.
+          Require: string list
+          /// `landable --sha SHA` — the head SHA the caller believes it is gating. `pulls/{n}` is eventually
+          /// consistent after a force-push, so a caller that just pushed says which commit it means; a
+          /// disagreement is `pending`, never a verdict about the previous commit (#737).
+          Sha: string option
+
+          /// `issues --label L` — restrict the REST listing to issues carrying this label (absent ⇒ all).
+          Label: string option
+          /// `issues --state open|closed|all` — which issue state to list. Default `open` (bash's default).
+          IssueState: string option }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -86,7 +128,6 @@ CLIENT commands read and write GitHub through the typed IO layer.
 
 DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
-  fleet  [--snapshot FILE] [--json|--text]   fold the fleet divergence ledger into the cut-over verdict
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
 
@@ -101,18 +142,38 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              will refuse; --status/--all widen past the default)
   who    [--repo NAME] [--json]              who holds what, right now (held/stale/unclaimed;
                                              --json for the machine contract, else a human table)
+  reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
+                                             an open item/<n>-* PR (#581); a DRY RUN without --apply
+  landable <pr> --repo NAME                  is this OPEN PR finished work? one verdict word on stdout
+    [--wait [--tries N] [--interval S]]      (green/conflicted/pending/red/unknown), the decision in the
+                                             exit code — the #697/#720 gate as a query (#724). --wait polls
+                                             until the verdict SETTLES: it never believes an early green (it
+                                             waits for the run set to STOP GROWING), and keeps waiting while
+                                             zero runs have registered (default --tries 30, --interval 20s).
+    [--require NAME]... [--sha SHA]           --require NAME (repeatable): this check must have REPORTED —
+                                             for one branch protection does NOT require but that decides the
+                                             PR; absent, it reads like a passing one (#606). --sha SHA: the
+                                             head you MEAN to gate, for a caller that just force-pushed (the
+                                             PR object lags). Neither can green; both are pending (#737)
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
   take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
   release <ref> [--worker W] [--force]       drop the lock, restoring the column it overwrote
   heartbeat <ref> [--worker W]               renew the lease
 
+  add    <ref>                               put an issue ON the board, idempotently (#861) — the metered
+                                             verb the GraphQL monopoly rule names (#586); prints the item id
   set-field <ref> <field> <value>            write one board field (empty value clears)
   set-field --batch <ref> Field=Value ...    write N fields in ONE aliased mutation (#448)
   child  <parent-ref> <child-ref>            attach a child issue to a parent
   widen  <ref> --paths T...                  widen a HELD item's touch-set
+  overlap <ref> --active | <a> <b>           does an item's touch-set collide? (repo-scoped, #353)
   say    <ref> --to W --message M            message another worker
-  done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up
+  inbox  [--repo NAME] [--peek] [--json]     messages addressed to this worker across every in-flight
+                                             claim (ON the board and off it, #461/case 25); --peek does
+                                             not advance the cursor
+  done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up (add
+               [--partial "why"]             --partial "why" if this child does NOT complete its parent, #614)
   verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
                [--issue REF] [--warn]        SKIP; --issue names the issue explicitly; --warn advisory)
 
@@ -129,6 +190,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   lint   [--repo NAME] [--json] [--strict]   board-health gate: a Ready/Backlog item that no worker can
                                              ever pick up (no `Paths:`, or every token unmatchable) is an
                                              error (#496); --strict makes notes fatal too
+  issues <repo> [--label L] [--state S]      list a repo's issues over REST, ETag-revalidated — a 304 costs
+         [--refresh]                         nothing (#446/#418). <repo> is a short-id, owner/repo, or a
+                                             repo name; emits the raw JSON array (project it with jq)
 
   --help    --version
 
@@ -139,6 +203,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   3 red     ·   4 no-verdict   ·   75 EX_RATE (budget exhausted — back off, try again later)
   `take` (#585): 0 ONLY when it claimed an item · 5 EX_NONE (nothing startable) · 6 EX_CONTENDED
   (lost every race) · 75 EX_RATE · any other non-zero, could not read (never EX_NONE, #266)
+  `landable` (#720/#724): 0 green · 7 pending (the ONE verdict worth retrying) · 3 red or conflicted
+  (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
 
     let parse (args: string list) : Result<Options, string> =
@@ -161,6 +227,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
             | "--evidence" :: value :: t -> flags { acc with Evidence = Some value } t
             | [ "--evidence" ] -> Error "--evidence needs a value"
+            | "--partial" :: value :: t -> flags { acc with Partial = Some value } t
+            | [ "--partial" ] -> Error "--partial needs a value — say why this child does NOT complete its parent (#614)"
 
             | "--to" :: value :: _ when value.StartsWith "-" -> Error $"--to needs a value (got flag '%s{value}')"
             | "--to" :: value :: t -> flags { acc with ToWorker = Some value } t
@@ -195,9 +263,64 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--status" :: value :: t -> flags { acc with Status = Some value } t
             | [ "--status" ] -> Error "--status needs a value"
 
+            // `issues --label` / `--state` — a label may legitimately begin with a hyphen, but a bare
+            // trailing `--label` with nothing after it is still an error, so the empty-tail guard stays.
+            | "--label" :: value :: t -> flags { acc with Label = Some value } t
+            | [ "--label" ] -> Error "--label needs a value"
+
+            | "--state" :: value :: _ when value.StartsWith "-" -> Error $"--state needs a value (got flag '%s{value}')"
+            | "--state" :: value :: t ->
+                match value with
+                | "open"
+                | "closed"
+                | "all" -> flags { acc with IssueState = Some value } t
+                | other -> Error $"--state must be open, closed, or all (got '%s{other}')"
+            | [ "--state" ] -> Error "--state needs a value"
+
             | "--all" :: t -> flags { acc with All = true } t
             | "--batch" :: t -> flags { acc with Batch = true } t
             | "--strict" :: t -> flags { acc with Strict = true } t
+            | "--active" :: t -> flags { acc with Active = true } t
+            | "--apply" :: t -> flags { acc with Apply = true } t
+            | "--peek" :: t -> flags { acc with Peek = true } t
+
+            | "--wait" :: t -> flags { acc with Wait = true } t
+
+            | "--tries" :: value :: _ when value.StartsWith "-" ->
+                Error $"--tries needs a value (got flag '%s{value}')"
+            | "--tries" :: value :: t ->
+                match System.Int32.TryParse value with
+                | true, n when n > 0 -> flags { acc with Tries = Some n } t
+                | true, n -> Error $"--tries must be a positive count (got %d{n})"
+                | _ -> Error $"--tries needs a number (got '%s{value}')"
+            | [ "--tries" ] -> Error "--tries needs a value"
+
+            // `--interval` permits 0 (the test harness drives the poll with no wall-clock); it is a delay,
+            // not a count, so zero is meaningful where `-n 0` would not be.
+            | "--interval" :: value :: _ when value.StartsWith "-" ->
+                Error $"--interval needs a value (got flag '%s{value}')"
+            | "--interval" :: value :: t ->
+                match System.Int32.TryParse value with
+                | true, n when n >= 0 -> flags { acc with Interval = Some n } t
+                | true, n -> Error $"--interval must be a non-negative number of seconds (got %d{n})"
+                | _ -> Error $"--interval needs a number of seconds (got '%s{value}')"
+            | [ "--interval" ] -> Error "--interval needs a value"
+
+            // REPEATABLE: each `--require` APPENDS. A check-set is a set, and a caller naming two checks
+            // means both, not the last one — a last-wins parse would silently drop a required check, which
+            // is the fail-open direction this whole command exists to close (#737).
+            | "--require" :: value :: _ when value.StartsWith "-" ->
+                Error $"--require needs a check name (got flag '%s{value}')"
+            | "--require" :: value :: t when System.String.IsNullOrWhiteSpace value ->
+                Error "--require needs a check name (got an empty one)"
+            | "--require" :: value :: t -> flags { acc with Require = acc.Require @ [ value ] } t
+            | [ "--require" ] -> Error "--require needs a check name"
+
+            | "--sha" :: value :: _ when value.StartsWith "-" -> Error $"--sha needs a value (got flag '%s{value}')"
+            | "--sha" :: value :: t when System.String.IsNullOrWhiteSpace value ->
+                Error "--sha needs a commit SHA (got an empty one)"
+            | "--sha" :: value :: t -> flags { acc with Sha = Some value } t
+            | [ "--sha" ] -> Error "--sha needs a value"
 
             | "--fresh" :: t -> flags { acc with Fresh = true } t
             // `bootstrap --refresh` — drop the day-cached board map and re-resolve. An alias of `--fresh`
@@ -245,6 +368,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Mint = false
               Flip = false
               Evidence = None
+              Partial = None
               ToWorker = None
               Message = None
               Paths = []
@@ -254,7 +378,17 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Status = None
               All = false
               Batch = false
-              Strict = false }
+              Strict = false
+              Active = false
+              Apply = false
+              Peek = false
+              Wait = false
+              Tries = None
+              Interval = None
+              Require = []
+              Sha = None
+              Label = None
+              IssueState = None }
 
         match args with
         | []
@@ -265,7 +399,6 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | "scan" :: rest -> flags { defaults with Command = Scan } rest
         | "decide" :: rest -> flags { defaults with Command = Decide } rest
-        | "fleet" :: rest -> flags { defaults with Command = FleetVerdict } rest
         | "lanes" :: rest -> flags { defaults with Command = LanesView } rest
         | "facts" :: rest -> flags { defaults with Command = Facts } rest
 
@@ -277,14 +410,26 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `who` is a HUMAN truth read by default (the table case 20 asserts), and `--json` opts into the
         // machine contract cases 20/25 consume — the mirror of `ready`/`batch`, where JSON is the default.
         | "who" :: rest -> flags { defaults with Command = Who; Render = Text } rest
+        // `reap` reports as text (the operator reads it before deciding); its collect is gated behind
+        // `--apply`, so the bare form is a DRY RUN.
+        | "reap" :: rest -> flags { defaults with Command = Reap; Render = Text } rest
         | "claim" :: rest -> flags { defaults with Command = Claim } rest
+        // `adopt` reports as text (a precondition report the operator reads); it gates the `claim` transfer.
+        | "adopt" :: rest -> flags { defaults with Command = Adopt; Render = Text } rest
+        // `landable` prints ONE verdict word on stdout and puts the decision in the exit code — a query, not
+        // a table, so no `Render` flip.
+        | "landable" :: rest -> flags { defaults with Command = Landable } rest
         | "take" :: rest -> flags { defaults with Command = Take } rest
         | "release" :: rest -> flags { defaults with Command = Release } rest
         | "heartbeat" :: rest -> flags { defaults with Command = Heartbeat } rest
         | "set-field" :: rest -> flags { defaults with Command = SetField } rest
         | "child" :: rest -> flags { defaults with Command = Child } rest
         | "widen" :: rest -> flags { defaults with Command = Widen } rest
+        | "overlap" :: rest -> flags { defaults with Command = Overlap; Render = Text } rest
         | "say" :: rest -> flags { defaults with Command = Say } rest
+        // `inbox` reports as a human table by default (a worker reads it), `--json` for a machine consumer —
+        // the mirror of `who`.
+        | "inbox" :: rest -> flags { defaults with Command = Inbox; Render = Text } rest
         | "done" :: rest -> flags { defaults with Command = DoneCmd } rest
         | "verify-paths" :: rest -> flags { defaults with Command = VerifyPaths } rest
         | "bootstrap" :: rest -> flags { defaults with Command = Bootstrap } rest
@@ -292,6 +437,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "field-id" :: rest -> flags { defaults with Command = FieldId } rest
         | "option-id" :: rest -> flags { defaults with Command = OptionId } rest
         | "item-id" :: rest -> flags { defaults with Command = ItemId } rest
+        | "add" :: rest -> flags { defaults with Command = Add } rest
         | "lint" :: rest -> flags { defaults with Command = LintCmd; Render = Text } rest
+        // `issues` emits the raw JSON array (bash's `issues` prints the REST body); the caller projects it
+        // with jq, so the default Json render stands.
+        | "issues" :: rest -> flags { defaults with Command = Issues } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"

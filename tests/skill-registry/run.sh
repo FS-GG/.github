@@ -702,12 +702,56 @@ assert "--auto" not in steps[merge]["run"], \
 assert steps[merge].get("env", {}).get("GH_TOKEN") == "${{ steps.app-token.outputs.token }}", \
     "the merge does not use the App token (#514)"
 
-gate = next((n for n in steps if n.startswith("Decide whether the standing PR may be merged")), None)
+gate = next((n for n in steps if n.startswith("Is the standing PR landable?")), None)
 assert gate, "no step establishes that the standing PR is safe to merge"
 assert steps[gate]["id"] == "merge-gate", "the merge's `if` reads steps.merge-gate.outputs.merge"
-assert "skill-registry-merge-gate" in steps[gate]["run"], \
-    "the merge decision is not delegated to the tested merge-gate script — a merge lands a commit on " \
-    "`main`, so its truth table may not live in an untestable inline block"
+
+# THE GATE IS THE TOOL, NOT A COPY OF IT (#737, #724). This bot carried the LAST hand-rolled rollup —
+# the #710 copy, which read its own superseded runs as red and refused to merge the PR it had just
+# pushed. The rollup has been wrong four times in five copies, and every fix edited a copy, because
+# nothing executes a recipe and nothing tested the inline blocks. `landable` is the one implementation
+# and the one place a test can hold it, so this step may NAME it and nothing else.
+assert "fsgg-coord landable" in steps[gate]["run"], \
+    "the merge decision is not delegated to `fsgg-coord landable` — a merge lands a commit on `main`, " \
+    "so its truth table may not live in an untestable inline block, and may not be a sixth copy of a " \
+    "rollup that has already been wrong four times (#724, #737)"
+for endpoint, what in (("actions/runs", "workflow runs"), ("check-runs", "check runs")):
+    assert endpoint not in steps[gate]["run"], \
+        f"the gate reads {what} itself — that IS the hand-rolled merge gate, re-grown (#724, #737)"
+
+# --require registry-coherence: THE ASSERTION THIS BOT EXISTS FOR, and the reason `--auto` cannot be
+# used (see the merge assertions above). `registry-coherence` is not required on `main` and must not
+# become one (#549), so NOTHING but this flag will ever look at it — and an ABSENT check reads exactly
+# like a passing one to any "is anything red?" rollup (#606). Drop the flag and the bot silently goes
+# back to merging snapshots whose subject never reported: green, vacuous, and landing bad digests.
+assert "--require registry-coherence" in steps[gate]["run"], \
+    "the gate no longer asserts `registry-coherence` BY NAME. It is not a required check, so without " \
+    "--require nothing looks at it, and a renamed job or a narrowed `paths:` filter makes 'all checks " \
+    "green' true and vacuous — merging a snapshot that was never verified (#606, #425, #737)"
+
+# --sha: the head we MEAN to gate. `steps.pr.outputs.sha` is `git rev-parse HEAD` of the branch this
+# run force-pushed, read locally BECAUSE the PR object's head SHA is eventually consistent. Without
+# this the gate would score whatever `pulls/{n}` happens to name — routinely the PREVIOUS commit,
+# whose checks are green and are about code that would not be merged.
+assert "--sha" in steps[gate]["run"], \
+    "the gate does not pin the head SHA it is gating. `pulls/{n}` lags a force-push, so `landable` " \
+    "would score the PREVIOUS commit's green checks and merge one nothing ever checked (#737)"
+assert steps[gate].get("env", {}).get("SHA") == "${{ steps.pr.outputs.sha }}", \
+    "the gate's SHA is not the locally-resolved head this run pushed — reading it from the API is the " \
+    "very race --sha exists to close (#737)"
+
+# EVERY read the gate makes is scoped by a grant in THIS FILE. `landable` takes ONE token, so the old
+# App-token/GITHUB_TOKEN split had to collapse to one; it collapsed onto the read-only one, which is
+# the direction the `actions: read` rationale already argued for. An App token here would re-open it:
+# the App's permissions are configured outside this repo and cannot be asserted from inside it.
+assert steps[gate].get("env", {}).get("GITHUB_TOKEN") == "${{ github.token }}", \
+    "the gate does not read under GITHUB_TOKEN — a scope this FILE grants is a scope it can prove (#737)"
+assert "app-token" not in str(steps[gate].get("env", {})), \
+    "the gate holds an App token. It only READS; the App token is for the merge alone (#514, #737)"
+for scope in ("actions: read", "checks: read"):
+    assert scope in raw, \
+        f"`{scope}` is not granted, but the merge gate's reads need it — GITHUB_TOKEN would 403, " \
+        f"`landable` would return `unknown`, and the bot would refuse its own PR forever (#700, #737)"
 
 # MERGE AND RETIRE MUST STAY ON MUTUALLY EXCLUSIVE BRANCHES. This is the sequencing #642 flags as the
 # thing that makes it more than a copy-paste: a PR that is about to be RETIRED as obsolete must not be
@@ -969,93 +1013,23 @@ run --registry "$REG" --repos-root "$ROOT" --baseline-registry "$WORK/launder-ba
 grep -q "introduced by this change" <<<"$out" || { echo "FAIL: the rewritten row must be reported as introduced"; echo "$out"; exit 1; }
 echo "   ok"
 
-echo "== 43. the merge gate: an absent check is not a passing one, and a NON-required red still refuses =="
-# A green PR that nobody merges lands nothing (#642). #640 fixed the reason the standing PR could never
-# go green; #595 then went green and SAT there for days while `main` stayed red on the eight stale
-# digests it had already fixed. This gate lands it — and, like the retire gate, it is a SCRIPT driven
-# over its whole truth table here, because a merge is the other branch in this fabric that DESTROYS
-# state: it lands a commit on `main`.
+echo "== 43. the merge gate lives in the ENGINE, not here (#737) =="
+# THIS CASE USED TO DRIVE `scripts/skill-registry-merge-gate` OVER ITS WHOLE TRUTH TABLE. That script
+# is gone: it was the FIFTH copy of a rollup that has been wrong four times (#547, #606, #698, #710,
+# #720), and #724 put the logic in one tested place. The bot now calls `fsgg-coord landable` like
+# everything else, so the truth table it used to assert here is asserted where the implementation
+# actually lives, and cannot drift from it:
 #
-# THE TWO LEGS THAT ARE THE WHOLE POINT — both are cases GitHub's NATIVE auto-merge gets WRONG, which
-# is why #642's "just copy the propagate arm and pass --auto" is not the fix it looks like:
+#   * the scorer, pure                 tests/FS.GG.Coord.Core.Tests/LandableTests.fs
+#     (zero checks is RED not GREEN (#606) · a superseded cancelled run is not a failure (#720) ·
+#      an ABSENT --require'd check is never green (#737) · a red outranks a missing required one)
+#   * the binary, over a fake GitHub   tests/coord-engine-parity/run.sh cases 31-32
+#     (--require and --sha, each proven by a world that is GREEN without the flag and PENDING with it)
 #
-#   * (d) a RED `registry-coherence`. It is NOT a required check on `main` (required: contract-coherence
-#     / coherence, projection, roster-closure, drift, reconcile) and it must not become one — its
-#     verdict is a function of OTHER repos' mains, so requiring it would let a producer's merge deadlock
-#     every open `.github` PR (#549). Native auto-merge waits for REQUIRED checks and merges straight
-#     past a red non-required one — i.e. it would land a snapshot whose own coherence check says it is
-#     OBSOLETE, writing superseded digests over the registry and REDing the gate it was opened to green.
-#     That is #425's inversion, automated.
-#
-#   * (c) an ABSENT `registry-coherence`. A renamed job or a narrowed `paths:` filter, and the subject
-#     simply never reports — at which point "are all checks green?" is TRUE and vacuous. An absent
-#     subject reads exactly like a passing one (#606, #266), so it is asserted BY NAME.
-MGATE="$HERE/../../scripts/skill-registry-merge-gate"
-# `${2-CLEAN}`, not `${2:-CLEAN}`: leg (g) passes an EXPLICITLY EMPTY merge state — the shape a failed
-# `gh pr view` leaves behind — and `:-` substitutes CLEAN for an empty argument just as it does for an
-# absent one. That would have tested the happy path while LOOKING like it tested the refusal.
-mgate() { python3 "$MGATE" --checks "$1" --merge-state "${2-CLEAN}" 2>"$WORK/mwhy.txt"; }
-runs() { python3 -c 'import json,sys; print(json.dumps([{"check_runs": json.loads(sys.argv[1])}]))' "$1"; }
-
-# (a) every check green, including the subject, and the PR is CLEAN. Merge.
-runs '[{"name":"registry-coherence","status":"completed","conclusion":"success"},
-       {"name":"drift","status":"completed","conclusion":"success"},
-       {"name":"fixture","status":"completed","conclusion":"skipped"}]' > "$WORK/c.json"
-mgate "$WORK/c.json" > "$WORK/mout.txt" || { echo "FAIL: an all-green PR must merge"; cat "$WORK/mwhy.txt"; exit 1; }
-grep -q "merge=true" "$WORK/mout.txt" || { echo "FAIL: merge!=true on an all-green PR"; exit 1; }
-grep -q "checks=3"  "$WORK/mout.txt" || { echo "FAIL: the check count is not reported"; exit 1; }
-
-# (b) ZERO CHECK RUNS. "Everything passed" and "CI never started" are the SAME EMPTY SET, and only one
-# of them is safe (#606). The commonest cause is a CONFLICTED PR: GitHub cannot build refs/pull/N/merge,
-# so no workflow is ever scheduled and the head SHA has zero check runs forever. Never a pass.
-echo '[]' > "$WORK/c.json"
-mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: a PR with ZERO checks was merged — the #606 fail-open"; exit 1; }
-grep -q "merge=false" "$WORK/mout.txt" || { echo "FAIL: merge!=false on zero checks"; exit 1; }
-grep -qi "zero check runs" "$WORK/mwhy.txt" || { echo "FAIL: an empty check list was not NAMED as the reason"; cat "$WORK/mwhy.txt"; exit 1; }
-runs '[]' > "$WORK/c.json"      # the same emptiness, one page-shape in
-mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: an empty check_runs page was merged"; exit 1; }
-
-# (c) THE SUBJECT IS ABSENT. Everything that DID report is green — so a naive aggregate says "merge".
-mgate <(runs '[{"name":"drift","status":"completed","conclusion":"success"},
-               {"name":"projection","status":"completed","conclusion":"success"}]') CLEAN > "$WORK/mout.txt" \
-  && { echo "FAIL: merged with registry-coherence ABSENT — the reconcile was never verified"; exit 1; }
-grep -qi "did not report" "$WORK/mwhy.txt" || { echo "FAIL: the absent subject was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (d) THE SUBJECT IS RED — and it is NOT a required check, so native auto-merge would have merged it.
-runs '[{"name":"registry-coherence","status":"completed","conclusion":"failure"},
-       {"name":"drift","status":"completed","conclusion":"success"}]' > "$WORK/c.json"
-mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged past a RED registry-coherence — #425's inversion, automated"; exit 1; }
-grep -q "registry-coherence=failure" "$WORK/mwhy.txt" || { echo "FAIL: the red check was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (e) STILL RUNNING. A pending check has not passed. Refuse — the next run re-pushes and re-gates.
-runs '[{"name":"registry-coherence","status":"in_progress","conclusion":null},
-       {"name":"drift","status":"completed","conclusion":"success"}]' > "$WORK/c.json"
-mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged while a check was still running"; exit 1; }
-grep -qi "not completed" "$WORK/mwhy.txt" || { echo "FAIL: the pending check was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (f) A completed run with a NULL conclusion is not green either — it is the shape a cancelled or
-# still-settling run takes, and `(.conclusion or "") in GREEN` is the only test that catches it.
-runs '[{"name":"registry-coherence","status":"completed","conclusion":null}]' > "$WORK/c.json"
-mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: a null conclusion was treated as green"; exit 1; }
-
-# (g) EVERY CHECK GREEN, but GitHub says the PR is not mergeable. Asked of the PR, never of branch
-# protection — the protection endpoint needs `administration: read`, and a 403 there is neither a
-# verdict nor an absence of one (#463). UNSTABLE is the sharp one: mergeable, but something is red.
-runs '[{"name":"registry-coherence","status":"completed","conclusion":"success"}]' > "$WORK/c.json"
-for bad in BLOCKED UNSTABLE DIRTY BEHIND UNKNOWN ""; do
-  mgate "$WORK/c.json" "$bad" > "$WORK/mout.txt" \
-    && { echo "FAIL: merged a PR whose mergeStateStatus is '$bad'"; exit 1; }
-done
-mgate "$WORK/c.json" HAS_HOOKS > /dev/null || { echo "FAIL: HAS_HOOKS is mergeable and must not refuse"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (h) THE READ FAILED. An unparseable payload means the checks were NOT read — an absence of evidence,
-# not an absence of red checks. Same discriminator as the retire gate: the payload, never an exit code.
-printf 'gh: could not read check runs\n' > "$WORK/c.json"
-mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged on an unparseable check payload"; exit 1; }
-grep -qi "did not parse" "$WORK/mwhy.txt" || { echo "FAIL: the failed read was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-rm -f "$WORK/c.json"            # an absent file is the same failure, one step earlier
-mgate "$WORK/c.json" > "$WORK/mout.txt" && { echo "FAIL: merged with NO check payload at all"; exit 1; }
-echo "   ok"
+# What still belongs HERE is the WIRING — that this workflow asks that question, asks it about the
+# right subject, and merges only on the answer. Nothing runtime catches a rewiring, so it is pinned
+# above, in the structural assertions over the workflow YAML.
+echo "   ok (the truth table moved to the engine's corpus; the wiring is asserted above)"
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────────
 # Cases 44-51: THE MIRROR VERDICT (.github#658, epic #266).
@@ -1343,145 +1317,26 @@ rm -rf "$ROOT/Mirror.Repo/template/skill-manifest" "$ROOT/Mirror.Repo/template/p
 write_registry
 echo "   ok"
 
-echo "== 56. the merge gate: a SUPERSEDED run is not a RED one — and the two rules that would fail OPEN =="
-# THE BOT REFUSED TO MERGE THE PR IT HAD JUST PUSHED (#700). `skill-registry-autofix.yml` force-pushes
-# the branch (a `synchronize` event) and then edits the PR body (an `edited` event). Both are
-# `pull_request` events, so `github.ref` is `refs/pull/N/merge` for BOTH — ONE `cancel-in-progress`
-# group — and the `edited` run cancels the still-running `synchronize` run at the SAME head SHA. The
-# gate classified by conclusion alone, `cancelled` is not green, so the standing PR sat unmerged and
-# `main` stayed stale on the very digests the bot had already fixed. It manufactures the trigger on
-# every reconcile after the first, so this was the standing-PR PATH, not an interleaving.
+echo "== 56. supersession is the ENGINE's rule now (#737) =="
+# THE BOT REFUSED TO MERGE THE PR IT HAD JUST PUSHED (#700/#710). It force-pushes the branch (a
+# `synchronize` event) and then edits the PR body (an `edited` event); both are `pull_request` events, so
+# `github.ref` is `refs/pull/N/merge` for BOTH — ONE `cancel-in-progress` group — and the second run
+# cancels the first at the SAME head SHA. A gate that classifies by conclusion alone calls those corpses
+# RED and refuses. The bot manufactures that state on every reconcile after the first, so it was the
+# standing-PR PATH, not an interleaving.
 #
-# The repair is NARROW, because every loose version of it fails OPEN — and the gate must fail CLOSED:
-# a merge lands a commit on `main`. Legs (l) and (m) are the two loose versions, and both are drawn
-# from real workflows in this repo. They are the reason this is not "latest run wins".
-mrgate() { python3 "$MGATE" --checks "$1" --runs "$2" --merge-state "${3-CLEAN}" 2>"$WORK/mwhy.txt"; }
-wruns() { python3 -c 'import json,sys; print(json.dumps([{"workflow_runs": json.loads(sys.argv[1])}]))' "$1"; }
-# A check run carries its suite at `.check_suite.id`; a workflow run carries the same id at
-# `.check_suite_id`. That join is the ONLY way a check run can be told which workflow produced it —
-# `.name` is the JOB name and identifies nothing (leg (m)).
-crun() { printf '{"name":"%s","status":"completed","conclusion":%s,"check_suite":{"id":%s}}' "$1" "$2" "$3"; }
-
-# (i) THE HEADLINE. The bot's own standing-PR state: every check on the head SHA is duplicated — a
-# CANCELLED copy from the killed `synchronize` run, and a GREEN copy from the `edited` run that
-# replaced it, in the same concurrency group. The cancelled copies are corpses, not verdicts. MERGE.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"cancelled"' 1),
-                $(crun drift            '"cancelled"' 3),
-                $(crun registry-coherence '"success"' 2),
-                $(crun drift            '"success"' 4)]}]
-EOF
-wruns '[{"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":10,"status":"completed","conclusion":"cancelled","check_suite_id":1},
-        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2},
-        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":20,"status":"completed","conclusion":"cancelled","check_suite_id":3},
-        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"skill-registry-autofix","pull_requests":[{"number":595}],"run_number":21,"status":"completed","conclusion":"success","check_suite_id":4}]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  || { echo "FAIL: the bot refused to merge the PR it just pushed — a SUPERSEDED run read as a RED one (#700)"; cat "$WORK/mwhy.txt"; exit 1; }
-grep -q "merge=true" "$WORK/mout.txt" || { echo "FAIL: merge!=true on a PR whose only red checks were superseded"; exit 1; }
-grep -qi "superseded" "$WORK/mwhy.txt" || { echo "FAIL: the drop was not EXPLAINED — a silent drop is indistinguishable from a bug"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (j) A CANCELLED RUN NOBODY RE-RAN IS STILL A FINDING. Same shape, minus the replacement run. Nothing
-# superseded it, so it is a verdict about this PR and it is not green. REFUSE.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun drift '"cancelled"' 3)]}]
-EOF
-wruns '[{"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":20,"status":"completed","conclusion":"cancelled","check_suite_id":3},
-        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: merged past a cancelled run that NOBODY re-ran — supersession was assumed, not proven"; exit 1; }
-grep -q "drift=cancelled" "$WORK/mwhy.txt" || { echo "FAIL: the un-superseded cancelled run was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (k) A FAILURE IS NEVER DROPPED, EVEN OUT OF A SUPERSEDED SUITE. The sharpest one: the workflow RUN
-# concluded `cancelled` and a later run of its group replaced it — so the suite IS superseded — but a
-# job inside it had already FAILED before the cancel landed. The drop is keyed on the CHECK RUN's own
-# conclusion, so the failure stands. Dropping by suite alone would launder a real red check.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun drift '"failure"' 3), $(crun drift '"success"' 4)]}]
-EOF
-wruns '[{"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":20,"status":"completed","conclusion":"cancelled","check_suite_id":3},
-        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":21,"status":"completed","conclusion":"success","check_suite_id":4},
-        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: a FAILED job was dropped because its RUN was cancelled and superseded — a red check was laundered"; cat "$WORK/mwhy.txt"; exit 1; }
-grep -q "drift=failure" "$WORK/mwhy.txt" || { echo "FAIL: the failure inside the superseded suite was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (l) THE `.path`-ALONE TRAP — FAILS OPEN. `cancel-in-progress` keys on `<workflow>-${github.ref}`:
-# same workflow AND SAME REF. A `workflow_dispatch` run on the branch shares the SHA and the path and
-# carries a HIGHER run_number (the counter is per-workflow, across every event) — but a DIFFERENT ref,
-# so it supersedes NOTHING. And it is not academic: `closing-keywords.yml` gates its real job on
-# `if: github.event_name == 'pull_request'`, so the dispatch run SKIPS that job and still concludes
-# `success`. Key on `.path` alone and a vacuous green licenses dropping the PR run that was actually
-# cancelled — merging a PR whose body was never checked. Re-triggering a cancelled workflow by hand is
-# the obvious thing to do about one, which is what makes this reachable.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun closing-keywords '"cancelled"' 5)]}]
-EOF
-wruns '[{"path":".github/workflows/closing-keywords.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":10,"status":"completed","conclusion":"cancelled","check_suite_id":5},
-        {"path":".github/workflows/closing-keywords.yml","event":"workflow_dispatch","head_branch":"b","pull_requests":[],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":6},
-        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: a workflow_dispatch run in a DIFFERENT concurrency group licensed the drop — supersession keyed on .path alone (#698)"; cat "$WORK/mwhy.txt"; exit 1; }
-grep -q "closing-keywords=cancelled" "$WORK/mwhy.txt" || { echo "FAIL: the un-superseded cancelled run was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (m) THE "LATEST PER NAME" TRAP — FAILS OPEN, and it is why supersession is resolved on WORKFLOW RUNS
-# and never on check-run names. Check-run `.name` is the JOB name and job names COLLIDE ACROSS
-# WORKFLOWS: measured on this repo, SEVEN check runs named `fixture`, from SIX workflows. Collapse by
-# name and a genuinely FAILING `fixture` (from pin-coherence) is hidden by another workflow's
-# successful `fixture` (from timeout-coherence) — "all green", merge, red check landed. NOTHING is
-# cancelled here and nothing may be dropped: both `fixture`s are live verdicts.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun fixture '"failure"' 7), $(crun fixture '"success"' 8)]}]
-EOF
-wruns '[{"path":".github/workflows/pin-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":30,"status":"completed","conclusion":"failure","check_suite_id":7},
-        {"path":".github/workflows/timeout-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":31,"status":"completed","conclusion":"success","check_suite_id":8},
-        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: a FAILING \`fixture\` was hidden by another workflow's passing \`fixture\` — supersession keyed on the JOB NAME (#698)"; cat "$WORK/mwhy.txt"; exit 1; }
-grep -q "fixture=failure" "$WORK/mwhy.txt" || { echo "FAIL: the colliding-name failure was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (n) NO SUPERSESSION EVIDENCE => NOTHING IS SUPERSEDED. The workflow-runs read is evidence for DROPPING
-# a check, never for merging one, so losing it can only ever REFUSE a merge — never license one. An
-# absent, empty and unparseable payload are all the same conservative state, and (i)'s checks — which
-# MERGE when the evidence is present — must all three times REFUSE.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"cancelled"' 1), $(crun registry-coherence '"success"' 2)]}]
-EOF
-mgate "$WORK/c.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: a cancelled run was dropped with NO workflow-runs payload at all — supersession was assumed"; exit 1; }
-grep -qi "no workflow-runs payload was read" "$WORK/mwhy.txt" \
-  || { echo "FAIL: the gate refused, but did not say the supersession evidence was MISSING"; cat "$WORK/mwhy.txt"; exit 1; }
-printf 'gh: could not read workflow runs\n' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: a cancelled run was dropped on an UNPARSEABLE workflow-runs payload"; exit 1; }
-echo '[]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: a cancelled run was dropped on an EMPTY workflow-runs payload"; exit 1; }
-
-# (o) A CHECK RUN THAT JOINS TO NO WORKFLOW RUN KEEPS ITS VERDICT. This is what makes a NON-ACTIONS
-# check (a third-party app) safe here: it has no workflow run, so it can never be proven superseded and
-# can never be dropped. The gate reads CHECK RUNS as its subject and workflow runs only as evidence —
-# which is why, unlike the /pnext-item recipe's workflow-runs gate, it needs no "Actions-only" guard to
-# avoid going BLIND the day a third-party check appears.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"success"' 2), $(crun some-saas-scanner '"cancelled"' 999)]}]
-EOF
-wruns '[{"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"completed","conclusion":"success","check_suite_id":2}]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: a NON-ACTIONS cancelled check — which joins to no workflow run — was dropped as superseded"; cat "$WORK/mwhy.txt"; exit 1; }
-grep -q "some-saas-scanner=cancelled" "$WORK/mwhy.txt" || { echo "FAIL: the unjoinable check was not named"; cat "$WORK/mwhy.txt"; exit 1; }
-
-# (p) THE SUBJECT MAY NOT BE SUPERSEDED INTO ABSENCE. Drop `registry-coherence`'s only report as a
-# corpse and the subject is GONE — which the gate must read as "never verified" (#606), not as "no red
-# checks". The replacement run simply has not reported yet; the next poll sees it.
-cat > "$WORK/c.json" <<EOF
-[{"check_runs":[$(crun registry-coherence '"cancelled"' 1), $(crun drift '"success"' 4)]}]
-EOF
-wruns '[{"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":10,"status":"completed","conclusion":"cancelled","check_suite_id":1},
-        {"path":".github/workflows/skill-registry-coherence.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":11,"status":"in_progress","conclusion":null,"check_suite_id":2},
-        {"path":".github/workflows/drift.yml","event":"pull_request","head_branch":"b","pull_requests":[{"number":595}],"run_number":21,"status":"completed","conclusion":"success","check_suite_id":4}]' > "$WORK/r.json"
-mrgate "$WORK/c.json" "$WORK/r.json" > "$WORK/mout.txt" \
-  && { echo "FAIL: the SUBJECT was superseded into ABSENCE and the PR merged — an absent subject is not a passing one (#606)"; cat "$WORK/mwhy.txt"; exit 1; }
-grep -qi "did not report" "$WORK/mwhy.txt" || { echo "FAIL: the subject dropped to absent was not reported as absent"; cat "$WORK/mwhy.txt"; exit 1; }
-echo "   ok"
+# This case drove those rules through `scripts/skill-registry-merge-gate`. That script is gone (#737):
+# the bot calls `fsgg-coord landable`, and the rules are asserted against the implementation instead of
+# against a copy of it. Including the two loose repairs that FAIL OPEN, which is why this was never
+# "latest run wins":
+#
+#   * a `workflow_dispatch` run shares the SHA and the workflow but not the REF, so it supersedes
+#     nothing — `LandableTests`, "a higher run of a DIFFERENT group does not supersede (#703)"
+#   * "latest per NAME" hides a red: job names COLLIDE across workflows (seven `fixture`s from six
+#     workflows, measured) — `LandableTests`, "two check-runs SHARE a job name and one FAILS"
+#   * a cancelled run nobody re-ran is still a finding; a FAILED run is never dropped — `LandableTests`
+#   * the headline superseded-but-green standing PR, end to end over a fake GitHub —
+#     `tests/coord-engine-parity/run.sh` case 31
+echo "   ok (the rules moved to the engine's corpus, where they hold the implementation)"
 
 echo "skill-registry fixture: all checks passed"

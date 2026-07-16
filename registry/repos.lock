@@ -6,8 +6,8 @@
 # `repos-registry-selftest` fails on any diff, so nobody AUTHORS it — a collision here is a REBASE,
 # not a decision. DO NOT reserve it in a `Paths:` touch-set (#527); regenerate it and name it as
 # expected drift in the PR.
-00151d8428cc494dc8f8d7bfce41b663d4ae0f745c9961af2abeae778f8ce07b  .claude/skills/check-board
-2d3811baf0d8861a5a57ccf2b721260a876283de6c36a26d149667ad60beb0e3  .claude/skills/cross-repo-coordination
-35636ffb725d681a6f46e4ed7c18e916bc891b7f90f904aab4856568b6ac95fc  .claude/skills/intra-repo-parallel-work
-b6fc1e4357c50bd6568aeacb1a7cde017d11354e50756c85a7812fd53cb78c43  .claude/skills/pnext-item
-b8d62fe426bf0b0bfe7fe408b6e457e4a68c587306b1eee5fea773afcf2072fa  scripts/fsgg-coord
+4f4f96f5ac56ea45c9830087302474e408af4de16bcce9baf264250115368c89  .claude/skills/check-board
+0c2aa66b0f2cec048e5c1707a9f2b48aa388c2a3768775a42bde9389f1428cc7  .claude/skills/cross-repo-coordination
+f28956818970c59cbdf86e2c8e96a2ccceb8fe95db0f416e7705aad6136720c4  .claude/skills/intra-repo-parallel-work
+f62effd5f9b26e4678de1d0b27cf576db3a02d2d8eaf2226591ad9ecaa204eab  .claude/skills/pnext-item
+062226cbf265ff3574cceb1a12d2fdeae8fb5c8296242a2d7e97969816e7a379  scripts/fsgg-coord

@@ -29,6 +29,8 @@
     <Compile Include="Types.fs" />
     <Compile Include="TouchSet.fsi" />
     <Compile Include="TouchSet.fs" />
+    <Compile Include="EpicBody.fsi" />
+    <Compile Include="EpicBody.fs" />
     <Compile Include="Blockers.fsi" />
     <Compile Include="Blockers.fs" />
     <Compile Include="Schedulability.fsi" />
@@ -39,8 +41,12 @@
     <Compile Include="Batch.fs" />
     <Compile Include="Lanes.fsi" />
     <Compile Include="Lanes.fs" />
-    <Compile Include="Divergence.fsi" />
-    <Compile Include="Divergence.fs" />
+    <Compile Include="Landable.fsi" />
+    <Compile Include="Landable.fs" />
+    <Compile Include="Chore.fsi" />
+    <Compile Include="Chore.fs" />
+    <Compile Include="Kit.fsi" />
+    <Compile Include="Kit.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -413,6 +413,139 @@ module Board =
                 Ok(Some id)
             | other -> other
 
+    // ---- add: put an issue on the board (#861) -------------------------------------------------------
+
+    [<Literal>]
+    let private IssueNodeIdDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { id } } rateLimit { cost remaining } }"
+
+    [<Literal>]
+    let private AddItemDoc =
+        "mutation($projectId: ID!, $contentId: ID!) { addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) { item { id } } }"
+
+    /// The issue's own node id — `addProjectV2ItemById`'s `contentId`, which is NOT the board item id.
+    let private issueNodeId
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<string> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number}"
+
+        let request =
+            query
+                IssueNodeIdDoc
+                [ "owner", VString owner
+                  "repo", VString repo
+                  "number", VNumber(double number) ]
+                subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+
+        match graphQlData subject response.Body with
+        | Error e -> Error e
+        | Ok data ->
+
+        try
+            let issue = data.GetProperty("repository").GetProperty("issue")
+
+            if issue.ValueKind = JsonValueKind.Null then
+                Error(NotFound subject)
+            else
+
+            match issue.TryGetProperty "id" with
+            | true, id when id.ValueKind = JsonValueKind.String -> Ok(id.GetString())
+            | _ -> Error(Malformed(subject, "the issue lookup response has no `id`"))
+
+        with :? KeyNotFoundException ->
+            Error(Malformed(subject, "the issue lookup response is missing `repository.issue`"))
+
+    /// What `addItem` did. The caller needs to tell these apart: adding a second copy of an item is the
+    /// failure this whole function is shaped around, so "it was already there" is a SUCCESS worth naming.
+    type AddOutcome =
+        /// The issue was already on this board. Nothing was written.
+        | AlreadyOnBoard of itemId: string
+        /// The issue was added. This is the only path that spends a mutation.
+        | AddedToBoard of itemId: string
+
+    /// Put an issue on the board, idempotently.
+    ///
+    /// #421 IS THE WHOLE FUNCTION, exactly as it is `itemId`'s: `Ok None` — a successful read that walked
+    /// the board and did not find this issue — is the only thing that licenses the mutation, and an
+    /// `Error` is a read that DID NOT HAPPEN. Unreachable is not absent. So the error propagates rather
+    /// than being folded into "not there", which is #266's class and the defect #421 actually reported.
+    ///
+    /// WHAT THE GUARD IS *NOT* FOR, because the next reader will assume it and be afraid to touch it:
+    /// it is not what stops a duplicate row. `addProjectV2ItemById` is idempotent SERVER-side — calling
+    /// it for an issue already on the board returns that item's existing id and adds nothing (measured
+    /// against the live board, #861). #421 said a duplicate "would have" been created had its remediation
+    /// been followed; that was a reasonable inference, and it does not reproduce.
+    ///
+    /// The guard earns its place anyway, for reasons that do hold: adding on a failed read would spend a
+    /// mutation on a budget that just refused a query, and it would report `AddedToBoard` for an issue
+    /// whose presence we never established — a definite answer built on no information, which is the
+    /// whole of #421.
+    ///
+    /// The lookup is deliberately the UNCACHED `itemId`: the forever-cache only ever memoises a FOUND id,
+    /// so a cache hit is already an `AlreadyOnBoard` answer and a miss proves nothing.
+    ///
+    /// COST: 3 GraphQL on a real add (lookup, node id, mutation), 1 when it is already there. Two would
+    /// do — `ItemIdDoc` already reads `repository.issue`, so `id` could ride along and retire
+    /// `issueNodeId`. It does not, on purpose: `itemId` owns the ONE implementation of "narrow to OUR
+    /// board", and an issue can sit on several. A second copy of that predicate to save a point on a
+    /// once-per-filing verb trades a cross-board write — a no-op here and vandalism over there — against
+    /// a rounding error on a 5,000/hr budget (#418).
+    let addItem
+        (transport: IGitHubTransport)
+        (board: BoardMap)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<AddOutcome> =
+
+        match itemId transport board owner repo number with
+        | Error e -> Error e
+        | Ok(Some existing) ->
+            // Idempotent, and it costs one read and no write. Re-running `add` is how a close-out pass or a
+            // retried recipe behaves; it must not create a twin.
+            Cache.putItemId owner repo number board.Number existing
+            Ok(AlreadyOnBoard existing)
+
+        | Ok None ->
+
+        match issueNodeId transport owner repo number with
+        | Error e -> Error e
+        | Ok contentId ->
+
+        let subject = $"%s{owner}/%s{repo}#%d{number}"
+
+        let request =
+            query AddItemDoc [ "projectId", VId board.Id; "contentId", VId contentId ] subject
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+
+        match graphQlData subject response.Body with
+        | Error e -> Error e
+        | Ok data ->
+
+        try
+            let item = data.GetProperty("addProjectV2ItemById").GetProperty("item")
+
+            match item.TryGetProperty "id" with
+            | true, id when id.ValueKind = JsonValueKind.String ->
+                let newId = id.GetString()
+                Cache.putItemId owner repo number board.Number newId
+                Ok(AddedToBoard newId)
+            | _ -> Error(Malformed(subject, "the add response has no `addProjectV2ItemById.item.id`"))
+
+        with :? KeyNotFoundException ->
+            Error(Malformed(subject, "the add response is missing `addProjectV2ItemById.item`"))
+
     // ---- the pre-claim column (#481) ----------------------------------------------------------------
 
     [<Literal>]
@@ -522,7 +655,11 @@ module Board =
             match field.Type with
             | SingleSelect options ->
                 match Map.tryFind value options with
-                | Some optionId -> Ok("value: {singleSelectOptionId: $optionId}", [ "optionId", VId optionId ])
+                // `VString`, NOT `VId` — an option id LOOKS like an id, and the schema types it `String`.
+                // GraphQL checks the DECLARATION against the argument, never against the value, so `VId`
+                // here declares `$optionId: ID!` against a `String` argument and every single-select write
+                // is refused before it is attempted (#848).
+                | Some optionId -> Ok("value: {singleSelectOptionId: $optionId}", [ "optionId", VString optionId ])
                 | None ->
                     let known = options |> Map.keys |> String.concat ", "
 
@@ -535,8 +672,14 @@ module Board =
                 | true, n -> Ok("value: {number: $number}", [ "number", VNumber n ])
                 | _ -> Error $"'%s{value}' is not a number, and a NUMBER field cannot hold it."
 
-            | Date -> Ok("value: {date: $date}", [ "date", VString value ])
-            | Iteration -> Ok("value: {iterationId: $iterationId}", [ "iterationId", VId value ])
+            // `VDate`, NOT `VString` — the scalar is named `Date`, so `$date: String!` is refused against
+            // it exactly as `$optionId: ID!` was against `String`. The board has two DATE fields (`Start`,
+            // `Target`), so unlike the iteration leg below this one is reached today (#848).
+            | Date -> Ok("value: {date: $date}", [ "date", VDate value ])
+            // `iterationId` is `String` in the schema too, for the same reason and with the same fix. No
+            // field on the board is an Iteration today, so this path is unreached — and it would have been
+            // refused identically the day somebody added one.
+            | Iteration -> Ok("value: {iterationId: $iterationId}", [ "iterationId", VString value ])
 
     let setField
         (transport: IGitHubTransport)
@@ -584,6 +727,7 @@ module Board =
                             | VId _ -> "ID!"
                             | VNumber _ -> "Float!"
                             | VString _ -> "String!"
+                            | VDate _ -> "Date!"
 
                         $"$%s{name}: %s{t}")
                     |> String.concat ", "
@@ -651,6 +795,9 @@ module Board =
                                 match v with
                                 | VId s -> gqlStr s
                                 | VString s -> gqlStr s
+                                // A `Date` literal is a quoted string in GraphQL source, like the two above.
+                                // The tag matters for the DECLARATION, which this path does not emit.
+                                | VDate s -> gqlStr s
                                 | VNumber n -> string n
 
                             let key =

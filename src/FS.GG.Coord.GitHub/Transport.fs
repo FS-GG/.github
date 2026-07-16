@@ -18,6 +18,7 @@ module Transport =
     type Var =
         | VString of string
         | VId of string
+        | VDate of string
         | VNumber of double
 
     type Payload =
@@ -129,6 +130,7 @@ module Transport =
         match v with
         | VString s -> JsonValue.Create s
         | VId s -> JsonValue.Create s
+        | VDate s -> JsonValue.Create s
         | VNumber n -> JsonValue.Create n
 
     let private graphQlPayload (document: string) (variables: (string * Var) list) =

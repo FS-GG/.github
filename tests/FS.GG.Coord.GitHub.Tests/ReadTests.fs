@@ -336,3 +336,225 @@ let ``#421 a rate-limited read propagates as RateLimited - never as 'not there'`
     match Reads.issueBody recorder "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
     | other -> failwith $"an exhausted budget must not become an empty body — got %A{other}"
+
+// ---- the sub-issue graph (lint / rollup) -----------------------------------------------------------
+
+[<Fact>]
+let ``subIssues reads the total apart from the visible nodes, with each child's ref and state`` () =
+    let transport =
+        serving
+            """{"data":{"repository":{"issue":{"subIssues":{"totalCount":2,"nodes":[
+                 {"number":51,"state":"OPEN","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}},
+                 {"number":52,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}"""
+
+    match Reads.subIssues transport "FS-GG" "FS.GG.SDD" 50 with
+    | Ok set ->
+        Assert.Equal(2, set.Total)
+        Assert.Equal<Reads.SubIssue list>(
+            [ ({ Ref = "FS-GG/FS.GG.SDD#51"; Open = true }: Reads.SubIssue)
+              { Ref = "FS-GG/FS.GG.SDD#52"; Open = false } ],
+            set.Children
+        )
+    | Error e -> failwith $"the graph must resolve — got %A{e}"
+
+[<Fact>]
+let ``subIssues keeps a truncated graph honest - Total exceeds the visible nodes`` () =
+    // The distinction EPIC-CHILDREN-TRUNCATED and the rollup depend on: five children, only two returned.
+    let transport =
+        serving
+            """{"data":{"repository":{"issue":{"subIssues":{"totalCount":5,"nodes":[
+                 {"number":1,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}},
+                 {"number":2,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}"""
+
+    match Reads.subIssues transport "FS-GG" "FS.GG.SDD" 50 with
+    | Ok set -> Assert.True(set.Total > List.length set.Children)
+    | Error e -> failwith $"the graph must resolve — got %A{e}"
+
+[<Fact>]
+let ``subIssues FAILS CLOSED - an unreadable graph is an error, never an empty set`` () =
+    // An epic whose children could not be read must not roll up as "no children".
+    match Reads.subIssues (failing (RateLimited None)) "FS-GG" "FS.GG.SDD" 50 with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"a failed graph read must be an error — got %A{other}"
+
+[<Fact>]
+let ``refIsPullRequest is true iff the issues payload carries a pull_request object`` () =
+    let asPr =
+        serving """{"number":418,"pull_request":{"url":"https://github.com/x/y/pull/418"}}"""
+
+    let asIssue = serving """{"number":414,"body":"a plain issue"}"""
+
+    match Reads.refIsPullRequest asPr "FS-GG" "FS.GG.SDD" 418 with
+    | Ok true -> ()
+    | other -> failwith $"a PR payload must probe true — got %A{other}"
+
+    match Reads.refIsPullRequest asIssue "FS-GG" "FS.GG.SDD" 414 with
+    | Ok false -> ()
+    | other -> failwith $"a plain issue must probe false — got %A{other}"
+
+
+// ---- messages: the say/inbox channel ---------------------------------------------------------------
+
+/// One `fsgg:msg` comment, rendered exactly as `Writes.say` writes the body: REAL newlines separating the
+/// marker comment, the `**from → to**` header, and the text.
+let private msgComment (cid: int) (fromW: string) (dest: string) (text: string) =
+    let body = $"<!-- fsgg:msg from={fromW} to={dest} -->\n**{fromW} → {dest}**\n\n{text}"
+    let jbody = System.Text.Json.JsonSerializer.Serialize body
+    $"""{{"id":{cid},"body":{jbody},"created_at":"2026-07-16T00:00:0{cid}Z"}}"""
+
+[<Fact>]
+let ``messages parses an fsgg:msg comment - id, from, to, and the text with the header peeled off`` () =
+    let recorder =
+        serving ("[" + msgComment 7 "finch-a3f" "smew-f31" "I own src/Audio until Friday." + "]")
+
+    match Reads.messages recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [ m ] ->
+        Assert.Equal(7L, m.Id)
+        Assert.Equal("finch-a3f", m.From)
+        Assert.Equal("smew-f31", m.To)
+        // The `<!-- … -->` marker and the `**from → to**` header are peeled; the message itself remains.
+        Assert.Equal("I own src/Audio until Friday.", m.Text)
+    | other -> failwith $"expected one parsed message — got %A{other}"
+
+[<Fact>]
+let ``messages keeps a broadcast (to=*) and orders by comment id`` () =
+    let page =
+        "[" + msgComment 9 "finch-a3f" "*" "second" + "," + msgComment 4 "finch-a3f" "smew-f31" "first" + "]"
+
+    match Reads.messages (serving page) "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [ a; b ] ->
+        // Lowest comment id first — the same total order `markers` returns, so a cursor keyed on the id is
+        // monotone regardless of the order GitHub returned the page in.
+        Assert.Equal(4L, a.Id)
+        Assert.Equal(9L, b.Id)
+        Assert.Equal("*", b.To)
+    | other -> failwith $"expected two ordered messages — got %A{other}"
+
+[<Fact>]
+let ``messages ignores a claim marker and any non-message comment`` () =
+    // A comments page carries claim markers and plain comments too. `messages` reads ONLY `fsgg:msg`, so a
+    // lock marker on the same issue never surfaces as mail.
+    let marker =
+        comment 1 "<!-- fsgg:claim worker=ghost -->" now
+
+    let plain = comment 2 "just a normal human comment" now
+    let page = "[" + marker + "," + plain + "," + msgComment 3 "finch-a3f" "smew-f31" "the only message" + "]"
+
+    match Reads.messages (serving page) "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [ m ] -> Assert.Equal("the only message", m.Text)
+    | other -> failwith $"a claim marker and a plain comment are not messages — got %A{other}"
+
+[<Fact>]
+let ``messages does NOT deliver a comment whose TEXT merely quotes a msg marker (anchored)`` () =
+    // The same forgery `markerRe` refuses: an un-anchored match would let a message BODY that quotes an
+    // `fsgg:msg` header be read as a real message header. The regex is anchored at the start of the body.
+    let forgery =
+        comment 5 "look what I can write: <!-- fsgg:msg from=ghost to=victim -->" now
+
+    match Reads.messages (serving ("[" + forgery + "]")) "FS-GG" "FS.GG.SDD" 42 with
+    | Ok [] -> ()
+    | other -> failwith $"a quoted marker mid-body is not a message — got %A{other}"
+
+[<Fact>]
+let ``messages FAILS CLOSED on a malformed page - a lost message is not an empty mailbox`` () =
+    // A message is not a lock, so a single unparseable message is DROPPED — but a page we could not read at
+    // all is still an error, never an empty mailbox that reports "no new mail" over an unread warning.
+    match Reads.messages (serving "<html>502</html>") "FS-GG" "FS.GG.SDD" 42 with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a malformed page must be an error, not an empty mailbox — got %A{other}"
+
+// ---- issues: the ETag-revalidated REST list (#446/#418) --------------------------------------------
+
+/// A private cache directory for the ETag round-trip. `Reads.issues` stores the body + its validator on
+/// disk (that is what makes a later 304 answerable), so a test of it owns a throwaway cache the way
+/// `CacheTests.Sandbox` does — an inherited cache would be testing whatever ran before it.
+type private IssuesCache() =
+    let dir =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "fsgg-issues-test-" + System.Guid.NewGuid().ToString("N"))
+
+    do
+        System.IO.Directory.CreateDirectory dir |> ignore
+        System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+
+    interface System.IDisposable with
+        member _.Dispose() =
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", null)
+
+            try
+                System.IO.Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+/// A stateful transport: 200 + ETag for an UNCONDITIONAL read, 304 for a conditional one whose validator
+/// matches — exactly how GitHub answers `If-None-Match`. It is the ETag revalidation the command is built on.
+let private etagServer (body: string) (etag: string) =
+    Fake.Recorder(fun (req: Request) ->
+        match req.IfNoneMatch with
+        | Some e when e = etag -> Ok { Status = 304; Body = ""; ETag = Some etag; NextLink = None }
+        | _ -> Ok { Status = 200; Body = body; ETag = Some etag; NextLink = None })
+
+[<Fact>]
+let ``issues returns the raw body, then revalidates with the stored ETag and serves the 304 from cache (#418)`` () =
+    // The command's whole reason to exist: a repeat listing costs NOTHING. The first read is unconditional
+    // (inm=none) and caches the body with its validator; the second sends the ETag, the server answers 304,
+    // and the body is served FROM CACHE — the budget-free read.
+    use _cache = new IssuesCache()
+    let body = """[{"number":501},{"number":502}]"""
+    let etag = "W/\"issues-v1\""
+    let recorder = etagServer body etag
+
+    match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false with
+    | Ok b -> Assert.Equal(body, b)
+    | other -> failwith $"first read must return the body — got %A{other}"
+
+    Assert.True(recorder.Logged "issue-list FS-GG/FS.GG.SDD paginate=1 inm=none")
+
+    match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false with
+    | Ok b -> Assert.Equal(body, b)
+    | other -> failwith $"a 304 must serve the cached body, never an empty result — got %A{other}"
+
+    Assert.True(recorder.Logged $"issue-list FS-GG/FS.GG.SDD paginate=1 inm={etag}")
+
+[<Fact>]
+let ``issues --refresh drops the stored ETag and re-reads unconditionally`` () =
+    // `--refresh` (fresh=true) is the caller saying "ignore the cache". Even with a warm body+etag, the
+    // read goes out UNCONDITIONAL (inm=none), so a caller who suspects a stale cache can force a full read.
+    use _cache = new IssuesCache()
+    let body = """[{"number":501}]"""
+    let etag = "W/\"issues-v1\""
+    let recorder = etagServer body etag
+
+    Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None false |> ignore // warm the cache
+
+    match Reads.issues recorder "FS-GG" "FS.GG.SDD" "open" None true with
+    | Ok b -> Assert.Equal(body, b)
+    | other -> failwith $"a --refresh read must return the fresh body — got %A{other}"
+
+    // Both requests carried NO validator — the second because --refresh dropped it.
+    Assert.Equal(2, recorder.Count "issue-list FS-GG/FS.GG.SDD paginate=1 inm=none")
+
+[<Fact>]
+let ``issues fails closed on an unreadable list - never an empty array`` () =
+    // A listing we could not read is an ERROR, not "this repo has no issues" — the same fail-closed rule
+    // the rest of this layer holds. The body is passed through raw, so an empty-but-present array `[]` is a
+    // real answer; a 502 is not.
+    use _cache = new IssuesCache()
+
+    match Reads.issues (failing (Http(502, "bad gateway"))) "FS-GG" "FS.GG.SDD" "open" None false with
+    | Error(Http(502, _)) -> ()
+    | other -> failwith $"an unreadable listing must refuse — got %A{other}"
+
+[<Fact>]
+let ``issues fails closed on a 200 that is not a JSON array - a proxy error page is not an empty listing`` () =
+    // The #461 rule at the `issues` surface: a 200 carrying a proxy's HTML error body (or a truncated page)
+    // must NOT be emitted verbatim as if it were the issue list — it is a failed read. A present-but-empty
+    // `[]` passes (a real answer); garbage does not, and nothing is cached for a later 304 to serve.
+    use _cache = new IssuesCache()
+
+    match Reads.issues (serving "<html>502 Bad Gateway</html>") "FS-GG" "FS.GG.SDD" "open" None false with
+    | Error(Malformed _) -> ()
+    | other -> failwith $"a non-JSON 200 must be a failed read, not a listing — got %A{other}"
+
+    match Reads.issues (serving "[]") "FS-GG" "FS.GG.SDD" "open" None false with
+    | Ok "[]" -> ()
+    | other -> failwith $"a present-but-empty array is a real answer — got %A{other}"

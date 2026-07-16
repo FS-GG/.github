@@ -15,9 +15,10 @@
 #                                     — the RECIPES it governs. This is the one that matters: a PR
 #                                       that hand-rolls a merge gate touches ONLY a SKILL.md, and if
 #                                       that did not trigger this workflow the rule would be decorative.
-#   scripts/fsgg-coord                — the one sanctioned implementation. If `landable` is removed or
-#                                       renamed, every recipe's instruction to call it becomes a lie,
-#                                       and this gate should be the thing that says so.
+#   src/FS.GG.Coord.Cli/**            — the engine that IMPLEMENTS `landable` (ADR-0040 D.4 deleted the bash
+#                                       monolith this gate used to grep; `scripts/fsgg-coord` is the shim
+#                                       that execs the engine). If `landable` is removed or renamed, every
+#                                       recipe's instruction to call it becomes a lie, and this gate says so.
 name: recipe-landable
 
 on:
@@ -28,8 +29,13 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
-      - "scripts/fsgg-coord"
-      - ".github/workflows/recipe-landable.yml"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli/Client.fs"
+      # EVERY workflow, since #737 — the rule now reaches `jobs.*.steps[*].run`, and the last
+      # hand-rolled copy of the gate lived in a workflow, not a recipe. Watching only this file would
+      # leave the new root ungated on the exact PR that re-grows a copy: the gate would be correct and
+      # would never run, which is #266 wearing the fix for #266.
+      - ".github/workflows/**"
   push:
     branches: [main]
     paths:
@@ -38,8 +44,13 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "docs/coordination/**"
-      - "scripts/fsgg-coord"
-      - ".github/workflows/recipe-landable.yml"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli/Client.fs"
+      # EVERY workflow, since #737 — the rule now reaches `jobs.*.steps[*].run`, and the last
+      # hand-rolled copy of the gate lived in a workflow, not a recipe. Watching only this file would
+      # leave the new root ungated on the exact PR that re-grows a copy: the gate would be correct and
+      # would never run, which is #266 wearing the fix for #266.
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -51,6 +62,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      # The gate PARSES workflows since #737 (a recipe is fence-scanned; a workflow's shell lives in
+      # `run:` blocks, and its comments are prose that must stay legal). That needs PyYAML.
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
       - name: Run the recipe-landable fixture
         run: bash tests/recipe-landable/run.sh
       # The fixture drives the gate against throwaway recipes AND against this repo's real ones. This
@@ -64,8 +79,16 @@ jobs:
       # not assume it).
       - name: Assert the command the recipes name still exists
         run: |
-          scripts/fsgg-coord landable --help >/dev/null 2>&1 || true
-          grep -q '^landable_cmd()' scripts/fsgg-coord \
-            || { echo "::error::scripts/fsgg-coord has no 'landable' command, but every recipe tells workers to call it."; exit 1; }
-          grep -q 'landable)' scripts/fsgg-coord \
-            || { echo "::error::'landable' is not wired into fsgg-coord's command dispatch."; exit 1; }
+          # ADR-0040 D.4 deleted the bash monolith this gate used to grep; `scripts/fsgg-coord` is now the
+          # shim that execs the compiled engine, which is the ONE implementation of `landable`. This is the
+          # source-level analog of the old two-grep check — it needs no build and asserts the command is both
+          # PARSEABLE (a subcommand token routed to `Command = Landable`) and REACHABLE (that command is
+          # dispatched to a handler). Rename or drop `landable` in either place and every recipe that tells a
+          # worker to run it becomes a lie; this gate says so (#266: assert the subject, do not assume it).
+          # Whitespace-robust (grep -E with [[:space:]]*), so a formatter reflow of the match arm does not
+          # red the gate on a `landable` that is in fact still wired.
+          grep -qE '"landable"[[:space:]]*::[[:space:]]*rest' src/FS.GG.Coord.Cli/Options.fs \
+            && grep -qE 'Command[[:space:]]*=[[:space:]]*Landable' src/FS.GG.Coord.Cli/Options.fs \
+            || { echo "::error::src/FS.GG.Coord.Cli/Options.fs does not route the 'landable' subcommand token to Command = Landable, but every recipe tells workers to call it."; exit 1; }
+          grep -qE '\|[[:space:]]*Landable[[:space:]]*->[[:space:]]*landable' src/FS.GG.Coord.Cli/Client.fs \
+            || { echo "::error::'landable' is not dispatched to a handler in src/FS.GG.Coord.Cli/Client.fs."; exit 1; }

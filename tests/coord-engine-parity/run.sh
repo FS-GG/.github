@@ -734,6 +734,8 @@ childsrv() {  # childsrv <env-kv...> --  ; sets globals CHILD_PORT and CHILD_SRV
 # Read the POST bodies the fixture recorded — python3 is already the fixture runtime, so this adds no
 # dependency (the same idiom the #533 `dclaims` leg uses to read state straight off its server).
 posts_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_posts").read().decode())' "$1" 2>/dev/null; }
+deletes_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_deletes").read().decode())' "$1" 2>/dev/null; }
+patches_on() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_patches").read().decode())' "$1" 2>/dev/null; }
 
 # 1. THE LINK. An empty parent, a fresh child: `child` links it, names the edge in the sub-issue's own
 #    vocabulary (case 15's "linked … as a sub-issue of …"), and POSTs the child's REST id as a NUMBER.
@@ -1238,12 +1240,204 @@ else
   kill "$SC_SRV" 2>/dev/null
 fi
 rm -f "$SC_OUT"; rm -rf "$SC_CACHE" "$CO"
-# DISPOSITION ON THE RECORD (not silently skipped): case 13's remaining legs are separate work —
-#   * `reap` scopes to the checkout too (#480, the destructive one): NO `reap` command in the engine yet
-#     (the case 21 §d/§e / case 26 mold).
-#   * resolve_repo across the full roster + `issues` short-id (#381/#446), the `Blocked by`
-#     canonicalization gate, and the epic-rollup / NO-TOUCH-SET `lint` rules (#496): a `lint`/`issues`
-#     command the engine does not have. Tracked for cases 13-remainder / 14.
+# ---- case 13: the `Blocked by` WRITE gate — a typed dependency edge, not a resolution log ------------
+#
+# Projects v2 has no dependency field, so `Blocked by` is TEXT. In bash it drifted back into a free-form
+# LOG ("RESOLVED: #8 closed, shipped @d80a8ae"), and `.blocked` — which reads the field back as refs —
+# could not parse it, so an item the board displayed as blocked reached the scheduler UNBLOCKED. The gate
+# is on the WRITE: `set-field <issue> 'Blocked by' <value>` canonicalizes every accepted form
+# (owner/repo#n, repo#n, a bare #n adopting the item's own repo, an issue URL) to one `owner/repo#n`,
+# de-dupes refs that canonicalize alike, and REFUSES prose — before any board read, so a refused value
+# spends no GraphQL (the budget that dies first). The corpus (case 13 lines 153-243) counts `gh`; this
+# drives the ENGINE over HTTP against `blockedby_server.py`, which records each field mutation (the field,
+# whether it SET or CLEARED, the text it carried — mapped from the `fieldId` variable) and counts the
+# GraphQL requests, so "a refused write spends no GraphQL" is a request count of ZERO. The `--text`
+# wording is the API's; parity holds the PROPERTY (the canonical value the mutation carries), one transport
+# under the corpus's `gh` log.
+BB_OUT="$(mktemp)"; python3 "$HERE/blockedby_server.py" >"$BB_OUT" 2>/dev/null & BB_SRV=$!; BB_PORT=""
+for _ in $(seq 1 50); do BB_PORT="$(head -n1 "$BB_OUT" 2>/dev/null)"; [ -n "$BB_PORT" ] && break; sleep 0.1; done
+rm -f "$BB_OUT"
+bbget() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+sys.argv[2]).read().decode())' "$1" "$2" 2>/dev/null; }
+if [ -z "$BB_PORT" ]; then bad "#480: Blocked by fixture bound a port"; else
+  BBCACHE="$(mktemp -d)"
+  # The WRITE path shares one cache — the first write warms bootstrap, each records its mutation.
+  bbw() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$BBCACHE" \
+              "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' "$1" 2>&1; }
+  bblast() { bbget "$BB_PORT" /_writes | jq -r "$1"; }
+
+  # 1. A full ref passes through, canonical.
+  bbw 'FS-GG/FS.GG.SDD#8' >/dev/null
+  [ "$(bblast '.last | "\(.op) \(.field) \(.text)"')" = "set Blocked by FS-GG/FS.GG.SDD#8" ] \
+    && ok "Blocked by: a full owner/repo#n ref writes as-is (canonical --text, one transport over)" \
+    || bad "Blocked by: full ref passthrough" "$(bblast '.last')"
+
+  # 2. A bare #n adopts the BLOCKED item's own repo (SDD#42 -> FS-GG/FS.GG.SDD#33).
+  bbw '#33' >/dev/null
+  [ "$(bblast '.last.text')" = "FS-GG/FS.GG.SDD#33" ] \
+    && ok "Blocked by: a bare #n adopts the blocked item's repo (#33 -> FS-GG/FS.GG.SDD#33)" \
+    || bad "Blocked by: bare #n adoption" "$(bblast '.last.text')"
+
+  # 3. A LIST canonicalizes every form — a repo#n and an issue URL, in order.
+  bbw 'FS.GG.Rendering#33 , https://github.com/FS-GG/FS.GG.Templates/issues/8' >/dev/null
+  [ "$(bblast '.last.text')" = "FS-GG/FS.GG.Rendering#33, FS-GG/FS.GG.Templates#8" ] \
+    && ok "Blocked by: a list canonicalizes EVERY form (repo#n + URL), in order" \
+    || bad "Blocked by: list canonicalization" "$(bblast '.last.text')"
+
+  # 4. Refs that canonicalize alike are DE-DUPED — one edge, not two.
+  bbw '#8, FS-GG/FS.GG.SDD#8' >/dev/null
+  [ "$(bblast '.last.text')" = "FS-GG/FS.GG.SDD#8" ] \
+    && ok "Blocked by: refs that canonicalize alike are de-duped (#8 == FS-GG/FS.GG.SDD#8)" \
+    || bad "Blocked by: de-dupe" "$(bblast '.last.text')"
+
+  # 5. An EMPTY value CLEARS — via the distinct clear mutation, never an empty --text (a no-op on the API).
+  bbw '' >/dev/null
+  [ "$(bblast '.last.op')" = "clear" ] \
+    && ok "Blocked by: an empty value CLEARS the field (clearProjectV2ItemFieldValue, not an empty update)" \
+    || bad "Blocked by: empty clears" "$(bblast '.last')"
+
+  # 6. A REFUSED write spends ZERO GraphQL — validation PRECEDES item resolution. Run it against a FRESH
+  #    cache, so if the gate did NOT fire, bootstrap WOULD hit /graphql: the delta of 0 proves precedence.
+  before="$(bbget "$BB_PORT" /_gqlcount | jq -r '.count')"
+  pr_refuse="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" \
+                 "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'RESOLVED: #8 closed, shipped @d80a8ae' 2>&1)"; refrc=$?
+  after="$(bbget "$BB_PORT" /_gqlcount | jq -r '.count')"
+  { [ "$refrc" -ne 0 ] && [ "$before" = "$after" ]; } \
+    && ok "Blocked by: a refused write (a delivery log) is rejected AND spends ZERO GraphQL (validation precedes resolution)" \
+    || bad "Blocked by: refused write must cost no GraphQL" "rc=$refrc before=$before after=$after out=$pr_refuse"
+
+  # 7. The delivery log, the inverted edge, and a ref TRAILED by prose are all prose — all refused.
+  ( set +e
+    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'blocks FS.GG.Governance#14' >/dev/null 2>&1
+    [ $? -ne 0 ] ) \
+    && ok "Blocked by: the inverted 'blocks X' edge is refused (wrong direction)" \
+    || bad "Blocked by: inverted edge must refuse"
+  ( set +e
+    FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'FS-GG/FS.GG.SDD#8 (republish vehicle)' >/dev/null 2>&1
+    [ $? -ne 0 ] ) \
+    && ok "Blocked by: prose TRAILING a valid ref is refused — the anchored match will not swallow it" \
+    || bad "Blocked by: trailing prose must refuse"
+
+  # 8. The prose refusal REDIRECTS: names Status as the home for 'the item IS blocked'.
+  prose_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'not a ref' 2>&1)"
+  printf '%s' "$prose_out" | grep -q 'set-field <issue> Status Blocked' \
+    && ok "Blocked by: the prose refusal names Status as the right home for 'is blocked'" \
+    || bad "Blocked by: prose refusal must name Status" "$prose_out"
+
+  # 9. A '-'/'none' PLACEHOLDER is a distinct refusal — it points at CLEARING, not at Status.
+  ph_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 'Blocked by' 'none' 2>&1)"; phrc=$?
+  { [ "$phrc" -ne 0 ] && printf '%s' "$ph_out" | grep -q "'Blocked by' ''"; } \
+    && ok "Blocked by: a '-'/'none' placeholder is refused TOWARD clearing (points at 'Blocked by' '')" \
+    || bad "Blocked by: placeholder must point at clearing" "rc=$phrc out=$ph_out"
+
+  # 10. THE GATE IS SCOPED to `Blocked by`. Every other TEXT field stays free-form — Contract takes prose.
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$BB_PORT" FSGG_COORD_CACHE="$BBCACHE" "$ENGINE" set-field --worker bb-13 FS.GG.SDD#42 Contract 'fs-gg-ui-template (0.3.1, preview)' >/dev/null 2>&1
+  [ "$(bblast '.last | "\(.field) \(.text)"')" = "Contract fs-gg-ui-template (0.3.1, preview)" ] \
+    && ok "Blocked by: the gate is SCOPED — Contract (and every other TEXT field) still takes free-form text" \
+    || bad "Blocked by: gate must not touch other fields" "$(bblast '.last')"
+
+  kill "$BB_SRV" 2>/dev/null
+fi
+
+# ---- case 13: the `issues` short-id command — resolve the repo like everything else (#446) ----------
+#
+# `issues` lists a repo's issues over REST with ETag revalidation — the read both coordination skills
+# advertise as THE way to read issues WITHOUT spending GraphQL (a 304 costs nothing, #418). The corpus
+# (case 13 lines 99-121) certifies that it resolves its `<repo>` argument like EVERY other repo-taking
+# command: an `owner/repo` passes through split, a bare short-id maps through `resolve_repo` to the repo
+# NAME. bash's bug (#446): `issues` was the ONE command that took the bare token VERBATIM — so `issues
+# game` asked for `repos/FS-GG/game` and 404'd, while `--repo game` resolved everywhere else. The natural
+# recovery from that 404 is `gh issue list` — 2 GraphQL points a call, the exact budget the command exists
+# to save. The corpus counts `gh` (`issue-list FS-GG/<repo>` in `$GH_LOG`); this drives the ENGINE over
+# HTTP against `issues_server.py`, which records the `owner/repo` (and state/label/If-None-Match) of every
+# `/repos/*/issues` request — so the assertion becomes "the fixture was asked for FS-GG/FS.GG.Game, NEVER
+# FS-GG/game", one transport under. `issues` is a pure REST read (it never bootstraps the board), so the
+# fixture serves no GraphQL. Disposed on the record (ADR-0040 §5): bash's `--jq EXPR` is an ERGONOMIC —
+# the engine emits the raw JSON array and the caller projects it with real jq (the Json-is-contract rule),
+# so `issues … | jq` here IS the port of `issues … --jq …`, and the engine refuses an unknown `--jq` flag.
+ISS_OUT="$(mktemp)"; python3 "$HERE/issues_server.py" >"$ISS_OUT" 2>/dev/null & ISS_SRV=$!; ISS_PORT=""
+for _ in $(seq 1 50); do ISS_PORT="$(head -n1 "$ISS_OUT" 2>/dev/null)"; [ -n "$ISS_PORT" ] && break; sleep 0.1; done
+rm -f "$ISS_OUT"
+issget() { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_requests").read().decode())' "$1" 2>/dev/null; }
+if [ -z "$ISS_PORT" ]; then bad "#446: issues fixture bound a port"; else
+  ISSCACHE="$(mktemp -d)"
+  iss() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$ISS_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$ISSCACHE" "$ENGINE" issues "$@"; }
+  # The nwo of the LAST /repos/*/issues request the fixture saw — the resolved REST path, `$GH_LOG`'s
+  # `issue-list <nwo>` one transport over. `.inm` proves the conditional (ETag) read.
+  isslast() { issget "$ISS_PORT" | jq -r ".[-1] | $1"; }
+  issnwos() { issget "$ISS_PORT" | jq -r '[.[].nwo] | join(" ")'; }
+
+  # 1. A bare short-id resolves to the repo board rows carry — the ENGINE emits the issue array (jq'd by the
+  #    CALLER, the port of bash's `--jq`), and the fixture was asked for the RESOLVED owner/repo. #641: a
+  #    PULL REQUEST is an issue in REST, and `issues` must NOT list it — 777 (which carries `pull_request`)
+  #    is dropped, so the §4 duplicate-check cannot read a PR as "already filed" and suppress a real finding.
+  nums="$(iss sdd | jq -c '[.[].number]')"
+  [ "$nums" = "[501,502]" ] \
+    && ok "#641: 'issues sdd' emits genuine issues only — the PR (777) is filtered out" \
+    || bad "#641: issues must drop pull requests" "got: $nums"
+  printf '%s' "$nums" | grep -q '777' \
+    && bad "#641: a PR (777) must never appear in the issues listing" "got: $nums" \
+    || ok "#641: ...and the §4 duplicate-check never sees a PR as an already-filed issue"
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.SDD" ] \
+    && ok "#446: 'issues sdd' reads FS-GG/FS.GG.SDD over REST — the short-id resolves like --repo does" \
+    || bad "#446: issues short-id resolves" "requested: $(isslast '.nwo')"
+
+  # 2. THE #446 POSTER CHILD. `game` is one of the two short-ids resolve_repo once let fall through to the
+  #    literal token (#381), so `issues game` asked for `repos/FS-GG/game` and 404'd. It must resolve to
+  #    FS-GG/FS.GG.Game, and the bare `FS-GG/game` must NEVER reach the fixture.
+  iss game >/dev/null
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.Game" ] \
+    && ok "#446: 'issues game' resolves to FS-GG/FS.GG.Game (the short-id that once 404'd as repos/FS-GG/game)" \
+    || bad "#446: issues game must resolve, not 404" "requested: $(isslast '.nwo')"
+  case " $(issnwos) " in
+    *" FS-GG/game "*) bad "#446: the bare short-id must NEVER reach GitHub unresolved" "saw FS-GG/game" ;;
+    *) ok "#446: ...and 'FS-GG/game' NEVER reaches the fixture — the 404 (and the gh-issue-list fallback) is gone" ;;
+  esac
+
+  # 3. An EXPLICIT owner/repo is authoritative — split and passed through untouched, never re-resolved.
+  iss FS-GG/FS.GG.Game >/dev/null
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.Game" ] \
+    && ok "#446: an explicit owner/repo ('FS-GG/FS.GG.Game') passes through untouched" \
+    || bad "#446: owner/repo passthrough" "requested: $(isslast '.nwo')"
+
+  # 4. A non-original-four short-id resolves too — resolve_repo covers the WHOLE roster (#381), not just
+  #    the framework repos. `audio` fell through to the literal token in the same bug class.
+  iss audio >/dev/null
+  [ "$(isslast '.nwo')" = "FS-GG/FS.GG.Audio" ] \
+    && ok "#446/#381: 'issues audio' resolves across the whole roster (not just the original four repos)" \
+    || bad "#446: roster-wide resolution" "requested: $(isslast '.nwo')"
+
+  # 5. THE BUDGET-FREE 304 (#418) — the reason `issues` exists. A second read of the SAME listing, with the
+  #    same cache, sends the stored ETag; the fixture answers 304, and the engine serves the body FROM CACHE.
+  #    That is a conditional request (`inm` carries the validator, not `none`) served for zero fresh body —
+  #    the ETag revalidation the command is built on.
+  iss sdd >/dev/null            # warms the body+etag cache (the FILTERED body is what is stored, #641)
+  again="$(iss sdd | jq -c 'length')"
+  [ "$again" = "2" ] && [ "$(isslast '.inm')" != "none" ] \
+    && ok "#418: a repeat 'issues sdd' sends the ETag and is served a 304 from cache — the budget-free read" \
+    || bad "#418: issues revalidates with the stored ETag (304 is free)" "count=$again inm=$(isslast '.inm')"
+
+  # 6. `--state` and `--label` shape the REST path (and the cache key) — the query the listing is scoped by.
+  iss sdd --state closed --label bug >/dev/null
+  [ "$(isslast '"\(.state) \(.label)"')" = "closed bug" ] \
+    && ok "#446: --state and --label shape the REST listing (state=closed, labels=bug)" \
+    || bad "#446: issues --state/--label" "$(isslast '"\(.state) \(.label)"')"
+
+  # 7. No repo is a hard refusal — `issues` cannot default to a checkout (it is not a scoped worker command;
+  #    the repo is its one required positional). It refuses rather than guessing.
+  iss_norepo="$(iss 2>&1 >/dev/null)"; iss_rc=$?
+  { printf '%s' "$iss_norepo" | grep -q 'a repo is required' && [ "$iss_rc" -ne 0 ]; } \
+    && ok "#446: 'issues' with no repo REFUSES (a repo is required) — never a silent org-wide read" \
+    || bad "#446: issues must require a repo" "rc=$iss_rc: $iss_norepo"
+
+  kill "$ISS_SRV" 2>/dev/null; rm -rf "$ISSCACHE"
+fi
+
+# CASE 13 IS NOW FULL. Its last leg — `reap` (the DESTRUCTIVE worker command) scoping to the checkout you
+# are standing in (#480) — is proven in the "REAP SCOPES TO THE CHECKOUT" section below (a bare reap from
+# an SDD checkout considers only SDD's claims; from a Rendering checkout, Rendering's; outside a checkout
+# it REFUSES). The `Blocked by` canonicalization gate and the `issues` short-id command (#446) landed
+# above; the epic-rollup / NO-TOUCH-SET `lint` rules (#496) landed with case 14.
 
 # ---- VERIFY-PATHS: DID THE PR STAY INSIDE ITS TOUCH-SET? (case 23) --------------------------------
 #
@@ -1797,18 +1991,32 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
                    *)     ok "case14: NO-TOUCH-SET does not fire on a closed issue" ;; esac
 
   # BAD-TOUCH-SET (#496, reopened for the unmatchable case): a declared touch-set the scheduler cannot use
-  # is just as dead. #430 declares only `**/only-unmatchable`.
+  # is just as dead. #430 declares only `**/only-unmatchable` (ALL unmatchable); #431 declares a real subtree
+  # AND `**/nope-unmatchable` (SOME unmatchable, #646) — which lint used to stay green over.
   bts="$(jq -r '[.[] | select(.code=="BAD-TOUCH-SET") | .id | sub("^[^/]+/";"")] | sort | join(",")' <<<"$ljson")"
-  [ "$bts" = "FS.GG.SDD#430" ] \
-    && ok "case14: BAD-TOUCH-SET fires on the item whose every token is unmatchable (#430)" \
-    || bad "case14: BAD-TOUCH-SET must fire on exactly 430" "$bts"
-  d430="$(jq -r '.[] | select(.code=="BAD-TOUCH-SET") | .detail' <<<"$ljson")"
+  [ "$bts" = "FS.GG.SDD#430,FS.GG.SDD#431" ] \
+    && ok "#646: BAD-TOUCH-SET fires on the ALL-unmatchable item (#430) AND the PARTIAL one (#431)" \
+    || bad "#646: BAD-TOUCH-SET must fire on exactly 430,431" "$bts"
+  d430="$(jq -r '.[] | select(.code=="BAD-TOUCH-SET" and (.id|test("430"))) | .detail' <<<"$ljson")"
   printf '%s' "$d430" | grep -q 'only-unmatchable' \
-    && ok "case14: BAD-TOUCH-SET names the unmatchable token" \
+    && ok "case14: BAD-TOUCH-SET names the unmatchable token (#430)" \
     || bad "case14: BAD-TOUCH-SET must name the token" "$d430"
   printf '%s' "$d430" | grep -q 'no worker can ever pick this up' \
-    && ok "case14: BAD-TOUCH-SET says nobody can ever pick it up" \
+    && ok "case14: the ALL-unmatchable detail says nobody can ever pick it up (#430)" \
     || bad "case14: BAD-TOUCH-SET detail" "$d430"
+
+  # #646 — the PARTIAL item: names ONLY the unmatchable token, NOT the matchable subtree, and says why a
+  # partial declaration is worse (the silent-reservation double-book).
+  d431="$(jq -r '.[] | select(.code=="BAD-TOUCH-SET" and (.id|test("431"))) | .detail' <<<"$ljson")"
+  printf '%s' "$d431" | grep -q 'nope-unmatchable' \
+    && ok "#646: the PARTIAL item's detail names the unmatchable token (#431)" \
+    || bad "#646: partial BAD-TOUCH-SET must name the offending token" "$d431"
+  printf '%s' "$d431" | grep -q 'src/Partial' \
+    && bad "#646: the partial detail must NOT flag the MATCHABLE token — only the offending subset" "$d431" \
+    || ok "#646: ...and does NOT flag the matchable subtree (src/Partial/**) — only the offending subset"
+  printf '%s' "$d431" | grep -qi 'invisible to every other worker' \
+    && ok "#646: ...and explains WHY a partial declaration is worse (silent reservation → double-book)" \
+    || bad "#646: partial detail must explain the silent-reservation risk" "$d431"
 
   # The --json scratch field of the (deferred) EPIC-UNLINKED-CHILD rule must never leak — a finding schema
   # with an `unlinked` key is the internal probe list, not the contract.
@@ -1836,6 +2044,1749 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
     || bad "case14: --repo game must be clean+empty" "$(lt --repo game --json 2>/dev/null)"
 
   kill "$LINT_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 14 (no-touch-set-and-done) — the `lint` EPIC-ROLL-UP-GRAPH rules (#325/#346/#266/#235). An [epic]
+# with zero sub-issues (EPIC-NO-CHILDREN); a TRUNCATED child list rollup cannot verify
+# (EPIC-CHILDREN-TRUNCATED); a board-Done epic over an open child (EPIC-DONE-OPEN-CHILD); a board-Done
+# issue still open (DONE-STATUS-OPEN-ISSUE, a note); and an epic whose BODY declares a child the graph does
+# not contain (EPIC-UNLINKED-CHILD) — with a body-cited PR ref DROPPED (#346), a prose mention ignored, and
+# an unresolvable ref KEPT (fail closed, #266).
+LE_OUT="$(mktemp)"; python3 "$HERE/lintepic_server.py" >"$LE_OUT" 2>/dev/null & LE_SRV=$!; LE_PORT=""
+for _ in $(seq 1 50); do LE_PORT="$(head -n1 "$LE_OUT" 2>/dev/null)"; [ -n "$LE_PORT" ] && break; sleep 0.1; done
+rm -f "$LE_OUT"
+if [ -z "$LE_PORT" ]; then bad "lint-epic fixture bound a port"; else
+  le() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$LE_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" lint "$@"; }
+  lej="$(le --json 2>/dev/null)"
+  codeids() { jq -r "[.[] | select(.code==\"$1\") | .id | sub(\"^[^/]+/\";\"\")] | sort | join(\",\")" <<<"$lej"; }
+
+  [ "$(codeids EPIC-NO-CHILDREN)" = "FS.GG.SDD#440" ] \
+    && ok "case14: EPIC-NO-CHILDREN fires on an open [epic] with zero sub-issues (#440)" \
+    || bad "case14: EPIC-NO-CHILDREN" "$(codeids EPIC-NO-CHILDREN)"
+  [ "$(codeids EPIC-CHILDREN-TRUNCATED)" = "FS.GG.Rendering#404" ] \
+    && ok "case14: EPIC-CHILDREN-TRUNCATED fires on the epic whose graph is truncated (#404)" \
+    || bad "case14: EPIC-CHILDREN-TRUNCATED" "$(codeids EPIC-CHILDREN-TRUNCATED)"
+  jq -r '.[] | select(.code=="EPIC-CHILDREN-TRUNCATED") | .detail' <<<"$lej" | grep -q '5 sub-issues, only 2 visible' \
+    && ok "case14: ...and names the total vs the visible count (5 sub-issues, only 2 visible)" \
+    || bad "case14: truncated detail" "$(jq -r '.[]|select(.code=="EPIC-CHILDREN-TRUNCATED")|.detail' <<<"$lej")"
+  [ "$(codeids EPIC-DONE-OPEN-CHILD)" = "FS.GG.SDD#450" ] \
+    && ok "case14: EPIC-DONE-OPEN-CHILD fires on a board-Done epic over an open child (#450)" \
+    || bad "case14: EPIC-DONE-OPEN-CHILD" "$(codeids EPIC-DONE-OPEN-CHILD)"
+  jq -r '.[] | select(.code=="EPIC-DONE-OPEN-CHILD") | .detail' <<<"$lej" | grep -q 'FS.GG.SDD#451' \
+    && ok "case14: ...and names the open child (#451)" \
+    || bad "case14: done-open-child names the child" "$(jq -r '.[]|select(.code=="EPIC-DONE-OPEN-CHILD")|.detail' <<<"$lej")"
+  # DONE-STATUS-OPEN-ISSUE (note): board Done but the issue is still open — the epic #450 and the plain #460.
+  [ "$(codeids DONE-STATUS-OPEN-ISSUE)" = "FS.GG.Game#480,FS.GG.SDD#450,FS.GG.SDD#460" ] \
+    && ok "case14: DONE-STATUS-OPEN-ISSUE (note) fires on every board-Done-but-open issue (#450, #460, #480)" \
+    || bad "case14: DONE-STATUS-OPEN-ISSUE" "$(codeids DONE-STATUS-OPEN-ISSUE)"
+
+  # EPIC-UNLINKED-CHILD (#325): #409's body declares #414 (unlinked), PR #418 (dropped, #346), and #413
+  # (linked); prose #415 is not a child. The graph {#413} is complete, so the rule may reason.
+  [ "$(codeids EPIC-UNLINKED-CHILD)" = "FS.GG.SDD#409" ] \
+    && ok "case14: EPIC-UNLINKED-CHILD fires on exactly the epic that has one (#409)" \
+    || bad "case14: EPIC-UNLINKED-CHILD" "$(codeids EPIC-UNLINKED-CHILD)"
+  unamed="$(jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .detail' <<<"$lej" | sed 's/.*rollup cannot see them: //')"
+  [ "$unamed" = "FS.GG.SDD#414" ] \
+    && ok "case14: ...and names the declared-but-unlinked child, and ONLY it (#414)" \
+    || bad "case14: unlinked names exactly #414" "$unamed"
+  [ "$(jq -r '[.[] | select(.detail|test("415|#413|418"))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: a PR ref is dropped (#346), a prose mention and a linked child are not unlinked" \
+    || bad "case14: #415/#413/#418 must not appear as unlinked" "$lej"
+  # A truncated epic yields NO unlinked-child verdict — "unlinked" is unknowable over an incomplete set.
+  [ "$(jq -r '[.[] | select(.code=="EPIC-UNLINKED-CHILD" and (.id|test("404")))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: a truncated epic (#404) yields no unlinked-child verdict (#266)" \
+    || bad "case14: truncated epic must not fire unlinked" "$lej"
+  # The internal PR-probe scratch list must not leak into the schema.
+  [ "$(jq -r '[.[] | select(has("unlinked"))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: the PR-probe scratch field is not exposed in --json" \
+    || bad "case14: no 'unlinked' scratch field" "$lej"
+  # #470 is a healthy epic (its one declared child is linked) — the negative control.
+  [ "$(jq -r '[.[] | select(.id|test("470"))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: a healthy epic (linked children, complete graph) yields nothing (#470)" \
+    || bad "case14: #470 must be clean" "$lej"
+
+  # Fail closed (#266): a ref the PR-probe cannot resolve is KEPT, never dropped. Force #414's probe to 502.
+  lefc_out="$(mktemp)"; FSGG_PARITY_FAIL_ISSUE=414 python3 "$HERE/lintepic_server.py" >"$lefc_out" 2>/dev/null & LEFC=$!; LEFC_PORT=""
+  for _ in $(seq 1 50); do LEFC_PORT="$(head -n1 "$lefc_out" 2>/dev/null)"; [ -n "$LEFC_PORT" ] && break; sleep 0.1; done
+  rm -f "$lefc_out"
+  if [ -z "$LEFC_PORT" ]; then bad "lint-epic fail-closed fixture bound a port"; else
+    fcnamed="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$LEFC_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+                 FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" lint --json 2>/dev/null \
+               | jq -r '.[] | select(.code=="EPIC-UNLINKED-CHILD") | .detail' | sed 's/.*rollup cannot see them: //')"
+    [ "$fcnamed" = "FS.GG.SDD#414" ] \
+      && ok "case14: an unresolvable PR-probe ref is KEPT, not silently dropped (fail closed, #266)" \
+      || bad "case14: fail-closed keep" "$fcnamed"
+    kill "$LEFC" 2>/dev/null
+  fi
+
+  # --repo scopes the scan: only #404's finding is in Rendering; a note-only Game scope passes, and
+  # --strict makes that note fatal.
+  [ "$(le --repo rendering --json 2>/dev/null | jq -r '[.[].code] | unique | join(",")')" = "EPIC-CHILDREN-TRUNCATED" ] \
+    && ok "case14: --repo rendering scopes to only #404's finding (EPIC-CHILDREN-TRUNCATED)" \
+    || bad "case14: --repo rendering scope" "$(le --repo rendering --json 2>/dev/null)"
+  le --repo game >/dev/null 2>&1; gnrc=$?
+  [ "$gnrc" -eq 0 ] && ok "case14: lint --repo game (a note, no error) passes the gate (exit 0)" || bad "case14: note-only exit 0" "rc=$gnrc"
+  le --repo game --strict >/dev/null 2>&1; gsrc=$?
+  [ "$gsrc" -eq 1 ] && ok "case14: lint --repo game --strict makes the note fatal (exit 1)" || bad "case14: --strict note fatal" "rc=$gsrc"
+
+  kill "$LE_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 14 (no-touch-set-and-done) — the `done --flip` EPIC ROLLUP (#235/#583/#325/#346). Stamping a child
+# with --flip climbs to its parent and rolls it up ONLY when genuinely finished: HOLDS while a sibling is
+# open (#235/#583), FLIPS when every child is Done + closed, REFUSES when the epic BODY declares a child
+# the sub-issue graph does not contain (#325) — the EpicBody/subIssues check landed for lint, now reused —
+# while a body-cited PR ref does NOT block the flip (#346). bash's "1/2 children Done+closed — holding"
+# wording is re-expressed (ADR-0040 §5) as the engine's own rollup rendering: the PROPERTY (held vs flipped,
+# names the blocker) is what is held.
+DF_OUT="$(mktemp)"; python3 "$HERE/doneflip_server.py" >"$DF_OUT" 2>/dev/null & DF_SRV=$!; DF_PORT=""
+for _ in $(seq 1 50); do DF_PORT="$(head -n1 "$DF_OUT" 2>/dev/null)"; [ -n "$DF_PORT" ] && break; sleep 0.1; done
+rm -f "$DF_OUT"
+if [ -z "$DF_PORT" ]; then bad "done-flip fixture bound a port"; else
+  df() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$DF_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" done "$@" 2>&1; }
+
+  # A — HOLD (#235/#583): #42 stamps DONE, but its parent #301 is HELD because sibling #44 is still open.
+  a="$(df 'FS.GG.SDD#42' --worker w-df --flip)"
+  printf '%s' "$a" | grep -q 'FSGG-DONE   FS.GG.SDD#42' \
+    && ok "case14: done --flip stamps the child DONE (#42)" || bad "case14: child not stamped" "$a"
+  printf '%s' "$a" | grep -q 'FS.GG.SDD#301 left OPEN' \
+    && ok "case14: rollup HOLDS the parent while a sibling is open (#235/#583)" || bad "case14: parent must hold" "$a"
+  printf '%s' "$a" | grep -q 'still OPEN: #44' \
+    && ok "case14: ...and names the open sibling (#44)" || bad "case14: names open sibling" "$a"
+  printf '%s' "$a" | grep -q '301 stamped Done and closed' \
+    && bad "case14: a held parent must NOT be flipped" "$a" || ok "case14: a held parent is not flipped"
+
+  # B — FLIP: #62 stamps DONE and its parent #302 flips (every child Done + closed, body clean).
+  b="$(df 'FS.GG.SDD#62' --worker w-df --flip)"
+  { printf '%s' "$b" | grep -q 'FSGG-DONE   FS.GG.SDD#62' && printf '%s' "$b" | grep -q 'FS.GG.SDD#302 stamped Done and closed'; } \
+    && ok "case14: rollup FLIPS when every child is Done + closed (parent stamped Done AND closed, #613)" \
+    || bad "case14: parent must flip" "$b"
+
+  # C — REFUSE (#325): #72 stamps DONE, but #303's BODY declares #74, absent from the graph -> held, named.
+  c="$(df 'FS.GG.SDD#72' --worker w-df --flip)"
+  printf '%s' "$c" | grep -q 'FSGG-DONE   FS.GG.SDD#72' \
+    && ok "case14: the child still stamps DONE even when the parent will refuse (#72)" || bad "case14: child stamp" "$c"
+  printf '%s' "$c" | grep -q 'FS.GG.SDD#303 left OPEN' \
+    && ok "case14: rollup REFUSES when the body declares an unlinked child (#325)" || bad "case14: must refuse" "$c"
+  printf '%s' "$c" | grep -q 'does not contain: FS.GG.SDD#74' \
+    && ok "case14: ...and names the unlinked child (#74)" || bad "case14: names unlinked child" "$c"
+  printf '%s' "$c" | grep -q 'fsgg-coord child' \
+    && ok "case14: ...and points at the verb that fixes it (fsgg-coord child)" || bad "case14: points at child verb" "$c"
+  printf '%s' "$c" | grep -q '303 stamped Done and closed' \
+    && bad "case14: a body-unlinked parent must NOT be flipped" "$c" || ok "case14: a body-unlinked parent is not flipped"
+
+  # D — FLIP over a body-cited PR ref (#346): #304's body cites PR #920, which is not an unlinked child.
+  d="$(df 'FS.GG.SDD#82' --worker w-df --flip)"
+  printf '%s' "$d" | grep -q 'FS.GG.SDD#304 stamped Done and closed' \
+    && ok "case14: rollup FLIPS over a body-cited PR ref — a PR is not an unlinked child (#346)" || bad "case14: PR ref must not block flip" "$d"
+  printf '%s' "$d" | grep -q 'does not contain' \
+    && bad "case14: a body-cited PR must not read as an unlinked child" "$d" || ok "case14: a body-cited PR does not block the rollup"
+
+  # E — #614: the SAME only-child #62/#302 world as leg B, but the child is declared a PARTIAL fix with
+  #     `--partial`. The roll-up must LEAVE #302 OPEN (naming why), not close it on the strength of "all
+  #     children are done". This is the exact bug #614 names: an only child that was a partial fix closed
+  #     its open parent, because the roll-up assumed children partition the parent. Leg B (bare --flip)
+  #     remains the positive control that a completing child still closes the parent.
+  e="$(df 'FS.GG.SDD#62' --worker w-df --flip --partial 'the API rename landed; migrating the callers is a separate child')"
+  printf '%s' "$e" | grep -q 'FSGG-DONE   FS.GG.SDD#62' \
+    && ok "#614: done --flip --partial still stamps the child DONE (#62)" || bad "#614: child not stamped under --partial" "$e"
+  printf '%s' "$e" | grep -q 'FS.GG.SDD#302 left OPEN' \
+    && ok "#614: ...but --partial LEAVES THE PARENT OPEN — a partial child does not discharge its parent" || bad "#614: parent must stay open under --partial" "$e"
+  printf '%s' "$e" | grep -q '302 stamped Done and closed' \
+    && bad "#614: --partial must NOT close the parent (the exact #614 bug)" "$e" || ok "#614: ...and the parent is NOT stamped Done and closed"
+  printf '%s' "$e" | grep -q 'migrating the callers is a separate child' \
+    && ok "#614: ...naming WHY it is partial, so the left-open parent is explained" || bad "#614: names the partial reason" "$e"
+
+  kill "$DF_SRV" 2>/dev/null
+fi
+
+# case 14 (no-touch-set-and-done) — the `done` PR-PROVENANCE legs (#342/#558/#543). With no `--pr`, `done`
+# stamps the PR that ACTUALLY closed the issue — the LATEST-merged among true closers — and refuses a mere
+# prose mention; a commit-subject keyword (routed to the PR title, where `closingIssuesReferences` never
+# looks) is rescued by GitHub's own CLOSED_EVENT; a commit closer resolves through to its PR; and `--pr`
+# overrides WHICH pull request the stamp names, never WHETHER it closed the issue. `closedByPullRequestsReferences`
+# is a SUPERSET (mentions too, lowest-number-first), so the engine keeps the whole set and decides the closer
+# from ClosesThis / the close event — the #342 fix, re-expressed over HTTP.
+#
+# DISPOSED ON THE RECORD (ADR-0040 §5): bash exits 1 on a red NOT-DONE; the engine's certified exit for a Red
+# verdict is ExitRed=3 (see Program.fs). The corpus's "with a non-zero exit" assertions are re-expressed as the
+# PROPERTY — a refused stamp exits NON-ZERO — not bash's literal 1.
+DP_OUT="$(mktemp)"; python3 "$HERE/doneprov_server.py" >"$DP_OUT" 2>/dev/null & DP_SRV=$!; DP_PORT=""
+for _ in $(seq 1 50); do DP_PORT="$(head -n1 "$DP_OUT" 2>/dev/null)"; [ -n "$DP_PORT" ] && break; sleep 0.1; done
+rm -f "$DP_OUT"
+if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
+  dp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$DP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" done "$@" 2>&1; }
+
+  # #342 — the stamp names the CLOSER (#92 @ 09c836e), never the earlier prose mention #85.
+  p84="$(dp 'FS.GG.SDD#84' --worker w-dp)"; rc84=$?
+  { [ "$rc84" -eq 0 ] && printf '%s' "$p84" | grep -q 'FSGG-DONE   FS.GG.SDD#84'; } \
+    && ok "case14: done stamps the closer, green (#84)" || bad "case14: #84 should be DONE" "rc=$rc84: $p84"
+  printf '%s' "$p84" | grep -q 'merged PR #92 @ 09c836e' \
+    && ok "case14: ...naming the PR that CLOSED it — #92 @ 09c836e (#342)" || bad "case14: #84 names the closer" "$p84"
+  printf '%s' "$p84" | grep -qE '#85|410843e' \
+    && bad "case14: the earlier MENTION #85 must not be stamped (#342)" "$p84" \
+    || ok "case14: ...and never the earlier mention #85/410843e (#342)"
+
+  # #342 — a merged PR that merely MENTIONS the issue (its body names another) closes nothing.
+  p86="$(dp 'FS.GG.SDD#86' --worker w-dp)"; rc86=$?
+  printf '%s' "$p86" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#86' \
+    && ok "case14: done REFUSES when only a mention exists — red NOT-DONE (#86, #342)" || bad "case14: #86 should refuse" "$p86"
+  printf '%s' "$p86" | grep -q 'no merged PR closes this issue' \
+    && ok "case14: ...saying no merged PR closes this issue (#342)" || bad "case14: #86 reason" "$p86"
+  [ "$rc86" -ne 0 ] \
+    && ok "case14: ...and exits NON-ZERO (engine ExitRed=3; bash's literal 1 disposed on the record)" || bad "case14: #86 non-zero exit" "rc=$rc86"
+
+  # #342 — among two TRUE closers, the LATEST-merged wins, not the lowest-numbered.
+  p88="$(dp 'FS.GG.SDD#88' --worker w-dp)"
+  printf '%s' "$p88" | grep -q 'merged PR #95 @ 2222bbb' \
+    && ok "case14: among two closers, the LATEST-merged wins — #95 @ 2222bbb (#342)" || bad "case14: #88 latest-merged" "$p88"
+  printf '%s' "$p88" | grep -qE '#89|1111aaa' \
+    && bad "case14: the earlier-merged, lower-numbered #89 must not be stamped (#342)" "$p88" \
+    || ok "case14: ...and never the earlier-merged, lower-numbered #89/1111aaa (#342)"
+
+  # #558 — a keyword in the commit SUBJECT still earns the stamp (GitHub's own CLOSED_EVENT closer).
+  p165="$(dp 'FS.GG.SDD#165' --worker w-dp --flip)"; rc165=$?
+  { [ "$rc165" -eq 0 ] && printf '%s' "$p165" | grep -q 'FSGG-DONE   FS.GG.SDD#165'; } \
+    && ok "case14: a commit-SUBJECT keyword still earns the stamp — the CLOSED_EVENT closer (#558)" \
+    || bad "case14: #165 should be DONE via the close event" "rc=$rc165: $p165"
+
+  # #558 — a COMMIT closer (a squash) resolves through to its associated PR.
+  p166="$(dp 'FS.GG.SDD#166' --worker w-dp --flip)"
+  printf '%s' "$p166" | grep -q 'FSGG-DONE   FS.GG.SDD#166' \
+    && ok "case14: a COMMIT closer resolves through to its PR (#558)" || bad "case14: #166 commit closer" "$p166"
+
+  # #543 — `--pr` may not launder a mention: PR 97 closes #70, not #96.
+  p96="$(dp 'FS.GG.SDD#96' --pr 97 --flip --worker w-dp)"; rc96=$?
+  printf '%s' "$p96" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#96' \
+    && ok "case14: --pr REFUSES a PR that only MENTIONS the issue (#543)" || bad "case14: #96 --pr should refuse" "$p96"
+  case "$p96" in
+    *FSGG-DONE*) bad "case14: --pr must not be an override of PROVENANCE (#543)" "$p96" ;;
+    *) ok "case14: --pr overrides WHICH pr, never WHETHER it closed the issue (#543)" ;;
+  esac
+  [ "$rc96" -ne 0 ] \
+    && ok "case14: ...and exits NON-ZERO (engine ExitRed=3; bash's literal 1 disposed on the record)" || bad "case14: #96 non-zero exit" "rc=$rc96"
+
+  kill "$DP_SRV" 2>/dev/null
+fi
+
+# case 34 (xrepo-touchset-353) — the `overlap` command (#353). `Paths:` tokens are repo-relative, so a
+# touch-set comparison is only meaningful WITHIN a repo. `overlap` scopes to ONE repo: a same-named token in
+# ANOTHER repo is not a collision (two files in two repositories), and its holder is never named — while a
+# GENUINE same-repo overlap is still caught (scoping narrowed the set, not the test). Two shapes:
+# `overlap <ref> --active` (the item vs its repo's live claims) and `overlap <a> <b>` (the two items, or
+# DISJOINT-by-construction across a repo boundary). The engine already has `TouchSet.conflicts` repo-scoped
+# (case 35); this ports the command surface bash's #353 fixed.
+#
+# DISPOSED ON THE RECORD (ADR-0040 §5): the OVERLAP exit is the engine's `ExitContended=6`; the corpus's
+# `assert_fails` is the PROPERTY (a real overlap exits NON-ZERO), not bash's literal code. `widen`'s
+# collision-DETECT-and-notify half (case 34's second block) needs a notify write and is deferred as
+# 34-remainder — this slice ports the read-only `overlap` diagnostic.
+OV_OUT="$(mktemp)"; python3 "$HERE/overlap_server.py" >"$OV_OUT" 2>/dev/null & OV_SRV=$!; OV_PORT=""
+for _ in $(seq 1 50); do OV_PORT="$(head -n1 "$OV_OUT" 2>/dev/null)"; [ -n "$OV_PORT" ] && break; sleep 0.1; done
+rm -f "$OV_OUT"
+if [ -z "$OV_PORT" ]; then bad "overlap fixture bound a port"; else
+  ov() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$OV_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" overlap "$@" 2>&1; }
+
+  # --active: the cross-repo namesake (Rendering#402, same bare token) is NOT a collision.
+  oa="$(ov 'FS.GG.SDD#401' --active)"; oarc=$?
+  printf '%s' "$oa" | grep -q 'DISJOINT' \
+    && ok "case34: overlap --active — a same-named path in ANOTHER repo is not a collision (#353)" || bad "case34: 401 --active should be DISJOINT" "$oa"
+  case "$oa" in
+    *OVERLAP*|*Rendering*|*402*) bad "case34: overlap --active must never invent a cross-repo overlap (#353)" "$oa" ;;
+    *) ok "case34: overlap --active names no cross-repo holder (#353)" ;;
+  esac
+  [ "$oarc" -eq 0 ] \
+    && ok "case34: overlap --active exits 0 when the only namesake claim is in another repo (#353)" || bad "case34: 401 --active exit 0" "rc=$oarc"
+
+  # pairwise: different repos are DISJOINT by construction (no body read, no invented collision).
+  op="$(ov 'FS.GG.SDD#401' 'FS-GG/FS.GG.Rendering#402')"; oprc=$?
+  printf '%s' "$op" | grep -q 'different repos' \
+    && ok "case34: overlap a b — different repos are DISJOINT even on a same-named token (#353)" || bad "case34: cross-repo pair" "$op"
+  case "$op" in
+    *OVERLAP*) bad "case34: overlap a b must never invent a cross-repo overlap (#353)" "$op" ;;
+    *) ok "case34: overlap a b names no cross-repo collision (#353)" ;;
+  esac
+  [ "$oprc" -eq 0 ] \
+    && ok "case34: overlap a b exits 0 for a cross-repo pair (#353)" || bad "case34: cross-repo pair exit 0" "rc=$oprc"
+
+  # POSITIVE CONTROL (pairwise): a REAL same-repo overlap is STILL detected — scoping narrowed the set.
+  os="$(ov 'FS.GG.SDD#403' 'FS.GG.SDD#405')"; osrc=$?
+  printf '%s' "$os" | grep -q 'OVERLAP' \
+    && ok "case34: overlap a b — a real SAME-repo overlap is STILL detected (#353)" || bad "case34: same-repo pair overlap" "$os"
+  [ "$osrc" -ne 0 ] \
+    && ok "case34: ...and a real same-repo overlap exits NON-ZERO (engine ExitContended=6; bash's code disposed)" || bad "case34: same-repo pair non-zero" "rc=$osrc"
+
+  # POSITIVE CONTROL (--active): a real same-repo LIVE CLAIM is caught, and its holder named.
+  oac="$(ov 'FS.GG.SDD#405' --active)"; oacrc=$?
+  printf '%s' "$oac" | grep -q 'OVERLAP' \
+    && ok "case34: overlap --active — a genuine same-repo live claim is STILL detected (#353)" || bad "case34: 405 --active overlap" "$oac"
+  printf '%s' "$oac" | grep -q 'FS.GG.SDD#403' \
+    && ok "case34: ...and names the colliding same-repo item (#403)" || bad "case34: names colliding item" "$oac"
+  printf '%s' "$oac" | grep -q 'sdd-sib' \
+    && ok "case34: ...and names the holder it queues behind (sdd-sib) (#353)" || bad "case34: names holder" "$oac"
+  [ "$oacrc" -ne 0 ] \
+    && ok "case34: ...and exits NON-ZERO (engine ExitContended=6; bash's code disposed on the record)" || bad "case34: 405 --active non-zero" "rc=$oacrc"
+
+  kill "$OV_SRV" 2>/dev/null
+fi
+
+# case 24 leg (k) — `paths_of` FAILS CLOSED. An empty touch-set reads as "disjoint from everything", so a
+# failed BODY read (rate limit, network) must NOT be mis-read as "the issue declared nothing" — that is the
+# #266 fail-open, one subtree down, which would let the scheduler hand out work overlapping a held item. The
+# tell is WHICH diagnosis comes out: a failed read must refuse ("refusing to schedule against an unknown
+# touch-set"), never "no 'Paths:' touch-set declared". The engine's `overlap` reads the subject's touch-set
+# through `failSchedule`, which swaps the generic IO explain for the scheduler refusal while carrying the
+# IoError's own exit code. Re-expressed at the HTTP layer: `OVERLAP_FAIL_ISSUE=403` 500s the body read the
+# corpus faults with `GH_FAIL_ISSUE_GET=94`. DISPOSED (ADR-0040 §5): bash's `die` exits 1; the engine keeps
+# the read's own code (the corpus greps the SENTENCE, not the literal — `|| true`), and the property is the
+# refusal wording, not the exit number.
+OVK_OUT="$(mktemp)"; OVERLAP_FAIL_ISSUE=403 python3 "$HERE/overlap_server.py" >"$OVK_OUT" 2>/dev/null & OVK_SRV=$!; OVK_PORT=""
+for _ in $(seq 1 50); do OVK_PORT="$(head -n1 "$OVK_OUT" 2>/dev/null)"; [ -n "$OVK_PORT" ] && break; sleep 0.1; done
+rm -f "$OVK_OUT"
+if [ -z "$OVK_PORT" ]; then bad "overlap fail-closed fixture bound a port"; else
+  # `overlap 403 405` — same repo, but 403's body read FAULTS (500) before any comparison can be made.
+  ovk="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$OVK_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+            "$ENGINE" overlap 'FS.GG.SDD#403' 'FS.GG.SDD#405' 2>&1 || true)"
+  printf '%s' "$ovk" | grep -q 'refusing to schedule' \
+    && ok "case24(k): a failed touch-set read refuses to schedule against an unknown touch-set" \
+    || bad "case24(k): failed read must refuse to schedule" "$ovk"
+  case "$ovk" in
+    *"no 'Paths:' touch-set declared"*|*"declared nothing"*)
+      bad "case24(k): a failed read must NOT be diagnosed as 'the issue declared nothing'" "$ovk" ;;
+    *) ok "case24(k): a failed read is not mis-diagnosed as an empty declaration (#266 fail-open avoided)" ;;
+  esac
+  # ...and it never fell through to a DISJOINT — the fail-OPEN that hands out the overlapping tree.
+  case "$ovk" in
+    *DISJOINT*) bad "case24(k): a failed read must never read as DISJOINT (the fail-open double-book)" "$ovk" ;;
+    *) ok "case24(k): a failed read never reads as DISJOINT (fails closed, not open)" ;;
+  esac
+  kill "$OVK_SRV" 2>/dev/null
+fi
+
+# case 34-remainder (xrepo-touchset-353) — `widen`'s collision-DETECT-and-NOTIFY half (#353). The
+# read-only `overlap` command (#809) ported the repo-scoped collision COMPUTATION; this is the write half
+# ADR-0021 named ("re-declare AND re-check overlap before continuing") and the part a worker cannot do
+# alone: after the widen LANDS, re-check the NEW touch-set against the live claims in THIS item's repo, and
+# NOTIFY each worker it now collides with, on their own issue. The engine reuses the exact #353 collision
+# scan `overlap --active` runs (`activeCollisions`), so scoping cannot drift between the two surfaces.
+#
+# DISPOSED ON THE RECORD (ADR-0040 §5):
+#   - The engine's `widen` requires the widener to HOLD the lock (#706); bash's does not. So #401 carries a
+#     kite-t01 claim the corpus fixture omits — an engine STRENGTHENING, not a change to the property under
+#     test (verifyHeld's fail-closed refusal is proven on its own elsewhere).
+#   - The OVERLAP exit is the engine's ExitContended=6; the corpus's `assert_fails` is the PROPERTY (a real
+#     collision exits NON-ZERO), not bash's literal 1.
+WN_OUT="$(mktemp)"; python3 "$HERE/widennotify_server.py" >"$WN_OUT" 2>/dev/null & WN_SRV=$!; WN_PORT=""
+for _ in $(seq 1 50); do WN_PORT="$(head -n1 "$WN_OUT" 2>/dev/null)"; [ -n "$WN_PORT" ] && break; sleep 0.1; done
+rm -f "$WN_OUT"
+if [ -z "$WN_PORT" ]; then bad "widen-notify fixture bound a port"; else
+  wn() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$WN_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" widen "$@" 2>&1; }
+
+  # CROSS-REPO: widening #401 to the bare token `scripts/fsgg-coord` names a file in THIS repo; the same
+  # string on Rendering#402 is a different file, so it is DISJOINT — the widen lands, and the innocent
+  # cross-repo holder is NEVER pestered. (Run first, exactly as the corpus does, before the widen below.)
+  wx="$(wn 'FS.GG.SDD#401' --worker kite-t01 --paths 'scripts/fsgg-coord')"; wxrc=$?
+  printf '%s' "$wx" | grep -q 'widened FS.GG.SDD#401' \
+    && ok "case34: widen lands the re-declaration (#353)" || bad "case34: widen should land" "$wx"
+  printf '%s' "$wx" | grep -q 'DISJOINT' \
+    && ok "case34: widen — a same-named path in ANOTHER repo is not a collision (#353)" || bad "case34: 401 cross-repo widen DISJOINT" "$wx"
+  case "$wx" in
+    *OVERLAP*|*Rendering*|*402*|*render-x1*) bad "case34: widen must never invent a cross-repo overlap (#353)" "$wx" ;;
+    *) ok "case34: widen names no cross-repo holder (#353)" ;;
+  esac
+  [ "$wxrc" -eq 0 ] \
+    && ok "case34: widen exits 0 when the only namesake claim is in another repo (#353)" || bad "case34: cross-repo widen exit 0" "rc=$wxrc"
+  # ...and it left the innocent cross-repo bystander UNCOMMENTED (the corpus's before/after count check).
+  [ "$(posts_on "$WN_PORT" | jq -r '."402" // 0')" = "0" ] \
+    && ok "case34: widen leaves the cross-repo bystander #402 uncommented (#353)" || bad "case34: #402 should have no notify" "$(posts_on "$WN_PORT")"
+
+  # POSITIVE CONTROL — a REAL same-repo overlap is STILL detected: widen #401 to `src/Scene/**`, which #403
+  # (held by sdd-sib) already declares. The engine names the collision, NOTIFIES sdd-sib on #403, and exits
+  # non-zero. Scoping narrowed the live set, not the test.
+  wc="$(wn 'FS.GG.SDD#401' --worker kite-t01 --paths 'src/Scene/**')"; wcrc=$?
+  printf '%s' "$wc" | grep -q 'now collides with FS.GG.SDD#403' \
+    && ok "case34: widen — a genuine SAME-repo overlap is STILL detected, naming #403 (#353)" || bad "case34: same-repo widen detects #403" "$wc"
+  printf '%s' "$wc" | grep -q 'notified worker sdd-sib on FS.GG.SDD#403' \
+    && ok "case34: ...and NOTIFIES the same-repo worker sdd-sib on their own issue (#353)" || bad "case34: notify sdd-sib on #403" "$wc"
+  [ "$wcrc" -ne 0 ] \
+    && ok "case34: ...and a real same-repo collision exits NON-ZERO (engine ExitContended=6; bash's 1 disposed)" || bad "case34: same-repo widen non-zero" "rc=$wcrc"
+  # ...and the notify actually landed as ONE comment on #403 (the write half, counted at the HTTP layer).
+  [ "$(posts_on "$WN_PORT" | jq -r '."403" // 0')" = "1" ] \
+    && ok "case34: the notify lands as exactly one comment on #403 (#353)" || bad "case34: #403 should get one notify" "$(posts_on "$WN_PORT")"
+
+  kill "$WN_SRV" 2>/dev/null
+fi
+
+# ---- WIDEN re-checks BEFORE it writes (#523) — an unreadable scan REFUSES, body untouched -----------
+# The #523 defect: `widen` PATCHed the declaration and re-checked overlap AFTERWARDS, so on an exhausted
+# GraphQL budget the touch-set landed UNVERIFIED and the colliding workers were never told. The fix orders
+# the #353 collision scan BEFORE the write and lets its verdict gate the PATCH. This fixture lets the REST
+# legs (verifyHeld, issueBody) succeed and then rate-limits the scan's GraphQL: the widen must exit EX_RATE
+# and land ZERO writes. The PATCH/POST counts are read back, so a widen that wrote first cannot pass.
+WB_OUT="$(mktemp)"; python3 "$HERE/widenbudget_server.py" >"$WB_OUT" 2>/dev/null & WB_SRV=$!; WB_PORT=""
+for _ in $(seq 1 50); do WB_PORT="$(head -n1 "$WB_OUT" 2>/dev/null)"; [ -n "$WB_PORT" ] && break; sleep 0.1; done
+rm -f "$WB_OUT"
+if [ -z "$WB_PORT" ]; then bad "widen-budget fixture bound a port"; else
+  wb() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$WB_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" widen "$@" 2>&1; }
+  wbout="$(wb 'FS.GG.SDD#401' --worker kite-t01 --paths 'src/new/**')"; wbrc=$?
+
+  [ "$wbrc" -eq 75 ] \
+    && ok "#523: widen exits EX_RATE (75) when the pre-PATCH collision scan hits the budget" \
+    || bad "#523: widen should exit 75 on an exhausted scan" "rc=$wbrc :: $wbout"
+  printf '%s' "$wbout" | grep -qi 'budget' \
+    && ok "#523: ...and names the budget, not a protocol error or a lost race" || bad "#523: widen names the budget" "$wbout"
+  [ "$(patches_on "$WB_PORT" | jq -r '."401" // 0')" = "0" ] \
+    && ok "#523: ...and the body is UNTOUCHED — no PATCH landed before the verdict (the core of #523)" \
+    || bad "#523: widen must not PATCH before the scan verdict" "patches: $(patches_on "$WB_PORT")"
+  [ "$(posts_on "$WB_PORT" | jq -r 'to_entries | map(.value) | add // 0')" = "0" ] \
+    && ok "#523: ...and no notify was posted (there was no verdict to notify from)" \
+    || bad "#523: a refused widen must post no notify" "posts: $(posts_on "$WB_PORT")"
+
+  kill "$WB_SRV" 2>/dev/null
+fi
+
+# ---- #651: a MARKERLESS item with an open item/<n>-* PR is NOT offered ------------------------------
+# #581 read the open-PR proof-of-life only THROUGH a claim marker; a Ready item with NO marker but an open
+# `item/<n>-*` PR fell through to Startable and was handed out twice. The board carries #700 (markerless, an
+# open PR on item/700-*) and #701 (markerless, no PR): #700 must be skipped as `item-pr-open`, #701 offered.
+IP_OUT="$(mktemp)"; python3 "$HERE/itempr_server.py" >"$IP_OUT" 2>/dev/null & IP_SRV=$!; IP_PORT=""
+for _ in $(seq 1 50); do IP_PORT="$(head -n1 "$IP_OUT" 2>/dev/null)"; [ -n "$IP_PORT" ] && break; sleep 0.1; done
+rm -f "$IP_OUT"
+if [ -z "$IP_PORT" ]; then bad "item-pr fixture bound a port"; else
+  ipenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$IP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+                FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+                "$ENGINE" "$@"; }
+
+  ipjson="$(ipenv batch --repo FS.GG.SDD --json 2>/dev/null)"
+  [ "$ipjson" = '["FS.GG.SDD#701"]' ] \
+    && ok "#651: batch offers the markerless-no-PR item (#701) and SKIPS the markerless-open-PR item (#700)" \
+    || bad "#651: batch must skip a markerless item with an open item/<n> PR" "got: $ipjson"
+
+  iperr="$(ipenv batch --repo FS.GG.SDD 2>&1 >/dev/null)"
+  { printf '%s' "$iperr" | grep 'FS.GG.SDD#700' | grep -qi 'already in flight'; } \
+    && ok "#651: ...and the #700 skip names it as an implementation ALREADY IN FLIGHT (its open PR)" \
+    || bad "#651: the #700 skip must name the open-PR reason" "$iperr"
+  printf '%s' "$iperr" | grep 'FS.GG.SDD#700' | grep -q '812' \
+    && ok "#651: ...naming the PR (#812), so the refusal is checkable" \
+    || bad "#651: the skip should name the PR number" "$iperr"
+
+  ipnext="$(ipenv next --repo FS.GG.SDD 2>/dev/null)"
+  [ "$ipnext" = "FS.GG.SDD#701" ] \
+    && ok "#651: next returns #701 — a markerless item with NO PR is STILL startable (the control)" \
+    || bad "#651: a markerless-no-PR item must stay startable" "got: $ipnext"
+
+  kill "$IP_SRV" 2>/dev/null
+fi
+
+# ---- REAP: an expired lease is EVIDENCE of abandonment, not PROOF (#581) — case 26 ----------------
+# The false positive is SYSTEMATIC: work that simply outlasts its lease. bash's reaper broke a lock on
+# expiry alone and collected the claims of workers who were visibly still working, TWICE. #581's fix: an
+# open PR on the item's own `item/<n>-*` branch is the worktree protocol's own server-side proof of life,
+# so `reap` LOOKS for it and REFUSES when one is open. This holds the engine's new `reap` command to case
+# 26's certified answers over HTTP: the SAME off-board stale claim (#216, ghost-222, lease lapsed), reaped
+# when its work is dead and REFUSED when its PR is open — with the deletes counted at the HTTP layer, so a
+# refusal that deleted anyway (the exact #581 bug) cannot pass. `reap_server.py` is that world one
+# transport over; `--apply` gates the destructive break, and the bare form is a dry run (case 25).
+RP_OUT="$(mktemp)"; python3 "$HERE/reap_server.py" >"$RP_OUT" 2>/dev/null & RP_SRV=$!; RP_PORT=""
+for _ in $(seq 1 50); do RP_PORT="$(head -n1 "$RP_OUT" 2>/dev/null)"; [ -n "$RP_PORT" ] && break; sleep 0.1; done
+rm -f "$RP_OUT"
+if [ -z "$RP_PORT" ]; then bad "reap fixture bound a port"; else
+  rp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$RP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" reap "$@" 2>&1; }
+
+  # DRY RUN (case 25): a bare `reap` reports what --apply WOULD collect and deletes NOTHING. A destructive
+  # lock-break is never the default — the operator opts in.
+  rdry="$(rp --repo FS.GG.Rendering)"
+  printf '%s' "$rdry" | grep -q 'would reap  FS.GG.Rendering#216  worker ghost-222' \
+    && ok "reap: a bare reap is a DRY RUN — 'would reap …' names the item and its dead worker (case 25)" \
+    || bad "reap dry-run line" "$rdry"
+  [ "$(deletes_on "$RP_PORT")" = '[]' ] \
+    && ok "reap: ...and the DRY RUN deletes NOTHING (the break is gated behind --apply)" \
+    || bad "reap dry-run must not delete" "deletes: $(deletes_on "$RP_PORT")"
+
+  # --apply, DEAD lease (case 26 / case 25): the expired claim with NO open PR is collected — the negative
+  # control that keeps the #581 refusal below from being satisfied by a reap that simply stopped working.
+  rapp="$(rp --repo FS.GG.Rendering --apply)"
+  printf '%s' "$rapp" | grep -q 'reaped  FS.GG.Rendering#216  worker ghost-222' \
+    && ok "#581: an expired claim with NO open PR is reaped, naming the item + dead worker (case 26)" \
+    || bad "reap --apply reaped line" "$rapp"
+  [ "$(deletes_on "$RP_PORT")" = '[880]' ] \
+    && ok "#581: ...and the marker (comment 880) is actually DELETED — the lock released (case 26)" \
+    || bad "reap --apply must delete the marker" "deletes: $(deletes_on "$RP_PORT")"
+  # OFF-BOARD honesty (case 25): #216 is not on the board, and reap must not claim a reset it never did.
+  printf '%s' "$rapp" | grep -q 'not on board (marker cleared; nothing to reset)' \
+    && ok "reap: an OFF-BOARD claim's reset is 'not on board (nothing to reset)' — none invented (case 25)" \
+    || bad "reap off-board reset honesty" "$rapp"
+
+  kill "$RP_SRV" 2>/dev/null
+fi
+
+# LIVE-PR server: the SAME lapsed lease, but an OPEN PR #433 on item/216-* — the work is demonstrably alive.
+RL_OUT="$(mktemp)"; REAP_LIVE_PR=216:433 python3 "$HERE/reap_server.py" >"$RL_OUT" 2>/dev/null & RL_SRV=$!; RL_PORT=""
+for _ in $(seq 1 50); do RL_PORT="$(head -n1 "$RL_OUT" 2>/dev/null)"; [ -n "$RL_PORT" ] && break; sleep 0.1; done
+rm -f "$RL_OUT"
+if [ -z "$RL_PORT" ]; then bad "reap live-PR fixture bound a port"; else
+  rl="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$RL_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+          FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+          "$ENGINE" reap --repo FS.GG.Rendering --apply 2>&1)"
+  printf '%s' "$rl" | grep -q 'REFUSING' \
+    && ok "#581: reap REFUSES a claim whose PR is open — the lease lapsed, the WORK did not (case 26)" \
+    || bad "reap must refuse a live PR" "$rl"
+  printf '%s' "$rl" | grep -q '#433' \
+    && ok "#581: ...and names the PR (#433), so the refusal is checkable (case 26)" \
+    || bad "reap refusal names the PR" "$rl"
+  # THE ONE THAT MATTERS: the marker must SURVIVE. A refusal that deleted anyway is the bug #581 is for.
+  [ "$(deletes_on "$RL_PORT")" = '[]' ] \
+    && ok "#581: ...and the claim SURVIVES — nothing deleted (the leg that reaped live work TWICE) (case 26)" \
+    || bad "reap refusal must not delete" "deletes: $(deletes_on "$RL_PORT")"
+
+  kill "$RL_SRV" 2>/dev/null
+fi
+
+# ---- REAP SCOPES TO THE CHECKOUT YOU ARE STANDING IN (#480, case 13) — the destructive one ---------
+# `reap --apply` is the ONE worker command that DELETES another worker's state, so an org-wide default is
+# the worst place to keep one: a janitor run from `.github` would collect claims in five repos it was
+# never pointed at. Like `next`/`take`/`batch`/`who`, a bare `reap` takes the repo of the checkout you
+# are standing in — read FREE and offline from `git config remote.origin.url` — and considers ONLY that
+# repo's claims; an explicit `--repo` wins; OUTSIDE a checkout it REFUSES rather than scan the whole org.
+# The corpus (case 13, line 54) asserts this on the DRY RUN: a bare reap from an SDD checkout must NOT
+# name a Templates/Rendering/… claim. This drives the ENGINE from FAKE CHECKOUTS against a MULTI-REPO
+# world (`reap_scope_server.py` — a dead stale claim in SDD AND Rendering), so a leak is visible two ways:
+# the dry-run line names the checkout's repo, and the `/_requests` ledger shows which repo's `/issues`
+# was fetched — the corpus's "considers only THAT repo's claims" (`gh`-counted) one transport under.
+RS_OUT="$(mktemp)"; RS_CACHE="$(mktemp -d)"; RSCO="$(mktemp -d)"
+python3 "$HERE/reap_scope_server.py" >"$RS_OUT" 2>/dev/null & RS_SRV=$!
+RS_PORT=""; for _ in $(seq 1 50); do RS_PORT="$(head -n1 "$RS_OUT" 2>/dev/null)"; [ -n "$RS_PORT" ] && break; sleep 0.1; done
+if [ -z "$RS_PORT" ]; then
+  bad "#480: reap scope fixture bound a port"
+else
+  # Fake checkouts — the git remote is the ONLY signal the scope reads. Two URL forms (https, ssh) prove
+  # the parser handles both; `nogit` is deliberately NOT a git repo (an undetectable scope).
+  mkdir -p "$RSCO/sdd"   && git -C "$RSCO/sdd"   init -q && git -C "$RSCO/sdd"   remote add origin https://github.com/FS-GG/FS.GG.SDD.git
+  mkdir -p "$RSCO/rnd"   && git -C "$RSCO/rnd"   init -q && git -C "$RSCO/rnd"   remote add origin git@github.com:FS-GG/FS.GG.Rendering.git
+  mkdir -p "$RSCO/nogit"
+  rscoped() { local dir="$1"; shift; ( cd "$dir" \
+      && FSGG_GITHUB_API_BASE="http://127.0.0.1:$RS_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+         FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$RS_CACHE" \
+         "$ENGINE" reap "$@" 2>&1 ); }
+
+  # (1) A bare `reap` (DRY RUN) from an SDD checkout considers ONLY SDD's claim — names it, and NOT
+  #     Rendering's. The dry run is the corpus's own surface: the point is WHICH claims it considers.
+  r_sdd="$(rscoped "$RSCO/sdd")"
+  printf '%s' "$r_sdd" | grep -q 'would reap  FS.GG.SDD#301  worker mole-s1' \
+    && ok "#480: a bare 'reap' from an SDD checkout names THAT repo's claim (FS.GG.SDD#301)" \
+    || bad "#480: bare reap scopes to the checkout" "$r_sdd"
+  printf '%s' "$r_sdd" | grep -qE 'FS\.GG\.(Templates|Governance|Rendering|Audio|Game)#' \
+    && bad "#480: a bare SDD-checkout reap must NOT reach another repo (the destructive default)" "$r_sdd" \
+    || ok "#480: ...and never names a Rendering/Templates/… claim — the org-wide default #480 deletes is gone"
+  # AT THE TRANSPORT: the fixture was asked for SDD's issues, NEVER Rendering's — the corpus's
+  # "considers only THAT repo's claims" re-expressed as which repo's `/issues` the scan fetched.
+  rs_reqs="$(issget "$RS_PORT")"
+  { printf '%s' "$rs_reqs" | jq -e 'index("FS.GG.SDD") != null and index("FS.GG.Rendering") == null' >/dev/null 2>&1; } \
+    && ok "#480: ...and only SDD's /issues was fetched, never Rendering's (scope proven at the transport)" \
+    || bad "#480: reap must fetch only the checkout's repo issues" "requests: $rs_reqs"
+
+  # (2) The default is READ from the remote, not hard-wired: the same bare reap from a Rendering checkout
+  #     (ssh-form origin, so both URL shapes are exercised) picks Rendering's claim, not SDD's.
+  r_rnd="$(rscoped "$RSCO/rnd")"
+  { printf '%s' "$r_rnd" | grep -q 'would reap  FS.GG.Rendering#302  worker mole-r1' \
+      && ! printf '%s' "$r_rnd" | grep -q 'FS.GG.SDD#'; } \
+    && ok "#480: a bare 'reap' from a Rendering checkout (ssh remote) picks Rendering#302 — the scope is the remote" \
+    || bad "#480: bare reap reads the actual remote" "$r_rnd"
+
+  # (3) An explicit --repo SPELLS OUT the scope and wins over the checkout: from the SDD checkout,
+  #     `--repo rendering` (a registry short-id) resolves and considers Rendering's claim, not SDD's.
+  r_expl="$(rscoped "$RSCO/sdd" --repo rendering)"
+  { printf '%s' "$r_expl" | grep -q 'would reap  FS.GG.Rendering#302  worker mole-r1' \
+      && ! printf '%s' "$r_expl" | grep -q 'FS.GG.SDD#'; } \
+    && ok "#480: an explicit '--repo rendering' wins over the SDD checkout AND resolves the short-id (#381)" \
+    || bad "#480: explicit --repo wins + short-id resolves" "$r_expl"
+
+  # (4) OUTSIDE a checkout, `reap` — the DESTRUCTIVE command — REFUSES rather than fall back to an
+  #     org-wide scan. The refusal precedes any network read, so it deletes across zero repos, never five.
+  r_nogit="$(rscoped "$RSCO/nogit")"; r_rc=$?
+  { printf '%s' "$r_nogit" | grep -q -- '--repo required' && [ "$r_rc" -ne 0 ]; } \
+    && ok "#480: 'reap' outside a checkout REFUSES ('--repo required'), never scans the whole org (the destructive default)" \
+    || bad "#480: reap must refuse an undetectable scope" "rc=$r_rc: $r_nogit"
+  # NOTHING was deleted along the way — every leg above was a dry run or a refusal.
+  [ "$(deletes_on "$RS_PORT")" = '[]' ] \
+    && ok "#480: ...and across every scope leg NOTHING was deleted (dry runs + a refusal, never a break)" \
+    || bad "#480: reap scope legs must not delete" "deletes: $(deletes_on "$RS_PORT")"
+
+  kill "$RS_SRV" 2>/dev/null
+fi
+rm -f "$RS_OUT"; rm -rf "$RS_CACHE" "$RSCO"
+
+# ---- WHO READS THE LOCK OFF THE BOARD TOO (cases 25 + 26): #461/#581 -------------------------------
+#
+# `who` is the truth read of the LOCK, and the lock is NOT the board column — a marker sits on the ISSUE,
+# whose board Status may be Ready (a column flip that FAILED) or nowhere at all (a claim that never
+# reached the board). Case 20 above proves `who` on the board; this proves the half a board scan cannot
+# reach: `who --repo` scans the repo's OPEN ISSUES and reads the marker on each. The world (case 25's
+# `seed_offboard_world` + case 26's proof-of-life seed, one transport over): #210 In progress w/ no marker
+# (UNCLAIMED), #211 board-says-Ready but a live marker HOLDS it, #215 an off-board HELD claim, #216 an
+# off-board DEAD stale claim (bare STALE), #217 a chatty markerless issue (NOT in flight), and #890 an
+# off-board stale claim whose `item/890-*` PR is OPEN — #581 proof of life. The off-board scan must also
+# PAGINATE (a lock has no 100-issue limit) and never be conditional (a 304 could hide a fresh marker);
+# both are re-expressed at the HTTP layer via the fixture's `/_requests` ledger.
+OB_OUT="$(mktemp)"; python3 "$HERE/offboard_server.py" >"$OB_OUT" 2>/dev/null & OB_SRV=$!; OB_PORT=""
+for _ in $(seq 1 50); do OB_PORT="$(head -n1 "$OB_OUT" 2>/dev/null)"; [ -n "$OB_PORT" ] && break; sleep 0.1; done
+rm -f "$OB_OUT"
+if [ -z "$OB_PORT" ]; then bad "off-board who fixture bound a port"; else
+  obenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$OB_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" "$@"; }
+  obj="$(obenv who --repo FS.GG.Rendering --json 2>/dev/null)"
+
+  # IN FLIGHT, NO MORE NO LESS: the five claimed/orphaned items — INCLUDING the two off the board (#215,
+  # #216) and #890 — and NOT the chatty markerless #217. This is the whole of case 25's `who` contract.
+  obnums="$(printf '%s' "$obj" | jq -c '[.[].number] | sort')"
+  [ "$obnums" = '[210,211,215,216,890]' ] \
+    && ok "who: reports every in-flight item WHEREVER the board thinks it is — never the chatty #217 (case 25)" \
+    || bad "who off-board in-flight set" "expected [210,211,215,216,890], got: $obnums"
+
+  # OFF THE BOARD, STILL A LOCK: #215 is on NO board item, yet its live marker is HELD, names puffin-h11,
+  # and carries the touch-set read from the issue body — a reservation a board scan would miss entirely.
+  o215="$(printf '%s' "$obj" | jq -c '.[] | select(.number==215)')"
+  printf '%s' "$o215" | jq -e '.state=="held" and .worker=="puffin-h11"' >/dev/null 2>&1 \
+    && ok "who: an OFF-BOARD claim is HELD and names its worker (case 25 — the board never knew about #215)" \
+    || bad "who: #215 off-board held" "got: $o215"
+  printf '%s' "$o215" | jq -e '.paths == ["src/Off"]' >/dev/null 2>&1 \
+    && ok "who: ...and carries its touch-set, read from the issue body (case 25)" \
+    || bad "who: #215 off-board paths" "got: $o215"
+
+  # THE LOCK, NOT THE COLUMN: the board says #211 is Ready (its In-progress flip FAILED), but a live marker
+  # holds it — so `who` reports HELD. Reading the column instead would call a held item free.
+  printf '%s' "$obj" | jq -e '.[] | select(.number==211) | .state=="held" and .worker=="wren-c22"' >/dev/null 2>&1 \
+    && ok "who: a claim whose board Status flip FAILED is HELD, not free — who reads the lock (case 25)" \
+    || bad "who: #211 held despite Ready column" "$obj"
+
+  # UNCLAIMED rides the off-board scan too: #210 is In progress with no marker, so ONLY the column puts it
+  # in flight — null worker — and its declared touch-set still resolves.
+  printf '%s' "$obj" | jq -e '.[] | select(.number==210) | .state=="unclaimed" and .worker==null and (.paths==["src/Orphan2"])' >/dev/null 2>&1 \
+    && ok "who: an In-progress markerless item is UNCLAIMED with a null worker, even amid off-board claims (case 25)" \
+    || bad "who: #210 unclaimed" "$obj"
+
+  # #581 PROOF OF LIFE: #890's lease lapsed, but PR #433 is OPEN on item/890-* — the worktree protocol's
+  # own artifact. `who --json` carries it on the STALE row (`livePr`), and #216 — a stale claim with NO
+  # open PR — is a BARE stale (livePr null), the one a reaper may actually collect.
+  printf '%s' "$obj" | jq -e '.[] | select(.number==890) | .state=="stale" and .livePr=="#433 item/890-live-work"' >/dev/null 2>&1 \
+    && ok "#581: who carries the proof of life on the STALE row — livePr '#433 item/890-live-work' (case 26)" \
+    || bad "#581: #890 livePr" "$(printf '%s' "$obj" | jq -c '.[] | select(.number==890)')"
+  printf '%s' "$obj" | jq -e '.[] | select(.number==216) | .state=="stale" and .livePr==null' >/dev/null 2>&1 \
+    && ok "#581: a stale claim with NO open PR is a BARE stale (livePr null) — a reaper may collect it (case 26)" \
+    || bad "#581: #216 bare stale" "$(printf '%s' "$obj" | jq -c '.[] | select(.number==216)')"
+
+  # THE HUMAN ROW #581 is FOR: `STALE (#433 OPEN)` on the live one, a bare `STALE` on the dead one. `who`
+  # is what a human reads immediately before deciding to reap, so the two must not read the same.
+  obt="$(obenv who --repo FS.GG.Rendering 2>/dev/null)"
+  printf '%s' "$obt" | grep -qE 'FS.GG.Rendering#890.*STALE \(#433 OPEN\)' \
+    && ok "#581: ...and the human row says STALE (#433 OPEN), not a bare STALE (case 26)" \
+    || bad "#581: #890 text STALE (#433 OPEN)" "$obt"
+  printf '%s' "$obt" | grep FS.GG.Rendering#216 | grep -q 'OPEN' \
+    && bad "#581: #216 must be a BARE stale in the text row (no OPEN)" "$(printf '%s' "$obt" | grep '#216')" \
+    || ok "#581: ...and #216, whose work is dead, is a BARE STALE (no PR to name) (case 26)"
+
+  # THE SCAN ITSELF (case 25): a lock has no 100-issue limit, so the open-issue scan PAGINATES; and it is
+  # NEVER conditional, because a 304 could serve a `comments: 0` captured before a marker was posted and
+  # hide a live lock. `inm=none` and `paginate=1`, one transport over — read off the fixture's ledger.
+  reqs="$(curl -s "http://127.0.0.1:$OB_PORT/_requests")"
+  printf '%s' "$reqs" | jq -e 'any(.[]; .page=="2")' >/dev/null 2>&1 \
+    && ok "who: the open-issue scan PAGINATES — page 2 is fetched (a lock has no 100-issue limit) (case 25)" \
+    || bad "who scan must paginate" "issue-list requests: $reqs"
+  printf '%s' "$reqs" | jq -e 'all(.[]; .inm==false)' >/dev/null 2>&1 \
+    && ok "who: ...and is NEVER a conditional request — no If-None-Match may let a 304 hide a marker (case 25)" \
+    || bad "who scan must be unconditional (inm=none)" "issue-list requests: $reqs"
+
+  kill "$OB_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 25 (offboard-claims) — BATCH RESERVES an off-board claim's touch-set (#461/#581). The `who` legs
+# above prove the engine can READ a lock off the board; this proves the SCHEDULER honours it. Disjointness
+# is only sound if the reserved set is complete, and a claim lives off the board too: a marker on an issue
+# whose column flip failed (the board says Ready), or on one the board never listed. bash's `active_claims`
+# scans the repo's OPEN ISSUES (arm B) for exactly this; the engine's scan now does too, or `batch` hands
+# out a double-book. World (case 25's `seed_offboard_world`, batch slice, one transport over): #211 Ready
+# but HELD by wren-c22, #212 genuinely free, #213 Ready declaring `src/Off/Sub`, #215 an OFF-BOARD claim
+# held by puffin-h11 on `src/Off`. Only #212 has files no live marker touches.
+# ==================================================================================================
+OBB_OUT="$(mktemp)"; python3 "$HERE/offboardbatch_server.py" >"$OBB_OUT" 2>/dev/null & OBB_SRV=$!; OBB_PORT=""
+for _ in $(seq 1 50); do OBB_PORT="$(head -n1 "$OBB_OUT" 2>/dev/null)"; [ -n "$OBB_PORT" ] && break; sleep 0.1; done
+rm -f "$OBB_OUT"
+if [ -z "$OBB_PORT" ]; then bad "off-board batch fixture bound a port"; else
+  obbenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$OBB_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+               "$ENGINE" "$@"; }
+
+  # THE MACHINE CONTRACT: only the item no live marker touches. #211 is held (the board says Ready, the lock
+  # disagrees), #213 overlaps the OFF-BOARD #215's `src/Off`, and #210 is In progress — so #212 alone is free.
+  obbj="$(obbenv batch --repo FS.GG.Rendering --json 2>/dev/null)"; rc=$?
+  if [ "$rc" -eq 0 ] && [ "$obbj" = '["FS.GG.Rendering#212"]' ]; then
+    ok "batch: schedules only the item no live marker touches — reserves the off-board claim (case 25)"
+  else
+    bad "batch off-board --json" "expected [\"FS.GG.Rendering#212\"], got (rc=$rc): $obbj"
+  fi
+
+  obberr="$(obbenv batch --repo FS.GG.Rendering 2>&1 >/dev/null)"
+
+  # A BOARD ITEM WHOSE COLUMN LIES: #211 is Ready on the board, but its live marker HOLDS it. Reading the
+  # column instead of the lock would schedule an item a worker is standing in.
+  printf '%s' "$obberr" | grep -q 'FS.GG.Rendering#211 — already claimed by worker wren-c22' \
+    && ok "batch: skips a Ready item a marker actually holds — names the worker (case 25)" \
+    || bad "batch: #211 held-not-free" "$obberr"
+  # #428: the skip carries the LEASE WINDOW — 'should I wait?' is a number, not just 'it's taken'.
+  printf '%s' "$obberr" | grep -q 'already claimed by worker wren-c22 (lease frees in ~' \
+    && ok "batch: ...and names the lease window, not just the holder (#428)" \
+    || bad "batch: #211 lease window" "$obberr"
+
+  # THE OFF-BOARD RESERVATION: #213 declares `src/Off/Sub`, a subtree of the off-board #215's `src/Off`. A
+  # board-only scan never sees #215, so #213 would be handed puffin-h11's tree. The reservation must name the
+  # HOLDER, its ITEM, and the colliding paths — everything a blocked worker needs to act.
+  o213="$(printf '%s' "$obberr" | grep 'FS.GG.Rendering#213')"
+  printf '%s' "$o213" | grep -q 'overlaps in-flight work' \
+    && ok "batch: refuses to schedule over an OFF-BOARD claim's touch-set (case 25)" \
+    || bad "batch: #213 overlap" "$o213"
+  printf '%s' "$o213" | grep -q 'held by puffin-h11 on FS.GG.Rendering#215' \
+    && ok "batch: ...and names the OFF-BOARD holder and its item (#428, #461)" \
+    || bad "batch: #213 names off-board holder" "$o213"
+  printf '%s' "$o213" | grep -q 'held by puffin-h11 on FS.GG.Rendering#215 (lease frees in ~' \
+    && ok "batch: ...and the off-board claim's lease window (#428)" \
+    || bad "batch: #213 off-board lease window" "$o213"
+  printf '%s' "$o213" | grep -q 'src/Off/Sub  ⇄  src/Off' \
+    && ok "batch: ...and still shows WHICH paths collided (case 25)" \
+    || bad "batch: #213 collision paths" "$o213"
+
+  # #480/case 25: `next` shares batch's scan, so it reserves the off-board claim too — capped at one, the
+  # free item is what it hands out, never #213's double-book.
+  obbnext="$(obbenv next --repo FS.GG.Rendering 2>/dev/null)"
+  [ "$obbnext" = "FS.GG.Rendering#212" ] \
+    && ok "next: shares batch's off-board reservation — hands out the free item, not the collision (case 25)" \
+    || bad "next off-board" "expected FS.GG.Rendering#212, got: $obbnext"
+
+  # THE SCAN ITSELF (case 25, lines 156–165): had the candidate scan reused the ETag'd `issues` command, a
+  # live claim on the repo's 101st open issue would be invisible and `batch` would hand its touch-set away. So
+  # the off-board scan PAGINATES (page 2 fetched) and is NEVER conditional (a 304 could serve a pre-marker
+  # `comments: 0`). The SAME `Reads.openIssues` `who` uses, proven again at the SCHEDULER's surface.
+  obbreqs="$(curl -s "http://127.0.0.1:$OBB_PORT/_requests")"
+  printf '%s' "$obbreqs" | jq -e 'any(.[]; .page=="2")' >/dev/null 2>&1 \
+    && ok "batch: the candidate scan PAGINATES — page 2 is fetched, so a claim past page 1 is not missed (case 25)" \
+    || bad "batch scan must paginate" "issue-list requests: $obbreqs"
+  printf '%s' "$obbreqs" | jq -e 'all(.[]; .inm==false)' >/dev/null 2>&1 \
+    && ok "batch: ...and is NEVER conditional — no 304 may serve a pre-marker comments:0 (case 25)" \
+    || bad "batch scan must be unconditional (inm=none)" "issue-list requests: $obbreqs"
+
+  kill "$OBB_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 25 (offboard-claims) — the STARVED-QUEUE BANNER (#428). The scheduler above reserves off-board
+# and stale claims; this proves the AGGREGATE it renders when that reservation leaves NOTHING to hand
+# out. "nothing schedulable" over a busy repo reads as an empty backlog and sends a worker home — so a
+# starved queue must be called BUSY, name every holder, give the soonest lease, and — for a lease that
+# has EXPIRED — point at `reap`, the one blocker a worker clears alone. World (case 25's starved
+# section, one transport over): #221/#222/#224 are queued behind live claims (tern fresh, kite fresh,
+# ghost EXPIRED); #225 overlaps a MARKERLESS In-progress reserver (#226) — reserved, but no holder to
+# name and no lease to wait out; only #212's world (above) ever hands out work.
+# ==================================================================================================
+SQ_OUT="$(mktemp)"; python3 "$HERE/starvedqueue_server.py" >"$SQ_OUT" 2>/dev/null & SQ_SRV=$!; SQ_PORT=""
+for _ in $(seq 1 50); do SQ_PORT="$(head -n1 "$SQ_OUT" 2>/dev/null)"; [ -n "$SQ_PORT" ] && break; sleep 0.1; done
+rm -f "$SQ_OUT"
+if [ -z "$SQ_PORT" ]; then bad "starved-queue fixture bound a port"; else
+  sqenv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SQ_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" "$@"; }
+
+  # THE LOCKS STILL HOLD: a starved queue schedules nothing (the machine array is empty), but it is NOT
+  # the same fact as an empty backlog — the banner below is the whole difference.
+  sqj="$(sqenv batch --repo FS.GG.Rendering --json 2>/dev/null)"; rc=$?
+  [ "$rc" -eq 0 ] && [ "$sqj" = '[]' ] \
+    && ok "#428: a starved queue schedules NOTHING — the locks still hold (case 25)" \
+    || bad "#428: starved batch --json" "expected [] (rc=0), got (rc=$rc): $sqj"
+
+  sqerr="$(sqenv batch --repo FS.GG.Rendering 2>&1 >/dev/null)"
+
+  # THE BANNER: the queue is BUSY, and it names every holder so the worker knows who to talk to.
+  printf '%s' "$sqerr" | grep -q '3 item(s) are QUEUED BEHIND LIVE CLAIMS held by: ghost-222, kite-z01, tern-y99' \
+    && ok "#428: the starved queue is called BUSY and names every holder (case 25)" \
+    || bad "#428: queued-behind-claims banner" "$sqerr"
+  printf '%s' "$sqerr" | grep -q 'this queue is BUSY, not empty' \
+    && ok "#428: ...and says plainly this is not an empty backlog (case 25)" \
+    || bad "#428: BUSY-not-empty line" "$sqerr"
+
+  # THE SOONEST LEASE decides the wait — and an EXPIRED lease is a reap, not a wait, so it is the soonest
+  # of all (it frees NOW) and the advice points at `reap`, the one blocker a worker can clear alone.
+  printf '%s' "$sqerr" | grep -q 'soonest: lease EXPIRED — reapable' \
+    && ok "#428: the soonest lease is named — an EXPIRED one frees now (case 25)" \
+    || bad "#428: soonest lease" "$sqerr"
+  printf '%s' "$sqerr" | grep -q '1 of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo FS.GG.Rendering --apply' \
+    && ok "#428: ...and an expired lease is a REAP, with the exact command (case 25)" \
+    || bad "#428: expired-lease reap advice" "$sqerr"
+
+  # A DEAD holder is not a wait: the per-item reason says EXPIRED, not a countdown, so a worker does not
+  # go off to wait for a holder who is very likely gone.
+  printf '%s' "$sqerr" | grep -q '#224 — overlaps in-flight work held by ghost-222 on FS.GG.Rendering#216 (lease EXPIRED — reapable)' \
+    && ok "#428: an EXPIRED lease is a reap, never a wait — named on the item too (case 25)" \
+    || bad "#428: #224 expired per-item" "$sqerr"
+
+  # A MARKERLESS In-progress item RESERVES its files (arm A), so it must not be scheduled over — but it
+  # has no worker and no lease, so it is NOT a holder, NOT counted in the 3, and NEVER named "—".
+  printf '%s' "$sqerr" | grep -q '#225 — overlaps FS.GG.Rendering#226, which the board says is In progress with NO claim marker' \
+    && ok "#428: a markerless In-progress item is a reserver, not a holder (case 25)" \
+    || bad "#428: #225 markerless reserver" "$sqerr"
+  printf '%s' "$sqerr" | grep -q 'there is no lease to wait out; see: fsgg-coord who' \
+    && ok "#428: ...and it says there is no lease to wait out (case 25)" \
+    || bad "#428: #225 no-lease advice" "$sqerr"
+  printf '%s' "$sqerr" | grep -q 'held by —' \
+    && bad "#428: an unnameable reserver must never appear as a holder named '—'" "$sqerr" \
+    || ok "#428: an unnameable reserver never appears as a holder named '—' (case 25)"
+
+  # THE BANNER DOES NOT FIRE ON A HEALTHY QUEUE: the off-board world above HANDED OUT #212, so its stderr
+  # carries the per-item skips but NEVER the BUSY banner — a banner on a schedule that worked is noise
+  # that trains workers to skip stderr (#440). Re-run that world here and confirm the silence.
+  printf '%s' "$obberr" | grep -q 'QUEUED BEHIND LIVE CLAIMS' \
+    && bad "#428: a queue that DID hand out work must print no starved-queue banner" "$obberr" \
+    || ok "#428: a queue that handed out work prints NO starved-queue banner (case 25)"
+
+  kill "$SQ_SRV" 2>/dev/null
+fi
+
+# ---- INBOX: the worker mailbox, and the message that rides an OFF-BOARD claim (cases 22 + 25) --------
+#
+# `inbox` delivers what `say` posts. Case 22 certifies the mailbox contract (addressed + broadcast
+# delivery, the item named, the cursor advancing, a worker not seeing its OWN mail, `--peek` not
+# consuming); case 25 certifies that a message posted on an OFF-BOARD claim is delivered — which forces
+# `inbox` onto the SAME open-issue scan `who`/`reap`/`batch` run, or it drops the message. This is a pure
+# engine round-trip: the engine `say`s each message over HTTP and the engine `inbox`es it back — the
+# fixture seeds NO message, it only stores what the engine POSTs. #215 is OFF the board (only the
+# open-issue scan reaches it), so a mailbox reading the board's In-progress column alone would miss it.
+#
+# ONE shared cache dir for the whole slice (unlike the per-call `mktemp -d` elsewhere): the per-worker
+# inbox cursor is a file in it, and the cursor advancing between reads is half of what case 22 asserts.
+IBX_OUT="$(mktemp)"; python3 "$HERE/inbox_server.py" >"$IBX_OUT" 2>/dev/null & IBX_SRV=$!; IBX_PORT=""
+for _ in $(seq 1 50); do IBX_PORT="$(head -n1 "$IBX_OUT" 2>/dev/null)"; [ -n "$IBX_PORT" ] && break; sleep 0.1; done
+rm -f "$IBX_OUT"
+if [ -z "$IBX_PORT" ]; then bad "inbox fixture bound a port"; else
+  IBX_CACHE="$(mktemp -d)"
+  ibx() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$IBX_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$IBX_CACHE" \
+            "$ENGINE" "$@"; }
+
+  # puffin-h11 (who holds the OFF-BOARD #215) messages hoopoe-i22, then broadcasts to whoever is here.
+  ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to hoopoe-i22 --message 'I hold src/Off — stay out.' >/dev/null 2>&1
+  ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to '*' --message 'Broadcast to whoever is here.' >/dev/null 2>&1
+
+  inbox1="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering 2>/dev/null)"
+
+  # OFF-BOARD DELIVERY (case 25): the message rode #215, an issue the board never listed — delivered only
+  # because `inbox` ran the off-board open-issue scan, not the board column.
+  printf '%s' "$inbox1" | grep -q 'I hold src/Off — stay out.' \
+    && ok "inbox: delivers a message posted on an OFF-BOARD claim (case 25 — #215 is not on the board)" \
+    || bad "inbox off-board delivery" "$inbox1"
+  # A BROADCAST (to=*) reaches whoever reads (case 22).
+  printf '%s' "$inbox1" | grep -q 'Broadcast to whoever is here.' \
+    && ok "inbox: delivers a broadcast (to=*) (case 22)" \
+    || bad "inbox broadcast" "$inbox1"
+  # ...and it NAMES the item the message rode in on (case 22).
+  printf '%s' "$inbox1" | grep -q 'FS.GG.Rendering#215' \
+    && ok "inbox: names the item the message rode in on (case 22)" \
+    || bad "inbox names item" "$inbox1"
+
+  # THE CURSOR ADVANCED: a second read shows nothing new (case 22). The mail was consumed, not re-shown.
+  inbox2="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering 2>/dev/null)"
+  [ "$inbox2" = "no new messages for worker hoopoe-i22." ] \
+    && ok "inbox: the cursor advanced — nothing new on a second read (case 22)" \
+    || bad "inbox cursor advance" "expected 'no new messages...', got: $inbox2"
+
+  # A WORKER DOES NOT SEE ITS OWN MESSAGES (case 22): puffin-h11 sent both, so its own inbox is empty.
+  inboxself="$(ibx inbox --worker puffin-h11 --repo FS.GG.Rendering 2>/dev/null)"
+  [ "$inboxself" = "no new messages for worker puffin-h11." ] \
+    && ok "inbox: a worker does not see its OWN messages (case 22)" \
+    || bad "inbox self-filter" "expected 'no new messages...', got: $inboxself"
+
+  # --PEEK SHOWS NEW MAIL WITHOUT CONSUMING IT (case 22): post one more, peek it, then a plain read still
+  # sees it — the peek left the cursor where it was.
+  ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to hoopoe-i22 --message 'One more.' >/dev/null 2>&1
+  peek="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering --peek 2>/dev/null)"
+  printf '%s' "$peek" | grep -q 'One more.' \
+    && ok "inbox --peek: shows new mail (case 22)" \
+    || bad "inbox --peek shows" "$peek"
+  plain="$(ibx inbox --worker hoopoe-i22 --repo FS.GG.Rendering 2>/dev/null)"
+  printf '%s' "$plain" | grep -q 'One more.' \
+    && ok "inbox --peek: did NOT advance the cursor — the mail is still new (case 22)" \
+    || bad "inbox --peek no-advance" "$plain"
+
+  # case 24 (n): `say --to` NORMALIZES its target to a worker id. Ids are slug()'d at creation and `inbox`
+  # matches `.to` by EXACT string, so an unslugged `--to Heron-B71` would post a message its recipient
+  # (heron-b71) could never see — the message lands on the item but is addressed to an id nobody holds.
+  # The engine slugs the target and WARNS that it did so; `*` stays the literal broadcast (proven above).
+  normerr="$(ibx say --worker puffin-h11 'FS.GG.Rendering#215' --to 'Heron-B71' --message 'the impl is yours' 2>&1 >/dev/null)"
+  printf '%s' "$normerr" | grep -q "normalized from 'Heron-B71'" \
+    && ok "say: a mis-cased --to is normalized to the worker id (case 24 n)" \
+    || bad "say --to normalize warning" "$normerr"
+  # THE PROPERTY, round-tripped through the engine: the marker addresses the SLUG, so the slugged worker
+  # inboxes it. Had the engine posted `to=Heron-B71` verbatim, heron-b71 (exact-string match) would never
+  # see it — so delivery here IS the proof that `--to` was normalized to the id `inbox` matches.
+  inboxnorm="$(ibx inbox --worker heron-b71 --repo FS.GG.Rendering 2>/dev/null)"
+  printf '%s' "$inboxnorm" | grep -q 'the impl is yours' \
+    && ok "say: ...and the marker addresses the slug, so inbox matches it (case 24 n)" \
+    || bad "say --to slug round-trip" "$inboxnorm"
+
+  kill "$IBX_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 30 (pr-existence-697) — WHAT the orphaned PR SAYS, not merely that it exists. `who`/`reap` legs.
+#
+# #581 taught the tools that an open `item/<n>-*` PR is proof of life, and stopped there — so `reap` refused
+# such a claim and offered exactly one exit, "close it, then reap". For a PR that is GREEN and MERGEABLE that
+# exit DESTROYS the best work on the board. #697 reads the landable verdict (#720) so `who` flies the right
+# flag and `reap` speaks the right refusal. World (case 30's #697 seeds, one transport over): two OFF-BOARD
+# stale claims — #970 whose PR #701 is GREEN and MERGEABLE (LAND IT), #976 whose PR #705 is mergeable but has
+# checks still RUNNING (pending). `landable_server.py` scores each off its head SHA's workflow runs + check
+# runs (#720). The `adopt` command itself (case 30 parts 3–5) and case 31's superseded-run scoring are
+# separate slices; this proves the two TRUTH READS speak the verdict.
+# ==================================================================================================
+LND_OUT="$(mktemp)"; python3 "$HERE/landable_server.py" >"$LND_OUT" 2>/dev/null & LND_SRV=$!; LND_PORT=""
+for _ in $(seq 1 50); do LND_PORT="$(head -n1 "$LND_OUT" 2>/dev/null)"; [ -n "$LND_PORT" ] && break; sleep 0.1; done
+rm -f "$LND_OUT"
+if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
+  lnd() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$LND_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+            "$ENGINE" "$@"; }
+
+  # 1. `who` SAYS the work is finished. It is what a human reads immediately before reaping, so it is
+  #    exactly where "GREEN: LAND IT" has to appear — a bare `STALE (#701 OPEN)` reads as an abandoned
+  #    branch and the reader reaches for `reap` (#697).
+  wtext="$(lnd who --repo FS.GG.SDD 2>&1)"
+  printf '%s' "$wtext" | grep -q 'FS.GG.SDD#970 .*STALE (#701 OPEN — GREEN: LAND IT)' \
+    && ok "#697: who says a stale claim's GREEN PR is FINISHED work — 'STALE (#701 OPEN — GREEN: LAND IT)' (case 30)" \
+    || bad "#697: who GREEN: LAND IT row" "$wtext"
+  printf '%s' "$wtext" | grep -q 'fsgg-coord adopt FS.GG.SDD#970' \
+    && ok "#697: ...and points at the command that LANDS it, not the one that bins it (case 30)" \
+    || bad "#697: who points at adopt" "$wtext"
+  # A conflicted/pending PR is NOT green: #976's checks are still running, so its row must NOT say LAND IT.
+  printf '%s' "$wtext" | grep -q 'FS.GG.SDD#976 .*STALE (#705 OPEN — checks running)' \
+    && ok "#697: a mergeable PR whose checks are RUNNING is 'checks running', not LAND IT (case 30)" \
+    || bad "#697: who pending row" "$wtext"
+
+  # 2. `who --json` carries the PR's STATE on the stale row, not just its existence.
+  wjson="$(lnd who --repo FS.GG.SDD --json 2>/dev/null)"
+  [ "$(printf '%s' "$wjson" | jq -r '.[] | select(.number==970) | .prState')" = "green" ] \
+    && ok "#697: who --json carries prState 'green' on the finished orphan (case 30)" \
+    || bad "#697: #970 prState" "$(printf '%s' "$wjson" | jq -c '.[] | select(.number==970)')"
+  [ "$(printf '%s' "$wjson" | jq -r '.[] | select(.number==976) | .prState')" = "pending" ] \
+    && ok "#697: ...and 'pending' on the one whose CI has not settled (case 30)" \
+    || bad "#697: #976 prState" "$(printf '%s' "$wjson" | jq -c '.[] | select(.number==976)')"
+
+  # 3. THE ONE THAT MATTERS. `reap` must not point the destructive verb at finished work: it REFUSES the
+  #    green orphan, calls it FINISHED, names `adopt`, and NEVER advises "close it, then reap".
+  rerp="$(lnd reap --repo FS.GG.SDD --apply 2>&1)"
+  g970="$(printf '%s' "$rerp" | grep -A2 'FS.GG.SDD#970')"
+  printf '%s' "$rerp" | grep -q 'REFUSING to reap FS.GG.SDD#970' \
+    && ok "#697: reap REFUSES a claim whose PR is green and mergeable (case 30)" \
+    || bad "#697: reap refuses #970" "$rerp"
+  printf '%s' "$rerp" | grep -q 'FS.GG.SDD#970.*GREEN and MERGEABLE' \
+    && ok "#697: ...and calls the work GREEN and MERGEABLE — FINISHED (case 30)" \
+    || bad "#697: reap #970 FINISHED" "$rerp"
+  printf '%s' "$rerp" | grep -q 'fsgg-coord adopt FS.GG.SDD#970' \
+    && ok "#697: ...and names \`adopt\` as the remedy (case 30)" \
+    || bad "#697: reap #970 names adopt" "$rerp"
+  case "$rerp" in
+    *"close it, then reap"*)
+      bad "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun" "$rerp" ;;
+    *) ok "#697: reap must NEVER advise closing a GREEN, mergeable PR — that is the loaded gun (case 30)" ;;
+  esac
+
+  # 4. A MERGEABLE PR WHOSE CHECKS ARE STILL RUNNING is not abandoned — `reap` must refuse it too, and must
+  #    NOT tell anyone to close it: "Not green YET" is not "not green" (case 30, #697 4e's reap leg).
+  printf '%s' "$rerp" | grep -q 'REFUSING to reap FS.GG.SDD#976' \
+    && ok "#697: reap REFUSES a PR whose checks are still RUNNING — pending is not passing (case 30)" \
+    || bad "#697: reap refuses #976" "$rerp"
+  p976="$(printf '%s' "$rerp" | grep -A2 'FS.GG.SDD#976')"
+  printf '%s' "$p976" | grep -q 'Do NOT close it' \
+    && ok "#697: ...it says the work is UNFINISHED, and to look again — 'Do NOT close it' (case 30)" \
+    || bad "#697: reap #976 Do NOT close it" "$p976"
+
+  # 5. THE #581 GUARANTEE STILL HOLDS through the new verdict: a refusal DELETES NOTHING — both live claims
+  #    survive. A refusal that deleted anyway is the exact bug #581/#697 exist to prevent.
+  [ "$(deletes_on "$LND_PORT")" = '[]' ] \
+    && ok "#697: both claims SURVIVE the refusals — reap deleted NOTHING (case 30)" \
+    || bad "#697: reap refusal must not delete" "deletes: $(deletes_on "$LND_PORT")"
+
+  kill "$LND_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 30 (pr-existence-697) — the `adopt` COMMAND. Land another worker's orphaned PR through ONE verified
+# command that cannot be talked into landing anything else. The GATE is what makes it safe: `adopt` lands
+# FINISHED work (green + mergeable) and nothing else. The transfer reuses `claim` (one lock, one CAS). World
+# (case 30's #697 seeds, one transport over — `adopt_server.py`): #970 GREEN (LAND IT, transfer), #971
+# CONFLICTED, #972 mergeable-but-ZERO-checks (NOT green, #606), #973 a LIVE claim (a steal, not an orphan),
+# #974 NO open PR (merely dead), #975 mergeable=null-then-false (the lazy re-read sees the conflict), #976
+# checks RUNNING (pending). Every refusal leaves the lock UNTOUCHED.
+# ==================================================================================================
+ADP_OUT="$(mktemp)"; python3 "$HERE/adopt_server.py" >"$ADP_OUT" 2>/dev/null & ADP_SRV=$!; ADP_PORT=""
+for _ in $(seq 1 50); do ADP_PORT="$(head -n1 "$ADP_OUT" 2>/dev/null)"; [ -n "$ADP_PORT" ] && break; sleep 0.1; done
+rm -f "$ADP_OUT"
+if [ -z "$ADP_PORT" ]; then bad "adopt fixture bound a port"; else
+  adp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$ADP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+            FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  # The workers whose markers sit on an issue right now (the transfer POSTs; a refusal does not).
+  workers_on() { curl -s "http://127.0.0.1:$ADP_PORT/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                   | jq -r '[.[].body | capture("worker=(?<w>[^\\s>]+)").w] | join(",")' 2>/dev/null; }
+
+  # THE REFUSALS FIRST (they touch nothing), so the green transfer's POSTed marker cannot leak into them.
+
+  # 4a. A CONFLICTED PR is not finished — rebasing it is AUTHORING, not landing.
+  conf="$(adp adopt FS.GG.SDD#971 --worker heron-697 2>&1 || true)"
+  printf '%s' "$conf" | grep -q 'CONFLICTED' \
+    && ok "#697: adopt REFUSES a conflicted PR — rebasing is authoring, not landing (case 30)" \
+    || bad "#697: adopt #971 conflicted" "$conf"
+  [ "$(workers_on 971)" = "ghost-971" ] \
+    && ok "#697: ...and does NOT take the lock on it (case 30)" \
+    || bad "#697: adopt #971 lock leaked" "workers: $(workers_on 971)"
+
+  # 4b. ZERO check runs is NOT green (#606) — an absent subject is a finding, not a pass.
+  nock="$(adp adopt FS.GG.SDD#972 --worker heron-697 2>&1 || true)"
+  printf '%s' "$nock" | grep -q 'NOT green' \
+    && ok "#697/#606: a mergeable PR with ZERO check runs is NOT green — adopt refuses it (case 30)" \
+    || bad "#697: adopt #972 zero-checks" "$nock"
+  [ "$(workers_on 972)" = "ghost-972" ] \
+    && ok "#697/#606: ...and does NOT take the lock on untested work (case 30)" \
+    || bad "#697: adopt #972 lock leaked" "workers: $(workers_on 972)"
+
+  # 4c. A LIVE claim is not an orphan. Adopting one is a STEAL.
+  livec="$(adp adopt FS.GG.SDD#973 --worker heron-697 2>&1 || true)"
+  printf '%s' "$livec" | grep -q 'held by a LIVE claim' \
+    && ok "#697: adopt REFUSES a LIVE claim — a worker that is alive is not an orphan (case 30)" \
+    || bad "#697: adopt #973 live" "$livec"
+  [ "$(workers_on 973)" = "busy-973" ] \
+    && ok "#697: ...and the live worker keeps its lock (case 30)" \
+    || bad "#697: adopt #973 lock stolen" "workers: $(workers_on 973)"
+
+  # 4d. No PR at all: nothing to land — the claim is merely DEAD, and `reap` is the right tool.
+  nopr="$(adp adopt FS.GG.SDD#974 --worker heron-697 2>&1 || true)"
+  printf '%s' "$nopr" | grep -q 'no finished work to adopt' \
+    && ok "#697: adopt REFUSES an item with no open PR — there is no finished work to land (case 30)" \
+    || bad "#697: adopt #974 no-pr" "$nopr"
+  [ "$(workers_on 974)" = "ghost-974" ] \
+    && ok "#697: ...and leaves the dead claim for reap (case 30)" \
+    || bad "#697: adopt #974 lock leaked" "workers: $(workers_on 974)"
+
+  # 5. `mergeable` IS COMPUTED LAZILY: the first read is `null`, a later one carries the truth. A null must
+  #    be RE-READ, not believed — else a CONFLICTED PR reads as landable.
+  lazy="$(adp adopt FS.GG.SDD#975 --worker heron-697 2>&1 || true)"
+  printf '%s' "$lazy" | grep -q 'CONFLICTED' \
+    && ok "#697: a null \`mergeable\` is re-read, and the PR's REAL state (conflicted) is seen (case 30)" \
+    || bad "#697: adopt #975 lazy" "$lazy"
+  [ "$(workers_on 975)" = "ghost-975" ] \
+    && ok "#697: ...and the lock is not taken on a PR we misread as landable (case 30)" \
+    || bad "#697: adopt #975 lock leaked" "workers: $(workers_on 975)"
+
+  # 4e. Checks still RUNNING — a pending check is not a passing one.
+  pend="$(adp adopt FS.GG.SDD#976 --worker heron-697 2>&1 || true)"
+  printf '%s' "$pend" | grep -q 'checks RUNNING' \
+    && ok "#697: adopt refuses a PR whose checks are still RUNNING — pending is not passing (case 30)" \
+    || bad "#697: adopt #976 pending" "$pend"
+  [ "$(workers_on 976)" = "ghost-976" ] \
+    && ok "#697: ...and does NOT take the lock on unfinished work (case 30)" \
+    || bad "#697: adopt #976 lock leaked" "workers: $(workers_on 976)"
+
+  # 3. THE TRANSFER. A GREEN, mergeable orphan is adopted: adopt confirms GREEN and MERGEABLE, hands the
+  #    worker the MERGE (not a rebuild, not a close), and TRANSFERS the claim under `claim`'s CAS.
+  adopt970="$(adp adopt FS.GG.SDD#970 --worker heron-697 2>&1 || true)"
+  printf '%s' "$adopt970" | grep -q 'GREEN and MERGEABLE' \
+    && ok "#697: adopt confirms the PR is green and mergeable before touching anything (case 30)" \
+    || bad "#697: adopt #970 GREEN banner" "$adopt970"
+  printf '%s' "$adopt970" | grep -q 'Do NOT rebuild it, and do NOT close PR #701' \
+    && ok "#697: adopt hands the worker the MERGE, and says not to close the PR (case 30)" \
+    || bad "#697: adopt #970 epilogue" "$adopt970"
+  # THE TRANSFER ITSELF: heron-697's marker is now on #970, so the live winner (ghost-970 is stale) is the
+  # adopter — the claim is theirs, under one CAS, the total order intact.
+  printf '%s' "$(workers_on 970)" | grep -q 'heron-697' \
+    && ok "#697: adopt TRANSFERS the claim — the adopter's marker is posted under the CAS (case 30)" \
+    || bad "#697: adopt #970 transfer" "workers: $(workers_on 970)"
+
+  kill "$ADP_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 31 (superseded-run-720) — a SUPERSEDED run is not a RED one, driven through the `landable` COMMAND.
+#
+# `Landable.score`/`supersede` (Core, unit-tested) fixed the scoring for case 30's SINGLE-run worlds. Case
+# 31's world is MULTIPLE runs on one SHA — a force-pushed PR whose first suite was `cancelled` when a second
+# trigger of its own concurrency group replaced it. The raw aggregate saw `cancelled` and called green,
+# mergeable, finished work red, and it was `adopt` (whose whole population is force-pushed PRs) that paid.
+# This slice surfaces the verdict as a first-class QUERY — `landable <pr> --repo` prints the word on stdout
+# and puts the decision in the exit code — and drives case 31's #720 legs through the engine over HTTP
+# (`landable_super_server.py`, one PR per leg, no board/claim machinery — the scoring, isolated).
+#
+# Disposed on the record (ADR-0040 §5): (a) the exit CODES — bash numbers the poll loop 0/3/1
+# (green/pending/red), the engine keeps 3==red across every verdict command and gives PENDING its own 7, so
+# the LITERALS differ while the PROPERTY (green 0; pending a distinct retryable code; red a distinct
+# do-not-wait code) does not; (b) leg 9's argv-128KB cap is bash's — the bash rollup piped both lists to jq
+# through argv and a real run set tripped MAX_ARG_STRLEN; the engine reads the JSON off HttpClient, so the
+# failure mode is STRUCTURALLY ABSENT, and the fat payload is served only to prove the engine rolls it up.
+# NOT covered here (a follow-up sub-slice, #724): `landable --wait` — the poll loop that does not believe an
+# early green and waits for the run set to STOP GROWING. Case 31 stays PARTIAL until it lands.
+# ==================================================================================================
+SUP_OUT="$(mktemp)"; python3 "$HERE/landable_super_server.py" >"$SUP_OUT" 2>/dev/null & SUP_SRV=$!; SUP_PORT=""
+for _ in $(seq 1 50); do SUP_PORT="$(head -n1 "$SUP_OUT" 2>/dev/null)"; [ -n "$SUP_PORT" ] && break; sleep 0.1; done
+rm -f "$SUP_OUT"
+if [ -z "$SUP_PORT" ]; then bad "landable-super fixture bound a port"; else
+  sup()    { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SUP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD 2>/dev/null || true; }
+  # >/dev/null 2>&1, BOTH: the command prints its VERDICT on stdout and the DECISION in the exit code —
+  # leaking stdout here would make this helper return "green0" and every leg compare against a word it
+  # never expected. `|| rc=$?` is not optional under `set -e`: the whole point of legs below is a NON-zero
+  # exit, and letting it escape would kill the run on a PASSING assertion.
+  sup_rc() { local rc=0; FSGG_GITHUB_API_BASE="http://127.0.0.1:$SUP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+               FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+               FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" landable "$1" --repo FS.GG.SDD >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+
+  # 1. THE BUG, IN THE SHAPE .github#718 CARRIED. A cancelled run REPLACED by a later run of its own
+  #    concurrency group is superseded — evidence of nothing — and so are ITS check-runs; both drop.
+  [ "$(sup 801)" = "green" ] \
+    && ok "#720: a cancelled run REPLACED by a later run of its own group is superseded — the PR is GREEN (case 31)" \
+    || bad "#720: superseded -> green" "got: $(sup 801)"
+
+  # 2. ...and the drop rule is not a hole. A cancelled run NOBODY re-ran is still a finding.
+  [ "$(sup 802)" = "red" ] \
+    && ok "#720: a cancelled run with NO later run of its group is still RED — the drop is not a hole (case 31)" \
+    || bad "#720: lone cancelled -> red" "got: $(sup 802)"
+
+  # 3. THE TRAP THE OBVIOUS FIX FALLS INTO. A workflow_dispatch run shares the SHA and path but is a
+  #    DIFFERENT concurrency group, so it supersedes NOTHING — keying on the path alone would let its
+  #    vacuous green license the drop of a real cancelled run (#703).
+  [ "$(sup 803)" = "red" ] \
+    && ok "#720: a workflow_dispatch run does NOT supersede the pull_request run it shares a SHA with — still RED (case 31)" \
+    || bad "#720: cross-group no supersede -> red" "got: $(sup 803)"
+
+  # 4. #606 SURVIVES THE REWRITE. Zero runs is an EMPTY SUBJECT, not a clean one.
+  [ "$(sup 804)" = "red" ] \
+    && ok "#720/#606: ZERO workflow runs is a FINDING, not a pass — the rewrite does not fail open (case 31)" \
+    || bad "#720: zero runs -> red" "got: $(sup 804)"
+
+  # 5. A run still going is not a run that passed.
+  [ "$(sup 805)" = "pending" ] \
+    && ok "#720: an in-flight run is PENDING, never green (case 31)" \
+    || bad "#720: in_progress -> pending" "got: $(sup 805)"
+
+  # 6. THE FAIL-OPEN THE FIX ITSELF COULD HAVE INTRODUCED. Scoring runs ALONE would go blind to a
+  #    third-party app, which appears only in the check-runs — a failing codecov must still red the PR.
+  [ "$(sup 806)" = "red" ] \
+    && ok "#720: a FAILING third-party check still reds the PR — the Actions rollup does not go blind (case 31)" \
+    || bad "#720: foreign failing check -> red" "got: $(sup 806)"
+
+  # 7. A RUN CAN FAIL WITH NO CHECK RUNS. `startup_failure` (malformed YAML) concludes the RUN `failure`
+  #    and never creates a job — and its GREEN SIBLING is the assertion: a check-runs-only rollup would see
+  #    an all-green check set and merge a PR whose workflow never even parsed.
+  [ "$(sup 807)" = "red" ] \
+    && ok "#720: a startup_failure run reds the PR — even with NO check runs, and a green sibling workflow (case 31)" \
+    || bad "#720: startup_failure -> red" "got: $(sup 807)"
+
+  # 8. ...AND THE MIRROR: a CHECK RUN can fail while its RUN succeeds (job-level continue-on-error). Branch
+  #    protection scores check-runs, so scoring runs alone would call this green. The verdict is the UNION.
+  [ "$(sup 808)" = "red" ] \
+    && ok "#720: a FAILED check-run reds the PR even though its workflow run concluded success (case 31)" \
+    || bad "#720: failed check, green run -> red" "got: $(sup 808)"
+
+  # 9. A REAL-SIZED PAYLOAD. bash's rollup handed both lists to jq through ARGV and a ~150KB run set tripped
+  #    MAX_ARG_STRLEN (128KB) — jq died, the verdict was `unknown`, `adopt` refused every real PR. The
+  #    engine reads the JSON off HttpClient: no argv, the failure mode is structurally absent. Proven green.
+  [ "$(sup 809)" = "green" ] \
+    && ok "#720: a REAL-SIZED payload still rolls up GREEN — the engine reads JSON, never argv (128KB cap absent) (case 31)" \
+    || bad "#720: fat payload -> green" "got: $(sup 809)"
+
+  # 10. THE EXIT CODE carries the decision, so a poll loop tells "keep waiting" from "stop" without parsing
+  #    prose (#724, /pnext-item §5). green 0 · pending 7 (the ONE worth retrying) · red 3 (do NOT wait).
+  #    bash numbers these 0/3/1 — disposed above as the property (three distinguishable states, green 0).
+  [ "$(sup_rc 801)" = "0" ] \
+    && ok "#720: landable exits 0 on green (case 31)" \
+    || bad "#720: exit 0 on green" "got: $(sup_rc 801)"
+  [ "$(sup_rc 805)" = "7" ] \
+    && ok "#720: landable exits 7 on pending — the ONLY verdict worth retrying (bash 3, disposed) (case 31)" \
+    || bad "#720: exit 7 on pending" "got: $(sup_rc 805)"
+  [ "$(sup_rc 802)" = "3" ] \
+    && ok "#720: landable exits 3 on red — do not merge, and do not wait (bash 1, disposed) (case 31)" \
+    || bad "#720: exit 3 on red" "got: $(sup_rc 802)"
+
+  kill "$SUP_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 31 (#724) — `landable --wait`, the poll loop that does NOT believe an early green.
+#
+# The single-shot verdict above fixed the SCORING; `--wait` carries the one thing a single read cannot —
+# refusing a PREMATURE green. GitHub registers a PR's runs over 20-60s, so the subject set is empty at first
+# (a `red` that is really "not started yet") and then GROWS (an early all-green is a PARTIAL rollup). The
+# engine's `Landable.settled` decides break-vs-wait: it keeps waiting while zero runs have registered, and it
+# believes a green only once the subject count has STOPPED GROWING across two consecutive polls.
+#
+# `landable_wait_server.py` is STATEFUL where it must be: sha810's runs/checks GROW on the SECOND read
+# (exactly as GitHub schedules them), so the 810 leg is invoked ONCE and its exit captured — a second call
+# would advance the fixture's read counter and score against a set that had already grown.
+#
+# Disposed on the record (ADR-0040 §5): the exit CODES are the engine's own — green 0, red/conflicted 3 —
+# where bash's poll loop numbers green/red 0/1; run.sh asserts the PROPERTY (green 0; red/conflicted a
+# distinct do-not-wait code), not bash's literals. `--interval 0` drives the poll with no wall-clock.
+# ==================================================================================================
+WAIT_OUT="$(mktemp)"; python3 "$HERE/landable_wait_server.py" >"$WAIT_OUT" 2>/dev/null & WAIT_SRV=$!; WAIT_PORT=""
+for _ in $(seq 1 50); do WAIT_PORT="$(head -n1 "$WAIT_OUT" 2>/dev/null)"; [ -n "$WAIT_PORT" ] && break; sleep 0.1; done
+rm -f "$WAIT_OUT"
+if [ -z "$WAIT_PORT" ]; then bad "landable-wait fixture bound a port"; else
+  # `landable --wait --tries N --interval 0` -> the command's exit status (the poll-loop contract). Both
+  # stdout and stderr to /dev/null: the verdict word on stdout would otherwise fold into the captured value.
+  lndw() { local rc=0; FSGG_GITHUB_API_BASE="http://127.0.0.1:$WAIT_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+             FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" landable "$1" --repo FS.GG.SDD --wait --tries "${2:-3}" --interval 0 >/dev/null 2>&1 \
+             || rc=$?; printf '%s' "$rc"; }
+
+  # 1. --wait AGREES with the single-shot verdict on a SETTLED PR. 801 is the superseded-but-green PR: its
+  #    run set does not grow, so the count is stable on the second poll and the green is believed.
+  wr="$(lndw 801)"
+  [ "$wr" = "0" ] \
+    && ok "#724: --wait returns GREEN (exit 0) on a settled, superseded-but-green PR (case 31)" \
+    || bad "#724: --wait settled green -> 0" "got: $wr"
+
+  # 2. TRAP ONE — THE REGISTRATION RACE. 804 has ZERO runs, forever. Zero runs score red (#606), but a
+  #    waiter must read that as "CI has not started YET" and keep waiting; only when the runs never register
+  #    (tries exhausted) does the red stand — the honest #606 finding. Engine red is exit 3 (bash 1, disposed).
+  wr="$(lndw 804 2)"
+  [ "$wr" = "3" ] \
+    && ok "#724: zero runs is 'CI has not started', not 'CI failed' — but if they never register, RED (exit 3) (case 31)" \
+    || bad "#724: --wait registration race -> 3" "got: $wr"
+
+  # 3. TRAP TWO — THE PARTIAL ROLLUP, the one that MERGES A BAD PR. sha810 grows: the first poll sees one
+  #    green run, the next sees that run PLUS a failed one. A waiter that trusts the first all-green returns
+  #    green; the engine waits for the set to STOP GROWING and returns RED (exit 3). Invoked ONCE — the
+  #    fixture is stateful, so a second call would score against an already-grown set.
+  wr="$(lndw 810 4)"
+  [ "$wr" = "3" ] \
+    && ok "#724: --wait does NOT believe an early all-green — it waits for the run set to STOP GROWING (exit 3) (case 31)" \
+    || bad "#724: --wait growing set -> 3" "got: $wr"
+
+  # 4. A CONFLICTED PR gets no CI at all (GitHub cannot build refs/pull/N/merge while it conflicts), so
+  #    waiting on one waits forever. It must come back AT ONCE — --tries 30 with no wall-clock proves it did
+  #    not spin. Engine conflicted is exit 3 (bash 1, disposed).
+  wr="$(lndw 704 30)"
+  [ "$wr" = "3" ] \
+    && ok "#724: --wait returns CONFLICTED immediately (exit 3) — no amount of waiting fixes a conflict (case 31)" \
+    || bad "#724: --wait conflicted -> 3" "got: $wr"
+
+  kill "$WAIT_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 32 (#737) — `--require NAME` / `--sha SHA`, the assertions the CALLER adds to the verdict.
+#
+# These are what let the LAST hand-rolled copy of this gate — `skill-registry-autofix.yml`, which merges
+# unattended — call `landable` rather than carry its own rollup (#724). Each closes a hole the command
+# could not see:
+#
+#   --require  the check that DECIDES the bot's PR (`registry-coherence`) is NOT required by branch
+#              protection and must not be (#549), so nothing else ever looks at it — and an ABSENT check
+#              reads exactly like a passing one to any "is anything red?" rollup (#606).
+#   --sha      the bot force-pushes and then gates; `pulls/{n}` lags, so for a moment it names the
+#              PREVIOUS commit, whose checks are green and are about code that would not be merged.
+#
+# THE LOAD-BEARING LEGS ARE THE PAIRS (902 and 905): the SAME fixture world scores GREEN without the flag
+# and PENDING with it. Anything less than that contrast would not prove the flag does anything.
+#
+# An unmet assertion is PENDING (exit 7), never green: it is usually transient (registration, a superseded
+# suite's replacement, GitHub catching up with a push), so `--wait` rides it out and refuses when the tries
+# run out. Single-shot here — one read, one verdict, no wall-clock.
+# ==================================================================================================
+REQ_OUT="$(mktemp)"; python3 "$HERE/landable_require_server.py" >"$REQ_OUT" 2>/dev/null & REQ_SRV=$!; REQ_PORT=""
+for _ in $(seq 1 50); do REQ_PORT="$(head -n1 "$REQ_OUT" 2>/dev/null)"; [ -n "$REQ_PORT" ] && break; sleep 0.1; done
+rm -f "$REQ_OUT"
+if [ -z "$REQ_PORT" ]; then bad "landable-require fixture bound a port"; else
+  # `lndr <pr> [extra flags...]` -> the verdict WORD on stdout. `lndr_rc` -> the exit code.
+  lndr() { local pr="$1"; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$REQ_PORT" GITHUB_TOKEN=t \
+             FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+             FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+             "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" 2>/dev/null || true; }
+  lndr_rc() { local pr="$1" rc=0; shift; FSGG_GITHUB_API_BASE="http://127.0.0.1:$REQ_PORT" GITHUB_TOKEN=t \
+                FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+                FSGG_COORD_MERGEABLE_RETRY_MS=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+                "$ENGINE" landable "$pr" --repo FS.GG.SDD "$@" >/dev/null 2>&1 || rc=$?; printf '%s' "$rc"; }
+
+  # 1. The required check reported and is green — so is the PR. --require must not make a green PR unlandable.
+  r="$(lndr 901 --require registry-coherence)"
+  [ "$r" = "green" ] \
+    && ok "#737: --require is satisfied by a green check of that name -> green (case 32)" \
+    || bad "#737: --require satisfied -> green" "got: $r"
+
+  # 2. THE LOAD-BEARING LEG. 902 is green on every check it HAS, and the subject is absent. Without
+  #    --require that is a GREEN — the merge the bot's own gate exists to refuse (#642/#425).
+  r="$(lndr 902)"
+  [ "$r" = "green" ] \
+    && ok "#737: WITHOUT --require, a PR whose subject never reported is GREEN — the #606 hole (case 32)" \
+    || bad "#737: 902 without --require -> green" "got: $r"
+
+  # ...and WITH it, the same world is pending. The flag is the whole difference.
+  r="$(lndr 902 --require registry-coherence)"
+  [ "$r" = "pending" ] \
+    && ok "#737: WITH --require, the SAME world is PENDING — an absent check is never a green (case 32)" \
+    || bad "#737: 902 with --require -> pending" "got: $r"
+
+  # ...and it is exit 7 (pending), not 0. The exit code is what the bot's `|| exit` reads.
+  r="$(lndr_rc 902 --require registry-coherence)"
+  [ "$r" = "7" ] \
+    && ok "#737: an unmet --require exits 7 (pending), never 0 (case 32)" \
+    || bad "#737: 902 --require -> exit 7" "got: $r"
+
+  # 3. A RED check outranks a missing required one. `red` is settled and must be reported AT ONCE; making
+  #    --wait spin out its whole budget before announcing a failure it already knew would be a nuisance
+  #    gate, and a nuisance gate is one people learn to skip (#498).
+  r="$(lndr 903 --require registry-coherence)"
+  [ "$r" = "red" ] \
+    && ok "#737: a RED check outranks a missing required one — a finding is not a 'not yet' (case 32)" \
+    || bad "#737: 903 -> red" "got: $r"
+
+  # 4. A SUPERSEDED copy of the required check does NOT satisfy it (#710). The cancelled suite's
+  #    registry-coherence is dropped with its run — and it is exactly the check whose verdict we lack.
+  r="$(lndr 904 --require registry-coherence)"
+  [ "$r" = "pending" ] \
+    && ok "#737: a SUPERSEDED copy of the required check does NOT satisfy it (case 32)" \
+    || bad "#737: 904 -> pending" "got: $r"
+
+  # 5. THE OTHER LOAD-BEARING LEG. 905's PR still names shaOld, whose checks are green. Without --sha the
+  #    command takes the PR's head on trust and scores the OLD commit: GREEN. That is the read the bot's
+  #    gate avoids by pinning `git rev-parse HEAD`, and it is why --sha exists.
+  r="$(lndr 905)"
+  [ "$r" = "green" ] \
+    && ok "#737: WITHOUT --sha, a lagging PR object scores the PREVIOUS commit's green checks (case 32)" \
+    || bad "#737: 905 without --sha -> green" "got: $r"
+
+  # ...and naming the commit we MEAN refuses it until GitHub catches up.
+  r="$(lndr 905 --sha shaNew)"
+  [ "$r" = "pending" ] \
+    && ok "#737: WITH --sha, a PR that still names another head is PENDING, never green (case 32)" \
+    || bad "#737: 905 with --sha -> pending" "got: $r"
+
+  # ...and --sha naming the head the PR ACTUALLY has is a no-op: the assertion is met, so it scores as before.
+  r="$(lndr 905 --sha shaOld)"
+  [ "$r" = "green" ] \
+    && ok "#737: --sha that AGREES with the PR's head changes nothing (case 32)" \
+    || bad "#737: 905 --sha shaOld -> green" "got: $r"
+
+  # 6. The pending verdict SAYS WHICH assertion is unmet, on stderr. One word is honest and useless on the
+  #    case that never resolves (a RENAMED job): the operator is left with no thread to pull.
+  err="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$REQ_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+           FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_MERGEABLE_RETRY_MS=0 \
+           FSGG_COORD_CACHE="$(mktemp -d)" \
+           "$ENGINE" landable 902 --repo FS.GG.SDD --require registry-coherence 2>&1 >/dev/null || true)"
+  printf '%s' "$err" | grep -q 'registry-coherence' \
+    && ok "#737: a pending on an unmet assertion NAMES it on stderr (case 32)" \
+    || bad "#737: pending names the check" "got: $err"
+
+  kill "$REQ_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 24 — THE LOCK FAILS CLOSED UNDER ADVERSARIAL INTERLEAVINGS.
+#
+# Case 24's hardest legs are the interleavings in which two workers could end up believing they hold ONE
+# item — the failure the whole ADR-0027 protocol exists to prevent. The engine already implements the
+# fail-closed behaviour (a forged marker does not hold; a malformed one BLOCKS; an expired worker cannot
+# resurrect its claim; a failed or empty CAS re-read is a LOSS, never an orphaned lock); this drives those
+# certified answers through the compiled binary over HTTP, with no bash in the pipeline. The letters match
+# the legs in `tests/fsgg-coord/cases/24-issue-boundary-adversarial.sh`.
+#
+# `casadversarial_server.py` is one FS.GG.SDD world: each issue carries the marker state its leg needs, and
+# legs (g)/(i) MUTATE it — `claim` POSTs a marker, the re-read faults (g) or comes back empty (i), and the
+# withdraw DELETEs the marker it posted. `/_deletes` proves the failed CAS removed our OWN marker (no
+# orphan); `/_patches` proves a refused heartbeat patched NOTHING.
+#
+# Disposed on the record (ADR-0040 §5): where the engine's wording differs from bash's literal, the
+# PROPERTY is asserted, not the spelling — (c) `held by heron-b71` vs `worker 'heron-b71' does` (both name
+# the holder); (d) `claim --force` vs `fsgg-coord claim` (both point at re-claiming); (f) `unparseable
+# lock` vs `unparsed-marker` (both BLOCK the item); (g) `could not take … a LOSS` vs `removed our marker`/
+# `nothing was claimed` (both DELETE the posted marker at `/_deletes` and claim NOTHING via a non-zero exit).
+# ==================================================================================================
+ADV_OUT="$(mktemp)"; python3 "$HERE/casadversarial_server.py" >"$ADV_OUT" 2>/dev/null & ADV_SRV=$!; ADV_PORT=""
+for _ in $(seq 1 50); do ADV_PORT="$(head -n1 "$ADV_OUT" 2>/dev/null)"; [ -n "$ADV_PORT" ] && break; sleep 0.1; done
+rm -f "$ADV_OUT"
+if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
+  ADV_BASE="http://127.0.0.1:$ADV_PORT"
+  adv() { FSGG_GITHUB_API_BASE="$ADV_BASE" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+            FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+            "$ENGINE" "$@"; }
+  # Capture stdout+stderr AND the exit code in ONE invocation into `ADV_OUT`/`ADV_RC`. The legs below
+  # drive stateful, MUTATING commands (claim POSTs and withdraws), so running a command twice — once for
+  # its text, once for its exit code — would exercise a DIFFERENT read on the second call (e.g. #90's
+  # re-read fault would land on the second run's INITIAL read). One invocation per leg keeps the exit-code
+  # assertion and the text assertion about the SAME run.
+  adv_cap() { ADV_OUT="$(adv "$@" 2>&1)"; ADV_RC=$?; }
+
+  # (e) A claim marker QUOTED inside a message does not forge a lock — the marker is only a marker at the
+  #     START of a comment body (`^<!--\s*fsgg:claim`). #88 carries a `fsgg:msg` that quotes a claim marker
+  #     in prose and no real marker, so the item is FREE and claims cleanly.
+  adv_cap claim 'FS.GG.SDD#88' --worker vole-c88
+  { [ "$ADV_RC" = "0" ] && printf '%s' "$ADV_OUT" | grep -q 'claimed FS.GG.SDD#88'; } \
+    && ok "case24(e): a marker quoted inside a message does NOT hold the item — it is still claimable" \
+    || bad "case24(e): forged-marker-in-message must not block the claim" "rc=$ADV_RC got: $ADV_OUT"
+
+  # (f) A marker we cannot parse a worker out of FAILS CLOSED: it BLOCKS the item rather than reading as
+  #     free (a lock you cannot read is still a lock). #89's marker has no `worker=`. Engine says
+  #     "unparseable lock" (bash: "unparsed-marker" — disposed as the property).
+  adv_cap claim 'FS.GG.SDD#89' --worker vole-c89
+  [ "$ADV_RC" != "0" ] \
+    && ok "case24(f): a malformed marker BLOCKS the item (claim fails closed, non-zero)" \
+    || bad "case24(f): a malformed marker must block the claim" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'unparseable lock' \
+    && ok "case24(f): ...and the refusal names the unparseable marker (bash 'unparsed-marker', disposed)" \
+    || bad "case24(f): refusal must name the unparseable lock" "$ADV_OUT"
+
+  # (c) THE RESURRECTION BUG. A worker whose lease expired must NOT heartbeat its marker back to life once
+  #     another worker legitimately holds the item — it must be told to STOP. #86 carries ghost-222 STALE
+  #     under heron-b71 FRESH.
+  adv_cap heartbeat 'FS.GG.SDD#86' --worker ghost-222
+  [ "$ADV_RC" != "0" ] \
+    && ok "case24(c): an expired worker cannot resurrect its claim under a NEW holder (heartbeat refused)" \
+    || bad "case24(c): heartbeat under a new holder must fail" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'heron-b71' && printf '%s' "$ADV_OUT" | grep -q 'STOP working' \
+    && ok "case24(c): ...it names the worker that now holds it (heron-b71) and says STOP working it" \
+    || bad "case24(c): refusal must name the holder and say STOP working" "$ADV_OUT"
+  # ...and the refused renew patched NOTHING — the fixture recorded zero comment PATCHes.
+  [ "$(curl -s "$ADV_BASE/_patches")" = "[]" ] \
+    && ok "case24(c): the refused renew patched NOTHING (no comment PATCH reached the fixture)" \
+    || bad "case24(c): a refused heartbeat must not PATCH" "$(curl -s "$ADV_BASE/_patches")"
+
+  # (d) An expired lease is refused even when nobody else took the item — the promise lapsed; re-claim.
+  adv_cap heartbeat 'FS.GG.SDD#87' --worker ghost-333
+  [ "$ADV_RC" != "0" ] \
+    && ok "case24(d): an expired lease cannot be renewed in place (heartbeat refused)" \
+    || bad "case24(d): an expired lease heartbeat must fail" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'EXPIRED' && printf '%s' "$ADV_OUT" | grep -qi 'claim' \
+    && ok "case24(d): ...it says the lease EXPIRED and points at re-claiming (bash 'fsgg-coord claim', disposed)" \
+    || bad "case24(d): refusal must say EXPIRED and name the re-claim remedy" "$ADV_OUT"
+
+  # (g) A transient read failure on the CAS re-read must not ORPHAN the marker we just posted — an orphaned
+  #     live marker blocks every other worker for a full lease while nobody works the item. #90 starts
+  #     empty; its re-read FAULTS (502). The claim withdraws its own marker (ONE invocation — the fixture
+  #     faults every #90 read after the first, so a second run would fault the initial read instead).
+  del_before="$(curl -s "$ADV_BASE/_deletes")"
+  adv_cap claim 'FS.GG.SDD#90' --worker teal-e55
+  [ "$ADV_RC" != "0" ] \
+    && ok "case24(g): a failed CAS re-read is a LOSS (claim exits non-zero — nothing was claimed)" \
+    || bad "case24(g): a failed CAS re-read must not announce a claim" "rc=$ADV_RC $ADV_OUT"
+  # The posted marker was DELETEd — "removed our marker" (bash), proven at the transport: /_deletes grew.
+  del_after="$(curl -s "$ADV_BASE/_deletes")"
+  [ "$del_after" != "$del_before" ] \
+    && ok "case24(g): ...and it REMOVED our own marker — no orphan survives the failed re-read (a DELETE fired)" \
+    || bad "case24(g): a failed re-read must withdraw the just-posted marker" "before=$del_before after=$del_after"
+
+  # (i) THE FAIL-OPEN. If the CAS re-read shows NO live marker, our own marker is missing — a peer collected
+  #     it, or the read lagged our write. We cannot demonstrate we hold the lock, so we must NOT announce
+  #     that we do. "We cannot tell" is a LOSS. #92 starts empty and its re-read stays empty (vanished).
+  adv_cap claim 'FS.GG.SDD#92' --worker teal-e55
+  [ "$ADV_RC" != "0" ] \
+    && ok "case24(i): an empty CAS re-read is a LOSS, not a win (claim exits non-zero)" \
+    || bad "case24(i): an empty CAS re-read must not be a win" "rc=$ADV_RC $ADV_OUT"
+  printf '%s' "$ADV_OUT" | grep -q 'marker vanished' \
+    && ok "case24(i): ...it says the marker vanished" \
+    || bad "case24(i): refusal must say the marker vanished" "$ADV_OUT"
+  case "$ADV_OUT" in
+    *"claimed FS.GG.SDD#92"*) bad "case24(i): must not announce a lock it cannot show" "$ADV_OUT" ;;
+    *) ok "case24(i): ...and it does NOT announce a lock it cannot show" ;;
+  esac
+
+  # The workers whose claim markers sit on an issue right now — the `worker=` of every LIVE marker the
+  # /comments read serves back (the fixture reflects the DELETEs, so a collected stale marker is gone).
+  adv_workers_on() { curl -s "$ADV_BASE/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                       | jq -r '[.[].body | capture("worker=(?<w>[^\\s>]+)").w] | join(",")' 2>/dev/null; }
+  # Messages addressed `to=<w>` on an issue — the collect NOTIFY is an ordinary `fsgg:msg` comment.
+  adv_msgto() { curl -s "$ADV_BASE/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                  | jq --arg w "$2" '[.[] | select(.body|test("fsgg:msg")) | select(.body|test("to="+$w))] | length' 2>/dev/null; }
+
+  # (a) A stale marker must be COLLECTED by the next claimant, never merely ignored — an ignored marker is
+  #     what `heartbeat` later resurrects underneath the new holder (two live markers, one item). #84 carries
+  #     ghost-111's STALE claim; heron-b71 claims over it (--force to skip the #516 pre-hold scan).
+  adv_cap claim 'FS.GG.SDD#84' --worker heron-b71 --force
+  printf '%s' "$ADV_OUT" | grep -q "collected worker 'ghost-111' expired claim" \
+    && ok "case24(a): claim COLLECTS the stale marker it claims over (names the evicted worker)" \
+    || bad "case24(a): claim must collect the stale marker it claims over" "$ADV_OUT"
+  [ "$(adv_workers_on 84)" = "heron-b71" ] \
+    && ok "case24(a): ...and exactly ONE marker survives — the stale one is gone" \
+    || bad "case24(a): exactly one marker must survive" "workers: $(adv_workers_on 84)"
+  [ "$(adv_msgto 84 ghost-111)" = "1" ] \
+    && ok "case24(a): ...and the collected worker is TOLD, not silently evicted (a fsgg:msg to=ghost-111)" \
+    || bad "case24(a): the collected worker must be notified" "msgs to=ghost-111: $(adv_msgto 84 ghost-111)"
+
+  # (b) Re-claiming when MY OWN marker went stale must renew a SINGLE marker, not mint a second. #85 carries
+  #     otter-b55's own STALE claim; otter-b55 re-claims (no --force — it holds nothing else live).
+  adv_cap claim 'FS.GG.SDD#85' --worker otter-b55
+  { [ "$ADV_RC" = "0" ] && [ "$(adv_workers_on 85)" = "otter-b55" ]; } \
+    && ok "case24(b): a worker whose OWN marker went stale ends with ONE marker (a renew, not a duplicate)" \
+    || bad "case24(b): a self-renew must leave exactly one marker" "rc=$ADV_RC workers: $(adv_workers_on 85)"
+  # Renewing your OWN stale marker is not an eviction to announce — you do not message yourself.
+  case "$ADV_OUT" in
+    *"collected worker 'otter-b55'"*) bad "case24(b): a self-renew must not announce collecting itself" "$ADV_OUT" ;;
+    *) ok "case24(b): ...and it does NOT announce collecting its own marker (no self-eviction)" ;;
+  esac
+
+  # (l) Two claimants collecting the SAME expired marker: the loser's collect DELETE 404s because the winner
+  #     already removed it. "Already gone" is the goal state of a collector, so the claim still WINS. #95's
+  #     ghost-444 marker DELETEs with a 404 (GH_DELETE_404=818, the corpus's model).
+  adv_cap claim 'FS.GG.SDD#95' --worker heron-b71 --force
+  { [ "$ADV_RC" = "0" ] && printf '%s' "$ADV_OUT" | grep -q 'claimed FS.GG.SDD#95'; } \
+    && ok "case24(l): a 404 collecting an already-gone stale marker is NOT fatal — the claim wins" \
+    || bad "case24(l): a benign 404 on collection must not fail the claim" "rc=$ADV_RC $ADV_OUT"
+  [ "$(adv_workers_on 95)" = "heron-b71" ] \
+    && ok "case24(l): ...and 'already gone' leaves exactly the new holder" \
+    || bad "case24(l): a concurrent-GC 404 must leave only the new holder" "workers: $(adv_workers_on 95)"
+
+  # (j) A marker bearing OUR id is NOT proof it is ours — rules 4/5 (#419) can hand one id to several
+  #     workers — and the re-claim (heartbeat) path bypasses the CAS entirely, so it is exactly where a
+  #     same-id sibling silently adopts another worker's lock. It must WARN there, not only on the fresh
+  #     path. #93 carries a FRESH marker whose worker id is DERIVED from a shared claude-code session id
+  #     (`Identity.nameFromSeed`); re-claiming under that SAME session (no --worker — the id comes from
+  #     CLAUDE_CODE_SESSION_ID) renews the ONE marker in place (a PATCH, not a duplicate) and warns.
+  #     Disposed on the record (ADR-0040 §5): the engine's wording differs from bash's literal — engine
+  #     `held … (lease renewed)` + `NOTE — … adopted ITS lock` + `WARNING — … may not be unique to this
+  #     worker`, bash the same three strings — the PROPERTY is asserted (renew in place, one marker, warn
+  #     the shared-id hazard), not the exact spelling.
+  j93="$(FSGG_GITHUB_API_BASE="$ADV_BASE" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+           FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+           env -u FSGG_WORKER -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID \
+               CLAUDE_CODE_SESSION_ID=309bd638-8a1c-42b7-952b-898efb8d1064 \
+           "$ENGINE" claim 'FS.GG.SDD#93' 2>&1 || true)"
+  printf '%s' "$j93" | grep -q 'lease renewed' \
+    && ok "case24(j): a re-claim of our own live marker RENEWS it in place (lease renewed)" \
+    || bad "case24(j): a re-claim must renew in place, not duplicate" "$j93"
+  printf '%s' "$j93" | grep -q 'adopted ITS lock' \
+    && ok "case24(j): ...and WARNS it never ran the CAS (adopted ITS lock)" \
+    || bad "case24(j): a re-claim under a shared id must warn 'adopted ITS lock'" "$j93"
+  printf '%s' "$j93" | grep -q 'may not be unique to this worker' \
+    && ok "case24(j): ...and names the shared-id hazard (may not be unique to this worker)" \
+    || bad "case24(j): a re-claim must name the shared-id hazard" "$j93"
+  j93n="$(curl -s "$ADV_BASE/repos/FS-GG/FS.GG.SDD/issues/93/comments" | jq '[.[]|select(.body|test("fsgg:claim"))]|length' 2>/dev/null)"
+  [ "$j93n" = "1" ] \
+    && ok "case24(j): ...and still exactly ONE marker (a renew, not a duplicate)" \
+    || bad "case24(j): a re-claim must leave exactly one marker" "markers on #93: $j93n"
+
+  kill "$ADV_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# case 24 (legs h + m) — reap's MUTATING interleavings: it does not cause the double-hold it CLEANS UP,
+# and a failed delete is REPORTED, not swallowed.
+#
+# `Reapable` is a SNAPSHOT verdict — proven against the scan's read — so `reap` RE-VERIFIES the marker's
+# freshness immediately before breaking the lock, and DELETES before it would ever notify. One
+# `reap --repo FS.GG.SDD --apply` over `reap_race_server.py`'s two-item world drives both legs:
+#   (h) #91  the holder HEARTBEATED between the scan and the delete (the marker's `updated_at` flips
+#            stale→fresh on the RE-VERIFY read) → reap SKIPS it: "renewed since the scan", marker SURVIVES.
+#            This is `GH_REAP_RACE=91` re-expressed at the HTTP layer.
+#   (m) #96  the marker's DELETE FAILS (500, `GH_FAIL_DELETE=819`) → reap REPORTS "FAILED", LEAVES the
+#            marker (still held), and does NOT tell the worker (reap posts no notify — the delete comes
+#            first, so a failed delete never leaves a worker told-to-stop over a marker that still holds).
+#
+# Disposed on the record (ADR-0040 §5): the engine's reap posts NO notify (leg m's "worker not notified"
+# is structural, not an ordering it could get wrong), and its FAILED/skipped wording is its own — the
+# PROPERTY is asserted (a renewed lock is skipped and survives; a failed delete is reported and the marker
+# stands), counted at the HTTP layer via `/_deletes` and the /comments read-back.
+# ==================================================================================================
+RR_OUT="$(mktemp)"; python3 "$HERE/reap_race_server.py" >"$RR_OUT" 2>/dev/null & RR_SRV=$!; RR_PORT=""
+for _ in $(seq 1 50); do RR_PORT="$(head -n1 "$RR_OUT" 2>/dev/null)"; [ -n "$RR_PORT" ] && break; sleep 0.1; done
+rm -f "$RR_OUT"
+if [ -z "$RR_PORT" ]; then bad "reap-race fixture bound a port"; else
+  RR_BASE="http://127.0.0.1:$RR_PORT"
+  rr_workers_on() { curl -s "$RR_BASE/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                      | jq -r '[.[].body | capture("worker=(?<w>[^\\s>]+)").w] | join(",")' 2>/dev/null; }
+  rr_out="$(FSGG_GITHUB_API_BASE="$RR_BASE" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" reap --repo FS.GG.SDD --apply 2>&1 || true)"
+
+  # (h) A claim renewed between the scan and the delete is SKIPPED, and its marker SURVIVES.
+  printf '%s' "$rr_out" | grep -q 'renewed since the scan' \
+    && ok "case24(h): reap RE-VERIFIES — a claim renewed between the scan and the delete is SKIPPED" \
+    || bad "case24(h): a claim renewed since the scan must be skipped" "$rr_out"
+  [ "$(rr_workers_on 91)" = "finch-a3f" ] \
+    && ok "case24(h): ...and its marker SURVIVES the reap (finch-a3f still holds #91)" \
+    || bad "case24(h): a renewed claim's marker must survive" "workers on #91: $(rr_workers_on 91)"
+  # The skip DELETED nothing on #91 — the re-verify short-circuited before the break.
+  [ "$(curl -s "$RR_BASE/_deletes" | jq 'index(816)')" = "null" ] \
+    && ok "case24(h): ...and reap DELETED nothing on the renewed claim (no 816 in /_deletes)" \
+    || bad "case24(h): a skipped reap must delete nothing" "deletes: $(curl -s "$RR_BASE/_deletes")"
+
+  # (m) A failed DELETE is REPORTED ("FAILED"), the marker STAYS, and the worker is NOT told (reap deletes
+  #     before it would notify, and this engine's reap posts no notify — so a failed delete strands nobody).
+  printf '%s' "$rr_out" | grep -q 'FAILED' \
+    && ok "case24(m): reap reports a failed delete ('FAILED'), it is not swallowed" \
+    || bad "case24(m): a failed delete must be reported" "$rr_out"
+  [ "$(rr_workers_on 96)" = "ghost-555" ] \
+    && ok "case24(m): ...and a failed delete leaves the marker in place (ghost-555 still holds #96)" \
+    || bad "case24(m): a failed delete must leave the marker" "workers on #96: $(rr_workers_on 96)"
+  # No fsgg:msg addressed to ghost-555 anywhere — reap posts no notify, so nothing told the worker it was
+  # released while its marker still held the item (the ordering leg m guards, structural in the engine).
+  [ "$(curl -s "$RR_BASE/repos/FS-GG/FS.GG.SDD/issues/96/comments" | jq '[.[]|select(.body|test("fsgg:msg"))|select(.body|test("to=ghost-555"))]|length')" = "0" ] \
+    && ok "case24(m): ...and does NOT tell the worker it was released (no fsgg:msg to=ghost-555)" \
+    || bad "case24(m): a failed reap must not notify the worker" "messages to ghost-555 present"
+
+  kill "$RR_SRV" 2>/dev/null
+fi
+
+# ==================================================================================================
+# CASE 43 (kit-digest-and-argv) — THE LAST CORPUS CASE. Two guarantees, and case 43 is FULL with them.
+# ==================================================================================================
+# (A) THE KIT-DIGEST OBLIGATION IS OBSERVED, NOT INFERRED (#469/#563/#588). `registry/repos.lock` pins a
+# content digest of every kit source (ADR-0019, #527); editing one and not relocking reds `main`. The
+# warning that names it used to INFER the obligation from what a worker DECLARED ("is `registry/repos.yml`
+# in your touch-set?"), which FAILED OPEN after #527 moved the digests into the generated `repos.lock`:
+# declaring `repos.yml` silenced the warning while the lock was still stale. A DECLARATION is not the
+# obligation; a MATCHING DIGEST is — so the engine recomputes the digest off the tree and LOOKS. That read
+# is a pure filesystem read (`FSGG_KIT_ROOT` stands a throwaway tree up), independent of the transport; the
+# fixture exists only so the `widen` it rides can LAND (#706 requires the widener to hold the lock). #74 is
+# held by kite-469 with no neighbour, so the widen lands and the #353 re-check is DISJOINT (exit 0).
+KITROOT="$(mktemp -d)/kitroot"
+mkdir -p "$KITROOT/.claude/skills/pnext-item" "$KITROOT/.agents/skills/pnext-item" \
+         "$KITROOT/scripts" "$KITROOT/registry"
+# (re)write the tree and relock it, so the lock is HONEST before each scenario (the corpus's `kit_seed`).
+kit_seed() {
+  printf 'skill body v1\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  cp "$KITROOT/.claude/skills/pnext-item/SKILL.md" "$KITROOT/.agents/skills/pnext-item/SKILL.md"
+  printf '#!/usr/bin/env bash\n# client v1\n' >"$KITROOT/scripts/fsgg-coord"
+  { printf '# registry/repos.lock — GENERATED.\n'
+    printf '%s  .claude/skills/pnext-item\n' "$(sha256sum "$KITROOT/.claude/skills/pnext-item/SKILL.md" | cut -d' ' -f1)"
+    printf '%s  scripts/fsgg-coord\n'        "$(sha256sum "$KITROOT/scripts/fsgg-coord" | cut -d' ' -f1)"
+  } >"$KITROOT/registry/repos.lock"
+}
+KIT_OUT="$(mktemp)"; python3 "$HERE/kit_server.py" >"$KIT_OUT" 2>/dev/null & KIT_SRV=$!; KIT_PORT=""
+for _ in $(seq 1 50); do KIT_PORT="$(head -n1 "$KIT_OUT" 2>/dev/null)"; [ -n "$KIT_PORT" ] && break; sleep 0.1; done
+rm -f "$KIT_OUT"
+if [ -z "$KIT_PORT" ]; then bad "kit fixture bound a port"; else
+  # widen with an EXPLICIT kit root, so the digest can be made genuinely stale.
+  kd() { FSGG_KIT_ROOT="$KITROOT" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" GITHUB_TOKEN=t \
+           FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+           FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" widen "$1" --worker kite-469 --paths "$2" 2>&1; }
+
+  # NEGATIVE CONTROL FIRST — a tree whose lock MATCHES must produce NO warning. If this ever goes green by
+  # accident (a broken root, an unreadable lock), every positive assertion below is vacuous (#563).
+  kit_seed; w_clean="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord')"
+  printf '%s' "$w_clean" | grep -q 'KIT DIGEST' \
+    && bad "#563: a lock that MATCHES must NOT warn — the obligation is met (case 43)" "$w_clean" \
+    || ok "#563: a lock that MATCHES must NOT warn — the obligation is met (case 43)"
+
+  # (1) A STALE CLIENT digest is OBSERVED and named — regardless of what the touch-set declares.
+  kit_seed; printf '# client v2 — edited\n' >>"$KITROOT/scripts/fsgg-coord"
+  w469="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord, tests/fsgg-coord/run.sh')"
+  printf '%s' "$w469" | grep -q 'KIT DIGEST' \
+    && ok "#469: widen NAMES a kit source whose digest is now STALE (case 43)" || bad "#469 KIT DIGEST" "$w469"
+  printf '%s' "$w469" | grep -q 'scripts/fsgg-coord' \
+    && ok "#469: ...naming the stale source itself (case 43)" || bad "#469 names the stale source" "$w469"
+  printf '%s' "$w469" | grep -q 'repos.sh relock' \
+    && ok "#469: ...and prints the CURRENT regenerate command (case 43)" || bad "#469 relock command" "$w469"
+  printf '%s' "$w469" | grep -q 'repos-registry-selftest' \
+    && ok "#469: ...and says which gate will red main (case 43)" || bad "#469 names the gate" "$w469"
+  printf '%s' "$w469" | grep -q 'do NOT reserve it' \
+    && ok "#469: ...and says NOT to reserve the generated lock (#309/#527) (case 43)" || bad "#469 do-not-reserve" "$w469"
+  # #588: the advice must NOT name `repos.sh digest` — it still exists but writes nothing now.
+  printf '%s' "$w469" | grep -q 'repos.sh digest' \
+    && bad "#588: the advice must not name repos.sh digest — it writes nothing now (case 43)" "$w469" \
+    || ok "#588: the advice does NOT name the no-op repos.sh digest (case 43)"
+  # ...and it STILL widens. Advisory, never fatal: `repos-registry-selftest` is the authority.
+  printf '%s' "$w469" | grep -q 'widened FS.GG.SDD#74' \
+    && ok "#469: ...while STILL widening (advisory, not fatal) (case 43)" || bad "#469 still widens" "$w469"
+
+  # (2) THE FAIL-OPEN, PINNED. Declaring `registry/repos.yml` used to SILENCE this. It must NOT: the lock
+  #     is still stale, and main is still red. This is the assertion #563 exists for.
+  w_yml="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord, registry/repos.yml')"
+  printf '%s' "$w_yml" | grep -q 'KIT DIGEST' \
+    && ok "#563: declaring registry/repos.yml must NOT silence a genuinely stale lock (case 43)" \
+    || bad "#563 repos.yml must not silence" "$w_yml"
+
+  # (3) A STALE SKILL digest is observed too — the coupling is not client-specific.
+  kit_seed; printf 'skill body v2\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  cp "$KITROOT/.claude/skills/pnext-item/SKILL.md" "$KITROOT/.agents/skills/pnext-item/SKILL.md"
+  w469s="$(kd 'FS.GG.SDD#74' '.claude/skills/pnext-item/**')"
+  printf '%s' "$w469s" | grep -q '.claude/skills/pnext-item' \
+    && ok "#469: a SKILL source is content-addressed too, and is named (case 43)" || bad "#469 skill source named" "$w469s"
+
+  # (4) SKILL ROOTS — the byte-identical union (ADR-0011/0014) is OBSERVED. Edit one root and not the other:
+  #     the `roots` gate reds main, and the tool must say so with the mirror command that fixes it.
+  kit_seed; printf 'skill body v2 — one root only\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  w_roots="$(kd 'FS.GG.SDD#74' '.claude/skills/pnext-item/**')"
+  printf '%s' "$w_roots" | grep -q 'SKILL ROOTS' \
+    && ok "#563: diverged skill roots are NAMED (case 43)" || bad "#563 SKILL ROOTS" "$w_roots"
+  printf '%s' "$w_roots" | grep -q '.agents/skills/pnext-item' \
+    && ok "#563: ...with the mirror command that fixes it (case 43)" || bad "#563 mirror command" "$w_roots"
+  # ...and a CLIENT kit has no mirror, so a client-only staleness must NOT nag about roots.
+  kit_seed; printf '# client v2\n' >>"$KITROOT/scripts/fsgg-coord"
+  w_client="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord')"
+  printf '%s' "$w_client" | grep -q 'SKILL ROOTS' \
+    && bad "#469: a CLIENT kit must NOT be told to mirror skill roots (case 43)" "$w_client" \
+    || ok "#469: a CLIENT kit is NOT told to mirror skill roots (case 43)"
+
+  # (5) No lock to read — a RECEIVER repo mirrors the kit but not the registry. Stay silent rather than
+  #     nagging every worker in every downstream repo about a file they do not have.
+  w469r="$(FSGG_KIT_ROOT="$(dirname "$KITROOT")/no-such-root" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" \
+             GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+             FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" widen 'FS.GG.SDD#74' --worker kite-469 --paths 'scripts/fsgg-coord' 2>&1)"
+  printf '%s' "$w469r" | grep -q 'KIT DIGEST' \
+    && bad "#469: no lock to read -> silent (receiver repos have no registry) (case 43)" "$w469r" \
+    || ok "#469: no lock to read -> silent (receiver repos have no registry) (case 43)"
+
+  kill "$KIT_SRV" 2>/dev/null
+fi
+
+# (B) THE CLAIM SCAN MUST NOT TRAVEL THROUGH `argv` (#497) — STRUCTURALLY ABSENT IN THE ENGINE, and proven.
+# bash's `active_claims` funnelled the whole candidate set back through the jq COMMAND LINE, so once the
+# org's open-issue bodies crossed MAX_ARG_STRLEN (128 KiB, July 2026), `execve` returned E2BIG, jq never
+# ran, and EVERY claim-aware read (who/reap/batch/take/inbox/widen) died at once — a loud outage (#461
+# refused to report the empty set as "nobody holds anything"), but one no waiting would clear. DISPOSED ON
+# THE RECORD (ADR-0040 §5, exactly as case 31 leg 9's argv-128 KiB cap): the engine reads each body as JSON
+# off `HttpClient` and never marshals the set through argv, so E2BIG is STRUCTURALLY ABSENT. The fixture
+# serves a candidate set BIGGER than the cap only to prove the engine READS a real-sized set — the property
+# the corpus pins — rather than the plumbing failing at size.
+ARGV_OUT="$(mktemp)"; python3 "$HERE/argv_server.py" >"$ARGV_OUT" 2>/dev/null & ARGV_SRV=$!; ARGV_PORT=""
+for _ in $(seq 1 50); do ARGV_PORT="$(head -n1 "$ARGV_OUT" 2>/dev/null)"; [ -n "$ARGV_PORT" ] && break; sleep 0.1; done
+rm -f "$ARGV_OUT"
+if [ -z "$ARGV_PORT" ]; then bad "argv fixture bound a port"; else
+  fatwho="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$ARGV_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+              FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+              "$ENGINE" who --repo FS.GG.Audio --json 2>&1 || true)"
+  # The fixture really is over the cap — otherwise everything below is vacuous. Three ~50 KiB bodies.
+  fatbytes="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$ARGV_PORT" curl -s "http://127.0.0.1:$ARGV_PORT/repos/FS-GG/FS.GG.Audio/issues" | wc -c)"
+  [ "$fatbytes" -gt 131072 ] \
+    && ok "#497: the fixture candidate set really exceeds MAX_ARG_STRLEN ($fatbytes > 131072 bytes) (case 43)" \
+    || bad "#497: the fixture set must EXCEED 131072 bytes or it tests nothing" "$fatbytes"
+  # The scan READS it. Pre-fix bash died with `Argument list too long` / `invalid JSON text` / #461's
+  # `cannot read the claim set`; the engine never touches argv, so none of those can appear.
+  case "$fatwho" in
+    *"cannot read the claim set"*|*"Argument list too long"*|*"--argjson"*)
+      bad "#497: a claim set over the arg cap must still be READ, not die (case 43)" "$fatwho" ;;
+    *) ok "#497: a claim set over the arg cap is still READ, not died (structurally absent in the engine) (case 43)" ;;
+  esac
+  [ "$(printf '%s' "$fatwho" | jq -r '.[] | select(.number==530) | .worker' 2>/dev/null)" = "kite-497" ] \
+    && ok "#497: ...and the claim inside that oversized set is reported, with its holder (case 43)" \
+    || bad "#497: the claim in the oversized set must be reported" "$fatwho"
+  # The scan stays HONEST at size: the two chatty-but-markerless issues are not in-flight work, and a body
+  # big enough to break the plumbing must not become a claim.
+  [ "$(printf '%s' "$fatwho" | jq -c '[.[] | select(.number >= 530 and .number <= 532) | .number] | sort' 2>/dev/null)" = "[530]" ] \
+    && ok "#497: ...and chatty markerless issues in that set are still not claims (case 43)" \
+    || bad "#497: chatty markerless issues must not become claims" "$fatwho"
+
+  kill "$ARGV_SRV" 2>/dev/null
 fi
 
 echo

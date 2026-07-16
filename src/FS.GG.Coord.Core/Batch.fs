@@ -63,6 +63,124 @@ module Batch =
 
         | result, _ -> Schedulability.explain leaseMinutes d.Item result
 
+    /// A passed-over candidate that is QUEUED BEHIND A LIVE CLAIM — a real marker holds it, or it overlaps
+    /// one. The age is the HOLDER's, so its lease window can be computed; `KnownLiveWork` is true only for a
+    /// claim whose own PR proves the work outlived its lease (#581), because a lapsed-but-alive lease is
+    /// evidence to talk, never a lease to reap.
+    type private QueuedClaim =
+        { Worker: WorkerId
+          Holder: Ref
+          AgeSeconds: int
+          KnownLiveWork: bool }
+
+    let private itemAge (item: Item) =
+        match item.Claim with
+        | Some(c, _) -> c.AgeSeconds
+        | None -> -1
+
+    /// The passed-over items queued behind a LIVE CLAIM, in decision order — the ones for which "wait for a
+    /// worker" or "reap a dead lease" is a real instruction. A candidate qualifies when its own lock holds
+    /// it (`HeldBy`/`HeldByLiveWork`) or it overlaps one (`OverlapsInFlight` whose holder is a `LiveClaim`).
+    /// A markerless In-progress reserver (`Unowned`), a batch-member peer, or an unnameable holder is NOT
+    /// one: none has a worker to talk to or a lease to wait out, so folding them in would advertise a wait
+    /// that nothing ends (#428).
+    let private queuedBehindClaims (result: BatchResult) : QueuedClaim list =
+        result.Decisions
+        |> List.choose (fun d ->
+            match d.Result, d.CollidedWith with
+            | HeldBy w, _ ->
+                Some
+                    { Worker = w
+                      Holder = d.Item.Ref
+                      AgeSeconds = itemAge d.Item
+                      KnownLiveWork = false }
+            | HeldByLiveWork(w, _), _ ->
+                Some
+                    { Worker = w
+                      Holder = d.Item.Ref
+                      AgeSeconds = itemAge d.Item
+                      KnownLiveWork = true }
+            | OverlapsInFlight _, Some(LiveClaim(w, holder, age)) ->
+                Some
+                    { Worker = w
+                      Holder = holder
+                      AgeSeconds = age
+                      KnownLiveWork = false }
+            | _ -> None)
+
+    /// A lease a `reap` would collect: expired by the clock, and NOT one whose PR proves the work is alive.
+    let private leaseExpired (leaseMinutes: int) (q: QueuedClaim) =
+        not q.KnownLiveWork && q.AgeSeconds >= 0 && q.AgeSeconds > leaseMinutes * 60
+
+    /// THE STARVED-QUEUE BANNER (#428). A batch that hands out NOTHING over a queue full of items QUEUED
+    /// BEHIND LIVE CLAIMS reads exactly like an empty backlog — and a worker who reads "nothing schedulable"
+    /// goes home from a repo with work in it. So when that is what happened, say the queue is BUSY, name
+    /// every holder (who to talk to), give the SOONEST lease (whether the wait is worth it at all), and —
+    /// for a lease that has already EXPIRED — point at `reap`, because a dead lease is the one blocker a
+    /// worker clears themselves, a collection rather than a wait.
+    ///
+    /// Returns [] whenever the queue is NOT starved: work WAS handed out (a `chosen` batch is not starved),
+    /// or nothing is queued behind a live claim (a queue starved by blockers or columns is #440's business,
+    /// and it is told per-item). A BUSY banner on a healthy queue is noise that trains workers to skip
+    /// stderr — the very habit #440 was closed to break.
+    let starvedBanner (leaseMinutes: int) (result: BatchResult) : string list =
+        if not (List.isEmpty result.Chosen) then
+            []
+        else
+            match queuedBehindClaims result with
+            | [] -> []
+            | queued ->
+                let holders =
+                    queued
+                    |> List.map (fun q -> q.Worker.Value)
+                    |> List.distinct
+                    |> List.sort
+                    |> String.concat ", "
+
+                let expired = queued |> List.filter (leaseExpired leaseMinutes)
+
+                // The soonest lease to free. A reapable EXPIRED lease frees NOW, so it is the soonest of all.
+                // Otherwise the window that closes first is the one with the LARGEST age — but only among
+                // claims whose lease is still LIVE: a `HeldByLiveWork` claim is over its lease by the clock
+                // yet is NOT reapable (#581), so letting its age drive `leaseWindow` would print a phantom
+                // "lease EXPIRED — reapable" here with no reap advice beside it. If no live lease remains to
+                // wait on (every queued claim is a live-work over-run, or ageless), we cannot name a window.
+                let soonest =
+                    if not (List.isEmpty expired) then
+                        "lease EXPIRED — reapable"
+                    else
+                        match
+                            queued
+                            |> List.map (fun q -> q.AgeSeconds)
+                            |> List.filter (fun a -> a >= 0 && a <= leaseMinutes * 60)
+                        with
+                        | [] -> "lease unknown"
+                        | ages -> Schedulability.leaseWindow leaseMinutes (List.max ages)
+
+                // Repo-scoped by construction: every queued claim is in the batch's one repo, so its holder
+                // names the repo the `reap` remedy runs against.
+                let repo = (List.head queued).Holder.Repo
+
+                let banner =
+                    [ "this queue is BUSY, not empty."
+                      $"%d{List.length queued} item(s) are QUEUED BEHIND LIVE CLAIMS held by: %s{holders}"
+                      $"  soonest: %s{soonest}" ]
+
+                // The one blocker a worker can clear ALONE is a dead lease — so if any has expired, do not
+                // let it read as a wait: name how many, and the exact `reap` that collects them. `reap`
+                // re-probes and refuses a claim whose PR is still open, so this advice can never break a
+                // lock over live work (#581).
+                let expiredLeases =
+                    expired |> List.map (fun q -> q.Holder) |> List.distinct |> List.length
+
+                let reapAdvice =
+                    if expiredLeases > 0 then
+                        [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo %s{repo} --apply" ]
+                    else
+                        []
+
+                banner @ reapAdvice
+
     /// Reservations that name files in THIS repo. Tokens are repo-relative (#312, #353).
     let private inRepo (owner: string) (repo: string) (reservations: Reservation list) =
         reservations |> List.filter (fun r -> r.Owner = owner && r.Repo = repo)
@@ -217,10 +335,13 @@ module Batch =
             | DeliberatelyNoTouchSet
             | UnusableTouchSet _
             | BlockedBy _
+            | ItemPrOpen _
             | OverlapsInFlight _
             | Undetermined _ ->
-                // Not startable, and reserving nothing — precisely BECAUSE nobody is working it,
-                // which is what separates this leg from the two above.
+                // Not startable, and reserving nothing. `ItemPrOpen` is the #651 leg: an open `item/<n>-*`
+                // PR with no marker means someone is implementing it, but there is no claim to name and no
+                // lease to wait out — so, like a markerless Ready row, it reserves nothing here; it is simply
+                // not handed out (which is what stops the duplicate implementation).
                 ()
 
         for item in ordered do

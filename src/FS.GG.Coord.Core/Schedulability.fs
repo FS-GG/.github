@@ -14,6 +14,7 @@ module Schedulability =
         | BlockedBy of Blocker list
         | HeldBy of WorkerId
         | HeldByLiveWork of WorkerId * pr: int
+        | ItemPrOpen of pr: int
         | OverlapsInFlight of (string * string) list
         | Undetermined of reason: string
 
@@ -111,6 +112,17 @@ module Schedulability =
             Undetermined "the claim's lease has expired and we could not check for an open item/<n> PR — an unverifiable claim is not an abandoned one (#581)"
 
         | Some(_, LeaseExpiredNoPr)
+        | None ->
+
+        // 5b. THE MARKERLESS PR (#581 one leg over — #651). No live-held claim governs this item, but an
+        //     open `item/<n>-*` PR on its own branch is an implementation ALREADY IN FLIGHT — a worker who
+        //     opened a PR without a claim marker, or whose marker lapsed and was cleaned. Offering it costs a
+        //     DUPLICATE implementation of work that is already written. The open-PR probe is proof of life
+        //     whether or not a marker points at it; #581 read it only through the marker, so a markerless
+        //     item slipped straight through to `Startable`. `ItemPr` is `None` unless the scan found such a
+        //     PR AND no marker claimed the item, so a claimed item never double-counts here.
+        match item.ItemPr with
+        | Some pr -> ItemPrOpen pr
         | None ->
 
         // 6. DISJOINTNESS, last: it is the only check that depends on other items.
@@ -213,6 +225,8 @@ module Schedulability =
         | HeldBy(WorkerId w) -> $"%s{id} — already claimed by worker %s{w} (%s{leaseWindow leaseMinutes age})"
         | HeldByLiveWork(WorkerId w, pr) ->
             $"%s{id} — lease EXPIRED, but PR #%d{pr} is open: worker %s{w} is demonstrably still working it (#581). Not offering it; its touch-set stays reserved."
+        | ItemPrOpen pr ->
+            $"%s{id} — no claim marker, but PR #%d{pr} is open on its `item/%d{item.Ref.Number}-*` branch: an implementation is already in flight. Not offering it — claiming it now would duplicate work that is already written (#651)."
         | OverlapsInFlight hits ->
             // The HOLDER-BLIND rendering. `Batch.explainDecision` overrides this with the holder and its
             // lease window whenever the decision carries one — which, in a batch, is always. This is the

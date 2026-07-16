@@ -7,9 +7,9 @@ shells out to. You will normally never invoke it by hand.
 
 ## What it is for
 
-`scripts/fsgg-coord` is 4,000 lines of bash modelling a concurrent, transactional, budget-constrained
-domain in a substrate with no types, no `Result`, no atomicity, and whose default failure mode is to
-**fail open** — an error, an empty result, and a legitimate "no" are the same value. The defect record
+`scripts/fsgg-coord` was 4,000 lines of bash modelling a concurrent, transactional, budget-constrained
+domain in a substrate with no types, no `Result`, no atomicity, and whose default failure mode was to
+**fail open** — an error, an empty result, and a legitimate "no" were the same value. The defect record
 follows from the substrate: *"is this item startable?"* was computed in five places and agreed in none
 ([#485](https://github.com/FS-GG/.github/issues/485)), and the fail-open family
 ([#266](https://github.com/FS-GG/.github/issues/266)) has 51 children.
@@ -45,22 +45,18 @@ fsgg-coord-engine decide < snapshot.json      # → a typed verdict per candidat
 fsgg-coord-engine decide --text < snapshot.json
 ```
 
-That is what makes **shadow mode** free. Both engines see byte-identical input, so a disagreement is a
-difference in the *rule* — not in what each of them happened to observe, and not a second scan of a
-5,000 pt/hr budget the whole fleet shares
+That is what makes the engine **pure and reproducible**: the verdict is a total function of the snapshot,
+so the same board state always decides the same way, and a test can *state* the answer rather than stand a
+live fixture up — no second scan of the 5,000 pt/hr budget the whole fleet shares
 ([#418](https://github.com/FS-GG/.github/issues/418)).
 
-## Shadow mode
+## It is the client now
 
-Bash remains authoritative. With an engine on `PATH`, `fsgg-coord` runs **both** on every
-`batch`/`next`/`take`, returns **bash's** answer, and logs the disagreement:
-
-```sh
-fsgg-coord batch --repo sdd     # shadows automatically wherever an engine resolves
-fsgg-coord divergence           # OUTCOME divergences apart from REASON ones
-```
-
-The shadow cannot change bash's answer, its exit code, or its life. `--engine bash` opts out.
+`scripts/fsgg-coord` is the [ADR-0034](https://github.com/FS-GG/.github/blob/main/docs/adr/0034-typed-coordination-engine.md)
+§4.4 shim ([ADR-0040](https://github.com/FS-GG/.github/blob/main/docs/adr/0040-port-the-io-layer.md) Phase D):
+it resolves this compiled engine and `exec`s it, passing argv through unchanged. The ~7,000-line bash
+implementation, and the *shadow* that once ran both engines side by side and returned bash's answer, are
+gone — this engine is the one and only coordination client.
 
 ## Exit codes
 

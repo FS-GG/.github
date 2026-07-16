@@ -118,7 +118,11 @@ def graphql(query: str, variables: dict):
                     "issue": {
                         "number": 42,
                         "state": "CLOSED",
-                        "closedByPullRequestsReferences": {"nodes": [{"number": 77, "merged": True}]},
+                        "closedByPullRequestsReferences": {"nodes": [
+                            {"number": 77, "merged": True, "mergedAt": "2026-02-01T00:00:00Z",
+                             "mergeCommit": {"abbreviatedOid": "77abc12"},
+                             "closingIssuesReferences": {"nodes": [
+                                 {"number": 42, "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"}}]}}]},
                         "timelineItems": {"nodes": []},
                         "subIssues": {"totalCount": 0, "nodes": []},
                         "projectItems": {"nodes": [{"project": {"number": 12}, "status": {"name": "In review"}}]},

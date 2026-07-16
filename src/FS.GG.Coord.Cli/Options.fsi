@@ -13,13 +13,12 @@ namespace FS.GG.Coord.Cli
 /// collected in order into `Args`, and each command validates its own arity.
 module Options =
 
-    /// What the engine was asked to do. The DECISION commands (`Decide`, `Fleet`, `Lanes`, `Facts`) read
+    /// What the engine was asked to do. The DECISION commands (`Decide`, `Lanes`, `Facts`) read
     /// state on stdin and touch no network; the CLIENT commands below `Scan` perform IO through the GitHub
     /// adapter — they are the surface the shim (ADR-0034 §4.4) execs in place of the bash client.
     type Command =
         | Decide
         | Scan
-        | FleetVerdict
         | LanesView
         | Facts
 
@@ -37,8 +36,16 @@ module Options =
         | Ready
         /// Who holds what, right now — held/stale/unclaimed (`who [--repo] [--json]`).
         | Who
+        /// Collect expired claims whose work is dead — refusing any with an open `item/<n>-*` PR
+        /// (`reap [--repo] [--apply]`, #581). A DRY RUN without `--apply`.
+        | Reap
         /// Take an item's lock (`claim <ref> [--worker W] [--force]`).
         | Claim
+        /// Take over an ORPHAN — a stale claim whose PR is FINISHED — and land it (`adopt <ref> [--worker W]`, #697).
+        | Adopt
+        /// Is an OPEN PR finished work? The #697/#720 verdict as a first-class QUERY
+        /// (`landable <pr> --repo NAME`) — one word on stdout, the decision in the exit code.
+        | Landable
         /// Schedule AND claim the next item in one step (`take [--repo] [--worker W]`).
         | Take
         /// Drop a lock, restoring the column it overwrote (`release <ref> [--worker W]`).
@@ -51,8 +58,14 @@ module Options =
         | Child
         /// Widen a held item's touch-set (`widen <ref> --paths T...`).
         | Widen
+        /// Report whether an item's touch-set overlaps another's, or the repo's live claims
+        /// (`overlap <ref> --active` | `overlap <ref-a> <ref-b>`). Repo-scoped (#353).
+        | Overlap
         /// Message another worker (`say <ref> --to W --message M`).
         | Say
+        /// This worker's mailbox — messages across every in-flight claim, on the board and off it
+        /// (`inbox [--repo] [--peek] [--json]`, #461/case 25).
+        | Inbox
         /// Stamp an item done, optionally rolling the parent up (`done <ref> [--flip] [--evidence E]`).
         | DoneCmd
         /// Check a PR's changed files against the touch-set its issue declared (`verify-paths --pr N [--warn]`).
@@ -67,8 +80,14 @@ module Options =
         | OptionId
         /// The board item id for an issue (`item-id <ref>`) — 1 GraphQL, then cached forever.
         | ItemId
+        /// Put an issue on the board, idempotently (`add <ref>`) — the metered verb the GraphQL monopoly
+        /// rule (#586) names in place of `gh project item-add`, restored in #861.
+        | Add
         /// Board-health gate: flag Ready/Backlog items no worker can pick up (`lint [--repo] [--strict]`, #496).
         | LintCmd
+        /// List a repo's issues over REST, ETag-revalidated — the GraphQL-budget-free read
+        /// (`issues <repo> [--label L] [--state S] [--refresh]`, #446/#418).
+        | Issues
 
         | Help
         | Version
@@ -103,6 +122,9 @@ module Options =
           /// `--evidence <text>` (`done`) — assert the item is finished with NO PR (#600). Required for the
           /// no-PR green path; a green path with no argument would be a way of switching the stamp off.
           Evidence: string option
+          /// `--partial <why>` (`done --flip`) — this child is a PARTIAL fix and does NOT discharge its
+          /// parent, so the roll-up leaves the parent OPEN (#614). Absent means the child completes it.
+          Partial: string option
           /// `--to <worker>` (`say`).
           ToWorker: string option
           /// `--message <text>` (`say`).
@@ -134,7 +156,48 @@ module Options =
           Batch: bool
 
           /// `--strict` (`lint`) — a NOTE is fatal too, not just an error (the pedantic board-health pass).
-          Strict: bool }
+          Strict: bool
+
+          /// `--active` (`overlap`) — check the item's touch-set against the LIVE claims in its own repo,
+          /// rather than against a second named item. Repo-scoped (#353).
+          Active: bool
+
+          /// `--apply` (`reap`) — actually DELETE the expired markers. Without it, `reap` is a DRY RUN that
+          /// only reports what it WOULD collect (`would reap …`), so a destructive lock-break is never the
+          /// default — the operator opts into it. #581.
+          Apply: bool
+
+          /// `--peek` (`inbox`) — show new messages WITHOUT advancing the per-worker cursor, so the same
+          /// mail is still "new" on the next read. Off, `inbox` consumes what it shows.
+          Peek: bool
+
+          /// `--wait` (`landable`) — poll until the verdict SETTLES rather than reading it once (#724). The
+          /// poll never believes an early `green`: it waits for the run set to STOP GROWING, and it keeps
+          /// waiting while zero runs have registered (the registration race). Conflicted/unknown return at
+          /// once — no amount of waiting fixes either.
+          Wait: bool
+          /// `--tries N` (`landable --wait`) — the maximum number of polls (positive). Default 30.
+          Tries: int option
+          /// `--interval S` (`landable --wait`) — seconds to sleep between polls (0 permitted, for the test
+          /// harness). Default 20.
+          Interval: int option
+          /// `--require NAME` (`landable`, REPEATABLE — each occurrence APPENDS) — a check-run name that must
+          /// have REPORTED before this PR is `green`. The rollup asks "is anything red?", which is blind to a
+          /// check that is ABSENT; branch protection covers the REQUIRED set, so this is for a NON-required
+          /// check that nonetheless decides the PR (#737). A missing one is `pending`, never `green`.
+          Require: string list
+          /// `--sha SHA` (`landable`) — the head SHA the caller believes it is gating. `pulls/{n}` is
+          /// eventually consistent after a force-push, so a caller that just pushed can name the commit it
+          /// MEANS; a disagreement is `pending` rather than a verdict about the previous commit (#737).
+          /// Absent ⇒ the PR's own head SHA is taken on trust, right for every caller that did not push.
+          Sha: string option
+
+          /// `--label L` (`issues`) — restrict the REST listing to issues carrying this label. Absent ⇒ every
+          /// issue in the state.
+          Label: string option
+          /// `--state open|closed|all` (`issues`) — which issue state to list. Default `open`, exactly as
+          /// bash's `issues`.
+          IssueState: string option }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

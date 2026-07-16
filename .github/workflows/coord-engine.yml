@@ -1,24 +1,18 @@
-# coord-engine — the typed engine's executable edge, and the SHADOW (ADR-0034, Phase 2).
+# coord-engine — the typed engine's executable edge (ADR-0034; ADR-0040 Phase D).
 #
-# Phase 1 built a pure core that nothing consumed. Phase 2 gives it a mouth and stands it next to the
-# incumbent: `fsgg-coord --engine shadow` runs BOTH engines on every scheduling call, returns BASH'S
-# answer, and logs the disagreement. Bash stays authoritative until that log has been empty across the
-# live fleet for three consecutive days. Nothing is cut over on faith — this tool schedules the work
-# that rewrites this tool, and a big-bang flip would be betting the queue on an untested rule.
+# Phase 1 built a pure core that nothing consumed. Phase 2 gave it a mouth. Phase D made `scripts/fsgg-coord`
+# BE it (the ADR-0034 §4.4 shim execs the compiled `fsgg-coord-engine`), and D.4 deleted the bash monolith
+# and the shadow that stood the two engines side by side — there is one engine now, so there is nothing to
+# shadow. What remains is the gate that proves the ONE engine works: it reads its own board over HTTP, its
+# write commands land over a real lock, and it returns the answer the shell corpus CERTIFIES — the corpus's
+# own contract, with no bash in the pipeline.
 #
 # WHAT THIS GATE IS ACTUALLY FOR, and it is not "does the engine compile".
 #
-# The shadow is, by design, a component that does NOTHING when it goes wrong: it may not change bash's
-# answer, and it may not red a receiver's CI when the engine is absent. Those two rules are correct,
-# and together they describe a thing that fails SILENTLY — which is epic #266 ("coherence gates that
-# fail open: a missing subject reports green", 51 children) rebuilt inside the very mechanism meant to
-# retire it. A shadow nobody can prove ran is not evidence, and "zero divergence" is the most
-# reassuring possible way to say "we never looked".
-#
-# So this gate exists to make the shadow PROVE it ran. It builds the engine, sets
-# FSGG_SHADOW_REQUIRE_ENGINE=1 — which turns "no engine" from a skip into a failure inside the fixture
-# — and the fixture then asserts that the comparison was non-empty. The engine's absence cannot be the
-# reason this gate is green.
+# It holds the engine to the certified corpus (`tests/coord-engine-parity/`, ~445 assertions across all 27
+# cases) and to the wire-contract unit suite — and it refuses to pass VACUOUSLY (#266, #436): a runner that
+# discovers nothing exits 0, so the non-vacuity step asserts a floor of tests actually ran. A green gate
+# over an untested fail-open surface is the exact bug this engine exists to end.
 #
 # The build config is in the trigger list, and BOTH halves of it are (#609): the root
 # Directory.Build.props IMPORTS dist/dotnet/Directory.Build.props, which is what sets RestoreLockedMode
@@ -34,7 +28,6 @@ on:
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
-      - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
@@ -49,7 +42,6 @@ on:
       - "tests/FS.GG.Coord.Cli.Tests/**"
       - "tests/coord-engine-e2e/**"
       - "tests/coord-engine-parity/**"
-      - "tests/fsgg-coord/**"
       - "scripts/fsgg-coord"
       - "Directory.Build.props"
       - "dist/dotnet/Directory.Build.props"
@@ -111,6 +103,15 @@ jobs:
       - name: Parity — the engine matches the corpus's certified batch answer
         run: bash tests/coord-engine-parity/run.sh
 
+      # SHIM PARITY (ADR-0040 Phase D.2). The same corpus, re-decided through `scripts/fsgg-coord` —
+      # which the swap cut down to the ~40-line ADR-0034 §4.4 resolver that REPLACED the ~7,000-line bash
+      # (deleted in D.4 — this shim is the only `scripts/fsgg-coord` there is). It re-runs the parity
+      # corpus with the engine indirected through the shim (a shim that dropped an arg, swallowed output,
+      # or mangled an exit code would red one of the 445), and proves the shim resolves the engine or
+      # REFUSES — never the silent no-op (#266) that is the whole reason the bash grew a resolver.
+      - name: Shim parity — the corpus is green THROUGH the ADR-0034 §4.4 shim
+        run: bash tests/coord-engine-parity/shim.sh
+
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
 
@@ -126,15 +127,3 @@ jobs:
             exit 1
           fi
           echo "coord-engine: $passed test(s) passed" >> "$GITHUB_STEP_SUMMARY"
-
-      # THE SHADOW MUST PROVE IT RAN. `FSGG_SHADOW_REQUIRE_ENGINE=1` turns a missing engine from the
-      # skip it legitimately is in a receiver into a FAILURE here — because .github is the one place
-      # that builds the engine from source, so here, and only here, its absence is a defect rather
-      # than a fact. The fixture then asserts the shadow compared a non-zero number of verdicts, that
-      # it did not change bash's answer by a single byte, and that `divergence` refuses to call an
-      # empty log green.
-      - name: The shadow — it ran, it compared, and it changed nothing
-        env:
-          FSGG_SHADOW_REQUIRE_ENGINE: "1"
-          FSGG_COORD_ENGINE_BIN: ${{ github.workspace }}/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
-        run: bash tests/fsgg-coord/run-cases.sh

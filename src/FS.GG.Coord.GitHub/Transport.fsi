@@ -2,11 +2,13 @@ namespace FS.GG.Coord.GitHub
 
 /// The wire. One request in, one `IoResult<Response>` out — and NOTHING above this line knows about HTTP.
 ///
-/// THE SEAM IS HERE BECAUSE THE CORPUS COUNTS HERE. `tests/fsgg-coord` drives the client against a
-/// PATH-shim `gh` stub that counts calls, and ADR-0040 C1 makes that corpus the cut-over gate: *"no step
-/// of this port may land that reduces the corpus"*. A tool that reached for `HttpClient` inline would be
-/// INVISIBLE to it — every budget assertion, every ETag-304 assertion, every fail-closed assertion is
-/// written against a call counter, and a direct call is a call nobody counted.
+/// THE SEAM IS HERE BECAUSE THE CORPUS COUNTS HERE. The cut-over gate (ADR-0040 C1) is a call-counting
+/// corpus: *"no step of this port may land that reduces the corpus"*. The bash corpus counted `gh`
+/// invocations at a PATH-shim stub; the port re-expressed that one transport under, and `tests/coord-engine-parity/`
+/// now counts HTTP requests at the fixture (bash and its stub were deleted in ADR-0040 D.4). A tool that
+/// reached for `HttpClient` inline would be INVISIBLE to either — every budget assertion, every ETag-304
+/// assertion, every fail-closed assertion is written against a request counter, and a direct call is a
+/// call nobody counted.
 ///
 /// So the transport is an INTERFACE with two implementations: `HttpTransport` (the real one, pointed at a
 /// configurable API base) and `Fake` (the recording one, which counts calls exactly as the stub does and
@@ -37,11 +39,23 @@ module Transport =
     /// formality: a NUMBER field wants `{"number": 42}` and rejects `{"number": "42"}`. Serialising every
     /// variable as a string is the kind of shortcut that works for every document you have and fails on the
     /// first one you write — so the type is carried, and the JSON is derived from it.
+    /// The tag picks the type the variable is DECLARED as, and GraphQL validates that declaration against
+    /// the argument's schema type without ever looking at the value. So a tag is a claim about the SCHEMA,
+    /// not about the shape of the string: `ID`, `String` and `Date` are all text on the wire and none of
+    /// them is substitutable for another in a declaration. Tag against the schema, never against the value
+    /// (#848).
     type Var =
         | VString of string
         /// A GraphQL `ID!`. It is a string on the wire, but it is NOT free text — keeping it apart from
         /// `VString` is what stops a field id being passed where an option id belongs.
+        ///
+        /// It is NOT for anything that merely LOOKS like an id: `singleSelectOptionId` and `iterationId`
+        /// are both typed `String` by the schema, and tagging them `VId` declared `ID!` against a `String`
+        /// argument — which refused every single-select write the tool made (#848).
         | VId of string
+        /// A GraphQL `Date!` (`YYYY-MM-DD`). Apart from `VString` for the same reason `VId` is: the scalar
+        /// is named `Date`, so `String!` against it is refused on sight.
+        | VDate of string
         | VNumber of double
 
     /// What travels in the request body.

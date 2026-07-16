@@ -17,12 +17,20 @@ let private parentRef =
       Repo = "FS.GG.SDD"
       Number = 350 }
 
+/// A merged PR whose BODY names this issue — a true closer (`ClosesThis`), the ordinary case.
+let private closer n =
+    { Number = n
+      Merged = true
+      MergedAt = "2026-01-01T00:00:00Z"
+      Oid = "abc1234"
+      ClosesThis = true }
+
 /// A closed issue with a merged PR and no children — the ordinary green case.
 let private closedByPr =
     { Ref = aRef
       State = Closed
-      ClosingPrs = [ 399 ]
-      ClosedByEvent = None
+      ClosingPrs = [ closer 399 ]
+      CloserPrs = []
       Children = NoChildren
       BoardStatus = InReview
       Parent = None }
@@ -31,8 +39,8 @@ let private closedByPr =
 
 [<Fact>]
 let ``a closed issue with a merged PR is DONE`` () =
-    match verify None closedByPr with
-    | Green(ClosedByPullRequest 399) -> ()
+    match verify None None closedByPr with
+    | Green(ClosedByPullRequest(399, _, _)) -> ()
     | other -> failwith $"a merged PR closes it — got %A{other}"
 
 [<Fact>]
@@ -43,13 +51,15 @@ let ``the CLOSED_EVENT rescues a PR whose BODY never carried the keyword`` () =
     //
     // A correct, merged, green PR therefore stamped RED. Permanently: editing a merged PR's body does not
     // backfill the reference. The CLOSED_EVENT's closer is the record of the ACT, and it is what saves this.
+    // The PR is LISTED (a merge that closed the issue is), but its body never named the issue — so it is
+    // not a `ClosesThis` closer. GitHub's own CLOSED_EVENT names it, and that is what saves the stamp.
     let facts =
         { closedByPr with
-            ClosingPrs = []
-            ClosedByEvent = Some 399 }
+            ClosingPrs = [ { closer 399 with ClosesThis = false } ]
+            CloserPrs = [ 399 ] }
 
-    match verify None facts with
-    | Green(ClosedByPullRequest 399) -> ()
+    match verify None None facts with
+    | Green(ClosedByPullRequest(399, _, _)) -> ()
     | other -> failwith $"the closing ACT must be honoured, not just the closing PROSE — got %A{other}"
 
 // ---- #600: the green path for work resolved WITHOUT a PR --------------------------------------------
@@ -66,9 +76,9 @@ let ``#600 an item resolved WITHOUT a PR is DONE - when there is evidence`` () =
     let facts =
         { closedByPr with
             ClosingPrs = []
-            ClosedByEvent = None }
+            CloserPrs = [] }
 
-    match verify (Some "resolved by #380/#383/#385 plus a feed re-baseline; verified empirically") facts with
+    match verify None (Some "resolved by #380/#383/#385 plus a feed re-baseline; verified empirically") facts with
     | Green(ResolvedWithoutPr evidence) -> Assert.Contains("feed re-baseline", evidence)
     | other -> failwith $"a no-PR resolution with evidence is a GREEN path, not a workaround — got %A{other}"
 
@@ -79,9 +89,9 @@ let ``#600 ...but the evidence is REQUIRED - a blank one is refused`` () =
     let facts =
         { closedByPr with
             ClosingPrs = []
-            ClosedByEvent = None }
+            CloserPrs = [] }
 
-    match verify (Some "   ") facts with
+    match verify None (Some "   ") facts with
     | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "blank")
     | other -> failwith $"blank evidence is no evidence — got %A{other}"
 
@@ -90,9 +100,9 @@ let ``a CLOSED issue that nothing closed is RED - and it names the green path`` 
     let facts =
         { closedByPr with
             ClosingPrs = []
-            ClosedByEvent = None }
+            CloserPrs = [] }
 
-    match verify None facts with
+    match verify None None facts with
     | Red reasons ->
         Assert.Contains(reasons, fun r -> r.Contains "nothing records what closed it")
         // THE REFUSAL TELLS THE WORKER WHAT WOULD HAVE WORKED. A refusal that does not is a refusal that
@@ -104,9 +114,69 @@ let ``a CLOSED issue that nothing closed is RED - and it names the green path`` 
 let ``the evidence does NOT override a real PR - the record wins over the prose`` () =
     // A worker who passes `--evidence` on an item that DID have a closing PR gets the PR named in the
     // stamp, not their own sentence. The stamp records what GitHub observed, not what anybody asserted.
-    match verify (Some "I say it is done") closedByPr with
-    | Green(ClosedByPullRequest 399) -> ()
+    match verify None (Some "I say it is done") closedByPr with
+    | Green(ClosedByPullRequest(399, _, _)) -> ()
     | other -> failwith $"the record outranks the assertion — got %A{other}"
+
+// ---- #342: provenance — the LATEST-merged true closer, never the first mention ----------------------
+
+[<Fact>]
+let ``#342 among two true closers the LATEST-merged wins, not the lowest-numbered`` () =
+    // `closedByPullRequestsReferences` is returned lowest-number-first, so taking the first stamped an
+    // earlier merge. The stamp must name the PR that ACTUALLY landed the work — the latest-merged.
+    let facts =
+        { closedByPr with
+            ClosingPrs =
+                [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa" }
+                  { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
+
+    match verify None None facts with
+    | Green(ClosedByPullRequest(95, "2222bbb", _)) -> ()
+    | other -> failwith $"the latest-merged closer wins — got %A{other}"
+
+[<Fact>]
+let ``#342 a merged PR that only MENTIONS the issue is not a closer`` () =
+    // A merged PR whose body names a DIFFERENT issue (ClosesThis = false) and which GitHub's close event
+    // does not name has closed nothing here. It is a mention — our "Filed, not fixed: #N" convention is
+    // exactly this — and a mention must not stamp the issue green.
+    let facts =
+        { closedByPr with
+            ClosingPrs = [ { closer 97 with ClosesThis = false } ]
+            CloserPrs = [] }
+
+    match verify None None facts with
+    | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "no merged PR closes this issue")
+    | other -> failwith $"a mere mention does not close the issue — got %A{other}"
+
+// ---- #543: --pr overrides WHICH pr, never WHETHER it closed the issue --------------------------------
+
+[<Fact>]
+let ``#543 --pr cannot launder a mention into a stamp`` () =
+    // The documented escape hatch used to select by NUMBER alone, so pointing `--pr` at any merged PR that
+    // merely mentioned the issue stamped it green — the #342 hole, through the override. `--pr` is held to
+    // the same closer predicate: it names which PR, never whether it closed the issue.
+    let facts =
+        { closedByPr with
+            ClosingPrs = [ { closer 97 with ClosesThis = false } ]
+            CloserPrs = [] }
+
+    match verify (Some 97) None facts with
+    | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "does not close this issue")
+    | other -> failwith $"--pr must not launder a mention — got %A{other}"
+
+[<Fact>]
+let ``#543 --pr names WHICH true closer to stamp, among several`` () =
+    // When more than one PR truly closed the issue, `--pr` picks which one the stamp names — a legitimate
+    // human override of WHICH, honoured because the chosen PR really is a closer.
+    let facts =
+        { closedByPr with
+            ClosingPrs =
+                [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa" }
+                  { closer 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
+
+    match verify (Some 89) None facts with
+    | Green(ClosedByPullRequest(89, "1111aaa", _)) -> ()
+    | other -> failwith $"--pr names which true closer to stamp — got %A{other}"
 
 // ---- #583: open children ----------------------------------------------------------------------------
 
@@ -117,7 +187,7 @@ let ``#583 a parent with OPEN sub-issues is not done, whatever its board says`` 
             Children = SomeOpen [ 401; 402 ]
             BoardStatus = Done }
 
-    match verify None facts with
+    match verify None None facts with
     | Red reasons ->
         Assert.Contains(reasons, fun r -> r.Contains "#401")
         Assert.Contains(reasons, fun r -> r.Contains "#402")
@@ -137,7 +207,7 @@ let ``an UNVERIFIABLE child set is NoVerdict - never green, and never a confiden
         { closedByPr with
             Children = Unverifiable(120, 100) }
 
-    match verify None facts with
+    match verify None None facts with
     | NoVerdict reason ->
         Assert.Contains("truncated", reason)
         Assert.Contains("120", reason)
@@ -149,10 +219,10 @@ let ``truncation is checked FIRST - before the closing PR, before everything`` (
     // otherwise pass every test below it and print a confident green over work nobody looked at.
     let facts =
         { closedByPr with
-            ClosingPrs = [ 399 ]
+            ClosingPrs = [ closer 399 ]
             Children = Unverifiable(120, 100) }
 
-    match verify None facts with
+    match verify None None facts with
     | NoVerdict _ -> ()
     | Green _ -> failwith "a truncated child set produced a GREEN stamp — this is the confident-green over an unread subject"
     | other -> failwith $"expected NoVerdict — got %A{other}"
@@ -163,7 +233,7 @@ let ``truncation is checked FIRST - before the closing PR, before everything`` (
 let ``an OPEN issue cannot be stamped - the stamp records that work is finished, it does not finish it`` () =
     let facts = { closedByPr with State = Open }
 
-    match verify None facts with
+    match verify None None facts with
     | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "still OPEN")
     | other -> failwith $"an open issue is not done — got %A{other}"
 
@@ -171,7 +241,7 @@ let ``an OPEN issue cannot be stamped - the stamp records that work is finished,
 
 [<Fact>]
 let ``a green stamp and a red stamp do not look alike`` () =
-    let green = render aRef (Green(ClosedByPullRequest 399))
+    let green = render aRef (Green(ClosedByPullRequest(399, "abc1234", "2026-01-01")))
     let red = render aRef (Red [ "nope" ])
     let unverified = render aRef (NoVerdict "could not read")
 
@@ -290,6 +360,10 @@ let ``#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other`
     let transport =
         scripted
             [ ok parentAllDone // the parent's facts
+              // The EPIC-UNLINKED-CHILD check re-reads the body + graph (#325): a body declaring no
+              // extra children clears it, so the roll-up proceeds.
+              ok """{"number":350,"body":"Paths: none"}""" // the parent's body
+              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // its graph, with refs
               ok itemOnBoard // boardWrite: resolve the item
               ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" // the Status write
               ok """{"number":350,"state":"closed"}""" ] // the ISSUE close
@@ -303,6 +377,31 @@ let ``#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other`
         Assert.True(transport.Logged "issue-patch FS-GG/FS.GG.SDD 350")
 
     | other -> failwith $"a rolled-up parent must be stamped AND closed — got %A{other}"
+
+[<Fact>]
+let ``#325 a parent whose BODY declares an unlinked child is left open, and names it`` () =
+    use _sandbox = new Sandbox()
+
+    // "All children resolved" is a claim about the sub-issue GRAPH. #350's graph holds only #398 (closed) —
+    // but its BODY declares #399, which the graph does not contain. Closing the parent here would close it
+    // over a criterion split out and never linked, so the roll-up must REFUSE and name #399.
+    let transport =
+        scripted
+            [ ok parentAllDone // facts: graph {#398 closed}, AllResolved
+              ok """{"number":350,"body":"- [ ] #398 the linked half\n- [ ] #399 the UNLINKED half"}""" // body declares #399
+              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // graph {#398}
+              ok """{"number":399,"body":"a plain issue"}""" ] // the PR-probe for #399 -> not a PR -> KEPT
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen(p, reasons) ] ->
+        Assert.Equal(parentRef, p)
+        let joined = String.concat " " reasons
+        Assert.Contains("FS.GG.SDD#399", joined)
+        Assert.Contains("fsgg-coord child", joined)
+        // It must NOT have written the board or closed the issue.
+        Assert.False(transport.Logged "--single-select-option-id opt_done")
+        Assert.False(transport.Logged "issue-patch FS-GG/FS.GG.SDD 350")
+    | other -> failwith $"a body-unlinked parent must be left open, naming the child — got %A{other}"
 
 [<Fact>]
 let ``a parent with an OPEN sibling is left open, and says which`` () =

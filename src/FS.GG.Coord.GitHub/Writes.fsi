@@ -19,10 +19,14 @@ namespace FS.GG.Coord.GitHub
 /// marker and confirming it is ours. There is no constructor for it. #706 is not fixed here. It is
 /// *unexpressible*.
 ///
-/// The same move retires #523: `widen` PATCHed the body and re-checked it afterwards, so on an exhausted
-/// budget the declaration was already rewritten when the refusal arrived. Here the re-check PRODUCES the
-/// value the PATCH consumes — `rewrite` returns a `Rewritten`, and `patchBody` accepts nothing else. A
-/// PATCH that precedes its own validation cannot be written down.
+/// The same move enforces #523's GRAMMAR half by construction: a bad token cannot reach the write, because
+/// `rewrite` returns a `Rewritten`, `patchBody` accepts nothing else, and a PATCH that precedes its own
+/// grammar validation cannot be written down. #523 PROPER — the COLLISION re-check (#353, "the colliding
+/// workers are never told") — is a SEQUENCING obligation the type system does not carry, and it lives in
+/// `Client.widen`: the overlap scan runs against the proposed touch-set and GATES the PATCH, so an unreadable
+/// scan (an exhausted GraphQL budget) REFUSES with the body untouched rather than landing a declaration no
+/// one verified. Retired there, not here; see the Phase-D payoff disposition
+/// (docs/2026-07-16-phase-d-payoff-disposition.md).
 ///
 /// WHAT IS HERE, AND WHAT IS NOT — STATED, BECAUSE A MODULE THAT OVERSTATES ITS SCOPE IS A MODULE THAT
 /// GETS TRUSTED FOR THINGS IT DOES NOT DO.
@@ -78,8 +82,29 @@ module Writes =
     /// them is how "somebody else has it" became indistinguishable from "we could not tell" — which,
     /// under the CAS, must be read as a LOSS.
     type ClaimOutcome =
-        /// We won. Here is the proof.
-        | Won of Held
+        /// We won. Here is the proof — and the workers whose STALE markers we COLLECTED to win it.
+        ///
+        /// A stale marker is a lapsed lease, and the next claimant must COLLECT it, never merely out-order
+        /// it: an ignored stale marker is exactly what `heartbeat` later resurrects underneath the new
+        /// holder — two live markers, one item, the double-hold the whole protocol exists to prevent. So a
+        /// won claim DELETES the stale debris on the item (a 404 is success — a peer may have collected the
+        /// same marker first), and hands back the OTHER workers it evicted so the caller can TELL them, on
+        /// their own item, that their expired claim was collected. Our OWN stale marker (a renew of a claim
+        /// that went stale) is collected too — so exactly one marker survives — but is NOT in this list:
+        /// you do not message yourself. Collection is best-effort; a stale marker we could not delete is
+        /// LEFT for `reap`, never a reason to fail a claim we have already won.
+        | Won of held: Held * collected: WorkerId list
+
+        /// **WE ALREADY HELD IT — this is a RE-CLAIM, not a fresh win.** A live marker already bearing our
+        /// worker id is renewed IN PLACE (a PATCH of the one marker we have, never a second POST that we
+        /// would then lose to our own first), so a slow worker re-claiming ends with ONE marker, and `take`
+        /// retries stay idempotent. It carries the collected stale debris exactly as `Won` does.
+        ///
+        /// It is a SEPARATE outcome from `Won` because this path **bypasses the CAS entirely** — and an id
+        /// is not proof of ownership (#419: rules 4/5 can hand one id to several workers). So a caller whose
+        /// id is shared must WARN here that it adopted an existing marker without running the CAS, the one
+        /// place the fresh-claim path's shared-id warning would otherwise never be reached.
+        | Renewed of held: Held * collected: WorkerId list
 
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
         | Lost of WorkerId
@@ -207,6 +232,81 @@ module Writes =
     /// already dropped, so nothing below may abort the release: a board that cannot be read or written
     /// leaves the column alone and REPORTS it, rather than failing and leaving a lock behind.
     val release: transport: IGitHubTransport -> held: Held -> IoResult<BoardStatus option>
+
+    /// A stale marker that has been PROVEN reapable — its lease has lapsed AND we LOOKED for the item's
+    /// own `item/<n>-*` PR and found none. This is #581 as a TYPE.
+    ///
+    /// Abstract, and produced ONLY by `reapable`. There is no constructor from a `Marker` alone, and that
+    /// is the whole point: lease expiry is EVIDENCE of abandonment, never PROOF (its false positive is
+    /// systematic — work that outlasts its lease), so a marker whose PR is open, or whose liveness we could
+    /// not read, cannot be turned into one of these. `reap` accepts nothing else, so "collect a claim only
+    /// once you have ruled its work dead" is not an `if` a reaper can forget — it is the only door in.
+    ///
+    /// It carries the marker's COMMENT ID, because the lock IS that id: reaping by worker STRING would let a
+    /// twin's id name the wrong comment, the #550 shape one command over.
+    [<Sealed>]
+    type Reapable =
+        /// The item this stale lock sits on.
+        member Ref: Ref
+
+        /// The worker whose lapsed claim this is — named in the reap report, never the reaper's.
+        member Worker: WorkerId
+
+        /// The comment id of the stale marker. The lock IS this number.
+        member MarkerId: int64
+
+        /// The board column this claim overwrote (#481), so a reap can put it back rather than guess — the
+        /// same restore `release` performs, now for a lock its own holder abandoned.
+        member PreviousStatus: BoardStatus option
+
+    /// Why a stale marker may NOT be reaped. NOT a `bool`: each case is a different thing to tell the
+    /// operator, and collapsing "the work is alive" into "could not reap" is exactly how #581's reaper
+    /// destroyed the claims of workers who were visibly still working.
+    type ReapRefusal =
+        /// #581: the lease lapsed, but an `item/<n>-*` PR is OPEN — the worktree protocol's own artifact,
+        /// server-side proof the work is alive. Carries the PR number so the refusal is checkable.
+        | WorkAlive of pr: int
+
+        /// WE COULD NOT TELL. The liveness read failed, and a lock we cannot rule dead we may not break —
+        /// a transient 5xx must not become a reaped claim (the fail-closed direction on a lock).
+        | Undetermined of reason: string
+
+    /// Prove a STALE marker is reapable — #581's judgement, in ONE place.
+    ///
+    /// `Ok` only on `LeaseExpiredNoPr`: the lease lapsed and we LOOKED for the item's PR and found none.
+    /// Every other `Liveness` is a `ReapRefusal` the caller must report instead of collecting. The caller
+    /// owns finding the lease lapsed first (it must, or the `LeaseExpired*` cases are a lie) — this function
+    /// owns the proof-of-life gate on top of it.
+    val reapable: ref: Ref -> marker: Reads.Marker -> liveness: Liveness -> Result<Reapable, ReapRefusal>
+
+    /// What `reap` did once it RE-VERIFIED the marker against a fresh read. `reapable` was minted from a
+    /// SNAPSHOT — the scan — and a holder may have heartbeated between the scan and this delete. Deleting a
+    /// lock because it USED TO BE stale is the one way `reap` can itself cause the double-hold it exists to
+    /// clean up, so the marker's freshness is re-checked immediately before the delete, and the three
+    /// outcomes are kept apart because each is a different line the operator must read.
+    type ReapResult =
+        /// The marker was still stale on the fresh read, and it was DELETED — the lock self-heals.
+        | Reaped
+
+        /// The holder HEARTBEATED between the scan and now: the marker is live again, so it was LEFT alone.
+        /// Carries its now-current age so the report can say how recently it was renewed.
+        | RenewedSinceScan of ageSeconds: int
+
+        /// The marker was already gone by the time we re-read — a peer collected it first. Nothing to do.
+        | AlreadyGone
+
+    /// COLLECT a reaped claim — RE-VERIFY the marker is still stale, then delete it so the lease self-heals.
+    ///
+    /// Takes the `Reapable`, so #581 is unexpressible here: a live or unreadable claim has no way to reach
+    /// this call. But `Reapable` was proven against the SCAN, and the scan is a snapshot — so this re-reads
+    /// the markers and confirms the one it is about to delete is STILL stale (`RenewedSinceScan` if the
+    /// holder heartbeated since; `AlreadyGone` if a peer collected it first), because reaping a lock that
+    /// went live again between the scan and the delete is exactly how `reap` would cause the double-hold it
+    /// exists to clean up. It deletes by COMMENT ID (a 404 is success — two reapers collecting the same
+    /// marker must not turn the loser's benign miss into an error), and it does NOT touch the board: what the
+    /// freed column becomes is the caller's decision (`PreviousStatus`), made after the lock is already gone,
+    /// so a board it cannot read or write leaves the column alone rather than stranding a lock behind.
+    val reap: transport: IGitHubTransport -> leaseMinutes: int -> reapable: Reapable -> IoResult<ReapResult>
 
     /// Post a message to another worker (`fsgg:msg`).
     ///

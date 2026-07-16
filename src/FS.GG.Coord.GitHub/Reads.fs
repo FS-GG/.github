@@ -5,6 +5,7 @@ module Reads =
     open System
     open System.Text.Json
     open System.Text.RegularExpressions
+    open FS.GG.Coord
     open FS.GG.Coord.Types
     open Errors
     open Transport
@@ -177,6 +178,21 @@ module Reads =
         |> List.sortBy (fun m -> m.Id)
         |> List.tryHead
 
+    /// THE MARKER THAT HOLDS THE LOCK, REGARDLESS OF LEASE — the live CAS `winner` if there is one, else
+    /// the lowest-id marker whose lease has lapsed.
+    ///
+    /// `winner` decides IDENTITY: only a live marker can answer a heartbeat or lose a CAS. This decides
+    /// RESERVATION, and the two are not the same question. A lease is a clock; a lock is a lock, and it is
+    /// broken only by `reap`, never by the clock running out (#461/#581, case 25). So the SCHEDULER must
+    /// reserve a stale-but-unreaped claim's touch-set exactly as it reserves a live one — scheduling over
+    /// it would hand a second worker the very tree its holder is standing in, the double-book this whole
+    /// scheduler exists to prevent. This is the same choice `who` makes when it classifies a row Held (a
+    /// live winner) or Stale (a lapsed marker still holding the lock).
+    let reserver (leaseMinutes: int) (markers: Marker list) : Marker option =
+        match winner leaseMinutes markers with
+        | Some m -> Some m
+        | None -> markers |> List.sortBy (fun m -> m.Id) |> List.tryHead
+
     let markers
         (transport: IGitHubTransport)
         (owner: string)
@@ -217,6 +233,108 @@ module Reads =
                         // LOWEST COMMENT ID FIRST. This is the CAS's total order and the winner is the
                         // head. Sorting here — once, in the one place markers are read — is what stops a
                         // caller inventing its own idea of who won.
+                        |> Seq.sortBy (fun m -> m.Id)
+                        |> List.ofSeq
+
+                    Ok found
+
+    // ---- worker-to-worker messages (the `say` / `inbox` channel) ----------------------------------
+
+    type Message =
+        { Id: int64
+          From: string
+          To: string
+          At: string
+          Text: string }
+
+    /// ANCHORED, exactly like `markerRe`. Un-anchor it and a `say` message whose TEXT merely quotes a
+    /// message marker would be delivered as though it were one — the same forgery `markerRe` refuses.
+    let private msgRe = Regex(@"^<!--\s*fsgg:msg\s", RegexOptions.Compiled)
+
+    let private msgFromToRe =
+        Regex(@"^<!--\s*fsgg:msg\s+from=(?<f>[^\s>]+)\s+to=(?<t>[^\s>]+)", RegexOptions.Compiled)
+
+    // The rendered body is `<!-- fsgg:msg … -->\n**from → to**\n\n<text>`. Peel the marker comment and the
+    // `**from → to**` header off the front, then trim the trailing newline, leaving the message the worker
+    // wrote — the same two `sub`s bash's `parse_msgs` applies.
+    let private msgCommentRe = Regex(@"^<!--[^>]*-->\s*", RegexOptions.Compiled)
+    let private msgHeaderRe = Regex(@"^\*\*[^*]*\*\*\s*", RegexOptions.Compiled)
+
+    let private parseMessage (comment: JsonElement) : Message option =
+        match str comment "body" with
+        | None -> None
+        | Some body when not (msgRe.IsMatch body) -> None
+        | Some body ->
+
+        let id =
+            match comment.TryGetProperty "id" with
+            | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
+            | _ -> None
+
+        match id with
+        // A message with no orderable id cannot be paged past — the inbox cursor is keyed on the id. Drop
+        // it rather than let a null reset every reader's high-water mark. A message is NOT a lock, so the
+        // safe failure here is to lose one message, never (as with a marker) to read an item as free.
+        | None -> None
+        | Some id ->
+
+        let m = msgFromToRe.Match body
+
+        if not m.Success then
+            // A half-written `fsgg:msg` names no correspondent. Deliver it to nobody rather than guess a
+            // recipient — again, a message is not a lock: dropping it is safe where broadcasting is not.
+            None
+        else
+            let text =
+                let noComment = msgCommentRe.Replace(body, "")
+                let noHeader = msgHeaderRe.Replace(noComment, "")
+                noHeader.TrimEnd()
+
+            Some
+                { Id = id
+                  From = m.Groups.["f"].Value
+                  To = m.Groups.["t"].Value
+                  At = (str comment "created_at" |> Option.defaultValue "")
+                  Text = text }
+
+    /// The worker-to-worker messages on an issue, in comment-id order (lowest first).
+    ///
+    /// A message is an `fsgg:msg` comment `say` posts; `inbox` reads them across every in-flight claim. Read
+    /// UNCONDITIONALLY, exactly like `markers`: a 304 could serve a comments page captured before a `say`,
+    /// and a lost message is a coordination failure even where it is not a lost lock — the same reason the
+    /// claim scan never goes conditional.
+    let messages
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<Message list> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} messages"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}/comments"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error(Malformed(subject, "the comments response is not a JSON array"))
+                else
+                    let found =
+                        doc.RootElement.EnumerateArray()
+                        |> Seq.choose parseMessage
                         |> Seq.sortBy (fun m -> m.Id)
                         |> List.ofSeq
 
@@ -479,6 +597,121 @@ module Reads =
 
                     Ok ids
 
+    // ---- the sub-issue graph, with state + total (lint / rollup) -----------------------------------
+
+    type SubIssue = { Ref: string; Open: bool }
+    type SubIssueSet = { Total: int; Children: SubIssue list }
+
+    [<Literal>]
+    let private SubIssuesDoc =
+        "query($owner: String!, $repo: String!, $number: Int!) { repository(owner: $owner, name: $repo) { issue(number: $number) { subIssues(first: 100) { totalCount nodes { number state repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
+
+    let subIssues
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<SubIssueSet> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} sub-issue graph"
+
+        let request =
+            { Method = "POST"
+              Path = "graphql"
+              Query = []
+              Body =
+                Transport.Query(
+                    SubIssuesDoc,
+                    [ "owner", Transport.VString owner
+                      "repo", Transport.VString repo
+                      "number", Transport.VNumber(double number) ]
+                )
+              Budget = GraphQl
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                try
+                    let subIssuesNode =
+                        doc.RootElement
+                            .GetProperty("data")
+                            .GetProperty("repository")
+                            .GetProperty("issue")
+                            .GetProperty("subIssues")
+
+                    let total = subIssuesNode.GetProperty("totalCount").GetInt32()
+
+                    let children =
+                        subIssuesNode.GetProperty("nodes").EnumerateArray()
+                        |> Seq.choose (fun n ->
+                            let nwo =
+                                match n.TryGetProperty "repository" with
+                                | true, r when r.ValueKind = JsonValueKind.Object -> str r "nameWithOwner"
+                                | _ -> None
+
+                            let num =
+                                match n.TryGetProperty "number" with
+                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+                                | _ -> None
+
+                            let isOpen =
+                                match n.TryGetProperty "state" with
+                                // GraphQL issue state is upper-case OPEN/CLOSED. Anything that is not
+                                // exactly CLOSED is treated as still open — the conservative direction, so a
+                                // rollup never flips over a child it could not read as closed.
+                                | true, s when s.ValueKind = JsonValueKind.String -> s.GetString() <> "CLOSED"
+                                | _ -> true
+
+                            match nwo, num with
+                            | Some nwo, Some num -> Some { Ref = $"%s{nwo}#%d{num}"; Open = isOpen }
+                            | _ -> None)
+                        |> List.ofSeq
+
+                    Ok { Total = total; Children = children }
+                with
+                | :? System.Collections.Generic.KeyNotFoundException
+                | :? System.NullReferenceException ->
+                    Error(Malformed(subject, "the sub-issue graph response is missing `repository.issue.subIssues`"))
+
+    let refIsPullRequest
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<bool> =
+
+        let subject = $"%s{owner}/%s{repo}#%d{number} (pull-request probe)"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues/%d{number}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                // The issues API returns a `pull_request` OBJECT iff the number is a PR. Its ABSENCE (or
+                // null) is a plain issue.
+                match doc.RootElement.TryGetProperty "pull_request" with
+                | true, pr -> Ok(pr.ValueKind = JsonValueKind.Object)
+                | _ -> Ok false
+
     // ---- the meter --------------------------------------------------------------------------------
 
     let rateLimit (transport: IGitHubTransport) : IoResult<RateLimitSnapshot> =
@@ -604,6 +837,270 @@ module Reads =
                         |> List.ofSeq
                     )
 
+    /// A JSON element's `int64` property, or `None` — for `check_suite.id` / `check_suite_id`.
+    let private int64Of (e: JsonElement) (name: string) =
+        match e.TryGetProperty name with
+        | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt64())
+        | _ -> None
+
+    /// A JSON element's `int` property, or `None`.
+    let private intOf (e: JsonElement) (name: string) =
+        match e.TryGetProperty name with
+        | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
+        | _ -> None
+
+    /// The `workflow_runs[]` on a head SHA, as `Landable.RunRow`s — or `None` if the read failed. `None` is
+    /// distinct from `Some []` (no runs registered yet, a real observation the scorer reads as #606's empty
+    /// set), so a failed read collapses to `PrUnknown` while an honest empty stays a finding.
+    let private workflowRuns
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (sha: string)
+        : Landable.RunRow list option =
+
+        let subject = $"%s{owner}/%s{repo} runs @ %s{sha}"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/actions/runs"
+              Query = [ "head_sha", sha; "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error _ -> None
+        | Ok response ->
+            match parse subject response.Body with
+            | Error _ -> None
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "workflow_runs" with
+                | true, arr when arr.ValueKind = JsonValueKind.Array ->
+                    arr.EnumerateArray()
+                    |> Seq.map (fun r ->
+                        let prNumbers =
+                            match r.TryGetProperty "pull_requests" with
+                            | true, prs when prs.ValueKind = JsonValueKind.Array ->
+                                prs.EnumerateArray() |> Seq.choose (fun p -> intOf p "number") |> List.ofSeq
+                            | _ -> []
+
+                        ({ Path = str r "path" |> Option.defaultValue ""
+                           Event = str r "event" |> Option.defaultValue ""
+                           HeadBranch = str r "head_branch" |> Option.defaultValue ""
+                           PrNumbers = prNumbers
+                           RunNumber = intOf r "run_number" |> Option.defaultValue 0
+                           Status = str r "status" |> Option.defaultValue ""
+                           Conclusion = str r "conclusion"
+                           CheckSuiteId = int64Of r "check_suite_id" }
+                        : Landable.RunRow))
+                    |> List.ofSeq
+                    |> Some
+                | _ -> None
+
+    /// The `check_runs[]` on a head SHA, as `Landable.CheckRow`s — or `None` if the read failed.
+    let private checkRuns
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (sha: string)
+        : Landable.CheckRow list option =
+
+        let subject = $"%s{owner}/%s{repo} check-runs @ %s{sha}"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/commits/%s{sha}/check-runs"
+              Query = [ "per_page", "100" ]
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error _ -> None
+        | Ok response ->
+            match parse subject response.Body with
+            | Error _ -> None
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "check_runs" with
+                | true, arr when arr.ValueKind = JsonValueKind.Array ->
+                    arr.EnumerateArray()
+                    |> Seq.map (fun c ->
+                        let suiteId =
+                            match c.TryGetProperty "check_suite" with
+                            | true, s when s.ValueKind = JsonValueKind.Object -> int64Of s "id"
+                            | _ -> None
+
+                        ({ Name = str c "name" |> Option.defaultValue ""
+                           CheckSuiteId = suiteId
+                           Status = str c "status" |> Option.defaultValue ""
+                           Conclusion = str c "conclusion" }
+                        : Landable.CheckRow))
+                    |> List.ofSeq
+                    |> Some
+                | _ -> None
+
+    /// `mergeable` as GitHub returns it: `true`/`false`, `null` while it COMPUTES lazily in a background
+    /// job, or absent (a malformed/minimal PR response). `Computing` and `Absent` are held apart because
+    /// only `Computing` is worth a re-read — an absent field will not appear on a second look.
+    type private MergeState =
+        | Mergeable of bool
+        | Computing
+        | Absent
+
+    /// The delay between mergeability re-reads. GitHub computes `mergeable` in a BACKGROUND job and returns
+    /// `null` until it lands, so a retry fired microseconds after the first read cannot have observed a job
+    /// that had not finished — a zero-delay retry is a no-op dressed as diligence. Default ~1s (bash's), env
+    /// so the test harness can drive the fixture's read-count flip without paying the wall-clock.
+    let private mergeableRetryMs () =
+        match Environment.GetEnvironmentVariable "FSGG_COORD_MERGEABLE_RETRY_MS" with
+        | null
+        | "" -> 1000
+        | v ->
+            match Int32.TryParse v with
+            | true, n when n >= 0 -> n
+            | _ -> 1000
+
+    /// Read a PR once: its mergeability state and head SHA (`None` if unreadable/absent).
+    let private prMergeAndSha
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : (MergeState * string option) option =
+
+        let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/pulls/%d{pr}"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error _ -> None
+        | Ok response ->
+            match parse subject response.Body with
+            | Error _ -> None
+            | Ok doc ->
+                use doc = doc
+                let root = doc.RootElement
+
+                // `.mergeable` is `true` / `false` / `null` / absent. Read them all APART: `false` is
+                // CONFLICTED, the one state we most need to name, and folding it into a fallback (the jq `//`
+                // trap the corpus warns about) would report a conflict as `unknown`.
+                let merge =
+                    match root.TryGetProperty "mergeable" with
+                    | true, v when v.ValueKind = JsonValueKind.True -> Mergeable true
+                    | true, v when v.ValueKind = JsonValueKind.False -> Mergeable false
+                    | true, v when v.ValueKind = JsonValueKind.Null -> Computing
+                    | _ -> Absent
+
+                let sha =
+                    match root.TryGetProperty "head" with
+                    | true, h when h.ValueKind = JsonValueKind.Object -> str h "sha"
+                    | _ -> None
+
+                Some(merge, sha)
+
+    /// The landable verdict AND the number of subjects it was scored over (`Landable.scoreN`). The count is
+    /// what `landable --wait` polls on: a `red` over ZERO subjects is "CI has not started yet", not "CI
+    /// failed" (#606/#724), and it is 0 for every verdict reached before the runs are scored (conflicted,
+    /// unknown). `prLandable` is this, with the count dropped.
+    /// `prLandableN`, plus the two assertions a caller can add to it (#737):
+    ///
+    /// `required` — check-run names that must have REPORTED, threaded to `Landable.scoreRequired`.
+    ///
+    /// `expected` — the head SHA the caller believes it is gating. GitHub's PR object is EVENTUALLY
+    /// CONSISTENT after a force-push: for a second or so `pulls/{n}` still names the PREVIOUS commit, whose
+    /// checks are green and are not about the code that would be merged. A caller that has just pushed KNOWS
+    /// the SHA it pushed (`git rev-parse HEAD`), so it can say so, and a disagreement scores `PrPending` —
+    /// never green, never a verdict about the wrong commit. `pending` does not settle, so `--wait` simply
+    /// waits for GitHub to catch up. Omit it and the PR's own head SHA is taken on trust, which is the right
+    /// default for every caller that did not just push.
+    ///
+    /// Returns the verdict, the subject count `--wait` settles on, and — for diagnostics only — the caller's
+    /// assertions that are NOT met, each as a human phrase. Without it a `pending` is one honest word and no
+    /// thread to pull, which is fine while the state is transient and useless on the case that never
+    /// resolves (a renamed job, a SHA the caller got wrong). The verdict never depends on this list.
+    let prLandableRequire
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        (required: string list)
+        (expected: string option)
+        : PrState * int * string list =
+
+        // THE LAZY RE-READ (#697). A null `mergeable` is UNKNOWN, not "mergeable" and not "conflicted" — and
+        // it is the NORMAL first answer for a PR GitHub has not yet tested. So a present `null` is re-read a
+        // bounded number of times (3, ~1s apart, bash's budget); a `false` seen on the SECOND look is the
+        // conflict the first read could not yet see, and adopting on the first `null` would land it. `Absent`
+        // is not re-read — the field is not there to change — and a read that FAILED is `PrUnknown`.
+        let rec readMerge (triesLeft: int) : MergeState * string option =
+            match prMergeAndSha transport owner repo pr with
+            | None -> Absent, None
+            | Some(Computing, sha) when triesLeft > 1 ->
+                let ms = mergeableRetryMs ()
+
+                if ms > 0 then
+                    System.Threading.Thread.Sleep ms
+
+                readMerge (triesLeft - 1)
+            | Some result -> result
+
+        match readMerge 3 with
+        | Mergeable false, _ -> PrConflicted, 0, []
+        | Computing, _
+        | Absent, _ -> PrUnknown, 0, []
+        | Mergeable true, None -> PrUnknown, 0, []
+        // THE PR STILL NAMES A DIFFERENT COMMIT than the caller pushed, so its checks are the OLD commit's.
+        // Not a verdict about this PR — a read taken too early. `PrPending` keeps `--wait` polling until
+        // GitHub catches up, and keeps a single-shot read from ever calling the wrong commit's green ours.
+        | Mergeable true, Some sha when expected |> Option.exists (fun e -> e <> sha) ->
+            let want = defaultArg expected ""
+
+            PrPending,
+            0,
+            [ $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
+        | Mergeable true, Some sha ->
+            match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
+            | Some runs, Some checks ->
+                let state, n = Landable.scoreRequired required (Some true) runs checks
+
+                let unmet =
+                    Landable.missing required runs checks
+                    |> List.map (fun name -> $"required check `%s{name}` has not reported")
+
+                state, n, unmet
+            | _ -> PrUnknown, 0, []
+
+    let prLandableN
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : PrState * int =
+        let state, n, _ = prLandableRequire transport owner repo pr [] None
+        state, n
+
+    let prLandable
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (pr: int)
+        : PrState =
+        prLandableN transport owner repo pr |> fst
+
     [<Literal>]
     let private ClosingRefDoc =
         "query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { closingIssuesReferences(first: 5) { nodes { number repository { nameWithOwner } } } } } rateLimit { cost remaining } }"
@@ -727,3 +1224,89 @@ module Reads =
                         |> List.ofSeq
 
                     Ok issues
+
+    /// `issues` — a repo's issue list over REST, ETag-revalidated (#446/#418). THE budget-free read: a 304
+    /// serves the cached body for zero cost, which is the whole reason the command exists — a worker reads
+    /// issues WITHOUT spending GraphQL, so it never has to fall back to `gh issue list` (2 points a call).
+    ///
+    /// UNLIKE `openIssues`, this read IS conditional, and that is correct: its subject is the issue list a
+    /// human/consumer asked for, not the lock. `openIssues` must never be served a 304 because a stale body
+    /// could hide a claim marker (#461); here there is no marker to hide — a listing is a listing — so the
+    /// ETag is pure budget savings. The cache key is the request AS A STRING (path + the query that shapes
+    /// the result), so a different state or label is a different cache entry, exactly as bash slugs its path.
+    ///
+    /// Returns the issue array as a JSON string — pull requests dropped (#641) — for the caller to jq.
+    let issues
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (state: string)
+        (label: string option)
+        (fresh: bool)
+        : IoResult<string> =
+
+        let query =
+            [ "state", state; "per_page", "100" ]
+            @ (match label with
+               | Some l when l <> "" -> [ "labels", l ]
+               | _ -> [])
+
+        // The cache key is the full request string — the same fact bash slugs to name its body/etag files.
+        let cacheKey =
+            let qs = query |> List.map (fun (k, v) -> $"%s{k}=%s{v}") |> String.concat "&"
+            $"repos/%s{owner}/%s{repo}/issues?%s{qs}"
+
+        let subject = $"%s{owner}/%s{repo} issues"
+
+        let request =
+            { Method = "GET"
+              Path = $"repos/%s{owner}/%s{repo}/issues"
+              Query = query
+              Body = NoBody
+              Budget = Rest
+              // CONDITIONAL BY DESIGN — the ETag is what makes the 304 free. `--refresh` (fresh) drops it,
+              // forcing a full re-read when the caller wants to bypass the cache.
+              IfNoneMatch = (if fresh then None else Cache.getETag cacheKey)
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match response with
+            // A 304 says "what you have is current" — serve it from the cache. A missing body here is OUR
+            // protocol violation (a validator we could not honour), and `getBody` reports it as an error,
+            // never an empty result. The cached body was validated on the 200 that stored it (below), so a
+            // 304 does not re-parse it.
+            | NotModified -> Cache.getBody cacheKey
+            | _ ->
+                // 200: a body we could not parse is a FAILED READ, never "this repo has no issues" — the same
+                // #461 fail-closed rule the rest of this layer holds (a 200 carrying a proxy's HTML error or a
+                // truncated page is not an empty listing). We validate it is a JSON ARRAY, drop pull requests
+                // (#641), then cache and emit that filtered array. An empty-but-present `[]` is a real answer
+                // and passes; garbage does not.
+                match parse subject response.Body with
+                | Error e -> Error e
+                | Ok doc ->
+                    use doc = doc
+
+                    if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                        Error(Malformed(subject, "the issue-list response is not a JSON array"))
+                    else
+                        // #641 — A PULL REQUEST IS AN ISSUE IN REST, and `issues` must not list it: the §4
+                        // duplicate-check reads a PR as "already filed" and silently suppresses a real finding.
+                        // Drop every element that carries a `pull_request` key (the same predicate `openIssues`
+                        // applies to the claim scan; here it guards the human/consumer listing), keeping each
+                        // genuine issue's FULL object and the array shape the caller's jq expects. We cache and
+                        // emit the FILTERED body, not the raw one, so a later 304 re-serves the same filtered
+                        // array — the ETag is GitHub's (sent as If-None-Match); the body is only ever re-served
+                        // to us, never back to GitHub, so storing the projection is correct.
+                        let kept = Nodes.JsonArray()
+
+                        for el in doc.RootElement.EnumerateArray() do
+                            match el.TryGetProperty "pull_request" with
+                            | true, _ -> ()
+                            | _ -> kept.Add(Nodes.JsonNode.Parse(el.GetRawText()))
+
+                        let filtered = kept.ToJsonString()
+                        Cache.putBody cacheKey response.ETag filtered
+                        Ok filtered

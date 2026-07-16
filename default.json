@@ -36,7 +36,7 @@
     {
       "description": [
         "Prefer stable releases for FS.GG.*; do not propose prereleases over them.",
-        "This description used to assert that 'FS-GG packages now all ship on a STABLE channel (FS.GG.Audio 0.1.0 was the last -preview producer)'. That is not true today: FS.GG.NewSddFullstack (0.1.1-preview.1) and FS.GG.NewSddWorkspace (0.3.0-preview.1) publish ONLY prereleases, so `ignoreUnstable` means Renovate can never propose a bump for either. That is pre-existing behaviour and is left unchanged here — but it is recorded rather than asserted away, because a false sentence in this file is what froze the SDD.Cli pin four times (.github#576)."
+        "This description used to assert that 'FS-GG packages now all ship on a STABLE channel (FS.GG.Audio 0.1.0 was the last -preview producer)'. That is nearly true again: FS.GG.NewSddWorkspace was PROMOTED to stable at 0.3.0 (the full-platform release, 2026-07-16), so Renovate can now propose a bump for it. The one remaining prerelease-only producer is FS.GG.NewSddFullstack (0.1.1-preview.1) — `ignoreUnstable` means Renovate can never propose a bump for it. Recorded rather than asserted away, because a false sentence in this file is what froze the SDD.Cli pin four times (.github#576)."
       ],
       "matchDatasources": ["nuget"],
       "matchPackageNames": ["/^FS\\.GG\\./i"],

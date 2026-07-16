@@ -780,106 +780,36 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
 
 ## Setup
 
-- **Install the coordination engine — and KEEP IT CURRENT:**
+- **The coordination client IS the typed engine now (ADR-0040 Phase D).** `scripts/fsgg-coord` is a
+  ~40-line shim (ADR-0034 §4.4) that resolves the compiled `fsgg-coord-engine` and `exec`s it — there is
+  no bash implementation left and no shadow, so the engine must be present to coordinate at all. The shim
+  resolves ONE engine, in this order, and fails loudly if it finds none (never a silent no-op, #266):
+
+  1. `FSGG_COORD_ENGINE_BIN` — an explicit path, honoured or refused, never fallen back from.
+  2. a global tool on `PATH` — `dotnet tool install -g FS.GG.Coord.Cli`.
+  3. a **local manifest** — `.config/dotnet-tools.json` + `dotnet tool run`; the shim runs
+     `dotnet tool restore` for you the first time (a manifest is a *declaration*, not an installation, #655).
+  4. a **repo-local source build** — `.github` alone builds the engine from source (ADR-0034 §4.3), so
+     fixing coord never requires publishing coord.
+
+- **In a receiver you install nothing.** Every receiver already declares the engine in
+  `.config/dotnet-tools.json` — Renovate keeps its version current, the kit distributes the file — and the
+  shim restores it the first time it needs it. The kit used to ask the worker to run the restore; asking
+  is not a mechanism (measured hit rate: zero), so the shim does it for you (#655).
+
+- **Outside a receiver, install it globally — and KEEP IT CURRENT:**
 
   ```sh
   dotnet tool install -g FS.GG.Coord.Cli     # provides `fsgg-coord-engine`
-  dotnet tool update  -g FS.GG.Coord.Cli     # ...and run this too. A global tool does NOT self-update.
+  dotnet tool update  -g FS.GG.Coord.Cli     # ...and run this too — a global tool does NOT self-update.
   ```
 
-  **A stale engine is worse than no engine** (#655). A worker without one contributes no evidence and
-  says so. A worker with a *superseded* one contributes divergences from a build nobody should trust —
-  noise that buries the real findings. `fsgg-coord` carries a floor and simply **refuses** to shadow with
-  an engine below it: the run is recorded as a skip, naming the version and how to fix it. Nothing
-  breaks, and nothing is quietly wrong.
-
-  This is not hypothetical. Engines before `0.1.1` strip the leading dot from every dotfile path, so
-  `.github/workflows/gate.yml` becomes a token that matches no file — it conflicts with nothing, and the
-  engine reports an item as **startable while a live claim is holding it** (#649). The shadow caught that
-  seven times in one day. Bash was authoritative, so nobody was mis-scheduled; that is exactly what
-  shadow mode is for.
-
-  This is **optional and safe to skip** — `fsgg-coord` works exactly as before without it. What it
-  buys is the SHADOW (ADR-0034): with an engine present, every `batch`/`next`/`take` is decided by
-  **both** the bash client and the typed F# engine, **bash's answer is the one you get**, and any
-  disagreement is logged (`fsgg-coord divergence`). Nothing about your run changes — not the answer,
-  not the exit code, not the timing you would notice.
-
-  It is worth the one command because an engine you have is an engine you can ASK. `--engine=fs` is
-  **open** (ADR-0038) — there, the typed core's answer *is* the answer, and every failure is fatal
-  rather than a quiet fall back to bash. The **default does not move**: with no flag it is `auto`, and
-  `auto` still hands you bash's answer.
-
-  The cut-over gate is the **defect corpus** — `tests/fsgg-coord/cases/`, one case per historical
-  defect, run against **both** engines in CI. It is not a fleet clock: that clock could never tick,
-  because a worker in a per-item worktree resolves no engine and so banks no evidence (#728). The
-  shadow is now **telemetry** — it is how a live fleet is watched, not what the flip waits on.
-
-  A global tool lands in `~/.dotnet/tools`, which is already on `PATH`, so it is found in **every**
-  repo with no per-repo setup. (A local `dotnet tool restore` also works — but note a local tool is
-  *not* on `PATH`, and `fsgg-coord` reaches it via `dotnet tool run`.)
-
-  **In a receiver you no longer have to do either.** Every receiver already declares the engine in
-  `.config/dotnet-tools.json` — Renovate keeps its version current and the kit distributes the file — and
-  `fsgg-coord` now **restores it for you** the first time it needs it.
-
-  It did not, and that is why the fleet's evidence comes from one repo. A manifest is a *declaration*, not
-  an *installation*: until something runs `dotnet tool restore`, `dotnet tool run fsgg-coord-engine` exits
-  1 with *Run "dotnet tool restore"…* on **stderr**, so the version came back empty, became `unknown`, and
-  `unknown` is stale by design — every scheduling call in all six receivers skipped, blaming a stale engine
-  and telling the worker to *update* a tool they had never installed. Measured on 2026-07-14 against the
-  live divergence log: **187 of 239 shadow runs skipped, 186 of them for exactly this reason**, with the
-  engine version recorded as `unknown` 187 times. The kit's answer had been a sentence asking the worker to
-  run the restore, and that sentence had the hit rate every other request in this fabric has: zero.
-
-- **Your shadow's evidence is published for you.** The shadow pushes it to the fleet ledger itself, from
-  the scheduling call that produced it — and `done --flip` publishes immediately as well. No extra step,
-  nothing to remember (#656).
-
-  This used to be a request: *"when your loop is done, run `fsgg-coord divergence --publish`."* Measured
-  against a live fleet of 28 workers and 597 compared item-verdicts, it was run **zero times**, by
-  anybody, including by the worker who wrote it. **Asking is not a mechanism.**
-
-  The first fix hung the publish on `done` — *"the one command every worker runs when it finishes an
-  item."* It is not. An item closed by a **squash-message closing keyword** (#681, #685, #693) is merged,
-  closed and board-Done without `done` ever being called, and that worker's evidence never leaves the
-  machine.
-
-  The ledger is **not empty** — it held 59 rows on 2026-07-14, 11 of them from that day — so the hook does
-  work for the workers that reach it. It is not *complete*, and the shape of the gap is the point: every
-  one of those rows carries `skipped=0`, because the only workers that publish are the ones whose engine
-  **resolved** — and that is `.github`, the single repo that builds the engine from source. The five
-  receivers, skipping every call for want of a restore, have contributed **nothing, ever**. So the fleet
-  gate was not reading a fleet; it was reading one repo and calling it the fleet, while ADR-0034's
-  cut-over criterion said *"across the **live fleet**."* **A hook on one path is a request that the path
-  be taken.** So the publish now hangs on the *shadow*, which is the only path that has, by construction,
-  just produced evidence.
-
-  That gap is **why the fleet clock is gone**: a criterion no worker in a worktree could ever satisfy is
-  not a slow gate, it is an unreachable one (#728). [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md)
-  retired it and made the **defect corpus** the gate. The ledger above is still worth filling — it is how
-  a live fleet is *watched* — but nothing waits on it any more.
-
-  It is **throttled** — at most one REST write per 30 minutes per machine, shared across every worker on
-  it, because the hot scheduling loop may not pay the network on every call. Missing a window loses
-  nothing permanently: the publish folds your **whole** log, keyed on `(worker, day, engine)` and
-  rewritten in place, so the next one carries the missed day up with it. Late is a property of this
-  ledger; lost is not.
-
-  It is idempotent, it costs one REST call, and **it can never cost you your done-stamp or your item** —
-  it runs after the stamp is earned, and a publish that fails is bookkeeping that failed.
-
-  You can still run it by hand, and should if you are stopping without finishing an item:
-
-  ```sh
-  fsgg-coord divergence --publish            # your local log is not evidence until it is published
-  fsgg-coord divergence --fleet              # where the FLEET stands: 0 green · 1 red · 3 no verdict
-  ```
-
-  The local log lives in `~/.cache/fsgg-coord/`, a cache directory that dies with your container. The
-  cut-over criterion is no longer a fleet clock — it is the **defect corpus** (ADR-0038) — but the
-  ledger is still how a **live** fleet is watched, and a worker who shadows and never publishes has told
-  it exactly as much as one who never shadowed at all.
+  A global tool lands in `~/.dotnet/tools`, already on `PATH`, so it is found in **every** repo with no
+  per-repo setup. Keeping it current matters because the engine **is** the scheduler now: engines before
+  `0.1.1` strip the leading dot from every dotfile path, so `.github/workflows/gate.yml` matches no file,
+  conflicts with nothing, and the scheduler reports an item **startable while a live claim is holding it**
+  (#649). There is no longer a bash answer behind it to stay authoritative — a stale engine simply
+  mis-schedules.
 
 - `Status: In progress` and `Blocked by` already exist on the board — **no schema change is
   required**. A repo may add an optional `Paths` text field if it wants touch-sets filterable
