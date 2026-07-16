@@ -21,9 +21,9 @@ monolith into four focused, independently shippable components plus an
 organization-level coordination repository. It has since grown two more: **FS.GG.Game**,
 the render-independent simulation core extracted from Rendering under
 [ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md) and published at
-0.4.0, and **FS.GG.Audio**, onboarded as a standalone component under
+0.5.0, and **FS.GG.Audio**, onboarded as a standalone component under
 [ADR-0023](adr/0023-onboard-fs-gg-audio-as-an-sdd-driven-component.md) and published at
-0.2.0. **Six framework components**, plus `.github`.
+0.3.0. **Six framework components**, plus `.github`.
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
@@ -77,10 +77,10 @@ the decision records linked throughout.
 
 Seven repositories under [github.com/FS-GG](https://github.com/FS-GG) (six framework
 components + `.github`; **FS.GG.Game** was extracted under ADR-0022 — its packages
-`FS.GG.Game.Core` + `.Render` are **published at 0.4.0** to the org feed + nuget.org;
+`FS.GG.Game.Core` + `.Render` are **published at 0.5.0** to the org feed + nuget.org;
 `game-extraction` **`coherent: true`** since P5, 2026-07-06; and **FS.GG.Audio** was onboarded
 as a standalone render-independent component under ADR-0023, its `FS.GG.Audio.*` set published
-at **0.2.0** — promoted off the `-preview` channel on 2026-07-09 (FS.GG.Audio#4), which made it
+at **0.3.0** — promoted off the `-preview` channel on 2026-07-09 (FS.GG.Audio#4), which made it
 the **last `FS.GG.*` producer to go stable**, so every producer in the org now ships on a stable
 channel):
 
@@ -90,8 +90,8 @@ channel):
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
-| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), **0.4.0** on the org feed + nuget.org |
-| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, **0.2.0** on the org feed + nuget.org |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), **0.5.0** on the org feed + nuget.org |
+| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, **0.3.0** on the org feed + nuget.org |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns the two org-level CLIs, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`) + `FS.GG.Coord.Cli` (the ADR-0034 engine) — **both published**, org feed + nuget.org |
 
 ---
@@ -231,12 +231,13 @@ Two packages in one repo (**11 projects: 5 src + 6 test**).
 
 **`FS.GG.Contracts`** — the typed cross-repo contract backbone. A
 **FSharp.Core-only BCL leaf** (no project references, no I/O), namespace `Fsgg`,
-four modules:
+five modules:
 
-- `Fsgg.ContractVersion` — a self-describing package SemVer (`val value = "1.4.0"`) so a consumer knows which surface it compiled against.
+- `Fsgg.ContractVersion` — a self-describing package SemVer (`val value = "2.0.1"`) so a consumer knows which surface it compiled against.
 - [`Fsgg.Schemas`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Schemas.fsi) — one typed source of truth for every `.fsgg` schema shape and its version constant (SDD- and Governance-owned).
 - [`Fsgg.Provider`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Provider.fsi) — the extended scaffold-provider descriptor (canonical `NameParameter`).
 - [`Fsgg.Registry`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Registry.fsi) — **the validator for this repo's [`registry/dependencies.yml`](../registry/dependencies.yml)**. Its version grammar deliberately mirrors `scripts/validate-registry.py` byte-for-byte, including the 4-segment `major.minor.patch.revision` form (ADR-0007), so the typed validator and the (now retired) Python authority cannot disagree.
+- [`Fsgg.SkillMirror`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/SkillMirror.fsi) — the one `mirror`/`verify` library that owns all orchestrated skill fan-out (ADR-0014); §5's skill-union invariant below is stated against it.
 
 **The `fsgg-sdd` CLI** drives the lifecycle
 `charter → specify → clarify → checklist → plan → tasks → analyze → evidence →
@@ -396,13 +397,12 @@ The consumer `game` scaffold provider is deferred and `dotnet new fs-gg-ui --pro
 **frozen** for the epic's duration — a named sequel epic retires the freeze. Phased plan:
 [`docs/reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md`](reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md).
 
-**Status (P4, 2026-07-06):** the render edge landed — `FS.GG.Game.Render` projects `Game.Core`
-onto `FS.GG.UI.Scene` (consumed from nuget.org) — and the four game product skills migrated
-`owner: fs-gg-rendering → fs-gg-game` byte-identically (reconciled from FS.GG.Game's own producer
-skill-manifest; registry = manifest = bytes). Rendering keeps **frozen** byte-identical copies of
-the game starter + skills — an accepted two-copies cost tracked as the `game-starter-two-copies`
-coherence row, retired by the P6 provider epic. Still ahead: the physical `Canvas`/`Scene` major
-removal + the package publish (P5).
+`FS.GG.Game.Render` projects `Game.Core` onto `FS.GG.UI.Scene` (consumed from nuget.org), and the
+four game product skills migrated `owner: fs-gg-rendering → fs-gg-game` byte-identically (reconciled
+from FS.GG.Game's own producer skill-manifest; registry = manifest = bytes). Rendering keeps
+**frozen** byte-identical copies of the game starter + skills — an accepted two-copies cost tracked
+as the `game-starter-two-copies` coherence row, retired by the P6 provider epic. Live phase state is
+the `game-extraction` coherence row's to report, not this page's.
 
 ---
 
@@ -525,14 +525,12 @@ invocations. **ADR-0030** carves the one creation-time exception: `new-sdd-works
 self-updates the CLI to the newest coherent set before scaffolding **by default**
 (`--pinned` restores a reproducible pin), because at creation there is no consumer artifact
 to clobber. Truth stays declarative in the registry so it can be diffed, gated, and flipped
-after publish (`FR-007`). As of SDD v0.4.0 (2026-07-01) the registry pins `minimum-fsgg-sdd: 0.4.0`
-(the oldest published CLI that seeds those artifacts — advanced `0.3.0→0.4.0` because
-feature 056 made `fsgg-sdd` the sole skill-mirror authority, seeding the `fs-gg-sdd-*`
-skills into a *third* root `.agents/skills/` and fanning the byte-identical union into
-`.claude`/`.codex`/`.agents`, growing the seeded surface, FR-011). Both halves are in
-lockstep (2026-07-02, Templates#49/#51): the provider descriptor mirrors `minimumFsggSdd
-0.4.0`, the pinned `fs-gg-ui` template (`0.1.61-preview.1`) emits UI skills into
-`.agents/skills/` only on the sdd path, and the `fsgg-sdd-orchestrator-axis` coherence
+after publish (`FR-007`). The registry pins `minimum-fsgg-sdd: 0.6.0` — the oldest published CLI
+that seeds those artifacts, advanced `0.4.0→0.6.0` on 2026-07-04 because feature 073
+(the transient-artifact taxonomy) made `fsgg-sdd` seed a `.gitignore` for regenerable output
+into scaffolded products, growing the expected seeded surface (FR-011). Both halves are in
+lockstep (Templates#99/PR#100, merged 2026-07-05): the provider descriptor mirrors
+`minimumFsggSdd 0.6.0`, and the `fsgg-sdd-orchestrator-axis` coherence
 row is `coherent: true`. A behind-CLI scaffold is verified to warn
 (`scaffold.cliBehindMinimum`) and stamp used+minimum into `scaffold-provenance`
 (original axis resolution closed epic #85).
@@ -667,58 +665,74 @@ install is what keeps the composition honest. See the
   `extends: ["github>FS-GG/.github"]`) with custom managers for the embedded pins
   the standard NuGet manager misses. Producers push to the org GitHub Packages
   feed on release; consumers auto-PR the bump.
-- **The coordination fabric is becoming a typed, packaged component ([ADR-0034](adr/0034-typed-coordination-engine.md), accepted 2026-07-12).**
-  The client every worker and CI job drives — `scripts/fsgg-coord` — is today **4,024 lines of bash**
-  whose state model is jq regexes over prose: claims are HTML comments, touch-sets are a `Paths:` line
-  in an issue body, dependency edges are free text (Projects v2 has no typed dependency field). That
-  is a concurrent, transactional, budget-constrained domain modelled in a substrate with no types, no
-  `Result`, and whose default failure mode is to **fail open** — which is why *"is this item
-  startable?"* is currently **computed in five places and agrees in none**
+- **The coordination fabric is a typed, packaged component ([ADR-0034](adr/0034-typed-coordination-engine.md),
+  accepted 2026-07-12; cut over and finished under [ADR-0040](adr/0040-port-the-io-layer.md), 2026-07-15).**
+  The client every worker and CI job drives — `scripts/fsgg-coord` — **was** ~7,000 lines of bash whose
+  state model was jq regexes over prose: claims are HTML comments, touch-sets are a `Paths:` line in an
+  issue body, dependency edges are free text (Projects v2 has no typed dependency field). That is a
+  concurrent, transactional, budget-constrained domain — and it **was** modelled in a substrate with no
+  types, no `Result`, and whose default failure mode is to **fail open**, which is why
+  *"is this item startable?"* was **computed in five places and agreed in none**
   ([#485](https://github.com/FS-GG/.github/issues/485); 34 issues), and why
   [epic #266](https://github.com/FS-GG/.github/issues/266) has 51 children.
 
-  ADR-0034 moves the domain into a pure typed F# core (`FS.GG.Coord.Core`) with **one** schedulability
+  ADR-0034 moved the domain into a pure typed F# core (`FS.GG.Coord.Core`) with **one** schedulability
   function and a three-valued `Green | Red | NoVerdict` on every check, where `NoVerdict` is non-zero.
-  Migration is **shadow-mode**: both engines run, bash stays authoritative, and nothing cuts over
-  until divergence is zero on live traffic.
+  **That engine is now the sole implementation.** ADR-0040 Phase D.4 deleted the bash monolith and the
+  shadow/differential gates that drove it; `scripts/fsgg-coord` is today an 83-line **resolver shim**
+  that finds the `fs.gg.coord.cli` tool via `.config/dotnet-tools.json` and `exec`s it, passing argv and
+  exit code through unchanged. Every doc, workflow, and skill that references that PATH still works —
+  which was the point of keeping it.
 
-  *"Zero divergence on live traffic"* is itself a **computed verdict**, not a judgement call
-  ([#634](https://github.com/FS-GG/.github/issues/634)). The shadow's evidence used to end its life in a
-  disposable cache directory on whichever machine produced it, with no worker id on the rows and no code
-  evaluating the criterion — so the cut-over would have been decided by a human reading one laptop's
-  counters. Workers now publish a per-`(worker, day, engine)` summary to a **fleet ledger** (REST, on the
-  budget that does not die first), and `Divergence.evaluate` folds it in the typed core:
-  `fsgg-coord divergence --fleet` returns `Green | Red | NoVerdict` and fails closed on evidence that is
-  absent, thin, single-worker, or from a different engine build.
+  **What gated the flip was the defect corpus, not a clock ([ADR-0038](adr/0038-the-corpus-is-the-cut-over-gate.md)).**
+  ADR-0034 staged the cut-over behind a shadow-mode criterion — both engines run, bash stays
+  authoritative, nothing flips until divergence is zero on live traffic. **That clock could not tick**,
+  for a structural reason: workers run in per-item worktrees, a worktree worker resolved no engine
+  ([#728](https://github.com/FS-GG/.github/issues/728)), and a worker who banks no evidence can never be
+  one of the "≥2 distinct workers" the criterion required — while any engine republish reset the window,
+  so the engine could not be improved while waiting for the clock that waited for the engine. ADR-0038
+  replaced it with a **defect corpus**: one case per historical defect, which needs only a checkout,
+  survives a rebuild, and covers every path that has *actually broken* rather than whatever floated past
+  a live fleet for three days. It lives in
+  [`tests/coord-engine-parity/`](https://github.com/FS-GG/.github/tree/main/tests/coord-engine-parity)
+  (each defect a hermetic fixture server; `shim.sh` re-runs the whole corpus *through* the shim, which
+  is how the swap was proven transparent) and
+  [`tests/coord-engine-e2e/`](https://github.com/FS-GG/.github/tree/main/tests/coord-engine-e2e), which
+  drives the compiled engine over HTTP against a fixture GitHub — no token, no network. The shadow was
+  demoted from gate to telemetry, then removed with the bash it compared against.
 
-  Two consequences land on this map. **`.github` becomes a two-tool producer** (above), the engine
-  shipping as a `dotnet tool` on the coherent set. And the **`kit:` row becomes a digest-pinned
-  shim** that resolves the tool from the already-distributed `.config/dotnet-tools.json`, so every
-  gate and every `scripts/fsgg-coord` path in the fabric survives untouched — and the publish cycle
-  breaks by asymmetry: **`.github` builds the engine from source and never depends on the feed**, so
-  a broken feed cannot prevent the coordination tool from being fixed. That kit-row shape change is a
+  Two consequences landed on this map. **`.github` is a two-tool producer** (above), the engine shipping
+  as a `dotnet tool` on the coherent set. And the **`kit:` row is a digest-pinned shim** — the publish
+  cycle breaks by asymmetry: **`.github` builds the engine from source and never depends on the feed**,
+  so a broken feed cannot prevent the coordination tool from being fixed. That kit-row shape change is a
   contract-change under [ADR-0015](adr/0015-register-the-registry-schema-as-a-governed-contract.md)
-  and lands with the *implementation*, not with the decision.
+  and landed with the *implementation*, not with the decision.
 
-  The larger prize is not the language. `fsgg-coord` is **already the model** — in every drift that
-  can be dated, the tool was right and the prose was wrong — it simply is not the *source*. ADR-0034
-  inverts that: `docs/coordination/parallel-work.md` and the four `SKILL.md` become **generated
-  projections**, guarded by a regeneration gate exactly like `registry/repos.lock`. A protocol rule
-  can then no longer land in one tier and not the others, which is what **54 vendored copies** of the
-  protocol currently guarantee it will.
-
-  **Phase 0 shipped 2026-07-12** — one queueing board write, the done-stamp, the kit-digest obligation
-  made observable, and the GraphQL monopoly (the client is the org's only GraphQL principal, and
-  `fsgg-coord add` is the verb that made that rule obeyable).
+  The larger prize was not the language. `fsgg-coord` was **already the model** — in every drift that
+  can be dated, the tool was right and the prose was wrong — it simply was not the *source*. ADR-0034
+  §4.5 inverted that, and **it has landed** ([#731](https://github.com/FS-GG/.github/issues/731)): the
+  rules live once in `FS.GG.Coord.Core/Protocol.fs`, and the prose that states them is a **build
+  artifact** — a `<!-- BEGIN GENERATED: fsgg-protocol -->` region emitted by
+  [`scripts/generate-projections`](../scripts/generate-projections) into
+  `docs/coordination/parallel-work.md` and the two `intra-repo-parallel-work/SKILL.md` roots, guarded
+  by the `projections` gate exactly like `registry/repos.lock`. A protocol rule can no longer land in
+  one tier and not the others, because there are no tiers — which is what **54 vendored copies** of
+  the protocol used to guarantee it would.
 
 - **Public distribution (dual-publish, [ADR-0012](adr/0012-dual-publish-to-nuget-org.md) +
   [ADR-0013](adr/0013-trusted-publishing-oidc-for-nuget-org.md)).** On release each producer
   additionally pushes the **byte-identical** `.nupkg` to **public nuget.org** (after the
   org-feed push), so public consumers `dotnet tool install` / `dotnet add package` with no
   `--add-source`. Auth is **Trusted Publishing (OIDC)** — a short-lived `NuGet/login` key per
-  run, no stored secret. The org GitHub Packages feed stays the **coherence/`-preview` source
-  of truth** (Renovate and the contract-coherence gate read it); nuget.org is an additive
-  public target (`nuget-org-published` ✅). Package IDs on nuget.org are permanent, freezing the
+  run, no stored secret. **nuget.org is the read path; the org feed is the publish path**
+  ([ADR-0039](adr/0039-nuget-org-is-the-read-path.md), accepted 2026-07-15, amending ADR-0012 §1):
+  Renovate resolves every `FS.GG.*` lookup from `api.nuget.org` ([`default.json`](../default.json)),
+  because the org feed **requires a credential even to read** and a 401 on a Renovate datasource is
+  not an error — it is an empty version list, which is why the bot froze the `FS.GG.SDD.Cli` pin four
+  times and opened no PR ([#576](https://github.com/FS-GG/.github/issues/576)). The org feed remains
+  the **publish** target and the `-preview` channel, and the `feed-coherence` gate still reads it —
+  that gate asserts `package-version` against the feed a producer just pushed to, so the feed is the
+  right subject for it. Package IDs on nuget.org are permanent, freezing the
   `FS.GG.*` identities (no rename — [ADR-0003](adr/0003-rename-fs-skia-ui-version-machinery-to-fs-gg-ui.md)).
 
 ---
