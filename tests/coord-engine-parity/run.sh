@@ -3305,6 +3305,51 @@ if [ -z "$ADV_PORT" ]; then bad "cas-adversarial fixture bound a port"; else
     *) ok "case24(i): ...and it does NOT announce a lock it cannot show" ;;
   esac
 
+  # The workers whose claim markers sit on an issue right now — the `worker=` of every LIVE marker the
+  # /comments read serves back (the fixture reflects the DELETEs, so a collected stale marker is gone).
+  adv_workers_on() { curl -s "$ADV_BASE/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                       | jq -r '[.[].body | capture("worker=(?<w>[^\\s>]+)").w] | join(",")' 2>/dev/null; }
+  # Messages addressed `to=<w>` on an issue — the collect NOTIFY is an ordinary `fsgg:msg` comment.
+  adv_msgto() { curl -s "$ADV_BASE/repos/FS-GG/FS.GG.SDD/issues/$1/comments" \
+                  | jq --arg w "$2" '[.[] | select(.body|test("fsgg:msg")) | select(.body|test("to="+$w))] | length' 2>/dev/null; }
+
+  # (a) A stale marker must be COLLECTED by the next claimant, never merely ignored — an ignored marker is
+  #     what `heartbeat` later resurrects underneath the new holder (two live markers, one item). #84 carries
+  #     ghost-111's STALE claim; heron-b71 claims over it (--force to skip the #516 pre-hold scan).
+  adv_cap claim 'FS.GG.SDD#84' --worker heron-b71 --force
+  printf '%s' "$ADV_OUT" | grep -q "collected worker 'ghost-111' expired claim" \
+    && ok "case24(a): claim COLLECTS the stale marker it claims over (names the evicted worker)" \
+    || bad "case24(a): claim must collect the stale marker it claims over" "$ADV_OUT"
+  [ "$(adv_workers_on 84)" = "heron-b71" ] \
+    && ok "case24(a): ...and exactly ONE marker survives — the stale one is gone" \
+    || bad "case24(a): exactly one marker must survive" "workers: $(adv_workers_on 84)"
+  [ "$(adv_msgto 84 ghost-111)" = "1" ] \
+    && ok "case24(a): ...and the collected worker is TOLD, not silently evicted (a fsgg:msg to=ghost-111)" \
+    || bad "case24(a): the collected worker must be notified" "msgs to=ghost-111: $(adv_msgto 84 ghost-111)"
+
+  # (b) Re-claiming when MY OWN marker went stale must renew a SINGLE marker, not mint a second. #85 carries
+  #     otter-b55's own STALE claim; otter-b55 re-claims (no --force — it holds nothing else live).
+  adv_cap claim 'FS.GG.SDD#85' --worker otter-b55
+  { [ "$ADV_RC" = "0" ] && [ "$(adv_workers_on 85)" = "otter-b55" ]; } \
+    && ok "case24(b): a worker whose OWN marker went stale ends with ONE marker (a renew, not a duplicate)" \
+    || bad "case24(b): a self-renew must leave exactly one marker" "rc=$ADV_RC workers: $(adv_workers_on 85)"
+  # Renewing your OWN stale marker is not an eviction to announce — you do not message yourself.
+  case "$ADV_OUT" in
+    *"collected worker 'otter-b55'"*) bad "case24(b): a self-renew must not announce collecting itself" "$ADV_OUT" ;;
+    *) ok "case24(b): ...and it does NOT announce collecting its own marker (no self-eviction)" ;;
+  esac
+
+  # (l) Two claimants collecting the SAME expired marker: the loser's collect DELETE 404s because the winner
+  #     already removed it. "Already gone" is the goal state of a collector, so the claim still WINS. #95's
+  #     ghost-444 marker DELETEs with a 404 (GH_DELETE_404=818, the corpus's model).
+  adv_cap claim 'FS.GG.SDD#95' --worker heron-b71 --force
+  { [ "$ADV_RC" = "0" ] && printf '%s' "$ADV_OUT" | grep -q 'claimed FS.GG.SDD#95'; } \
+    && ok "case24(l): a 404 collecting an already-gone stale marker is NOT fatal — the claim wins" \
+    || bad "case24(l): a benign 404 on collection must not fail the claim" "rc=$ADV_RC $ADV_OUT"
+  [ "$(adv_workers_on 95)" = "heron-b71" ] \
+    && ok "case24(l): ...and 'already gone' leaves exactly the new holder" \
+    || bad "case24(l): a concurrent-GC 404 must leave only the new holder" "workers: $(adv_workers_on 95)"
+
   kill "$ADV_SRV" 2>/dev/null
 fi
 

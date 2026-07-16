@@ -78,8 +78,18 @@ module Writes =
     /// them is how "somebody else has it" became indistinguishable from "we could not tell" — which,
     /// under the CAS, must be read as a LOSS.
     type ClaimOutcome =
-        /// We won. Here is the proof.
-        | Won of Held
+        /// We won. Here is the proof — and the workers whose STALE markers we COLLECTED to win it.
+        ///
+        /// A stale marker is a lapsed lease, and the next claimant must COLLECT it, never merely out-order
+        /// it: an ignored stale marker is exactly what `heartbeat` later resurrects underneath the new
+        /// holder — two live markers, one item, the double-hold the whole protocol exists to prevent. So a
+        /// won claim DELETES the stale debris on the item (a 404 is success — a peer may have collected the
+        /// same marker first), and hands back the OTHER workers it evicted so the caller can TELL them, on
+        /// their own item, that their expired claim was collected. Our OWN stale marker (a renew of a claim
+        /// that went stale) is collected too — so exactly one marker survives — but is NOT in this list:
+        /// you do not message yourself. Collection is best-effort; a stale marker we could not delete is
+        /// LEFT for `reap`, never a reason to fail a claim we have already won.
+        | Won of held: Held * collected: WorkerId list
 
         /// Another worker holds it, and their lock is live. Their id, so the worker can `say` to them.
         | Lost of WorkerId
