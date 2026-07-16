@@ -1,7 +1,13 @@
 <!--
   The typed coordination engine, as a `dotnet tool` (ADR-0034 Phase 3a).
 
-  WHY IT IS PACKAGED NOW, AND WHY THAT IS *NOT* THE FLIP.
+  THE FLIP HAS SINCE HAPPENED (ADR-0040 Phase D COMPLETE). This tool is no longer packaged to *shadow*
+  bash — it IS the coordination client. `scripts/fsgg-coord` is now the §4.4 shim that execs this
+  command, the ~7,000-line bash monolith is deleted, and the shadow, the `engine=` mode flag, and the
+  fleet-divergence ledger are retired. The history below is why it was packaged BEFORE the flip; it is
+  kept as the record of that ordering.
+
+  WHY IT WAS PACKAGED FIRST, AND WHY THAT WAS *NOT* THE FLIP.
 
   Phase 2 shipped the shadow: both engines decide, bash's answer is returned, the disagreement is
   logged, and bash stays authoritative until that log is clean. Phase 2's exit criterion is "zero
@@ -10,9 +16,9 @@
   evidence needs the engine distributed; distribution was scheduled for Phase 3; Phase 3 was gated on
   Phase 2 exiting. The clock could never start (.github#617).
 
-  So publishing comes BEFORE flipping, and it is the only order in which the flip's evidence can
-  exist. Bash stays authoritative. The `engine=fs` mode stays refused. The single thing this changes
-  is that a worker in a receiver repo now HAS an engine to shadow with.
+  So publishing came BEFORE flipping, and it was the only order in which the flip's evidence could
+  exist. Bash stayed authoritative through Phase 3a. The single thing packaging changed was that a
+  worker in a receiver repo now HAD an engine to shadow with.
 
   IDENTITY IS FOREVER (ADR-0003; "package identity == product identity, never rename in place"):
 
@@ -73,8 +79,6 @@
     <Compile Include="Json.fs" />
     <Compile Include="Snapshot.fsi" />
     <Compile Include="Snapshot.fs" />
-    <Compile Include="Fleet.fsi" />
-    <Compile Include="Fleet.fs" />
     <Compile Include="Options.fsi" />
     <Compile Include="Options.fs" />
     <Compile Include="Identity.fsi" />

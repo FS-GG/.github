@@ -750,3 +750,32 @@ moles are whacked. #485 and #570 are already groping toward this by hand.
 
 Phase 4 is where the money is. The rewrite is the enabling condition; **the generated
 projections are the payoff.**
+
+---
+
+## 9. Epilogue — the port completed (ADR-0040 Phase D)
+
+Everything above from Phase 2 onward is the *plan*, in the tense it was written. This is what landed —
+the history is kept; only this note is added.
+
+The typed core did become the client, but **not** by flipping `--engine=fs` to the default.
+[ADR-0040](../adr/0040-port-the-io-layer.md) ported the IO layer the shadow plan had assumed away, and its
+**Phase D** cut over in four steps: the engine was published as a `dotnet tool` (Phase 3a);
+`scripts/fsgg-coord` became the ADR-0034 §4.4 shim that resolves and `exec`s the compiled
+`fsgg-coord-engine` (D.2); the shim went green in all six receivers (D.3); and the ~7,000-line bash
+monolith, the shell corpus, and the shadow were deleted (D.4 — the one-way door).
+
+So the following are **gone**, and every doc that still described them was retired with the D.4 follow-up:
+
+- **The shadow.** There is no "run both engines, return bash's answer" any more — there is one engine, and
+  its answer is the answer. `--engine=fs` / `--engine=bash` / `auto` went with the bash they chose between.
+- **The fleet-divergence ledger and its clock.** `Divergence.evaluate`, the `fleet` command, and
+  `fsgg-coord divergence --publish/--fleet` folded a ledger the bash shadow was the only producer of; with
+  the shadow gone nothing produces it, so that code was deleted.
+- **The cut-over gate.** [ADR-0038](../adr/0038-the-corpus-is-the-cut-over-gate.md) had already replaced
+  the fleet clock with the **defect corpus**; that corpus is now `tests/coord-engine-parity/` (~445
+  assertions), which drives the engine over HTTP with no bash in the pipeline.
+
+What the plan got right is that the rule now has **one home**, and it is not a shell pipeline. What it got
+wrong was the *mechanism* of the flip — a fleet clock no worktree worker could ever tick (#728), and a
+delete step that presumed an IO layer which did not yet exist. ADR-0038 and ADR-0040 corrected both.

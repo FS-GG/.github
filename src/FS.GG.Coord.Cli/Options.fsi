@@ -13,13 +13,12 @@ namespace FS.GG.Coord.Cli
 /// collected in order into `Args`, and each command validates its own arity.
 module Options =
 
-    /// What the engine was asked to do. The DECISION commands (`Decide`, `Fleet`, `Lanes`, `Facts`) read
+    /// What the engine was asked to do. The DECISION commands (`Decide`, `Lanes`, `Facts`) read
     /// state on stdin and touch no network; the CLIENT commands below `Scan` perform IO through the GitHub
     /// adapter — they are the surface the shim (ADR-0034 §4.4) execs in place of the bash client.
     type Command =
         | Decide
         | Scan
-        | FleetVerdict
         | LanesView
         | Facts
 

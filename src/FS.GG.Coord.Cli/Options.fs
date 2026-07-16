@@ -5,7 +5,6 @@ module Options =
     type Command =
         | Decide
         | Scan
-        | FleetVerdict
         | LanesView
         | Facts
         | WhoAmI
@@ -117,7 +116,6 @@ CLIENT commands read and write GitHub through the typed IO layer.
 
 DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
-  fleet  [--snapshot FILE] [--json|--text]   fold the fleet divergence ledger into the cut-over verdict
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
 
@@ -360,7 +358,6 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | "scan" :: rest -> flags { defaults with Command = Scan } rest
         | "decide" :: rest -> flags { defaults with Command = Decide } rest
-        | "fleet" :: rest -> flags { defaults with Command = FleetVerdict } rest
         | "lanes" :: rest -> flags { defaults with Command = LanesView } rest
         | "facts" :: rest -> flags { defaults with Command = Facts } rest
 
