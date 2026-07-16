@@ -150,7 +150,7 @@ server charged **that query** — attributable, and unaffected by anyone else.
 | `next [--repo R] [--ignore-blocked] [--fresh]` | (4) | Print the one most-startable item — the first `Ready`, else the first `Backlog` — optionally scoped to a repo. Items whose `Blocked by` refs are still open (or cannot be verified) are **skipped**, with the reason on stderr; `--ignore-blocked` restores the unfiltered pick. Blocked-awareness is **free**: the blockers resolve against the same scan (which already carries every board item's `state`), so no per-blocker lookup is paid. A **scheduling** read, so it serves the shared 90s scan cache — the second worker to ask inside the window pays **0 pts**. `--fresh` forces a rescan. |
 | `lint [--repo R] [--json] [--strict]` | (4) | Assert the board's **epic invariants**: no **open** `[epic]` with zero sub-issues (the orphaned epic — a closed childless epic is finished work, not an orphan), none the board calls `Done` over a still-open child, none with more children than the scan can see. Exits non-zero on any error; `Status: Done` on a still-open issue is a NOTE (fatal only under `--strict`). Same paginated full scan as `ready` — 1 point per 100-item page — but it also selects each epic's `subIssues`, which raises **nodeCount** (~200 → ~10,100 per page) while leaving cost at 1. That buys every child's state in the same pagination, where the alternative is one follow-up query per epic. |
 | `who` / `reap` / `inbox` / `batch` / `take` / `overlap --active` / `widen` | (3)+(4) | All read "what is in flight" from one place, and because **the marker is the lock**, that set is found by reading markers — not by trusting the board's `In progress` column, which `claim` writes best-effort. Cost: the same one board scan as `ready`, plus **one paginated REST issue-list per repo** (which carries each issue's body, so a touch-set is free), plus **one comments read per candidate**. Candidates are pruned soundly on `comments > 0` — a claim marker *is* a comment, so a zero-comment issue cannot hold a lock. This list deliberately does **not** reuse the ETag'd `issues` command: that asks for one page of 100 (a lock may not have a 100-issue limit), and a 304 serving a pre-claim `comments: 0` would hide a live marker — **a lock may never be read from a cache**. Measured on `FS-GG/.github`: 4 GraphQL + 3 REST for one repo, 12 REST across all of them. Known bound: without `--repo`, the repos scanned come from the board, so a claim in a repo with zero board items needs an explicit `--repo`. |
-| `flush [--dry-run]` | (5) | Replay board writes an exhausted budget refused. `claim` queues them rather than losing them; every board-writing command drains the queue first, so it empties on its own once the budget returns. |
+| `flush [--dry-run]` | (5) | Replay board writes an exhausted budget refused. **Every** board write queues rather than losing it (#510) — but **nothing drains the queue on its own**: no board write flushes as a side effect, so `flush` is the only thing that replays one, and you must run it. `--dry-run` lists what is queued without replaying. Both check the queue before touching the board, so an empty queue and a dry run cost **zero** GraphQL. |
 | `budget` | — | Print the GraphQL **and** REST meters, the queued-write count, and a **warning while there is still budget left to act on** (`gh api rate_limit` does not itself consume the core budget). |
 
 ## Scheduling reads vs. truth reads — where the 90s cache line is drawn
@@ -182,11 +182,25 @@ So the client treats it as its own condition:
 - **The lock still works.** Claim markers, comments, issue reads, PR creation — all REST, all on the
   other budget. `claim` under exhaustion takes the lock and reports the board write as **DEFERRED**.
 - **The board write is queued, not lost — and this is now true of EVERY board write.** There is one
-  board write in the client (`board_write`), and it queues. `flush` replays it; the next board-writing
-  command flushes automatically.
+  board write in the client (`board_write`), and it queues. **`flush` replays it, and NOTHING else
+  does.** There is no autoflush on any code path: no board-writing command drains the queue as a side
+  effect, so a deferral nobody flushes is a write that never lands. `EX_RATE` is therefore a back-off
+  **and-come-back** instruction, and `flush` is the coming back:
 
-  It was not always so, and the way it failed is worth keeping: **only `claim` ever called
-  `defer_write`**, while the exhaustion message above told *every* caller "Board WRITES are queued".
+  ```sh
+  scripts/fsgg-coord flush --dry-run   # what is queued — replays NOTHING, costs zero GraphQL
+  scripts/fsgg-coord flush             # replay it, once the budget is back
+  ```
+
+  **This text used to say the opposite** — *"the next board-writing command flushes automatically"* —
+  and it was never true of any engine, bash or port (`.github#883`). It was false in the direction that
+  produces **inaction**: the recipes pair the promise with *"do not fix the board by hand"*, so a worker
+  whose `set-field` deferred read both instructions as **do nothing**, and the write sat in
+  `pending.jsonl` forever.
+
+  **Universal deferral was not always so either**, and the way it failed is the same shape: **only
+  `claim` ever called `defer_write`**, while the exhaustion message above told *every* caller
+  "Board WRITES are queued".
   So a `set-field` — which the recipes drive three times in a row when a worker files a finding —
   printed the promise and **dropped the write**; `flush` then found an empty queue and reported
   success, *confirming the lie*. The finding landed on the board with no Status, no Repo Scope and no
