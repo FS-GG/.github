@@ -244,24 +244,41 @@ fi
 # go red on a check they cannot make green from their own PR.
 #
 # That is not a hypothetical: #499 moved the source of truth and FS.GG.SDD could not merge ANYTHING
-# for hours (.github#379). Four of the five consumers have no global.json today, so putting it in FILES
-# now would do the same to four repos at once.
+# for hours (.github#379). Putting global.json in FILES before the receivers are coherent with the
+# canonical copy would do the same to several repos at once.
 #
 # The rule — receivers adopt first, the shared config enforces last — was written in a comment, and a
 # comment is not a gate (#266). So it is a test. These two legs are a TRIPWIRE, and they are meant to
-# be DELETED, not worked around: when Game / Rendering / SDD / Governance have all adopted, the item
-# that adds "global.json" to FILES removes this block in the same PR. Until then, a well-meaning
-# "finish the job" edit reds here, with the reason, instead of freezing the org.
+# be DELETED, not worked around: the item that adds "global.json" to FILES removes this block in the
+# same PR. Until then, a well-meaning "finish the job" edit reds here, with the reason, instead of
+# freezing the org.
+#
+# DO NOT DELETE THIS BLOCK BECAUSE "EVERYONE HAS A global.json NOW" (#805). They do, and it is still
+# not safe. `--check` compares CONTENT: a receiver whose global.json names a different band than
+# dist/dotnet/global.json drifts exactly as hard as one carrying none.
+#
+# And they diverged without anyone doing anything wrong. The four receivers adopted byte-identically
+# at the canonical 10.0.301 of the day (#561); Renovate then bumped the CANONICAL to 10.0.302
+# (bff95e4, #804) and bumped Game and Governance in their own repos, leaving Rendering, SDD and Audio
+# holding the original bytes. Measured 2026-07-16: three of five would have gone red, every one of
+# them having adopted exactly as instructed. This file is distributed but UNMANAGED, so nothing fans
+# a canonical bump out — divergence is the steady state, and it re-opens on every SDK patch.
+#
+# The condition for deleting this block is CONTENT COHERENCE **and** a decision (.github#903) that
+# enforcement is what we want at all — leaving global.json unmanaged, and dropping this block
+# unsatisfied, is a live option there. Neither condition is recorded here: this comment would rot the
+# same way the census did. Measure it (the loop in scripts/sync-build-config.sh's FILES note prints
+# MATCHES/DRIFTS per repo), read #903, and only then decide what happens to this block.
 [ -f "$SRC/global.json" ] \
   && ok "global.json: the canonical SDK pin is distributed (present under dist/dotnet/)" \
   || bad "global.json: canonical SDK pin missing from dist/dotnet/" \
          "#536 distributes the SDK pin; without the source file, step 3 (adding it to FILES) can never be taken."
 
 if grep -qE '^\s*"global\.json"' "$SCRIPT"; then
-  bad "global.json: is NOT in FILES yet — receivers must adopt FIRST" \
-      "$(printf '"global.json" was added to sync-build-config.sh FILES, but 4 of 5 consumers (Game, Rendering, SDD, Governance) have no global.json.\n--check reports a MISSING managed file as DRIFT, and that check is REQUIRED in those repos — so this change MERGE-FREEZES all four, exactly as .github#499 froze FS.GG.SDD (#379).\n\nIf the receivers HAVE now adopted: delete this tripwire block in the same PR. That is the intended way to remove it.\nIf they have not: land the per-repo adoption items first (see .github#536).')"
+  bad "global.json: is NOT in FILES yet — receivers must MATCH the canonical pin FIRST" \
+      "$(printf '"global.json" was added to sync-build-config.sh FILES.\n--check reports a managed file that is MISSING or DIFFERENT as DRIFT, and that check is REQUIRED in the receivers — so this change MERGE-FREEZES every repo not byte-identical to dist/dotnet/global.json, exactly as .github#499 froze FS.GG.SDD (#379).\n\n"EVERY CONSUMER HAS ONE" IS NOT THE CONDITION (#805). They all do, and three of them still named a different band than canonical when this was last measured (2026-07-16: canonical 10.0.302; Rendering/SDD/Audio 10.0.301). Presence is not coherence — and nobody erred: the receivers adopted byte-identically at 10.0.301, then Renovate bumped the CANONICAL to 10.0.302 (#804) and only some receivers followed. This file is unmanaged, so nothing fans a canonical bump out.\n\nMEASURE before you delete this block — do not trust any census written in a comment:\n  for r in Game Rendering SDD Governance Audio; do\n    gh api "repos/FS-GG/FS.GG.$r/contents/global.json" --jq .content 2>/dev/null | base64 -d \\\n      | diff -q - dist/dotnet/global.json >/dev/null && echo "$r: MATCHES" || echo "$r: DRIFTS"\n  done\n\nAND WHETHER TO ENFORCE AT ALL IS AN OPEN DECISION — see .github#903. Leaving global.json unmanaged is a live option there, in which case this block should be DELETED rather than satisfied. Do not read a red here as an instruction to make it green.\n\nIf every receiver MATCHES and #903 decided to enforce: delete this tripwire block in the same PR. That is the intended way to remove it.\nIf any DRIFTS: re-pin it to the canonical band first (see .github#561, .github#903).')"
 else
-  ok "global.json: correctly NOT in FILES yet — adding it before the receivers adopt would freeze 4 repos"
+  ok "global.json: correctly NOT in FILES yet — adding it before receivers MATCH canonical would freeze them"
 fi
 
 # =================================================================================================
