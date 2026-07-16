@@ -202,7 +202,7 @@ jobs:
       # This costs the daily bot ~1 min and buys the end of a five-copy duplication that produced five
       # bugs. If the build fails the gate step cannot run, `$GITHUB_OUTPUT` gets no `merge` key, and
       # nothing is merged — the same fail-closed direction as every other way this gate can die.
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 

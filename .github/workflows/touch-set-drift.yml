@@ -50,7 +50,7 @@ jobs:
       # restores it from the feed, ADR-0034 §4.3) and hands the shim its path via `FSGG_COORD_ENGINE_BIN`
       # (tier 1) — the same wiring the corpus/e2e gates use, so `verify-paths` resolves an engine here rather
       # than dying #266-loud on a runner with no built binary.
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
