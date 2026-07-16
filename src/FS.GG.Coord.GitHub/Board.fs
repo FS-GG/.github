@@ -1037,13 +1037,25 @@ module Board =
                 Ok Written
             | Error e -> if isQueueable e then queueAll e else Error e
 
-    let flush (transport: IGitHubTransport) (board: BoardMap) : IoResult<int> =
+    type FlushOutcome =
+        { Queued: int
+          Written: int
+          Dropped: int
+          Stopped: IoError option }
+
+    let flush (transport: IGitHubTransport) (board: BoardMap) : IoResult<FlushOutcome> =
         match Cache.pending () with
         | Error e -> Error e
-        | Ok [] -> Ok 0
+        | Ok [] ->
+            Ok
+                { Queued = 0
+                  Written = 0
+                  Dropped = 0
+                  Stopped = None }
         | Ok entries ->
 
         let mutable written = 0
+        let mutable dropped = 0
         let mutable stopped = None
 
         for entry in entries do
@@ -1063,7 +1075,9 @@ module Board =
                         | _ -> None
 
                 match parsed with
-                | None -> Cache.dropPending entry
+                | None ->
+                    Cache.dropPending entry
+                    dropped <- dropped + 1
                 | Some(owner, repo, number) ->
 
                     let write =
@@ -1075,14 +1089,24 @@ module Board =
                     // appends a second copy. Every flush under a dead budget would double the queue,
                     // forever, while reporting that it had written nothing and backing off from nothing.
                     match attempt transport board owner repo number entry.Field write with
-                    | Ok Written
+                    | Ok Written ->
+                        Cache.dropPending entry
+                        written <- written + 1
+
                     | Ok NotOnBoard ->
                         // `NotOnBoard` is DROPPED, not retried. It is permanent, and `boardWrite` would not
                         // have queued it in the first place — but an entry queued before the item was
                         // removed from the board can still reach here, and carrying it forever would mean
                         // the queue never drains.
+                        //
+                        // DROPPED IS NOT WRITTEN, AND `written` IS THE COUNT THIS FUNCTION RETURNS (#862).
+                        // Counting it here would report a write that never happened, to a caller whose whole
+                        // job is telling a worker whether their board writes landed — the same
+                        // "reported success over a subject it never touched" that #266 names, inside the
+                        // one verb that exists to repair exactly that. The entry still drops; it counts
+                        // as DROPPED, which is a fact the caller renders separately.
                         Cache.dropPending entry
-                        written <- written + 1
+                        dropped <- dropped + 1
 
                     | Ok Deferred ->
                         // `attempt` cannot return this — it has no queue. The case exists so that a future
@@ -1100,7 +1124,15 @@ module Board =
                         // A PERMANENTLY UN-WRITABLE ENTRY IS DROPPED, LOUDLY. It will never land, and
                         // carrying it forever means the queue never drains and nobody is ever told why.
                         Cache.dropPending entry
+                        dropped <- dropped + 1
 
-        match stopped with
-        | Some e -> Error e
-        | None -> Ok written
+        // A STOP IS NOT AN ERROR HERE, AND THAT IS THE FIX (#862). Returning `Error e` discarded `written`
+        // — the count the caller renders — so the caller re-read the queue to infer it, and a concurrent
+        // `defer` into the shared queue file made that inference wrong. The rate limit and the work that
+        // landed are DIFFERENT FACTS; a caller needs both, so both are returned. `Error` now means only
+        // "the queue could not be read".
+        Ok
+            { Queued = List.length entries
+              Written = written
+              Dropped = dropped
+              Stopped = stopped }

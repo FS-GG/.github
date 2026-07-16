@@ -34,6 +34,7 @@ module Options =
         | OptionId
         | ItemId
         | Add
+        | Flush
         | LintCmd
         | Issues
         | Help
@@ -93,6 +94,16 @@ module Options =
           /// `inbox --peek` — show new messages WITHOUT advancing the per-worker cursor, so the same mail
           /// is still "new" on the next read. Off, `inbox` consumes what it shows.
           Peek: bool
+
+          /// `flush --dry-run` — LIST the queued writes without replaying them.
+          ///
+          /// The polarity is deliberate, and it is the OPPOSITE of `reap --apply` (#862). `reap` collects
+          /// another worker's claim, so its bare form must be safe. `flush` replays writes THIS worker was
+          /// already told were queued — the recovery action the `EX_RATE` message names — so a dry run by
+          /// default would rebuild the exact trap this issue was filed for: a worker runs the command the
+          /// engine told them to run, reads "3 pending", concludes the board is repaired, and walks away
+          /// from three writes that never landed.
+          DryRun: bool
 
           /// `landable --wait` — poll until the verdict SETTLES instead of reading it once (#724). A `green`
           /// is believed only once the subject count has stopped growing; a `red` at zero subjects is the
@@ -165,6 +176,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              verb the GraphQL monopoly rule names (#586); prints the item id
   set-field <ref> <field> <value>            write one board field (empty value clears)
   set-field --batch <ref> Field=Value ...    write N fields in ONE aliased mutation (#448)
+  flush  [--dry-run]                         REPLAY the board writes an exhausted budget queued — the verb
+                                             every "QUEUED; flush replays it" message names (#862). Replays
+                                             by DEFAULT; --dry-run lists the queue and writes nothing
   child  <parent-ref> <child-ref>            attach a child issue to a parent
   widen  <ref> --paths T...                  widen a HELD item's touch-set
   overlap <ref> --active | <a> <b>           does an item's touch-set collide? (repo-scoped, #353)
@@ -178,7 +192,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                [--issue REF] [--warn]        SKIP; --issue names the issue explicitly; --warn advisory)
 
   whoami [--mint]                            this worker's id and how it was derived
-  budget                                     the GraphQL/REST budget
+  budget [--json]                            the GraphQL budget, and the depth of the deferral queue
+                                             (`pendingBoardWrites`) — free, and 0 GraphQL
 
   bootstrap [--refresh]                      resolve the board + field/option ids (2 GraphQL, then
                                              day-cached; --refresh drops the cache and re-resolves)
@@ -283,6 +298,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--active" :: t -> flags { acc with Active = true } t
             | "--apply" :: t -> flags { acc with Apply = true } t
             | "--peek" :: t -> flags { acc with Peek = true } t
+            | "--dry-run" :: t -> flags { acc with DryRun = true } t
 
             | "--wait" :: t -> flags { acc with Wait = true } t
 
@@ -382,6 +398,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Active = false
               Apply = false
               Peek = false
+              DryRun = false
               Wait = false
               Tries = None
               Interval = None
@@ -403,7 +420,11 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "facts" :: rest -> flags { defaults with Command = Facts } rest
 
         | "whoami" :: rest -> flags { defaults with Command = WhoAmI } rest
-        | "budget" :: rest -> flags { defaults with Command = Budget } rest
+        // `budget` reports as text — the operator's free pre-flight read — and `--json` opts into the
+        // machine contract (`pendingBoardWrites`, #862), the same polarity as `who`/`inbox`. It ALWAYS
+        // rendered text; pinning `Render` here is what makes that the DECLARED default rather than a
+        // record field the command quietly ignored, so `--json` now means something.
+        | "budget" :: rest -> flags { defaults with Command = Budget; Render = Text } rest
         | "next" :: rest -> flags { defaults with Command = Next } rest
         | "batch" :: rest -> flags { defaults with Command = BatchCmd } rest
         | "ready" :: rest -> flags { defaults with Command = Ready } rest
@@ -438,6 +459,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "option-id" :: rest -> flags { defaults with Command = OptionId } rest
         | "item-id" :: rest -> flags { defaults with Command = ItemId } rest
         | "add" :: rest -> flags { defaults with Command = Add } rest
+        // `flush` REPLAYS by default — see `DryRun`. It reports as text: an operator reads it after the
+        // back-off `EX_RATE` told them to take.
+        | "flush" :: rest -> flags { defaults with Command = Flush; Render = Text } rest
         | "lint" :: rest -> flags { defaults with Command = LintCmd; Render = Text } rest
         // `issues` emits the raw JSON array (bash's `issues` prints the REST body); the caller projects it
         // with jq, so the default Json render stands.

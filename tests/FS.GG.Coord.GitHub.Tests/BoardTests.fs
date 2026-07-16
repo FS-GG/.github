@@ -541,13 +541,43 @@ let ``flush replays a queued write and DROPS it`` () =
         scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
 
     match flush replaying board with
-    | Ok 1 ->
+    | Ok r when r.Written = 1 && r.Queued = 1 && r.Dropped = 0 && r.Stopped.IsNone ->
         // UNLINKED, not truncated. An empty file is a claim — "there is a queue and it is empty" — and that
         // is a statement about state nobody made.
         match Cache.pending () with
         | Ok [] -> ()
         | other -> failwith $"the replayed entry must be gone — got %A{other}"
     | other -> failwith $"flush must replay the queued write — got %A{other}"
+
+[<Fact>]
+let ``#862 flush DROPS an entry whose item left the board - but does NOT count it as written`` () =
+    use _sandbox = new Sandbox()
+
+    // QUEUE A WRITE, then have the item leave the board before the replay. `boardWrite` refuses to queue a
+    // `NotOnBoard` (the #510 leg above), so this is the ONE way the case is reachable: the entry was
+    // legitimately queued against an item that WAS on the board, and the board moved underneath it.
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited None) ]
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    // The replay's lookup succeeds and finds NOTHING — the item is gone.
+    let gone =
+        scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+
+    match flush gone board with
+    // ZERO, not one. The entry is permanent and correctly DROPPED — carrying it forever would mean the
+    // queue never drains — but `written` is the count `flush` REPORTS, and a caller renders it as "replayed
+    // N of M". Counting a drop there tells a worker their board write landed when nothing was written: the
+    // precise failure #862 exists to end, rebuilt inside the verb that exists to repair it.
+    | Ok r when r.Written = 0 ->
+        // The drop is REPORTED as a drop — a fact of its own, next to a `Written` that stays honest.
+        Assert.Equal(1, r.Dropped)
+        Assert.Equal(1, r.Queued)
+
+        match Cache.pending () with
+        | Ok [] -> ()
+        | other -> failwith $"the un-writable entry must still be DROPPED — got %A{other}"
+    | Ok r -> failwith $"a dropped entry must not be COUNTED as written — flush reported %d{r.Written}"
+    | other -> failwith $"expected a clean flush that wrote nothing — got %A{other}"
 
 [<Fact>]
 let ``an exhausted budget STOPS the flush - the rest would fail identically`` () =
@@ -567,12 +597,49 @@ let ``an exhausted budget STOPS the flush - the rest would fail identically`` ()
     // exists to signal. The remainder stays queued.
     let stillLimited = Fake.Recorder(fun _ -> Error(RateLimited None))
 
+    // A STOP IS `Stopped`, NOT `Error` (#862). `Error` is reserved for a queue that could not be READ, so
+    // that the count this pass landed survives alongside the rate limit rather than being discarded with it.
     match flush stillLimited board with
-    | Error(RateLimited _) ->
+    | Ok r when r.Stopped.IsSome ->
+        Assert.Equal(0, r.Written)
+
         match Cache.pending () with
         | Ok entries -> Assert.Equal(2, List.length entries)
         | other -> failwith $"the queue must survive a stopped flush — got %A{other}"
     | other -> failwith $"an exhausted budget must stop the flush — got %A{other}"
+
+[<Fact>]
+let ``#862 a PARTIAL flush reports the writes it DID land, alongside the stop`` () =
+    use _sandbox = new Sandbox()
+
+    // Two queued writes; the replay lands the first and meets a fresh rate limit on the second.
+    let deferring =
+        scripted [ ok itemOnBoard; Error(RateLimited None); ok itemOnBoard; Error(RateLimited None) ]
+
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 811 "Status" (Set "Ready") "vole-418" |> ignore
+
+    let partial =
+        scripted
+            [ ok itemOnBoard
+              ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+              Error(RateLimited None) ]
+
+    // THE COUNT MUST SURVIVE THE STOP. `flush` used to return `IoResult<int>`, so a stop returned `Error e`
+    // and DISCARDED the 1 it had just written — leaving the caller to re-read the shared queue file and
+    // infer it, which a concurrent `defer` makes wrong. "One landed, one did not" is the whole answer the
+    // worker needs, and it is exactly what the old shape could not say.
+    match flush partial board with
+    | Ok r when r.Stopped.IsSome ->
+        Assert.Equal(2, r.Queued)
+        Assert.Equal(1, r.Written)
+        Assert.Equal(0, r.Dropped)
+
+        // The one that landed is gone; the one that did not is still queued, untouched.
+        match Cache.pending () with
+        | Ok [ survivor ] -> Assert.Equal("FS-GG/FS.GG.SDD#811", survivor.Ref)
+        | other -> failwith $"exactly the unreplayed entry must remain — got %A{other}"
+    | other -> failwith $"a partial flush must report the write it landed AND the stop — got %A{other}"
 
 [<Fact>]
 let ``a stopped flush does NOT RE-QUEUE what it was replaying - the queue must not grow`` () =
