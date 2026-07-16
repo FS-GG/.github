@@ -1,16 +1,22 @@
-# coord-core — FS.GG.Coord.Core, the typed coordination domain (ADR-0034, Phase 1).
+# coord-core — FS.GG.Coord.Core, the typed coordination domain (ADR-0034).
 #
-# THIS SHIPS NOTHING, AND THAT IS THE POINT. Phase 1 is deliberately dead code with a live test suite.
+# THIS CORE IS LOAD-BEARING, AND THAT IS WHY THIS GATE MATTERS. It began as Phase 1's deliberately dead
+# code with a live test suite; it is today referenced directly by FS.GG.Coord.Cli — the published
+# `fsgg-coord-engine` tool, and the SOLE implementation of the protocol. ADR-0040 Phase D.4 deleted the
+# bash monolith, so there is no second implementation to fall back on and no shadow comparing the two:
+# a rule that breaks here breaks coordination everywhere.
 #
-# The 4,024 lines of bash this core will replace are not merely code — they are a record of every way
-# this domain has gone wrong, written down by the people it went wrong for. `scripts/fsgg-coord` is an
-# incident log with a shebang. Porting that log into named regression tests BEFORE any of the new code
-# is trusted is the whole of Phase 1, and it is the direct cure for the failure that produced #488: a
-# fix that reintroduced its own bug, because nothing proved it could not.
+# The tests are an INCIDENT LOG, and that is why they outlived what they were ported from. The 4,024
+# lines of bash this core replaced were not merely code — they were a record of every way this domain
+# has gone wrong, written down by the people it went wrong for. Porting that log into named regression
+# tests BEFORE any of the new code was trusted was the whole of Phase 1, and it is the direct cure for
+# the failure that produced #488: a fix that reintroduced its own bug, because nothing proved it could
+# not. The bash is gone; the log it left is what still runs here.
 #
-# So this gate runs on a project nothing consumes. It will keep doing so until Phase 2 puts the engine
-# behind `--engine=fs` in shadow mode, and Phase 3 flips it. A green build here is not a claim that the
-# engine works; it is a claim that the RULES it encodes still hold.
+# A green build here is not a claim that the ENGINE works; it is a claim that the RULES it encodes still
+# hold. What proved the engine — and proved the swap to it was transparent — is the defect corpus of
+# ADR-0038 (`tests/coord-engine-parity/`, `tests/coord-engine-e2e/`), which `coord-engine.yml` gates,
+# not this job.
 #
 # The tests carry issue numbers because the issues are the specification: #266 (an unverifiable subject
 # must not report green), #273/#277/#435/#496 (the touch-set grammar), #437/#440/#488 (a full queue is

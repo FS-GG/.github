@@ -5,17 +5,19 @@ name: release-coord-engine
 # exception, on the same grounds as the first (release-new-sdd-workspace.yml): the tool lives here, so
 # its publish does too.
 #
-# THIS PUBLISH IS NOT THE FLIP, and the distinction is the whole reason it happens now.
+# THIS PUBLISH IS THE DISTRIBUTION PATH FOR THE ONLY IMPLEMENTATION, which is what makes it load-bearing.
 #
-# ADR-0034 Phase 2 exits on "zero divergence across the LIVE FLEET for three consecutive days". That
-# could never be met: the shadow only runs where an engine exists, an engine only existed where someone
-# had BUILT it (`.github`, and nowhere else), and distributing it was scheduled for Phase 3 — which was
-# itself gated on Phase 2 exiting. The clock could never start (.github#617).
+# ADR-0040 Phase D.4 deleted the bash monolith and the shadow that compared against it. The engine is the
+# sole implementation, and `scripts/fsgg-coord` is now a resolver shim that finds this very package via
+# the receivers' `.config/dotnet-tools.json` and `exec`s it. So a receiver repo that cannot restore it has
+# no coordination tool at all — there is no second engine to fall back to, and nothing to shadow with.
 #
-# So publishing comes BEFORE flipping, and it is the only order in which the flip's evidence can exist.
-# This publish does not change WHO DECIDES. The default mode is `auto`, and `auto` returns BASH'S answer;
-# `--engine=fs` is open since ADR-0038 but it is never the default. The one thing this changes is that a
-# worker in a receiver repo now HAS an engine to shadow with — an instrument, not a new authority.
+# What gated the cut-over was the DEFECT CORPUS, not a clock (ADR-0038). ADR-0034 §5 staged the flip
+# behind "zero divergence across the LIVE FLEET for three consecutive days", and that clock could never
+# tick: the shadow only ran where an engine existed, an engine only existed where someone had BUILT it
+# (`.github`, and nowhere else), and distributing it was gated on the criterion it was needed to meet
+# (.github#617). The corpus — `tests/coord-engine-parity/` and `tests/coord-engine-e2e/` — replaced it,
+# and `shim.sh` re-running that corpus THROUGH the shim is how the swap was proven transparent.
 #
 # `.github` builds the engine FROM SOURCE and never restores it from the feed — the asymmetry ADR-0034
 # §4.4 relies on. A broken feed therefore cannot prevent the coordination tool from being fixed.
@@ -170,8 +172,9 @@ jobs:
       # (which sync-build-config byte-copies into all six) would simply break `dotnet tool restore` in
       # five repos.
       #
-      # And the receivers are the whole point. ADR-0034 Phase 2 exits on divergence evidence from the
-      # LIVE FLEET, and the fleet is those six repos.
+      # And the receivers are the whole point. `scripts/fsgg-coord` resolves this package and `exec`s it,
+      # so a receiver that cannot restore it has no coordination tool at all — not a slower one, none.
+      # The fleet is those six repos.
       #
       # ADR-0012 dual-publish, ADR-0013 auth (Trusted Publishing OIDC — no stored key). Pushes the
       # BYTE-IDENTICAL org-feed .nupkg, no re-pack. Gated on `vars.NUGET_ORG_PUBLISH` so it stays
@@ -205,11 +208,6 @@ jobs:
             echo "### fsgg-coord-engine ${{ steps.v.outputs.version }}"
             if [ "${{ steps.v.outputs.push }}" = "true" ]; then
               echo "Published \`FS.GG.Coord.Cli\` **${{ steps.v.outputs.version }}** to the org feed."
-              echo ""
-              echo "This is **not** the flip. The default mode is \`auto\`, and \`auto\` returns BASH's answer;"
-              echo "\`--engine=fs\` is open (ADR-0038) but never the default."
-              echo "What it changes: a worker in a receiver repo now has an engine to SHADOW with, so the"
-              echo "divergence log — now TELEMETRY, not the cut-over gate — can start filling."
             else
               echo "Pack-only dry run — nothing pushed."
             fi
