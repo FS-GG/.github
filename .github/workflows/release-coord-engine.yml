@@ -8,8 +8,8 @@ name: release-coord-engine
 # THIS PUBLISH IS THE DISTRIBUTION PATH FOR THE ONLY IMPLEMENTATION, which is what makes it load-bearing.
 #
 # ADR-0040 Phase D.4 deleted the bash monolith and the shadow that compared against it. The engine is the
-# sole implementation, and `scripts/fsgg-coord` is an 83-line resolver shim that finds this very package
-# via `.config/dotnet-tools.json` and `exec`s it. So a receiver repo that cannot restore this package has
+# sole implementation, and `scripts/fsgg-coord` is now a resolver shim that finds this very package via
+# the receivers' `.config/dotnet-tools.json` and `exec`s it. So a receiver repo that cannot restore it has
 # no coordination tool at all — there is no second engine to fall back to, and nothing to shadow with.
 #
 # What gated the cut-over was the DEFECT CORPUS, not a clock (ADR-0038). ADR-0034 §5 staged the flip

@@ -1,7 +1,7 @@
 # coord-core — FS.GG.Coord.Core, the typed coordination domain (ADR-0034).
 #
 # THIS CORE IS LOAD-BEARING, AND THAT IS WHY THIS GATE MATTERS. It began as Phase 1's deliberately dead
-# code with a live test suite; it is today a ProjectReference of FS.GG.Coord.Cli — the published
+# code with a live test suite; it is today referenced directly by FS.GG.Coord.Cli — the published
 # `fsgg-coord-engine` tool, and the SOLE implementation of the protocol. ADR-0040 Phase D.4 deleted the
 # bash monolith, so there is no second implementation to fall back on and no shadow comparing the two:
 # a rule that breaks here breaks coordination everywhere.
