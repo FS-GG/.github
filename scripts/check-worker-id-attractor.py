@@ -136,19 +136,32 @@ SELF_BASENAME = "check-worker-id-attractor.py"
 # stdout, so `eval "$(...)"` is the whole ritual.
 SANCTIONED_MINT = re.compile(r"fsgg-coord\s+whoami\s+--mint")
 
-# A mint remedy a reader can PASTE: `eval "$(<cmd> whoami --mint)"`, in a doc or in a string the tool
-# prints. `\\?"` because the engine's F# literals escape the quote (`eval \"$(…)\"`).
-EVAL_MINT = re.compile(r"eval\s+\\?\"\$\(\s*(?P<cmd>[^\s()]+)\s+whoami\s+--mint")
+# A mint remedy a reader can PASTE, captured by the COMMAND it names rather than by the `eval "$(…)"`
+# wrapper around it. Keying on the wrapper is the obvious way to write this and it FAILS OPEN: a site
+# printing `run: fsgg-coord-engine whoami --mint` — the same `command not found`, minus the eval —
+# sails past, and the summary then asserts that N remedies "run as printed" while one of them does
+# not. The command is the subject; the wrapper is decoration.
+#
+# The character class is what keeps this off prose. A command token is `[\w./-]+`, so the forms that
+# legitimately mention the mint without naming a command do not match, and are not findings:
+#     `whoami --mint` prints one line       <- prose ABOUT the ritual: no command token
+#     eval "$(… whoami --mint)"             <- an ellipsis placeholder: `…` is not in the class
+#     grep -q 'whoami --mint'               <- a test asserting on the string: quote, not a token
+#     "$ENGINE" whoami --mint               <- a test invoking a built binary: quote, not a token
+MINT_CALL = re.compile(r"(?P<cmd>[\w./-]+)\s+whoami\s+--mint")
 
 # The one command that RUNS as printed, from a plain checkout, with nothing on PATH: the ADR-0034
 # §4.4 resolver, whose whole job is to find the engine and exec it. The engine's own binary
 # (`fsgg-coord-engine`) is NOT installed on PATH — that is exactly what #569 got wrong.
 RUNNABLE_MINT_CMD = "scripts/fsgg-coord"
 
-# An ellipsis is prose REFERRING to the ritual (`eval "$(… whoami --mint)"` in a doc comment about
-# minting), not a line anybody pastes. Placeholders are fine here for the same reason `<id>` is fine
-# above: nobody runs a placeholder and gets `command not found`.
-MINT_ELLIPSIS = frozenset(("…", "...", "<cmd>"))
+# A placeholder is prose REFERRING to the ritual (`eval "$(... whoami --mint)"` in a doc comment
+# about minting), not a line anybody pastes — fine here for the same reason `<id>` is fine above:
+# nobody runs a placeholder and gets `command not found`.
+#
+# Only the ASCII spelling needs listing. The unicode `…` is not in MINT_CALL's command class, so it
+# never reaches this check at all — listing it would claim a guard that does no work.
+MINT_PLACEHOLDER = frozenset(("...",))
 
 # What an actual worker id looks like: a word, a hyphen, and a hex-ish tail (`w-4f2a91c7`,
 # `finch-a3f`). Anything with `<`, `$`, or a backtick in it is a placeholder or a substitution, and
@@ -244,16 +257,23 @@ def code_files(root: Path) -> list[tuple[Path, str]]:
         base = root / d
         if not base.is_dir():
             continue
-        for p in sorted(base.rglob("*")):
-            if not p.is_file():
-                continue
-            if CODE_EXCLUDE_DIRS.intersection(p.relative_to(base).parts):
-                continue
-            if p.name == SELF_BASENAME:
-                continue
-            # `scripts/fsgg-coord` is extensionless, and it is the resolver the remedy names.
-            if p.suffix in CODE_SUFFIXES or (d == "scripts" and p.suffix == ""):
-                files.append((p, str(p.relative_to(root))))
+        # PRUNE at the directory, rather than rglob-ing everything and discarding: on a built
+        # checkout `bin/`/`obj/` hold thousands of artifacts, and rglob("*") would stat and sort
+        # every one of them only to throw them away — work that grows with the build output instead
+        # of with the source.
+        stack = [base]
+        found: list[Path] = []
+        while stack:
+            for p in sorted(stack.pop().iterdir()):
+                if p.is_dir():
+                    if p.name not in CODE_EXCLUDE_DIRS:
+                        stack.append(p)
+                elif p.name != SELF_BASENAME:
+                    # `scripts/fsgg-coord` is extensionless, and it is the resolver the remedy names.
+                    if p.suffix in CODE_SUFFIXES or (d == "scripts" and p.suffix == ""):
+                        found.append(p)
+        for p in sorted(found):
+            files.append((p, str(p.relative_to(root))))
     return files
 
 
@@ -265,7 +285,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--root", default=".", help="repo root (default: .)")
     ap.add_argument(
         "--surface", action="append", default=None,
-        help=f"directory to audit, repeatable (default: the roots in {ROOTS_DECL}, plus docs/)",
+        help=f"DOC directory to audit for rules 1-3, repeatable (default: the roots in "
+             f"{ROOTS_DECL}, plus docs/). Does not affect rule 4, whose surface is the code that "
+             f"prints a remedy ({', '.join(CODE_SURFACE)}/) and is not selectable — a flag that "
+             f"could switch the tool's own strings off is a way to green a tree without fixing it.",
     )
     args = ap.parse_args(argv)
     root = Path(args.root).resolve()
@@ -362,13 +385,17 @@ def main(argv: list[str]) -> int:
             # Not a text file, or unreadable: it prints nothing a worker pastes.
             continue
 
-        in_engine = rel.startswith(ENGINE_SURFACE)
+        # A path-component prefix, not a string prefix: `startswith` would count a future
+        # `src/FS.GG.Coord.Cli.Tests/` as the engine, and remedies in a TEST project would then
+        # satisfy the non-vacuity guard below while the real engine printed nothing — the exact
+        # vacuity it exists to prevent.
+        in_engine = rel == ENGINE_SURFACE or rel.startswith(ENGINE_SURFACE + "/")
         for lineno, line in enumerate(text.splitlines(), 1):
-            for m in EVAL_MINT.finditer(line):
+            for m in MINT_CALL.finditer(line):
                 if in_engine:
                     engine_sites += 1
                 cmd = m.group("cmd")
-                if cmd == RUNNABLE_MINT_CMD or cmd in MINT_ELLIPSIS:
+                if cmd == RUNNABLE_MINT_CMD or cmd in MINT_PLACEHOLDER:
                     continue
                 findings.append(
                     f"{rel}:{lineno}: this prints a mint remedy naming `{cmd}`, which is not on "
@@ -380,7 +407,7 @@ def main(argv: list[str]) -> int:
                 )
 
     # Fail closed for the code surface, on its real subject. The engine PRINTS these remedies — five
-    # of them, at #569. If we found none, the glob, the suffix list, or EVAL_MINT is broken, and the
+    # of them, at #569. If we found none, the glob, the suffix list, or MINT_CALL is broken, and the
     # leg above is worthless rather than clean. Skipped when there is no engine in the tree at all
     # (a doc-only fixture): nothing there prints a remedy, so auditing nothing is honest.
     if (root / ENGINE_SURFACE).is_dir() and engine_sites == 0:

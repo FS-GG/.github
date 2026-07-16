@@ -236,6 +236,15 @@ mkengine "$ENG_BARE" 'eval \"$(fsgg-coord whoami --mint)\"' >/dev/null
 expect "a BARE \`fsgg-coord\` is caught too — it is not on PATH either, which is #569 as filed" \
   1 "naming \`fsgg-coord\`" "$ENG_BARE"
 
+# The rule is about the COMMAND, not about the `eval "$(…)"` wrapper around it. Keying on the wrapper
+# is the obvious way to write this and it fails OPEN: the same `command not found`, minus the eval,
+# sails through — and the summary then reports N remedies "run as printed" while one of them does
+# not. Caught reviewing this change; the first draft had exactly this hole.
+ENG_NOEVAL="$(mksurface "$WORK/eng-noeval")"
+mkengine "$ENG_NOEVAL" 'run: fsgg-coord-engine whoami --mint' >/dev/null
+expect "a remedy printed WITHOUT the eval wrapper is caught — the command is the subject, not the wrapper" \
+  1 "which is not on PATH" "$ENG_NOEVAL"
+
 ENG_OK="$(mksurface "$WORK/eng-ok")"
 mkengine "$ENG_OK" 'eval \"$(scripts/fsgg-coord whoami --mint)\"' >/dev/null
 expect "the RESOLVER path — the one spelling that runs from a plain checkout — is never flagged" \
@@ -243,10 +252,23 @@ expect "the RESOLVER path — the one spelling that runs from a plain checkout �
 
 # Prose ABOUT the ritual is not a line anybody pastes, and flagging it would be the gate crying wolf
 # at the sentence that teaches the rule — the carve-out `is_literal_trailer` already makes.
-ENG_ELL="$(mksurface "$WORK/eng-ell")"
-mkengine "$ENG_ELL" 'eval "$(… whoami --mint)"' >/dev/null
-expect "an ELLIPSIS placeholder in a doc comment is prose, not a remedy — not flagged" \
-  0 "ok: no literal worker id" "$ENG_ELL"
+#
+# Each of these carries a REAL remedy as well as the prose, so the engine non-vacuity guard is
+# satisfied and the leg tests what it claims to. Prose alone is exit 3 (nothing to audit), which is
+# correct and is asserted separately below — an earlier draft of this leg omitted the real remedy and
+# "passed" on a tree the gate had never looked at.
+ell() {  # ell <name> <prose-line>
+  local d; d="$(mksurface "$WORK/ell-$RANDOM$RANDOM")"
+  mkengine "$d" 'eval \"$(scripts/fsgg-coord whoami --mint)\"' >/dev/null
+  printf '\n/// %s is the whole ritual.\n' "$2" >> "$d/src/FS.GG.Coord.Cli/Client.fs"
+  expect "$1" 0 "ok: no literal worker id" "$d"
+}
+ell "a UNICODE ellipsis in a doc comment is prose, not a remedy — not flagged" \
+    'eval "$(… whoami --mint)"'
+ell "an ASCII \`...\` placeholder is prose too — not flagged" \
+    'eval "$(... whoami --mint)"'
+ell "prose naming NO command (\`whoami --mint\` prints one line) is not a remedy — not flagged" \
+    '`whoami --mint`'
 
 # Build output carries a copy of every doc comment. A finding there is one nobody can act on: you
 # cannot fix a generated file, and the regeneration would put it straight back.
