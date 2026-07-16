@@ -138,14 +138,23 @@ Each finding has a code, a ground truth, and a fix — or an explicit refusal to
 | `UNDECLARED-PATHS` | open, unclaimed, not `Done`, and the issue body declares no `Paths:` | **report only** — the fix is an *issue* edit, and this skill never writes to an issue |
 | `EPIC-*` | from `lint --json` (severity `error`) | **report only** — a broken epic needs a human |
 
-**Always write with `set-field --batch`, never the single-field form.** `set-field <ref> <field>
-<value>` **cannot write any single-select** — it declares its GraphQL variable `$optionId: ID!`
-while `ProjectV2FieldValue.singleSelectOptionId` is a `String`, so the server refuses the query on a
-type mismatch (`.github#848`). `Status`, `Phase`, `Repo Scope`, `Workstream` and `Effort` are **all**
-single-selects, which is every field this skill writes. `--batch` builds a different document and is
-immune. The single-field form still works for text fields (`Blocked by`, `Contract`), which is why
-the break is easy to miss — and why this table prescribed the broken spelling for every flip in it
-until `#848` was found.
+**Always write with `set-field --batch`, never the single-field form.** On the engine the fleet is
+**pinned** to, `set-field <ref> <field> <value>` **cannot write any single-select**: it declares its
+GraphQL variable `$optionId: ID!` while `ProjectV2FieldValue.singleSelectOptionId` is a `String`, so
+the server refuses the query on a type mismatch (`.github#848`). `Status`, `Phase`, `Repo Scope`,
+`Workstream` and `Effort` are **all** single-selects, which is every field this table writes. The
+form still works for text fields (`Blocked by`, `Contract`) — which is why the break is easy to
+miss, and why this table prescribed the broken spelling for every flip in it until `#848` was found.
+
+`--batch` builds a different document and is **immune either way**, which is why it is the standing
+instruction rather than a workaround to retire. `.github#857` repairs the single-field form at the
+source, but that does **not** reach a receiver when it merges: `.github` builds the engine from
+source (ADR-0034 §4.3) and picks the fix up immediately, while every other repo restores the
+**pinned** `FS.GG.Coord.Cli` from `dist/dotnet/.config/dotnet-tools.json` and keeps the bug until a
+release carries `#857` and the pin flips (as `#852`/`#853` did for 0.2.0). So "is it fixed?" has two
+different answers depending on where you are standing — and `--batch` is correct in both. Prefer it
+regardless: it writes N fields in **one aliased mutation** (`#448`), which is also the cheaper spend
+against a budget every worker shares.
 
 **`fsgg-coord add` is gone, so `OFF-BOARD-ISSUE` is report-only for now.** The bash client wrapped
 `gh project item-add` in something **idempotent** and metered; the typed engine never ported it, so
