@@ -1,23 +1,50 @@
 # Reusable cross-repo contract-coherence gate (FS-GG/.github#18, epic #16 Pillar 3).
 #
-# Every FS-GG repo's CI calls this via `workflow_call`. It enforces four things:
+# Every FS-GG repo's CI calls this via `workflow_call`. It enforces three things:
 #   1. The org registry (FS-GG/.github registry/dependencies.yml) is schema-valid — validated by
 #      the TYPED Fsgg.Registry validator (`fsgg-sdd registry validate`) shipped in FS.GG.Contracts
 #      via the FS.GG.SDD.Cli tool (SDD#26; 4-segment version grammar fixed in SDD#32 / CLI 0.2.1).
 #      The pin tracks the newest published CLI (0.9.0) — see the install step.
-#   2. The registry's declared `fsgg-contracts` pin equals the ACTUAL FS.GG.Contracts package
-#      version (read from FS-GG/FS.GG.SDD, the schema authority) — fails on drift.
-#   3. The calling repo's org-shared .NET build config matches the canonical source of truth
+#   2. The calling repo's org-shared .NET build config matches the canonical source of truth
 #      (shared-build-config@1.0.0) via scripts/sync-build-config.sh --check.
-#   4. The build-config source .props are well-formed XML (guards the .github#29 defect class).
+#   3. The build-config source .props are well-formed XML (guards the .github#29 defect class).
 #
-# The registry + scripts are sourced from FS-GG/.github (public); FS.GG.Contracts is read from
-# FS-GG/FS.GG.SDD (public). The typed validator is restored as a .NET tool from the org GitHub
-# Packages feed, so every caller MUST grant `packages: read` (the run-scoped GITHUB_TOKEN then
-# authenticates the NuGet restore — public package, but the feed still requires a token). This is
-# the .github#49 swap from the scripts/validate-registry.py stand-in to the typed CLI, which flips
-# coherence id `registry-validator-typed` → coherent:true; it is unblocked because the H4 feed/
-# App-token provisioning (#21) is closed. See docs/coordination/README.md and ADR-0001.
+# EVERY ASSERTION HERE IS A PURE FUNCTION OF COMMITTED FILES, AND THAT IS THE LOAD-BEARING PROPERTY
+# (.github#741). This workflow is REUSABLE: six repos call it, so anything it asserts, it asserts as
+# a REQUIRED check on every one of their PRs. A failure here is `enforce_admins`-level — not even an
+# admin merges past it. So the only safe subject for this gate is state the caller's own PR can fix.
+#
+# IT USED TO ASSERT A FOURTH THING, AND THAT ONE COULD NOT BE FIXED BY THE CALLER. It checked out
+# FS-GG/FS.GG.SDD@main, read `FS.GG.Contracts.fsproj <Version>`, and asserted by strict string
+# equality that the registry's `fsgg-contracts` pin equalled it — calling an UNRELEASED BRANCH, in
+# its own error message, "the actual FS.GG.Contracts package version". Two defects, one line:
+#
+#   * IT WEDGED THE ORG ON A BUMP. The assertion coupled `FS-GG/.github@main`'s registry to
+#     `FS-GG/FS.GG.SDD@main`'s source, and NO PR SPANS BOTH REPOS. Bump SDD first and every caller
+#     goes red the instant it merges; advance the registry first and every `.github` PR wedges
+#     instead. There was no landing order without a red window, and SDD calls this workflow too —
+#     so a bare source bump wedged SDD's OWN merges (FS.GG.SDD#432).
+#   * IT WAS VACUOUSLY GREEN. `main` is not a release and a source tree is not a package. When
+#     SDD#426 grew the Contracts public surface under an unchanged `2.0.0`, the `.nupkg` on the feed
+#     and the source labelled `2.0.0` became different artifacts — and this gate printed
+#     `ok: ... == actual package version == 2.0.0`. Epic #266's signature: a confident verdict about
+#     a subject the code could not see.
+#
+# THE COUPLING DID NOT GO AWAY — IT MOVED TO WHERE IT CANNOT WEDGE ANYONE (source-coherence.yml,
+# `.github`-local: path-filtered PR + push + daily schedule, the shape feed-coherence.yml already
+# uses). Registry-vs-reality is asserted there, against the two subjects that are real: SDD's source
+# (source-coherence.yml) and the live feed (feed-coherence.yml). A red there reds `.github@main`,
+# which is the repo that owns the registry and can actually fix it. DO NOT ADD AN ASSERTION BACK
+# HERE THAT DEPENDS ON ANOTHER REPO'S MUTABLE `main`, OR ON THE NETWORK BEYOND THIS RUN'S OWN
+# RESTORE — a NuGet outage must not be able to wedge six repos' PRs.
+#
+# The registry + scripts are sourced from FS-GG/.github (public). The typed validator is restored as
+# a .NET tool from the org GitHub Packages feed, so every caller MUST grant `packages: read` (the
+# run-scoped GITHUB_TOKEN then authenticates the NuGet restore — public package, but the feed still
+# requires a token). This is the .github#49 swap from the scripts/validate-registry.py stand-in to
+# the typed CLI, which flips coherence id `registry-validator-typed` → coherent:true; it is
+# unblocked because the H4 feed/App-token provisioning (#21) is closed. See
+# docs/coordination/README.md and ADR-0001.
 name: contract-coherence
 
 on:
@@ -35,10 +62,13 @@ on:
         description: "Ref of FS-GG/.github to source the registry + scripts from."
         type: string
         default: "main"
-      contracts-ref:
-        description: "Ref of FS-GG/FS.GG.SDD to read the actual FS.GG.Contracts version from."
-        type: string
-        default: "main"
+      # `contracts-ref` was REMOVED in .github#741 along with the SDD-source assertion it fed. No
+      # caller passed it, so its removal is not a breaking input change — verified at the time
+      # against every call site in the org: SDD, Rendering, Governance and Game pass no `with:` at
+      # all; Audio (gate.yml) and Templates (composition.yml, NOT gate.yml) pass only
+      # `check-build-config: false`; .github's own coherence.yml passes `github-ref`.
+      # Do not reinstate it: an input naming another repo's ref is the shape of the coupling this
+      # gate is no longer allowed to have — see the header.
 
 permissions:
   contents: read
@@ -61,22 +91,14 @@ jobs:
           ref: ${{ inputs.github-ref }}
           path: dotgithub
 
-      - name: Checkout FS.GG.Contracts source (version authority)
-        uses: actions/checkout@v7
-        with:
-          repository: FS-GG/FS.GG.SDD
-          ref: ${{ inputs.contracts-ref }}
-          path: sdd
-          sparse-checkout: src/FS.GG.Contracts
-          sparse-checkout-cone-mode: true
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      # NOTE: no PyYAML install. It existed ONLY for the removed fsgg-contracts pin assertion
+      # (.github#741); the one remaining Python step parses XML with the stdlib. Do not re-add it
+      # "just in case" — an unused install is a dependency nobody is watching.
 
       - name: Set up .NET (for the typed fsgg-sdd validator)
         uses: actions/setup-dotnet@v6
@@ -139,25 +161,6 @@ jobs:
           dotnet tool install --global FS.GG.SDD.Cli --version 0.12.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
-      - name: Resolve actual FS.GG.Contracts version
-        id: contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="sdd/src/FS.GG.Contracts"
-          fsproj_ver="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$base/FS.GG.Contracts.fsproj" | head -1)"
-          src_ver="$(sed -n 's:.*let[[:space:]]\+value[[:space:]]*=[[:space:]]*"\([^"]*\)".*:\1:p' "$base/ContractVersion.fs" | head -1)"
-          echo "fsproj <Version> = '$fsproj_ver'; ContractVersion.value = '$src_ver'"
-          if [[ -z "$fsproj_ver" || -z "$src_ver" ]]; then
-            echo "::error::Could not read FS.GG.Contracts version from SDD source." >&2
-            exit 1
-          fi
-          if [[ "$fsproj_ver" != "$src_ver" ]]; then
-            echo "::error::FS.GG.Contracts is internally incoherent: fsproj <Version>='$fsproj_ver' != ContractVersion.value='$src_ver'." >&2
-            exit 1
-          fi
-          echo "version=$fsproj_ver" >> "$GITHUB_OUTPUT"
-
       - name: Assert build-config source .props are well-formed XML
         shell: bash
         run: |
@@ -180,32 +183,6 @@ jobs:
           # 4-segment version grammar (e.g. governance-reference-gate-set 1.2.1.1, ADR-0007) is
           # accepted as of CLI 0.2.1 (SDD#32).
           fsgg-sdd registry validate dotgithub/registry/dependencies.yml --text
-
-      - name: Assert fsgg-contracts pin == actual FS.GG.Contracts version
-        shell: bash
-        env:
-          # Env-passed (never interpolated into the run script) — the org's uniform anti-injection
-          # pattern (cf. architecture-map.yml); read as sys.argv[2] below.
-          CONTRACTS_VERSION: ${{ steps.contracts.outputs.version }}
-        run: |
-          # Version-coupling gate: the registry's declared fsgg-contracts `version` must equal the
-          # actual package version read from FS.GG.SDD source. `fsgg-sdd registry validate` checks
-          # schema only, so this coupling assertion stays a dedicated step (was --expect on the
-          # retired stand-in).
-          set -euo pipefail
-          python -c '
-          import sys, yaml
-          doc = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
-          want = sys.argv[2]
-          decl = next((c.get("version") for c in (doc.get("contracts") or [])
-                       if str(c.get("id", "")).strip() == "fsgg-contracts"), None)
-          if decl is None:
-              sys.exit("::error::contract-coherence: fsgg-contracts is absent from the registry.")
-          if str(decl) != want:
-              sys.exit(f"::error::fsgg-contracts pin drift: registry declares {str(decl)!r} but the "
-                       f"actual FS.GG.Contracts package version is {want!r}.")
-          print(f"ok: fsgg-contracts registry pin == actual package version == {want}")
-          ' "dotgithub/registry/dependencies.yml" "$CONTRACTS_VERSION"
 
       - name: Build-config drift gate
         if: ${{ inputs.check-build-config }}

@@ -33,8 +33,18 @@ repos:
 #     version       (required) SemVer of the contract SURFACE/SOURCE — EXCEPT `fs-gg-ui-template`, where
 #                   `version` is the FRAMEWORK pin (FsGgUiVersion, the generated product's FS.GG.UI.* pin)
 #                   and is DISTINCT from `package-version` (the template package). For fsgg-contracts,
-#                   `version` == the FS.GG.Contracts source SemVer and is the ONE gate-coupled scalar
-#                   (contract-coherence asserts it == SDD's actual package version).
+#                   `version` == the FS.GG.Contracts SOURCE SemVer ON `FS-GG/FS.GG.SDD@main` (fsproj
+#                   <Version> == Fsgg.ContractVersion.value) and is the ONE gate-coupled scalar —
+#                   asserted by source-coherence.yml (scripts/check-source-coherence.py, .github#741).
+#                   IT IS A SOURCE VERSION, NOT A PACKAGE VERSION, and the two are genuinely different
+#                   facts: `package-version` below is what is LIVE ON THE FEED. Read them together —
+#                   `version` alone never tells you what a consumer can restore.
+#                   THE GATE THAT ASSERTS THIS IS `.github`-LOCAL, DELIBERATELY (.github#741). It used
+#                   to live in the REUSABLE contract-coherence.yml, which six repos call — so this
+#                   scalar disagreeing with SDD's `main` for even a minute wedged every PR in the org,
+#                   and no landing order avoided it (no PR spans both repos; FS.GG.SDD#432). Keeping
+#                   the assertion here, where the registry lives, means a bump reds only the repo that
+#                   can fix it. Do not move it back into a reusable workflow.
 #     owner         (required) the repo key (see repos:) that is the source of truth for the surface.
 #     surface       (required) prose/one-line description of the on-disk or package surface.
 #     consumers     (required) repo keys that depend on the contract.
