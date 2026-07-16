@@ -196,11 +196,11 @@ So the client treats it as its own condition:
   and it was never true of any engine, bash or port (`.github#883`). It was false in the direction that
   produces **inaction**: the recipes pair the promise with *"do not fix the board by hand"*, so a worker
   whose `set-field` deferred read both instructions as **do nothing**, and the write sat in
-  `pending.jsonl` forever. That is this page's own lesson below, aimed at this page: a promise nothing
-  keeps is worse than no promise, because it is the one thing that stops the worker looking.
+  `pending.jsonl` forever.
 
-  It was not always so, and the way it failed is worth keeping: **only `claim` ever called
-  `defer_write`**, while the exhaustion message above told *every* caller "Board WRITES are queued".
+  **Universal deferral was not always so either**, and the way it failed is the same shape: **only
+  `claim` ever called `defer_write`**, while the exhaustion message above told *every* caller
+  "Board WRITES are queued".
   So a `set-field` — which the recipes drive three times in a row when a worker files a finding —
   printed the promise and **dropped the write**; `flush` then found an empty queue and reported
   success, *confirming the lie*. The finding landed on the board with no Status, no Repo Scope and no
