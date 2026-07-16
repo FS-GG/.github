@@ -201,6 +201,92 @@ module ChoreTests =
         let i = { item 1 with Status = Ready; Blockers = [ blocker 2 BlockerUnknown ] }
         Assert.Empty(derive [ i ])
 
+    // ---- the RESERVER owns the scheduling column — where the rules meet each other (#331, #461, #581) --
+    //
+    // Every rule above is tested in isolation, on an UNCLAIMED item. These are the cases where two rules
+    // look at one item at the same time, and they are where both of this module's real defects lived: the
+    // corpus tested rules, not their interactions.
+
+    [<Fact>]
+    let ``a claimed, Ready, BLOCKED item derives ONE chore — never two that write opposite columns`` () =
+        // The defect: this derived CLAIM-STATUS-LAG ("set In progress") **and** STATUS-NOT-BLOCKED ("set
+        // Blocked") at once. Two callers draining the queue wrote opposite columns to one item and the
+        // winner was whoever got there first — a board whose answer depends on a race.
+        let i =
+            { item 1 with
+                Status = Ready
+                Claim = Some(claim other, LeaseHeld)
+                Blockers = [ blocker 2 BlockerOpen ] }
+
+        Assert.Equal<string list>([ "CLAIM-STATUS-LAG" ], rules [ i ])
+
+    [<Fact>]
+    let ``BLOCKER-CLEARED does not flip a HOLDER's deliberate Blocked — their column wins (#331)`` () =
+        // The worker hit the blocker, set the column per the protocol, and has not released yet. The blocker
+        // then closed. Writing Ready here overwrites their judgement with a default — and it is the same
+        // stomp CLAIM-STATUS-LAG already refuses to make, so making it here contradicts this module itself.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Claim = Some(claim other, LeaseHeld)
+                Blockers = [ blocker 2 BlockerClosed ] }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``STATUS-NOT-BLOCKED does not fire on a reserved item — a claim reserves it, so nothing advertises it`` () =
+        let i =
+            { item 1 with
+                Status = Backlog
+                Claim = Some(claim other, LeaseHeld)
+                Blockers = [ blocker 2 BlockerOpen ] }
+
+        Assert.Equal<string list>([ "CLAIM-STATUS-LAG" ], rules [ i ])
+
+    [<Fact>]
+    let ``a STALE marker still owns the column — the lock breaks on reap, not on the clock (#461, #581)`` () =
+        // Deference to a lapsed lease costs nothing: STALE-CLAIM collects the marker and restores the column
+        // (#481), and the blocker rules fire on the next pass. It converges, and it never races the holder.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Claim = Some(claim other, LeaseExpiredNoPr)
+                Blockers = [ blocker 2 BlockerClosed ] }
+
+        Assert.Equal<string list>([ "STALE-CLAIM" ], rules [ i ])
+
+    [<Fact>]
+    let ``once the claim is gone the blocker rules fire again — deference DEFERS, it does not suppress`` () =
+        let i = { item 1 with Status = Blocked; Claim = None; Blockers = [ blocker 2 BlockerClosed ] }
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+
+    [<Fact>]
+    let ``no item ever derives two chores that both write Status — the remedies cannot contradict`` () =
+        // The invariant behind the two defects above, stated over every combination rather than by example:
+        // whatever is wrong with an item, at most one chore may want to write its column. STALE-CLAIM is the
+        // one that restores a column rather than setting one, so it is excluded from the count.
+        let statuses = [ NoStatus; Backlog; Ready; InProgress; Blocked; InReview; Done ]
+        let claims = [ None; Some(claim other, LeaseHeld); Some(claim other, LeaseExpiredNoPr); Some(claim other, LivenessUnknown) ]
+        let blockerSets = [ []; [ blocker 2 BlockerOpen ]; [ blocker 2 BlockerClosed ]; [ blocker 2 BlockerMerged ]; [ blocker 2 BlockerUnknown ] ]
+
+        for st in statuses do
+            for cl in claims do
+                for bs in blockerSets do
+                    for state in [ Open; Closed ] do
+                        let i = { item 1 with Status = st; State = state; Claim = cl; Blockers = bs }
+
+                        let writers =
+                            derive [ i ]
+                            |> List.filter (fun c ->
+                                match c.Kind with
+                                | StaleClaim _ -> false
+                                | _ -> true)
+
+                        Assert.True(
+                            writers.Length <= 1,
+                            $"status=%A{st} state=%A{state} claim=%b{cl.IsSome} blockers=%d{bs.Length} derived %d{writers.Length} column-writing chores: %A{writers |> List.map (fun c -> c.Kind.RuleId)}"
+                        )
+
     // ---- what is NOT a chore: fixes only ever write to the BOARD -------------------------------------
 
     [<Fact>]

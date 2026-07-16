@@ -42,11 +42,10 @@ module Chore =
         | InReview -> "In review"
         | Done -> "Done"
 
-    let private andList (xs: string list) =
-        match xs with
-        | [] -> "nothing"
-        | [ x ] -> x
-        | _ -> String.concat ", " xs
+    /// Both call sites are guarded non-empty (`BlockerCleared` requires blockers to exist; `StatusNotBlocked`
+    /// matches `[]` away), so there is no empty case to render — and inventing a word for one would imply a
+    /// state the callers already exclude.
+    let private nameList (xs: string list) = String.concat ", " xs
 
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =
@@ -65,9 +64,9 @@ module Chore =
             | ClosedIssueNotDone column ->
                 $"%s{subject.Short}: the issue is CLOSED but the board says %s{columnLabel column} — set Status to Done."
             | BlockerCleared resolved ->
-                $"%s{subject.Short}: every blocker is resolved (%s{andList resolved}) but the board still says Blocked — set Status to Ready."
+                $"%s{subject.Short}: every blocker is resolved (%s{nameList resolved}) but the board still says Blocked — set Status to Ready."
             | StatusNotBlocked blockers ->
-                $"%s{subject.Short}: %s{andList blockers} is still open, but the board advertises it as startable — set Status to Blocked."
+                $"%s{subject.Short}: %s{nameList blockers} is still open, but the board advertises it as startable — set Status to Blocked."
 
     type Boundary =
         | AtNext
@@ -108,6 +107,23 @@ module Chore =
         | BlockerOpen
         | BlockerUnknown
         | BlockerUnparseable -> false
+
+    /// IS A CLAIM MARKER RESERVING THIS ITEM? — and therefore: is its SCHEDULING COLUMN somebody else's?
+    ///
+    /// The rule this expresses, once, rather than per-rule: **while a marker reserves an item, the column
+    /// belongs to whoever holds it.** A worker who hits a blocker and sets `Blocked` made a DECISION, and a
+    /// column set deliberately during a lease still wins (#331) — so a chore that "reconciles" it overwrites
+    /// somebody's judgement with a default, which is this mechanism running backwards.
+    ///
+    /// It is the RESERVER, not the live winner (`Reads.reserver`, not `Reads.winner`): a lease is a clock
+    /// but a lock is broken only by `reap` (#461/#581), so a stale-but-uncollected marker still owns the
+    /// column. That costs nothing — STALE-CLAIM collects it and restores the column (#481), and the rules
+    /// below then fire on the next pass. It converges, and it never races the holder.
+    ///
+    /// Without this the rules disagree with each other: an item that is `Ready`, claimed, and blocked derived
+    /// BOTH `CLAIM-STATUS-LAG` ("set In progress") and `STATUS-NOT-BLOCKED` ("set Blocked") — two chores
+    /// writing opposite columns to one item, with the winner decided by whichever caller drained first.
+    let private reserved (item: Item) = item.Claim.IsSome
 
     /// The chores ONE item's observed state implies.
     ///
@@ -155,17 +171,33 @@ module Chore =
           // resolve. One `BlockerUnknown` or `BlockerUnparseable` and this does not fire: a blocker we could
           // not resolve is not a blocker we cleared (#266, #421), and unblocking on a failed read is the
           // fail-open this codebase exists to make unwritable.
-          if item.State = Open && item.Status = Blocked && not item.Blockers.IsEmpty && item.Blockers |> List.forall resolved then
+          //
+          // NOT while a marker reserves it: that `Blocked` is very likely the HOLDER's own — they hit the
+          // blocker, set the column, and have not released yet — and #331 says their column wins. They will
+          // release, `release` restores it, and this fires on the next pass.
+          if
+              item.State = Open
+              && not (reserved item)
+              && item.Status = Blocked
+              && not item.Blockers.IsEmpty
+              && item.Blockers |> List.forall resolved
+          then
               Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)
 
           // STATUS-NOT-BLOCKED. A blocker observed OPEN while the board advertises the item as startable —
           // the scheduler is handing out work that is not startable. `BlockerUnknown` blocks too, but
           // writing `Blocked` off a read we FAILED to make would stamp a column from a failure, so it stays
           // report-only in `lint`.
+          //
+          // NOT while a marker reserves it, and here that is not merely deference: a reserved item is not
+          // being ADVERTISED to anyone — the claim reserves its touch-set, so the scheduler will not hand it
+          // out whatever the column says. The premise of this rule is already false, and firing anyway would
+          // contradict CLAIM-STATUS-LAG on the very same item.
           match item.Blockers |> List.filter (fun b -> b.State = BlockerOpen) with
           | [] -> ()
           | openOnes when
               item.State = Open
+              && not (reserved item)
               && (match item.Status with
                   | Ready
                   | Backlog -> true

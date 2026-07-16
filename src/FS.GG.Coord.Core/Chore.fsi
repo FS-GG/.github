@@ -117,6 +117,9 @@ module Chore =
         /// FINISHED. Requires EVERY blocker to be resolved — one `BlockerUnknown` or `BlockerUnparseable` and
         /// this is not offered at all, because "I could not look" is not "I looked and it is fine" (#266,
         /// #421) and the safe direction on a block is to hold it. Carries what it saw resolve.
+        ///
+        /// Never on a RESERVED item: that `Blocked` is most likely the holder's own, and their column wins
+        /// (#331). See "the reserver owns the column" below.
         | BlockerCleared of resolved: string list
 
         /// `STATUS-NOT-BLOCKED` — an OPEN blocker, but the column is `Ready`/`Backlog`, so the scheduler is
@@ -124,10 +127,38 @@ module Chore =
         ///
         /// Requires a blocker observed OPEN. An unresolvable blocker also blocks — but writing `Blocked` off
         /// a read we failed to make would stamp a column from a failure, so that stays report-only.
+        ///
+        /// Never on a RESERVED item, and here the rule's own premise is what fails: a claim reserves the
+        /// item's touch-set, so the scheduler will not hand it to anyone whatever the column says. It is not
+        /// being advertised, so there is nothing to correct.
         | StatusNotBlocked of blockers: string list
 
         /// The `/check-board` rule id — the anchor a report cites and a reader greps back to this code.
         member RuleId: string
+
+    /// **THE RESERVER OWNS THE SCHEDULING COLUMN**, and it is stated once here rather than re-decided by each
+    /// rule — because the rules that re-decided it disagreed with each other.
+    ///
+    /// While a claim marker reserves an item, its column belongs to whoever holds it. A worker who hits a
+    /// blocker and sets `Blocked` made a DECISION, and a column set deliberately during a lease still wins
+    /// (#331), so a chore that "reconciles" it overwrites somebody's judgement with a default. It is the
+    /// RESERVER, not the live winner (`Reads.reserver`, not `Reads.winner`): a lease is a clock but a lock is
+    /// broken only by `reap` (#461/#581), so a stale-but-uncollected marker still owns its column.
+    ///
+    /// Deferring costs nothing, which is why it is safe to make absolute: `STALE-CLAIM` collects an abandoned
+    /// marker and `release` restores the column it overwrote (#481), so the deferred rules fire on the next
+    /// pass. Deference DEFERS; it does not suppress.
+    ///
+    /// Two exceptions, and both are about a fact that is not a scheduling column at all: `STALE-CLAIM`, which
+    /// RESTORES a column rather than choosing one, and `CLOSED-ISSUE-NOT-DONE`, because a closed issue is
+    /// ground truth about the WORK — the issue IS the work and the column is the copy (#520) — and no lease
+    /// outranks it.
+    ///
+    /// Without this rule, an item that was `Ready`, claimed, and blocked derived BOTH `CLAIM-STATUS-LAG`
+    /// ("set In progress") and `STATUS-NOT-BLOCKED` ("set Blocked"): two chores writing opposite columns to
+    /// one item, with the winner decided by whichever caller drained the queue first. The invariant is now
+    /// asserted over every (status × claim × blocker × issue-state) combination in `ChoreTests`: **at most one
+    /// chore per item may want to write its column.**
 
     /// ONE UNIT OF DEFERRED MAINTENANCE.
     ///
