@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Emit the self-contained skill-union assertion that external consumers fetch (#843).
+#
+# THE PROBLEM THIS SOLVES. `scripts/skill-union-assert.sh` is the consumer-facing arm of ADR-0014
+# (coherence id `skill-mirror-verified`). FS.GG.Templates fetches it STANDALONE over
+# `raw.githubusercontent.com` at a pinned 40-char commit SHA — that is the documented design
+# (FS.GG.Templates#56), not an accident: a content-addressed fetch carries its own integrity check, a
+# pinned SHA makes the gate deterministic, moving the pin is a reviewable commit, and the same curl
+# gives offline/local dev for free.
+#
+# Then #358 hoisted `need_val` into `lib/args.sh` and #524 hoisted root resolution into `lib/roots.sh`,
+# and fetching ONE file started yielding a script that dies on line 91 with `lib/args.sh: No such file
+# or directory`. Every OTHER consumer reaches the assertion through the reusable
+# `coordination-coherence` workflow, which `actions/checkout`s this whole repo — so the siblings came
+# along for free and the split was invisible. Templates is the only standalone consumer, so the break
+# surfaced in exactly one place, and stayed hidden for two weeks because the Renovate manager meant to
+# move the pin never fired (the pin lives under `tests/`, which `config:recommended` ignores). Two
+# defects masking each other: the stale pin hid the contract break.
+#
+# WHY A BUNDLE, AND NOT "JUST KEEP THE SCRIPT SELF-CONTAINED". Inlining the libs BY HAND is the one
+# option that looks free and is not: `lib/roots.sh` exists precisely so the script that WRITES a tree's
+# roots (`coordination-sync`) resolves them exactly as the script that ASSERTS them does. Before that
+# hoist the two had sources of truth that agreed only by coincidence of defaults, and the moment a tree
+# declared anything else they diverged SILENTLY — the writer would skip a declared root and the asserter
+# would then blame the TREE for the omission (#525). Hand-inlining would re-open that, trading an
+# external coupling for an internal correctness bug this repo already paid to fix.
+#
+# So the libs stay the single source of truth and the CONSUMER-FACING artifact is GENERATED, exactly as
+# `generate-projections` does for the protocol prose (ADR-0034 §4.5). The next `source` a maintainer adds
+# is inlined by this script instead of breaking a consumer's CI two weeks later.
+#
+#   scripts/generate-skill-union-bundle            # rewrite dist/skill-union-assert.sh in place
+#   scripts/generate-skill-union-bundle --check    # verify it is current; exit 1 on any drift (the GATE)
+#
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+CHECK=""
+[ "${1:-}" = "--check" ] && CHECK=1
+
+SRC="$HERE/scripts/skill-union-assert.sh"
+OUT="$HERE/dist/skill-union-assert.sh"
+
+[ -f "$SRC" ] || { echo "::error::no source at $SRC" >&2; exit 2; }
+
+# THE SOURCE LINE, EXACTLY AS THE SCRIPT WRITES IT. Anchored rather than a loose `grep lib/`: a pattern
+# that quietly stops matching would emit a bundle that still `source`s and is not self-contained at all —
+# the #266 failure (a generator that reports success over a subject it can no longer see). The closure
+# assertion below is the backstop that makes a drifted pattern LOUD instead of silent.
+SOURCE_RE='^\.[[:space:]]+"\$\(dirname[^)]*\)/lib/([A-Za-z0-9_.-]+)"[[:space:]]*$'
+
+# The marker every inlined lib carries. Counted off the EMITTED BYTES below rather than tracked in a
+# variable: `render` runs inside a pipeline, and a pipeline is a SUBSHELL — an `inlined=$((inlined+1))`
+# in there is discarded, so the parent would read 0 and the non-vacuity check would fire on a bundle that
+# is in fact fine. Assert on the artifact, never on a counter that a subshell can eat.
+MARKER='# ---- BEGIN INLINED: scripts/lib/'
+
+render() {
+  local line lib libfile
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" =~ $SOURCE_RE ]]; then
+      lib="${BASH_REMATCH[1]}"
+      libfile="$HERE/scripts/lib/$lib"
+      [ -f "$libfile" ] || { echo "::error::$SRC sources lib/$lib, which does not exist" >&2; exit 2; }
+
+      echo "${MARKER}${lib} ----------------------------------------------------"
+      echo "# Inlined from scripts/lib/$lib by scripts/generate-skill-union-bundle. In the repo this is a"
+      echo "# sourced fragment shared with coordination-sync (#525); in this bundle it is inlined so the"
+      echo "# artifact is a single self-contained file. Edit scripts/lib/$lib and regenerate."
+      cat "$libfile"
+      echo "# ---- END INLINED: scripts/lib/$lib ------------------------------------------------------"
+    else
+      printf '%s\n' "$line"
+    fi
+  done <"$SRC"
+}
+
+emit() {
+  cat <<EOF
+#!/usr/bin/env bash
+# ============================================================================================
+# DO NOT EDIT. GENERATED FILE.
+#
+# Generated from scripts/skill-union-assert.sh + scripts/lib/* by
+# scripts/generate-skill-union-bundle. \`skill-union-bundle\` in CI fails on any drift, so an edit
+# here is reverted by the next regeneration — edit the SOURCE and regenerate.
+#
+# THIS FILE IS THE SUPPORTED STANDALONE ARTIFACT (.github#843). It is self-contained BY
+# CONSTRUCTION: it sources no siblings, so fetching this one file at a pinned commit SHA is a
+# complete, deterministic, content-addressed gate. Adding a \`source\` to the source script inlines
+# it here; it can no longer break a consumer who fetched one file.
+#
+#   curl -fsSL https://raw.githubusercontent.com/FS-GG/.github/<40-char-sha>/dist/skill-union-assert.sh
+#
+# Consumers reaching the assertion through the reusable skill-union-assert.yml workflow do NOT need
+# this file — that path checks out the repo and runs scripts/skill-union-assert.sh directly.
+# ============================================================================================
+EOF
+
+  # The source's own shebang is dropped: this bundle carries the one emitted above. Everything else —
+  # including every comment — rides along verbatim, because a consumer reading the bundle must be able to
+  # read the same reasoning a maintainer does.
+  render | tail -n +2
+}
+
+BODY="$(emit)"
+inlined="$(printf '%s\n' "$BODY" | grep -cF "$MARKER" || true)"
+
+# NON-VACUITY, AT GENERATION TIME (#266, #436). Zero inlined libs means the anchored pattern above no
+# longer matches what the script actually writes — and the bundle we just built is then a byte-copy that
+# still `source`s siblings it will not have. That artifact would FETCH fine, RUN fine in this repo, and
+# die only in the consumer's CI: the exact two-week-invisible failure #843 reports. Refuse to emit it.
+[ "$inlined" -gt 0 ] || {
+  echo "::error::inlined 0 libs — the source pattern no longer matches scripts/skill-union-assert.sh." >&2
+  echo "::error::The bundle would still source siblings and would NOT be self-contained. Fix SOURCE_RE." >&2
+  exit 2
+}
+
+# CLOSURE. The property a consumer actually depends on, asserted on the bytes we are about to write
+# rather than assumed from the inlining above: nothing in the bundle sources a sibling. This catches an
+# inlined lib that itself sources a third file — the failure that would otherwise reach the consumer as a
+# fresh "No such file or directory" and cost another cross-repo issue.
+if residual="$(printf '%s\n' "$BODY" | grep -nE '^[[:space:]]*(\.|source)[[:space:]]+.*(dirname|BASH_SOURCE|/lib/)' || true)"; [ -n "$residual" ]; then
+  echo "::error::the bundle still sources a sibling — it is NOT self-contained:" >&2
+  printf '%s\n' "$residual" >&2
+  exit 2
+fi
+
+if [ -n "$CHECK" ]; then
+  [ -f "$OUT" ] || { echo "::error::$OUT is missing — run scripts/generate-skill-union-bundle" >&2; exit 1; }
+  if ! diff -u "$OUT" <(printf '%s\n' "$BODY") >/dev/null; then
+    echo "::error::dist/skill-union-assert.sh is STALE — run scripts/generate-skill-union-bundle and commit" >&2
+    diff -u "$OUT" <(printf '%s\n' "$BODY") >&2 || true
+    exit 1
+  fi
+  [ -x "$OUT" ] || { echo "::error::$OUT is not executable" >&2; exit 1; }
+  echo "dist/skill-union-assert.sh is current ($inlined lib(s) inlined)"
+  exit 0
+fi
+
+mkdir -p "$HERE/dist"
+printf '%s\n' "$BODY" >"$OUT"
+chmod +x "$OUT"
+echo "wrote dist/skill-union-assert.sh ($inlined lib(s) inlined)"
