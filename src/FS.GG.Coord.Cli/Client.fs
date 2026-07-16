@@ -1865,48 +1865,57 @@ module Client =
                             | Ok body ->
                                 let rewritten = Writes.rewrite body validated
 
-                                match Writes.widen ctx.Transport held rewritten with
+                                // #523/#353 — RE-CHECK BEFORE THE PATCH, and let its verdict GATE the write.
+                                // ADR-0021's "re-declare AND re-check overlap before continuing" is the half a
+                                // worker cannot do alone. The overlap scan runs against the PROPOSED touch-set
+                                // (`rewritten.Body`, computed in memory above — `activeCollisions` takes it as an
+                                // argument and never re-reads THIS item's body, so it needs no landed PATCH) and
+                                // compares it to the live claims in THIS item's repo. If the scan is UNREADABLE —
+                                // an exhausted GraphQL budget, a malformed claim — we REFUSE, and the body is left
+                                // untouched: that is #523. Landing the declaration first and re-checking afterwards
+                                // (as bash did) meant that on an exhausted budget the touch-set landed UNVERIFIED
+                                // and the workers it now collided with were never told. Only once we HOLD a verdict
+                                // do we PATCH. A scan that SUCCEEDS and finds a collision still lands the widen —
+                                // that is widen's job, and how a bad declaration gets fixed — and then notifies each
+                                // colliding worker on their own issue; only the unreadable case refuses. Same-repo
+                                // scope: a cross-repo namesake is a phantom (#353), its innocent holder uncommented.
+                                match activeCollisions ctx opts ref (TouchSet.parse rewritten.Body) with
                                 | Error e -> fail e
-                                | Ok() ->
-                                    printfn "widened %s → Paths: %s" ref.Short (String.Join(", ", opts.Paths))
-
-                                    // Declaration time is the cheap moment to learn that editing a kit source
-                                    // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
-                                    kitDigestWarn ()
-
-                                    // #353 — ADR-0021's "re-declare AND re-check overlap before continuing", the
-                                    // half a worker cannot do alone. The widen has LANDED (that is its job, and how
-                                    // a bad declaration gets fixed); now re-check the NEW touch-set against the live
-                                    // claims in THIS item's repo, and notify each worker it now collides with — on
-                                    // their own issue. The scan compares the rewritten body's touch-set, never the
-                                    // old one. Scoped to the same repo: a cross-repo namesake is a phantom (#353),
-                                    // and its innocent holder is left uncommented.
-                                    match activeCollisions ctx opts ref (TouchSet.parse rewritten.Body) with
+                                | Ok collisions ->
+                                    match Writes.widen ctx.Transport held rewritten with
                                     | Error e -> fail e
-                                    | Ok [] ->
-                                        printfn "DISJOINT — the widened touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
-                                        ExitGreen
-                                    | Ok collisions ->
-                                        // The notify is the part a worker cannot do alone. A post that fails is
-                                        // reported, but the collision still stands — it does not become a DISJOINT.
-                                        let paths = String.Join(", ", opts.Paths)
+                                    | Ok() ->
+                                        printfn "widened %s → Paths: %s" ref.Short (String.Join(", ", opts.Paths))
 
-                                        for other, holder, toks in collisions do
-                                            eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
-                                            eprint $"  %s{toks}"
+                                        // Declaration time is the cheap moment to learn that editing a kit source
+                                        // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
+                                        kitDigestWarn ()
 
-                                            let msg =
-                                                $"heads up: I widened %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). We cannot run these in parallel as declared — sequence one behind the other (`Blocked by`) or split the touch-set, and reply here."
+                                        match collisions with
+                                        | [] ->
+                                            printfn "DISJOINT — the widened touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
+                                            ExitGreen
+                                        | collisions ->
+                                            // The notify is the part a worker cannot do alone. A post that fails is
+                                            // reported, but the collision still stands — it does not become a DISJOINT.
+                                            let paths = String.Join(", ", opts.Paths)
 
-                                            match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
-                                            | Error e ->
-                                                eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
-                                            | Ok() -> eprint $"  notified worker %s{holder} on %s{other.Short}"
+                                            for other, holder, toks in collisions do
+                                                eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
+                                                eprint $"  %s{toks}"
 
-                                        eprint "fsgg-coord-engine: widening introduced a collision — do NOT keep editing the shared paths until it is resolved."
-                                        // A real same-repo collision exits non-zero (engine ExitContended=6; bash's
-                                        // literal 1 disposed on the record, ADR-0040 §5).
-                                        ExitContended
+                                                let msg =
+                                                    $"heads up: I widened %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). We cannot run these in parallel as declared — sequence one behind the other (`Blocked by`) or split the touch-set, and reply here."
+
+                                                match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
+                                                | Error e ->
+                                                    eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+                                                | Ok() -> eprint $"  notified worker %s{holder} on %s{other.Short}"
+
+                                            eprint "fsgg-coord-engine: widening introduced a collision — do NOT keep editing the shared paths until it is resolved."
+                                            // A real same-repo collision exits non-zero (engine ExitContended=6; bash's
+                                            // literal 1 disposed on the record, ADR-0040 §5).
+                                            ExitContended
 
     /// `paths_of` FAILS CLOSED (#494 leg k). A touch-set read FOR SCHEDULING that we could not complete is
     /// NOT an empty touch-set: an empty set reads as "disjoint from everything", so a failed body read would
