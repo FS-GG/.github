@@ -19,12 +19,18 @@ The board (four items across two repos):
 """
 
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 RATE = {"cost": 1, "remaining": 4975}
+
+# case 24 leg (k): a body read that FAULTS. `OVERLAP_FAIL_ISSUE=<n>` makes GET /issues/<n> 500, standing
+# in for bash's `GH_FAIL_ISSUE_GET` — the transient read failure `paths_of` must refuse to schedule over
+# rather than mis-read as an empty ("declared nothing") touch-set.
+FAIL_ISSUE = os.environ.get("OVERLAP_FAIL_ISSUE")
 
 REPO = {401: "FS-GG/FS.GG.SDD", 402: "FS-GG/FS.GG.Rendering",
         403: "FS-GG/FS.GG.SDD", 405: "FS-GG/FS.GG.SDD"}
@@ -110,6 +116,9 @@ class H(BaseHTTPRequestHandler):
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))
+            if FAIL_ISSUE is not None and n == int(FAIL_ISSUE):
+                # A transient read failure, not a 404 — the body could not be read at all (leg k).
+                return self._send(500, {"message": "upstream unavailable"})
             return self._send(200, {"number": n, "body": BODIES.get(n, "")}) if n in BODIES \
                 else self._send(404, {"message": "Not Found"})
         if p.rstrip("/") == "/rate_limit":

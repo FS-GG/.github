@@ -1700,6 +1700,20 @@ module Client =
                                         // literal 1 disposed on the record, ADR-0040 §5).
                                         ExitContended
 
+    /// `paths_of` FAILS CLOSED (#494 leg k). A touch-set read FOR SCHEDULING that we could not complete is
+    /// NOT an empty touch-set: an empty set reads as "disjoint from everything", so a failed body read would
+    /// let the scheduler hand out work overlapping a held item (#266's fail-open, one subtree down). So a
+    /// failed body read is surfaced as a scheduler-specific refusal — "refusing to schedule against an
+    /// unknown touch-set" — never diagnosed as "the issue declared nothing"; only a SUCCESSFUL read with no
+    /// `Paths:` is the honest empty DISJOINT. The IoError is carried so the exit code stays the read's own (a
+    /// rate limit is still ExRate), the way `fail` does — this only swaps the SENTENCE for the one the corpus
+    /// greps at the scheduling surface, distinct from a claim we could not read (`claims_of`'s refusal).
+    let private failSchedule (ref: Ref) (e: Errors.IoError) : int =
+        eprint
+            $"fsgg-coord-engine: cannot read the touch-set on %s{ref.Owner}/%s{ref.Repo}#%d{ref.Number} (rate limit? network?) — refusing to schedule against an unknown touch-set."
+
+        Errors.exitCode e
+
     /// #353 — DOES THIS ITEM'S TOUCH-SET COLLIDE WITH ANOTHER'S, and NOTHING outside its own repo counts.
     ///
     /// `Paths:` tokens are repo-relative: `scripts/fsgg-coord` names a file in whichever repo the item lives.
@@ -1723,7 +1737,7 @@ module Client =
                 ExitError
             | Ok ref ->
                 match touchSetOf ref with
-                | Error e -> fail e
+                | Error e -> failSchedule ref e
                 | Ok ts ->
                     match activeCollisions ctx opts ref ts with
                     | Error e -> fail e
@@ -1754,10 +1768,10 @@ module Client =
                     ExitGreen
                 else
                     match touchSetOf ra with
-                    | Error e -> fail e
+                    | Error e -> failSchedule ra e
                     | Ok tsa ->
                         match touchSetOf rb with
-                        | Error e -> fail e
+                        | Error e -> failSchedule rb e
                         | Ok tsb ->
                             match TouchSet.conflicts tsa tsb with
                             | [] ->
