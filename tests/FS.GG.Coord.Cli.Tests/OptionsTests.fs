@@ -79,6 +79,33 @@ module OptionsTests =
         Assert.Contains("--status", e)
 
     [<Fact>]
+    let ``release --status carries the column name`` () =
+        // #867: the flag PARSED all along — it was `release` that never read it. This asserts the half the
+        // parser owns; `Client`'s precedence is asserted at the HTTP layer by the e2e restore fixture.
+        Assert.Equal(Some "Blocked", (parse [ "release"; ".github#574"; "--status"; "Blocked" ] |> ok).Status)
+
+    [<Fact>]
+    let ``release --status without a value is refused, not left silently unset`` () =
+        let e = parse [ "release"; ".github#574"; "--status" ] |> rejected
+        Assert.Contains("--status", e)
+
+    [<Fact>]
+    let ``--status is REFUSED by a command that does not implement it, never swallowed`` () =
+        // #867's silence had two mechanisms, and this is the one that made it survive: `--status` is a GLOBAL
+        // parser flag, so `unknown argument` — the refusal that catches every other typo instantly — never
+        // fired. Every command accepted it, and all but `ready` ignored it. A flag accepted and ignored tells
+        // the caller, via a green exit, that something happened which did not.
+        for verb in [ "claim"; "take"; "heartbeat"; "done"; "widen"; "who"; "next"; "reap" ] do
+            let e = parse [ verb; "--status"; "Blocked" ] |> rejected
+            Assert.Contains("--status", e)
+
+    [<Fact>]
+    let ``--status stays accepted by the two commands that DO read it`` () =
+        // The mirror of the refusal: a gate that also refused the real users would just move the defect.
+        Assert.Equal(Some "Done", (parse [ "ready"; "--status"; "Done" ] |> ok).Status)
+        Assert.Equal(Some "Blocked", (parse [ "release"; ".github#574"; "--status"; "Blocked" ] |> ok).Status)
+
+    [<Fact>]
     let ``ready --all is a boolean widen with no value`` () =
         Assert.True((parse [ "ready"; "--all" ] |> ok).All)
 

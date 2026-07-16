@@ -867,16 +867,38 @@ module Client =
                                                         let name = statusName restoreTo
 
                                                         if name <> "" then
-                                                            Board.boardWrite
-                                                                ctx.Transport
-                                                                bm
-                                                                ref.Owner
-                                                                ref.Repo
-                                                                ref.Number
-                                                                "Status"
-                                                                (Board.Set name)
-                                                                marker.Worker.Value
-                                                            |> ignore
+                                                            // #867: `release`'s defect, in `reap`'s copy —
+                                                            // the outcome was discarded, so "best-effort"
+                                                            // meant "unmentioned". Case 25's own rule is that
+                                                            // reap must not claim a reset it never performed;
+                                                            // a silent `Deferred` or failure claims exactly
+                                                            // that, by saying nothing. Still never fatal: the
+                                                            // lock is already gone.
+                                                            match
+                                                                Board.boardWrite
+                                                                    ctx.Transport
+                                                                    bm
+                                                                    ref.Owner
+                                                                    ref.Repo
+                                                                    ref.Number
+                                                                    "Status"
+                                                                    (Board.Set name)
+                                                                    marker.Worker.Value
+                                                            with
+                                                            | Ok Board.Written -> printfn "  reset to %s" name
+                                                            | Ok Board.Deferred ->
+                                                                printfn
+                                                                    "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  fsgg-coord flush"
+                                                                    name
+                                                            | Ok Board.NotOnBoard ->
+                                                                printfn "  not on board (marker cleared; nothing to reset)"
+                                                            | Error e ->
+                                                                printfn
+                                                                    "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  fsgg-coord set-field %s Status '%s'"
+                                                                    name
+                                                                    (Errors.explain e)
+                                                                    ref.Short
+                                                                    name
                                                     | Ok None ->
                                                         printfn "  not on board (marker cleared; nothing to reset)"
                                                     | Error _ -> ()
@@ -1365,11 +1387,33 @@ module Client =
                     | PrConflicted -> ExitRed
                     | PrUnknown -> ExitNoVerdict
 
+    /// `release --status S` — the column the caller DELIBERATELY names (#867/#331), resolved to a
+    /// `BoardStatus` before anything is written.
+    ///
+    /// The timing is the point: an unknown column is refused BEFORE the marker is dropped. Validate it
+    /// afterwards and a typo costs the caller their lock AND the column they asked for — released, un-landed,
+    /// and non-zero. A refused write spends no GraphQL and drops no lease.
+    let private requestedStatus (opts: Options) : Result<BoardStatus option, int> =
+        match opts.Status with
+        | None -> Ok None
+        | Some raw ->
+            match Reads.statusOfName raw with
+            | Some s -> Ok(Some s)
+            | None ->
+                eprint
+                    $"fsgg-coord-engine: release --status: unknown column '%s{raw}' (Backlog, Ready, In progress, Blocked, In review, Done) — nothing released."
+
+                Error ExitError
+
     let release (ctx: Context) (opts: Options) : int =
         match oneArg opts "release: an issue ref", worker opts with
         | Error c, _
         | _, Error c -> c
         | Ok arg, Ok w ->
+
+        match requestedStatus opts with
+        | Error c -> c
+        | Ok requested ->
             match parseRef ctx arg with
             | Error msg ->
                 eprint $"fsgg-coord-engine: %s{msg}"
@@ -1385,26 +1429,75 @@ module Client =
                     | Error e -> fail e
                     | Ok previousStatus ->
                         // The marker is gone; the lease is dropped. Restore the column it overwrote — or
-                        // `Ready` if it recorded none (#481). A board failure here leaves the column alone
-                        // and is reported, never fatal: the lock is already released.
+                        // `Ready` if it recorded none (#481).
                         let restoreTo =
-                            match previousStatus with
-                            // A recorded `In progress` is the claim's OWN footprint, not a column anybody
-                            // chose — restoring it would leave the item looking claimed with no claim on it.
-                            // It falls back to `Ready`, exactly as an unrecorded column does (#481).
-                            | Some InProgress
-                            | None -> BoardStatus.Ready
+                            match requested with
+                            // #867: an explicit `--status` IS the caller naming the deliberate column, so it
+                            // beats both the recorded restore and the `Ready` fallback — that is #331/#481's
+                            // precedence, and the skill has documented it since. The port dropped the flag on
+                            // the floor: `opts.Status` was never consulted, so the documented way to abandon
+                            // an item into a column was a no-op that exited 0. It is how #732 kept coming
+                            // back — four workers correctly parked it `Blocked`, and the board kept saying
+                            // `Ready` (#888).
                             | Some s -> s
+                            | None ->
+                                match previousStatus with
+                                // A recorded `In progress` is the claim's OWN footprint, not a column anybody
+                                // chose — restoring it would leave the item looking claimed with no claim on
+                                // it. It falls back to `Ready`, exactly as an unrecorded column does (#481).
+                                | Some InProgress
+                                | None -> BoardStatus.Ready
+                                | Some s -> s
 
                         let name = statusName restoreTo
 
-                        match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                        | Ok board when name <> "" ->
-                            Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
-                            |> ignore
-                        | _ -> ()
+                        // #867: the restore's result is REPORTED, never fatal. The lock really is gone, so a
+                        // failed column must not red the command — but "not fatal" and "not mentioned" are
+                        // different things, and only the second shipped: `|> ignore` discarded all four
+                        // outcomes directly beneath a comment promising they were reported. `Deferred` is the
+                        // one that bites hardest — an exhausted budget QUEUES the write and nothing replays it
+                        // on its own (#510/#878), so a silent defer is a column that never lands.
+                        let landed =
+                            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                            | Ok board when name <> "" ->
+                                match
+                                    Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
+                                with
+                                | Ok Board.Written -> true
+                                | Ok Board.Deferred ->
+                                    eprint
+                                        $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  fsgg-coord flush"
 
-                        printfn "released %s" ref.Short
+                                    false
+                                | Ok Board.NotOnBoard ->
+                                    eprint
+                                        $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the lock is dropped, but the column was NOT set to '%s{name}'."
+
+                                    false
+                                | Error e ->
+                                    eprint
+                                        $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
+
+                                    false
+                            | Error e ->
+                                eprint
+                                    $"fsgg-coord-engine: could not resolve the board (%s{Errors.explain e}) — the lock is dropped, but the column was NOT set to '%s{name}'."
+
+                                false
+                            | Ok _ -> false
+
+                        // NAME THE COLUMN ONLY IF IT LANDED. `release` reporting a bare "released <ref>" is
+                        // what let the ignored `--status` look like it had worked — but a line that names the
+                        // column unconditionally is the SAME defect wearing the fix's clothes: on a deferred
+                        // or failed write it asserts, on stdout and with a green exit, a column the board does
+                        // not hold. stderr already said otherwise, and a caller that reads one of the two
+                        // reads stdout. So stdout states only what is true; the reason it is not true is on
+                        // stderr, immediately above.
+                        if landed then
+                            printfn "released %s → %s" ref.Short name
+                        else
+                            printfn "released %s" ref.Short
+
                         ExitGreen
 
     let heartbeat (ctx: Context) (opts: Options) : int =

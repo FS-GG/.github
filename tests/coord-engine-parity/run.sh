@@ -1105,7 +1105,9 @@ rm -rf "$RLCACHE"
 #     its own read (bash's "release spends 1"), ported separately. #481 changes what release restores TO,
 #     not WHETHER it first reads the live column.
 #   • the human wording (`board: Backlog`, `restored`) is asserted here at the HTTP layer (the board write's
-#     option id), not on stdout — the engine's `release` reports `released <ref>` without naming the column.
+#     option id), not on stdout — the engine's `release` reports `released <ref> → <column>`, which names the
+#     column but not in bash's words (#867 added the column; the silent `released <ref>` is what let the
+#     ignored `--status` look like it had worked).
 rsrv() {  # rsrv <env-kv...> --  ; sets globals RS_PORT and RS_SRV for a FRESH restore fixture
   local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
   local out; out="$(mktemp)"
@@ -1189,6 +1191,47 @@ if [ -z "$RS_PORT" ]; then bad "restore fixture (h) bound a port"; else
   [ "$(rlastopt)" = "opt_ready" ] \
     && ok "#481: a recorded 'In progress' is a footprint, not a column — release falls back to Ready" \
     || bad "#481: a recorded In progress must not be restored" "last write=$(rlastopt)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (k) #867 — `release --status S` LANDS THE COLUMN THE CALLER NAMES, beating the recorded restore.
+#     THE REGRESSION GUARD, and the reason it is here rather than in a unit test: the flag PARSED all along
+#     (`OptionsTests` was green on it for the whole life of the port) and `release` simply never read
+#     `opts.Status`. So the only assertion that can catch a re-drop is one that watches the BOARD WRITE —
+#     exactly what this fixture already records for #481. #867's own body says "nothing was positioned to
+#     notice"; this is the thing positioned to notice.
+#
+#     The claim records prev=Backlog, so a `release` that ignores `--status` writes opt_backlog — which is
+#     precisely the bug: it looked like a correct #481 restore, and exited 0.
+rsrv FSGG_PARITY_STATUS=Backlog --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (k) bound a port"; else
+  renv claim FS.GG.SDD#358 --force --worker pika-r01 >/dev/null 2>&1
+  rout="$(renv release FS.GG.SDD#358 --worker pika-r01 --status Blocked 2>/dev/null)"; krc=$?
+  [ "$(rlastopt)" = "opt_blocked" ] \
+    && ok "#867: release --status Blocked writes opt_blocked — the named column BEATS the recorded restore (prev=Backlog)" \
+    || bad "#867: release --status must land the named column" "last write=$(rlastopt) rc=$krc"
+  printf '%s' "$rout" | grep -q 'released FS.GG.SDD#358 → Blocked' \
+    && ok "#867: ...and stdout NAMES the column it landed in (the bare 'released <ref>' is what hid the no-op)" \
+    || bad "#867: release must name the column on stdout" "stdout=$rout"
+  [ -z "$(rbodies 358)" ] \
+    && ok "#867: ...and the lease is still dropped (the marker is deleted)" \
+    || bad "#867: release --status must still drop the marker" "bodies=$(rbodies 358)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (k2) #867 — an UNKNOWN column is refused BEFORE the marker is dropped. Order is the property: validate
+#      after the release and a typo costs the caller their lock AND the column, leaving an item nobody holds
+#      and nobody parked. A refused write spends no GraphQL and drops no lease.
+rsrv FSGG_PARITY_STATUS=Backlog --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (k2) bound a port"; else
+  renv claim FS.GG.SDD#359 --force --worker pika-r01 >/dev/null 2>&1
+  renv release FS.GG.SDD#359 --worker pika-r01 --status Blocke >/dev/null 2>&1; brc=$?
+  [ "$brc" -ne 0 ] \
+    && ok "#867: release --status with an unknown column is REFUSED (non-zero), not silently defaulted" \
+    || bad "#867: an unknown --status must be refused" "rc=$brc"
+  rbodies 359 | grep -q 'fsgg:claim' \
+    && ok "#867: ...and the lock is STILL HELD — the refusal lands before the marker is dropped" \
+    || bad "#867: a refused --status must not drop the lease" "bodies=$(rbodies 359)"
   kill "$RS_SRV" 2>/dev/null
 fi
 
