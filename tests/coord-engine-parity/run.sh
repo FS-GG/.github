@@ -1427,11 +1427,11 @@ if [ -z "$ISS_PORT" ]; then bad "#446: issues fixture bound a port"; else
   kill "$ISS_SRV" 2>/dev/null; rm -rf "$ISSCACHE"
 fi
 
-# DISPOSITION ON THE RECORD (not silently skipped): case 13's ONE remaining leg is separate work —
-#   * `reap` scopes to the checkout too (#480, the destructive one): `reap` now EXISTS (case 26), so its
-#     #480 checkout-scope default is a follow-up (it still demands an explicit --repo).
-#   The `Blocked by` canonicalization gate and the `issues` short-id command (#446) landed above; the
-#   epic-rollup / NO-TOUCH-SET `lint` rules (#496) landed with case 14 (now FULL).
+# CASE 13 IS NOW FULL. Its last leg — `reap` (the DESTRUCTIVE worker command) scoping to the checkout you
+# are standing in (#480) — is proven in the "REAP SCOPES TO THE CHECKOUT" section below (a bare reap from
+# an SDD checkout considers only SDD's claims; from a Rendering checkout, Rendering's; outside a checkout
+# it REFUSES). The `Blocked by` canonicalization gate and the `issues` short-id command (#446) landed
+# above; the epic-rollup / NO-TOUCH-SET `lint` rules (#496) landed with case 14.
 
 # ---- VERIFY-PATHS: DID THE PR STAY INSIDE ITS TOUCH-SET? (case 23) --------------------------------
 #
@@ -2423,6 +2423,80 @@ if [ -z "$RL_PORT" ]; then bad "reap live-PR fixture bound a port"; else
 
   kill "$RL_SRV" 2>/dev/null
 fi
+
+# ---- REAP SCOPES TO THE CHECKOUT YOU ARE STANDING IN (#480, case 13) — the destructive one ---------
+# `reap --apply` is the ONE worker command that DELETES another worker's state, so an org-wide default is
+# the worst place to keep one: a janitor run from `.github` would collect claims in five repos it was
+# never pointed at. Like `next`/`take`/`batch`/`who`, a bare `reap` takes the repo of the checkout you
+# are standing in — read FREE and offline from `git config remote.origin.url` — and considers ONLY that
+# repo's claims; an explicit `--repo` wins; OUTSIDE a checkout it REFUSES rather than scan the whole org.
+# The corpus (case 13, line 54) asserts this on the DRY RUN: a bare reap from an SDD checkout must NOT
+# name a Templates/Rendering/… claim. This drives the ENGINE from FAKE CHECKOUTS against a MULTI-REPO
+# world (`reap_scope_server.py` — a dead stale claim in SDD AND Rendering), so a leak is visible two ways:
+# the dry-run line names the checkout's repo, and the `/_requests` ledger shows which repo's `/issues`
+# was fetched — the corpus's "considers only THAT repo's claims" (`gh`-counted) one transport under.
+RS_OUT="$(mktemp)"; RS_CACHE="$(mktemp -d)"; RSCO="$(mktemp -d)"
+python3 "$HERE/reap_scope_server.py" >"$RS_OUT" 2>/dev/null & RS_SRV=$!
+RS_PORT=""; for _ in $(seq 1 50); do RS_PORT="$(head -n1 "$RS_OUT" 2>/dev/null)"; [ -n "$RS_PORT" ] && break; sleep 0.1; done
+if [ -z "$RS_PORT" ]; then
+  bad "#480: reap scope fixture bound a port"
+else
+  # Fake checkouts — the git remote is the ONLY signal the scope reads. Two URL forms (https, ssh) prove
+  # the parser handles both; `nogit` is deliberately NOT a git repo (an undetectable scope).
+  mkdir -p "$RSCO/sdd"   && git -C "$RSCO/sdd"   init -q && git -C "$RSCO/sdd"   remote add origin https://github.com/FS-GG/FS.GG.SDD.git
+  mkdir -p "$RSCO/rnd"   && git -C "$RSCO/rnd"   init -q && git -C "$RSCO/rnd"   remote add origin git@github.com:FS-GG/FS.GG.Rendering.git
+  mkdir -p "$RSCO/nogit"
+  rscoped() { local dir="$1"; shift; ( cd "$dir" \
+      && FSGG_GITHUB_API_BASE="http://127.0.0.1:$RS_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+         FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$RS_CACHE" \
+         "$ENGINE" reap "$@" 2>&1 ); }
+
+  # (1) A bare `reap` (DRY RUN) from an SDD checkout considers ONLY SDD's claim — names it, and NOT
+  #     Rendering's. The dry run is the corpus's own surface: the point is WHICH claims it considers.
+  r_sdd="$(rscoped "$RSCO/sdd")"
+  printf '%s' "$r_sdd" | grep -q 'would reap  FS.GG.SDD#301  worker mole-s1' \
+    && ok "#480: a bare 'reap' from an SDD checkout names THAT repo's claim (FS.GG.SDD#301)" \
+    || bad "#480: bare reap scopes to the checkout" "$r_sdd"
+  printf '%s' "$r_sdd" | grep -qE 'FS\.GG\.(Templates|Governance|Rendering|Audio|Game)#' \
+    && bad "#480: a bare SDD-checkout reap must NOT reach another repo (the destructive default)" "$r_sdd" \
+    || ok "#480: ...and never names a Rendering/Templates/… claim — the org-wide default #480 deletes is gone"
+  # AT THE TRANSPORT: the fixture was asked for SDD's issues, NEVER Rendering's — the corpus's
+  # "considers only THAT repo's claims" re-expressed as which repo's `/issues` the scan fetched.
+  rs_reqs="$(issget "$RS_PORT")"
+  { printf '%s' "$rs_reqs" | jq -e 'index("FS.GG.SDD") != null and index("FS.GG.Rendering") == null' >/dev/null 2>&1; } \
+    && ok "#480: ...and only SDD's /issues was fetched, never Rendering's (scope proven at the transport)" \
+    || bad "#480: reap must fetch only the checkout's repo issues" "requests: $rs_reqs"
+
+  # (2) The default is READ from the remote, not hard-wired: the same bare reap from a Rendering checkout
+  #     (ssh-form origin, so both URL shapes are exercised) picks Rendering's claim, not SDD's.
+  r_rnd="$(rscoped "$RSCO/rnd")"
+  { printf '%s' "$r_rnd" | grep -q 'would reap  FS.GG.Rendering#302  worker mole-r1' \
+      && ! printf '%s' "$r_rnd" | grep -q 'FS.GG.SDD#'; } \
+    && ok "#480: a bare 'reap' from a Rendering checkout (ssh remote) picks Rendering#302 — the scope is the remote" \
+    || bad "#480: bare reap reads the actual remote" "$r_rnd"
+
+  # (3) An explicit --repo SPELLS OUT the scope and wins over the checkout: from the SDD checkout,
+  #     `--repo rendering` (a registry short-id) resolves and considers Rendering's claim, not SDD's.
+  r_expl="$(rscoped "$RSCO/sdd" --repo rendering)"
+  { printf '%s' "$r_expl" | grep -q 'would reap  FS.GG.Rendering#302  worker mole-r1' \
+      && ! printf '%s' "$r_expl" | grep -q 'FS.GG.SDD#'; } \
+    && ok "#480: an explicit '--repo rendering' wins over the SDD checkout AND resolves the short-id (#381)" \
+    || bad "#480: explicit --repo wins + short-id resolves" "$r_expl"
+
+  # (4) OUTSIDE a checkout, `reap` — the DESTRUCTIVE command — REFUSES rather than fall back to an
+  #     org-wide scan. The refusal precedes any network read, so it deletes across zero repos, never five.
+  r_nogit="$(rscoped "$RSCO/nogit")"; r_rc=$?
+  { printf '%s' "$r_nogit" | grep -q -- '--repo required' && [ "$r_rc" -ne 0 ]; } \
+    && ok "#480: 'reap' outside a checkout REFUSES ('--repo required'), never scans the whole org (the destructive default)" \
+    || bad "#480: reap must refuse an undetectable scope" "rc=$r_rc: $r_nogit"
+  # NOTHING was deleted along the way — every leg above was a dry run or a refusal.
+  [ "$(deletes_on "$RS_PORT")" = '[]' ] \
+    && ok "#480: ...and across every scope leg NOTHING was deleted (dry runs + a refusal, never a break)" \
+    || bad "#480: reap scope legs must not delete" "deletes: $(deletes_on "$RS_PORT")"
+
+  kill "$RS_SRV" 2>/dev/null
+fi
+rm -f "$RS_OUT"; rm -rf "$RS_CACHE" "$RSCO"
 
 # ---- WHO READS THE LOCK OFF THE BOARD TOO (cases 25 + 26): #461/#581 -------------------------------
 #
