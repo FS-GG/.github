@@ -49,8 +49,16 @@ case. These are closed with an evidence comment pointing here.
 
 **Coverage note (#600, #611):** the engine code retires both defects, but neither has a
 `tests/coord-engine-parity/` assertion pinning it. Closing on verified code is correct — the defect is gone
-from the engine — but the regression is unguarded. A follow-up parity case for each is filed as a low-priority
-gap, not a blocker (the corpus is a regression net, not the proof the fix exists).
+from the engine — but the regression is unguarded. The follow-up parity cases are tracked in
+[#839](https://github.com/FS-GG/.github/issues/839), not a blocker (the corpus is a regression net, not the
+proof the fix exists).
+
+**Residuals note (#611, #550, #600):** three of the closed issues are closed over a smaller, genuinely
+separate tail — #611's bare-`<n>` acceptance (a `pnext-item` §4 docs correction, not an engine change),
+#550's belt-and-suspenders session predicate, and the coverage gaps above. Each is closed because the
+**engine** defect it named is retired; the tails are tracked in [#839](https://github.com/FS-GG/.github/issues/839)
+so they are not lost in this prose. (Contrast #646, kept OPEN because its residual is an explicit acceptance
+bullet the issue calls "the one that matters most," not a separable tail.)
 
 ## NOT retired by the port — **KEPT OPEN, re-filed against the engine**
 
@@ -64,7 +72,7 @@ Phase D would retire them) is **removed**; they stay open as engine work, `bug`-
 | **#651** | the open-PR proof-of-life (#581) is a property of the stale MARKER, not of the ITEM. `Scan.fs` probes `Reads.prAlive` only inside `Some m -> if Reads.isStale …`; on the no-marker path (`holder = None`) nothing probes the branch, and `Schedulability`'s `None` case falls through to `Startable` (`Schedulability.fs:113-114`). A markerless Ready/Backlog item with a live `item/<n>-*` PR is still offered. Faithfully reproduced. | probe `Reads.prAlive` on the `holder = None` path too, and surface an `ItemPrOpen` verdict so `take`/`batch`/`who` skip it. Add a parity case (markerless item + open PR ⇒ not offered). |
 | **#641** | `fsgg-coord issues` still lists PULL REQUESTS. `Reads.issues` returns `response.Body` **raw** (`Reads.fs:1252` — "emit the RAW bytes bash's `issues` prints"). The sibling `openIssues` **does** filter `pull_request` and even names #641 (`Reads.fs:1166`) — but that guards the *claim scan*, not the `issues` command the §4 duplicate-check reads. Faithfully reproduced. | filter `pull_request` at emit time in `Reads.issues` (preserving array shape), or add an `--include-prs` opt-in. |
 | **#614** | `done --flip`'s roll-up still infers "all children Done ⇒ parent Done", so one PARTIAL child closes an open parent. The core grew a `Discharge` (`Partial`/`Completes`) type and `Done.rollUp` honours `Partial` (`Done.fs:36-39`, `:543-550`) — but the CLI **hard-codes `Done.Completes`** (`Client.fs:2218`) with no `--partial` flag and no auto-detection, so the `Partial` path is unreachable dead code and the partition assumption survives. | wire a discharge flag (`done --flip --partial "<why>"`, or invert the default) through `Options.fs`/`Client.fs:2218`, plus the `pnext-item` §4 warning. The plumbing already exists. |
-| **#646** *(mixed)* | the titled **deadlock is structurally resolved**: `claim` no longer validates the body's `Paths:` (`Writes.fs:178-222`), so a malformed item is lockable by ref; with #706 making `widen` holder-gated, the repair happens under the lock, no unlocked race. But acceptance bullet 1 — `lint` red on an item whose `Paths:` *contains* an unmatchable token — is only half-met: `touchSetFindings` emits `BAD-TOUCH-SET` only when **every** token is unmatchable (`List.forall`, `Client.fs:2778`); a **partial** declaration falls through silently. | (enhancement, not a carried bug) switch `forall`→`exists` at `Client.fs:2778` and name the offending subset, so a partial-unmatchable declaration is caught at filing time. `claim --paths` from the issue is **not** needed. |
+| **#646** *(mixed)* | the titled **deadlock is structurally resolved**: `claim` no longer validates the body's `Paths:` (`Writes.fs:178-222`), so a malformed item is lockable by ref; with #706 making `widen` holder-gated, the repair happens under the lock, no unlocked race. But acceptance bullet 1 — `lint` red on an item whose `Paths:` *contains* an unmatchable token — is only half-met: `touchSetFindings` (`Client.fs:2769`) emits `BAD-TOUCH-SET` only when **every** token is unmatchable (`List.forall`, `Client.fs:2781`); a **partial** declaration falls through silently. | (enhancement, not a carried bug) switch `forall`→`exists` at `Client.fs:2781` and name the offending subset, so a partial-unmatchable declaration is caught at filing time. `claim --paths` from the issue is **not** needed. |
 
 ## The `Writes.fsi` correction shipped here
 
