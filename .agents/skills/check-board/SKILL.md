@@ -156,22 +156,28 @@ different answers depending on where you are standing — and `--batch` is corre
 regardless: it writes N fields in **one aliased mutation** (`#448`), which is also the cheaper spend
 against a budget every worker shares.
 
-**`fsgg-coord add` is gone, so `OFF-BOARD-ISSUE` is report-only for now.** The bash client wrapped
-`gh project item-add` in something **idempotent** and metered; the typed engine never ported it, so
-`add`, `item-add` and `flush` are all `unknown command` today (`.github#846`, the D.4 client-surface
-gap). The raw call still exists:
+**`OFF-BOARD-ISSUE` is report-only, and there is currently NO sanctioned way to fix it.** Say that
+plainly rather than hand anyone a recipe. The bash client wrapped the raw Projects v2 add in
+something **idempotent** and metered; the typed engine never ported it, so `add`, `item-add` and
+`flush` are all `unknown command` today (`.github#846`, the D.4 client-surface gap). What is left is
+a **standoff**, and you should know it is there rather than rediscover it in a red check:
 
-```sh
-gh project item-add "$FSGG_COORD_PROJECT" --owner "$FSGG_COORD_OWNER" --url <html_url>
-```
+- The raw `gh project` add still works — but `check-graphql-monopoly` **fails the merge** of any
+  skill or doc carrying it as a runnable line, because a recipe that reaches past the client is an
+  unmetered principal on a budget the whole fleet shares (`#418`). That gate is right.
+- Its remediation tells you to use `fsgg-coord add` — **which no longer exists**. So the fabric
+  forbids the spelling that works and mandates the one that does not (`.github#859`).
 
-**`--apply` must not run it.** It is not idempotent: boarding an issue twice creates a **duplicate
-item**, and the only thing standing between this pass and that duplicate is a snapshot being right
-about absence. A failed or partial scan makes a boarded issue look off-board — and "I could not
-read the board" is not "the item is not on it" (`#266`), which is precisely the confusion that had
-`#421` telling workers to `item-add` an issue that was already there. So: report the class, name
-the issues, and let a human who has *looked* run the line above. Restore auto-remediation when an
-idempotent `add` comes back.
+Until `add` returns, the honest move is the one this skill already prefers: **report the class, name
+the issues, and stop.** Do not smuggle the raw call in behind an exemption marker — the marker means
+*one-time board provisioning run by a human with admin rights*, and a reconcile pass is neither.
+
+**And `--apply` must never board anything even once `add` is back — unless it is idempotent.**
+Boarding an issue twice creates a **duplicate item**, and the only thing standing between this pass
+and that duplicate is a snapshot being right about *absence*. A failed or partial scan makes a
+boarded issue look off-board — and "I could not read the board" is not "the item is not on it"
+(`#266`), which is precisely the confusion that had `#421` telling workers to add an issue that was
+already there.
 
 `CLAIM-STATUS-LAG` is the one class you cannot read off a single command: `who --json` does not
 emit `inProgress`. Join it yourself — an item `who` reports as `held` whose board `status` is not
