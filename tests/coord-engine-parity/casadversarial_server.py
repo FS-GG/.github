@@ -21,6 +21,17 @@ The world is ONE repo (FS.GG.SDD). Each issue carries the marker state its leg n
              just-posted marker (a failed re-read is a LOSS, never an orphan)
     (i) #92  EMPTY; the CAS RE-READ returns [] (our marker VANISHED) — claim treats "we cannot tell" as a
              LOSS and does not announce a lock it cannot show
+    (a) #84  ghost-111 STALE (id 810)   claim COLLECTS the stale marker it claims over (DELETEs it), TELLS
+                                        the evicted worker (a fsgg:msg to=ghost-111), one marker survives
+    (b) #85  otter-b55 STALE (id 811)   a worker whose OWN marker went stale renews to ONE marker, not two
+    (l) #95  ghost-444 STALE (id 818)   the collect DELETE 404s (a peer collected it first) — not fatal
+
+Legs (a)/(b)/(l) MUTATE this process too: `claim` POSTs its fresh marker, wins the CAS over the stale one,
+and then COLLECTS the stale marker (a DELETE, recorded in `/_deletes`). A GET on an issue's /comments
+reflects the deletes — so `workers_on` sees exactly the survivor(s). Issue 95's DELETE returns 404 (the
+concurrent-GC race: the marker is present for our read and re-verify, gone by the time our DELETE lands),
+and the engine treats "already gone" as success. Leg (a)'s notify is an ordinary POST, so it shows up on
+#84's /comments as a `fsgg:msg` addressed `to=ghost-111`.
 
 Legs (g)/(i) MUTATE this process: `claim` POSTs its marker, the re-read fails or comes back empty, and the
 withdraw DELETEs the marker it posted. `/_deletes` records the comment ids DELETEd, so the harness can
@@ -48,7 +59,9 @@ REPO = "FS.GG.SDD"
 RATE = {"cost": 1, "remaining": 4977}
 
 LOCK = threading.Lock()
-_DELETES = []          # comment ids this process was asked to DELETE (the CAS withdraw).
+_DELETES = []          # comment ids this process was asked to DELETE (the CAS withdraw / stale collect).
+_DELETED = set()       # comment ids actually gone now — a GET on /comments reflects them (legs a/b/l).
+_DELETE_404 = {818}    # comment ids whose DELETE 404s (a peer collected it first, leg l) — still GONE.
 _PATCHES = []          # comment ids this process was asked to PATCH (a heartbeat renew).
 _POSTED = {}           # marker comments `claim` POSTs, keyed by issue number (leg e's write-through).
 _NEXT_ID = [9000]
@@ -84,12 +97,20 @@ def _seeded(n):
         ts = _now()
         return [{"id": 815, "body": "<!-- fsgg:claim lease=120 -->\nhalf-written",
                  "user": {"login": "EHotwagner"}, "created_at": ts, "updated_at": ts}]
+    if n == 84:  # (a) a STALE claim by ghost-111 — the next claimant COLLECTS it and TELLS ghost-111
+        return [_marker(810, "ghost-111", _ago(3))]
+    if n == 85:  # (b) our OWN stale marker — a renew ends with one marker, not two
+        return [_marker(811, "otter-b55", _ago(3))]
+    if n == 95:  # (l) a stale claim whose DELETE 404s (a peer collected it first)
+        return [_marker(818, "ghost-444", _ago(3))]
     return []  # #90, #92 start EMPTY
 
 
 ISSUE_BODY = {
+    84: "Paths: src/A/**", 85: "Paths: src/B/**",
     86: "Paths: src/C/**", 87: "Paths: src/D/**", 88: "Paths: src/E/**",
     89: "Paths: src/F/**", 90: "Paths: src/G/**", 92: "Paths: src/I/**",
+    95: "Paths: src/L/**",
 }
 
 
@@ -159,8 +180,16 @@ class H(BaseHTTPRequestHandler):
         p = self.path.split("?", 1)[0]
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/comments/(\d+)$", p)
         if m:
+            cid = int(m.group(1))
             with LOCK:
-                _DELETES.append(int(m.group(1)))
+                _DELETES.append(cid)
+                # The marker is GONE regardless of what we answer — for leg l, a peer's delete landed
+                # first, so it is already absent even though our own DELETE 404s. Either way a subsequent
+                # read must not serve it back.
+                _DELETED.add(cid)
+                is404 = cid in _DELETE_404
+            if is404:
+                return self._send(404, {"message": "Not Found"})  # (l) already gone — not fatal
             self.send_response(204)
             self.end_headers()
             return
@@ -201,7 +230,10 @@ class H(BaseHTTPRequestHandler):
                 # None and "we cannot tell who holds this" is treated as a LOSS.
                 if n == 92:
                     return self._send(200, [])
-                return self._send(200, _seeded(n) + _POSTED.get(n, []))
+                # A read reflects the DELETEs (legs a/b/l): a collected stale marker is gone, so
+                # `workers_on` sees exactly the survivor.
+                live = [c for c in _seeded(n) + _POSTED.get(n, []) if c["id"] not in _DELETED]
+                return self._send(200, live)
 
         if re.match(r"^/repos/[^/]+/[^/]+/issues/?$", p):
             return self._send(200, [{"number": n, "title": ISSUE_BODY[n].split(":")[0], "state": "open",

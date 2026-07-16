@@ -967,7 +967,23 @@ module Client =
 
                     match Writes.claim ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref readPreviousStatus with
                     | Error e -> fail e
-                    | Ok(Writes.Won held) ->
+                    | Ok(Writes.Won(held, collected)) ->
+                        // A stale marker we claimed over was COLLECTED (deleted) by the CAS, never merely
+                        // out-ordered — an ignored stale marker is what `heartbeat` resurrects underneath us,
+                        // two live markers on one item. TELL each evicted worker, on their own item, that
+                        // their expired claim was collected and the item is taken: a silent eviction is how a
+                        // worker keeps building against a lock it no longer holds.
+                        for evicted in collected do
+                            printfn "collected worker '%s' expired claim" evicted.Value
+
+                            Writes.say
+                                ctx.Transport
+                                (WorkerId w.Id)
+                                evicted
+                                ref
+                                $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
+                            |> ignore
+
                         // Move the board column to In progress — the ONE board write, through the
                         // queue-aware path so an exhausted budget defers rather than drops (#510).
                         match board.Force() with

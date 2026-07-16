@@ -19,7 +19,7 @@ module Writes =
         member _.PreviousStatus = previousStatus
 
     type ClaimOutcome =
-        | Won of Held
+        | Won of held: Held * collected: WorkerId list
         | Lost of WorkerId
         | Twin of theirs: SessionId
         | Undecided of reason: string
@@ -191,6 +191,26 @@ module Writes =
 
         let liveBefore = Reads.winner leaseMinutes before
 
+        // COLLECT THE STALE DEBRIS ON AN ITEM WE HAVE WON. A stale marker is a lapsed lease, and the next
+        // claimant must COLLECT it, never merely out-order it: an ignored stale marker is exactly what
+        // `heartbeat` resurrects underneath the new holder — two live markers, one item. So once our live
+        // marker is the winner, delete every OTHER stale marker on the item (a 404 is success — a peer may
+        // have collected the same one, the concurrent-GC race), and hand back the workers we evicted so the
+        // caller can TELL them. Our OWN stale marker (a claim of ours that went stale) is deleted too, so
+        // exactly one marker survives, but is not returned: you do not message yourself. Best-effort — a
+        // stale marker we could not delete is left for `reap`, never a reason to fail a claim already won.
+        let collectStale (winnerId: int64) (markers: Reads.Marker list) : WorkerId list =
+            markers
+            |> List.filter (fun m -> m.Id <> winnerId && Reads.isStale leaseMinutes m)
+            |> List.choose (fun m ->
+                match deleteComment transport ref m.Id with
+                | Ok() -> Some m.Worker
+                | Error _ -> None)
+            // Our OWN stale marker is deleted but is not a notification (you do not message yourself); and an
+            // unparseable marker that is merely STALE is debris worth deleting, but its `worker` is a sentinel
+            // — `say`ing to "unparsed-marker" addresses no worker and posts a comment nobody reads.
+            |> List.filter (fun w -> w <> worker && w <> WorkerId UnparsedMarker)
+
         match liveBefore with
         // A MARKER HELD BY NOBODY BLOCKS. A half-written lock fails CLOSED — if it vanished, the item would
         // read as free and a second worker would be handed files somebody may be standing in.
@@ -215,7 +235,7 @@ module Writes =
         | Some m ->
             match session, m.Session with
             | Some(SessionId ours), Some(SessionId theirs) when ours <> theirs -> Ok(Twin(SessionId theirs))
-            | _ -> Ok(Won(Held(ref, worker, m.Id, m.PreviousStatus)))
+            | _ -> Ok(Won(Held(ref, worker, m.Id, m.PreviousStatus), collectStale m.Id before))
 
         | None ->
 
@@ -261,8 +281,9 @@ module Writes =
 
         | Some w when w.Id = myId ->
             // WE WON. The lowest live marker id is ours, and every racer computing the same total order
-            // reaches the same conclusion.
-            Ok(Won(Held(ref, worker, myId, previousStatus)))
+            // reaches the same conclusion. Now collect the stale debris this win claimed over — including
+            // our OWN just-superseded stale marker, so a renew ends with exactly one marker, not two.
+            Ok(Won(Held(ref, worker, myId, previousStatus), collectStale myId after))
 
         | Some w ->
             // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
