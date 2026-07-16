@@ -41,6 +41,18 @@ module Protocol =
         { Kind: string
           Meaning: string }
 
+    /// One exit code, as the CALLER's contract — the fact a shell script reads without parsing prose.
+    type ExitCodeDoc =
+        { Code: int
+          /// The `EX_*` spelling, where the code has one a worker would recognise; `""` where it does
+          /// not. The name is a label on the number, never a second source for it.
+          Name: string
+          /// What the code means the engine OBSERVED.
+          Meaning: string
+          /// What the caller should DO about it. A code whose remedy is unstated is a code a worker
+          /// invents a remedy for.
+          Action: string }
+
     // ---- the verdicts ------------------------------------------------------------------------------
     // ONE TOTAL FUNCTION, ONE UNION. Fourteen of the scheduler family's issues were a missing case in
     // it; #485 named the cause — startability was computed in five places and agreed in none. These are
@@ -78,6 +90,65 @@ module Protocol =
           { Kind = "undetermined"
             Meaning =
               "WE COULD NOT DECIDE — and that is never a silent no. An unreachable answer is not a negative one. This is the case whose absence made every other case a lie waiting to happen." } ]
+
+    // ---- take's exit contract ----------------------------------------------------------------------
+    // #585 gave `take` codes that tell "I claimed you an item" apart from the four ways it can claim
+    // NOTHING, so `take && work_it` cannot fire on nothing. The codes were then RESTATED by hand in
+    // /pnext-item §1 — and the restatement was wrong in three ways at once, which is the case for
+    // generating it rather than proof-reading it harder:
+    //
+    //   * it documented `EX_PARTIAL` as "could not read the board — a no-verdict". `Errors.ExPartial`
+    //     is a WRITE that half-landed (a `set-field --batch` outcome). `take` never returns it, and the
+    //     code a failed READ actually carries is 1 (or EX_RATE for a budget).
+    //   * its "≠0, ≠2" row swallowed rows 5, 6 and 75 — every one of them is also "≠0, ≠2", so read
+    //     top-down the table contradicted itself. It gets one thing right that a naive replacement
+    //     loses, though, and the first draft of THIS list lost it: a catch-all covers 3 (the batch was
+    //     REFUSED), which is reachable and easy to forget. Enumerating beats a catch-all only if the
+    //     enumeration is complete.
+    //   * it read EX_RATE as "the GraphQL budget". Since #897 the engine names the budget that ACTUALLY
+    //     died, and REST is the one that takes `claim`/`take`/`who` down with it (ADR-0034 §3).
+    //
+    // The list is ordered as a worker meets it: the one success first, then the failures by how likely
+    // they are to be the reason a loop stopped.
+    let takeExitCodes: ExitCodeDoc list =
+        [ { Code = 0
+            Name = ""
+            Meaning = "An item was CLAIMED. This is the ONLY code that means you hold one."
+            Action = "Go work it — and only here." }
+          { Code = 5
+            Name = "EX_NONE"
+            Meaning =
+              "Looked, and nothing was startable — an empty or all-blocked queue. A LOOK THAT SUCCEEDED and found nothing, which is why it is not 0 and not a read failure."
+            Action =
+              "Nothing to do: stop, or wait for the board to free up. Diagnose before you idle — `batch --include-backlog`, `who`, `next` each name a different reason a full board looks empty." }
+          { Code = 6
+            Name = "EX_CONTENDED"
+            Meaning =
+              "The item was startable when it was picked and the claim CAS lost every race for it — somebody else got there first."
+            Action = "Back off briefly and retry. The board is busy, not empty." }
+          { Code = 75
+            Name = "EX_RATE"
+            Meaning =
+              "A rate budget is exhausted. The message names WHICH one (#897): REST takes `claim`/`take`/`who` with it, because the lock lives there (ADR-0034 §3); GraphQL takes the board reads."
+            Action =
+              "Back off until the reset it names — do not loop. Then `flush --dry-run`: a board write you made on an exhausted budget is QUEUED, and nothing replays it for you." }
+          { Code = 3
+            Name = ""
+            Meaning =
+              "REFUSED — the batch cannot be scheduled at all. Some in-flight claim declares a touch-set that matches no file, so it reserves NOTHING, and scheduling against it would hand its files to a second worker. The message names the item and the offending tokens."
+            Action =
+              "Do NOT retry — it will refuse identically until the declaration is fixed. Fix the claim it names (`widen <issue> --paths '<paths>'`), or talk to its holder." }
+          { Code = 1
+            Name = ""
+            Meaning =
+              "No verdict was reached, for one of two reasons the message tells apart: the engine refused your INPUT before it looked (no worker id resolves; the board document does not parse), or the board READ failed. A read failure is never an empty queue and never EX_NONE (#266) — \"I could not look\" and \"I looked, and it is empty\" keep different codes on purpose."
+            Action =
+              "Read the message. A refused input is not retryable — it names its own remedy. Retry only a read failure, and investigate one that persists." }
+          { Code = 2
+            Name = ""
+            Meaning =
+              "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
+            Action = "Report it. Do not retry, and do not work an item you were not handed." } ]
 
     // ---- the rules ---------------------------------------------------------------------------------
 

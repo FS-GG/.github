@@ -69,12 +69,39 @@ jobs:
       # A GATE THAT CANNOT FAIL IS NOT A GATE (#266, #436). If the region markers were deleted, the
       # regenerator would have nothing to compare and would pass over a document that is now, once again,
       # a hand-maintained copy of the protocol. Assert the regions are actually there.
+      #
+      # WHICH documents comes from `--list`, so the generator and this gate cannot disagree about the
+      # target set. HOW MANY is hardcoded HERE and nowhere else, deliberately: a count derived from the
+      # same list it checks would be satisfied by deleting a target — the vacuity this step exists to
+      # refuse. Adding a projection is meant to cost this line.
       - name: Non-vacuity — the generated regions exist
         run: |
           set -euo pipefail
-          n="$(grep -rlF 'BEGIN GENERATED: fsgg-protocol' \
-                 docs/coordination/parallel-work.md \
-                 .claude/skills/intra-repo-parallel-work/SKILL.md \
-                 .agents/skills/intra-repo-parallel-work/SKILL.md | wc -l)"
-          echo "documents carrying a generated protocol region: $n"
-          [ "$n" -eq 3 ] || { echo "::error::expected 3 generated regions, found $n — a projection has become a hand-maintained copy again"; exit 1; }
+          expected=5
+
+          list="$(bash scripts/generate-projections --list)"
+          n="$(printf '%s\n' "$list" | grep -c .)"
+          echo "declared projection regions:"
+          printf '%s\n' "$list"
+
+          [ "$n" -eq "$expected" ] || {
+            echo "::error::expected $expected declared projection regions, found $n — if you added or removed one, say so by editing 'expected' in this gate"
+            exit 1
+          }
+
+          # Every DECLARED region is actually PRESENT in its document. `--check` alone cannot catch a
+          # deleted marker pair on a target it no longer knows about, and a `fsgg-protocol` marker is a
+          # PREFIX of `fsgg-protocol:<kind>`, so the match is anchored to the exact marker.
+          while IFS="$(printf '\t')" read -r kind path; do
+            [ -n "$kind" ] || continue
+            case "$kind" in
+              rules) marker="<!-- BEGIN GENERATED: fsgg-protocol -->" ;;
+              *)     marker="<!-- BEGIN GENERATED: fsgg-protocol:$kind -->" ;;
+            esac
+            grep -qxF "$marker" "$path" || {
+              echo "::error::$path carries no '$kind' region — it is a hand-maintained copy of the protocol again"
+              exit 1
+            }
+          done <<< "$list"
+
+          echo "all $n projection regions present."

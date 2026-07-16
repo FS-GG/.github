@@ -94,3 +94,33 @@ module ProtocolTests =
     let ``the protocol is not empty`` () =
         Assert.NotEmpty Protocol.rules
         Assert.NotEmpty Protocol.verdicts
+        Assert.NotEmpty Protocol.takeExitCodes
+
+    /// A CODE WITHOUT A REMEDY IS A CODE A WORKER INVENTS A REMEDY FOR — and the invented one is
+    /// "retry", which is exactly wrong for 2 (the engine is broken) and for 5 (the queue is empty).
+    /// The `Meaning`/`Action` split is the whole reason this table beats the number alone.
+    [<Fact>]
+    let ``every take exit code says what it saw and what to do`` () =
+        for c in Protocol.takeExitCodes do
+            Assert.False(
+                System.String.IsNullOrWhiteSpace c.Meaning,
+                $"take exit %d{c.Code} means nothing")
+
+            Assert.False(
+                System.String.IsNullOrWhiteSpace c.Action,
+                $"take exit %d{c.Code} tells the caller to do nothing")
+
+    /// Two rows for one code is two remedies for one observation, and the worker reads whichever it
+    /// meets first. The old hand-written table had exactly this defect: its `≠0, ≠2` row also matched
+    /// 5, 6 and 75, so three codes carried two contradictory instructions each.
+    [<Fact>]
+    let ``take exit codes are unique`` () =
+        let codes = Protocol.takeExitCodes |> List.map (fun c -> c.Code)
+        Assert.Equal<int list>(List.distinct codes, codes)
+
+    /// 0 IS THE ONLY SUCCESS, and the table's first row is what a worker copies. `take && work_it`
+    /// firing on nothing is #585 itself.
+    [<Fact>]
+    let ``take documents exactly one success code, and it leads`` () =
+        Assert.Equal(0, (List.head Protocol.takeExitCodes).Code)
+        Assert.Equal(1, Protocol.takeExitCodes |> List.filter (fun c -> c.Code = 0) |> List.length)

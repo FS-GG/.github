@@ -658,10 +658,16 @@ module Snapshot =
     // THE PROTOCOL (ADR-0034 §4.5) — the rules, as a document nobody authors.
     // ================================================================================================
 
+    // /2 — the payload gained `takeExitCodes` (#889). Additive for a reader that ignores unknown members,
+    // but the number says what the surface IS, not merely whether an old reader survives it.
     [<Literal>]
-    let private FactsSchema = "fsgg.coord.protocol/1"
+    let private FactsSchema = "fsgg.coord.protocol/2"
 
-    let renderFacts (rules: Protocol.Rule list) (verdicts: Protocol.VerdictDoc list) : string =
+    let renderFacts
+        (rules: Protocol.Rule list)
+        (verdicts: Protocol.VerdictDoc list)
+        (takeExitCodes: Protocol.ExitCodeDoc list)
+        : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
 
@@ -686,6 +692,18 @@ module Snapshot =
             w.WriteStartObject()
             w.WriteString("kind", v.Kind)
             w.WriteString("meaning", v.Meaning)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+
+        w.WriteStartArray("takeExitCodes")
+
+        for c in takeExitCodes do
+            w.WriteStartObject()
+            w.WriteNumber("code", c.Code)
+            w.WriteString("name", c.Name)
+            w.WriteString("meaning", c.Meaning)
+            w.WriteString("action", c.Action)
             w.WriteEndObject()
 
         w.WriteEndArray()

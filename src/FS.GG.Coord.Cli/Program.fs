@@ -82,7 +82,7 @@ let private readInput (opts: Options) =
 /// rule exists once, and the prose is a build artifact.
 let private facts (opts: Options) =
     match opts.Render with
-    | Json -> printfn "%s" (Snapshot.renderFacts Protocol.rules Protocol.verdicts)
+    | Json -> printfn "%s" (Snapshot.renderFacts Protocol.rules Protocol.verdicts Protocol.takeExitCodes)
     | Text ->
         for r in Protocol.rules do
             printfn "## %s" r.Title
@@ -97,6 +97,14 @@ let private facts (opts: Options) =
 
         for v in Protocol.verdicts do
             printfn "- **%s** — %s" v.Kind v.Meaning
+
+        printfn ""
+        printfn "## `take` — the exit contract (#585)"
+        printfn ""
+
+        for c in Protocol.takeExitCodes do
+            let name = if c.Name = "" then "" else $" ({c.Name})"
+            printfn "- **%d**%s — %s %s" c.Code name c.Meaning c.Action
 
     ExitGreen
 
