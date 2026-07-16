@@ -80,16 +80,17 @@ module CommandSurfaceTests =
     /// verb inventory cannot account for them and the DU cross-check must be told so explicitly.
     let private flagDispatched = [ Help; Version ]
 
-    /// Verbs that are DISPATCHED but absent from `usage` — the `adopt` class: it works, and it is
-    /// invisible. Each entry is a LIVE DEFECT, not an exemption: the test below asserts this set is
-    /// EXACTLY the undocumented one, so documenting a verb goes red until its line here is deleted,
-    /// and a newly-undocumented verb goes red on arrival.
+    /// Verbs that are DISPATCHED but absent from `usage` — a verb that works and is invisible. Each entry
+    /// is a LIVE DEFECT, not an exemption: the test below asserts this set is EXACTLY the undocumented
+    /// one, so documenting a verb goes red until its line here is deleted, and a newly-undocumented verb
+    /// goes red on arrival.
     ///
-    /// `adopt` (#697) is dispatched by `Options.fs` and reasoned about by #712, but appears nowhere in
-    /// the usage block. Fixing it is a one-line addition to `usage` in `src/FS.GG.Coord.Cli/Options.fs`
-    /// — a file held by a live claim on #862 while this gate was written, so it is #869's follow-up
-    /// rather than a path this item may edit.
-    let private knownUndocumented = set [ "adopt" ]
+    /// EMPTY, and it earned that. `adopt` (#697) sat here when #869 landed: dispatched since #697,
+    /// reasoned about by #712, and absent from `usage` — but the one-line fix lived in `Options.fs`,
+    /// held by a live claim on #862, so #869 could only record it. #891 documented it, and this set going
+    /// red is what made the second half of that fix non-optional (the PR could not merge until the entry
+    /// came out). Empty is the honest resting state: every verb the engine dispatches, `--help` names.
+    let private knownUndocumented: Set<string> = Set.empty
 
     let private caseName (c: Command) =
         FSharpValue.GetUnionFields(c, typeof<Command>) |> fst |> fun i -> i.Name
