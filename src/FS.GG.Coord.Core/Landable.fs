@@ -29,22 +29,55 @@ module Landable =
     let private cgroup (r: RunRow) : string * string * string * int list =
         r.Path, r.Event, r.HeadBranch, List.sort r.PrNumbers
 
+    /// SUPERSESSION IS THE GROUP'S OWN LATER RUN, whatever the earlier one concluded (ADR-0043). Only the
+    /// highest run number in each concurrency group is scored; every earlier run of that group is dropped
+    /// with its check suite.
+    ///
+    /// THE CONCLUSION IS NOT PART OF THE TEST, and it used to be: the rule dropped a superseded run ONLY
+    /// when it was `cancelled`, on the reasoning that "a failed run is never dropped — so this cannot fail
+    /// open" (#698/#719). That reasoning assumed a failure could be laundered by RE-RUNNING it until it
+    /// passed. **A re-run cannot do that, because a re-run creates no run.** It adds an ATTEMPT under the
+    /// same id and the same run number, and the row's `Conclusion` reads the LATEST attempt (#721 — the same
+    /// fact that makes a re-run re-execute a stale `@main`). So a failure re-run until it passes is ONE row
+    /// reading `success`, which every rule here scores green, and the `cancelled`-only test bought no
+    /// protection from it — it had none to buy. What it actually kept was a failure that a DIFFERENT TRIGGER
+    /// had already re-evaluated, which is #1039: `architecture-map` reads the PR BODY out of the event
+    /// payload, so its verdict is not a function of the head SHA. You follow the remedy it prints, the
+    /// `edited` run passes, and the completed failure stays immortal beside it — `red`, forever, on a PR
+    /// GitHub calls `clean`. The escape was to force-push a tree-identical commit to launder the verdict.
+    ///
+    /// AND THE EVENT NEED NOT BE CONSULTED to tell those apart, though #1039 first proposed it: every run
+    /// scored here is on ONE head SHA (`Reads.workflowRuns` keys the read on it), and a `synchronize`
+    /// CHANGES the head SHA by definition. So a second run of a group on a fixed SHA is always a
+    /// re-evaluation, never a re-run — the SHA scoping decides it, with no event list to go stale (#381/
+    /// #446/#962). It could not have been consulted anyway: `edited` and `synchronize` are webhook ACTIONS,
+    /// and the runs API carries only `event` — `pull_request` for both.
+    ///
+    /// IT STILL CANNOT FAIL OPEN, and `cgroup` is what does that work — not the conclusion. A run is
+    /// dropped only for a later run of its OWN group, so a `workflow_dispatch` (a different `github.ref`,
+    /// hence a different group) supersedes nothing and cannot vacuously green a `pull_request` run it
+    /// skipped its gate job in (#703). A cancelled or failed run NOBODY replaced is the latest in its group,
+    /// stays live, and is still a finding (#698).
+    ///
+    /// THE `Status` LEAVES THE TEST TOO: a superseded run still IN PROGRESS is dropped, where the old rule
+    /// waited for it. Nothing cancels it when its workflow declares no `concurrency` block, and it is scoring
+    /// an OLDER read of the same SHA's metadata than the run that already replaced it.
+    ///
+    /// THE COST, NAMED: a FLAKE is now laundered by any later trigger of its group on the same SHA — a label
+    /// toggle included, since metadata gates trigger on `labeled`/`unlabeled`. The `cancelled`-only clause
+    /// only APPEARED to close that door: re-running the failed run mutates its own row to `success`, which
+    /// every rule here scores green, so laundering was always one click away and the clause merely kept the
+    /// HONEST path (follow the gate's printed remedy) red. Branch protection — the authority that actually
+    /// gates the merge — scores the latest run per workflow and greens both cases regardless (ADR-0043).
     let supersede (runs: RunRow list) : RunRow list * int64 list =
         // A run is REPLACED when a run of its own concurrency group carries a higher run number.
         let replaced (r: RunRow) =
             runs |> List.exists (fun o -> cgroup o = cgroup r && o.RunNumber > r.RunNumber)
 
-        // SUPERSEDED, and nothing else: a CANCELLED run a later run of its group replaced. A cancelled run
-        // nobody re-ran is still a finding (stays live); a failed run is never dropped — so this cannot
-        // fail open.
-        let live =
-            runs
-            |> List.filter (fun r -> r.Conclusion <> Some "cancelled" || not (replaced r))
+        let live = runs |> List.filter (fun r -> not (replaced r))
 
         let dead =
-            runs
-            |> List.filter (fun r -> r.Conclusion = Some "cancelled" && replaced r)
-            |> List.choose (fun r -> r.CheckSuiteId)
+            runs |> List.filter replaced |> List.choose (fun r -> r.CheckSuiteId)
 
         live, dead
 

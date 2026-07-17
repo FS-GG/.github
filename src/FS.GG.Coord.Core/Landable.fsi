@@ -49,10 +49,16 @@ module Landable =
           Status: string
           Conclusion: string option }
 
-    /// Split runs into (live, dead-check-suite-ids): a `cancelled` run replaced by a LATER `RunNumber` of
-    /// its OWN concurrency group is superseded (#720), and its check suite must be dropped with it. A
-    /// cancelled run nobody re-ran stays live (still a finding); a FAILED run is never dropped. This is the
-    /// one expression applied to both the runs and their check-runs, so the two cannot drift.
+    /// Split runs into (live, dead-check-suite-ids): a run replaced by a LATER `RunNumber` of its OWN
+    /// concurrency group is superseded (#720), and its check suite must be dropped with it. A run nobody
+    /// replaced stays live and is still a finding (#698). This is the one expression applied to both the
+    /// runs and their check-runs, so the two cannot drift.
+    ///
+    /// THE CONCLUSION IS NOT PART OF THE TEST (ADR-0043). The rule was once `cancelled`-only, to stop a
+    /// failure being laundered by re-running it until it passed — an attack that does not exist: a re-run
+    /// creates no run, only an ATTEMPT under the same row, whose `Conclusion` then reads the latest attempt
+    /// (#721). What the test actually kept was a failure a DIFFERENT TRIGGER had re-evaluated on the same
+    /// SHA, which is #1039. `cgroup`, not the conclusion, is what keeps this fail-closed (#703).
     val supersede: runs: RunRow list -> RunRow list * int64 list
 
     /// Score a PR from its mergeability and the checks on its head SHA.

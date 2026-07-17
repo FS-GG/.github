@@ -10,8 +10,8 @@ open FS.GG.Coord.Landable
 /// `Reads.prLandable` does the three reads; this module holds `Landable.score` to the corpus's certified
 /// verdicts. Every test is a state in which the WRONG answer points a destructive verb at finished work, or
 /// lands work that is not finished:
-///   green ≠ conflicted ≠ pending ≠ red · zero-checks is RED not GREEN (#606) · a superseded `cancelled`
-///   run is NOT a failure (#720) · a null mergeable is UNKNOWN, never mergeable.
+///   green ≠ conflicted ≠ pending ≠ red · zero-checks is RED not GREEN (#606) · a superseded run is NOT a
+///   finding, whatever it concluded (#720/#1039) · a null mergeable is UNKNOWN, never mergeable.
 module LandableTests =
 
     let private run path event branch prs num status concl suite : RunRow =
@@ -120,6 +120,80 @@ module LandableTests =
         let cancelled = run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "cancelled") (Some 10L)
         let dispatch = run ".github/workflows/build.yml" "workflow_dispatch" "item/x" [ 1 ] 2 "completed" (Some "success") (Some 11L)
         Assert.Equal(PrRed, score (Some true) [ cancelled; dispatch ] [])
+
+    // ---- a superseded FAILURE is superseded too (#1039 / ADR-0043) ------------------------------------
+    //
+    // The rule above was once `cancelled`-only, to stop a failure being laundered by re-running it until it
+    // passed. That attack needs a re-run to CREATE a run, and it does not: it adds an attempt to the same
+    // row, whose Conclusion then reads the latest attempt (#721). So these two runs are never a re-run —
+    // every run scored is on ONE head SHA, and a `synchronize` changes the SHA. A second run of a group on
+    // one SHA is a metadata RE-EVALUATION, and the failure it replaced is stale by construction.
+
+    [<Fact>]
+    let ``a FAILED run replaced by a later run of its own group is superseded, and the PR is GREEN (#1039)`` () =
+        // PR #1036, head 752e95c, measured: architecture-map run 938 `failure` (it read the PRE-edit body out
+        // of the event payload), then run 940 `success` after the opt-out line the gate itself told the
+        // worker to add. Same path, same event, same branch. Nothing cancelled 938 — it had COMPLETED, and
+        // architecture-map declares no `concurrency` block — so the `cancelled`-only rule kept it and scored
+        // the PR `red` permanently, while GitHub called it `clean` and the merge was correct.
+        let g = ".github/workflows/architecture-map.yml", "pull_request", "item/1026-chore-lock-embed", [ 1026 ]
+        let path, ev, br, prs = g
+        let failed = run path ev br prs 938 "completed" (Some "failure") (Some 10L)
+        let later = run path ev br prs 940 "completed" (Some "success") (Some 11L)
+        Assert.Equal(PrGreen, score (Some true) [ failed; later ] [])
+
+    [<Fact>]
+    let ``a superseded FAILURE's check-runs are dropped with its suite, exactly as a cancelled one's are`` () =
+        let g = ".github/workflows/architecture-map.yml", "pull_request", "item/1026-x", [ 1026 ]
+        let path, ev, br, prs = g
+        let failed = run path ev br prs 938 "completed" (Some "failure") (Some 10L)
+        let later = run path ev br prs 940 "completed" (Some "success") (Some 11L)
+        // `reconcile` is architecture-map's job and a REQUIRED check: its failing copy belongs to the dead
+        // suite, so it must not be scored — otherwise the run is dropped and its check reds the PR anyway.
+        let deadCheck = named "reconcile" (Some 10L) "completed" (Some "failure")
+        let liveCheck = named "reconcile" (Some 11L) "completed" (Some "success")
+        Assert.Equal(PrGreen, score (Some true) [ failed; later ] [ deadCheck; liveCheck ])
+
+    [<Fact>]
+    let ``a FAILED run NOBODY replaced stays live — dropping a failure needs a REPLACEMENT, not a mood`` () =
+        // The fail-closed half: supersession is a fact about a later run of the group, so a lone failure is
+        // the latest in its own group and is scored. A red PR cannot go green by having no successor.
+        let lone = run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 10L)
+        Assert.Equal(PrRed, score (Some true) [ lone ] [])
+
+    [<Fact>]
+    let ``a higher run of a DIFFERENT group does not supersede a FAILURE either (#703 holds for failures)`` () =
+        // #703's hole, aimed at the case this change opens up. `workflow_dispatch` shares the path, the
+        // branch and the SHA and carries a HIGHER run number, but it is a different `github.ref` — so it
+        // supersedes nothing. A gate job that `if: github.event_name == 'pull_request'` SKIPS in the dispatch
+        // run and concludes `success`; letting it drop the failed pull_request run would count a vacuous
+        // green and merge a PR whose gate never passed. `cgroup` — not the conclusion — is what forbids it.
+        let failed = run ".github/workflows/build.yml" "pull_request" "item/x" [ 1 ] 1 "completed" (Some "failure") (Some 10L)
+        let dispatch = run ".github/workflows/build.yml" "workflow_dispatch" "item/x" [ 1 ] 2 "completed" (Some "success") (Some 11L)
+        Assert.Equal(PrRed, score (Some true) [ failed; dispatch ] [])
+
+    [<Fact>]
+    let ``a superseded run STILL RUNNING is dropped too — a group's verdict is its LATEST run's`` () =
+        // The `Status` leaves the test along with the `Conclusion`. Under the cancelled-only rule an
+        // in-progress run was never `cancelled`, so it stayed live and held the PR at `pending` until it
+        // finished. A workflow with no `concurrency` block (architecture-map declares none) never cancels its
+        // predecessor, so that wait was for a run whose verdict was stale before it started: it is scoring an
+        // OLDER read of the same SHA's metadata. Its successor has already answered.
+        let g = ".github/workflows/architecture-map.yml", "pull_request", "item/x", [ 1 ]
+        let path, ev, br, prs = g
+        let stillGoing = run path ev br prs 938 "in_progress" None (Some 10L)
+        let later = run path ev br prs 940 "completed" (Some "success") (Some 11L)
+        Assert.Equal(PrGreen, score (Some true) [ stillGoing; later ] [])
+
+    [<Fact>]
+    let ``supersession keys on the RUN NUMBER, not on list order — a later run listed FIRST still wins`` () =
+        // The runs API returns newest-first, so the superseding run arrives BEFORE the one it replaces. A
+        // rule that trusted position rather than RunNumber would score this backwards and red a green PR.
+        let g = ".github/workflows/architecture-map.yml", "pull_request", "item/x", [ 1 ]
+        let path, ev, br, prs = g
+        let later = run path ev br prs 940 "completed" (Some "success") (Some 11L)
+        let failed = run path ev br prs 938 "completed" (Some "failure") (Some 10L)
+        Assert.Equal(PrGreen, score (Some true) [ later; failed ] [])
 
     // ---- scoreN: the verdict AND the count `--wait` polls on (#724) ----------------------------------
 
