@@ -345,6 +345,35 @@ module Writes =
                 "a touch-set with no tokens reserves nothing. Declare `Paths: none` if that is the decision, or name the files."
         else
 
+        // THE SENTINEL IS A DECISION, AND `widen` IS HOW YOU DECLARE IT (#863).
+        //
+        // `Paths: none` says "this item touches nothing, deliberately" — an epic, a decision item (#496).
+        // It is not a path, so `TouchSet.classify` calls it `Unmatchable`, and the check below would
+        // therefore REFUSE it as a token that "can never match a file". That refusal is technically true
+        // and entirely beside the point: never matching a file is what the sentinel is FOR. It would also
+        // make the tool contradict itself — the empty-token refusal directly above tells the worker to
+        // "Declare `Paths: none` if that is the decision", and `widen --paths none` is how they would do
+        // it. So the sentinel is decided FIRST, over the whole token set, exactly as `TouchSet.parse`
+        // decides it — the two must agree, or `widen` writes a body its own parser reads differently.
+        let sentinels, realPaths = tokens |> List.partition TouchSet.isSentinel
+
+        if not (List.isEmpty sentinels) then
+            if List.isEmpty realPaths then
+                // ALL sentinel. CANONICALISE to a single `none`: `rewrite` joins the tokens verbatim, so
+                // passing `["none"; "none"]` through would emit `Paths: none none` — which is #863's own
+                // input, written by the tool that exists to repair it.
+                Ok(Validated [ "none" ])
+            else
+                // A CONTRADICTION: "I touch nothing" and "I touch src/A" cannot both hold. Refuse it here
+                // rather than write it, and say which of the two the worker has to pick — the unmatchable
+                // message below would report `none` as a typo'd path and send them looking for the wrong
+                // mistake.
+                let named = String.Join(", ", realPaths)
+
+                Error
+                    $"`none` is the sentinel for 'this item touches nothing, deliberately' — it cannot be declared alongside real paths (%s{named}). Declare the paths, or declare `none`, not both."
+        else
+
         // THE GRAMMAR LIVES IN THE CORE, AND THERE IS ONE OF IT. Re-implementing `classify` here would be a
         // second place for the touch-set rule to rot — which is #485's shape (one question, five
         // implementations, agreeing in none) reproduced inside its own remedy.

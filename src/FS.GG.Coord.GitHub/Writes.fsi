@@ -187,6 +187,11 @@ module Writes =
     ///
     /// A refusal names what WOULD have been accepted — a refusal that does not is a refusal that only moves
     /// the worker's confusion one step later.
+    ///
+    /// THE SENTINEL IS ACCEPTED, and canonicalised to a single `none` (#863). `Paths: none` is a DECISION
+    /// (#496), `widen --paths none` is how a worker declares it, and this function's own empty-token
+    /// refusal tells them to — so refusing it as "a token that can never match a file" would be the tool
+    /// contradicting its own instruction. `none` MIXED with real paths is a contradiction and is refused.
     val validate: tokens: string list -> Result<Validated, string>
 
     /// A body that has been REWRITTEN and is ready to PATCH.

@@ -67,6 +67,66 @@ module TouchSetTests =
     let ``#496 the two are not equal — the whole point of the issue`` () =
         Assert.NotEqual<TouchSet>(DeclaredNone, Undeclared)
 
+    // ---- #863: the sentinel is decided over the TOKEN SET, not the concatenated string --------------
+    // `parse` concatenated every declaration into one string and asked `isNoneSentinel` of THAT. Two
+    // bare `Paths: none` lines make `"none none"` — not `"none"` — so the sentinel was lost and `none`
+    // fell through to `classify`, which called it `Matchable`: it is a perfectly path-shaped token. The
+    // epic went `Startable` AND reserved a `none` directory that exists nowhere, so it read as disjoint
+    // from every worker on the board. #496 and #273 firing together, through the parser built to end
+    // both. The `Unmatchable` gate was structurally blind to it — `none` IS matchable; it matches no
+    // file that EXISTS, which is the one thing the gate does not test.
+    //
+    // The tests are on the REPEATED declaration specifically. A single `Paths: none` passed throughout,
+    // which is precisely how this shipped: the covering test reproduced the blind spot.
+
+    [<Fact>]
+    let ``#863 a REPEATED 'Paths: none' is still the sentinel — not a path called none`` () =
+        Assert.Equal(DeclaredNone, TouchSet.parse "An epic.\n\nPaths: none\n\nMore prose.\n\nPaths: none")
+
+    [<Fact>]
+    let ``#863 five of them are still the sentinel — the union does not accumulate into a path`` () =
+        let body = "An epic.\n" + String.replicate 5 "\nPaths: none\n"
+        Assert.Equal(DeclaredNone, TouchSet.parse body)
+
+    [<Fact>]
+    let ``#863 a repeated sentinel is never a Matchable token — the exact fail-open`` () =
+        // The precise shape of the bug: `Declared [Matchable "none"]` is startable and reserves a
+        // directory that does not exist. Assert against the FAIL-OPEN, not merely for the right answer.
+        match TouchSet.parse "Paths: none\nPaths: none" with
+        | Declared ts ->
+            Assert.Fail(
+                $"a repeated sentinel parsed as a DECLARATION of %A{ts} — it reserves a 'none' directory that does not exist, so it is disjoint from every worker on the board"
+            )
+        | DeclaredNone -> ()
+        | other -> Assert.Fail $"expected DeclaredNone, got %A{other}"
+
+    [<Fact>]
+    let ``#863 case and backticks do not defeat the token-set test`` () =
+        Assert.Equal(DeclaredNone, TouchSet.parse "Paths: `none`\nPaths: NONE")
+
+    [<Fact>]
+    let ``#863 'none' beside real paths is a CONTRADICTION — Unmatchable, never unioned in`` () =
+        // "I touch nothing" and "I touch src/A" cannot both hold. Refuse it: `Unmatchable` reserves
+        // nothing and covers nothing, so `Schedulability` refuses the item rather than handing out a
+        // touch-set with a fake `none` reservation silently mixed into it.
+        Assert.Equal(
+            Declared [ Unmatchable "none"; Matchable "src/A/**" ],
+            TouchSet.parse "Paths: none\nPaths: src/A/**"
+        )
+
+    [<Fact>]
+    let ``#863 a contradictory declaration is reported as unmatchable, so the gate can see it`` () =
+        Assert.Equal<string list>([ "none" ], TouchSet.parse "Paths: none src/A/**" |> TouchSet.unmatchable)
+
+    [<Fact>]
+    let ``#863 a bare 'Paths:' is an OMISSION — List.forall is vacuously true on the empty set`` () =
+        // The trap inside the fix itself. Testing `List.forall isNoneSentinel` over an EMPTY token list
+        // answers TRUE, so a `Paths:` line with nothing after it would report `DeclaredNone` — a
+        // DECISION nobody made. That is #496's conflation with the two sides swapped, and it would read
+        // as deliberate rather than as the omission it is. The empty case must be decided FIRST.
+        Assert.Equal(Undeclared, TouchSet.parse "Paths:")
+        Assert.Equal(Undeclared, TouchSet.parse "Paths:\nPaths:   ")
+
     // ---- #273: not a glob language ------------------------------------------------------------------
     // A token that matches nothing CONFLICTS WITH NOTHING, so it reads as DISJOINT against every other
     // worker — ADR-0021's own failure, one level down: a lock that succeeds under exactly the
