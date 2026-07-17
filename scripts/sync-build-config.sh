@@ -56,31 +56,31 @@ SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]
 #   2. one PR per receiver, adopting it
 #   3. ONLY THEN add its name here — and now the gate is asserting something already true
 #
-# `global.json` is at step 2 (.github#536, #805). It is in dist/dotnet/ and DELIBERATELY not in this
-# list. tests/sync-build-config asserts that it stays out — a comment is not a gate (#266), so the
-# ordering rule is a test.
+# `global.json` IS NOT IN THIS LIST, AND THAT IS A DECISION, NOT A PENDING STEP (.github#903).
 #
-# STEP 2 COMPLETED, AND THEN DECAYED — WHICH IS WHY "EVERYONE HAS ONE" IS THE WRONG TEST (#805).
-# The four receivers adopted correctly, byte-identical to the canonical 10.0.301 of the day (#561's
-# children; SDD's was verified by sha256, not hand-copied). Then RENOVATE BUMPED THE CANONICAL out
-# from under them — bff95e4, "update dependency dotnet-sdk to v10.0.302" (#804) — and bumped Game
-# and Governance in their own repos, but not Rendering, SDD or Audio. Measured 2026-07-16: canonical
-# 10.0.302; Rendering, SDD and Audio still carrying the ORIGINAL canonical bytes, 10.0.301.
+# It is distributed under dist/dotnet/ and deliberately UNMANAGED: per-repo SDK bands are legitimate.
+# The three-step order above does not apply to it — there is no step 3 waiting to be taken. #561
+# once carried one; #903 decided against it and closed the question. tests/sync-build-config asserts
+# the name stays out, because a comment is not a gate (#266).
 #
-# So nobody hand-edited anything and no adoption was skipped. `--check` compares CONTENT, not
-# presence, so adding this name to the list that day would have frozen THREE repos, every one of
-# which had adopted exactly as instructed. COHERENCE IS NOT A STATE YOU REACH ONCE. global.json is
-# distributed but UNMANAGED, so nothing fans a canonical bump out: each copy moves only when
-# Renovate happens to touch that repo. Divergence is the STEADY STATE here, not an accident, and it
-# re-opens every time the SDK ships a patch.
+# WHY, in one line: nothing fans a canonical bump out, so divergence is the STEADY STATE of this
+# file, not an accident — and it re-opens on every SDK patch. Coherence here is not a state you
+# reach once. The four receivers adopted byte-identically at the canonical 10.0.301 of the day
+# (#561's children); Renovate then bumped the CANONICAL to 10.0.302 out from under them (bff95e4,
+# #804) and bumped Game and Governance in their own repos, leaving Rendering, SDD and Audio holding
+# the ORIGINAL canonical bytes. `--check` compares CONTENT, so enforcing that day would have frozen
+# three repos, every one of which had adopted exactly as instructed. A gate that reds three repos
+# for correctly adopting is measuring the wrong thing.
 #
-# THAT IS WHY STEP 3 MAY NEVER BE TAKEN — an open decision, .github#903. Enforcing coherence and
-# letting Renovate bump per-repo are incompatible (see #678), so #903 weighs enforcement against
-# simply leaving it unmanaged and deleting the tripwire. Read it before you "finish the job" — the
-# job may be to drop it.
+# Two more reasons #903 landed where it did: `rollForward: latestFeature` makes the pin a FLOOR, so
+# band-coherence buys less than it looks like it buys; and enforcement is incompatible with
+# Renovate's per-repo bumps (#678) — managing this file means taking it out of Renovate's reach in
+# five receivers, a standing cost, forever, for a floor.
 #
-# Either way the gate is CONTENT, not existence. Re-measure rather than trusting this paragraph —
-# it is a dated observation, and the thing it observes moves:
+# TO CHANGE THIS, RE-OPEN #903. Do not "finish the job" — the job was dropped on purpose. If you do
+# re-open it, the precondition is CONTENT coherence, not presence, and it must be re-measured rather
+# than read off any census in a comment (this one included — it is a dated observation, and the
+# thing it observes moves):
 #   for r in Game Rendering SDD Governance Audio; do
 #     gh api "repos/FS-GG/FS.GG.$r/contents/global.json" --jq '.content' 2>/dev/null | base64 -d \
 #       | diff -q - dist/dotnet/global.json >/dev/null && echo "$r: MATCHES" || echo "$r: DRIFTS"

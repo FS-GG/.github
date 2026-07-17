@@ -677,6 +677,15 @@ install is what keeps the composition honest. See the
   `*.local.props` for repo-specific settings. A `--check` mode is the drift gate,
   run by the reusable `contract-coherence.yml` workflow (ADR-0006) and by each
   receiver's own `gate.yml`. See [`docs/build/README.md`](build/README.md).
+- **`dist/dotnet/` also holds `global.json`, and it is deliberately NOT managed**
+  (ADR-0006's 2026-07-17 amendment,
+  [#903](https://github.com/FS-GG/.github/issues/903)). It is a fourth canonical
+  file, but it is not in `sync-build-config.sh`'s `FILES`, so nothing distributes
+  it and no drift gate judges it: **per-repo SDK bands are legitimate.** Receivers
+  copy it by hand and Renovate bumps each copy independently, so divergence here is
+  the steady state rather than a defect — enforcing byte-coherence would merge-freeze
+  every receiver still holding the previous canonical bytes. This is a settled
+  decision, not a pending rollout step; `tests/sync-build-config` holds the line.
 - **The drift gate compares against a PIN, not against `main`** (ADR-0036,
   [#592](https://github.com/FS-GG/.github/issues/592)). Each receiver commits
   `.config/fsgg-build-config.sha` — the `.github` commit its managed files came from —

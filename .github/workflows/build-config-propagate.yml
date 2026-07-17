@@ -58,10 +58,14 @@ on:
       # sync with the script's `FILES` list, because it is a superset of it by construction.
       #
       # The cost of the superset is a no-op run: `dist/dotnet/global.json` is NOT in the script's `FILES`
-      # (deliberately — four of five consumers have no `global.json`, and syncing it would merge-freeze
-      # them; that is #536/#561's whole sequencing problem), so editing it triggers this workflow, which
-      # syncs nothing, finds a clean tree, and says so. Over-triggering is the safe direction: the failure
-      # this workflow exists to end is a change that reaches NOBODY.
+      # — it is UNMANAGED by decision (#903), so nothing syncs it and Renovate's canonical bumps here
+      # reach no receiver. Editing it triggers this workflow, which syncs nothing, finds a clean tree,
+      # and says so. Over-triggering is the safe direction: the failure this workflow exists to end is a
+      # change that reaches NOBODY.
+      #
+      # That no-op is EXPECTED, and it is not a bug to fix by adding the file to `FILES` — see #903 and
+      # the FILES note in scripts/sync-build-config.sh. Per-repo SDK bands are legitimate; enforcing
+      # coherence would merge-freeze the receivers holding the previous canonical bytes.
       - "dist/dotnet/**"
       # The syncer itself: a change to WHAT counts as managed, or HOW it is written, must reach the
       # receivers too — their drift check runs this very script out of `.github@main`, so a script that
@@ -175,7 +179,8 @@ jobs:
           git commit -m "chore: sync shared build config from FS-GG/.github@${short}"
           git push origin "$branch" --force
           # The title names the files the SCRIPT manages — which is not everything in `dist/dotnet/`.
-          # `global.json` lives there and is deliberately NOT synced (#536/#561), and a title that
+          # `global.json` lives there and is deliberately NOT synced (#536, and unmanaged by decision
+          # per #903 — not a pending step), and a title that
           # claimed it would be describing a diff this PR does not contain. `.config/fsgg-build-config.sha`
           # IS in the diff (it is the provenance pin, #592) and so it is named.
           title="chore: sync shared build config (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json, .config/fsgg-build-config.sha)"

@@ -237,48 +237,40 @@ else
 'REFUSING to overwrite hand-authored ...', and is stuck. That is the #561 rollout population."$'\n'"$DRIFT_OUT"
 fi
 
-# --- global.json: distributed, but NOT YET enforced. The ordering rule, as a gate (.github#536) ----
+# --- global.json: distributed and DECIDED-UNMANAGED. The decision, as a gate (.github#903) ---------
 #
-# `--check` treats a MISSING managed file as DRIFT, and the drift check is REQUIRED in adopting repos.
-# So a name added to FILES before the receivers carry that file merge-freezes every one of them — they
-# go red on a check they cannot make green from their own PR.
+# THIS IS NO LONGER A TRIPWIRE. It used to be one: it held the line on an ordering rule (receivers
+# adopt first, the shared config enforces last) while #561's step 3 — "add global.json to FILES" —
+# was still intended, and it was written to be DELETED by the item that took that step.
 #
-# That is not a hypothetical: #499 moved the source of truth and FS.GG.SDD could not merge ANYTHING
-# for hours (.github#379). Putting global.json in FILES before the receivers are coherent with the
-# canonical copy would do the same to several repos at once.
+# #903 decided that step is never taken. `global.json` stays UNMANAGED; per-repo SDK bands are
+# legitimate. So the assertion below is not "not yet" waiting on a precondition — it is a REGRESSION
+# TEST on a decided end state, and it is permanent. It outlived its tripwire phase rather than being
+# deleted with it, because what it asserts went from temporary to settled.
 #
-# The rule — receivers adopt first, the shared config enforces last — was written in a comment, and a
-# comment is not a gate (#266). So it is a test. These two legs are a TRIPWIRE, and they are meant to
-# be DELETED, not worked around: the item that adds "global.json" to FILES removes this block in the
-# same PR. Until then, a well-meaning "finish the job" edit reds here, with the reason, instead of
-# freezing the org.
+# Deleting it would remove the only thing standing between a well-meaning "finish #561" edit and a
+# merge freeze. #561 is closed and still carries the un-taken step 3, so a reader can quite
+# reasonably conclude the rollout stalled — the gate is what catches them and says otherwise. A
+# comment cannot do that job (#266).
 #
-# DO NOT DELETE THIS BLOCK BECAUSE "EVERYONE HAS A global.json NOW" (#805). They do, and it is still
-# not safe. `--check` compares CONTENT: a receiver whose global.json names a different band than
-# dist/dotnet/global.json drifts exactly as hard as one carrying none.
-#
-# And they diverged without anyone doing anything wrong. The four receivers adopted byte-identically
-# at the canonical 10.0.301 of the day (#561); Renovate then bumped the CANONICAL to 10.0.302
-# (bff95e4, #804) and bumped Game and Governance in their own repos, leaving Rendering, SDD and Audio
-# holding the original bytes. Measured 2026-07-16: three of five would have gone red, every one of
-# them having adopted exactly as instructed. This file is distributed but UNMANAGED, so nothing fans
-# a canonical bump out — divergence is the steady state, and it re-opens on every SDK patch.
-#
-# The condition for deleting this block is CONTENT COHERENCE **and** a decision (.github#903) that
-# enforcement is what we want at all — leaving global.json unmanaged, and dropping this block
-# unsatisfied, is a live option there. Neither condition is recorded here: this comment would rot the
-# same way the census did. Measure it (the loop in scripts/sync-build-config.sh's FILES note prints
-# MATCHES/DRIFTS per repo), read #903, and only then decide what happens to this block.
+# WHY UNMANAGED (the short form; the full argument is in scripts/sync-build-config.sh's FILES note
+# and #903): nothing fans a canonical bump out, so divergence is the STEADY STATE of this file and
+# re-opens on every SDK patch. The receivers adopted byte-identically at the canonical 10.0.301 of
+# the day (#561); Renovate then moved the CANONICAL to 10.0.302 (bff95e4, #804) and bumped only Game
+# and Governance in their own repos. `--check` compares CONTENT, so enforcing would red Rendering,
+# SDD and Audio for having adopted exactly as instructed. Also: `rollForward: latestFeature` makes
+# the pin a floor, and enforcement is incompatible with Renovate's per-repo bumps (#678).
 [ -f "$SRC/global.json" ] \
   && ok "global.json: the canonical SDK pin is distributed (present under dist/dotnet/)" \
   || bad "global.json: canonical SDK pin missing from dist/dotnet/" \
-         "#536 distributes the SDK pin; without the source file, step 3 (adding it to FILES) can never be taken."
+         "#536 distributes the SDK pin. It is unmanaged (#903) but still the canonical copy receivers
+copy FROM, and Renovate bumps it here — so its absence is a real regression, not a cleanup."
 
 if grep -qE '^\s*"global\.json"' "$SCRIPT"; then
-  bad "global.json: is NOT in FILES yet — receivers must MATCH the canonical pin FIRST" \
-      "$(printf '"global.json" was added to sync-build-config.sh FILES.\n--check reports a managed file that is MISSING or DIFFERENT as DRIFT, and that check is REQUIRED in the receivers — so this change MERGE-FREEZES every repo not byte-identical to dist/dotnet/global.json, exactly as .github#499 froze FS.GG.SDD (#379).\n\n"EVERY CONSUMER HAS ONE" IS NOT THE CONDITION (#805). They all do, and three of them still named a different band than canonical when this was last measured (2026-07-16: canonical 10.0.302; Rendering/SDD/Audio 10.0.301). Presence is not coherence — and nobody erred: the receivers adopted byte-identically at 10.0.301, then Renovate bumped the CANONICAL to 10.0.302 (#804) and only some receivers followed. This file is unmanaged, so nothing fans a canonical bump out.\n\nMEASURE before you delete this block — do not trust any census written in a comment:\n  for r in Game Rendering SDD Governance Audio; do\n    gh api "repos/FS-GG/FS.GG.$r/contents/global.json" --jq .content 2>/dev/null | base64 -d \\\n      | diff -q - dist/dotnet/global.json >/dev/null && echo "$r: MATCHES" || echo "$r: DRIFTS"\n  done\n\nAND WHETHER TO ENFORCE AT ALL IS AN OPEN DECISION — see .github#903. Leaving global.json unmanaged is a live option there, in which case this block should be DELETED rather than satisfied. Do not read a red here as an instruction to make it green.\n\nIf every receiver MATCHES and #903 decided to enforce: delete this tripwire block in the same PR. That is the intended way to remove it.\nIf any DRIFTS: re-pin it to the canonical band first (see .github#561, .github#903).')"
+  bad "global.json: is DECIDED-unmanaged (#903) and must NOT be in FILES" \
+      "$(printf '"global.json" was added to sync-build-config.sh FILES.\n\nTHIS IS NOT A "NOT YET". .github#903 DECIDED this file stays UNMANAGED — per-repo SDK bands are legitimate, and #561'"'"'s step 3 was DROPPED, not deferred. If you got here by reading #561 (which is closed and still carries the un-taken step 3) and concluding the rollout was unfinished: it is not unfinished, it is decided. Read #903.\n\nWHAT THIS CHANGE WOULD DO: --check reports a managed file that is MISSING or DIFFERENT as DRIFT, and that check is REQUIRED in the receivers — so this MERGE-FREEZES every repo not byte-identical to dist/dotnet/global.json, exactly as .github#499 froze FS.GG.SDD (#379). Measured 2026-07-17: canonical 10.0.302; Rendering, SDD and Audio on 10.0.301, all three holding the ORIGINAL canonical bytes. Three repos frozen for having adopted correctly.\n\nPRESENCE IS NOT COHERENCE (#805): every receiver HAS a global.json. That was never the condition.\n\nTO CHANGE THIS, RE-OPEN #903 — do not make this gate green. Enforcing means: re-pin the drifting receivers to canonical FIRST (ADR-0032 §3), take global.json out of Renovate'"'"'s per-repo reach in the receivers (#678), and only THEN add the name here and delete this block. Re-measure rather than trusting the census above — it is dated:\n  for r in Game Rendering SDD Governance Audio; do\n    gh api "repos/FS-GG/FS.GG.$r/contents/global.json" --jq .content 2>/dev/null | base64 -d \\\n      | diff -q - dist/dotnet/global.json >/dev/null && echo "$r: MATCHES" || echo "$r: DRIFTS"\n  done')"
 else
-  ok "global.json: correctly NOT in FILES yet — adding it before receivers MATCH canonical would freeze them"
+  ok "global.json: correctly not in FILES (#903: unmanaged, by decision — not a pending step)"
 fi
 
 # =================================================================================================
