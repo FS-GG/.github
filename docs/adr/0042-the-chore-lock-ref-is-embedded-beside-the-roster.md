@@ -54,8 +54,14 @@ while reporting that it does. An owner the map does not know has **no** lock rat
 
 **`.github`'s lock is [#1033](https://github.com/FS-GG/.github/issues/1033)** — closed (so it never appears
 in an `--state open` read, never lands on the board, and cannot be mistaken for work), never locked (the
-marker is a comment, and a locked conversation refuses comments). The six receivers have no lock issue yet
-and are therefore `None`; #733 creates theirs as it wires `offer`.
+marker is a comment, and a locked conversation refuses comments).
+
+**All seven repos now have a lock** ([#1087](https://github.com/FS-GG/.github/issues/1087)). #733 wired
+`offer` and left the receivers `None` because their lock issues did not exist yet; #1087 created the six
+(`FS.GG.SDD#518`, `FS.GG.Rendering#878`, `FS.GG.Governance#268`, `FS.GG.Templates#252`, `FS.GG.Game#406`,
+`FS.GG.Audio#183`), each a closed `[chore-lock]` issue naming this file as where its number is embedded,
+and added their arms to `choreLockRef`. The queue drains in every repo now, not `.github` alone. A repo the
+map does not know is still `None` — the fail-closed default is unchanged, it just has six fewer members.
 
 ## Consequences
 
@@ -67,9 +73,10 @@ and are therefore `None`; #733 creates theirs as it wires `offer`.
   (#381, #446, #962). The mitigation is not vigilance: an absent arm yields `None`, and `None` shuts `offer`.
   A stale map makes the queue *quieter*, never wrong — which is the opposite of how those three failed
   (an empty answer reported as a full one).
-- **`offer` refuses in all six receivers until #733 lands their locks.** That is the honest state, not a
-  gap: `Chore` ships as it always has — deliberately dead code with a live test suite — and a chore queue
-  that offers without a lock is the failure mode, not a smaller version of the feature.
+- **`offer` refused in all six receivers until #1087 landed their locks.** That was the honest state while
+  it held — a chore queue that offers without a lock is the failure mode, not a smaller version of the
+  feature — and #1087 closed it by creating the six lock issues and rostering their numbers, so the queue
+  now conscripts a caller in every repo rather than only the one that happened to have a lock issue first.
 - **No new dependency.** ADR-0040 C4 says this port must not spend surface, and a YAML reader is surface.
 - **No REST spend.** The lock ref costs a `match`, not a search — see Alternatives.
 

@@ -42,6 +42,16 @@ ISSUES = {
     # #733 — the item whose `done` triggers the AfterDone offer. In `.github`, so its offer resolves a lock.
     51: {"body": "A finished .github item.\n\nPaths: src/Y/**", "state": "CLOSED", "status": "In review",
          "repo": ".github"},
+    # #1087 — a chore in a RECEIVER (FS.GG.SDD, the default repo): CLOSED while the board still says Ready.
+    # Before #1087 the SDD offer was refused for want of a lock; now SDD#518 exists and this drains. This is
+    # the row that proves the rollout — a receiver conscripts a caller, which .github used to do alone.
+    45: {"body": "A closed SDD item the board still calls Ready.\n\nPaths: src/Z/**",
+         "state": "CLOSED", "status": "Ready"},
+    # #1087 — the free-refusal control: an UNROSTERED repo (no chore lock at all). All seven FS-GG repos now
+    # have one, so the honest "no lock" case is a repo `choreLockRef` does not know. `done` here stamps and
+    # offers nothing, WITHOUT a board read — the #733 free-refusal path, now reachable only off-roster.
+    60: {"body": "A finished item in a repo with no chore lock.\n\nPaths: src/Q/**",
+         "state": "CLOSED", "status": "In review", "repo": "FS.GG.Legacy"},
 }
 
 def repo_of(n):

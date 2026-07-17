@@ -504,25 +504,47 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// reporting that it does. An owner this map does not know has no lock, so it gets `None` and `offer`
     /// stays shut.
     ///
-    /// ONLY `.github` HAS A LOCK TODAY (#1033). The six receivers are `None` on purpose: their lock issues do
-    /// not exist yet, and .github#733 creates them as it wires `offer` — until then `offer` refuses there,
-    /// which is the honest state rather than a gap. Adding one is this map plus the closed issue it names.
-    let choreLockRef (owner: string) (repo: string) : FS.GG.Coord.Types.Ref option =
-        match owner.ToLowerInvariant(), (resolveRepo repo).ToLowerInvariant() with
-        | "fs-gg", ".github" ->
-            // CANONICAL on the way out, case-insensitive on the way in — `resolveRepo`'s own contract
-            // (`Governance` → `FS.GG.Governance`), applied to the owner too. Echoing the caller's casing back
-            // would mint a Ref that is structurally UNEQUAL to the canonical one while `Short` renders both
-            // as `.github#1033` — two locks that compare different and print the same, which is the split the
-            // CAS cannot survive and no log would show.
-            // Annotated because the bare labels resolve to `Blocker`, which also carries an `Owner`.
-            let lock: FS.GG.Coord.Types.Ref =
-                { Owner = "FS-GG"
-                  Repo = ".github"
-                  Number = 1033 }
+    /// ALL SEVEN REPOS HAVE A LOCK (#1087). `.github#1033` was the first (#733); the six receivers' locks were
+    /// created and wired here as the #1087 rollout, so the chore queue drains in every repo rather than only
+    /// the one that used to have a lock issue. A repo NOT in this table is still `None` — the fail-closed
+    /// default is unchanged, it just now has six fewer members.
+    ///
+    /// THE NUMBERS ARE THE CLOSED `[chore-lock]` ISSUES, one per repo (each says so in its own body). The map
+    /// is the ONLY record the engine reads — ADR-0042: no YAML reader, because the shim ships to receivers
+    /// without the roster (above). So a lock issue's number lives here and nowhere the engine consults at
+    /// runtime; the issue's body names this file as the place it is embedded, and that pairing is the whole
+    /// coherence contract (change one, change the other).
+    let private choreLockNumbers: (string * int) list =
+        // (canonical repo, its closed chore-lock issue number). Canonical spellings only — the lookup below
+        // canonicalises the caller's input through `resolveRepo` before matching, so `Governance`, `governance`
+        // and `FS.GG.Governance` all find this row, and the Ref that comes back is built from THIS spelling.
+        [ ".github", 1033
+          "FS.GG.SDD", 518
+          "FS.GG.Rendering", 878
+          "FS.GG.Governance", 268
+          "FS.GG.Templates", 252
+          "FS.GG.Game", 406
+          "FS.GG.Audio", 183 ]
 
-            Some lock
-        | _ -> None
+    let choreLockRef (owner: string) (repo: string) : FS.GG.Coord.Types.Ref option =
+        // KEYED ON OWNER TOO, and that is the fail-closed part (see the doc above): an owner this map does not
+        // know gets `None`, so a caller under another owner is never handed FS-GG's issue numbers.
+        // `.ToLowerInvariant()` throughout, matching `resolveRepo` — the file opens no `System`.
+        if owner.ToLowerInvariant() <> "fs-gg" then
+            None
+        else
+            let canonical = (resolveRepo repo).ToLowerInvariant()
+
+            choreLockNumbers
+            |> List.tryFind (fun (r, _) -> r.ToLowerInvariant() = canonical)
+            |> Option.map (fun (r, n) ->
+                // CANONICAL on the way out — the Ref is built from the TABLE's spelling (`r`), never the
+                // caller's casing. Echoing the caller back would mint a Ref structurally UNEQUAL to the
+                // canonical one while `Short` renders both alike — two locks that compare different and print
+                // the same, the split the CAS cannot survive and no log would show.
+                { FS.GG.Coord.Types.Owner = "FS-GG"
+                  FS.GG.Coord.Types.Repo = r
+                  FS.GG.Coord.Types.Number = n })
 
     /// `say`'s message is POSITIONAL, and `--to` is OPTIONAL — the shape bash shipped, the shape all seven
     /// prescribing sites document, and the shape the port dropped (#919).

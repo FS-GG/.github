@@ -77,18 +77,36 @@ module RepoScopeTests =
 
         Assert.Equal(Some expected, Options.choreLockRef "FS-GG" repo)
 
-    /// FAIL CLOSED, and this is the rule the whole feature rests on: ADR-0041 — "Absent ⇒ `offer` refuses. A
-    /// chore queue that cannot find its lock must offer nothing, never broadcast." The six receivers have no
-    /// lock issue yet (.github#733 creates them as it wires `offer`), so they are `None` on purpose. A repo
-    /// nobody rostered is `None` for the same reason.
+    /// ALL SEVEN REPOS RESOLVE (#1087). The six receivers gained closed `[chore-lock]` issues and this map
+    /// gained their numbers, so the queue drains in every repo rather than only `.github`. Each is asserted
+    /// through a short-id spelling AND its canonical spelling, because both reach `choreLockRef` — a worker
+    /// types `--repo game`, `offer` is handed `FS.GG.Game`. The NUMBER is pinned here because this map is the
+    /// only place the engine records it (ADR-0042: no YAML reader), so a silent renumber must red a test, not
+    /// a live lock on the wrong subject.
     [<Theory>]
-    [<InlineData("sdd")>]
-    [<InlineData("rendering")>]
-    [<InlineData("governance")>]
-    [<InlineData("templates")>]
-    [<InlineData("game")>]
-    [<InlineData("audio")>]
+    [<InlineData("sdd", "FS.GG.SDD", 518)>]
+    [<InlineData("FS.GG.SDD", "FS.GG.SDD", 518)>]
+    [<InlineData("rendering", "FS.GG.Rendering", 878)>]
+    [<InlineData("FS.GG.Rendering", "FS.GG.Rendering", 878)>]
+    [<InlineData("governance", "FS.GG.Governance", 268)>]
+    [<InlineData("FS.GG.Governance", "FS.GG.Governance", 268)>]
+    [<InlineData("templates", "FS.GG.Templates", 252)>]
+    [<InlineData("game", "FS.GG.Game", 406)>]
+    [<InlineData("audio", "FS.GG.Audio", 183)>]
+    let ``every receiver's chore lock resolves to its closed lock issue`` (repo: string, canonicalRepo: string, number: int) =
+        let expected: FS.GG.Coord.Types.Ref =
+            { Owner = "FS-GG"
+              Repo = canonicalRepo
+              Number = number }
+
+        Assert.Equal(Some expected, Options.choreLockRef "FS-GG" repo)
+
+    /// FAIL CLOSED remains the rule for a repo NOBODY rostered: ADR-0041 — "Absent ⇒ `offer` refuses. A chore
+    /// queue that cannot find its lock must offer nothing, never broadcast." The seven known repos now resolve;
+    /// an eighth the map does not know is `None`, exactly as the six receivers were before #1087.
+    [<Theory>]
     [<InlineData("FS.GG.Nonexistent")>]
+    [<InlineData("some-fork")>]
     [<InlineData("")>]
     let ``a repo with no lock issue has no lock`` (repo: string) =
         Assert.Equal(None, Options.choreLockRef "FS-GG" repo)

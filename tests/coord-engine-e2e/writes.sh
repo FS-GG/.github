@@ -178,24 +178,32 @@ printf '%s' "$dso" | grep -q 'FSGG-DONE' && ! printf '%s' "$dso" | grep -qi 'cho
   && ok "#733: the AfterDone offer is on stderr — done's stdout verdict is untouched" \
   || bad "#733: offer does not pollute done's stdout" "$dso"
 
-# A REPO WITH NO CHORE LOCK IS REFUSED, NOT GUESSED AT. `choreLockRef` knows exactly one repo
-# (`.github#1033`, ADR-0041) and answers None for the other six receivers — so the queue drains in
-# `.github` ONLY, and honestly. A `done` there stamps exactly as before and offers nothing.
-br0="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g')"
-dn2="$("$ENGINE" "done" FS.GG.SDD#42 --worker snipe-733 2>&1)"; dn2rc=$?
-[ "$dn2rc" -eq 0 ] && printf '%s' "$dn2" | grep -q 'FSGG-DONE' && ! printf '%s' "$dn2" | grep -qi 'chore' \
-  && ok "#733: a repo with no chore lock is offered nothing, and still stamps" \
-  || bad "#733: no-lock repo offers nothing" "rc=$dn2rc: $dn2"
+# #1087 — A RECEIVER NOW DRAINS. Before #1087 `choreLockRef` knew only `.github#1033`, so a `done` in any
+# receiver was refused for want of a lock and the queue drained in `.github` alone. The six receivers now
+# have closed `[chore-lock]` issues (SDD#518 among them) and the map resolves all seven, so stamping an SDD
+# item offers an SDD chore under SDD's OWN lock. This is the rollout's whole point, and it reds on pre-#1087
+# code (SDD had no lock). SDD#45 is the chore (CLOSED, board still Ready → CLOSED-ISSUE-NOT-DONE).
+rc="$("$ENGINE" "done" FS.GG.SDD#42 --worker snipe-1087 2>&1)"; rcrc=$?
+[ "$rcrc" -eq 0 ] && printf '%s' "$rc" | grep -q 'FSGG-DONE' \
+  && printf '%s' "$rc" | grep -qi 'chore' && printf '%s' "$rc" | grep -q '#45' \
+  && printf '%s' "$rc" | grep -q 'FS.GG.SDD#518' \
+  && ok "#1087: a RECEIVER (FS.GG.SDD) now offers a chore under its OWN lock — the queue drains org-wide" \
+  || bad "#1087: a receiver drains its chore queue" "rc=$rcrc: $rc"
 
-# ...AND IT SPENDS NOTHING FINDING THAT OUT. `Chores.offer`'s step 1 is `choreLockRef` — a pure string
-# match, placed first "because it spends nothing" — and six of the org's seven repos answer None. Reaching
-# that match THROUGH a scan would buy a board read, on the budget the claim lock itself lives on, for a
-# guaranteed refusal, in the common case. No assertion on output can catch that regression: the output is
-# identical either way (nothing). So the fixture counts the read instead.
+# AN UNROSTERED REPO IS REFUSED, FOR FREE. All seven FS-GG repos have a lock now, so the honest "no lock"
+# case is a repo `choreLockRef` does not know (FS.GG.Legacy). `Chores.offer`'s step 1 is that pure string
+# match, placed first "because it spends nothing" — so a `done` there stamps, offers nothing, and never
+# reads the board. No assertion on OUTPUT can catch a stray read (the output is identical either way:
+# nothing), so the fixture counts board reads and this asserts the count does not move.
+br0="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g')"
+dn2="$("$ENGINE" "done" FS.GG.Legacy#60 --worker snipe-1087 2>&1)"; dn2rc=$?
+[ "$dn2rc" -eq 0 ] && printf '%s' "$dn2" | grep -q 'FSGG-DONE' && ! printf '%s' "$dn2" | grep -qi 'chore' \
+  && ok "#1087: an UNROSTERED repo is offered nothing, and still stamps" \
+  || bad "#1087: unrostered repo offers nothing" "rc=$dn2rc: $dn2"
 br1="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g')"
 [ "$br0" = "$br1" ] \
-  && ok "#733: a no-lock repo costs NO board read — the free question is asked first (${br0}→${br1})" \
-  || bad "#733: no-lock done spends no board read" "board reads went ${br0} → ${br1}"
+  && ok "#1087: an unrostered repo costs NO board read — the free question is asked first (${br0}→${br1})" \
+  || bad "#1087: unrostered done spends no board read" "board reads went ${br0} → ${br1}"
 
 # ---- verify-paths: a PR inside its touch-set is OK -------------------------------------------------
 vp="$("$ENGINE" verify-paths --pr 500 --repo FS.GG.SDD 2>&1)"; vprc=$?

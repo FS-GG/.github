@@ -131,13 +131,13 @@ let ``a clean board costs NO REST — the lock is taken only when there is a cho
 
 [<Fact>]
 let ``a repo with no chore lock offers nothing, and never asks the network`` () =
-    // ADR-0041 verbatim: absent ⇒ `offer` refuses. The six receivers have no lock issue yet and are `None`
-    // until #733 creates theirs, so this is today's real state for five-sixths of the org, not an edge case.
-    // It fails CLOSED, like every other "could not look" here (#266): a queue that cannot find its lock
-    // offers nothing rather than broadcasting.
-    let audit = blockerClearedBoard |> List.map (fun i -> { i with Ref = { i.Ref with Repo = "FS.GG.Audio" } })
+    // ADR-0041 verbatim: absent ⇒ `offer` refuses, failing CLOSED like every other "could not look" here
+    // (#266). All SEVEN FS-GG repos have a lock as of #1087, so the honest stand-in for "no lock" is now a
+    // repo the map does not know at all — not a receiver (those all resolve). `choreLockRef` returns `None`,
+    // and `offer` refuses before touching the network (`unreachable` proves it: any transport call throws).
+    let unrostered = blockerClearedBoard |> List.map (fun i -> { i with Ref = { i.Ref with Repo = "FS.GG.Nonexistent" } })
 
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" "FS.GG.Audio" (Chore.Whole audit))
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" "FS.GG.Nonexistent" (Chore.Whole unrostered))
 
 /// The same cleared-blocker condition, on a row belonging to a DIFFERENT repo. The org board is one board
 /// for seven repos, so this is what a bare `next` (no `--repo`, hence `Scan.scope None`) actually hands us.
