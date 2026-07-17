@@ -1,6 +1,6 @@
 ---
 name: lane-steward
-description: A helping chore, not a scheduler. Find the over-broad `Paths:` declarations that are gluing an FS-GG board into one lane, and PROPOSE narrower ones — so the board can absorb the workers it looks like it can. Use when `fsgg-coord lanes` shows a ceiling far below the number of open items, when a fan-out keeps reporting "nothing schedulable" over a full board, or as a periodic tidy. It never decides that two items are safe to run together: that is computed. Canonical protocol lives in FS-GG/.github. See ADR-0021, ADR-0027, ADR-0034.
+description: A helping chore, not a scheduler. Find the over-broad `Paths:` declarations that are gluing an FS-GG board into one lane, and PROPOSE narrower ones — so the board can absorb the workers it looks like it can. Use when `fsgg-coord scan | fsgg-coord lanes` shows a ceiling far below the number of open items, when a fan-out keeps reporting "nothing schedulable" over a full board, or as a periodic tidy. It never decides that two items are safe to run together: that is computed. Canonical protocol lives in FS-GG/.github. See ADR-0021, ADR-0027, ADR-0034.
 ---
 
 # lane-steward
@@ -8,9 +8,16 @@ description: A helping chore, not a scheduler. Find the over-broad `Paths:` decl
 Your board says forty items. It can absorb two.
 
 ```
-$ fsgg-coord lanes --repo .github
-3 lane(s) — 2 free
+$ fsgg-coord scan --repo .github | fsgg-coord lanes --text
+3 lane(s) — 2 free, 1 occupied or with no startable work.
+
 lane .github#422  (40 item(s), 3 startable)
+  → .github#422
+    .github#431
+    …
+  the declarations gluing this lane together:
+    …
+
 CEILING: 2 worker(s) can start right now, provably without colliding.
 ```
 
@@ -18,6 +25,12 @@ Forty items of work, transitively glued into **one lane**, because a handful of 
 are broader than the work they describe. Fan out five workers and three of them are handed nothing —
 and `take` reports an empty queue over a board that is full (#440's shape). That is what you are here
 to fix.
+
+**`scan` reads the board; `lanes` decides. The pipe is the whole invocation.** `lanes` is a DECISION
+command — it partitions a snapshot on stdin and touches no network, which is what lets it reserve
+against exactly what the scheduler does. It takes **no `--repo`**: that flag parses and is silently
+ignored, so `fsgg-coord lanes --repo <r>` reads an empty stdin and refuses with *"the snapshot is
+empty … a failed read"* — a read it never made. Feed it `scan`, or `--snapshot <file>` (#975).
 
 ## The one rule, and it is the whole job
 
@@ -41,10 +54,11 @@ something safe-but-wrong, the section below is about why that is the dangerous o
 Run this first. It is the whole input:
 
 ```sh
-fsgg-coord lanes --repo <r> --json
+fsgg-coord scan --repo <r> | fsgg-coord lanes --json
 ```
 
-Three things come back, and they are three different jobs:
+Three things come back, and they are three different jobs. `glue` is nested per-lane inside
+`partition`; `unlanable` and `ceiling` are top-level.
 
 ### 1. `glue` — the over-broad declarations. **This is the main event.**
 
@@ -134,7 +148,7 @@ for them.
 ## When you are done
 
 ```sh
-fsgg-coord lanes --repo <r>      # did the ceiling actually move?
+fsgg-coord scan --repo <r> | fsgg-coord lanes --text      # did the ceiling actually move?
 ```
 
 **That number is your whole score.** Not the count of comments you posted, not the tokens you narrowed —
