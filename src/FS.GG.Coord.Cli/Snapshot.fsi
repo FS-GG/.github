@@ -105,4 +105,5 @@ module Snapshot =
         rules: Protocol.Rule list ->
         verdicts: Protocol.VerdictDoc list ->
         takeExitCodes: Protocol.ExitCodeDoc list ->
+        landableExitCodes: Protocol.ExitCodeDoc list ->
             string

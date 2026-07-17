@@ -56,6 +56,17 @@ module Protocol =
     /// the engine actually returns, so this list cannot drift from `Client.take` again.
     val takeExitCodes: ExitCodeDoc list
 
+    /// `landable`'s exit contract (#900) — the POLL-LOOP half of the same defect. The code is the
+    /// machine-readable verdict, so a loop tells "keep waiting" from "stop" without parsing the word.
+    ///
+    /// Generated, because the hand-written copy documented BASH's numbers: `/pnext-item` §5 called `3`
+    /// "pending" where the engine returns it for RED, so a loop built from the table waits forever on a
+    /// PR that can never go green — and had no row for `7`, the one code that does mean wait. `7` is
+    /// the ONLY retryable code here, and there is no EX_RATE: `landable` has no error channel, so an
+    /// exhausted budget arrives as `unknown` (4). `Cli.Tests` pins every `Code` here against the
+    /// literal the engine returns; `Core.Tests` pins what the rows SAY.
+    val landableExitCodes: ExitCodeDoc list
+
     val touchSetGrammar: Rule
     val touchSetDeclaration: Rule
     val blockerResolution: Rule

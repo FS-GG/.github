@@ -150,6 +150,73 @@ module Protocol =
               "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
             Action = "Report it. Do not retry, and do not work an item you were not handed." } ]
 
+    // ---- landable's exit contract ------------------------------------------------------------------
+    // #900, and it is #889 one command over: /pnext-item §5 restated `landable`'s codes BY HAND, and
+    // restated BASH's — "green (0), pending (3), red / conflicted / unknown (1)". The engine's are
+    // 0/7/3/4, and the divergence is deliberate and on the record (`Client.fs`, ADR-0040 §5): bash
+    // numbered the poll loop 0/3/1, where the engine keeps 3 == red across every verdict command
+    // (`done`/`decide`/`adopt`) and gives pending its own 7. The LITERALS differ; the PROPERTY does not.
+    //
+    // The table was therefore wrong in BOTH directions on the two codes that matter, and `landable`'s
+    // exit code exists precisely so a poll loop need not parse the verdict word:
+    //
+    //   * 3 means RED, and the table said PENDING — so `until landable "$pr"; do sleep 30; done` waits
+    //     FOREVER on a PR that will never go green. Not a wrong answer: a hang, on the failure case, so
+    //     it survives every green rehearsal.
+    //   * 7 means PENDING, and the table had no 7 — so a loop reads it as an unrecognised failure and
+    //     stops waiting on a PR that is merely still running.
+    //
+    // ENUMERATING BEATS A CATCH-ALL ONLY IF THE ENUMERATION IS COMPLETE (#889's lesson, paid for by a
+    // first draft of `takeExitCodes` that dropped `ExitRed`). The four-row match `Client.landable` ends
+    // on is NOT the whole contract — #900's own issue body lists those four and stops. Two more are
+    // reachable, and they are the easy ones to forget:
+    //
+    //   * 1, from the REFUSED-INPUT arms ahead of the read (`--repo` absent, a PR ref that is not a
+    //     number, `oneArg`'s arity check). Never retryable.
+    //   * 2, from `Program.main`'s top-level defect handler, which wraps every command.
+    //
+    // AND THERE IS NO 75 HERE, WHICH IS THE ROW A READER OF `take`'S TABLE WILL EXPECT. `landable` is
+    // fail-closed BY CONSTRUCTION: `Reads.prLandableRequire` returns a bare `PrState` with no error
+    // channel, so a rate limit, a 404 and a `null` mergeability all resolve to `PrUnknown` — exit 4, an
+    // honest no-verdict — rather than to a budget code. A `landable` that exited 75 would be a defect.
+    //
+    // Ordered as a poll loop meets it: the one green, then the one code worth retrying, then the ways
+    // to stop.
+    let landableExitCodes: ExitCodeDoc list =
+        [ { Code = 0
+            Name = ""
+            Meaning =
+              "GREEN — the PR is finished work: it merges cleanly, and every workflow run and check-run scored on its head SHA passed. The ONLY code that means merge it."
+            Action = "Merge it. This is the only code that says so." }
+          { Code = 7
+            Name = ""
+            Meaning =
+              "PENDING — the verdict has not SETTLED: checks are still running, none have registered yet, the run set is still growing, or an assertion you added (`--require`, `--sha`) is not yet met. The ONE retryable verdict, which is why it has a code of its own rather than sharing one with a way to stop."
+            Action =
+              "Keep waiting — this is the only code that says wait. Prefer `--wait`, which polls until the verdict settles rather than believing an early green. A `pending` that NEVER resolves is a finding: the job was RENAMED, its workflow's `paths:` filter no longer matches, or `--sha` named the wrong commit." }
+          { Code = 3
+            Name = ""
+            Meaning =
+              "RED or CONFLICTED — two words, one code, because both mean STOP and neither improves by waiting. Red: a run or check-run failed. Conflicted: the PR does not merge cleanly, so GitHub cannot build `refs/pull/N/merge` and gives it NO CI at all — which is why it is returned immediately rather than polled."
+            Action =
+              "Stop. Do NOT wait — 3 is the code the recipe used to call `pending`, and a loop that waits on it never terminates. A red check is a finding; a conflicted PR needs a rebase, which is AUTHORING, not landing." }
+          { Code = 4
+            Name = ""
+            Meaning =
+              "UNKNOWN — no verdict, and this is the FAIL-CLOSED one (#266). The read could not be made or its answer was not conclusive: a rate limit, a 404, a `mergeable` GitHub has not computed. Note what it is NOT — there is no EX_RATE (75) here, unlike `take`: an exhausted budget arrives as this code, because `landable` has no error channel to carry a budget on."
+            Action =
+              "Do not merge, and do not treat it as a red. An unreachable answer is not a negative one. Look at why the read failed — check `budget` if you suspect a rate limit — and ask again." }
+          { Code = 1
+            Name = ""
+            Meaning =
+              "REFUSED — the engine rejected your INPUT before it ever looked at the PR: no `--repo` (so which repo the PR is in is undefined), a ref that is not a PR number, or the wrong number of arguments. It is not a verdict about the PR, and no word is printed."
+            Action = "Read the message and fix the call. Not retryable — it will refuse identically." }
+          { Code = 2
+            Name = ""
+            Meaning =
+              "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
+            Action = "Report it. Do not retry, and do not merge a PR you have no verdict on." } ]
+
     // ---- the rules ---------------------------------------------------------------------------------
 
     let touchSetGrammar: Rule =

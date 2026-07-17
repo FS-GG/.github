@@ -51,6 +51,8 @@ TARGETS=(
   "rules:.agents/skills/intra-repo-parallel-work/SKILL.md"
   "take-exit-codes:.claude/skills/pnext-item/SKILL.md"
   "take-exit-codes:.agents/skills/pnext-item/SKILL.md"
+  "landable-exit-codes:.claude/skills/pnext-item/SKILL.md"
+  "landable-exit-codes:.agents/skills/pnext-item/SKILL.md"
 )
 
 if [ -n "$LIST" ]; then
@@ -108,6 +110,25 @@ render_rules() {
   echo ""
 }
 
+# The BODY of an exit-code table, for a given `facts` key. `take`'s contract and `landable`'s are the
+# same SHAPE — a code, what it means, what to do — so they share one renderer and differ only in the
+# prose above them. A second copy of this would re-open the drift this file exists to close, and the
+# `|` escaping below is exactly the subtlety that rots in a copy: it is invisible until some fact grows
+# a pipe, and then it corrupts a table that still renders.
+render_exit_code_table() { # facts-key
+  echo "| exit | meaning | what to do |"
+  echo "|---|---|---|"
+  # `|` is the CELL SEPARATOR, so a pipe inside a fact would silently split one cell into two and shift
+  # every column after it — a corrupted table that still renders, which is the worst way for this to
+  # fail. Escape it here rather than forbidding it in Protocol.fs: the prose should not have to know
+  # what it is being rendered into.
+  jq -r --arg key "$1" '
+    def cell: gsub("\\|"; "\\|");
+    .[$key][]
+      | "| **\(.code)**\(if .name == "" then "" else " (`" + (.name | cell) + "`)" end) | \(.meaning | cell) | \(.action | cell) |"' "$FACTS"
+  echo ""
+}
+
 # `take-exit-codes` — `take`'s exit contract (#585), for the driver skill whose loop reads it.
 render_take_exit_codes() {
   echo "<!--"
@@ -119,17 +140,23 @@ render_take_exit_codes() {
   echo "  row swallowed every other row in the table. Edit Protocol.fs and regenerate."
   echo "-->"
   echo ""
-  echo "| exit | meaning | what to do |"
-  echo "|---|---|---|"
-  # `|` is the CELL SEPARATOR, so a pipe inside a fact would silently split one cell into two and shift
-  # every column after it — a corrupted table that still renders, which is the worst way for this to
-  # fail. Escape it here rather than forbidding it in Protocol.fs: the prose should not have to know
-  # what it is being rendered into.
-  jq -r '
-    def cell: gsub("\\|"; "\\|");
-    .takeExitCodes[]
-      | "| **\(.code)**\(if .name == "" then "" else " (`" + (.name | cell) + "`)" end) | \(.meaning | cell) | \(.action | cell) |"' "$FACTS"
+  render_exit_code_table takeExitCodes
+}
+
+# `landable-exit-codes` — `landable`'s POLL-LOOP contract (#900), for the same driver skill. §5 restated
+# it by hand and restated BASH's numbers, so `3` was documented as "pending" when the engine returns it
+# for "red" — a loop built from the table hangs forever on a PR that will never go green.
+render_landable_exit_codes() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
   echo ""
+  echo "  The hand-written copy of this table documented BASH's codes (#900) — green 0, pending 3, red 1"
+  echo "  — where the engine returns 0/7/3/4 and keeps 3 == red across every verdict command. It was"
+  echo "  wrong in BOTH directions on the two codes a poll loop reads. Edit Protocol.fs and regenerate."
+  echo "-->"
+  echo ""
+  render_exit_code_table landableExitCodes
 }
 
 # The marker a kind uses. `rules` keeps the original unnamed spelling (three files already carry it);

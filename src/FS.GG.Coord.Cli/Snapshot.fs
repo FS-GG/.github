@@ -660,13 +660,15 @@ module Snapshot =
 
     // /2 — the payload gained `takeExitCodes` (#889). Additive for a reader that ignores unknown members,
     // but the number says what the surface IS, not merely whether an old reader survives it.
+    // /3 — and `landableExitCodes` (#900), on the same reasoning.
     [<Literal>]
-    let private FactsSchema = "fsgg.coord.protocol/2"
+    let private FactsSchema = "fsgg.coord.protocol/3"
 
     let renderFacts
         (rules: Protocol.Rule list)
         (verdicts: Protocol.VerdictDoc list)
         (takeExitCodes: Protocol.ExitCodeDoc list)
+        (landableExitCodes: Protocol.ExitCodeDoc list)
         : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
@@ -696,17 +698,24 @@ module Snapshot =
 
         w.WriteEndArray()
 
-        w.WriteStartArray("takeExitCodes")
+        // ONE writer for both exit-code tables: they are the same SHAPE, and a second hand-written copy
+        // of these four members is how the key names drift apart under the generator that reads them.
+        let writeExitCodes (key: string) (codes: Protocol.ExitCodeDoc list) =
+            w.WriteStartArray(key)
 
-        for c in takeExitCodes do
-            w.WriteStartObject()
-            w.WriteNumber("code", c.Code)
-            w.WriteString("name", c.Name)
-            w.WriteString("meaning", c.Meaning)
-            w.WriteString("action", c.Action)
-            w.WriteEndObject()
+            for c in codes do
+                w.WriteStartObject()
+                w.WriteNumber("code", c.Code)
+                w.WriteString("name", c.Name)
+                w.WriteString("meaning", c.Meaning)
+                w.WriteString("action", c.Action)
+                w.WriteEndObject()
 
-        w.WriteEndArray()
+            w.WriteEndArray()
+
+        writeExitCodes "takeExitCodes" takeExitCodes
+        writeExitCodes "landableExitCodes" landableExitCodes
+
         w.WriteEndObject()
         w.Flush()
 
