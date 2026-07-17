@@ -22,10 +22,13 @@ on:
   push:
     branches: [main]
     paths:                                    # the content-addressed kit sources (repos.yml `kit:`)
-      # HAND-MAINTAINED, and it must match repos.yml `kit:` — GitHub does not evaluate a path filter
-      # from a file, so this is the one place the kit is enumerated outside the roster. A kit item
-      # missing here does not fail: it PROPAGATES NOTHING, silently, and the receivers keep an old
-      # copy the coherence gate will then redden. Adding a kit skill means adding BOTH its roots.
+      # HAND-MAINTAINED, and it should match repos.yml `kit:` — GitHub does not evaluate a path filter
+      # from a file, so this is the one place the kit is enumerated outside the roster. Adding a kit
+      # skill means adding BOTH its roots. But this list no longer has to be COMPLETE to be safe, and
+      # that is the point of the `registry/repos.lock` entry below: the source paths trigger directly
+      # on a content edit, while repos.lock backstops a MEMBERSHIP change (a kit row added/removed) —
+      # or a source path someone forgot to add here — so a kit change can no longer PROPAGATE NOTHING
+      # silently and leave receivers on a stale copy the coherence gate then reddens.
       - "scripts/fsgg-coord"
       - ".claude/skills/cross-repo-coordination/**"
       - ".agents/skills/cross-repo-coordination/**"
@@ -36,6 +39,12 @@ on:
       - ".claude/skills/pnext-item/**"
       - ".agents/skills/pnext-item/**"
       - "dist/dotnet/.config/dotnet-tools.json"   # the engine tool manifest — a `kind: config` kit source (#1077)
+      # The kit's content-addressed digest set: it changes IFF the kit changes — a source's content OR
+      # its MEMBERSHIP (a row added/removed). #1077 moved the manifest onto the kit WITHOUT editing its
+      # bytes, so no source path above changed and the push arm did not fire; the manifest reached the
+      # receivers only via a manual dispatch. repos.lock closes that gap, and precisely: an unrelated
+      # roster edit (a repo row, a capability) does not touch it, so it is not an over-broad trigger (#1123).
+      - "registry/repos.lock"
   workflow_dispatch:
 
 permissions:
