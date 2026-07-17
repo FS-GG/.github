@@ -3239,16 +3239,60 @@ module Client =
             ExitGreen
 
         | Ok entries when opts.DryRun ->
-            printfn "flush --dry-run — %d write(s) queued, NOT replayed:" (List.length entries)
+            // WHICH BOARD IS THIS OWED TO? A dry run is the read that must work when NO board read can — an
+            // exhausted budget is the only reason a queue exists — so "which board?" has to be answerable
+            // exactly here (#966). It still costs zero GraphQL: the target is recorded ON the entry (#882),
+            // and `ctx.Owner`/`ctx.Title` are the environment's, so this compares two things already in hand.
+            let here = ctx.Owner, ctx.Title
+
+            let elsewhere (e: Cache.Deferred) =
+                match e.Board with
+                | Some b when not (Cache.sameBoard b here) -> Some b
+                | _ -> None
+
+            printfn
+                "flush --dry-run — %d write(s) queued, NOT replayed. A flush here writes %s/%s:"
+                (List.length entries)
+                ctx.Owner
+                ctx.Title
 
             for e in entries do
+                // A SKIP AND A REPLAY MUST NOT RENDER ALIKE, which is the whole of this item: the engine has
+                // told a skip from a drop since #963, and every entry printed here looked identical anyway.
+                let note =
+                    match elsewhere e with
+                    | Some(o, t) -> sprintf "  -> queued against %s/%s; a flush HERE would SKIP it" o t
+                    | None ->
+                        match e.Board with
+                        // Pre-#882: no board recorded, replayed against the current one — the behaviour it
+                        // was queued under. Said out loud, because it is the one entry whose target is a
+                        // default rather than a fact.
+                        | None -> "  -> no board recorded (pre-#882); would replay against this board"
+                        | Some _ -> ""
+
                 printfn
-                    "  %s %s = %s  (queued %s by %s)"
+                    "  %s %s = %s  (queued %s by %s)%s"
                     e.Ref
                     e.Field
                     (if e.Value = "" then "<cleared>" else e.Value)
                     e.At
                     e.Worker
+                    note
+
+            // The remedy that WORKS, next to the count it explains. Re-running flush here can never land
+            // another board's entry, so "re-run after the reset" would be advice that does not fix the
+            // number it names.
+            match entries |> List.choose elsewhere |> List.distinct with
+            | [] -> ()
+            | boards ->
+                let n = entries |> List.filter (elsewhere >> Option.isSome) |> List.length
+
+                eprint (
+                    sprintf
+                        "fsgg-coord-engine: %d of these write(s) are queued against another board (%s) and CANNOT land here — they are still owed, not lost. Point FSGG_COORD_OWNER/FSGG_COORD_PROJECT at that board and flush again."
+                        n
+                        (boards |> List.map (fun (o, t) -> $"%s{o}/%s{t}") |> String.concat ", ")
+                )
 
             ExitGreen
 
@@ -3275,6 +3319,15 @@ module Client =
                         eprint
                             $"fsgg-coord-engine: %d{r.Dropped} queued write(s) were DROPPED, not replayed — permanently un-writable (an unparseable ref, or an item no longer on this board)."
 
+                    // A SKIP IS THE OPPOSITE OF A DROP, and until now the CLI told the worker neither (#966).
+                    // `replayed 0 of 1` and nothing else is exactly the "my write did not replay and nothing
+                    // said why" that #882 felt like from the outside — the impression this count exists to
+                    // end. A dropped write is gone; a skipped one is still owed and still landable, just not
+                    // by this pass against this board, so it gets its own line and its own remedy.
+                    if r.Skipped > 0 then
+                        eprint
+                            $"fsgg-coord-engine: %d{r.Skipped} queued write(s) were SKIPPED, not replayed — they are queued against a DIFFERENT board, so this pass left them alone. They are still owed and still landable: point FSGG_COORD_OWNER/FSGG_COORD_PROJECT at that board and flush again (`flush --dry-run` names it)."
+
                     match r.Stopped with
                     | None -> ExitGreen
 
@@ -3282,7 +3335,12 @@ module Client =
                     // over a flush that DID land writes, and the worker could not tell "nothing landed"
                     // from "most landed" — the same could-not-tell that #862 is about.
                     | Some e ->
-                        let remaining = r.Queued - r.Written - r.Dropped
+                        // SUBTRACT THE SKIPS (#966). `Queued - Written - Dropped` stays TRUE — a skipped
+                        // entry does remain queued — but it is the wrong number to attach to "re-run flush
+                        // after the reset", because a re-run HERE can never land another board's entry. The
+                        // advice would not fix the count it names. The skips are reported above, with the
+                        // remedy that does work; this number is the one the reset actually clears.
+                        let remaining = r.Queued - r.Written - r.Dropped - r.Skipped
 
                         eprint
                             $"fsgg-coord-engine: the budget ran out mid-flush; %d{remaining} write(s) REMAIN QUEUED — re-run flush after the reset."
