@@ -19,6 +19,7 @@
     <Compile Include="IdentityTests.fs" />
     <Compile Include="RepoScopeTests.fs" />
     <Compile Include="RefParseTests.fs" />
+    <Compile Include="TouchSetLintTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
