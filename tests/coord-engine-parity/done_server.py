@@ -26,7 +26,7 @@ import re
 import sys
 import threading
 from datetime import datetime, timedelta, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 RATE = {"cost": 1, "remaining": 4960}
 
@@ -87,10 +87,22 @@ def graphql(q):
 
 
 class H(BaseHTTPRequestHandler):
+    # Keep-alive, so the server does not close after every response: HTTP/1.0's close-per-response
+    # races the engine's pooling HttpClient and RSTs away a written response (#761). Pairs with
+    # ThreadingHTTPServer below — a kept-alive connection would pin a single-threaded server.
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, *a):
         pass
 
     def _send(self, code, payload):
+        # A 204 carries NO body (RFC 9110 6.4.1), and a client that obeys that will not read one. Writing
+        # one anyway leaves the bytes in the stream, where they become the NEXT response's status line on a
+        # kept-alive connection (`{}HTTP/1.1 200 OK`) — #761. HTTP/1.0's close-per-response hid this.
+        if code == 204:
+            self.send_response(204)
+            self.end_headers()
+            return
         b = json.dumps(payload).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -151,7 +163,7 @@ class H(BaseHTTPRequestHandler):
 
 
 def main():
-    s = HTTPServer(("127.0.0.1", 0), H)
+    s = ThreadingHTTPServer(("127.0.0.1", 0), H)
     print(s.server_address[1], flush=True)
     s.serve_forever()
 

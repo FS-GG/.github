@@ -243,7 +243,11 @@ module Transport =
             | :? HttpRequestException as e ->
                 // WE DID NOT OBSERVE ANYTHING. This must never become an empty list: a connection reset is
                 // not a board with no items on it (#344).
-                Error(Transport e.Message)
+                let rec chain (x: exn) =
+                    match x.InnerException with
+                    | null -> x.Message
+                    | inner -> $"%s{x.Message} <- %s{chain inner}"
+                Error(Transport(chain e))
             | :? TaskCanceledException as e -> Error(Transport $"timed out: %s{e.Message}")
 
         interface IGitHubTransport with
