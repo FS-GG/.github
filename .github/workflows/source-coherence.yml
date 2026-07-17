@@ -130,7 +130,15 @@ jobs:
 
       # .github#1085 — the SAME checkout carries Schemas.fs, so this assertion is nearly free here.
       # Its subject is Schemas.governanceHandoffContractVersion, the version SDD's emitter stamps.
+      #
+      # `if: !cancelled()` so this reports INDEPENDENTLY of the fsgg-contracts assertion above. The two
+      # gate DIFFERENT contracts against the SAME checkout; a default sequential step would be skipped
+      # whenever the first reds, hiding a simultaneous governance-handoff drift until the unrelated
+      # fsgg-contracts flip lands — one #266-shaped round-trip per masked failure. The guard is scoped
+      # to skip only on cancellation, so a genuinely failed checkout still reaches this step and fails
+      # closed ("cannot read source") rather than being silently passed.
       - name: Assert governance-handoff `version` == SDD emitted contractVersion constant
+        if: ${{ !cancelled() }}
         run: |
           python scripts/check-emitted-contract-version.py registry/dependencies.yml \
             --contracts-src sdd/src/FS.GG.Contracts
