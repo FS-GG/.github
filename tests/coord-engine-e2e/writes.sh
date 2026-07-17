@@ -228,7 +228,32 @@ ve="$(cd "$VP_CO" && FSGG_KIT_ROOT="$VP_BAD" "$ENGINE" verify-paths --pr 502 --r
   && ok "#498: an EMPTY generated-paths subtracts nothing (fails closed)" \
   || bad "#498: empty generated-paths fails closed" "rc=$verc: $ve"
 
-rm -rf "$VP_CO" "$VP_EMPTY" "$VP_BAD"
+# FAIL CLOSED 4 — a HANGING generator. The other three fail closed by returning; this one fails closed
+# only because the wait is BOUNDED. It is pinned because the first cut of the bound DID NOT WORK and
+# looked like it did: a blocking `ReadToEnd` on stdout ran before the timeout, a stuck child never closes
+# stdout, so the read never returned and the timeout was never reached. `verify-paths` — the merge gate —
+# hung for as long as it was allowed to. The bug was invisible to every other leg here, because a healthy
+# generator exercises none of it. Timeout tunable so this costs ~1s instead of 30.
+VP_HANG="$(mktemp -d)"; mkdir -p "$VP_HANG/scripts"
+printf '#!/bin/sh\nexec sleep 987654\n' >"$VP_HANG/scripts/generated-paths"
+chmod +x "$VP_HANG/scripts/generated-paths"
+vh_start="$(date +%s)"
+vh="$(cd "$VP_CO" && FSGG_KIT_ROOT="$VP_HANG" FSGG_GENERATED_PATHS_TIMEOUT_MS=1000 \
+       "$ENGINE" verify-paths --pr 502 --repo .github 2>&1)"; vhrc=$?
+vh_elapsed=$(( $(date +%s) - vh_start ))
+[ "$vhrc" -ne 0 ] && printf '%s' "$vh" | grep -q 'repos.lock' && printf '%s' "$vh" | grep -q 'was killed' \
+  && [ "$vh_elapsed" -lt 15 ] \
+  && ok "#498: a HANGING generated-paths is killed and subtracts nothing (bounded, ${vh_elapsed}s)" \
+  || bad "#498: hanging generated-paths is bounded" "rc=$vhrc elapsed=${vh_elapsed}s: $vh"
+
+# ...and the hang is REAPED, not orphaned. `Kill true` takes the process tree: killing the script while
+# leaving the generator it is blocked on alive would leak the actual hang, one process per PR.
+sleep 0.5
+[ "$(pgrep -f 'sleep 987654' | wc -l)" -eq 0 ] \
+  && ok "#498: the killed generator leaves no orphaned process behind" \
+  || bad "#498: hanging generator is reaped" "$(pgrep -af 'sleep 987654')"
+
+rm -rf "$VP_CO" "$VP_EMPTY" "$VP_BAD" "$VP_HANG"
 
 # ---- report ----------------------------------------------------------------------------------------
 echo

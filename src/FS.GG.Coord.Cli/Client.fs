@@ -2960,17 +2960,70 @@ module Client =
                 psi.UseShellExecute <- false
                 use p = Process.Start psi
 
-                // Async, and NOT a second blocking ReadToEnd: draining one pipe while the other fills its
-                // buffer deadlocks both — the child blocks writing stderr, we block reading stdout, and
-                // `verify-paths` hangs instead of reporting. The roster's warnings are small today; a
-                // deadlock that depends on how chatty a generator is, is not a thing to leave armed.
+                // BOTH pipes async, and the ordering here is the whole point rather than a style choice.
+                //
+                // A blocking `StandardOutput.ReadToEnd()` cannot be bounded by a later `WaitForExit t`: a
+                // stuck generator never closes stdout, so the read never returns and the timeout below is
+                // simply never reached. (Measured, on the first cut of this function: a `sleep 600`
+                // generator hung `verify-paths` for as long as it was allowed to run, and left the child
+                // alive — the timeout was decoration, and a comment promising a bound that does not exist
+                // is worse than no bound, because it invites the trust it cannot earn.)
+                //
+                // Async also removes the symmetric deadlock: draining one pipe while the child fills the
+                // other's buffer blocks them both.
+                let stdout = Text.StringBuilder()
+                let sync = obj ()
+
+                p.OutputDataReceived.Add(fun e ->
+                    if not (isNull e.Data) then
+                        lock sync (fun () -> stdout.AppendLine e.Data |> ignore))
+
+                // The generator's OWN reason, forwarded rather than swallowed — see the doc comment.
                 p.ErrorDataReceived.Add(fun e ->
                     if not (isNull e.Data) then
                         eprint $"  | %s{e.Data}")
 
+                p.BeginOutputReadLine()
                 p.BeginErrorReadLine()
-                let out = p.StandardOutput.ReadToEnd()
+
+                // BOUNDED, because a HANG is the one failure this design otherwise had no answer for.
+                // Everything else fails closed — absent, broken, silent all subtract nothing and say so. A
+                // generator that blocks (waits on stdin, a hung git, a stalled network mount) instead hangs
+                // `verify-paths` itself, which IS the merge gate: no verdict, no diagnostic, a job burning
+                // to its workflow timeout. That is not fail-closed, it is fail-SILENT. Nothing else in the
+                // chain bounds it — `generated-paths` does not time its own generators out — so the bound
+                // goes at the edge that has a verdict to protect. 30s is three orders of magnitude past the
+                // measured cost of the whole roster (~40ms): only a genuinely stuck generator reaches it.
+                // `Kill true` takes the process TREE — killing the script and orphaning the generator it is
+                // blocked on would leak the actual hang.
+                //
+                // Tunable ONLY so the gate can prove the bound without costing CI 30 idle seconds — the same
+                // reason `FSGG_COORD_SCAN_TTL_SEC` exists, and the e2e suite already sets that. An untested
+                // safety net is one that rots quietly (#724); a knob nothing but the test turns is cheaper
+                // than not testing it. A malformed or non-positive value falls back to the default rather
+                // than disabling the bound: "0" must not silently mean "wait forever".
+                let timeoutMs =
+                    match Environment.GetEnvironmentVariable "FSGG_GENERATED_PATHS_TIMEOUT_MS" with
+                    | null
+                    | "" -> 30_000
+                    | v ->
+                        match Int32.TryParse v with
+                        | true, n when n > 0 -> n
+                        | _ -> 30_000
+
+                if not (p.WaitForExit timeoutMs) then
+                    (try p.Kill true with _ -> ())
+
+                    eprint
+                        $"fsgg-coord-engine: scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+
+                    Set.empty
+                else
+
+                // The child is gone; this second, unbounded wait is the documented way to let the async
+                // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
                 p.WaitForExit()
+                let out = lock sync (fun () -> stdout.ToString())
 
                 if p.ExitCode <> 0 then
                     eprint
@@ -3170,20 +3223,33 @@ module Client =
                             // drift in a repo we never asked. That is the fail-open this change exists to
                             // avoid, reached from the one direction the roster cannot see. Owner included —
                             // `otherorg/.github` is not `FS-GG/.github`, and only the slug knows that.
-                            let subtractable =
-                                let checkoutIsSubject =
-                                    match gitRemoteRepo () with
-                                    | Some slug -> String.Equals(slug, $"%s{owner}/%s{repo}", StringComparison.OrdinalIgnoreCase)
-                                    | None -> false
-
-                                if not checkoutIsSubject then
-                                    Set.empty
-                                else
-                                    match kitRoot () with
-                                    | Some root -> generatedPaths root
-                                    | None -> Set.empty
-
+                            // ASK ONLY WHEN THERE IS DRIFT TO SUBTRACT FROM. Not merely to save the three
+                            // generator forks on the commonest verdict — the reason is the DIAGNOSTIC. A
+                            // failing `generated-paths` reports that nothing was subtracted "so a regenerated
+                            // artifact will be reported as drift below"; on a PR with no drift, that sentence
+                            // is FALSE and it lands in the sticky comment of a GREEN PR (the workflow merges
+                            // our stderr into the file it publishes). A gate that cries wolf on the happy path
+                            // teaches one lesson — that its output is noise — and the next warning will be
+                            // real (#698). With no drift there is nothing to subtract and nothing to say.
                             let regenerated, undeclared =
+                                if List.isEmpty drift then
+                                    [], []
+                                else
+
+                                let subtractable =
+                                    let checkoutIsSubject =
+                                        match gitRemoteRepo () with
+                                        | Some slug ->
+                                            String.Equals(slug, $"%s{owner}/%s{repo}", StringComparison.OrdinalIgnoreCase)
+                                        | None -> false
+
+                                    if not checkoutIsSubject then
+                                        Set.empty
+                                    else
+                                        match kitRoot () with
+                                        | Some root -> generatedPaths root
+                                        | None -> Set.empty
+
                                 drift |> List.partition (fun f -> Set.contains f subtractable)
 
                             // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
