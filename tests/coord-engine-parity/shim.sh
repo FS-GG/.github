@@ -70,20 +70,20 @@ else
   bad "tier 1: a missing explicit bin must refuse, not fall back" "rc=$rc err=$err"
 fi
 
-# tier 4, the from-source build: with the env unset, from inside .github, the shim still resolves an
+# tier 2, the source build: with the env unset, from inside .github, the shim still resolves an
 # engine and answers --version. The anti-#266 property — an unset knob is not "no engine", and a
 # resolver that finds one must not pretend it found none.
 out="$(cd "$REPO_ROOT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>/dev/null)"; rc=$?
 if [ "$rc" -eq 0 ] && [ -n "$out" ]; then
-  ok "tier 4: with the env unset, the shim resolves an engine from source and answers (version $out)"
+  ok "tier 2: with the env unset, the shim resolves an engine from source and answers (version $out)"
 else
-  bad "tier 4: an unset env must still resolve the from-source engine in .github" "rc=$rc out=$out"
+  bad "tier 2: an unset env must still resolve the from-source engine in .github" "rc=$rc out=$out"
 fi
 
 # REFUSAL, not silent no-op: no explicit bin, no engine on PATH, no manifest, no repo — the shim exits
 # NON-ZERO with advice, never 0. A non-git cwd with the env unset stands in for a bare receiver that
-# never restored the tool: tiers 3/4 need a git toplevel (there is none here), tier 1 is unset, and
-# tier 2 (a global tool on PATH) does not exist — so nothing resolves and the shim must SAY so.
+# never restored the tool: tiers 2/4 need a git toplevel (there is none here), tier 1 is unset, and
+# tier 3 (a global tool on PATH) does not exist — so nothing resolves and the shim must SAY so.
 NONGIT="$(mktemp -d)"
 err="$(cd "$NONGIT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>&1 >/dev/null)"; rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$err" | grep -qi 'no fsgg-coord engine found'; then
@@ -94,11 +94,11 @@ fi
 rmdir "$NONGIT" 2>/dev/null || true
 
 # ---- 3. STALENESS: THE ARTIFACT IS NOT A REF (#929) ----------------------------------------------
-# Tier 4 execs a build output nothing keeps in step with the `src/` beside it, so the shim can hand a
+# Tier 2 execs a build output nothing keeps in step with the `src/` beside it, so the shim can hand a
 # worker code that is not in their tree — and twice on 2026-07-16 it handed them an engine that
 # silently ignored `release --status` and put a merged item back to Ready.
 #
-# These legs use a SYNTHETIC tier-4 checkout: a git toplevel with a fake engine and a fake source tree.
+# These legs use a SYNTHETIC source-build checkout: a git toplevel with a fake engine and a fake source tree.
 # That is deliberate on two counts. It asserts the shim's mtime rule directly, with no 5s `dotnet build`
 # per leg; and it does not depend on the REAL bin/ being stale or fresh at test time — which is whatever
 # the last person happened to build, i.e. the very thing under test.
@@ -107,7 +107,18 @@ rmdir "$NONGIT" 2>/dev/null || true
 # land on different timestamps — true on ext4's nanosecond stamps, false the moment this runs on a
 # coarser filesystem, and a parity red is supposed to be EVIDENCE rather than a coin toss.
 FIXSRC="src/FS.GG.Coord.Core/Protocol.fs"
-fixture() {   # $1 = dir. A tier-4 checkout whose engine is NEWER than its source (i.e. FRESH).
+
+# A FIXTURE REF THAT CANNOT RESOLVE — BELT AND BRACES (#1008). These legs pass a ref to a board WRITE verb,
+# and they are safe only while the fixture engine is the one that receives it. That is now structural (the
+# shim resolves the source build above any packaged engine, §4 below), but a fixture whose safety rests on
+# resolution being correct is exactly what #1008 was: the placeholder used to be `.github#1`, which RESOLVES
+# — and when tier 2 preempted these legs, `claim .github#1` was posted to this repo FOR REAL, twice. The
+# blast radius was small only by luck: `.github#1` is a pull request, so the board's GraphQL could not
+# resolve it as an Issue and #331 failed closed. A live ITEM number would have been claimed out from under
+# its holder and had its Status rewritten. So the ref is now one that cannot exist anywhere: if the
+# isolation ever breaks again, the write fails on the ref instead of landing on somebody's work.
+FIXREF="fixture/repo#999999"
+fixture() {   # $1 = dir. A source-build checkout whose engine is NEWER than its source (i.e. FRESH).
   mkdir -p "$1/src/FS.GG.Coord.Cli/bin/Release/net10.0" "$1/src/FS.GG.Coord.Core"
   ( cd "$1" && git init -q . ) >/dev/null 2>&1
   printf '// source\n' >"$1/$FIXSRC"
@@ -123,11 +134,17 @@ FIX="$(mktemp -d)"; fixture "$FIX"
 
 # FRESH: an engine newer than its source is the happy path, and it must stay SILENT. A guard that cried
 # wolf here would fire on every worker after every legitimate build — teaching the fleet to skim it.
+#
+# AND `ENGINE RAN` IS ASSERTED, NOT JUST THE SILENCE (#1008). An assertion on silence ALONE cannot tell
+# "the guard stayed quiet" from "the guard never ran" — the fixture engine going unreached is silent too,
+# and passes. That is the property that would have caught #1008 on day one, and it costs one `grep`: this
+# leg was green for the whole life of the bug precisely because it never checked WHOSE silence it heard.
 err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>&1 >/dev/null)"; rc=$?
-if [ "$rc" -eq 0 ] && [ -z "$err" ]; then
-  ok "staleness: an engine NEWER than its src/ is silent — no warning on the happy path"
+out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>/dev/null)"
+if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'ENGINE RAN'; then
+  ok "staleness: an engine NEWER than its src/ is silent — no warning on the happy path, and the FIXTURE is what ran"
 else
-  bad "staleness: a fresh engine must not warn" "rc=$rc err=$err"
+  bad "staleness: a fresh engine must not warn, and must be the engine under test" "rc=$rc out=$out err=$err"
 fi
 
 # STALE + a READ verb: WARN, but still run. A stale read misinforms one worker; blocking it would halt
@@ -145,7 +162,7 @@ fi
 # STALE + a BOARD WRITE: REFUSE. A stale write corrupts state the whole fleet shares (#929's two live
 # incidents), so the engine must NOT run — asserted on the output, not merely the exit code.
 for verb in release set-field "done" claim; do   # "done" quoted: a coord VERB in a list, not this loop's keyword (SC1010, #648)
-  out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" .github#1 2>&1)"; rc=$?
+  out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" "$FIXREF" 2>&1)"; rc=$?
   if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
      && printf '%s' "$out" | grep -qi 'refused'; then
     ok "staleness: a stale engine REFUSES the board write '$verb' (exit $rc) — the engine never ran"
@@ -154,27 +171,95 @@ for verb in release set-field "done" claim; do   # "done" quoted: a coord VERB i
   fi
 done
 
-# NO SOURCE — the receivers' shape (ADR-0034 §4.4 tiers 2/3): there is nothing to be stale AGAINST, so
-# the guard must not fire. Asserted at tier 4 with the sources removed, which is the shim's own test for
+# NO SOURCE — the receivers' shape (ADR-0034 §4.4 tiers 3/4): there is nothing to be stale AGAINST, so
+# the guard must not fire. Asserted at tier 2 with the sources removed, which is the shim's own test for
 # it: no `*.fs` under src/, so no comparison exists to fail.
 find "$FIX/src" -name '*.fs' -delete
-err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release .github#1 2>&1 >/dev/null)"; rc=$?
-if [ "$rc" -eq 0 ] && [ -z "$err" ]; then
+err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>/dev/null)"
+if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'ENGINE RAN'; then
   ok "staleness: with NO source present, even a board write is unaffected — nothing to be stale against"
 else
-  bad "staleness: a source-less checkout must not warn or refuse" "rc=$rc err=$err"
+  bad "staleness: a source-less checkout must not warn or refuse" "rc=$rc out=$out err=$err"
 fi
 
-# AN EXPLICIT BIN IS EXEMPT, and structurally: tier 1 execs before tier 4 is ever reached. This is why
+# AN EXPLICIT BIN IS EXEMPT, and structurally: tier 1 execs before tier 2 is ever reached. This is why
 # the D.1 corpus above (which drives the shim through FSGG_COORD_ENGINE_BIN) sees no warnings, and why
 # the receivers' shape cannot be broken by this guard.
 fixture "$FIX"; stale "$FIX"
-err="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$FIXBIN" "$SHIM" release .github#1 2>&1 >/dev/null)"; rc=$?
-if [ "$rc" -eq 0 ] && [ -z "$err" ]; then
+err="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$FIXBIN" "$SHIM" release "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+out="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$FIXBIN" "$SHIM" release "$FIXREF" 2>/dev/null)"
+if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'ENGINE RAN'; then
   ok "staleness: an explicit FSGG_COORD_ENGINE_BIN is honoured silently — an instruction, not a hint"
 else
-  bad "staleness: tier 1 must not consult staleness" "rc=$rc err=$err"
+  bad "staleness: tier 1 must not consult staleness" "rc=$rc out=$out err=$err"
 fi
+
+# ---- 4. THE SOURCE BUILD OUTRANKS A PACKAGED ENGINE (#1018, #1008) -------------------------------
+# EVERY LEG IN §3 DRIVES THE SHIM WITH `env -u FSGG_COORD_ENGINE_BIN`, WHICH UNSETS TIER 1 AND NOTHING
+# ELSE — and that was never enough. Under the old order a global tool on PATH exec'd BEFORE the source
+# build was ever considered, so on any machine with `dotnet tool install -g` — the receivers' DOCUMENTED
+# shape, and the first remedy the shim's own `die()` prints — every fixture leg above silently drove the
+# REAL engine at the REAL board. It made 2 live claims on `.github#1` and the guard legs passed vacuously
+# (#1008); the same preemption falsely closed epic #889 in production, with the #1005 guard that refuses
+# it sitting BUILT in `src/` (#1018). One cause: the ORDER. The guard was never mis-scoped, it was
+# unreachable, and §3 could not see that because §3 was unreachable in the same breath.
+#
+# So PATH IS THE VARIABLE, and these legs pin what #1008 measured as a 6-assertion swing on nothing but
+# PATH: same fixture, same argv, a global tool ADDED — same verdict. §3 cannot go vacuous again without
+# reddening here.
+#
+# THE FAKE TOOL NEVER TALKS TO GITHUB. A leg that can post a claim is the bug, not the test for it.
+GLOBALDIR="$(mktemp -d)"
+printf '#!/usr/bin/env bash\necho "GLOBAL TOOL RAN: $*"\n' >"$GLOBALDIR/fsgg-coord-engine"
+chmod +x "$GLOBALDIR/fsgg-coord-engine"
+
+# FRESH source build + a global tool on PATH: the SOURCE BUILD runs. ADR-0034 decision 2 in one assertion
+# — `.github` builds the engine from source and never depends on the feed, so a feed build sitting on PATH
+# may not answer for it. Under the old order this leg returned "GLOBAL TOOL RAN".
+fixture "$FIX"
+out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN PATH="$GLOBALDIR:$PATH" "$SHIM" next 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN' \
+   && ! printf '%s' "$out" | grep -q 'GLOBAL TOOL RAN'; then
+  ok "precedence: a global tool on PATH does NOT preempt the source build — .github never runs the feed (ADR-0034 decision 2)"
+else
+  bad "precedence: the source build must outrank a global tool on PATH" "rc=$rc out=$out"
+fi
+
+# STALE source build + a BOARD WRITE + a global tool on PATH: still REFUSED, and the global tool never ran.
+# This is the exact shape that falsely closed #889: a guard is only a guard if PATH cannot route around it.
+stale "$FIX"
+out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN PATH="$GLOBALDIR:$PATH" "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qi 'refused' \
+   && ! printf '%s' "$out" | grep -q 'GLOBAL TOOL RAN'; then
+  ok "precedence: a global tool cannot route a board write around the STALE guard (exit $rc) — #929's guard is REACHABLE (#1018)"
+else
+  bad "precedence: a stale board write must be refused even with a global tool on PATH" "rc=$rc out=$out"
+fi
+
+# TIER 1 STILL OUTRANKS THE SOURCE BUILD. The reorder lifted the source build above the two PACKAGED forms,
+# NOT above the explicit instruction — so an operator who means the global tool here still says so and is
+# obeyed, silently. That is the escape hatch that makes this reorder safe to land on a live fleet.
+fixture "$FIX"; stale "$FIX"
+out="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$GLOBALDIR/fsgg-coord-engine" PATH="$GLOBALDIR:$PATH" "$SHIM" release "$FIXREF" 2>/dev/null)"; rc=$?
+err="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$GLOBALDIR/fsgg-coord-engine" PATH="$GLOBALDIR:$PATH" "$SHIM" release "$FIXREF" 2>&1 >/dev/null)"
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'GLOBAL TOOL RAN' && [ -z "$err" ]; then
+  ok "precedence: tier 1 still outranks the source build — an explicit bin is an instruction, and the operator's escape hatch"
+else
+  bad "precedence: an explicit bin must still win over the source build" "rc=$rc out=$out err=$err"
+fi
+
+# A RECEIVER IS BYTE-FOR-BYTE UNTOUCHED: no source build, so the global tool answers exactly as before. The
+# reorder keys on the BUILD's existence, not on a repo name — only the repo that owns coord's source can
+# have that path — so there is no `.github` special-case here to drift out of step with the roster.
+RCV="$(mktemp -d)"; ( cd "$RCV" && git init -q . ) >/dev/null 2>&1
+out="$(cd "$RCV" && env -u FSGG_COORD_ENGINE_BIN PATH="$GLOBALDIR:$PATH" "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'GLOBAL TOOL RAN'; then
+  ok "precedence: a receiver (no source build) still resolves the global tool — the reorder keys on the BUILD, not a repo name"
+else
+  bad "precedence: a receiver's resolution must be unchanged by the reorder" "rc=$rc out=$out"
+fi
+rm -rf "$RCV" "$GLOBALDIR"
 rm -rf "$FIX"
 
 echo

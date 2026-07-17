@@ -349,12 +349,27 @@ else
   bad "scripts/fsgg-coord is not an executable file — the sanctioned remedy names a program that is not there"
 fi
 
-# ...and it is on nobody's PATH, which is WHY the remedy must name the path. If `fsgg-coord-engine`
-# ever ships on PATH this leg goes red, and rule 4 should be revisited rather than worked around.
-if command -v fsgg-coord-engine >/dev/null 2>&1 || command -v fsgg-coord >/dev/null 2>&1; then
-  bad "an fsgg-coord binary is on PATH — rule 4 assumes it is not; revisit #569 rather than skip this"
+# ...and a BARE `fsgg-coord` is on nobody's PATH, which is WHY the remedy must name the path.
+#
+# THIS LEG ALSO ASKED ABOUT `fsgg-coord-engine`, AND THAT WAS NEVER RULE 4'S BUSINESS (#1018). Rule 4
+# governs the NAME a remedy prints — `scripts/fsgg-coord`, because a bare `fsgg-coord` is `command not
+# found` (#569). No remedy anywhere prints `fsgg-coord-engine`: it is the ENGINE the shim execs, not a
+# name any doc tells you to type, so whether it is on PATH cannot make a printed remedy resolve or fail.
+# The leg red-flagged the receivers' DOCUMENTED shape (`dotnet tool install -g` — the shim's own tier 3,
+# and the first remedy its `die()` prints) as a violation of a rule that shape does not touch. That is
+# why it fired on developer machines and never in CI, and why it read as noise: for rule 4, it WAS noise.
+#
+# It was also, by accident, the only thing in this repo pointing at a REAL hazard — a global engine
+# preempting `.github`'s authoritative source build, which falsely closed epic #889 (#1018) and made the
+# shim's own fixtures post 2 live claims (#1008). That hazard is now fixed at the root: the shim resolves
+# the source build ABOVE any packaged engine, and `tests/coord-engine-parity/shim.sh` §4 pins it directly
+# and hermetically — it puts a tool on PATH ITSELF rather than waiting to notice one, so it holds on a CI
+# runner where this leg could never fire. The canary is not lost; it is replaced by a test of the thing it
+# was accidentally sensing, and this leg goes back to asking only its own question.
+if command -v fsgg-coord >/dev/null 2>&1; then
+  bad "a bare \`fsgg-coord\` is on PATH — rule 4 assumes it is not; revisit #569 rather than skip this"
 else
-  ok "no fsgg-coord binary is on PATH — so a bare name in a remedy really is \`command not found\` (#569)"
+  ok "no bare \`fsgg-coord\` is on PATH — so a bare name in a remedy really is \`command not found\` (#569)"
 fi
 
 # ...and the surface it audits really is the roots + docs, not a hardcoded guess.
