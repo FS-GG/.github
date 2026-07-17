@@ -683,3 +683,107 @@ module BatchTests =
         let banner = starvedBanner 120 (run [] [ blocked 1; blocked 2 ])
         Assert.False(anyLine "DEADLOCKED" banner, $"off-board blockers draw no edge, so no ring, got %A{banner}")
         Assert.Empty(banner)
+
+    // ================================================================================================
+    // #669 — THE PARTITION. Every open item is STARTABLE, or NAMED WITH A REASON. Never absent from both.
+    // ================================================================================================
+    // This is #669's headline rule, and #266's shape at the scheduler layer: "nothing schedulable" and
+    // "everything is accounted for" must not be the same answer. The individual-case tests above each pin
+    // ONE verdict; none of them asserts the WHOLE partition — that over a heterogeneous board, the batch
+    // leaves no candidate in the gap between the startable list and the skip-reason list. #669 sat open
+    // for exactly that: the rule HOLDS, and nothing said so, so four workers re-measured it.
+    //
+    // The partition it asserts, over an uncapped run (a cap is the ONE licensed way to leave a candidate
+    // unseen, and it must flag `Truncated` when it does — pinned separately above):
+    //   * every candidate gets a decision                        (no open item vanishes from the accounting)
+    //   * Chosen == exactly the decisions whose verdict is Startable
+    //   * Chosen and the reason-bearing decisions are DISJOINT and their union is every candidate
+    //   * every non-startable decision renders a NON-EMPTY reason that NAMES the item
+    //     — the "NAMED WITH A REASON" half, in the operator's own words (`Batch.explainDecision`).
+
+    /// A board that exercises the spread of schedulability verdicts a real queue produces — one item per
+    /// reason, plus two disjoint startables and one that overlaps a batch member. Numbered so the greedy
+    /// fold reaches #14 (chosen) before #15 (which then overlaps it).
+    let private mixedBoard =
+        let blockerOpen = { Ref = Some(ref 999); Raw = (ref 999).Short; State = BlockerOpen }
+
+        let withClaim liveness it =
+            { it with
+                Claim =
+                    Some(
+                        { Worker = WorkerId "wren-1"
+                          Session = None
+                          AgeSeconds = 60
+                          PreviousStatus = None },
+                        liveness
+                    ) }
+
+        [ item 1 [ "src/a1.fs" ] // Startable
+          { item 2 [ "src/a2.fs" ] with Status = Backlog } // WrongStatus Backlog (allowBacklog=false)
+          { item 3 [ "src/a3.fs" ] with Status = NoStatus } // WrongStatus NoStatus — #669's named dead-code arm
+          { item 4 [ "src/a4.fs" ] with Status = InProgress } // WrongStatus InProgress
+          { item 5 [ "src/a5.fs" ] with State = Closed } // IssueClosed
+          { item 6 [] with TouchSet = Undeclared } // NoTouchSet
+          { item 7 [] with TouchSet = DeclaredNone } // DeliberatelyNoTouchSet
+          { item 8 [] with TouchSet = Declared [ Unmatchable "**/*.fs" ] } // UnusableTouchSet
+          { item 9 [ "src/a9.fs" ] with Blockers = [ blockerOpen ] } // BlockedBy
+          item 10 [ "src/a10.fs" ] |> held "otter-2" 60 // HeldBy
+          item 11 [ "src/a11.fs" ] |> withClaim (LeaseExpiredPrOpen 4242) // HeldByLiveWork
+          { item 12 [ "src/a12.fs" ] with ItemPr = Some 777 } // ItemPrOpen
+          { item 13 [] with TouchSet = Unreadable "the issue body returned HTTP 500" } // Undetermined
+          item 14 [ "src/shared.fs" ] // Startable
+          item 15 [ "src/shared.fs" ] ] // OverlapsInFlight — collides with #14, chosen first
+
+    [<Fact>]
+    let ``#669 every candidate is chosen or explained — the partition has no gap`` () =
+        let r = run [] mixedBoard
+
+        // Nothing was left unseen: an uncapped run decides EVERY candidate. This is the invariant #669
+        // states — a candidate absent from the decisions is a row that vanished with no verdict at all.
+        Assert.False(r.Truncated, "an uncapped run leaves nothing unseen")
+        Assert.Equal(List.length mixedBoard, List.length r.Decisions)
+
+        let allNumbers = mixedBoard |> List.map (fun i -> i.Ref.Number) |> Set.ofList
+        let chosen = r.Chosen |> List.map (fun i -> i.Ref.Number) |> Set.ofList
+
+        let explained =
+            r.Decisions
+            |> List.choose (fun d ->
+                match d.Result with
+                | Startable -> None
+                | _ -> Some d.Item.Ref.Number)
+            |> Set.ofList
+
+        // Chosen is EXACTLY the startable decisions — the two lists are two views of one fold, not two
+        // independent computations that could disagree.
+        let startableDecisions =
+            r.Decisions
+            |> List.choose (fun d ->
+                match d.Result with
+                | Startable -> Some d.Item.Ref.Number
+                | _ -> None)
+            |> Set.ofList
+
+        Assert.Equal<Set<int>>(chosen, startableDecisions)
+
+        // THE PARTITION: disjoint, and together they are every candidate. No item in both; none in neither.
+        Assert.True(Set.isEmpty (Set.intersect chosen explained), "no item is both startable and explained")
+        Assert.Equal<Set<int>>(allNumbers, Set.union chosen explained)
+
+    [<Fact>]
+    let ``#669 every passed-over candidate is NAMED WITH A REASON, in the operator's words`` () =
+        let r = run [] mixedBoard
+
+        // The rule is not "every item has a verdict" — a verdict a worker cannot read is the #266 fail
+        // whose remedy this issue is. Each non-startable decision must render an English reason that names
+        // the item, via the same edge `take` prints (`Batch.explainDecision`, which folds in the holder).
+        for d in r.Decisions do
+            match d.Result with
+            | Startable -> ()
+            | _ ->
+                let sentence = explainDecision 120 d
+                Assert.False(System.String.IsNullOrWhiteSpace sentence, $"%A{d.Result} rendered an empty reason")
+
+                Assert.True(
+                    sentence.Contains d.Item.Ref.Short,
+                    $"the reason for %A{d.Result} does not name the item it is about: %s{sentence}")
