@@ -64,6 +64,8 @@ TARGETS=(
   "reconcile-rules:.agents/skills/check-board/SKILL.md"
   "blocker-states:.claude/skills/check-board/SKILL.md"
   "blocker-states:.agents/skills/check-board/SKILL.md"
+  "board-statuses:.claude/skills/cross-repo-coordination/SKILL.md"
+  "board-statuses:.agents/skills/cross-repo-coordination/SKILL.md"
   "versions:docs/architecture.md"
 )
 
@@ -331,6 +333,59 @@ render_blocker_states() {
   # `--check` compares generated to generated, so it would never notice.
   jq -r '.blockerStates[]
     | "| `\(.wire)` | \(if .holds then "**YES**" else "no" end) | \(.meaning | split("|") | join("\\|")) |"' "$FACTS"
+}
+
+# `board-statuses` — the six `Status` options `cross-repo-coordination` spelled by hand, in the field
+# table a filer reads before setting a column (#889, #1057).
+#
+# The bite is ASYMMETRIC, which is what makes it worth generating rather than proof-reading. A filer who
+# copies a drifted option is safe: `set-field` refuses an unknown one, loudly, before it writes. A
+# RECONCILER is not — it selects `.status` in `jq`, a drifted string matches nothing, no rows come back,
+# and no rows reads as a CLEAN BOARD (#476).
+#
+# TWO sources, as `blocker-states` has: the option strings and the case list come from Types.fs
+# (`BoardStatus`, `statusWireName`); `startable?` is Schedulability.fs (`columnStartability`), and the
+# prose is Protocol.fs. Regenerate for any of them.
+render_board_statuses() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  These six strings were a table row here, hand-kept, in BOTH skill roots. A drifted option is"
+  echo "  not a misprint: a reconciler selects it in jq, matches nothing, and reports a CLEAN BOARD over"
+  echo "  a board it never read (#476)."
+  echo ""
+  echo "  SIX, NOT SEVEN. \`BoardStatus\` has a seventh case — \`NoStatus\`, wire form \`\"\"\` — and it is"
+  echo "  the ABSENCE of a column rather than an option a filer can select. Protocol.fs drops it in a"
+  echo "  total match, so a new case cannot join the union without being classified."
+  echo "-->"
+  echo ""
+  echo "*Generated from the typed core: \`Types.statusWireName\` writes these option names, so the engine"
+  echo "that reads a column back is the engine that wrote this table. \`startable?\` is"
+  echo "\`Schedulability.columnStartability\` — the predicate \`take\` schedules on, not a copy that agrees"
+  echo "with it today.*"
+  echo ""
+  echo "| option | startable? | what it means |"
+  echo "|---|---|---|"
+  # `|` is ESCAPED for `render_blocker_states`'s reason: an unescaped pipe in the prose ends the cell
+  # silently, and `--check` compares generated to generated, so it would never notice.
+  #
+  # THREE ANSWERS, NOT A CHECKBOX. `with-backlog-opt-in` is rendered as its own answer and NAMES THE FLAG
+  # that starts it. Rounding it to "no" would publish the board's most common park as plain unstartable
+  # and hide `--include-backlog`; to "yes", it would promise a queue a bare `take` never reads.
+  #
+  # THE FOURTH CASE ERRORS RATHER THAN RENDERING "no", and that is not defensive noise. A `ColumnStartability`
+  # case added in F# reaches this filter as a string it has never seen, and an `else "no"` would publish
+  # the new case as NOT STARTABLE — a confident wrong answer, in a generated region nobody proof-reads,
+  # about the one column a worker is deciding whether to look in. The engine's total match cannot help
+  # here: it is on the other side of a JSON boundary. So the untyped end fails LOUD (#266).
+  jq -r '.boardStatuses[]
+    | "| `\(.wire)` | \(
+        if   .startable == "always"              then "**YES**"
+        elif .startable == "with-backlog-opt-in" then "only with `--include-backlog`"
+        elif .startable == "never"               then "no"
+        else error("unknown startable value \"\(.startable)\" for board status \"\(.wire)\" — scripts/generate-projections renders three ColumnStartability cases and the engine emitted a fourth; teach render_board_statuses what it means rather than letting it render as \"no\"") end
+      ) | \(.meaning | split("|") | join("\\|")) |"' "$FACTS"
 }
 
 # `versions` — the registry's version leads (#913), for the architecture map. THE ONLY REGION EMITTED

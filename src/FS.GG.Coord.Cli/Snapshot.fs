@@ -712,6 +712,27 @@ module Snapshot =
 
             w.WriteEndArray()
 
+        // `startable` is a STRING, not a bool, because the truth has three states: `Backlog` is startable
+        // IFF the caller passed `--include-backlog`. Rendering that as `false` would publish the board's
+        // most common park as plain unstartable and hide the flag that starts it; as `true`, it would
+        // promise a queue a bare `take` never reads.
+        //
+        // THE SPELLING IS NOT THIS FILE'S. `s.Startable` is already `Schedulability.columnStartabilityWireName`'s
+        // answer, exactly as `v.Kind` above is `Schedulability.kind`'s. The first draft of #1057 matched the
+        // union HERE and spelled the three strings in this writer — a wire vocabulary owned by a projection
+        // instead of by `Core`, which is the defect the whole change is about. It compiled clean when renamed.
+        let writeBoardStatuses (key: string) (statuses: Protocol.BoardStatusDoc list) =
+            w.WriteStartArray(key)
+
+            for s in statuses do
+                w.WriteStartObject()
+                w.WriteString("wire", s.Wire)
+                w.WriteString("startable", s.Startable)
+                w.WriteString("meaning", s.Meaning)
+                w.WriteEndObject()
+
+            w.WriteEndArray()
+
         let writeExitCodes (key: string) (codes: Protocol.ExitCodeDoc list) =
             w.WriteStartArray(key)
 
@@ -735,6 +756,7 @@ module Snapshot =
             | Protocol.Rules(key, rs) -> writeRules key rs
             | Protocol.Verdicts(key, vs) -> writeVerdicts key vs
             | Protocol.BlockerStates(key, bs) -> writeBlockerStates key bs
+            | Protocol.BoardStatuses(key, ss) -> writeBoardStatuses key ss
             | Protocol.ExitCodes(key, cs) -> writeExitCodes key cs
 
         w.WriteEndObject()

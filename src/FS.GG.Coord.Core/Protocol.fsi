@@ -27,6 +27,28 @@ module Protocol =
     /// A schedulability verdict, as the worker meets it.
     type VerdictDoc = { Kind: string; Meaning: string }
 
+    /// One board `Status` option, as a filer meets it: the option name the board stores, and whether the
+    /// scheduler hands the item out while it sits there.
+    type BoardStatusDoc =
+        { /// The Projects v2 option name — `Types.statusWireName`'s answer, never a second spelling. This
+          /// is the string `set-field` accepts and a `jq` `.status` selector matches.
+          Wire: string
+
+          /// Whether a scheduler offers an item in this column — `Schedulability.columnStartability`'s
+          /// answer, spelled by `Schedulability.columnStartabilityWireName`, never a second spelling.
+          ///
+          /// A STRING, on `VerdictDoc.Kind`'s terms and for its reason: the vocabulary belongs to `Core`,
+          /// beside the union it names. Carrying the union here instead would push the spelling out into
+          /// whichever projection renders it — which is what the first draft of #1057 did, in `Snapshot.fs`,
+          /// where renaming a case compiled with zero F# errors.
+          ///
+          /// NOT a bool: the truth has three states. `Backlog` is startable only under `--include-backlog`,
+          /// and that is the state a filer most often asks about.
+          Startable: string
+
+          /// What the column asserts about the item, and why a scheduler does or does not offer it.
+          Meaning: string }
+
     /// One `BlockerState`, as a reader of the scan's JSON meets it: the wire string, and what it says
     /// about the blocker.
     type BlockerStateDoc =
@@ -56,6 +78,28 @@ module Protocol =
     ///
     /// `Wire` is `blockerStateWireName`; `Holds` is a total match. Neither is written twice.
     val blockerStates: BlockerStateDoc list
+
+    /// The board's `Status` vocabulary, as prose — the six options of `Types.BoardStatus` that a board
+    /// column can actually hold, each with the option name the board stores and whether the scheduler
+    /// offers it (#889).
+    ///
+    /// `cross-repo-coordination` stated these six strings by hand, in a field table, and that table is
+    /// what a filer reads before setting a column. The stakes are not a misprinted doc: `set-field`
+    /// REFUSES an unknown option, so a filer who copies a drifted spelling gets a loud failure — but a
+    /// RECONCILER reads these strings with `jq` and a `.status` selector that matches nothing reports a
+    /// CLEAN BOARD. That is `check-board`'s worst output by its own account (#476), and it is the shape
+    /// #1012 measured in `BlockerState`: two copies, 775 tests green, the vocabulary broken.
+    ///
+    /// SIX, NOT SEVEN. `BoardStatus` has a seventh case — `NoStatus`, whose wire form is `""` — and it is
+    /// deliberately not here: it is the ABSENCE of a column, not an option the board offers, and a filer
+    /// cannot select it. `everyBoardStatus` drops it in a TOTAL match, so a new case cannot join the
+    /// union without this file being asked which side of that line it falls on (#437 is what happens when
+    /// `NoStatus` is allowed to read as `Backlog`).
+    ///
+    /// `Wire` is `statusWireName`; `Startable` is `Schedulability.columnStartability`. Neither is written
+    /// twice — and `Startable` could not be published at all until #1057 gave that fact a name, since it
+    /// lived as three legs of a `match` inside `schedulable` where no document could read it.
+    val boardStatuses: BoardStatusDoc list
 
     /// The verdict union, as prose. Emitted from the same cases the scheduler returns, so the list a
     /// worker reads cannot omit one — which is what fourteen of the scheduler family's issues were.
@@ -145,6 +189,7 @@ module Protocol =
         | Rules of key: string * Rule list
         | Verdicts of key: string * VerdictDoc list
         | BlockerStates of key: string * BlockerStateDoc list
+        | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
 
     /// The facts document's schema version — a fact about the document's shape, so it lives with the
