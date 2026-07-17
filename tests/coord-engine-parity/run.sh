@@ -549,7 +549,7 @@ dp1=""; for _ in $(seq 1 50); do dp1="$(head -n1 "$D1_OUT" 2>/dev/null)"; [ -n "
 rm -f "$D1_OUT"
 if [ -n "$dp1" ]; then
   d1="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$dp1" FSGG_COORD_CACHE="$(mktemp -d)" \
-    "$ENGINE" done 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"; d1rc=$?
+    "$ENGINE" "done" 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"; d1rc=$?
   [ "$d1rc" -eq 0 ] && printf '%s' "$d1" | grep -q 'FSGG-DONE   FS.GG.SDD#42' \
     && ok "#533: the stamp is still earned (green, FSGG-DONE) — dropping the lock does not touch the verdict" \
     || bad "#533: done --flip stamps the item green" "rc=$d1rc: $d1"
@@ -571,7 +571,7 @@ dp2=""; for _ in $(seq 1 50); do dp2="$(head -n1 "$D2_OUT" 2>/dev/null)"; [ -n "
 rm -f "$D2_OUT"
 if [ -n "$dp2" ]; then
   d2="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$dp2" FSGG_COORD_CACHE="$(mktemp -d)" \
-    "$ENGINE" done 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"
+    "$ENGINE" "done" 'FS.GG.SDD#42' --worker vole-533 --pr 7 --flip 2>&1)"
   printf '%s' "$(dclaims "$dp2")" | grep -q 'worker=other-999' \
     && ok "#533: ...but it must NOT delete a claim that is not ours — other-999's marker is left intact" \
     || bad "#533: done deleted a stranger's claim" "$(dclaims "$dp2")"
@@ -1312,7 +1312,10 @@ fi
 #      restore.
 rsrv FSGG_PARITY_FAIL_STATUS=1 'FSGG_PARITY_MARKERS=[{"n":375,"id":875,"worker":"pika-r01","prev":"Backlog"}]' --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (i2) bound a port"; else
-  i2out="$(renv release FS.GG.SDD#375 --worker pika-r01 2>&1)"; i2rc=$?
+  # No rc captured: this leg's contract is the WRITES (none), the marker (dropped), and the message —
+  # asserted below. `release` exits 0 on an unreadable column by design (#914), so an rc here would
+  # assert nothing. (#648)
+  i2out="$(renv release FS.GG.SDD#375 --worker pika-r01 2>&1)"
   [ "$(rget "$RS_PORT" /_writes | jq -r '.count')" = "0" ] \
     && ok "#331/#266: an UNREADABLE column is left ALONE — release writes nothing rather than guessing" \
     || bad "#331: a failed column read must not be written over" "writes=$(rget "$RS_PORT" /_writes | jq -c '[.writes[].optionId]')"
@@ -2390,7 +2393,7 @@ for _ in $(seq 1 50); do DF_PORT="$(head -n1 "$DF_OUT" 2>/dev/null)"; [ -n "$DF_
 rm -f "$DF_OUT"
 if [ -z "$DF_PORT" ]; then bad "done-flip fixture bound a port"; else
   df() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$DF_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
-             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" done "$@" 2>&1; }
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "done" "$@" 2>&1; }
 
   # A — HOLD (#235/#583): #42 stamps DONE, but its parent #301 is HELD because sibling #44 is still open.
   a="$(df 'FS.GG.SDD#42' --worker w-df --flip)"
@@ -2463,7 +2466,7 @@ for _ in $(seq 1 50); do DP_PORT="$(head -n1 "$DP_OUT" 2>/dev/null)"; [ -n "$DP_
 rm -f "$DP_OUT"
 if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
   dp() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$DP_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
-             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" done "$@" 2>&1; }
+             FSGG_COORD_PROJECT=Coordination FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "done" "$@" 2>&1; }
 
   # #342 — the stamp names the CLOSER (#92 @ 09c836e), never the earlier prose mention #85.
   p84="$(dp 'FS.GG.SDD#84' --worker w-dp)"; rc84=$?
@@ -3262,7 +3265,6 @@ if [ -z "$LND_PORT" ]; then bad "landable fixture bound a port"; else
   # 3. THE ONE THAT MATTERS. `reap` must not point the destructive verb at finished work: it REFUSES the
   #    green orphan, calls it FINISHED, names `adopt`, and NEVER advises "close it, then reap".
   rerp="$(lnd reap --repo FS.GG.SDD --apply 2>&1)"
-  g970="$(printf '%s' "$rerp" | grep -A2 'FS.GG.SDD#970')"
   printf '%s' "$rerp" | grep -q 'REFUSING to reap FS.GG.SDD#970' \
     && ok "#697: reap REFUSES a claim whose PR is green and mergeable (case 30)" \
     || bad "#697: reap refuses #970" "$rerp"

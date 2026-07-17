@@ -158,7 +158,7 @@ wire_both() { clearfail "$1"; local slug="${1//\//__}"
               printf 'jobs:\n  drift:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.github\n          path: _org-build\n      - run: %s --check\n' "$3" > "$FIX/$slug/gate.yml"; }
 unwired(){ clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"; printf '%s\n' "ci.yml" > "$FIX/$slug.list";
            printf 'jobs:\n  build:\n    runs-on: ubuntu-latest\n' > "$FIX/$slug/ci.yml"; }
-noflows(){ clearfail "$1"; local slug="${1//\//__}"; rm -f "$FIX/$slug.list"; rm -rf "$FIX/$slug"; }
+noflows(){ clearfail "$1"; local slug="${1//\//__}"; rm -f "$FIX/$slug.list"; rm -rf "${FIX:?}/$slug"; }  # "${FIX:?}": an empty FIX would make this `rm -rf /$slug` (SC2115, #648)
 # 403 on every call for this repo (a rate limit), 403 only until `n` attempts have burned, or 403 on
 # file reads only (the dir lists fine, so the audit gets partway in before it loses the API).
 unreachable()    { wire "$1"; local slug="${1//\//__}"; echo 403 > "$FIX/$slug.fail"; }
@@ -170,6 +170,10 @@ invisible()      { noflows "$1"; local slug="${1//\//__}"; : > "$FIX/$slug.gone"
 
 # TRIES=1 by default: no retry, no sleep, so the failure legs are fast and deterministic. The retry
 # leg overrides it. The delay is always 0 — the fixture must never actually sleep.
+# shellcheck disable=SC2120  # every caller today is a bare `run 2>&1`, so shellcheck is right that no
+# argument is ever passed. `"$@"` STAYS: it is the forwarding a wrapper is expected to do, and dropping
+# it is the trap — a later `run --apply` would then have its flag SILENTLY swallowed rather than
+# forwarded to the audit, which is a fixture that lies about what it ran. #648
 run() { PATH="$STUB:$PATH" REPOS_AUDIT_TRIES="${TRIES:-1}" REPOS_AUDIT_RETRY_DELAY=0 \
           bash "$AUDIT" --registry "$REG" --repos-sh "$REPOS_SH" "$@"; }
 
@@ -646,7 +650,12 @@ n=$(( $(wc -l < "$SBOX/passes") + 1 )); echo x >> "$SBOX/passes"
 cat "$SBOX/out.$n"
 exit "$(cat "$SBOX/rc.$n")"
 STUBSH
-  ( cd "$SBOX" && SBOX="$SBOX" GITHUB_OUTPUT="$SBOX/gh_out" REPOS_AUDIT_RETRY_AFTER_S=0 \
+  # `env`, not a bare assignment prefix: SBOX is not exported, so the prefix is doing real work — but
+  # written as a prefix, `GITHUB_OUTPUT="$SBOX/gh_out"` reads as if it might see the SBOX assigned
+  # beside it (it does not — it expands the PARENT's, which happens to be the same value, so the code
+  # was correct by coincidence rather than by construction). `env` makes the expansions unambiguously
+  # the parent's, which is what was meant. Behaviour is identical. SC2097/SC2098, #648.
+  ( cd "$SBOX" && env SBOX="$SBOX" GITHUB_OUTPUT="$SBOX/gh_out" REPOS_AUDIT_RETRY_AFTER_S=0 \
       bash -eo pipefail "$STEP" ) > "$SBOX/stdout" 2>&1
   STEP_OUT="$(cat "$SBOX/stdout")"
   STEP_RC="$(sed -n 's/^rc=//p' "$SBOX/gh_out")"

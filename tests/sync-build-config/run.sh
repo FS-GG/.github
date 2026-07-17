@@ -233,8 +233,7 @@ if printf '%s' "$DRIFT_OUT" | grep -q -- '--adopt'; then
   ok "drift remediation names --adopt, the path a first-time adopter actually needs (#633)"
 else
   bad "drift remediation must name --adopt for the hand-authored/first-adoption case (#633)" \
-      "A receiver with a hand-authored Directory.Build.props follows this message, hits
-'REFUSING to overwrite hand-authored ...', and is stuck. That is the #561 rollout population."$'\n'"$DRIFT_OUT"
+      "A receiver with a hand-authored Directory.Build.props follows this message, hits"$'\n'"'REFUSING to overwrite hand-authored ...', and is stuck. That is the #561 rollout population."$'\n'"$DRIFT_OUT"
 fi
 
 # --- global.json: distributed and DECIDED-UNMANAGED. The decision, as a gate (.github#903) ---------
@@ -351,9 +350,7 @@ if upstream_comment_edit "$ORG"; then
     ok "an upstream dist/dotnet/ change does NOT red-light a pinned receiver (#592 — the whole item)"
   else
     bad "a pinned receiver must stay GREEN when .github@main moves (#592)" \
-        "This is the merge freeze: #499 and #536 both red-lit finished, green PRs in repos that had
-changed nothing. The receiver's files still match its pin ($A); .github merely moved to $B.
-rc=$rc"$'\n'"$OUT"
+        "This is the merge freeze: #499 and #536 both red-lit finished, green PRs in repos that had"$'\n'"changed nothing. The receiver's files still match its pin ($A); .github merely moved to $B."$'\n'"rc=$rc"$'\n'"$OUT"
   fi
 
   # ...and it must SAY it is behind. Green-and-silent would hide staleness completely; the deal #592
@@ -426,10 +423,7 @@ if [ "$rc" -eq 0 ] && printf '%s' "$OUT" | grep -qi "could not be resolved"; the
   ok "an unresolvable pin on a BEHIND receiver passes with a warning — a fetch blip cannot freeze a repo (#592)"
 else
   bad "an unresolvable pin must fail OPEN, even when the receiver is BEHIND (#592)" \
-      "The receiver is coherent-but-behind and its pin cannot be read. Falling back to a compare against
-main reddens it — which is the merge freeze this item exists to end, re-entered through a network blip.
-Without a readable baseline, BEHIND and HAND-EDITED are indistinguishable and have opposite verdicts:
-refuse to guess, and pass. rc=$rc (want 0)"$'\n'"$OUT"
+      "The receiver is coherent-but-behind and its pin cannot be read. Falling back to a compare against"$'\n'"main reddens it — which is the merge freeze this item exists to end, re-entered through a network blip."$'\n'"Without a readable baseline, BEHIND and HAND-EDITED are indistinguishable and have opposite verdicts:"$'\n'"refuse to guess, and pass. rc=$rc (want 0)"$'\n'"$OUT"
 fi
 
 # ...and it must be honest that it did not actually check anything, rather than printing a green that
@@ -450,8 +444,7 @@ if [ "$rc" -eq 0 ] && [ ! -f "$t4/$PIN_REL" ]; then
   ok "a sync from a DIRTY dist/dotnet/ writes no pin — a pin must not be a false claim (#592)"
 else
   bad "syncing from an uncommitted dist/dotnet/ must not write a pin (#592)" \
-      "It would claim these files came from HEAD when they did not, and --check would then report the
-receiver as hand-edited. rc=$rc; pin: $(cat "$t4/$PIN_REL" 2>&1)"$'\n'"$OUT"
+      "It would claim these files came from HEAD when they did not, and --check would then report the"$'\n'"receiver as hand-edited. rc=$rc; pin: $(cat "$t4/$PIN_REL" 2>&1)"$'\n'"$OUT"
 fi
 git -C "$ORG" checkout -q -- dist/dotnet/Directory.Packages.props
 

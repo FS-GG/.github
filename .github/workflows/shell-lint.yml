@@ -1,0 +1,173 @@
+# shell-lint — the repo that WRITES the org's shell finally reads it (#648).
+#
+# `.github` authors and DISTRIBUTES shell: the coordination kit (`scripts/fsgg-coord`), the sync
+# scripts, the generators, and 38 test fixtures — ~22,000 lines. Until this workflow, no linter had
+# ever read any of it, in this repo or any other.
+#
+# THE HOLE WAS FOUND FROM OUTSIDE. FS.GG.Game#266 put a shellcheck gate over its own shell and had to
+# EXCLUDE `scripts/fsgg-coord`: the kit is VENDORED there, so a receiver cannot fix a finding in it —
+# the next `coordination-sync` reverts the edit — and reporting one would be a false accusation
+# against a file nobody in that repo owns. That exclusion is correct. It leaves the kit linted
+# NOWHERE, including in the repo that owns it, which is this one. #648 is Game asking us to close it.
+#
+# The evidence that nothing ever ran was already in the tree: `scripts/lib/roots.sh` opens with
+# `# shellcheck shell=bash` and `scripts/coordination-sync` carries `# shellcheck source=lib/roots.sh`.
+# Directives addressed to a reader that did not exist.
+#
+# NO `paths:` FILTER, AND THAT IS DELIBERATE. Every other gate here filters, because every other gate
+# has a subject that a path can enclose. This one does not: `lint-shell.sh` decides membership by
+# reading the file's SHEBANG, so "the shell in this repo" is a content predicate, not a directory.
+# Four files already prove it — `scripts/fsgg-coord`, `scripts/coordination-sync`,
+# `scripts/generate-projections`, `scripts/generate-skill-union-bundle` are shell with no extension,
+# because they are commands. A `paths:` filter over `**.sh` would not match one of them, and the next
+# such file could land anywhere. A filter that fails to match is not a gate that fails — it is a gate
+# that never runs, and reports nothing while doing so. The job is seconds long; it runs on everything.
+#
+# The verdict is f(tree): hermetic, no world state, no decay. Every red it raises was introduced by
+# the diff in front of it, and the fix is always inside that diff. So it gates, honestly — and it
+# needs no `schedule:`, because nothing can stale a pure function of files that did not change.
+name: shell-lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shell-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # PINNED, and checksum-verified in both jobs below. This binary decides whether shell may merge;
+  # taking whatever `shellcheck` the runner image ships would make the verdict f(tree, runner-image),
+  # and the second argument moves on somebody else's schedule. The failure that produces is the FALSE
+  # ACCUSATION this org refuses (#238): GitHub bumps the image to a shellcheck with a new check —
+  # SC2320 and friends all arrived in point releases — and the next PR goes red on a file it did not
+  # write, unreproducibly, in a file its item never declared in `Paths:`.
+  #
+  # 0.11.0 is the ORG's pin, not a fresh choice: FS.GG.Game#261 argued reproducibility and won, and
+  # this is the same version and the same checksum its gate.yml verifies. Two repos linting the same
+  # vendored kit with two different shellchecks would be two verdicts, and the kit's whole problem is
+  # already that its receivers cannot answer for it.
+  SHELLCHECK_VERSION: 0.11.0
+  SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO before believing it when it says yes.
+  #
+  # Its headline leg is the hole this gate had while it was being WRITTEN — an extension-only sweep
+  # finds 47 of 51 files and silently skips `scripts/fsgg-coord`, which is to say it skips the exact
+  # file #648 was filed about, and reports green. The fixture's last legs run the gate against the
+  # SHIPPED tree and assert the kit is in the subject, so "passes on synthetic repos while the real
+  # shell rots" is not a state this job can reach.
+  fixture:
+    name: "Fixture: the gate can say NO, and its subject includes the kit"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install shellcheck (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          txz="$RUNNER_TEMP/shellcheck.tar.xz"
+          curl -fsSL --retry 3 -o "$txz" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  ${txz}" | sha256sum -c -
+          tar -xJf "$txz" -C "$RUNNER_TEMP"
+          echo "SHELLCHECK=$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" >> "$GITHUB_ENV"
+
+      - name: Run the shell-lint fixture (no network)
+        run: bash tests/shell-lint/run.sh
+
+  lint:
+    name: "Lint every shell file in the repo (pinned shellcheck)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install shellcheck (pinned + checksum-verified)
+        run: |
+          set -euo pipefail
+          txz="$RUNNER_TEMP/shellcheck.tar.xz"
+          curl -fsSL --retry 3 -o "$txz" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  ${txz}" | sha256sum -c -
+          tar -xJf "$txz" -C "$RUNNER_TEMP"
+          echo "SHELLCHECK=$RUNNER_TEMP/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" >> "$GITHUB_ENV"
+
+      - name: Lint
+        id: check
+        run: |
+          rc=0
+          out="$(bash scripts/lint-shell.sh 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      # A BLOCK scalar, and it must stay one: `run: echo "shell-lint: OK"` on a single line puts a
+      # `: ` inside a plain scalar, and YAML rejects the whole file — which GitHub reports by silently
+      # NOT RUNNING the workflow. This gate caught it in its own definition, before it ever ran.
+      - name: 'OK: every shell file in the repo is clean'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "shell-lint: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: shellcheck reported something'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### shell-lint: shellcheck has findings"
+            echo
+            echo 'Reproduce it EXACTLY, with the same pinned binary this job used:'
+            echo
+            echo '    curl -fsSLO https://github.com/koalaman/shellcheck/releases/download/v'"${SHELLCHECK_VERSION}"'/shellcheck-v'"${SHELLCHECK_VERSION}"'.linux.x86_64.tar.xz'
+            echo '    tar -xJf shellcheck-v'"${SHELLCHECK_VERSION}"'.linux.x86_64.tar.xz'
+            echo '    SHELLCHECK=./shellcheck-v'"${SHELLCHECK_VERSION}"'/shellcheck scripts/lint-shell.sh'
+            echo
+            echo 'If the finding is a FALSE POSITIVE, do not leave it to ambush the next reader — decide it:'
+            echo
+            echo '- prefer a real fix. Most of them have one that is provably identical: quoting a coord'
+            echo '  verb (`"$ENGINE" "done"`, SC1010), `env` instead of an assignment prefix (SC2097),'
+            echo '  `FOO='"''"'` instead of `FOO= ` (SC1007), an explicit `$'"'"'\n'"'"'` join (SC1078).'
+            echo '- otherwise `# shellcheck disable=SCxxxx` **with a reason on the same comment**.'
+            echo
+            echo 'Do NOT lower `SEVERITY`, and do not add a file to an exclusion list: the kit being'
+            echo 'excluded everywhere is the reason this gate exists (#648).'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=shell-lint: shellcheck reported findings::See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate discovered ZERO shell files'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### shell-lint: no verdict"
+            echo
+            echo 'The gate discovered **zero** shell files. This repo demonstrably contains ~22,000'
+            echo 'lines of it, so this means **discovery broke** — not that the tree is clean.'
+            echo 'Examining nothing is a failure to audit, not a clean audit (#266).'
+            echo
+            echo 'Retrying will not help. Fix `is_shell` / the enumeration in `scripts/lint-shell.sh`.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=shell-lint: no verdict (permanent)::The gate linted zero files. See the job log."
+          exit 1
+
+      - name: 'COULD NOT RUN: no shellcheck, or no checkout'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '2' }}
+        run: |
+          echo "::error title=shell-lint: could not run::The gate could not execute (rc=2) — this is not a verdict about the tree. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","2","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=shell-lint: inconclusive::lint-shell.sh exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

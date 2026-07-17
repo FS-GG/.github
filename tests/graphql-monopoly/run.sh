@@ -37,10 +37,13 @@ echo "graphql-monopoly fixture — work='$WORK'"
 # gate_on <case> <markdown> -> sets $RC and $OUT
 gate_on() {
   local name="$1" body="$2" dir="$WORK/$1/.claude/skills/kit"
-  rm -rf "$WORK/$1"; mkdir -p "$dir"
+  # "${WORK:?}", not "$WORK": this is an `rm -rf`, and an unset/empty WORK would make it `rm -rf /$name`
+  # (SC2115). WORK is a mktemp -d and cannot realistically be empty — which is exactly the reasoning
+  # that makes an unguarded rm survive review until the day it is wrong. The guard costs nothing. #648
+  rm -rf "${WORK:?}/$name"; mkdir -p "$dir"
   printf '%s\n' "$body" > "$dir/SKILL.md"
   set +e
-  OUT="$(python3 "$GATE" --root "$WORK/$1" 2>&1)"
+  OUT="$(python3 "$GATE" --root "$WORK/$name" 2>&1)"
   RC=$?
   set -e
 }
