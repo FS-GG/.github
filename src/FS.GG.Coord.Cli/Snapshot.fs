@@ -346,17 +346,27 @@ module Snapshot =
         // Pre-parsed tokens, but still CLASSIFIED here — so an unmatchable reserved token is caught by
         // the same rule that catches it anywhere else (#273). It is the extraction, not the grammar,
         // that this side of the wire skips.
+        // #1150: `pathsUnreadable` is the writer saying "I hold a lock over this item but could not read
+        // its body", exactly as `bodyUnreadable` says it for a CANDIDATE. Its touch-set is UNKNOWN, not
+        // empty — `Unreadable`, which `Batch.schedule` reds the batch on, rather than `Undeclared`, a
+        // confident claim of no files that would let every candidate clear the lock (#496). Keyed on the
+        // field's PRESENCE, so a within-lease claim with real paths round-trips through the `paths` arm.
         let paths =
-            prop path "paths" el
-            |> Result.bind (asArray $"%s{path}.paths")
-            |> Result.bind (fun els ->
-                els
-                |> List.mapi (fun j t -> asString $"%s{path}.paths[%d{j}]" t)
-                |> collect)
-            |> Result.map (fun tokens ->
-                match tokens with
-                | [] -> Undeclared
-                | ts -> Declared(ts |> List.map TouchSet.classify))
+            match optProp "pathsUnreadable" el with
+            | Some v ->
+                asString $"%s{path}.pathsUnreadable" v
+                |> Result.map (fun reason -> Unreadable reason)
+            | None ->
+                prop path "paths" el
+                |> Result.bind (asArray $"%s{path}.paths")
+                |> Result.bind (fun els ->
+                    els
+                    |> List.mapi (fun j t -> asString $"%s{path}.paths[%d{j}]" t)
+                    |> collect)
+                |> Result.map (fun tokens ->
+                    match tokens with
+                    | [] -> Undeclared
+                    | ts -> Declared(ts |> List.map TouchSet.classify))
 
         let h = prop path "holder" el |> Result.bind (holder $"%s{path}.holder")
 
