@@ -333,6 +333,52 @@ module Client =
 
                 ExitGreen
 
+    /// `next`'s chore offer — condition 3's safe point, which `Chore.Boundary.AtNext` names: the worker is
+    /// idle and about to pick up work anyway.
+    ///
+    /// SILENT ON EVERY REFUSAL, which is `Chores.offer`'s whole contract — an offer is a COURTESY to a
+    /// worker who asked for something else, so nothing here may change `next`'s answer or its exit code.
+    ///
+    /// STDERR, NEVER STDOUT. `next`'s stdout is a machine contract: one line, the chosen item's ref, which a
+    /// caller reads with `$(…)`. A chore printed there would be read as an ITEM REF by every script that
+    /// already parses this command — the offer would corrupt the answer it is attached to. It is a message
+    /// to a human, and it goes where `sayRepoAdvisory` and `printChosen` already put messages to humans.
+    ///
+    /// It re-parses the snapshot rather than threading the `Request` out of `renderDecision`, because the
+    /// alternative changes that function's shape for `batch` and `take` as well — to avoid a pure re-parse
+    /// of a document already in hand. It is the SAME `Snapshot.parse` either way, so there is no second
+    /// spelling to drift (#485).
+    let private offerChoreAtNext (ctx: Context) (opts: Options) (doc: string) : unit =
+        // No worker id resolves ⇒ no lock is possible ⇒ no offer. `next` itself needs no worker, and that
+        // asymmetry is deliberate: the ANSWER does not touch a lock, the OFFER is nothing but one. Note this
+        // uses `Identity.resolve` directly rather than `worker`, which PRINTS a #419 warning and would make
+        // an idle `next` scold every worker on a shared session for a lock it is not going to take.
+        match Identity.resolve opts.Worker, Snapshot.parse doc with
+        | Error _, _
+        | _, Error _ -> ()
+        | Ok w, Ok request ->
+            let session = w.Session |> Option.map SessionId
+
+            // The repo the offer is FOR. `--repo` when given, else the checkout we are standing in — the
+            // same default `parseRef` uses for a bare ref. `choreLockRef` canonicalises it (`Governance` →
+            // `FS.GG.Governance`) and answers `None` for anything it does not know, so a typo cannot lock
+            // the wrong repo: it offers nothing, which is #979's lesson applied where a WRITE is at stake.
+            let repo =
+                opts.Repo
+                |> Option.orElse ctx.DefaultRepo
+                |> Option.defaultValue ""
+
+            // The snapshot's candidates are the UNFILTERED in-scope set — `Scan.snapshot` drops only PRs and
+            // out-of-scope repos, never a board column. That is what makes the chore rules reachable at all:
+            // `BLOCKER-CLEARED` needs a `Blocked` row and `CLOSED-ISSUE-NOT-DONE` needs a closed one, and
+            // bash filtered on `Status ∈ {Ready, Backlog}` BEFORE the engine was asked, so under it neither
+            // rule could ever have fired. `.github#669` leg 5 asked for exactly this snapshot and the port
+            // already carries it — this is the first caller to spend it.
+            let items = request.Candidates |> List.map (fun c -> c.Item)
+
+            Chores.offer ctx.Transport Chore.AtNext (WorkerId w.Id) session ctx.Owner repo items
+            |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
+
     let next (ctx: Context) (opts: Options) : int =
         // `next` is `batch` capped at one. The cap is the ONLY difference — the decision is identical, so
         // they cannot disagree.
@@ -353,6 +399,11 @@ module Client =
                     // honest "nothing schedulable right now." plus the per-item passed-over reasons, the shape
                     // `batch` already uses. The guessed list asserted causes `next` never observed (case 41).
                     printChosen opts.LeaseMinutes result
+
+                // AFTER the answer, and outside every failure path above: a chore is offered to a worker who
+                // already has what it came for. This is the conscription point (#733/§4.6) — the tool has no
+                // thread, so the next caller is it.
+                offerChoreAtNext ctx opts doc
 
                 ExitGreen
 
