@@ -30,10 +30,15 @@ Every other green path is anchored to a merged PR — a fact GitHub records, whe
 caught by the merge not existing. `--evidence` is the only one anchored to a free-text string, which makes
 its REFUSAL legs the ones most worth pinning.
 
-`state_reason` IS SERVED HERE AND THE ENGINE IGNORES IT — DELIBERATELY (#1028 decided #600's open
-question). `Done.fs:529` treats `completed` vs `not_planned` as load-bearing when it WRITES a close, and
-the read path (`Done.fs:232`) queries `number state` and never `stateReason`. That asymmetry is correct,
+THE CLOSE REASON IS SERVED HERE AND THE ENGINE IGNORES IT — DELIBERATELY (#1028 decided #600's open
+question). `Done.closeIssue` treats `completed` vs `not_planned` as load-bearing when it WRITES a close,
+and the read path (`Done.facts`) queries `number state` and never the reason. That asymmetry is correct,
 and it is two questions wearing one word:
+
+MIND THE TWO SPELLINGS — they are two different APIs, and this fixture is one of them. The WRITE is REST
+and its payload says `state_reason`; the READ is GraphQL, where the field is `stateReason`. `Done.facts`
+is the GraphQL read, so the GraphQL spelling is the one served below and the only one a read check could
+ever consult. Do not search this file for `state_reason` and conclude the pin is absent.
 
   * The WRITE is an ASSERTION. `done --flip` closing an issue asserts the work completed, so it records
     `completed`.
@@ -99,10 +104,11 @@ def closer_commit(oid, prs):
 def issue(number, closing_nodes, closer_nodes, state_reason="COMPLETED"):
     """A `Done.facts` response.
 
-    `stateReason` is served but NOT queried by the engine (`Done.fs:232` asks for `number state`). It is
-    here to PIN the #1028 decision that the read path is state_reason-blind on purpose — see the module
-    docstring. An extra field in a JSON response is ignored by a client that does not ask for it, so
-    serving it costs nothing today and goes red the day someone reads it.
+    `stateReason` is served but NOT queried by the engine (`Done.facts` asks for `number state`). It is
+    here to PIN the #1028 decision that the read path is close-reason-blind on purpose — see the module
+    docstring, which also explains why this is the GraphQL spelling and not REST's `state_reason`. An
+    extra field in a JSON response is ignored by a client that does not ask for it, so serving it costs
+    nothing today and goes red the day someone reads it.
     """
     return {"data": {"repository": {"issue": {
         "number": number, "state": "CLOSED", "stateReason": state_reason,

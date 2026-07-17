@@ -2565,7 +2565,7 @@ if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
   # would be a way of switching the stamp off, reached for by exactly the people it was not meant for.
   p170b="$(dp 'FS.GG.SDD#170' --evidence '' --worker w-dp)"; rc170b=$?
   printf '%s' "$p170b" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#170' \
-    && ok "#1028: BLANK evidence is REFUSED — red NOT-DONE (#600, Done.fs:172)" \
+    && ok "#1028: BLANK evidence is REFUSED — red NOT-DONE (#600, Done.verify)" \
     || bad "#1028: #170 blank evidence should refuse" "rc=$rc170b: $p170b"
   printf '%s' "$p170b" | grep -q 'the evidence offered for resolving it without one is blank' \
     && ok "#1028: ...saying the evidence is blank, not that no PR closes it (#266)" \
@@ -2584,12 +2584,15 @@ if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
     && ok "#1028: ...and the refusal POINTS AT the green path rather than dead-ending (#600)" \
     || bad "#1028: #170 bare must name the --evidence remedy" "$p170c"
 
-  # #1028 DECIDES #600's open question: the read path ignores `state_reason`, deliberately. #171 is closed
-  # as NOT_PLANNED — the state of an obsolete item or a transplanted duplicate, i.e. exactly the population
-  # `--evidence` was built to green. Requiring `completed` here would re-break #600 in the one place it
-  # exists to fix. The engine WRITES `state_reason: completed` (Done.fs:529) because that is an ASSERTION
-  # that work completed; the read asks whether the item is RESOLVED, and not_planned is a resolution. Two
-  # questions, one word. This leg goes red the day someone reads stateReason — which is the point.
+  # #1028 DECIDES #600's open question: the read path ignores the CLOSE REASON, deliberately. #171 is
+  # closed as NOT_PLANNED — the state of an obsolete item or a transplanted duplicate, i.e. exactly the
+  # population `--evidence` was built to green. Requiring `completed` here would re-break #600 in the one
+  # place it exists to fix. The engine WRITES `state_reason: completed` (`Done.closeIssue`, over REST)
+  # because that is an ASSERTION that work completed; the read (`Done.facts`, over GraphQL, where the
+  # field is `stateReason`) asks whether the item is RESOLVED, and not_planned is a resolution. Two
+  # questions, one word. This leg goes red the day someone reads it — which is the point. NOTE it is
+  # behaviourally identical to #170's green leg TODAY, and that is deliberate: it is the executable
+  # record of the decision, not extra coverage. See doneprov_server.py's docstring.
   p171="$(dp 'FS.GG.SDD#171' --evidence 'duplicate: detail transplanted into #838' --worker w-dp)"; rc171=$?
   { [ "$rc171" -eq 0 ] && printf '%s' "$p171" | grep -q 'FSGG-DONE   FS.GG.SDD#171'; } \
     && ok "#1028: an issue closed NOT_PLANNED still greens on evidence — state_reason is not read, BY DECISION (#600)" \
