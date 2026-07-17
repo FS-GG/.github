@@ -370,27 +370,91 @@ def engine_verbs(root: Path) -> list[str]:
 # `//` INSIDE A STRING IS NOT A COMMENT (`"https://…"`), so the scan tracks quote state rather than
 # calling `line.split("//")`. Escapes are honoured INSIDE a string (`\"` neither opens nor closes),
 # which keeps a printed `--message '\"…\"'` from inverting every span after it.
-def printed_spans(line: str) -> list[tuple[int, int]]:
-    spans: list[tuple[int, int]] = []
-    i = 0
-    start: int | None = None
-    while i < len(line):
-        c = line[i]
-        if c == "\\" and start is not None:
-            i += 2
-            continue
-        if c == '"':
-            if start is None:
-                start = i
-            else:
-                spans.append((start, i))
-                start = None
+#
+# IT IS PER-FILE, NOT PER-LINE, BECAUSE THE BIGGEST PRINTED STRING IN THE TOOL SPANS 101 LINES. A
+# line-at-a-time reader cannot see a `"""…"""` block: its interior lines contain no quote at all, so
+# every one of them reads as "not a string" and the whole of `--help` — the single most-read thing the
+# engine prints — is invisible to the rule. That is this gate's own #266 signature, and it would have
+# shipped inside the change written to close one.
+#
+# F# HAS THREE STRING FLAVOURS AND ALL THREE HAD TO BE READ, because getting one wrong does not fail
+# quietly here — it corrupts every line AFTER it:
+#
+#     "…"        regular      — `\"` escapes
+#     """…"""    triple       — spans lines; no escapes; interior quotes are literal
+#     @"…"       verbatim     — `""` is an escaped quote, a LONE `"` closes
+#
+# THE VERBATIM CASE IS NOT OPTIONAL, and `Fake.fs` is why: it holds `@"""sub_issue_id""\s*:…"`, a regex.
+# Read that with no verbatim branch and the `@` is skipped as an ordinary character, the `"""` behind it
+# opens a triple block that never closes, and the scanner runs to the END OF THE FILE marking every
+# remaining line as printed — silent false positives downstream of one regex nobody was looking at.
+# Measured: with the branch removed, a plain COMMENT two lines later is read as a printed remedy.
+#
+# (The branch's POSITION relative to the `"""` test is not what saves it — checked, and reordering them
+# changes nothing, because the `@` sits at the scan position and claims the token either way. It is the
+# branch EXISTING that matters. This parenthesis is here because the obvious comment to write was "so
+# `@"` is tested BEFORE `"""`", and that would have been a load-bearing-sounding claim about a line that
+# carries no load — the kind a later reader trusts and preserves for the wrong reason.)
+def printed_regions(text: str) -> list[tuple[int, str, list[tuple[int, int]]]]:
+    out: list[tuple[int, str, list[tuple[int, int]]]] = []
+    in_triple = False
+    for lineno, line in enumerate(text.splitlines(), 1):
+        spans: list[tuple[int, int]] = []
+        # Spans are EXCLUSIVE bounds (`a < pos < b`), so an open recorded at the first content column
+        # is stored as `content - 1`. A block inherited from an earlier line opens at column 0, hence
+        # the -1: a command starting in column 0 of a `"""` body is still inside the string.
+        open_at: int | None = 0 if in_triple else None
+        i = 0
+        while i < len(line):
+            if in_triple:
+                j = line.find('"""', i)
+                if j < 0:
+                    break  # the block runs past this line; the tail append below closes it at EOL
+                spans.append(((open_at or 0) - 1, j))
+                in_triple, open_at = False, None
+                i = j + 3
+                continue
+            if line.startswith('@"', i):  # verbatim — see the note above this function
+                start = i + 2
+                i += 2
+                closed = False
+                while i < len(line):
+                    if line.startswith('""', i):
+                        i += 2
+                        continue
+                    if line[i] == '"':
+                        spans.append((start - 1, i))
+                        i += 1
+                        closed = True
+                        break
+                    i += 1
+                if not closed:
+                    open_at = start
+                continue
+            if line.startswith('"""', i):
+                in_triple = True
+                open_at = i + 3
+                i += 3
+                continue
+            c = line[i]
+            if c == "\\" and open_at is not None:
+                i += 2
+                continue
+            if c == '"':
+                if open_at is None:
+                    open_at = i + 1
+                else:
+                    spans.append((open_at - 1, i))
+                    open_at = None
+                i += 1
+                continue
+            if c == "/" and open_at is None and line.startswith("//", i):
+                break  # a comment tail: nothing after it is printed, whatever it quotes
             i += 1
-            continue
-        if c == "/" and start is None and line.startswith("//", i):
-            break  # a comment tail: nothing after it is printed, whatever it quotes
-        i += 1
-    return spans
+        if open_at is not None:  # a string still open at EOL — a `"""` body, or a ragged literal
+            spans.append((open_at - 1, len(line)))
+        out.append((lineno, line, spans))
+    return out
 
 
 def printed_files(root: Path) -> list[tuple[Path, str]]:
@@ -576,8 +640,7 @@ def main(argv: list[str]) -> int:
                 text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            for lineno, line in enumerate(text.splitlines(), 1):
-                spans = printed_spans(line)
+            for lineno, line, spans in printed_regions(text):
                 for m in printed_call.finditer(line):
                     if not any(a < m.start() < b for a, b in spans):
                         continue  # a comment naming a command, not a remedy anybody pastes

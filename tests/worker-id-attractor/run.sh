@@ -465,6 +465,34 @@ find "$REAL_V/src" \( -name '*.fs' -o -name '*.fsi' \) \
 expect "rule 5: an engine that yields NO printed command at all is exit 3 — examining nothing is not a clean audit" \
   3 "found NO printed command" "$REAL_V"
 
+# (h) A MULTI-LINE `"""` STRING IS PRINTED TOO — and it is the biggest one the tool has. `--help` is a
+#     101-line triple-quoted block whose interior lines contain no quote at all, so a line-at-a-time
+#     reader calls every one of them "not a string" and the most-read output in the engine becomes
+#     invisible to this rule. Caught reviewing this change; pinned here so it cannot come back.
+REAL_W="$WORK/real-w"; cp -r "$REAL" "$REAL_W"
+python3 - "$REAL_W/src/FS.GG.Coord.Cli/Options.fs" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+# inject a broken remedy INTO the --help block, on an interior line (no quotes of its own)
+t = t.replace("DECISION (pure — no board, no network):",
+              "  run it:  fsgg-coord-engine claim <issue>\n\nDECISION (pure — no board, no network):", 1)
+p.write_text(t)
+PY
+expect "rule 5: a broken remedy inside the multi-line \`--help\` block IS caught — 101 lines with no quote of their own (#931)" \
+  1 "this PRINTS \`fsgg-coord-engine claim\`" "$REAL_W"
+
+# (i) ...and a VERBATIM `@"…"` must not open a `"""` block. `Fake.fs` holds `@"""sub_issue_id""…"` — a
+#     regex — and with no verbatim branch the `@` is skipped, the `"""` behind it opens a block that
+#     never closes, and every remaining line of the FILE reads as printed. This leg is shaped to catch
+#     exactly that: the assertion is a COMMENT placed AFTER the regex, which is a finding only if the
+#     leak reached it. Verified to red with the verbatim branch removed — the realistic regression, a
+#     later reader "simplifying" the scanner.
+REAL_X="$WORK/real-x"; cp -r "$REAL" "$REAL_X"
+printf '\nlet private _re = Regex.Match(body, @"""sub_issue_id""\\s*:\\s*(\\d+)")\n' >>"$REAL_X/$ENGINE_FS"
+printf '// and now a COMMENT naming `fsgg-coord-engine claim` — after the verbatim regex\n' >>"$REAL_X/$ENGINE_FS"
+expect "rule 5: a verbatim \`@\"…\"\` does not open a triple block that swallows the rest of the file (#931)" \
+  0 "ok: no literal worker id" "$REAL_X"
+
 echo
 echo "worker-id-attractor fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::worker-id-attractor fixture FAILED"; exit 1; }

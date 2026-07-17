@@ -300,15 +300,17 @@ fi
 # WHAT WAS BROKEN. `/pnext-item` §2 MANDATES an item worktree ("never work an item in the shared
 # checkout"), and a fresh worktree has no `bin/`. So tier 2a missed, tier 3 found no global tool, tier 4
 # found no manifest (`.github` has none — its engine is tier 2a), and the resolver died 69 for EVERY
-# worker following the recipe. The tool printed 25 commands into that: `fsgg-coord-engine <verb>` is 127
-# (`command not found`), and `scripts/fsgg-coord <verb>` was 69 — a MORE convincing failure, because it
-# looks like a real diagnostic. Both spellings were broken, which is why printing the other one was not
-# a fix and this tier is.
+# worker following the recipe. The tool printed dozens of commands into that: `fsgg-coord-engine <verb>`
+# is 127 (`command not found`), and `scripts/fsgg-coord <verb>` was 69 — a MORE convincing failure,
+# because it looks like a real diagnostic. Both spellings were broken, which is why printing the other
+# one was not a fix and this tier is. (#931 says "25 sites"; it was 31 by the time it was worked, across
+# verbs the issue never named. The thesis survived the drift; the count did not, so no number is pinned
+# here for the next reader to re-check — `check-worker-id-attractor.py` rule 5 counts them at run time.)
 #
 # DECIDED ON THE RECORD, not chosen here (#931). Three alternatives were weighed and rejected: shipping
 # the engine on PATH (a provisioning change, and it would make #569's fix wrong); printing
 # `scripts/fsgg-coord` and stopping (still 69 — the trade this tier exists to refuse); an absolute path
-# at runtime (correct, and unpasteable into any doc). This one fixes all 25 sites without changing what
+# at runtime (correct, and unpasteable into any doc). This one fixes every site without changing what
 # any of them print, and RETIRES the tribal note — *"run coord from the shared checkout"* — that every
 # bitten worker was carrying privately. #570: a rule enforced by whoever happens to remember it decays.
 #
@@ -332,7 +334,11 @@ fi
 # `dirty_guard "$SHARED"` is the #709 warning arriving at the reader who needs it. It fires by the same
 # rule, not an exception to it: $SHARED is a main working tree, so its `--git-dir` and `--git-common-dir`
 # agree and the exemption simply does not apply.
-SHARED="$(shared_toplevel)"
+# Only ASK when there is a git repo to ask about. `$TOP` empty means `rev-parse` already failed, so
+# `git worktree list` would fail too — and this line is on the RECEIVERS' hot path, where tiers 3/4
+# answer and every invocation would otherwise pay for a subprocess that cannot succeed.
+SHARED=""
+[ -n "$TOP" ] && SHARED="$(shared_toplevel)"
 if [ -n "$SHARED" ] && [ "$SHARED" != "$TOP" ]; then
   CANDIDATE="$(engine_path "$SHARED")"
   if [ -x "$CANDIDATE" ]; then
