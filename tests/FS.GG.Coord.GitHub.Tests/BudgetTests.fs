@@ -24,9 +24,15 @@ let private headers (pairs: (string * string) list) : string -> string option =
 //
 // `item_id` looked up an issue's board item. Under an exhausted GraphQL budget the lookup FAILED, and the
 // failure came back as the empty string — which the caller read as "this issue is not on the board". It
-// then printed a remediation telling the worker to run `item-add`, which CREATED A SECOND BOARD ITEM for
-// an issue that already had one. A budget failure did not merely report the wrong thing; it corrupted the
-// board, and it did so while sounding helpful.
+// then printed a remediation telling the worker to run `item-add` for an issue that already had a board
+// item. A budget failure did not merely report the wrong thing; it turned "I could not ask" into "the
+// answer is no", and it did so while sounding helpful.
+//
+// It did NOT create a second board item (#871): `addProjectV2ItemById` is idempotent server-side, so the
+// remediation would have been a no-op. #421's text was explicitly counterfactual — a duplicate "would
+// have" been created "had I followed it" — and that hedge hardened into a fact as it was copied into the
+// source. The classifier below is load-bearing for the reason #421 actually earned, which needs no
+// duplicate: unreachable is not absent.
 
 [<Fact>]
 let ``#421 a rate-limited failure classifies as RateLimited, never as NotFound`` () =

@@ -347,9 +347,13 @@ module Board =
 
         match transport.Send request with
         // #421, AND IT IS THE WHOLE FUNCTION. An exhausted budget propagates as `RateLimited`. It does NOT
-        // become `Ok None` — because `Ok None` is what licenses `item-add`, and adding an item on a failed
-        // lookup CREATES A DUPLICATE for an issue that was already on the board. A failed lookup is not an
-        // absence.
+        // become `Ok None` — because `Ok None` is what licenses `item-add`, and a failed lookup is not an
+        // absence. Answering "not on the board" from a read that did not happen is a definite answer built
+        // on no information, which is #266's class and the whole of #421.
+        //
+        // NOT because the add would duplicate the row (#871): `addProjectV2ItemById` is idempotent
+        // server-side and resolves to the existing item — see `addItem` for the measurement. The guard is
+        // about the ANSWER, not the row.
         | Error e -> Error e
         | Ok response ->
 

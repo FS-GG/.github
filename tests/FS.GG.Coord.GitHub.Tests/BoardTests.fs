@@ -72,15 +72,18 @@ let private scripted (responses: IoResult<Response> list) =
 let ``#421 a rate-limited item lookup is RateLimited - it is NEVER 'not on board'`` () =
     // THE INCIDENT, IN ONE ASSERTION. Under an exhausted budget the lookup failed, the failure came back as
     // the empty string, and the caller read it as "this issue is not on the board" — then printed a
-    // remediation telling the worker to run `item-add`, which CREATED A SECOND BOARD ITEM for an issue that
-    // already had one.
+    // remediation telling the worker to run `item-add` for an issue that already had a board item.
+    //
+    // The damage was the ANSWER, not a row: `addProjectV2ItemById` is idempotent server-side, so following
+    // that remediation would have printed an id and changed nothing (#871). What #421 actually caught is a
+    // definite "no" manufactured from a read that never happened — #266's class.
     //
     // `Ok None` is what licenses an `item-add`. It must be UNREACHABLE from a failure.
     let transport = failing (RateLimited(UnknownBudget, None))
 
     match itemId transport board "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
-    | Ok None -> failwith "a rate-limited lookup reported the item ABSENT — this is #421, and it creates a duplicate board item"
+    | Ok None -> failwith "a rate-limited lookup reported the item ABSENT — this is #421: 'could not ask' became 'the answer is no'"
     | other -> failwith $"expected RateLimited — got %A{other}"
 
 [<Fact>]
@@ -119,7 +122,7 @@ let ``#421 addItem REFUSES to add on a failed lookup - and spends no mutation`` 
 
     match addItem transport board "FS-GG" "FS.GG.SDD" 42 with
     | Error(RateLimited _) -> ()
-    | Ok(AddedToBoard _) -> failwith "added the item on a FAILED lookup — this is #421, and it duplicates a board row"
+    | Ok(AddedToBoard _) -> failwith "added the item on a FAILED lookup — this is #421: it reports AddedToBoard for an issue whose presence was never established"
     | other -> failwith $"expected RateLimited — got %A{other}"
 
     Assert.Equal(1, transport.GraphQlCalls)

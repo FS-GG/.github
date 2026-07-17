@@ -6,8 +6,8 @@ namespace FS.GG.Coord.GitHub
 /// read anything; every one of epic #266's 51 children lives out here instead, in the layer that can. The
 /// bash client's substrate makes the mistake nearly free — an error, an empty result, and a legitimate
 /// "no" are all the empty string — and it paid for that with #344 (a confident empty board), #421 (a
-/// rate-limited lookup reported as "not on board", with a remediation that CREATES A DUPLICATE), and #461
-/// (a truncated page read as "nobody holds this lock").
+/// rate-limited lookup reported as "not on board", complete with a remediation for the absence it had
+/// invented), and #461 (a truncated page read as "nobody holds this lock").
 ///
 /// So there is no function here that returns a bare value. A read returns `IoResult`, and the caller
 /// cannot get at the value without saying what it will do when there isn't one.
