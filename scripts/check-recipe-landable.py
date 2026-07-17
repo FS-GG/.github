@@ -84,6 +84,15 @@ ROOTS = (".claude/skills", ".agents/skills", "docs/coordination")
 # The workflows it governs (#737). Scanned by PARSING, not by fence — see the docstring.
 WORKFLOW_ROOT = ".github/workflows"
 
+# WHAT THIS GATE READS, FOR THE WORKFLOW THAT RUNS IT (#996, epic #266). `check-paths-coherence.py`
+# reads this BY AST and reds `recipe-landable.yml` if its `paths:` does not select every entry.
+#
+# Already correct, and declared anyway — see check-graphql-monopoly.py: a rule that is only ever
+# exercised on violators is one nobody can trust. Note WORKFLOW_ROOT is a real part of the subject
+# and not padding: #737 extended this gate to `jobs.*.steps[*].run`, so a hand-rolled landable check
+# growing back in a WORKFLOW is exactly what it now watches for — and the trigger has to see it.
+PATHS_SUBJECT = ROOTS + (WORKFLOW_ROOT,)
+
 FENCE = re.compile(r"^```(\w*)\s*$")
 
 # The escape hatch, in the comment syntax of the thing being scanned. A recipe is markdown, so it is an

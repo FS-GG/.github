@@ -94,6 +94,23 @@ from pathlib import Path
 ROOTS_DECL = ".agent-skill-roots"
 FALLBACK_ROOTS = (".claude/skills", ".agents/skills")
 
+# WHAT THIS GATE READS, FOR THE WORKFLOW THAT RUNS IT (#996, epic #266).
+#
+# `check-paths-coherence.py` reads this BY AST and reds `recipe-pagination.yml` if its `paths:` does
+# not select every entry. It did not: the filter listed the two fallback roots and NOT `ROOTS_DECL`
+# itself — and the paragraph directly above is this gate refusing that exact fail-open one layer
+# down. It says a second copy of the root list here would mean "a root added to the declaration is
+# silently NOT audited… That is the #266 fail-open this gate exists to close."
+#
+# Reading the declaration at run time closed it INSIDE the gate, and the gate's TRIGGER reopened it:
+# a PR adding a root to `.agent-skill-roots` and nothing else did not run this workflow, so the new
+# root's recipes were unaudited and the gate stayed green — by never being asked. The reasoning that
+# put ROOTS_DECL in the script is the same reasoning that puts it here.
+#
+# The roots are read at RUN time and a workflow filter is static, so the SUBJECT is the declaration
+# file plus the fallbacks — never the roots this tree happens to declare today.
+PATHS_SUBJECT = (ROOTS_DECL,) + FALLBACK_ROOTS
+
 FENCE_LANGS = {"sh", "bash", "shell", "console"}
 
 WRITE_VERBS = {"POST", "PUT", "PATCH", "DELETE"}
