@@ -577,6 +577,55 @@ contracts:
     owner: rendering
     surface: "FS.GG.UI.KeyboardInput public .fsi — Keymap (value type + rebind ops), Keymap.resolve + conflict diagnostics, keyboard input-config-screen surface; ships in the fs-gg-ui coherent set (FS.GG.UI.KeyboardInput package)"
     consumers: [game]         # FS.GG.Game.Render's default command→key keymap consumes the Keymap surface (FS.GG.Game#109 / PR #115, merged 2026-07-10 against the published 0.5.0). Establishes a SECOND game -> rendering edge (see dependencies:), alongside game-scene-adapter -> FS.GG.UI.Scene.
+  # .github IS a producer (ADR-0039 §5), and its two packages were absent from this inventory — so
+  # check-feed-coherence.py, whose subject IS this file, had no subject for either (.github#1067).
+  # The org's package inventory was off by two. These rows close that.
+  - id: coord-engine
+    version: "0.3.0"          # SOURCE SemVer — src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj <Version>, in THIS repo. release-coord-engine.yml evaluates that property (dotnet msbuild -getProperty:Version) and requires any `coord-engine/v<version>` tag to match it, so the fsproj is the source of truth and the tag is a coherence check against it — never the other way round.
+    package-version: "0.3.0"  # FEED newest, VERIFIED LIVE on nuget.pkg.github.com/FS-GG 2026-07-17 (serves 0.3.0 + 0.2.0 + 0.1.1 + 0.1.0). Not inferred from the tag: a tag is not a publish (see the fs-gg-ui-template PHANTOM 0.9.1 note above).
+    owner: github
+    # ⚠ READ THIS BEFORE TRUSTING THE TWO SCALARS ABOVE. They are EQUAL, and `feed-coherence` is GREEN
+    # over them — while 30 engine commits sit UNRELEASED on main (measured 2026-07-17: `git log
+    # coord-engine/v0.3.0..main -- src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub`
+    # = 30, and <Version> is UNCHANGED since that tag). That is not a stale comment — it is the state
+    # this row was ADDED in, and it is the whole reason #1067 exists.
+    #
+    # WHY A GREEN ROW CANNOT SEE IT. This engine's <Version> moves only AT RELEASE TIME, by hand. Every
+    # other producer's source version moves with the CHANGE (SDD#387 put `fsproj <Version> ==
+    # Fsgg.ContractVersion.value` in SDD itself, so a surface edit that skips the bump reds SDD's own
+    # PR). So for them `version` drifting ahead of `package-version` is the legible "merged, not yet
+    # published" signal. Here that signal DOES NOT EXIST: source-outran-feed holds <Version> CONSTANT,
+    # so version == package-version is precisely the state the bug lives in.
+    #
+    # So this row buys the PUBLISHED-BUT-REGISTRY-STALE direction (real: the .github#250 class has hit
+    # other rows 7+ times — publish 0.4.0 without flipping this and feed-coherence reds, correctly).
+    # It does NOT buy the direction this engine actually fails in. Nothing does yet: .github#1075 is
+    # the detector, and it measures COMMITS SINCE THE RELEASE TAG rather than comparing two scalars
+    # that are equal by construction while the defect is happening. Do not read this row's green as
+    # "the fleet is running current code" — those are different facts (epic #266).
+    surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
+    consumers: [sdd, rendering, governance, templates, game, audio]   # the SIX coordination-kit receivers (registry/repos.yml `receives: coordination-kit`) — NOT the build-config four. `scripts/fsgg-coord` is kit-borne and resolves this package and `exec`s it, so a receiver that cannot restore it "has no coordination tool at all — not a slower one, none" (release-coord-engine.yml). A TOOL edge, not a contract-surface one, and real either way: fsgg-surface-impact reads this list to say who a verb/exit-code change must flag. `.github` itself is NOT listed — it resolves the engine via THE SOURCE BUILD (`scripts/fsgg-coord`'s own name for that tier; the tier NUMBERS moved in #1018 and the names cannot rot, so this names it), not by restoring the package.
+  # FS.GG.NewSddWorkspace IS STILL ABSENT, AND THAT IS NOW A DELIBERATE, RECORDED GAP — NOT AN
+  # OMISSION NOBODY NOTICED (which is the decision that produced .github#1067 in the first place).
+  # It is BLOCKED on FS-GG/FS.GG.SDD#508, filed from here: the typed validator refuses the only honest
+  # row it could have. MEASURED against `fsgg-sdd registry validate` 0.12.0, not inferred:
+  #
+  #   { "entry": "new-sdd-workspace", "rule": "MissingField",
+  #     "message": "Contract 'new-sdd-workspace' is missing a non-empty 'consumers'." }
+  #
+  # Nothing restores that package — it is a `dotnet new` template humans install, and this repo's own
+  # fixture builds it from SOURCE, not from the feed — so `consumers: []` is the true value and the
+  # schema will not carry it. The remaining moves are (a) invent a consuming repo, which is a lie a
+  # gate would then enforce, or (b) drop the row, which is how the inventory went off by two. Neither
+  # is available, so the row waits on the schema, in the open, with its blocker named.
+  #
+  # Fsgg.Registry lives in FS.GG.SDD, so .github CANNOT fix this: no PR spans both repos, and growing
+  # the schema is a governed two-ordered-PR change (see the schemaVersion note above) — SDD teaches the
+  # validator and publishes a CLI, THEN .github bumps + pins to it. The real question is what this
+  # registry IS: a contract GRAPH (where a consumerless package does not belong) or the org's package
+  # INVENTORY (where it must). That is an architectural call, which is why it is filed rather than
+  # guessed. It is the coord-engine defect ASLEEP: 0 commits sit unreleased today, so it is invisible
+  # rather than fixed, and .github#1075's detector must acquire it as a subject when the row lands.
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:

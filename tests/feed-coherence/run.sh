@@ -49,6 +49,10 @@ contracts:
   - { id: game-sim-core,                 version: "0.2.0",           package-version: "0.2.0" }
   - { id: game-scene-adapter,            version: "0.2.0",           package-version: "0.2.0" }
   - { id: fs-gg-audio,                   version: "0.1.0-preview.1", package-version: "0.1.0-preview.1" }
+  # .github's own engine (.github#1067). Carried here because the gate's ORPHAN check is live: a
+  # CONTRACT_PACKAGES entry with no contract in the registry under test is an error, so every real
+  # mapping must appear in this synthetic registry too.
+  - { id: coord-engine,                  version: "0.3.0",           package-version: "0.3.0" }
   - { id: shared-build-config,           version: "1.0.0" }
 YAML
 
@@ -65,7 +69,8 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Audio.Core":                  ["0.1.0-preview.1"],
   "FS.GG.Audio.Host":                  ["0.1.0-preview.1"],
   "FS.GG.Audio.Engine":                ["0.1.0-preview.1"],
-  "FS.GG.Audio.Elmish":                ["0.1.0-preview.1"]
+  "FS.GG.Audio.Elmish":                ["0.1.0-preview.1"],
+  "FS.GG.Coord.Cli":                   ["0.3.0", "0.2.0", "0.1.1", "0.1.0"]
 }
 JSON
 
