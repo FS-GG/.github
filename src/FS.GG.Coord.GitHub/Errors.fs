@@ -37,8 +37,9 @@ module Errors =
         // NOTE a `NotFound` is NOT `EX_OFFBOARD`. `EX_OFFBOARD` means "this issue is not an item on the
         // BOARD" — a fact about the project, discovered on a successful read. A 404 from the issues API
         // means the ISSUE is not there. Collapsing them would let a mistyped repo masquerade as an
-        // un-boarded item and trigger the `item-add` remediation, which is #421's duplicate-creating
-        // failure wearing a different hat.
+        // un-boarded item and trigger the `item-add` remediation — #421's failure wearing a different hat:
+        // a definite answer about the board, derived from a read that never established anything about it.
+        // (Not a duplicate row; that mechanism does not reproduce — #871.)
         | NotFound _
         | Unauthorized _
         | Malformed _

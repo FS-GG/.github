@@ -11,10 +11,21 @@ namespace FS.GG.Coord.GitHub
 ///
 /// **#421 — an exhausted budget is not an absent item.** `item_id` resolved an issue's board item. Under a
 /// dead budget the lookup failed, the failure came back as the empty string, and the caller read that as
-/// *"this issue is not on the board"* — then printed a remediation telling the worker to run `item-add`,
-/// which CREATED A SECOND BOARD ITEM for an issue that already had one. A budget failure did not merely
-/// report the wrong thing. It corrupted the board, while sounding helpful. So `Offboard` is a case here,
-/// it is reached only from a SUCCESSFUL read, and `RateLimited` can never become it.
+/// *"this issue is not on the board"* — then printed a remediation telling the worker to run `item-add`
+/// for an issue that already had a board item. A budget failure did not merely fail; it produced a
+/// DEFINITE ANSWER out of a read that never happened, and sounded helpful doing it. So `Offboard` is a
+/// case here, it is reached only from a SUCCESSFUL read, and `RateLimited` can never become it.
+///
+/// **What #421 did NOT do is corrupt the board, and the correction matters** (#871). This header, and
+/// eight other comments across five more files, asserted that it did — three of them in these very
+/// words: the remediation *"CREATED A SECOND BOARD ITEM"*. It did not:
+/// `addProjectV2ItemById` is idempotent server-side — for an issue already on the board it resolves to
+/// that item's existing id and adds nothing (measured against the live Coordination board, #861/#871;
+/// the board carries 1,124 items and 1,124 distinct content ids). #421's own text was careful and
+/// counterfactual — a duplicate *"would have"* been created *"had I followed it"* — and the hedge
+/// hardened into an assertion as it was copied inward. The rule it drew is untouched and right; only
+/// this stated mechanism was wrong. Do not weaken the guard: it stops a definite answer built on no
+/// information, which is the defect. It was never what stopped a duplicate row — GitHub is.
 ///
 /// **#510 — the tool promised a write it dropped.** Only `claim` deferred its board write on an exhausted
 /// budget; `set-field` and `done --flip` printed the same *"the write is QUEUED"* sentence and threw the

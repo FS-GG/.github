@@ -325,8 +325,9 @@ let ``an issue body we could NOT read is an error - never an empty touch-set`` (
 [<Fact>]
 let ``#421 a rate-limited read propagates as RateLimited - never as 'not there'`` () =
     // The read layer must carry the budget failure OUT, intact. The moment it degrades to an empty result
-    // the caller cannot tell an exhausted budget from an absent subject — and the remediation for the
-    // second one CREATES A DUPLICATE BOARD ITEM.
+    // the caller cannot tell an exhausted budget from an absent subject — and it then acts on the second
+    // one, with all the confidence of a read it never got (#421). The remediation itself is harmless — an
+    // `item-add` for an issue already on the board is idempotent (#871); the invented certainty is not.
     let recorder = failing (RateLimited(UnknownBudget, None))
 
     match Reads.markers recorder "FS-GG" "FS.GG.SDD" 42 with
