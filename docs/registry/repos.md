@@ -137,8 +137,11 @@ which is **generated** — regenerate it with `scripts/repos.sh relock` (the dig
 
 `repos.lock` is a **generated, CI-gated artifact** ([#309](https://github.com/FS-GG/.github/issues/309)):
 nobody authors it, `repos-registry-selftest` fails on any drift in it, and a collision in it is a
-rebase rather than a decision. **Do not reserve it in a `Paths:` touch-set** — regenerate it and name
-it as expected drift in the PR. The digests used to be a `sha256:` field on each `kit:` row, which
+rebase rather than a decision. **Do not reserve it in a `Paths:` touch-set** — regenerate it and commit
+it; `verify-paths` asks `repos.sh relock --list` what it emits and reports the lock under
+`regenerated (expected):` rather than as drift, so there is nothing to explain in the PR
+([ADR-0044](../adr/0044-generated-artifacts-are-derived-from-their-generators.md),
+[#498](https://github.com/FS-GG/.github/issues/498)). The digests used to be a `sha256:` field on each `kit:` row, which
 forced every kit edit to reserve the whole authored roster and serialised them all against each other
 ([#527](https://github.com/FS-GG/.github/issues/527)).
 

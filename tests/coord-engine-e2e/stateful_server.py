@@ -284,8 +284,20 @@ class Handler(BaseHTTPRequestHandler):
             pr = int(m.group(1))
             # PR #500: changes only files under issue #43's touch-set (src/Other/**) → OK.
             # PR #501: also touches docs/x.md, OUTSIDE src/Other/** → DRIFT.
+            #
+            # #498/ADR-0044 — a GENERATED, CI-gated artifact is outside the touch-set by the letter of the
+            # declaration and is NOT drift: §1 forbids declaring it, so reporting it is the gate firing on
+            # its own instruction. `registry/repos.lock` is the stand-in, and it is deliberately a path the
+            # REAL `scripts/generated-paths` emits, so a leg pointed at the real roster and a leg pointed
+            # at a stub agree about what the subtractable set contains.
+            # PR #502: regenerated ONLY          → OK, with the artifact reported as expected.
+            # PR #503: regenerated + real drift  → DRIFT naming ONLY docs/x.md as reviewable.
             files = [{"filename": "src/Verify/Foo.fs"}]
             if pr == 501:
+                files.append({"filename": "docs/x.md"})
+            if pr in (502, 503):
+                files.append({"filename": "registry/repos.lock"})
+            if pr == 503:
                 files.append({"filename": "docs/x.md"})
             return self._send(200, files)
 

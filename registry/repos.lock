@@ -8,6 +8,6 @@
 # expected drift in the PR.
 e870bb67d41b1e70232c1fa5abf62faefa0086dd15b04fb04454cd94787141a7  .claude/skills/check-board
 2bc35ac87142c94246da4a14fb47ec85edd2f5c25cd18300a671e78b2bbc07e6  .claude/skills/cross-repo-coordination
-2c352f61b8b0cc0e59bfa175b1f01a8419c08cb434f6bb3e2c2311981e6f5bb5  .claude/skills/intra-repo-parallel-work
-c2ff1f8b32a1ed963d26f432d3a2288b1b07795245b4ac5d3cf139135f914486  .claude/skills/pnext-item
+0fd6c04e57dfc6d1f247f8d3e43165334d728012ba7934085717f50b83179fec  .claude/skills/intra-repo-parallel-work
+cc8ba78584f08f7d91f942da0ac37d638a74ad489b18e58160ea9828e31209c0  .claude/skills/pnext-item
 a05f04b448105503fac390df79c165e00942e5ecf7e03c66e9ed5f38c424987a  scripts/fsgg-coord
