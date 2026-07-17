@@ -127,6 +127,30 @@ So invert the dependency: `docs/coordination/parallel-work.md` and the four `SKI
 **emitted from the typed model** and guarded by a regeneration gate, exactly like `registry/repos.lock`.
 A rule then cannot land in one tier and not the others, because there are no longer tiers.
 
+> **Amendment (2026-07-17, [#732](https://github.com/FS-GG/.github/issues/732)). Phase 4.4 — folding
+> the hand-written per-rule gates INTO the regeneration gate — is rejected. The per-rule gates are
+> KEPT; they are complementary to the regeneration gate, not superseded by it.**
+>
+> This section retires *tiers of a projection* — it makes the docs regenerate from the model so a rule
+> cannot land in the skill and not the doc. Phase 4.4 read that as license to also retire the
+> **content** gates (`check-worker-id-attractor.py`, `check-graphql-monopoly`, the recipe-pagination /
+> landable / followup checks, …) on the theory that a fully-emitted corpus can no longer drift.
+>
+> **It can't, and that is exactly the confusion.** The regeneration gate answers one question — *does
+> the emitted text match what the model would emit?* — and it answers it by comparing the tree against
+> **itself**. The per-rule gates answer a different question — *is the property this gate exists to
+> protect actually true?* (no worker-id attractor in the prose; no second GraphQL principal; every
+> `gh api` LIST read paginated; no hand-rolled `landable`). A regenerated, byte-perfect corpus that
+> **emits an attractor** is green under the regeneration gate and caught only by the per-rule gate.
+> Fold them and that coverage is gone: the fold trades a gate that checks *a truth about the world* for
+> one that checks *internal consistency*, and those are not the same gate.
+>
+> This was investigated **four times independently** (workers converging on the same refusal, incl.
+> `brant-de4f`'s Test B) — the property holds at **any** Phase-4 completeness, so "the projections are
+> finished now" never becomes an argument for the fold, and #889 closing is a red herring. #732 is
+> closed **decided-won't-do**; read Phase 4.4 as retired. The regeneration gate owns *projection
+> coherence*; the per-rule gates own *the properties a projection can be coherent and still violate*.
+
 **5. Migration is shadow-mode. Bash stays authoritative until divergence is zero.**
 
 The engine ships behind `--engine=fs`, defaulting off. Both engines run on every invocation; bash's
