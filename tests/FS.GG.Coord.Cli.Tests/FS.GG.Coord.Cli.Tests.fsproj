@@ -21,6 +21,7 @@
     <Compile Include="RepoScopeTests.fs" />
     <Compile Include="RefParseTests.fs" />
     <Compile Include="TouchSetLintTests.fs" />
+    <Compile Include="EpicVerdictTests.fs" />
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
   </ItemGroup>
