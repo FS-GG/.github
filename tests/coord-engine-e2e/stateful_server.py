@@ -20,7 +20,7 @@ import re
 import sys
 import threading
 from datetime import datetime, timezone
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOCK = threading.Lock()
 
@@ -200,17 +200,35 @@ def graphql(query: str, variables: dict):
     return None
 
 
+# HTTP/1.1 with a THREAD PER CONNECTION, together, on purpose (#1172). The compiled engine drives this
+# through .NET's `HttpClient`, which POOLS keep-alive connections and reuses one across the CAS's
+# post-marker → re-read pair. The default `BaseHTTPRequestHandler` speaks HTTP/1.0 and CLOSES every
+# connection (`will_close=True`), so the pool reuses a socket the server is tearing down; under CI load
+# the client writes the re-read onto that half-closed socket and the framing desyncs — the re-read
+# misses the just-posted marker and a second worker "wins" a lock it should have lost. That is #761's
+# shape ("a fixture that spoke HTTP/1.0 at a pooling client"), one suite over.
+#
+# HTTP/1.1 keeps the connection alive with the Content-Length framing `_send` already writes, so the
+# pool's reuse is legal instead of a race. But a kept-alive connection the client holds open would
+# then BLOCK a single-threaded server's accept loop — deadlocking the moment the engine opens a second
+# connection (its multi-repo off-board scan does) — so the server must serve each connection on its own
+# thread. The module `LOCK` already guards every shared-state access, which is what makes that safe.
 class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, *a):
         pass
 
     def _send(self, status, payload):
-        body = json.dumps(payload).encode()
+        # A 204/304 carries no body; under HTTP/1.1 keep-alive a stray body would desync the NEXT
+        # request on the connection — reintroducing, on the DELETE path, the very race this fix closes.
+        body = b"" if status in (204, 304) else json.dumps(payload).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if body:
+            self.wfile.write(body)
 
     def _body(self):
         n = int(self.headers.get("Content-Length", 0))
@@ -384,7 +402,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    server = HTTPServer(("127.0.0.1", 0), Handler)
+    # ThreadingHTTPServer: a thread per connection, so a client's idle keep-alive connection never
+    # starves the accept loop. `daemon_threads = True` (its default) keeps `kill <pid>` immediate.
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     print(server.server_address[1], flush=True)
     server.serve_forever()
 
