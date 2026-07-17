@@ -25,6 +25,11 @@ let private closer n =
       Oid = "abc1234"
       ClosesThis = true }
 
+/// A merged PR the issue's own CLOSED_EVENT names as the closer, whose BODY never named the issue — so
+/// GitHub does NOT list it in `closedByPullRequestsReferences` at all. This is the #558 case, in the shape
+/// GitHub actually returns it (#928).
+let private eventCloser n = { closer n with ClosesThis = false }
+
 /// A closed issue with a merged PR and no children — the ordinary green case.
 let private closedByPr =
     { Ref = aRef
@@ -44,23 +49,88 @@ let ``a closed issue with a merged PR is DONE`` () =
     | other -> failwith $"a merged PR closes it — got %A{other}"
 
 [<Fact>]
-let ``the CLOSED_EVENT rescues a PR whose BODY never carried the keyword`` () =
+let ``#928 the CLOSED_EVENT rescues a PR whose BODY never carried the keyword - and it is NOT listed`` () =
     // `gh pr create --fill` maps the COMMIT SUBJECT to the PR TITLE. So a worker whose commit reads
     // `fix: the thing (closes #NNN)` puts the keyword where `closingIssuesReferences` NEVER LOOKS — and the
     // squash commit still closes the issue.
     //
     // A correct, merged, green PR therefore stamped RED. Permanently: editing a merged PR's body does not
     // backfill the reference. The CLOSED_EVENT's closer is the record of the ACT, and it is what saves this.
-    // The PR is LISTED (a merge that closed the issue is), but its body never named the issue — so it is
-    // not a `ClosesThis` closer. GitHub's own CLOSED_EVENT names it, and that is what saves the stamp.
+    //
+    // THE FIXTURE IS THE POINT (#928). This test used to assert `ClosingPrs = [ closer 399 ]` — "the PR is
+    // LISTED (a merge that closed the issue is)" — and that premise is FALSE. A PR whose body never named the
+    // issue is absent from `closedByPullRequestsReferences` ENTIRELY, because GitHub builds that connection
+    // FROM the body linkage. Measured on .github#622 / PR #926: the reference list is [], the close event
+    // names the squash commit, and the commit names the merged PR.
+    //
+    // So the old fixture hand-built the one state in which leg (B) was reachable — it proved the FILTER
+    // worked and never touched the case #558 exists for, which is why the bug shipped green and stayed green.
     let facts =
         { closedByPr with
-            ClosingPrs = [ { closer 399 with ClosesThis = false } ]
-            CloserPrs = [ 399 ] }
+            ClosingPrs = []
+            CloserPrs = [ eventCloser 399 ] }
 
     match verify None None facts with
     | Green(ClosedByPullRequest(399, _, _)) -> ()
     | other -> failwith $"the closing ACT must be honoured, not just the closing PROSE — got %A{other}"
+
+[<Fact>]
+let ``#928 a LISTED PR whose body never carried the keyword is still rescued`` () =
+    // The other shape: GitHub does list the PR (some other reference put it there) but its body never named
+    // the issue, so it is not a `ClosesThis` closer. The union must not regress the case that already worked —
+    // and the candidate must not be DUPLICATED into the set when both records carry it.
+    let facts =
+        { closedByPr with
+            ClosingPrs = [ { closer 399 with ClosesThis = false } ]
+            CloserPrs = [ eventCloser 399 ] }
+
+    match verify None None facts with
+    | Green(ClosedByPullRequest(399, _, _)) -> ()
+    | other -> failwith $"a listed non-ClosesThis closer named by the event is still a closer — got %A{other}"
+
+[<Fact>]
+let ``#928 an UNMERGED closer named by the close event does NOT stamp - the union cannot launder`` () =
+    // THE SOUNDNESS EDGE OF THE UNION, and the reason `CloserPrs` carries merge facts rather than bare
+    // numbers. `associatedPullRequests` returns the PRs that CONTAIN the closing commit — which need not be
+    // merged ones. Admitting a closer by ASSUMING it merged would re-open the #543 leg-2 hole through the
+    // very door #928 opened: `Merged` is still required of a candidate, whichever record produced it.
+    let facts =
+        { closedByPr with
+            ClosingPrs = []
+            CloserPrs = [ { eventCloser 399 with Merged = false } ] }
+
+    match verify None None facts with
+    | Red reasons ->
+        // AND IT SAYS SO HONESTLY — it must not claim the close event named nothing (#928 ask 3).
+        Assert.Contains(reasons, fun r -> r.Contains "#399" && r.Contains "MERGED")
+        Assert.DoesNotContain(reasons, fun r -> r.Contains "names no PR or commit")
+    | other -> failwith $"an unmerged closer has landed no work — got %A{other}"
+
+[<Fact>]
+let ``#928 --pr names a closer the reference list never listed`` () =
+    // `--pr 926` on .github#622 reported, WRONGLY, "PR #926 does not close this issue" — it filtered the same
+    // empty list. The override reaches the union too, and is still held to the same closer predicate.
+    let facts =
+        { closedByPr with
+            ClosingPrs = []
+            CloserPrs = [ eventCloser 399 ] }
+
+    match verify (Some 399) None facts with
+    | Green(ClosedByPullRequest(399, _, _)) -> ()
+    | other -> failwith $"--pr must reach a closer the event named — got %A{other}"
+
+[<Fact>]
+let ``#928 the union does not disturb #342 - the latest-merged closer still wins`` () =
+    // The union ADDS a source; it must not soften a single test below it. Provenance still decides among true
+    // closers, across both records: an event-named closer that merged LATER outranks a listed one.
+    let facts =
+        { closedByPr with
+            ClosingPrs = [ { closer 89 with MergedAt = "2026-01-01T00:00:00Z"; Oid = "1111aaa" } ]
+            CloserPrs = [ { eventCloser 95 with MergedAt = "2026-03-01T00:00:00Z"; Oid = "2222bbb" } ] }
+
+    match verify None None facts with
+    | Green(ClosedByPullRequest(95, "2222bbb", _)) -> ()
+    | other -> failwith $"the latest-merged closer wins across BOTH records — got %A{other}"
 
 // ---- #600: the green path for work resolved WITHOUT a PR --------------------------------------------
 
