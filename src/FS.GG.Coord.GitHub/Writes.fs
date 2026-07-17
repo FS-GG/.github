@@ -26,6 +26,11 @@ module Writes =
         | Undecided of reason: string
         | BlockedByUnparseableMarker
 
+    type HeldOutcome =
+        | Holds of Held
+        | DoesNotHold
+        | TwinHolds of theirs: SessionId
+
     [<Sealed>]
     type Reapable
         internal (ref: Ref, worker: WorkerId, markerId: int64, previousStatus: BoardStatus option) =
@@ -80,6 +85,24 @@ module Writes =
             | None -> ""
 
         $"<!-- fsgg:claim worker=%s{worker.Value} lease=%d{leaseMinutes}%s{sessionPart}%s{prevPart} -->"
+
+    /// IS A MARKER BEARING OUR WORKER ID ACTUALLY A TWIN'S? Returns the OTHER session when it is.
+    ///
+    /// ONE PREDICATE, TWO CALLERS — `claim` (which refuses to adopt a twin's lock) and `verifyHeld` (which
+    /// refuses to hand out the capability over it). It is factored here because the two must agree BY
+    /// CONSTRUCTION: a `claim` that calls a marker a twin and a `verifyHeld` that calls the same marker ours
+    /// would mean the tool refuses you the lock and then authorises you to delete it. Two implementations of
+    /// one question is #485's shape (one question, five implementations, agreeing in none), and this is the
+    /// question the protocol can least afford to answer twice.
+    ///
+    /// TWIN ONLY WHEN BOTH SESSIONS ARE KNOWN. A sessionless marker — a human, a harness that exports none,
+    /// any marker minted before #419 — is genuinely indistinguishable from ours, and failing closed on it
+    /// would lock workers out of items they really hold. Our own session is never a twin, or a worker could
+    /// neither renew nor verify its own lease.
+    let private twinSession (ours: SessionId option) (theirs: SessionId option) : SessionId option =
+        match ours, theirs with
+        | Some(SessionId o), Some(SessionId t) when o <> t -> Some(SessionId t)
+        | _ -> None
 
     // ---- comment primitives ----------------------------------------------------------------------
 
@@ -224,9 +247,9 @@ module Writes =
         // would lock workers out of items they really hold — so it heartbeats. And our OWN session re-claiming
         // its own marker is a heartbeat, never a twin, or a worker could never renew its own lease.
         | Some m ->
-            match session, m.Session with
-            | Some(SessionId ours), Some(SessionId theirs) when ours <> theirs -> Ok(Twin(SessionId theirs))
-            | _ ->
+            match twinSession session m.Session with
+            | Some theirs -> Ok(Twin theirs)
+            | None ->
                 // RE-CLAIM / HEARTBEAT. The marker is already ours — same session, sessionless (a human or a
                 // pre-#419 marker, indistinguishable from ours), or our own session re-claiming. RENEW THE
                 // LEASE IN PLACE: a PATCH of the one marker we have, never a second POST that we would then
@@ -313,19 +336,26 @@ module Writes =
         (transport: IGitHubTransport)
         (leaseMinutes: int)
         (worker: WorkerId)
+        (session: SessionId option)
         (ref: Ref)
-        : IoResult<Held option> =
+        : IoResult<HeldOutcome> =
 
-        // FAILS CLOSED. An unreadable marker set yields an ERROR, never a `Held` and never `None` — because
-        // `None` says "we looked, and this worker does not hold it", which is a claim a failed read is not
-        // entitled to make. Manufacturing a capability from a failed read would be the fail-open this whole
-        // type exists to prevent, sitting inside its own constructor.
+        // FAILS CLOSED. An unreadable marker set yields an ERROR, never a `Holds` and never `DoesNotHold` —
+        // because `DoesNotHold` says "we looked, and this worker does not hold it", which is a claim a failed
+        // read is not entitled to make. Manufacturing a capability from a failed read would be the fail-open
+        // this whole type exists to prevent, sitting inside its own constructor.
         match Reads.markers transport ref.Owner ref.Repo ref.Number with
         | Error e -> Error e
         | Ok markers ->
             match Reads.winner leaseMinutes markers with
-            | Some m when m.Worker = worker -> Ok(Some(Held(ref, worker, m.Id, m.PreviousStatus)))
-            | _ -> Ok None
+            | Some m when m.Worker = worker ->
+                // THE ID MATCHED. That is NOT the same question as "is this ours", and #419 is the whole
+                // reason: an id two workers share is an id this protocol cannot separate. Ask the session
+                // predicate — `claim`'s own — before opening the door to the capability.
+                match twinSession session m.Session with
+                | Some theirs -> Ok(TwinHolds theirs)
+                | None -> Ok(Holds(Held(ref, worker, m.Id, m.PreviousStatus)))
+            | _ -> Ok DoesNotHold
 
     // ---- the touch-set -----------------------------------------------------------------------------
 

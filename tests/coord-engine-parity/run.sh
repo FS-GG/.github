@@ -2155,7 +2155,10 @@ printf '%s' "$sw" | grep -q 'do NOT invent' \
 #    must REFUSE, not adopt-and-heartbeat. `restore_server.py` seeds #74 held by heron-7c2 session=79b9e347
 #    and #71 held sessionlessly by dunlin-9f1.
 TW_OUT="$(mktemp)"
-FSGG_PARITY_MARKERS='[{"n":74,"id":819,"worker":"heron-7c2","session":"79b9e347"},{"n":71,"id":820,"worker":"dunlin-9f1"}]' \
+#    #77/#78 are #1031's, and they are SEPARATE issues on purpose: the back-compat legs below RENEW #74's
+#    and #71's markers (a re-claim PATCHes the body), so a `verifyHeld` leg reusing them would read a session
+#    the leg above rewrote — and #71 would no longer be sessionless, which is the whole point of it.
+FSGG_PARITY_MARKERS='[{"n":74,"id":819,"worker":"heron-7c2","session":"79b9e347"},{"n":71,"id":820,"worker":"dunlin-9f1"},{"n":77,"id":821,"worker":"heron-7c2","session":"79b9e347"},{"n":78,"id":822,"worker":"dunlin-9f1"}]' \
   python3 "$HERE/restore_server.py" >"$TW_OUT" 2>/dev/null &
 TW_SRV=$!; TW_PORT=""
 for _ in $(seq 1 50); do TW_PORT="$(head -n1 "$TW_OUT" 2>/dev/null)"; [ -n "$TW_PORT" ] && break; sleep 0.1; done
@@ -2213,6 +2216,68 @@ if [ -z "$TW_PORT" ]; then bad "twin fixture bound a port"; else
   [ "$same_rc" -eq 0 ] \
     && ok "#419: the SAME session re-claiming its own marker SUCCEEDS (a heartbeat, not a twin) (case 44)" \
     || bad "#419: same-session re-claim must not be refused as a twin" "rc=$same_rc"
+
+  # 5. #1031 — THE OTHER DOOR. `claim` has refused a twin since #419 (legs 1-4), but `claim` is not the only
+  #    way to a `Held`: every command after it — `release`, `heartbeat`, `widen`, `done`'s lock-drop — gets
+  #    one from `verifyHeld`, which matched on the WORKER ID ALONE. A twin's id IS ours, so the door opened.
+  #    Belt-and-suspenders (#550 scoped these verbs to the winning comment id, so the reachable path was
+  #    already shut) — but it was the last place the invariant was asserted by convention, and #419's whole
+  #    lesson is that a shared id is the one thing this protocol cannot separate.
+  # tverb <session> <worker> <verb...> — any verb as a named session/worker against the twin fixture.
+  tverb() { local s="$1" w="$2"; shift 2
+    env FSGG_GITHUB_API_BASE="http://127.0.0.1:$TW_PORT" GITHUB_TOKEN=t FSGG_COORD_OWNER=FS-GG \
+        FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 FSGG_COORD_CACHE="$(mktemp -d)" \
+        env -u OPENCODE_SESSION_ID -u FSGG_AGENT_SESSION_ID CLAUDE_CODE_SESSION_ID="$s" FSGG_WORKER="$w" \
+        "$ENGINE" "$@"; }
+
+  rel_err="$(tverb ed60050b heron-7c2 release FS.GG.SDD#77 2>&1 >/dev/null)"; rel_rc=$?
+  [ "$rel_rc" -ne 0 ] \
+    && ok "#1031: release REFUSES a twin's marker — our id, another session (case 44)" \
+    || bad "#1031: release must refuse a twin's marker" "rc=$rel_rc err=$rel_err"
+  printf '%s' "$rel_err" | grep -q 'two workers share one id' \
+    && ok "#1031: ...naming the shared-id hazard, as claim does (case 44)" \
+    || bad "#1031: the release refusal must name the shared-id hazard" "$rel_err"
+  printf '%s' "$rel_err" | grep -q '79b9e347' \
+    && ok "#1031: ...and reporting the OTHER session (case 44)" \
+    || bad "#1031: the release refusal must report the other session" "$rel_err"
+  # THE ONE THAT MATTERS. `release` DELETEs the marker, so a twin adopted here is a lock DROPPED out from
+  # under a worker who is still editing its files. Read off the served comment set, not the exit code.
+  ids77="$(tmarkers 77 | jq -r 'sort_by(.id) | map(.id|tostring) | join(",")')"
+  [ "$ids77" = "821" ] \
+    && ok "#1031: ...and the twin's marker SURVIVES the refused release (case 44)" \
+    || bad "#1031: release must not delete a twin's marker" "ids=$ids77"
+
+  # `heartbeat` is the sharpest leg, and the reason `verifyHeld` returns a TWIN rather than a bare non-hold.
+  # Its non-hold diagnosis keys on the WORKER ID — which a twin shares — so a twin collapsed into "does not
+  # hold" reaches the `_` arm and is told its lease EXPIRED and to re-claim it with `--force`: advice to go
+  # take a lock a twin is working behind. Pin the WORDS, because the exit code is non-zero either way and
+  # cannot tell the correct refusal from the dangerous one.
+  hb_err="$(tverb ed60050b heron-7c2 heartbeat FS.GG.SDD#77 2>&1 >/dev/null)"; hb_rc=$?
+  [ "$hb_rc" -ne 0 ] \
+    && ok "#1031: heartbeat REFUSES a twin's marker (case 44)" \
+    || bad "#1031: heartbeat must refuse a twin's marker" "rc=$hb_rc err=$hb_err"
+  printf '%s' "$hb_err" | grep -q 'two workers share one id' \
+    && ok "#1031: ...as a shared IDENTITY (case 44)" \
+    || bad "#1031: the heartbeat refusal must name the shared-id hazard" "$hb_err"
+  ! printf '%s' "$hb_err" | grep -q 'EXPIRED' \
+    && ok "#1031: ...and does NOT misreport it as an EXPIRED lease (the #1031 defect) (case 44)" \
+    || bad "#1031: a twin must not be diagnosed as an expired lease" "$hb_err"
+  ! printf '%s' "$hb_err" | grep -q 'force' \
+    && ok "#1031: ...and never offers --force, which would steal the twin's lock (case 44)" \
+    || bad "#1031: the twin refusal must not offer --force" "$hb_err"
+
+  # BACK-COMPAT, the same boundary legs 3-4 draw for `claim`, drawn again for `verifyHeld` — the two ask ONE
+  # question (`Writes.twinSession`) and must answer it identically, or the tool refuses you the lock in one
+  # verb and hands it to you in another. A SESSIONLESS marker is indistinguishable from ours: it still
+  # releases, rather than failing closed and stranding a worker on an item they really hold.
+  tverb ed60050b dunlin-9f1 release FS.GG.SDD#78 >/dev/null 2>&1; rel78_rc=$?
+  [ "$rel78_rc" -eq 0 ] \
+    && ok "#1031: a SESSIONLESS marker with our id still RELEASES — not refused (case 44)" \
+    || bad "#1031: a sessionless marker must not be refused by verifyHeld" "rc=$rel78_rc"
+  ids78="$(tmarkers 78 | jq -r 'length')"
+  [ "$ids78" = "0" ] \
+    && ok "#1031: ...and the release really dropped it (case 44)" \
+    || bad "#1031: the sessionless release must delete the marker" "remaining=$ids78"
   kill "$TW_SRV" 2>/dev/null
 fi
 

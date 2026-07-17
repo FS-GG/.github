@@ -221,6 +221,43 @@ module Client =
             eprint $"fsgg-coord-engine: %s{what} takes exactly one argument (got %d{List.length opts.Args})."
             Result.Error ExitError
 
+    /// OUR SESSION, for the twin predicate — the same one `claim` rides into the marker it posts.
+    ///
+    /// `None` means this harness exports no session. That is not a failure and must not fail closed: a
+    /// caller with no session of its own has nothing to compare, so it can never conclude "twin", and
+    /// `verifyHeld` keeps the pre-#1031 behaviour for it (Writes.twinSession).
+    let private sessionOf (w: Identity.Worker) : SessionId option = w.Session |> Option.map SessionId
+
+    /// THE REMEDY FOR A SHARED ID, and it is a MINT — never `--force` (#1031).
+    ///
+    /// A twin is a broken IDENTITY, not a contested item: forcing would delete a lock our twin is working
+    /// behind, which is the double-claim ADR-0027 exists to prevent, so `claim` refuses a twin even under
+    /// `--force` (#419) and nothing here may offer it as a way out. And the remedy is a COMMAND, not a
+    /// literal — an id an agent copies is an id agents collide on (#551), which is why no id appears here to
+    /// copy.
+    let private mintRemedy () =
+        eprint "  Mint a fresh, unique id in THIS shell (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
+
+    /// THE TWIN REFUSAL, shared by the three verbs that REFUSE over a twin's marker — `release`, `heartbeat`,
+    /// `widen` (#1031).
+    ///
+    /// ONE MESSAGE, and `claim`'s wording deliberately: a worker who meets this from `release` and then from
+    /// `heartbeat` is in ONE situation — a broken identity — and must not have to work out that two
+    /// differently-worded refusals mean the same thing.
+    ///
+    /// `done`'s lock-drop is the fourth `verifyHeld` caller and deliberately does NOT use this: it is not a
+    /// refusal. The stamp is earned by the MERGE, which owes nothing to whose session holds the lock, so
+    /// `done` reports the twin and still exits green. Same hazard, different verdict — so it says a different
+    /// thing, and shares only the remedy (`mintRemedy`).
+    ///
+    /// ExitRed, matching `claim`'s twin refusal: a broken identity is a stop, not a retry.
+    let private twinRefusal (verb: string) (workerId: string) (ref: Ref) (theirs: SessionId) : int =
+        eprint
+            $"fsgg-coord-engine: %s{ref.Short} carries a live marker with YOUR worker id '%s{workerId}' but a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). %s{verb} would act on your TWIN's lock, not yours."
+
+        mintRemedy ()
+        ExitRed
+
     // ---- the read / schedule commands ------------------------------------------------------------------
 
     /// Scan the board and decide. The shared body of `next`/`batch`/`take` — one board read, one decision,
@@ -1850,12 +1887,15 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) ref with
+                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
                 | Error e -> fail e
-                | Ok None ->
+                | Ok Writes.DoesNotHold ->
                     eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — nothing to release."
                     ExitError
-                | Ok(Some held) ->
+                // #1031: our id, another session. `release` DELETES the marker, so adopting a twin's would drop
+                // a lock they are working behind — the one outcome this verb must never produce.
+                | Ok(Writes.TwinHolds theirs) -> twinRefusal "release" w.Id ref theirs
+                | Ok(Writes.Holds held) ->
                     match Writes.release ctx.Transport held with
                     | Error e -> fail e
                     | Ok previousStatus ->
@@ -1989,9 +2029,15 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
-                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) ref with
+                match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
                 | Error e -> fail e
-                | Ok None ->
+                // #1031: our id, another session. This arm is why `verifyHeld` returns a TWIN rather than a
+                // bare non-hold. The diagnosis below keys on the WORKER ID — which a twin shares — so a twin
+                // reaching it finds our own id on the live winner, falls to the `_` arm, and is told its lease
+                // EXPIRED and to `claim --force`: advice to go take a lock a twin is working behind. The one
+                // remedy that cannot be recovered from an id is the one an id-keyed branch would print.
+                | Ok(Writes.TwinHolds theirs) -> twinRefusal "heartbeat" w.Id ref theirs
+                | Ok Writes.DoesNotHold ->
                     // Either someone else holds it, or the lease expired. Read the markers to say which —
                     // "a non-holder cannot renew" and "the lease expired" are different remedies.
                     match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with
@@ -2004,7 +2050,7 @@ module Client =
 
                         ExitError
                     | Error e -> fail e
-                | Ok(Some held) ->
+                | Ok(Writes.Holds held) ->
                     match Writes.heartbeat ctx.Transport opts.LeaseMinutes held with
                     | Error e -> fail e
                     | Ok _ ->
@@ -2366,12 +2412,16 @@ module Client =
                 | Ok ref ->
                     // #706 — widen takes the HELD claim. verifyHeld is the only door to it that this command
                     // has, and it fails closed: no capability from a failed read.
-                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) ref with
+                    match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
                     | Error e -> fail e
-                    | Ok None ->
+                    | Ok Writes.DoesNotHold ->
                         eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — widen rewrites the touch-set of a lock you must be holding (#706)."
                         ExitError
-                    | Ok(Some held) ->
+                    // #1031: our id, another session. `widen` PATCHes the issue BODY, so a twin's touch-set
+                    // would be rewritten under them — re-reserving files they are editing, or handing away
+                    // files they are.
+                    | Ok(Writes.TwinHolds theirs) -> twinRefusal "widen" w.Id ref theirs
+                    | Ok(Writes.Holds held) ->
                         // #523 — validate BEFORE the read of the body, and rewrite BEFORE the PATCH. A bad
                         // token cannot reach the write, because it cannot produce the value the write takes.
                         match Writes.validate opts.Paths with
@@ -2785,14 +2835,25 @@ module Client =
                             // "only your own" rule is the capability type, not a forgettable `if`. And unlike
                             // the `release` command, we do NOT restore the column: the item is Done, and Done
                             // is what stands.
-                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) ref with
-                            | Ok(Some held) ->
+                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
+                            | Ok(Writes.Holds held) ->
                                 match Writes.release ctx.Transport held with
                                 | Ok _ -> ()
                                 | Error e ->
                                     eprint
                                         $"fsgg-coord-engine: the stamp is GREEN, but %s{w.Id}'s claim on %s{ref.Short} could not be dropped: %s{Errors.explain e}. Run `release` (or `reap`) so it stops reserving its touch-set (#533)."
-                            | Ok None ->
+                            // #1031: our id, another session. The stamp stands — `done` verified the MERGE, which
+                            // is a fact about the PR and owes nothing to whose session holds the lock. But the
+                            // claim is our TWIN's, and dropping it here would delete a lock they are working
+                            // behind. Say so instead: this is the shared-id hazard, not a stranded claim, and
+                            // `reap` (the remedy for somebody else's marker) is the wrong tool for an id that is
+                            // nominally ours.
+                            | Ok(Writes.TwinHolds theirs) ->
+                                eprint
+                                    $"fsgg-coord-engine: %s{ref.Short} is stamped Done, but its claim carries YOUR worker id '%s{w.Id}' in a DIFFERENT session (%s{theirs.Value}) — two workers share one id (#419). Left alone: dropping it would delete a lock your twin is working behind."
+
+                                mintRemedy ()
+                            | Ok Writes.DoesNotHold ->
                                 // We do not hold it. If ANOTHER worker's lock is live, this engine leaves it
                                 // alone and says so — it never silently deletes a claim that is not ours.
                                 match Reads.markers ctx.Transport ref.Owner ref.Repo ref.Number with

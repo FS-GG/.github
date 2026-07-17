@@ -157,6 +157,29 @@ module Writes =
         readPreviousStatus: (unit -> BoardStatus option) ->
             IoResult<ClaimOutcome>
 
+    /// What re-reading the markers says about whether WE hold the lock.
+    ///
+    /// NOT AN OPTION, for `ClaimOutcome`'s reason: each case is a different instruction to the worker, and
+    /// `None` collapsed two of them. "You do not hold this" and "your TWIN holds this" have opposite
+    /// remedies — re-claim it, versus do not go anywhere near it until you have a new identity — and the
+    /// caller cannot tell them apart by worker id, because a twin's id is ours (#419).
+    type HeldOutcome =
+        /// The live winner is us. Here is the proof.
+        | Holds of Held
+
+        /// The live winner is not us — somebody else's marker, or no live marker at all (a lapsed lease).
+        /// The worker may re-claim.
+        | DoesNotHold
+
+        /// **THE LIVE MARKER CARRIES OUR WORKER ID, BUT A DIFFERENT SESSION.** A twin holds this lock
+        /// (#419), and their id is ours, so every id-keyed question about it answers "yes, that's you".
+        ///
+        /// It is a case of its own precisely because `DoesNotHold` would be MISREAD: a caller diagnosing it
+        /// re-reads the markers, finds our own id on the live winner, and concludes the only other thing
+        /// that fits — "your lease expired, re-claim it" — which is advice to go take a lock a twin is
+        /// working behind. Carries the OTHER session so the caller can name it, as `Twin` does.
+        | TwinHolds of theirs: SessionId
+
     /// Re-read the markers and confirm the live winner is US.
     ///
     /// The other door to a `Held`, for a worker that took its lock in an earlier process — every command
@@ -166,12 +189,26 @@ module Writes =
     /// It fails CLOSED: an unreadable marker set yields an error, never a `Held`. Manufacturing a
     /// capability from a failed read would be the fail-open this entire type exists to prevent, sitting
     /// inside its own constructor.
+    ///
+    /// **AND IT MATCHES ON A SESSION PREDICATE, NOT ON THE WORKER ID ALONE (#1031, #839 residual 2 of 4).**
+    /// The id match was the last place this invariant was asserted by CONVENTION: `claim` has refused a twin
+    /// since #419, and `release`/`heartbeat` scope to the winning comment id — so the reachable path was
+    /// already closed — but a deliberately mis-targeted ref could still match a twin's marker here and be
+    /// handed the capability that authorises deleting it. #419's whole lesson is that a shared id is the one
+    /// thing this protocol cannot separate, so the door to `Held` may not be opened by an id.
+    ///
+    /// The predicate is `claim`'s, exactly, and it must stay that way — two answers to "is this marker ours?"
+    /// that disagree is the defect, not the safeguard. We conclude "twin" ONLY when both sessions are known:
+    /// a sessionless marker (a human, a harness exporting none, any pre-#419 marker) is genuinely
+    /// indistinguishable from ours, and failing closed on it would lock workers out of items they really
+    /// hold; and our own session is a match, never a twin, or no worker could verify its own lock.
     val verifyHeld:
         transport: IGitHubTransport ->
         leaseMinutes: int ->
         worker: WorkerId ->
+        session: SessionId option ->
         ref: Ref ->
-            IoResult<Held option>
+            IoResult<HeldOutcome>
 
     /// A touch-set that has been VALIDATED — every token is matchable.
     ///
