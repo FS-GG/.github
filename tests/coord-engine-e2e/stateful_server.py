@@ -75,6 +75,14 @@ RATE_LIMIT = {"cost": 1, "remaining": 4999}
 # regression no assertion on output could catch, because the output is identical either way: nothing.
 BOARD_READS = [0]
 
+# #1151 — the deferred-write injection. `updateProjectV2ItemFieldValue` normally succeeds; when this
+# counter is > 0 it decrements and answers a RATE-LIMIT error instead, so the engine's `boardWrite`
+# returns `Deferred` (queued, nothing auto-replays it) exactly as an exhausted GraphQL budget does. It
+# is armed for ONE write at a time (via `/_fixture/defer-next-field-write`), so a test can defer a
+# specific stamp and then let `flush` replay it against a healthy server. The message matches
+# `Budget.isRateLimited`'s pattern, which is how the real transport recognises the exhaustion.
+DEFER_FIELD_WRITES = [0]
+
 
 def project_fields():
     return {
@@ -196,6 +204,11 @@ def graphql(query: str, variables: dict):
             }
         }
     if "updateProjectV2ItemFieldValue" in query or "clearProjectV2ItemFieldValue" in query:
+        # #1151: if a defer is armed, RATE-LIMIT this one field write so `boardWrite` returns `Deferred`.
+        with LOCK:
+            if DEFER_FIELD_WRITES[0] > 0:
+                DEFER_FIELD_WRITES[0] -= 1
+                return {"errors": [{"message": "API rate limit exceeded for this fixture"}]}
         return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
     return None
 
@@ -308,6 +321,14 @@ class Handler(BaseHTTPRequestHandler):
         if path.rstrip("/") == "/_fixture/board-reads":
             with LOCK:
                 return self._send(200, {"boardReads": BOARD_READS[0]})
+
+        # #1151 — arm ONE deferred field write. The next `updateProjectV2ItemFieldValue` rate-limits, so
+        # `boardWrite` returns `Deferred`; the one after it succeeds. Lets a test drive the deferred-stamp
+        # path (`done` keeps the green verdict, surfaces the flush remedy) and then `flush` it clean.
+        if path.rstrip("/") == "/_fixture/defer-next-field-write":
+            with LOCK:
+                DEFER_FIELD_WRITES[0] += 1
+                return self._send(200, {"deferArmed": DEFER_FIELD_WRITES[0]})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:

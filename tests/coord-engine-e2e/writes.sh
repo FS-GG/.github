@@ -134,6 +134,36 @@ dn="$(run "done" FS.GG.SDD#42 2>&1)"; dnrc=$?   # quoted: the coord VERB, not th
   && ok "done stamps an item closed by a merged PR" \
   || bad "done stamps a completed item" "rc=$dnrc: $dn"
 
+# ---- #1151: done SURFACES a DEFERRED Status write, keeps the GREEN stamp, and flush completes it -----
+# The exact condition #1151 closes: on an exhausted budget the Status=Done write returns `Deferred`
+# (QUEUED, and nothing replays it on its own). The Green arm used to `|> ignore` that outcome, so `done`
+# printed green, exited 0, and said NOTHING about the flush the board now needs — silent drift. It must
+# instead keep the green verdict (the WORK is done), DROP the claim (the lock's lifetime is the work's,
+# #533), and PRINT the flush remedy. Then `flush` lands the queued stamp.
+run claim FS.GG.SDD#42 >/dev/null 2>&1                                            # a live marker for done to drop
+curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/defer-next-field-write" >/dev/null      # arm: the next field write RATE-LIMITS
+dd="$(run "done" FS.GG.SDD#42 --flip 2>&1)"; ddrc=$?
+if [ "$ddrc" -eq 0 ] \
+   && printf '%s' "$dd" | grep -q 'FSGG-DONE' \
+   && printf '%s' "$dd" | grep -qi 'DEFERRED' \
+   && printf '%s' "$dd" | grep -q 'scripts/fsgg-coord flush'; then
+  ok "#1151: done keeps the GREEN stamp but SURFACES the deferred Status write with flush advice"
+else
+  bad "#1151: done surfaces the deferred Status write with flush advice" "rc=$ddrc: $dd"
+fi
+
+# ...and the claim marker is DROPPED even though the column deferred — the lock must not outlive the work.
+after1151="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/42/comments")"
+printf '%s' "$after1151" | grep -q 'fsgg:claim' \
+  && bad "#1151: done drops the claim marker on a deferred write" "the marker survives: $after1151" \
+  || ok "#1151: done drops the claim marker even when the Status write DEFERS"
+
+# ...and flush REPLAYS the queued Status=Done write against the now-healthy server — the stamp is not lost.
+fdd="$(run flush 2>&1)"; fddrc=$?
+[ "$fddrc" -eq 0 ] && ! printf '%s' "$fdd" | grep -qi 'DROPPED' \
+  && ok "#1151: flush replays the deferred Status=Done write (the queued stamp lands)" \
+  || bad "#1151: flush replays the deferred stamp" "rc=$fddrc: $fdd"
+
 # ---- #1086: a worker mid-item in ANOTHER repo is NOT idle, and is offered nothing --------------------
 # The whole of #1086, end to end. `vole-418` holds a live claim on FS.GG.SDD#43 (taken above and never
 # released), and is here stamping a `.github` item. Condition 3 says they must not be handed a side-quest:

@@ -100,6 +100,27 @@ module Client =
         eprint $"fsgg-coord-engine: %s{Errors.explain e}"
         Errors.exitCode e
 
+    /// #1151: a NON-fatal board write's outcome, turned into the stderr note it warrants — SURFACING what
+    /// `|> ignore` used to swallow. A `Written` is silent; the other three each say what did NOT land and
+    /// how to finish it. `Deferred` is the one that bites: an exhausted budget QUEUES the write and NOTHING
+    /// replays it on its own (#510/#878), so a silent defer is a column that never lands under a command
+    /// that reported green. This is the sibling `release` handler's rule (`unclaimColumn`, #331/#867),
+    /// factored so `done`'s Status=Done stamp and `claim`'s In-progress move cannot regrow the same
+    /// promise-under-`ignore` (#1151). It does NOT touch the verdict: the caller keeps its exit code and
+    /// merely emits this note, because the WORK is done (or the lock is held) whatever the column says.
+    let private boardWriteNote (ref: Ref) (field: string) (value: string) (outcome: Result<Board.WriteOutcome, Errors.IoError>) : unit =
+        match outcome with
+        | Ok Board.Written -> ()
+        | Ok Board.Deferred ->
+            eprint
+                $"fsgg-coord-engine: the %s{field}=%s{value} board write for %s{ref.Short} is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
+        | Ok Board.NotOnBoard ->
+            eprint
+                $"fsgg-coord-engine: %s{ref.Short} is not an item on this board — the %s{field} column was NOT set to '%s{value}'."
+        | Error e ->
+            eprint
+                $"fsgg-coord-engine: the %s{field}=%s{value} board write for %s{ref.Short} FAILED (%s{Errors.explain e}) — the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} %s{field} '%s{value}'"
+
     // ---- shared context --------------------------------------------------------------------------------
 
     let private env name fallback =
@@ -1779,18 +1800,22 @@ module Client =
                             kitDeclaredWarn ctx ref
                             ExitGreen
                         | Ok b ->
-                            match
+                            let outcome =
                                 Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
-                            with
-                            | Ok _
-                            | Error _ ->
-                                ignore held
-                                printfn "claimed %s by worker %s" ref.Short w.Id
 
-                                // Declaration time is the cheap moment to learn that editing a kit source
-                                // obliges a relock (#469/#509) — one REST read, on the WIN path only.
-                                kitDeclaredWarn ctx ref
-                                ExitGreen
+                            ignore held
+                            printfn "claimed %s by worker %s" ref.Short w.Id
+
+                            // #1151: the LOCK is held whatever the column says, so the claim stays GREEN —
+                            // but the outcome used to be collapsed into `Ok _ | Error _`, so a DEFERRED
+                            // In-progress move (exhausted budget, nothing replays it) left the board saying
+                            // Ready under a held lock, silently. Surface it, exactly as `done` now does.
+                            boardWriteNote ref "Status" "In progress" outcome
+
+                            // Declaration time is the cheap moment to learn that editing a kit source
+                            // obliges a relock (#469/#509) — one REST read, on the WIN path only.
+                            kitDeclaredWarn ctx ref
+                            ExitGreen
                     | Ok(Writes.Renewed(held, collected)) ->
                         // A live marker already ours — the claim RENEWED it in place rather than posting a
                         // second (a `take` retry, or a worker beating its own lease). Any stale debris it
@@ -3042,9 +3067,12 @@ module Client =
                         | Red _ -> ExitRed
                         | Green _ ->
                             // Stamp the board Done. A board-write failure leaves the stamp GREEN (the work
-                            // IS done) and reports the note — the same rule as the bash client.
+                            // IS done) and reports the note — the same rule as the bash client. #1151: the
+                            // outcome was `|> ignore`d directly under the "reports the note" comment, so a
+                            // `Deferred` (queued, nothing auto-replays it) printed green with no flush remedy
+                            // and the board silently drifted un-stamped. Surface it, keeping the verdict green.
                             Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set "Done") w.Id
-                            |> ignore
+                            |> boardWriteNote ref "Status" "Done"
 
                             // --flip: roll the parent up. Whether this child DISCHARGES its parent is a fact
                             // only the author knows and no board read recovers (#614), so it is the caller's
