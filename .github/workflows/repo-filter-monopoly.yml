@@ -1,0 +1,151 @@
+# repo-filter-monopoly — `Scan.scope` is the engine's ONLY `--repo` filter.
+#
+# .github#979, epic #266. A verb that takes `--repo` and filters the board rows ITSELF is a silent
+# fail-open: a `--repo` naming no rostered repo resolves to itself (a literal name is a legitimate
+# spelling — `--repo .github` works that way), matches no row, and reports an EMPTY QUEUE WITH A GREEN
+# EXIT. That is indistinguishable from a repo which genuinely has no items — #266's signature exactly,
+# a check reporting success over a subject it never found.
+#
+# THE CLASS, NOT THE INSTANCE. The engine had FIVE copies of the filter (`Scan.snapshot`, `ready`,
+# `who`, `inbox`, `lint`), and the class had already produced four issues — #381, #446, #962, #979 —
+# every one presenting as "an empty queue" rather than "I could not find that repo", and every repair
+# adding the missing verb rather than removing the list. This is the same shape #978 fixed one layer
+# down for repo RESOLUTION, and `Options.fs` says the rule in as many words about its own subject:
+#
+#   "IT LIVES IN THE PARSER BECAUSE THAT IS THE ONLY PLACE EVERY VERB REACHES (#962). It used to live
+#    in `Client`, applied per-verb at a dispatch site, and being left out of that list is a silent
+#    fail-open."
+#
+# A funnel fixes today's five copies. A funnel plus a gate is what makes a sixth unwritable, which is
+# the only thing that ends a class rather than an instance (#724: "a fifth copy is not discouraged; it
+# is unwritable"). And the enumeration is demonstrably hard: #979's own investigation tabled THREE
+# hand-rolled sites after a careful read. There were five — `who` and `inbox` were missed by the worker
+# who had the file open and was counting them.
+#
+# WHAT IT DOES NOT ASSERT. A REF-TO-REF comparison is not a `--repo` filter: `Lanes.fs`'s
+# `a.Ref.Repo = b.Ref.Repo` and `widen`'s `String.Equals(r.Ref.Repo, ref.Repo, …)` ask a question
+# `--repo` has no part in. The bare-`=` arm excludes them structurally; the `String.Equals` arm takes
+# an explicit `// repo-filter-monopoly: exempt — <why>` marker, because inferring intent from an
+# argument name is how a gate starts guessing.
+#
+# No `schedule:` — the subject is entirely in this repo's tree, so nothing can stale it between pushes,
+# and a nightly run would only re-prove a pure function of files that did not change.
+name: repo-filter-monopoly
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "scripts/check-repo-filter-monopoly.py"
+      - "tests/repo-filter-monopoly/**"
+      - ".github/workflows/repo-filter-monopoly.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "scripts/check-repo-filter-monopoly.py"
+      - "tests/repo-filter-monopoly/**"
+      - ".github/workflows/repo-filter-monopoly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-filter-monopoly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and FIRST: prove the gate can still say NO before believing it when it says yes. The
+  # fixture's own last leg runs the gate against the SHIPPED tree, so "passes on synthetic strings
+  # while a real verb filters by hand" is not a state this job can reach.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      # No pip install: the gate is stdlib-only (re, pathlib) on purpose. A lint that reads source
+      # should not need a dependency, which is one more thing that can fail open on a runner.
+      - name: Run the repo-filter-monopoly fixture (no network)
+        run: bash tests/repo-filter-monopoly/run.sh
+
+  monopoly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: fixture
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Assert no verb hand-rolls the --repo filter
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-repo-filter-monopoly.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266). The exit code is the contract; nothing here greps the gate's prose.
+      - name: 'OK: Scan.scope is the only --repo filter'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "repo-filter-monopoly: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a verb hand-rolls the --repo filter'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### repo-filter-monopoly: a verb filters \`--repo\` by hand"
+            echo
+            echo 'A hand-rolled `--repo` filter is a **silent fail-open**: a `--repo` naming no'
+            echo 'rostered repo resolves to itself, matches no row, and reports an **empty queue with a'
+            echo 'green exit** — indistinguishable from a repo that genuinely has no items (#979, epic'
+            echo '#266). The engine had five copies of this filter and the class has produced four'
+            echo 'issues (#381, #446, #962, #979); each repair added the missing verb rather than'
+            echo 'removing the list.'
+            echo
+            echo '**Fix:** scope through the funnel, which filters **and reports** in one breath:'
+            echo
+            echo '    let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo'
+            echo '    scoped.Advisory |> Option.iter eprint'
+            echo '    let items = scoped.Rows'
+            echo
+            echo 'Going through `Scan.snapshot`? It already scopes — read `receipt.RepoAdvisory` and'
+            echo 'print it (`Program.fs` does).'
+            echo
+            echo 'Genuinely **not** a `--repo` filter — a ref-to-ref comparison, like `widen`'"'"'s "other'
+            echo 'in-flight items in THIS ref'"'"'s repo" — opts out explicitly, on the line before it:'
+            echo
+            echo '    // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=repo-filter-monopoly: a verb hand-rolls the --repo filter::Scope through Scan.scope instead. See the job log."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate audited NOTHING'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### repo-filter-monopoly: no verdict"
+            echo
+            echo 'The gate found **zero** `.Ref.Repo` comparisons across `src/`. `Scan.scope` carries'
+            echo 'one **by construction**, so this means the **walker broke** — not that the tree is'
+            echo 'clean. Examining nothing is a failure to audit, not a clean audit (#266): if the'
+            echo 'walker breaks, every verb reads as clean and this gate goes green while the'
+            echo 'fail-open it exists to catch goes on happening.'
+            echo
+            echo 'Retrying will not help — fix the walker or the surface list.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=repo-filter-monopoly: no verdict (permanent)::The gate audited zero subjects. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=repo-filter-monopoly: inconclusive::check-repo-filter-monopoly.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

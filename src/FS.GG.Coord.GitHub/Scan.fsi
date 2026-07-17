@@ -71,9 +71,58 @@ module Scan =
     [<Literal>]
     val OffBoardCap: int = 60
 
+    /// Board rows scoped to a `--repo`, and whether the request named a repo the board never heard of.
+    ///
+    /// THE `--repo` FILTER IS THIS FUNCTION'S MONOPOLY (#979). Every verb that takes `--repo` scopes
+    /// through `scope`, and `scripts/check-repo-filter-monopoly.py` fails the build on a hand-rolled
+    /// copy. The filter used to be written out per verb — five times, in `snapshot`, `ready`, `who`,
+    /// `inbox` and `lint` — which is exactly the shape #978 had just fixed one layer down for repo
+    /// RESOLUTION, and `Options.fs` names the reason in as many words:
+    ///
+    /// > IT LIVES IN THE PARSER BECAUSE THAT IS THE ONLY PLACE EVERY VERB REACHES (#962). It used to
+    /// > live in `Client`, applied per-verb at a dispatch site, and **being left out of that list is a
+    /// > silent fail-open**.
+    ///
+    /// The class had already produced four instances — #381, #446, #962 and #979 — and each repair
+    /// added the missing verb rather than removing the list. A funnel plus a gate removes the list.
+    type Scoped =
+        { /// The rows in scope. Identical to the input when no `--repo` was given.
+          Rows: Row list
+
+          /// `Some msg` ⇒ `--repo` named a repo NO row carries: a typo, or a repo with no board items
+          /// yet. The two are indistinguishable from here, so the message says both and the EXIT IS
+          /// UNCHANGED (#979 decision (d)).
+          ///
+          /// REPORT, DO NOT GATE. `ready` is a TRUTH read — an empty board is a real answer, and
+          /// erroring would break the reconciler that consumes it. #266 licenses exactly this: an
+          /// out-of-scope subject must be REPORTED, not silently skipped. What a green exit MEANS is
+          /// now stated rather than implied; that a fleet reading exit codes still cannot tell is the
+          /// accepted residual, named on #979 rather than left as an omission nobody noticed.
+          Advisory: string option }
+
+    /// Scope rows to a `--repo`, and say so when the request names no row. See `Scoped`.
+    ///
+    /// `repo` is expected ALREADY RESOLVED — short-id → repo name is the parser's job (#962/#978), and
+    /// re-resolving here would be the second copy of the bug this function exists to end.
+    ///
+    /// The known-repo set is derived from the ROWS IN HAND, never from a roster. That is #266's own
+    /// corollary — *compare against reality, not against a record of reality* — and #933/#958 is the
+    /// org's standing verdict on hand-maintained rosters. It costs nothing (the caller already has the
+    /// rows), it cannot go stale, and it means the `kind: client` shim constraint that keeps
+    /// `registry/repos.yml` out of the engine (case 13 §6c / #381) never binds.
+    ///
+    /// **NO ADVISORY OVER AN EMPTY BOARD**, and that is the fail-closed half. With zero rows there is
+    /// no known-repo set to compare against, so "no row names `X`" would be a confident claim about a
+    /// board nobody could see — #266's own defect, inside the fix for it. An empty result is then
+    /// attributable to the board, not to the scope, and the caller's empty output already says so.
+    val scope: repo: string option -> rows: Row list -> Scoped
+
     /// What the scan cost, and what it could not do — so a caller can say so rather than imply it.
     type Receipt =
         { Candidates: int
+          /// `scope`'s advisory for this scan's `--repo`, carried out so `scan`'s caller can SAY the
+          /// repo named nothing rather than print `0 candidate(s)` over a full board and imply it.
+          RepoAdvisory: string option
           /// Off-board blocker refs resolved over REST.
           OffBoardResolved: int
           /// Off-board refs we did NOT resolve because the cap was hit. They stay `BlockerUnknown`, which

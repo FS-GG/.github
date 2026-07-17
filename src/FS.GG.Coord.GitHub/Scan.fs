@@ -22,8 +22,53 @@ module Scan =
     [<Literal>]
     let OffBoardCap = 60
 
+    type Scoped =
+        { Rows: Row list
+          Advisory: string option }
+
+    // THE `--repo` FILTER, ONCE. Hand-rolled per verb it was a silent fail-open five times over (#979);
+    // `scripts/check-repo-filter-monopoly.py` is what keeps it one. See `Scan.fsi` for the full argument.
+    let scope (repo: string option) (rows: Row list) : Scoped =
+        match repo with
+        | None -> { Rows = rows; Advisory = None }
+        | Some name ->
+            let kept =
+                rows
+                |> List.filter (fun r -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase))
+
+            let advisory =
+                // A row matched, so the request named something real: nothing to say.
+                if not (List.isEmpty kept) then
+                    None
+                // NO ROWS AT ALL — so there is no known-repo set to compare against, and "no row names
+                // `X`" would be a confident claim about a board nobody could see (#266, inside the fix
+                // for #266). A failed scan is never an empty one (`Cache.putScan`, #344), so this is a
+                // genuinely empty board: the emptiness is the BOARD's, not the scope's, and the caller's
+                // empty output already says it.
+                elif List.isEmpty rows then
+                    None
+                else
+                    let known =
+                        rows
+                        |> List.map (fun r -> r.Ref.Repo)
+                        |> List.distinctBy (fun r -> r.ToLowerInvariant())
+                        |> List.sort
+
+                    let knownList = String.Join(", ", known)
+
+                    // BOTH readings, because from here they are the same fact: the board carries no row
+                    // for this name. Naming only the typo would be a verdict the rows cannot support.
+                    Some(
+                        $"fsgg-coord-engine: WARNING — no board row names repo `%s{name}`.\n"
+                        + $"  The board knows: %s{knownList}\n"
+                        + "  Check the spelling, or this repo has no items on the board yet."
+                    )
+
+            { Rows = kept; Advisory = advisory }
+
     type Receipt =
         { Candidates: int
+          RepoAdvisory: string option
           OffBoardResolved: int
           OffBoardSkipped: int
           BodiesUnreadable: int }
@@ -398,13 +443,14 @@ module Scan =
         // WORDS: the worker asking "why isn't #502 offered?" would get nothing for it, when bash names it
         // "the issue is closed". A closed candidate is SWEPT below with no body/marker/blocker read, exactly
         // as bash sweeps it — so the reason survives at zero extra cost.
-        let candidates =
-            rows
-            |> List.filter (fun r ->
-                not r.IsPullRequest
-                && (match repo with
-                    | None -> true
-                    | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)))
+        //
+        // PRs are dropped BEFORE the scope, so the known-repo set `scope` reports names the repos with
+        // items of WORK on the board — a repo carrying only PRs is not one a worker can be handed an
+        // item in, and offering it as a spelling suggestion would be a lie in the shape of help.
+        let scoped =
+            rows |> List.filter (fun r -> not r.IsPullRequest) |> scope repo
+
+        let candidates = scoped.Rows
 
         // THE BOARD IS ITS OWN BLOCKER INDEX, AND IT IS FREE. The scan already carries every board item's
         // state, so a `Blocked by` edge pointing at another board item costs ZERO additional reads.
@@ -802,6 +848,7 @@ module Scan =
             Ok(
                 Encoding.UTF8.GetString(stream.ToArray()),
                 { Candidates = List.length candidates
+                  RepoAdvisory = scoped.Advisory
                   OffBoardResolved = offBoardResolved
                   OffBoardSkipped = offBoardSkipped
                   BodiesUnreadable = bodiesUnreadable }

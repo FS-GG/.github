@@ -240,6 +240,11 @@ let private scan (opts: Options) =
         eprint
             $"scan: %d{receipt.Candidates} candidate(s); %d{receipt.OffBoardResolved} off-board blocker(s) resolved"
 
+        // #979 — the same rule, one line up: `scan --repo <typo>` reported `0 candidate(s)` over a full
+        // board, which reads as an empty queue rather than a name nothing matched. `Options.fs` cites
+        // exactly this line as the bug #962 would have left behind had resolution stayed out of the parser.
+        receipt.RepoAdvisory |> Option.iter eprint
+
         if receipt.OffBoardSkipped > 0 then
             // THE CAP IS ANNOUNCED, NEVER SILENT. A silent cap leaves the overflow blocked-forever with no
             // trace — reported blocked by something nobody looked up, which is indistinguishable from being
