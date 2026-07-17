@@ -1,0 +1,55 @@
+# Every generator answers `--list`, honestly — the convention ADR-0044 rests on (.github#498).
+#
+# `scripts/generated-paths` derives this repo's generated, CI-gated artifacts by ASKING each generator
+# what it emits, so that `verify-paths` can subtract them and stop reporting a permanent false DRIFT on
+# the artifacts intra-repo-parallel-work §1 tells workers NOT to declare. #498 declined the two
+# alternatives — a `Generated:` line per issue body, and a repo-level ignore file — because both are a
+# second copy of a fact the generator already holds, and the ignore file's copy fails OPEN.
+#
+# Runs tests/generator-list/run.sh, which drives scripts/check-generator-list.py through every
+# violation class, proves the REAL repo passes, proves `--list` mutates nothing, and — the leg the
+# design turns on — proves by EXECUTION that each subtracted artifact really is CI-gated: dirty it, run
+# its guard, assert it reds. That half cannot be checked by grepping workflow `run:` text; a parser
+# cannot tell a MENTION from a USE (#683), and check-paths-coherence.py has the measurement.
+name: generator-list
+
+on:
+  pull_request:
+    paths:
+      # scripts/** and not a per-generator list, for #334's reason: a hand-maintained list of
+      # generators is exactly the stale copy this whole design refuses, and the gate's forgotten-
+      # generator net globs `scripts/generate-*` — so a NEW generator must re-run this gate, and a
+      # filter naming only today's generators could never fire for tomorrow's. Over-triggering on an
+      # unrelated script is the cheap failure; a list that silently omits a generator is the fail-open.
+      - "scripts/**"
+      - "tests/generator-list/**"
+      - ".github/workflows/generator-list.yml"
+      # The subjects the fixture's §10 guard legs execute against. An edit to either artifact — or to
+      # the roster that names it — must re-prove that its guard still reds on drift. If a guard ever
+      # stops reding, its artifact stops being subtractable, and nothing else would say so before
+      # verify-paths began silently swallowing real findings.
+      - "registry/repos.yml"
+      - "registry/repos.lock"
+      - "dist/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "tests/generator-list/**"
+      - ".github/workflows/generator-list.yml"
+      - "registry/repos.yml"
+      - "registry/repos.lock"
+      - "dist/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the generator-list fixture
+        run: bash tests/generator-list/run.sh

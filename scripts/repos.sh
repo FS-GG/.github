@@ -26,6 +26,11 @@
 #                                                           # kit: sources. The lock is a GENERATED, CI-gated
 #                                                           # artifact — never reserve it in a Paths: touch-set
 #                                                           # (#309/#527); regenerate and note it as drift.
+#   repos.sh relock --list                                  # kind<TAB>path<TAB>marker for what relock EMITS,
+#                                                           # writing nothing (ADR-0044). Empty marker = the
+#                                                           # whole file is generated, so verify-paths may
+#                                                           # subtract it. The generator answers what it
+#                                                           # generates; nothing downstream keeps a copy.
 #   repos.sh digest <path>                                  # reference digest: skill dir -> sha256 of its
 #                                                           # SKILL.md; file -> sha256 of the file
 #   repos.sh -h | --help
@@ -140,18 +145,41 @@ read_lock() {
   sed 's/#.*$//' "$1" | awk 'NF >= 2 { print $2 "\t" $1 }' | LC_ALL=C sort
 }
 
+# `<path>` relative to `<root>`, for the `--list` contract (ADR-0044). Not `realpath
+# --relative-to`: that is GNU-only, and this script is the one every fabric runs. A prefix strip is
+# enough because both sides are already absolute and `lock_path` never escapes the root.
+rel_to() {
+  local p="$1" r="${2%/}"
+  case "$p" in "$r"/*) printf '%s\n' "${p#"$r"/}" ;; *) printf '%s\n' "$p" ;; esac
+}
+
 cmd_relock() {
-  local reg="$REG_DEFAULT" root=""
+  local reg="$REG_DEFAULT" root="" list=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --registry) need_val relock "$@"; reg="$2"; shift 2 ;;
       --root)     need_val relock "$@"; root="$2"; shift 2 ;;
+      --list)     list=1; shift 1 ;;
       *)          die "relock: unknown arg '$1'." ;;
     esac
   done
   [ -f "$reg" ] || die "registry not found: $reg"
   [ -n "$root" ] || root="$(cd "$(dirname "$reg")/.." && pwd)"
   local lock; lock="$(lock_path "$reg")"
+
+  # ADR-0044: the generator enumerates its own output, so nothing downstream keeps a second copy of
+  # it. The path is DERIVED — `lock_path` off the registry, exactly as the write below derives it —
+  # rather than a literal, because a literal here would be the very hand-kept copy this answers.
+  #
+  # The EMPTY marker field is the load-bearing part: it says the WHOLE FILE is generated, so nobody
+  # authors it and `verify-paths` may subtract it. A region generator fills that field in, and its
+  # file stays declarable. Emitted BEFORE any write, and it writes nothing itself: `--list` is the
+  # one question a caller must be able to ask a generator without it touching the tree.
+  if [ "$list" = 1 ]; then
+    printf 'kit-lock\t%s\t\n' "$(rel_to "$lock" "$root")"
+    return 0
+  fi
+
   gen_lock "$reg" "$root" > "$lock.tmp" && mv "$lock.tmp" "$lock"
   echo "repos-registry: relocked $(read_lock "$lock" | wc -l) kit digest(s) -> $lock"
 }

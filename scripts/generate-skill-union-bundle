@@ -31,15 +31,42 @@
 #
 #   scripts/generate-skill-union-bundle            # rewrite dist/skill-union-assert.sh in place
 #   scripts/generate-skill-union-bundle --check    # verify it is current; exit 1 on any drift (the GATE)
+#   scripts/generate-skill-union-bundle --list     # print `kind<TAB>path<TAB>marker` for what it emits (ADR-0044)
 #
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 CHECK=""
-[ "${1:-}" = "--check" ] && CHECK=1
+LIST=""
+# AN UNKNOWN ARGUMENT IS REFUSED, and that is a fix, not a tidy-up (ADR-0044). This was
+# `[ "${1:-}" = "--check" ] && CHECK=1`, which does not merely ignore an unknown flag — it falls
+# through to the WRITE. So every argument that was not exactly `--check` regenerated the bundle,
+# silently: a caller asking this generator a QUESTION got a mutated tree for an answer. That is the
+# precise hazard the `--list` convention walks into, since asking is the whole point of it, and it is
+# why the convention's gate asserts a generator refuses what it does not understand rather than
+# trusting each one to.
+case "${1:-}" in
+  --check) CHECK=1 ;;
+  --list)  LIST=1 ;;
+  "") ;;
+  *) echo "::error::unknown argument: $1 (expected --check, --list, or nothing)" >&2; exit 2 ;;
+esac
 
 SRC="$HERE/scripts/skill-union-assert.sh"
 OUT="$HERE/dist/skill-union-assert.sh"
+
+# ADR-0044: the generator names its own output, BEFORE the source check below and before any write —
+# `--list` must never touch the tree, and must answer even in a checkout where the source is missing
+# (the question is "what do you emit?", not "can you emit it now?"). The path is derived from `$OUT`,
+# the same variable the write uses, so the answer cannot drift from the artifact.
+#
+# The marker field is EMPTY: this generator owns the whole file, so nobody authors it and
+# `verify-paths` may subtract it. Contrast `generate-projections`, which fills the marker in — it
+# writes REGIONS into authored documents, and those files stay declarable.
+if [ -n "$LIST" ]; then
+  printf 'skill-union-bundle\t%s\t\n' "${OUT#"$HERE"/}"
+  exit 0
+fi
 
 [ -f "$SRC" ] || { echo "::error::no source at $SRC" >&2; exit 2; }
 
