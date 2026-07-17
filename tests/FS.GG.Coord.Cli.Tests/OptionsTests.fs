@@ -109,6 +109,91 @@ module OptionsTests =
     let ``ready --all is a boolean widen with no value`` () =
         Assert.True((parse [ "ready"; "--all" ] |> ok).All)
 
+    // ================================================================================================
+    // #991 — THE RESIDUE RULE, GENERALISED. The rule was always general; its enforcement was one arm.
+    // ================================================================================================
+    // #867 added the `--status` guard by hand and every other flag stayed unguarded — 38 flags, one of
+    // them checked. These pin the table BOTH ways, because a guard that also refused the real users would
+    // just move the defect somewhere quieter.
+
+    /// (flag argv, a command that READS it, a command that does NOT)
+    let private surface =
+        [ [ "--mint" ], "whoami", "ready"
+          [ "--all" ], "ready", "next"
+          [ "--active" ], "overlap", "who"
+          [ "--apply" ], "reap", "batch"
+          [ "--peek" ], "inbox", "who"
+          [ "--dry-run" ], "flush", "reap"
+          [ "--strict" ], "lint", "ready"
+          [ "--batch" ], "set-field", "widen"
+          [ "--flip" ], "done", "claim"
+          [ "--force" ], "claim", "release"
+          [ "--include-backlog" ], "take", "who"
+          [ "--fresh" ], "scan", "batch"
+          [ "--wait" ], "landable", "next"
+          [ "--paths"; "src/A.fs" ], "widen", "claim"
+          [ "--to"; "w-x" ], "say", "inbox"
+          [ "--evidence"; "x" ], "done", "claim"
+          [ "--partial"; "x" ], "done", "widen"
+          [ "--issue"; ".github#1" ], "verify-paths", "done"
+          [ "--sha"; "abc" ], "landable", "take"
+          [ "--require"; "ci" ], "landable", "who"
+          [ "--tries"; "3" ], "landable", "next"
+          [ "--interval"; "5" ], "landable", "next"
+          [ "--label"; "bug" ], "issues", "ready"
+          [ "--state"; "all" ], "issues", "ready"
+          [ "-n"; "5" ], "scan", "next"
+          [ "--status"; "Blocked" ], "release", "claim" ]
+
+    [<Fact>]
+    let ``#991 every flag is REFUSED by a command that does not read it`` () =
+        for (flag, _reader, nonReader) in surface do
+            let e = parse (nonReader :: flag) |> rejected
+
+            Assert.True(
+                e.Contains(List.head flag),
+                $"`%s{nonReader} %s{List.head flag}` must be refused BY NAME, got: %s{e}"
+            )
+
+    [<Fact>]
+    let ``#991 every flag stays accepted by a command that DOES read it`` () =
+        // The half that makes the table honest rather than merely strict.
+        for (flag, reader, _) in surface do
+            match parse (reader :: flag) with
+            | Ok _ -> ()
+            | Error e -> failwithf "`%s %s` READS this flag and must still parse, got: %s" reader (List.head flag) e
+
+    [<Fact>]
+    let ``#991 the refusal names the commands that DO read the flag`` () =
+        // A refusal that only says no sends the caller looking. #867's message named `ready`/`release`;
+        // every flag's now does, because the table knows the readers by construction.
+        let e = parse [ "ready"; "--flip" ] |> rejected
+        Assert.Contains("--flip", e)
+        Assert.Contains("`done`", e)
+        Assert.Contains("`ready`", e)
+
+    [<Fact>]
+    let ``#991 release --force was a DOCUMENTED no-op — the usage advertised it and nothing read it`` () =
+        // The find that came out of building the table, and #867's exact defect in the very command #867
+        // repaired: `release <ref> [--worker W] [--force]` sat in the usage block for the life of the port
+        // while `release` never consulted `opts.Force`. `claim` is the only reader (it bypasses the #516
+        // one-item-per-worker check). Refusing it breaks no working behaviour — there was none to break.
+        let e = parse [ "release"; ".github#574"; "--force" ] |> rejected
+        Assert.Contains("--force", e)
+        Assert.Contains("`claim`", e)
+
+        Assert.True((parse [ "claim"; ".github#574"; "--force" ] |> ok).Force)
+
+    [<Fact>]
+    let ``#991 a flag whose field has a non-optional default is Global — there is nothing to refuse`` () =
+        // `--json`/`--text` land in `Render` and `--lease` in `LeaseMinutes`, both non-optional. "Given" and
+        // "defaulted" are the same state, so they cannot be detected and must not be guessed at. They are
+        // declared Global deliberately, and every command keeps taking them.
+        Assert.Equal(Json, (parse [ "who"; "--json" ] |> ok).Render)
+        Assert.Equal(Text, (parse [ "lint"; "--text" ] |> ok).Render)
+        Assert.Equal(30, (parse [ "take"; "--lease"; "30" ] |> ok).LeaseMinutes)
+        Assert.Equal(Some "FS.GG.SDD", (parse [ "next"; "--repo"; "sdd" ] |> ok).Repo)
+
     [<Fact>]
     let ``#636 take --include-backlog is READ, not merely tolerated`` () =
         // THE USAGE BLOCK IS A PRESCRIBING SITE, and it is the one #919's gate cannot see: that gate scans the
