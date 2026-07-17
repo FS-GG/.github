@@ -166,7 +166,17 @@ jobs:
           # ACCEPTS the resulting `consumers: []` — 0.12.0 refuses it (MissingField), measured. The pin
           # is coupled to the schema, so it moves WITH the schema. #576 (bot freeze) stays open and
           # unrelated; a red pin gate absent a schema bump is still a #576 report, not a hand-advance.
-          # renovate: datasource=nuget depName=FS.GG.SDD.Cli
+          # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
+          # `versioning=loose`, NOT the manager default `nuget`, and this token is load-bearing (#576).
+          # Under nuget versioning a BARE literal is a RANGE, not a peg: `0.13.0` parses as `>=0.13.0`,
+          # which the newest release ALWAYS satisfies. So Renovate resolved currentVersion to the newest,
+          # found the constraint already met, and proposed NOTHING — measured against renovate@latest
+          # --platform=local: currentValue 0.10.0 -> currentVersion 0.13.0, updates: []. That, not the
+          # credential/route/casing this file's comments chased, is why the pin froze at every hand-advance
+          # (#127/#263/#566/#886): bump the floor to newest and `>=newest` is trivially satisfied again.
+          # `loose` treats the literal as a single version (and tolerates SDD's 4-segment grammar, which
+          # strict semver rejects), so 0.13.0 -> 0.14.0 is a real update the bot will open. Do NOT drop
+          # this token back to the default without re-reading #576.
           dotnet tool install --global FS.GG.SDD.Cli --version 0.13.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
