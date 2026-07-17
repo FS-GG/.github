@@ -124,6 +124,8 @@ module Lanes =
                 // and `scripts/foo` in another name two different files in two different worktrees — so
                 // comparing them bare invents a phantom collision (#312, #353) and would glue two
                 // independent lanes into one, halving the parallelism the board actually has.
+                // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter. This asks "do these
+                // two rows share a repo?", a question `--repo` has no part in.
                 if a.Ref.Owner = b.Ref.Owner && a.Ref.Repo = b.Ref.Repo then
                     if not (List.isEmpty (TouchSet.conflicts a.TouchSet b.TouchSet)) then
                         union i j

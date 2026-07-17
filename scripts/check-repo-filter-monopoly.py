@@ -26,21 +26,23 @@ hand-rolled sites after a careful read of the tree. There were five. `who` and `
 the very worker who had the file open and was counting them — which is the argument for a gate rather
 than for reading more carefully.
 
-WHAT IS A SUBJECT, AND WHAT DELIBERATELY IS NOT
+WHAT IS A SUBJECT, AND WHAT THE ALLOW-LIST IS (FS-GG/.github#1161, D3 of #1158)
 
 The subject is a CASE-INSENSITIVE STRING COMPARISON OF A ROW'S `.Ref.Repo` — `String.Equals(<x>.Ref
-.Repo, <y>, StringComparison…)`, plus a bare `=`/`<>` against a non-`.Repo` expression. That is the
+.Repo, <y>, StringComparison…)`, or a bare `=`/`<>` with `.Ref.Repo` on either side. That is the
 exact shape all five copies had, and the shape a sixth would have.
 
-A REF-TO-REF comparison is NOT a `--repo` filter and is not a subject: `Lanes.fs`'s `a.Ref.Repo =
-b.Ref.Repo` (which items share a repo?) and `Client.fs`'s `String.Equals(r.Ref.Repo, ref.Repo, …)`
-(`widen`'s "other in-flight items in THIS ref's repo") ask a question `--repo` has no part in. The
-`=`/`<>` arm excludes them structurally — an RHS naming `.Repo` is a ref-to-ref comparison by
-construction — and the `String.Equals` arm takes an explicit exemption, because inferring intent from
-an argument name is how a gate starts guessing.
+AN ALLOW-LIST, NOT A DENY-LIST. EVERY such comparison is a subject; the only ones that pass are `HOME`
+(the funnel, the one place allowed to filter) and lines carrying an EXPLICIT exempt marker. The gate
+used to guess — a bare `=` whose RHS named `.Repo` was auto-excluded as "ref-to-ref by construction" —
+and that heuristic is precisely the fail-open this item closes: a real `--repo` filter spelled
+`r.Ref.Repo = opts.Repo` has `.Repo` on its RHS too, so the guess waved the bug through. A gate that
+infers "this one is fine" from an argument name is a gate one argument name can fool.
 
-An exempt line opts out EXPLICITLY, on the line before it — explicit, greppable, reviewable, never
-inferred (the convention `check-graphql-monopoly.py` established):
+So a REF-TO-REF comparison — `Lanes.fs`'s `a.Ref.Repo = b.Ref.Repo` (which items share a repo?) and
+`Client.fs`'s `String.Equals(r.Ref.Repo, ref.Repo, …)` (`widen`'s "other in-flight items in THIS
+ref's repo") — is a legitimate question `--repo` has no part in, but it is no longer excused by
+guesswork. It opts out EXPLICITLY, on the line before it, exactly like every other exemption:
 
     // repo-filter-monopoly: exempt — <why this is not a --repo filter>
 
@@ -81,9 +83,10 @@ HOME = "src/FS.GG.Coord.GitHub/Scan.fs"
 # The shape every one of the five copies had. `String.Equals(r.Ref.Repo, name, StringComparison…)`.
 EQUALS = re.compile(r"String\.Equals\(\s*[A-Za-z_][\w.]*\.Ref\.Repo\s*,")
 
-# A bare structural comparison. The negative lookahead is what keeps a REF-TO-REF comparison out of
-# the subject by construction rather than by exemption: an RHS naming `.Repo` is comparing two refs.
-BARE = re.compile(r"\.Ref\.Repo\s*(?:=|<>)\s*(?![^\n]*\.Repo\b)")
+# A bare structural comparison on `.Ref.Repo`. NO negative lookahead: a ref-to-ref comparison is a
+# subject like any other and opts out with an explicit marker, not by the RHS happening to name
+# `.Repo` — that guess is what let `r.Ref.Repo = opts.Repo`, a real `--repo` filter, through (#1161).
+BARE = re.compile(r"\.Ref\.Repo\s*(?:=|<>)")
 
 EXEMPT = re.compile(r"//\s*repo-filter-monopoly:\s*exempt\b")
 
