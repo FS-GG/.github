@@ -1,10 +1,13 @@
 # Cross-repo coordination protocol
 
-How agents and maintainers across the FS-GG repos
+How agents and maintainers across the six FS-GG framework components
 ([FS.GG.SDD](https://github.com/FS-GG/FS.GG.SDD),
 [FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering),
 [FS.GG.Governance](https://github.com/FS-GG/FS.GG.Governance),
-[FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates)) request things from each
+[FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates),
+[FS.GG.Game](https://github.com/FS-GG/FS.GG.Game),
+[FS.GG.Audio](https://github.com/FS-GG/FS.GG.Audio)) — plus this `.github`
+coordination repo, seven in all — request things from each
 other, respond, and keep cross-repo contracts coherent.
 
 The repos are deliberately decoupled (see
