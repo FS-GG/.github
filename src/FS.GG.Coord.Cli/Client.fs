@@ -3405,8 +3405,14 @@ module Client =
     // whole point: "deliberately undeclared" must be sayable, or no gate can tell it from "somebody forgot".
     // A RECONCILER read: always fresh, never the cache.
     //
-    // The epic ROLL-UP-graph rules (EPIC-*, DONE-STATUS-OPEN-ISSUE, the PR-probing EPIC-UNLINKED-CHILD) are
-    // deferred to a later slice — they need the sub-issue graph + body-child-ref parsing this one does not.
+    // The epic ROLL-UP-graph rules (EPIC-*, DONE-STATUS-OPEN-ISSUE, the PR-probing EPIC-UNLINKED-CHILD) SHIP —
+    // they read the sub-issue graph and parse body child-refs, which the touch-set rules do not.
+    //
+    // They divide into two kinds, and the split is the thing to hold onto. The `error` rules name an epic that
+    // CANNOT roll up (no children, truncated graph, an unlinked declared child, acceptance delegated to nobody
+    // or stated nowhere) — each is a defect with a mechanical remedy. `EPIC-ROLLUP-READY` is a `note` naming
+    // the opposite: every mechanical precondition holds. It is still not a verdict that the epic is done,
+    // because that verdict is `Discharge` (#614) and no read can reach it.
 
     type private LintFinding =
         { Code: string
@@ -3595,6 +3601,36 @@ module Client =
                                           r
                                           $"%d{List.length lines} acceptance line(s) delegate to no child, so no child can ever discharge them and the rollup would close them unread: %s{named}. An epic's acceptance IS its children (#965) — make each one a child, or drop it from the body." ]
 
+                        // EPIC-NO-STATED-ACCEPTANCE (#1003). The half `EPIC-UNDELEGATED-ACCEPTANCE` cannot see:
+                        // it partitions the task lines, so a body with NO task lines has nothing un-delegated and
+                        // the rule reports itself satisfied over prose nobody checked. "Every criterion is
+                        // delegated" and "no criterion is written down in a form anything can check" are opposite
+                        // facts, and to `undelegatedAcceptance` they are the same empty list.
+                        //
+                        // MUTUALLY EXCLUSIVE with the rule above, by construction: `statesAcceptance` is false only
+                        // when there are no task lines at all, and `undelegatedAcceptance` is non-empty only when
+                        // there are. An epic can never carry both findings, so this adds a case rather than noise.
+                        //
+                        // WHY LINT SAYS THIS AT ALL, when `Done.rollUp` already refuses on it: the roll-up's refusal
+                        // is EPHEMERAL — `ParentLeftOpen` renders to the stamping worker's terminal and is never
+                        // recorded on the issue. So the reason an epic is sitting open is unreadable to everyone who
+                        // did not run that command, and `/check-board` cannot ask the tool why. Worse, the roll-up
+                        // only runs when somebody stamps a child; an epic whose last child was closed by hand has
+                        // never been asked the question at all. Lint is the read that can be taken at any time, so
+                        // the guard that keeps #561 and #889 closed has to be sayable here too.
+                        //
+                        // OPEN EPICS ONLY, for the reason `EPIC-UNDELEGATED-ACCEPTANCE` is: a closed epic can never
+                        // roll up again, so its unstated acceptance is history, not a defect a worker can act on.
+                        let noAcceptance =
+                            if r.State = IssueState.Open && not (FS.GG.Coord.EpicBody.statesAcceptance body) then
+                                [ mk
+                                      "EPIC-NO-STATED-ACCEPTANCE"
+                                      "error"
+                                      r
+                                      "body states NO task-line acceptance, so nothing in it can be checked against the sub-issue graph and this epic can never roll up — closing it on the strength of that graph would close an unread body (#1003). State each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `child`." ]
+                            else
+                                []
+
                         // EPIC-UNLINKED-CHILD may only reason when the graph is WHOLE (Total == visible) — a
                         // truncated graph makes "this declared child is unlinked" a claim about a set already
                         // known to be short (#266); EPIC-CHILDREN-TRUNCATED covers that case instead.
@@ -3626,7 +3662,51 @@ module Client =
 
                         match unlinkedResult with
                         | Error e -> Error e
-                        | Ok unlinked -> Ok(noChildren @ truncated @ doneOpenChild @ undelegated @ unlinked)
+                        | Ok unlinked ->
+                            let refusals = noChildren @ truncated @ doneOpenChild @ undelegated @ noAcceptance @ unlinked
+
+                            // EPIC-ROLLUP-READY — the one epic rule that is not a defect, and the read
+                            // `/check-board` could not take from any verb (#1037-era gap).
+                            //
+                            // THE DRIFT IT NAMES. `Done.rollUp` climbs only when a worker stamps a child. An epic
+                            // whose last child was closed by hand, or whose stamping worker walked away, is never
+                            // asked the question at all — so it sits open with every child resolved, advertising
+                            // work that does not exist. Nothing re-asks it, exactly as nothing re-checks a
+                            // `Blocked by` when its blocker closes: same rot, one graph over.
+                            //
+                            // WHY IT IS A NOTE AND NOT AN ERROR, AND WHY IT DOES NOT CLOSE ANYTHING. This finding
+                            // reports that every MECHANICAL precondition holds — the graph is whole, every child is
+                            // resolved, the acceptance is stated and fully delegated, no declared child is missing
+                            // from the graph. It does NOT report that the epic is done. That question is
+                            // `Discharge` (#614), and it is an ARGUMENT only a human can make: FS.GG.SDD#398 said
+                            // IN BOLD that it did not complete its parent, and the roll-up closed the parent anyway
+                            // by inferring completion from "all children are done". Children do not partition their
+                            // parent. So this rule hands a human a candidate and the evidence for it, and stops —
+                            // an error would read as "this SHOULD close", which is the inference #614 is about.
+                            //
+                            // GATED ON EVERY REFUSAL BEING EMPTY, by reusing them rather than re-deriving them: a
+                            // second spelling of "can this roll up?" is the drift #485/#864 name, and this one would
+                            // drift toward optimism, which is the direction that closes things.
+                            //
+                            // TITLE-SCOPED, like every rule here, and that under-reports: `Done.rollUp` applies to
+                            // every PARENT, and #561 is titled `[cross-repo]`. Under-reporting candidates is the
+                            // safe direction — a missed candidate stays open, and an epic this cannot see is one no
+                            // human is asked to close.
+                            let rollupReady =
+                                if
+                                    List.isEmpty refusals
+                                    && r.State = IssueState.Open
+                                    && graph.Children |> List.forall (fun c -> not c.Open)
+                                then
+                                    [ mk
+                                          "EPIC-ROLLUP-READY"
+                                          "note"
+                                          r
+                                          $"all %d{visible} child(ren) are resolved, the graph is whole, and the body's acceptance is fully delegated — every mechanical precondition to roll up holds, and this epic is still OPEN. Nothing has asked it to: the roll-up climbs only when a worker stamps a child. Whether those children DISCHARGE this epic is an argument only a human can make (#614) — decide it, do not infer it." ]
+                                else
+                                    []
+
+                            Ok(refusals @ rollupReady)
 
                 // Per item, in rule order: touch-set rules, then a Done-but-open NOTE, then the epic rules
                 // (only epics read their graph/body-child-refs). FAIL CLOSED (#266): an unreadable body or
@@ -3689,8 +3769,14 @@ module Client =
 
                         eprint $"fsgg-coord-engine: %d{errors} error(s), %d{notes} note(s)%s{repoSuffix}"
 
-                    // A gate: any error fails it; `--strict` makes a note fatal too. (No note rule ships in
-                    // this slice — the epic-graph rules that emit them are deferred — so `notes` is 0 here.)
+                    // A gate: any error fails it; `--strict` makes a note fatal too.
+                    //
+                    // NOTES ARE NOT FATAL BY DEFAULT, AND `EPIC-ROLLUP-READY` IS WHY THAT MATTERS NOW. Both note
+                    // rules report a state only a human can adjudicate — `DONE-STATUS-OPEN-ISSUE` cannot tell a
+                    // premature flip from "merged, left open for the release note", and `EPIC-ROLLUP-READY` cannot
+                    // tell a discharged epic from #614's partial fix. Reddening a gate on a question nobody has
+                    // been asked yet teaches the lesson #698 names: the gate is noise, merge anyway. `--strict` is
+                    // for the caller who wants to be stopped by one.
                     if errors > 0 || (opts.Strict && notes > 0) then
                         ExitError
                     else
