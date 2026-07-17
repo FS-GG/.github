@@ -94,6 +94,16 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
         "FS.GG.Audio.Engine",
         "FS.GG.Audio.Elmish",
     ],
+    # `.github` is a producer too (ADR-0039 §5) and had no row here, so this gate had no subject for
+    # the one package whose staleness degrades every worker in the fleet (.github#1067).
+    #
+    # WHAT THIS ENTRY DOES AND DOES NOT BUY. It catches the registry falling behind the feed — publish
+    # 0.4.0 and forget to flip the row, and this reds. That is real and it is the .github#250 class,
+    # which has hit other rows 7+ times. It does NOT catch the engine's OWN recurring failure (source
+    # merged, never published), and no entry here could: this gate compares the registry to the feed
+    # and never looks at source. See the coord-engine row in registry/dependencies.yml, and .github#1075
+    # for the detector that measures commits since the release tag instead of comparing two scalars.
+    "coord-engine": ["FS.GG.Coord.Cli"],
 }
 
 def _packages_for(contract_id: str) -> list[str]:
