@@ -258,15 +258,20 @@ module ProtocolTests =
             |> List.tryFind (fun c -> c.Code = code)
             |> Option.map (fun c -> c.Meaning.ToUpperInvariant())
 
+        // `StartsWith`, not `Contains` (#944). "REGISTERED" CONTAINS "RED" — and "none have registered
+        // yet" is row 7's own PENDING text, so `Contains "RED"` PASSES on the pending row. Measured on
+        // this tree: rewrite row 3 to say "The checks have not registered yet" and this test, the one
+        // named for catching exactly that, stayed GREEN. It was asserting a substring of a word rather
+        // than the verdict. Both rows open with their verdict word, so anchor to it.
         match meaningOf 3 with
         | None -> Assert.Fail "landable exit 3 (red/conflicted) is not documented"
         | Some m ->
-            Assert.True(m.Contains "RED", "landable exit 3 does not say it is RED — #900 is that it said 'pending'")
+            Assert.True(m.StartsWith "RED", "landable exit 3 does not say it is RED — #900 is that it said 'pending'")
             Assert.False(m.StartsWith "PENDING", "landable exit 3 is documented as PENDING — that is #900 exactly, and a loop built on it hangs")
 
         match meaningOf 7 with
         | None -> Assert.Fail "landable exit 7 (pending) is not documented — the recipe's table had no 7, so a loop stops waiting on a PR that is still running"
-        | Some m -> Assert.True(m.Contains "PENDING", "landable exit 7 does not say it is PENDING")
+        | Some m -> Assert.True(m.StartsWith "PENDING", "landable exit 7 does not say it is PENDING")
 
     /// THERE IS NO EX_RATE IN `landable`, and a reader of `take`'s table will expect one.
     /// `Reads.prLandableRequire` returns a bare `PrState` with no error channel, so a rate limit is
