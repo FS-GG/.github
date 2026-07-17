@@ -75,7 +75,7 @@ module RepoScopeTests =
               Repo = ".github"
               Number = 1033 }
 
-        Assert.Equal(Some expected, Options.choreLockRef "FS-GG" repo)
+        Assert.Equal(Some expected, Options.choreLockRef [] "FS-GG" repo)
 
     /// ALL SEVEN REPOS RESOLVE (#1087). The six receivers gained closed `[chore-lock]` issues and this map
     /// gained their numbers, so the queue drains in every repo rather than only `.github`. Each is asserted
@@ -99,7 +99,7 @@ module RepoScopeTests =
               Repo = canonicalRepo
               Number = number }
 
-        Assert.Equal(Some expected, Options.choreLockRef "FS-GG" repo)
+        Assert.Equal(Some expected, Options.choreLockRef [] "FS-GG" repo)
 
     /// FAIL CLOSED remains the rule for a repo NOBODY rostered: ADR-0041 — "Absent ⇒ `offer` refuses. A chore
     /// queue that cannot find its lock must offer nothing, never broadcast." The seven known repos now resolve;
@@ -109,7 +109,7 @@ module RepoScopeTests =
     [<InlineData("some-fork")>]
     [<InlineData("")>]
     let ``a repo with no lock issue has no lock`` (repo: string) =
-        Assert.Equal(None, Options.choreLockRef "FS-GG" repo)
+        Assert.Equal(None, Options.choreLockRef [] "FS-GG" repo)
 
     /// THE FAIL-OPEN THIS KEYING EXISTS TO REFUSE. The owner is CONFIGURABLE (`FSGG_COORD_OWNER`), and the
     /// embedded numbers are FS-GG's issues. Keyed on the repo alone, a caller under any other owner would be
@@ -121,7 +121,7 @@ module RepoScopeTests =
     [<InlineData("FS-GG-fork")>]
     [<InlineData("")>]
     let ``an owner the map does not know has no lock, never a foreign one`` (owner: string) =
-        Assert.Equal(None, Options.choreLockRef owner ".github")
+        Assert.Equal(None, Options.choreLockRef [] owner ".github")
 
     /// CANONICAL OUT, CASE-INSENSITIVE IN — `resolveRepo`'s contract, applied to the owner as well. Echoing
     /// the caller's casing back would mint a Ref structurally UNEQUAL to the canonical one while `Short`
@@ -137,7 +137,7 @@ module RepoScopeTests =
               Repo = ".github"
               Number = 1033 }
 
-        Assert.Equal(Some expected, Options.choreLockRef owner ".github")
+        Assert.Equal(Some expected, Options.choreLockRef [] owner ".github")
 
     /// The lock issue must never be confused with WORK. ADR-0041 puts three properties on it and the ref is
     /// only sound while all three hold — closed, unlocked, and never on the board. Only the number is
@@ -145,7 +145,7 @@ module RepoScopeTests =
     /// number is what makes a silent renumber a red test rather than a lock on the wrong subject.
     [<Fact>]
     let ``the embedded lock number is pinned`` () =
-        match Options.choreLockRef "FS-GG" ".github" with
+        match Options.choreLockRef [] "FS-GG" ".github" with
         | Some r ->
             Assert.Equal(1033, r.Number)
             Assert.Equal(".github", r.Repo)

@@ -457,3 +457,58 @@ module OptionsTests =
     let ``#614 --partial with no value is rejected — a partial fix must SAY why`` () =
         let e = parse [ "done"; "FS.GG.SDD#62"; "--flip"; "--partial" ] |> rejected
         Assert.Contains("--partial", e)
+
+    // ---- choreLockRef: FS-GG's table stays gated; an env-injected roster is universal (.github#1140) ----
+    // The last FS-GG hard-wire. `extra` is the per-deployment roster a VENDORED tenant injects by env
+    // (`FSGG_COORD_CHORE_LOCKS`), so `pnext-item`/`check-board` can run `offer` on a non-FS-GG board — while
+    // the embedded FS-GG numbers are still never handed to another owner (#1087's invariant, kept).
+
+    let private mkRef (owner: string) (repo: string) (n: int) : FS.GG.Coord.Types.Ref =
+        { FS.GG.Coord.Types.Owner = owner
+          FS.GG.Coord.Types.Repo = repo
+          FS.GG.Coord.Types.Number = n }
+
+    [<Fact>]
+    let ``choreLockRef with no injected roster resolves the embedded FS-GG lock, unchanged`` () =
+        Assert.Equal(Some(mkRef "FS-GG" ".github" 1033), choreLockRef [] "FS-GG" ".github")
+        // the short id is canonicalised on the way out, exactly as before
+        Assert.Equal(Some(mkRef "FS-GG" "FS.GG.SDD" 518), choreLockRef [] "FS-GG" "sdd")
+
+    [<Fact>]
+    let ``choreLockRef stays fail-closed for a non-FS-GG owner with no injected roster`` () =
+        // #1087's invariant: FS-GG's issue numbers are never handed to another owner.
+        Assert.Equal(None, choreLockRef [] "acme" "Product.X")
+        Assert.Equal(None, choreLockRef [] "acme" ".github")
+
+    [<Fact>]
+    let ``choreLockRef resolves an env-injected lock for a vendored tenant under its OWN owner`` () =
+        let extra = [ mkRef "acme" "Product.X" 42 ]
+        Assert.Equal(Some(mkRef "acme" "Product.X" 42), choreLockRef extra "acme" "Product.X")
+        // nothing for a repo the roster does not name, and no leak of the FS-GG table to `acme`
+        Assert.Equal(None, choreLockRef extra "acme" "Product.Y")
+        Assert.Equal(None, choreLockRef extra "acme" ".github")
+
+    [<Fact>]
+    let ``an injected lock is consulted FIRST — a deployment can repoint one without a code change`` () =
+        let extra = [ mkRef "FS-GG" ".github" 9999 ]
+        Assert.Equal(Some(mkRef "FS-GG" ".github" 9999), choreLockRef extra "FS-GG" ".github")
+        // a repo the override does not name still falls through to the embedded table
+        Assert.Equal(Some(mkRef "FS-GG" "FS.GG.SDD" 518), choreLockRef extra "FS-GG" "sdd")
+
+    [<Fact>]
+    let ``choreLockRef matches owner and repo case-insensitively`` () =
+        let extra = [ mkRef "Acme" "Product.X" 42 ]
+        Assert.Equal(Some(mkRef "Acme" "Product.X" 42), choreLockRef extra "acme" "product.x")
+
+    [<Fact>]
+    let ``parseChoreLocks reads a comma-separated roster, canonicalises the repo, and DROPS junk`` () =
+        // A malformed token degrades to the fail-closed default (a chore not offered), never a throw that
+        // would take down the caller's real command — the same answer an absent lock already gives.
+        let got = Client.parseChoreLocks "acme/Product.X#42, FS-GG/sdd#7 , garbage, /bad#1, a/b#x"
+        Assert.Equal<FS.GG.Coord.Types.Ref list>(
+            // `FS-GG/sdd` is canonicalised to `FS.GG.SDD` on the way in, so the stored ref is CAS-comparable.
+            [ mkRef "acme" "Product.X" 42; mkRef "FS-GG" "FS.GG.SDD" 7 ],
+            got
+        )
+        // an unset / empty env is an empty roster, not an error
+        Assert.Equal<FS.GG.Coord.Types.Ref list>([], Client.parseChoreLocks "")

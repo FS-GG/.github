@@ -113,7 +113,12 @@ module Client =
           Owner: string
           Title: string
           /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
-          DefaultRepo: string option }
+          DefaultRepo: string option
+          /// The per-deployment chore-lock roster a VENDORED tenant injects by env
+          /// (`FSGG_COORD_CHORE_LOCKS`, parsed by `parseChoreLocks`). Matched on (owner, repo) under ANY
+          /// owner and consulted BEFORE the engine's embedded FS-GG table — empty for the default FS-GG
+          /// deployment, so its behaviour is unchanged. See `Options.choreLockRef`.
+          ChoreLocks: Ref list }
 
     /// Parse a `<ref>` — a URL, `owner/repo#n`, `repo#n` (owner defaulting to the board owner), or a bare
     /// `n`/`#n` (repo defaulting to `defaultRepo`, the checkout you are standing in).
@@ -432,7 +437,7 @@ module Client =
             // out-of-scope repos — which is what makes the rules reachable at all. `BLOCKER-CLEARED` needs a
             // `Blocked` row and `CLOSED-ISSUE-NOT-DONE` a closed one, and bash filtered on
             // `Status ∈ {Ready, Backlog}` before the engine was asked, so under it neither could ever fire.
-            Chores.offer ctx.Transport boundary (WorkerId w.Id) session ctx.Owner repo observed
+            Chores.offer ctx.Transport boundary (WorkerId w.Id) session ctx.ChoreLocks ctx.Owner repo observed
             |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
 
     /// `next`'s call site. The repo the offer is FOR: `--repo` when given, else the checkout we are standing
@@ -456,7 +461,7 @@ module Client =
 
         // The free question first, exactly as `Chores.offer` does it and for the same reason: six of the
         // org's seven repos have no chore lock, and none of them should buy a board read to hear so.
-        match Options.choreLockRef ctx.Owner repo with
+        match Options.choreLockRef ctx.ChoreLocks ctx.Owner repo with
         | None -> ()
         | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AtNext repo)
 
@@ -500,7 +505,7 @@ module Client =
         // repo (`.github#1033`, ADR-0041), so SIX of the org's seven receivers answer `None` — most `done`
         // calls would buy a board scan, on the budget the claim lock lives on, for a guaranteed refusal.
         // The cheapest question first is the module's own rule; this is the call site keeping it.
-        match Options.choreLockRef ctx.Owner ref.Repo with
+        match Options.choreLockRef ctx.ChoreLocks ctx.Owner ref.Repo with
         | None -> ()
         | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AfterDone ref.Repo)
 
@@ -3596,6 +3601,31 @@ module Client =
 
     // ---- the dispatcher for the IO commands ------------------------------------------------------------
 
+    /// `FSGG_COORD_CHORE_LOCKS` → the injected chore-lock roster a vendored tenant runs against a non-FS-GG
+    /// board. Comma-separated fully-qualified refs `owner/repo#n`; a token that does not parse is DROPPED,
+    /// never thrown — a dropped lock costs a chore not offered (fail-closed, condition 1), the same answer an
+    /// absent lock already gives, so a typo degrades to the default rather than crashing the caller's real
+    /// command. Parsing lives HERE, not in the pure `Options.choreLockRef`, because env is IO and ADR-0042's
+    /// constraint is only that no `repos.yml` READER ship to a receiver — env DOES reach the receiver, so a
+    /// per-deployment roster injected by env is exactly the seam a file reader could not be. The repo is
+    /// canonicalised on the way in (`resolveRepo`), so the stored ref is already in the spelling the CAS
+    /// compares. The pattern is `parseRef`'s own fully-qualified arm (line ~166), kept in step by eye.
+    let parseChoreLocks (raw: string) : Ref list =
+        raw.Split(',')
+        |> Array.choose (fun tok ->
+            let m = Text.RegularExpressions.Regex.Match(tok.Trim(), @"^([\w.-]+)/([\w.-]+)#(\d+)$")
+
+            if m.Success then
+                Some(
+                    { Owner = m.Groups.[1].Value
+                      Repo = resolveRepo m.Groups.[2].Value
+                      Number = int m.Groups.[3].Value }
+                    : Ref
+                )
+            else
+                None)
+        |> Array.toList
+
     /// Build the context — the transport, the board coordinates, the token check. `Error` is a printed
     /// message and an exit code (a missing token is a refusal, never an empty board).
     let context () : Result<Context * IDisposable, int> =
@@ -3617,7 +3647,8 @@ module Client =
                 { Transport = transport
                   Owner = env "FSGG_COORD_OWNER" "FS-GG"
                   Title = env "FSGG_COORD_PROJECT" "Coordination"
-                  DefaultRepo = None },
+                  DefaultRepo = None
+                  ChoreLocks = parseChoreLocks (env "FSGG_COORD_CHORE_LOCKS" "") },
                 transport :> IDisposable
             )
 

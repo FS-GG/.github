@@ -116,6 +116,7 @@ module Chores =
         boundary: Chore.Boundary ->
         worker: Types.WorkerId ->
         session: Types.SessionId option ->
+        extra: Types.Ref list ->
         owner: string ->
         repo: string ->
         observed: Chore.Board ->

@@ -526,17 +526,38 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           "FS.GG.Game", 406
           "FS.GG.Audio", 183 ]
 
-    let choreLockRef (owner: string) (repo: string) : FS.GG.Coord.Types.Ref option =
-        // KEYED ON OWNER TOO, and that is the fail-closed part (see the doc above): an owner this map does not
-        // know gets `None`, so a caller under another owner is never handed FS-GG's issue numbers.
-        // `.ToLowerInvariant()` throughout, matching `resolveRepo` — the file opens no `System`.
-        if owner.ToLowerInvariant() <> "fs-gg" then
-            None
-        else
-            let canonical = (resolveRepo repo).ToLowerInvariant()
+    let choreLockRef
+        (extra: FS.GG.Coord.Types.Ref list)
+        (owner: string)
+        (repo: string)
+        : FS.GG.Coord.Types.Ref option =
+        // KEYED ON OWNER TOO, and that is the fail-closed part (see the doc above): a repo neither the
+        // embedded table nor `extra` knows gets `None`, so `offer` refuses rather than broadcasts.
+        // `.ToLowerInvariant()` throughout, matching `resolveRepo` — the resolver opens no `System`.
+        //
+        // `extra` is the per-deployment roster a VENDORED tenant injects by env (`FSGG_COORD_CHORE_LOCKS`,
+        // parsed in `Client.fs`, ADR-0042). It is matched on (owner, repo) so it works under ANY owner, and
+        // it is consulted FIRST so a deployment can repoint a lock without a code change. The EMBEDDED table
+        // below stays gated to `FS-GG`: its numbers are FS-GG's issues, so a caller under another owner is
+        // still never handed one — the invariant that kept a foreign owner from a real-but-unrelated ref is
+        // unchanged; the vendored tenant now brings its OWN refs rather than borrowing FS-GG's.
+        let ownerLc = owner.ToLowerInvariant()
+        let repoLc = (resolveRepo repo).ToLowerInvariant()
 
+        let fromExtra =
+            extra
+            |> List.tryFind (fun r ->
+                r.Owner.ToLowerInvariant() = ownerLc
+                && (resolveRepo r.Repo).ToLowerInvariant() = repoLc)
+
+        match fromExtra with
+        // The injected ref is already canonical (its repo was resolved when parsed) and carries its own
+        // owner, so it is returned verbatim — the CAS compares the same value the deployment declared.
+        | Some _ as hit -> hit
+        | None when ownerLc <> "fs-gg" -> None
+        | None ->
             choreLockNumbers
-            |> List.tryFind (fun (r, _) -> r.ToLowerInvariant() = canonical)
+            |> List.tryFind (fun (r, _) -> r.ToLowerInvariant() = repoLc)
             |> Option.map (fun (r, n) ->
                 // CANONICAL on the way out — the Ref is built from the TABLE's spelling (`r`), never the
                 // caller's casing. Echoing the caller back would mint a Ref structurally UNEQUAL to the
