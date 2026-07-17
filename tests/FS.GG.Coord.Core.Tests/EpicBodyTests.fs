@@ -32,14 +32,24 @@ let ``a non-checkbox bullet is not a child declaration`` () =
     Assert.Equal<string list>([], refs "- #1 just a bullet, no checkbox")
 
 [<Fact>]
-let ``all three ref spellings canonicalize to owner/repo#n against the epic's repo`` () =
+let ``all four ref spellings canonicalize to owner/repo#n against the epic's repo`` () =
     let body =
-        "- [ ] #7 bare\n- [x] FS-GG/FS.GG.Rendering#8 qualified\n- [ ] https://github.com/FS-GG/FS.GG.Audio/issues/9 a url"
+        "- [ ] #7 bare\n- [x] FS-GG/FS.GG.Rendering#8 qualified\n- [ ] https://github.com/FS-GG/FS.GG.Audio/issues/9 a url\n- [ ] FS.GG.Game#6 repo-qualified"
 
     Assert.Equal<string list>(
-        [ "FS-GG/FS.GG.Audio#9"; "FS-GG/FS.GG.Rendering#8"; "FS-GG/FS.GG.SDD#7" ],
+        [ "FS-GG/FS.GG.Audio#9"; "FS-GG/FS.GG.Game#6"; "FS-GG/FS.GG.Rendering#8"; "FS-GG/FS.GG.SDD#7" ],
         refs body
     )
+
+[<Fact>]
+let ``a repo#n child carries its repo, not the epic's - it must NOT fall through to bare #n`` () =
+    // #1153: `FS.GG.SDD#8` used to match no alternative but the bare `#n` it contains, dropping the
+    // `FS.GG.SDD` qualifier as prose and resolving against the EPIC's repo. In a `.github` epic that is
+    // `.github#8` — a real, usually-closed row — so the rollup checked the wrong issue's state.
+    let dotGithub body = EpicBody.childRefs "FS-GG" ".github" body
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#8" ], dotGithub "- [ ] FS.GG.SDD#8 the child")
+    // And the owner-less form still defers its OWNER to the epic's, exactly as a bare `#n` would.
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#8" ], refs "- [ ] FS.GG.SDD#8 the child")
 
 [<Fact>]
 let ``the result is deduplicated and sorted - the set is stable and diffable`` () =

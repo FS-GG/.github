@@ -452,6 +452,38 @@ module ProtocolTests =
         Assert.Equal(Some false, holdsOf "merged")
         Assert.Equal(Some true, holdsOf "open")
 
+    /// TWO REF PARSERS, ONE GRAMMAR — they may never disagree about what a ref token means.
+    ///
+    /// `EpicBody.childRefs` (scanning an epic's task list) and `Blockers.canonicalizeBlockedBy` (parsing a
+    /// `Blocked by` field) both reduce a ref token to `owner/repo#n`. #1153 is what their DRIFT cost:
+    /// `EpicBody` accepted `owner/repo#n`, a URL, and bare `#n` but NOT the owner-less `repo#n`, so
+    /// `FS.GG.SDD#8` fell through to the bare `#n` it contains and resolved against the epic's OWN repo —
+    /// `.github#8` for a `.github` epic — while `Blockers` read the same token as `FS-GG/FS.GG.SDD#8`.
+    /// A rollup that diffs one parser's output against the other's could then check the wrong issue. This
+    /// pins the two against ONE token set, in all four spellings, so they cannot silently drift again.
+    [<Fact>]
+    let ``EpicBody and Blockers canonicalize a ref token identically`` () =
+        let owner, repo = "FS-GG", ".github"
+
+        let tokens =
+            [ "#8" // bare #n → owner AND repo default to the epic's own
+              "FS.GG.SDD#8" // repo#n → repo carried, owner defaults
+              "FS-GG/FS.GG.Rendering#12" // owner/repo#n → both carried
+              "https://github.com/FS-GG/FS.GG.Audio/issues/9" ] // a full issue URL
+
+        for tok in tokens do
+            let viaEpic = EpicBody.childRefs owner repo $"- [ ] {tok} a child"
+
+            let viaBlockers =
+                match Blockers.canonicalizeBlockedBy owner repo tok with
+                | Ok(Some s) -> [ s ]
+                | Ok None -> []
+                | Error _ -> [ "<refused>" ]
+
+            Assert.True(
+                (viaEpic = viaBlockers),
+                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Blockers to %A{viaBlockers} — two ref parsers, one grammar, drifted (#1153)")
+
     /// A STATE DOCUMENTED UNDER AN EMPTY STRING IS UNGREPPABLE BY CONSTRUCTION, and a state that means
     /// nothing is a row a reader skips.
     [<Fact>]

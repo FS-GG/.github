@@ -11,11 +11,15 @@ module EpicBody =
     let private taskLine =
         Regex(@"^[ \t]{0,3}[-*+][ \t]+\[[ xX]\][ \t]", RegexOptions.Compiled)
 
-    // The FIRST ref on the line, in one of three spellings. Alternation order is leftmost-then-first, so an
-    // `owner/repo#n` is preferred over the bare `#n` it contains at the same position.
+    // The FIRST ref on the line, in one of FOUR spellings. Alternation order is leftmost-then-first, so an
+    // `owner/repo#n` is preferred over the `repo#n` and bare `#n` it contains at the same position, and
+    // `repo#n` over the bare `#n` it contains. `repo#n` sits before bare `#n` so `FS.GG.SDD#8` binds its
+    // repo qualifier instead of falling through to bare `#n`, which would drop `FS.GG.SDD` as prose and
+    // resolve the issue against the epic's OWN repo — `.github#8` for a `.github` epic (#1153). This is the
+    // same grammar `Blockers.canonToken` accepts, and `ProtocolTests` pins the two against one token set.
     let private refRe =
         Regex(
-            @"([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#([0-9]+)|https?://github\.com/([^/\s]+)/([^/\s]+)/issues/([0-9]+)|#([0-9]+)",
+            @"([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)#([0-9]+)|https?://github\.com/([^/\s]+)/([^/\s]+)/issues/([0-9]+)|([A-Za-z0-9._-]+)#([0-9]+)|#([0-9]+)",
             RegexOptions.Compiled
         )
 
@@ -44,8 +48,12 @@ module EpicBody =
                 Some $"%s{m.Groups.[1].Value}#%s{m.Groups.[2].Value}"
             elif m.Groups.[3].Success then
                 Some $"%s{m.Groups.[3].Value}/%s{m.Groups.[4].Value}#%s{m.Groups.[5].Value}"
+            elif m.Groups.[6].Success then
+                // `repo#n`: the owner defaults to the epic's own — the same reduction `Blockers.canonToken`
+                // gives `repo#n`, and the same one `#n` gets everywhere else. Only the REPO is carried.
+                Some $"%s{selfOwner}/%s{m.Groups.[6].Value}#%s{m.Groups.[7].Value}"
             else
-                Some $"%s{selfOwner}/%s{selfRepo}#%s{m.Groups.[6].Value}")
+                Some $"%s{selfOwner}/%s{selfRepo}#%s{m.Groups.[8].Value}")
         |> List.distinct
         |> List.sort
 
