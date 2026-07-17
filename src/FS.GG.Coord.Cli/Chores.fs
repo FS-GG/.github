@@ -18,11 +18,16 @@ module Chores =
         // declines must be able to hand the drain back NOW rather than make the fleet wait out the lease,
         // and condition 3's "carry an explicit size so the worker can decline" is not real if declining has
         // no verb.
+        //
+        // `scripts/fsgg-coord`, NEVER a bare `fsgg-coord` (#931, #569): the bare name is not on PATH, so a
+        // worker pasting exactly what the tool told them gets `command not found`. The resolver is what
+        // runs, and it resolves from an item worktree too — which is where pnext-item §2 puts every reader
+        // of this line. The `worker-id-attractor` gate holds this, and it caught this line.
         String.concat
             "\n"
             [ $"chore [%s{chore.Size.Label}] %s{chore.Statement}"
               $"  you hold %s{lockRef.Short}, the chore lock for this repo (%d{LeaseMinutes}m)."
-              $"  do it, or hand it back now:  fsgg-coord release %s{lockRef.Short}" ]
+              $"  do it, or hand it back now:  scripts/fsgg-coord release %s{lockRef.Short}" ]
 
     let offer
         (transport: Transport.IGitHubTransport)
@@ -56,7 +61,16 @@ module Chores =
             //    who typed a short id — offering nothing, silently, on a board full of chores.
             let ours =
                 items
-                |> List.filter (fun i -> String.Equals(i.Ref.Repo, lockRef.Repo, StringComparison.OrdinalIgnoreCase))
+                |> List.filter (fun i ->
+                    // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter. This asks "which
+                    // items live in THIS LOCK's repo?" — the same shape as `widen`'s, and a question
+                    // `--repo` has no part in. `repo` reaches this function only to RESOLVE the lock, and
+                    // by here it is spent: the scope is `lockRef`'s, so a caller who named no repo at all
+                    // is still scoped, which `Scan.scope opts.Repo` (correctly) would not do. Routing this
+                    // through the funnel is also not possible in the type: `Scan.scope` takes `Scan.Row`s
+                    // and these are `Types.Item`s — the funnel sits upstream of the snapshot these came
+                    // out of, and it already ran there.
+                    String.Equals(i.Ref.Repo, lockRef.Repo, StringComparison.OrdinalIgnoreCase))
 
             // 3. IDLE? — over the WHOLE board, not `ours`, and the difference is condition 3 itself.
             //
