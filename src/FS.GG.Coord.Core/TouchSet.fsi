@@ -39,6 +39,15 @@ module TouchSet =
     /// is the promise that has to state the rule.
     val parse: body: string -> TouchSet
 
+    /// Is this token the `none` SENTINEL — `Paths: none`, in any case, with any surrounding space?
+    ///
+    /// The sentinel is part of the grammar, so it is decided HERE, once. `Writes.validate` must tell a
+    /// declaration that reserves nothing DELIBERATELY (the sentinel — an epic, a decision item) from one
+    /// that reserves nothing BY MISTAKE (an unmatchable token, #273). Those are opposite verdicts on
+    /// inputs one character apart, and a second implementation of the test is a second place for it to
+    /// rot — #485's shape inside its own remedy.
+    val isSentinel: token: string -> bool
+
     /// Is this token one the matcher can actually reserve?
     ///
     /// Not a glob language. Exact paths, directory prefixes, and a TRAILING `/**` or `/*`. A leading

@@ -13,7 +13,13 @@ module TouchSet =
     let private fenceRe = Regex(@"^ {0,3}(```|~~~)", RegexOptions.Compiled)
 
     /// The sentinel, after normalisation.
-    let private isNoneSentinel (s: string) = s.Trim().ToLowerInvariant() = "none"
+    ///
+    /// PUBLIC because the sentinel is part of the GRAMMAR, and the grammar lives here — in one place.
+    /// `Writes.validate` has to tell "this declares nothing, deliberately" from "this reserves nothing,
+    /// by mistake", and the two are one character apart. Re-deciding that there would be a second place
+    /// for the rule to rot, which is #485's shape (one question, five implementations, agreeing in none)
+    /// reproduced inside its own remedy — the exact thing that file's own comment forbids.
+    let isSentinel (token: string) = token.Trim().ToLowerInvariant() = "none"
 
     /// Lines OUTSIDE any fenced code block. A `Paths:` line inside a fence is a QUOTATION of the
     /// grammar, not a use of it (#277) — and the protocol docs quote it constantly.
@@ -37,7 +43,7 @@ module TouchSet =
         // reserving a `none` directory that does not exist: a path-shaped token that matches no file is
         // disjoint from every other worker's touch-set, so the item would schedule AND read as
         // conflict-free with everything (#863, and #273's fail-open through the parser built to end it).
-        if isNoneSentinel token then
+        if isSentinel token then
             Unmatchable token
         else
 
@@ -108,7 +114,7 @@ module TouchSet =
             | [] -> Undeclared
 
             // The sentinel is tested over the TOKEN SET, never over the concatenated string (#863).
-            // `isNoneSentinel raw` broke on the second declaration: two bare `Paths: none` lines
+            // `isSentinel raw` broke on the second declaration: two bare `Paths: none` lines
             // concatenate to `"none none"`, which is not `"none"`, so the sentinel was LOST and `none`
             // fell through to `classify` — which called it `Matchable`, because it is a perfectly
             // path-shaped token. The epic then went Startable and reserved a `none` directory that does
@@ -116,7 +122,7 @@ module TouchSet =
             // not catch it: `none` IS matchable; it just matches no file that exists, which is the one
             // thing that gate does not test. Deciding over tokens makes the union in the `.fsi`'s
             // "multiple bare declarations UNIONED" promise mean the same thing for one line or for ten.
-            | ts when ts |> List.forall isNoneSentinel -> DeclaredNone
+            | ts when ts |> List.forall isSentinel -> DeclaredNone
 
             | ts -> Declared(ts |> List.map classify)
 

@@ -435,6 +435,54 @@ let ``an EMPTY touch-set is refused - it reserves nothing, and 'none' is a diffe
     | Error _ -> ()
     | Ok _ -> failwith "an empty token list is not a touch-set"
 
+// ---- #863: `widen --paths none` is how the SENTINEL gets declared ---------------------------------
+// `Paths: none` is a DECISION (#496), and the refusal directly above tells the worker to make it:
+// "Declare `Paths: none` if that is the decision". `widen --paths none` is how they would. The sentinel
+// is not a path, so `TouchSet.classify` calls it `Unmatchable` — and the #273 check would therefore
+// refuse it for "never matching a file", which is precisely what the sentinel is FOR. The tool would
+// instruct the worker to do a thing and then refuse to do it, citing a rule that does not apply.
+
+[<Fact>]
+let ``#863 the 'none' SENTINEL validates — it is a decision, not an unmatchable path`` () =
+    match validate [ "none" ] with
+    | Ok v -> Assert.Equal<string list>([ "none" ], v.Tokens)
+    | Error e -> failwith $"`widen --paths none` is how the sentinel is declared — got %s{e}"
+
+[<Fact>]
+let ``#863 the sentinel is CANONICALISED — 'none none' is the very body #863 is about`` () =
+    // `rewrite` joins the tokens verbatim, so passing these through unreduced would emit
+    // `Paths: none none` — #863's own reproduction, written by the tool that exists to repair it.
+    match validate [ "none"; "NONE" ] with
+    | Ok v -> Assert.Equal<string list>([ "none" ], v.Tokens)
+    | Error e -> failwith $"a repeated sentinel is still the sentinel — got %s{e}"
+
+[<Fact>]
+let ``#863 a validated sentinel round-trips through rewrite to DeclaredNone`` () =
+    // The two halves have to agree: what `widen` WRITES, `parse` must READ as the same decision.
+    // Anything else and the tool emits a body its own parser disagrees with.
+    let v = validate [ "none" ] |> Result.defaultWith failwith
+    let body = (rewrite "An epic." v).Body
+    Assert.Contains("Paths: none", body)
+    Assert.Equal(DeclaredNone, FS.GG.Coord.TouchSet.parse body)
+
+[<Fact>]
+let ``#863 'none' beside real paths is refused as a CONTRADICTION, naming the choice`` () =
+    match validate [ "none"; "src/A/**" ] with
+    | Error message ->
+        // NOT the #273 "can never match a file" sentence: that reports `none` as a typo'd path and sends
+        // the worker looking for the wrong mistake. The refusal has to name the actual decision.
+        Assert.Contains("sentinel", message)
+        Assert.Contains("src/A/**", message)
+        Assert.DoesNotContain("reserve NOTHING", message)
+    | Ok _ -> failwith "declaring 'none' alongside real paths is a contradiction and must be refused"
+
+[<Fact>]
+let ``#863 a real unmatchable token is STILL refused when the sentinel is not involved`` () =
+    // The sentinel branch must not swallow #273's check on its way past.
+    match validate [ "**/Audio.fs" ] with
+    | Error message -> Assert.Contains("reserve NOTHING", message)
+    | Ok _ -> failwith "an unmatchable token must still be refused"
+
 [<Fact>]
 let ``rewrite replaces the FIRST declaration and drops the rest`` () =
     // Two `Paths:` lines are an ambiguity, and an ambiguity in a reservation is two workers each reading
