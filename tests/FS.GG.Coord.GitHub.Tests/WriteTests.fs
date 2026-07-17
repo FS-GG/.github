@@ -515,6 +515,81 @@ let ``#550 ...and it re-emits the column it overwrote, so a long-lived claim doe
         | other -> failwith $"the heartbeat must not lose the previous column — got %A{other}"
     | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
 
+// ---- #1149: heartbeat must re-emit `session=`, or twin-detection dies after the first beat -----------
+//
+// Same family as #550 (heartbeat forgetting `prev=`), and worse: a PATCH rewrites the WHOLE body, so a
+// field the capability does not hold is a field the rewrite drops. `heartbeat` passed `None` for the
+// session, so the FIRST beat left a SESSIONLESS marker — and `twinSession` cannot tell a sessionless
+// marker from a human's, so a same-id twin's `claim` then read `Renewed`, not `Twin`, and both workers
+// held the item. The fix carries the session on the `Held` so the rewrite can re-emit it.
+
+/// Like `scripted`, but it also CAPTURES every REST body it is sent, so a test can assert on the exact
+/// bytes `heartbeat` PATCHed rather than on a round-trip proxy — the wire content is what #1149 is about.
+let private capturing (responses: IoResult<Response> list) =
+    let queue = System.Collections.Generic.Queue<IoResult<Response>>(responses)
+    let bodies = System.Collections.Generic.List<string>()
+
+    let recorder =
+        Fake.Recorder(fun req ->
+            match req.Body with
+            | Json b -> bodies.Add b
+            | _ -> ()
+
+            if queue.Count = 0 then
+                failwith "the transport was called more times than the test scripted"
+            else
+                queue.Dequeue())
+
+    recorder, bodies
+
+let private holdAs (session: string) (transport: Fake.Recorder) =
+    match verifyHeld transport 120 me (Some(SessionId session)) aRef with
+    | Ok(Holds held) -> held
+    | other -> failwith $"the fixture must hold the lock as %s{session} — got %A{other}"
+
+[<Fact>]
+let ``#1149 heartbeat re-emits session= so the marker does not go SESSIONLESS`` () =
+    let transport, bodies =
+        capturing
+            [ ok (comments [ marker 901 "vole-418" " session=S1" ]) // acquire, as session S1
+              ok "" ] // the heartbeat's PATCH
+
+    let held = holdAs "S1" transport
+
+    match heartbeat transport 120 held with
+    | Ok _ -> Assert.Contains("session=S1", Seq.last bodies) // the beaten body still carries the session
+    | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
+
+[<Fact>]
+let ``#1149 a twin's claim AFTER a heartbeat is refused Twin, not Renewed`` () =
+    // The failure scenario, end to end and with the REAL heartbeat output. Worker A (S1) claims and beats
+    // once; twin B (S2) — same shared-account id — claims the same item. Before the fix, A's beaten marker
+    // was sessionless and B got `Renewed`, the double-hold ADR-0027's CAS exists to prevent.
+    let transport, bodies =
+        capturing
+            [ ok (comments [ marker 901 "vole-418" " session=S1" ]) // A acquires as S1
+              ok "" ] // A's heartbeat PATCH
+
+    let held = holdAs "S1" transport
+
+    match heartbeat transport 120 held with
+    | Ok _ -> ()
+    | Error e -> failwith $"the heartbeat should have landed — got %A{e}"
+
+    // The marker as it stands on the issue after A's beat — the exact comment text A's heartbeat PATCHed,
+    // lifted out of the `{"body": …}` payload it was sent in, not a hand-written stand-in. If the fix
+    // regresses, this comment is sessionless and B is not refused.
+    let beatenComment =
+        System.Text.Json.JsonDocument.Parse(Seq.last bodies).RootElement.GetProperty("body").GetString()
+
+    let beatenMarker = $"""{{"id":901,"body":"%s{beatenComment}","updated_at":"%s{now}"}}"""
+
+    let twinTransport = scripted [ ok (comments [ beatenMarker ]) ]
+
+    match claim twinTransport 120 me (Some(SessionId "S2")) aRef (fun () -> None) with
+    | Ok(Twin(SessionId theirs)) -> Assert.Equal("S1", theirs)
+    | other -> failwith $"a twin claiming after a heartbeat must be refused Twin — got %A{other}"
+
 // ---- #273 / #523: the touch-set ---------------------------------------------------------------------
 
 [<Fact>]
