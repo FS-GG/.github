@@ -157,8 +157,17 @@ jobs:
           # the bot is still configured to keep it there. If the annotation below is reworded or moved,
           # or the pin is deleted, pin-coherence.yml fails — it is named in that gate's REQUIRED_PINS.
           # Do not "fix" a red pin gate by deleting it.
+          #
+          # ADVANCED 0.12.0 → 0.13.0 (.github#1114, SDD#508 step 3) — and this is NOT the sixth
+          # hand-advance the warning above forbids. That warning is about advancing the pin to GREEN a
+          # frozen-bot gate (#576) on the false belief it is bot-managed. This advance is the ADR-0037
+          # step-2 obligation: the schemaVersion 1→2 bump in registry/dependencies.yml makes `consumers`
+          # "required, may be empty", and only FS.GG.SDD.Cli 0.13.0 (SDD#516, three-state validator)
+          # ACCEPTS the resulting `consumers: []` — 0.12.0 refuses it (MissingField), measured. The pin
+          # is coupled to the schema, so it moves WITH the schema. #576 (bot freeze) stays open and
+          # unrelated; a red pin gate absent a schema bump is still a #576 report, not a hand-advance.
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli
-          dotnet tool install --global FS.GG.SDD.Cli --version 0.12.0
+          dotnet tool install --global FS.GG.SDD.Cli --version 0.13.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Assert build-config source .props are well-formed XML
