@@ -62,8 +62,8 @@ repo; CIB fails the second requirement wherever a repo forces it for determinism
    > `dist/dotnet/` and will not join `FILES`; per-repo SDK bands are legitimate.
    >
    > The rollout ([#561](https://github.com/FS-GG/.github/issues/561)) did complete its adoption
-   > phase — every consumer carries a `global.json`, adopted byte-identically at the canonical
-   > `10.0.301` of the day. Renovate then bumped the **canonical** to `10.0.302` out from under them
+   > phase: every consumer carries a `global.json`, and #561's four children adopted byte-identically
+   > at the canonical `10.0.301` of the day. Renovate then bumped the **canonical** to `10.0.302`
    > (`bff95e4`, [#804](https://github.com/FS-GG/.github/issues/804)) and bumped only some receivers
    > in their own repos. Because `--check` compares **content**, enforcing would have red-lit the
    > receivers that had adopted exactly as instructed. Nothing fans a canonical bump out, so
