@@ -449,16 +449,6 @@ module Snapshot =
     // shipped `item-pr-open` and `held-by` while the docs had no `item-pr-open` at all and explained a
     // `held` nothing emits. A token is a contract, so it is emitted from the union, once.
 
-    let private statusName =
-        function
-        | NoStatus -> ""
-        | Backlog -> "Backlog"
-        | Ready -> "Ready"
-        | InProgress -> "In progress"
-        | Blocked -> "Blocked"
-        | InReview -> "In review"
-        | Done -> "Done"
-
     let private blockerStateName =
         function
         | BlockerOpen -> "open"
@@ -494,7 +484,7 @@ module Snapshot =
 
     let private writeDetail (w: Utf8JsonWriter) (result: Schedulability) =
         match result with
-        | WrongStatus s -> w.WriteString("status", statusName s)
+        | WrongStatus s -> w.WriteString("status", statusWireName s)
         | UnusableTouchSet tokens ->
             w.WriteStartArray("tokens")
             tokens |> List.iter w.WriteStringValue

@@ -111,3 +111,19 @@ module Types =
         | Green of 'a
         | Red of reasons: string list
         | NoVerdict of reason: string
+
+    // THE WIRE VOCABULARY, ONCE. This was four identical private `statusName`s (Scan, Writes, Client,
+    // Snapshot). They agreed — which is the finding, not the reassurance (#916, #972). See Types.fsi.
+    //
+    // A TOTAL match, and deliberately no wildcard: adding a `BoardStatus` case must fail the BUILD here,
+    // not render as "" on the wire and set a column to nothing. `ProtocolTests` pins the same property
+    // by reflection over the union, so a case cannot reach the board unnamed (#983).
+    let statusWireName (s: BoardStatus) =
+        match s with
+        | NoStatus -> ""
+        | Backlog -> "Backlog"
+        | Ready -> "Ready"
+        | InProgress -> "In progress"
+        | Blocked -> "Blocked"
+        | InReview -> "In review"
+        | Done -> "Done"

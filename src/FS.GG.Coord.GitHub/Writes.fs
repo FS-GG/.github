@@ -58,16 +58,6 @@ module Writes =
     let private encodeStatus (s: string) =
         s.Replace("%", "%25").Replace(" ", "%20")
 
-    let private statusName (s: BoardStatus) =
-        match s with
-        | NoStatus -> ""
-        | Backlog -> "Backlog"
-        | Ready -> "Ready"
-        | InProgress -> "In progress"
-        | Blocked -> "Blocked"
-        | InReview -> "In review"
-        | Done -> "Done"
-
     /// THE MARKER. `worker=` MUST stay the first key — the parser anchors on it, and the anchor is what
     /// stops a `say` message that merely QUOTES a marker from forging a lock.
     let private markerBody
@@ -83,7 +73,7 @@ module Writes =
 
         let prevPart =
             match previousStatus with
-            | Some s -> $" prev=%s{encodeStatus (statusName s)}"
+            | Some s -> $" prev=%s{encodeStatus (statusWireName s)}"
             // A COLUMN NOBODY RECORDED CANNOT BE RESTORED (#481). Emitting `prev=` with an empty value
             // would be a recorded decision to restore nothing, which is a different claim from having made
             // no observation at all.

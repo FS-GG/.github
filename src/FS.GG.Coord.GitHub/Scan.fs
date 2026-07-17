@@ -143,17 +143,11 @@ module Scan =
             w.WriteNumber("number", r.Ref.Number)
             w.WriteString("title", r.Title)
 
-            w.WriteString(
-                "status",
-                match r.Status with
-                | NoStatus -> ""
-                | Backlog -> "Backlog"
-                | Ready -> "Ready"
-                | InProgress -> "In progress"
-                | Blocked -> "Blocked"
-                | InReview -> "In review"
-                | Done -> "Done"
-            )
+            // The FIFTH copy, and the one #983's measurement could not see: it had no name, so a grep for
+            // `let private statusName` — which is how the other four were found and counted — walked
+            // straight past it. This is the scan's own JSON `status` field, read by every `jq` in the
+            // recipe and by the parity corpus, so it is the wire by any definition.
+            w.WriteString("status", statusWireName r.Status)
 
             w.WriteString("blockedBy", r.BlockedByRaw)
 
@@ -374,16 +368,6 @@ module Scan =
 
     // ---- the snapshot --------------------------------------------------------------------------------
 
-    let private statusName (s: BoardStatus) =
-        match s with
-        | NoStatus -> ""
-        | Backlog -> "Backlog"
-        | Ready -> "Ready"
-        | InProgress -> "In progress"
-        | Blocked -> "Blocked"
-        | InReview -> "In review"
-        | Done -> "Done"
-
     let private blockerStateName (s: BlockerState) =
         match s with
         | BlockerOpen -> "open"
@@ -550,7 +534,7 @@ module Scan =
                     w.WriteString("owner", row.Ref.Owner)
                     w.WriteString("repo", row.Ref.Repo)
                     w.WriteNumber("number", row.Ref.Number)
-                    w.WriteString("status", statusName row.Status)
+                    w.WriteString("status", statusWireName row.Status)
                     w.WriteString("state", "CLOSED")
                     w.WriteStartArray("blockers")
                     w.WriteEndArray()
@@ -593,7 +577,7 @@ module Scan =
                 w.WriteString("owner", row.Ref.Owner)
                 w.WriteString("repo", row.Ref.Repo)
                 w.WriteNumber("number", row.Ref.Number)
-                w.WriteString("status", statusName row.Status)
+                w.WriteString("status", statusWireName row.Status)
 
                 w.WriteString(
                     "state",
@@ -640,7 +624,7 @@ module Scan =
                     | None -> ()
 
                     match m.PreviousStatus with
-                    | Some s -> w.WriteString("prevStatus", statusName s)
+                    | Some s -> w.WriteString("prevStatus", statusWireName s)
                     | None -> ()
 
                     // LIVENESS. The lease alone may not decide abandonment (#581), so an EXPIRED lease sends

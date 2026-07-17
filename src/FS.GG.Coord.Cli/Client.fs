@@ -63,16 +63,6 @@ module Client =
 
     /// Board status → its name, qualified against BoardStatus (bare `Ready` would resolve to the
     /// `Command.Ready` opened below). One place, so every render agrees.
-    let private statusName (s: BoardStatus) =
-        match s with
-        | BoardStatus.NoStatus -> ""
-        | BoardStatus.Backlog -> "Backlog"
-        | BoardStatus.Ready -> "Ready"
-        | BoardStatus.InProgress -> "In progress"
-        | BoardStatus.Blocked -> "Blocked"
-        | BoardStatus.InReview -> "In review"
-        | BoardStatus.Done -> "Done"
-
     let private eprint (s: string) = Console.Error.WriteLine(s: string)
 
     /// An IO failure → its exit code and a printed reason. `RateLimited` becomes EX_RATE (75), the back-off
@@ -339,7 +329,7 @@ module Client =
             w.WriteString("repo", $"%s{row.Ref.Owner}/%s{row.Ref.Repo}")
             w.WriteString("title", row.Title)
 
-            match statusName row.Status with
+            match statusWireName row.Status with
             | "" -> w.WriteNull("status")
             | s -> w.WriteString("status", s)
 
@@ -383,7 +373,7 @@ module Client =
                         // included, is asking to SEE it. `--status` matches the column NAME, case-insensitive,
                         // the way bash matches it.
                         match opts.Status with
-                        | Some s -> String.Equals(statusName r.Status, s, StringComparison.OrdinalIgnoreCase)
+                        | Some s -> String.Equals(statusWireName r.Status, s, StringComparison.OrdinalIgnoreCase)
                         | None -> opts.All || r.Status <> BoardStatus.Done)
 
                 match opts.Render with
@@ -391,7 +381,7 @@ module Client =
                 | Text ->
                     for row in wanted do
                         let status =
-                            match statusName row.Status with
+                            match statusWireName row.Status with
                             | "" -> "(no status)"
                             | s -> s
 
@@ -965,11 +955,11 @@ module Client =
                                                         | Preserve(Some s) ->
                                                             printfn
                                                                 "  column left at %s (chosen during the lease — reap collects a lease, not a decision)"
-                                                                (statusName s)
+                                                                (statusWireName s)
                                                         | Preserve None -> printfn "  no column set (nothing to reset)"
                                                         | ResetTo restoreTo ->
 
-                                                        let name = statusName restoreTo
+                                                        let name = statusWireName restoreTo
 
                                                         if name <> "" then
                                                             // #867: `release`'s defect, in `reap`'s copy —
@@ -1822,7 +1812,7 @@ module Client =
                             // NO WRITE. The column was chosen during the lease, so there is nothing to undo —
                             // and stdout must not imply `release` put it there.
                             match live with
-                            | Some s -> printfn "released %s (column left at %s)" ref.Short (statusName s)
+                            | Some s -> printfn "released %s (column left at %s)" ref.Short (statusWireName s)
                             // NO COLUMN TO RESET — the item is off this board, or on it with no `Status` set.
                             // SAY THAT. A bare `released <ref>` is this recipe's documented tell for "the
                             // column did NOT land, and stderr says why", so printing one here would raise that
@@ -1835,7 +1825,7 @@ module Client =
                             ExitGreen
                         | Ok(ResetTo restoreTo) ->
 
-                        let name = statusName restoreTo
+                        let name = statusWireName restoreTo
 
                         // #867: the restore's result is REPORTED, never fatal. The lock really is gone, so a
                         // failed column must not red the command — but "not fatal" and "not mentioned" are
@@ -3419,7 +3409,7 @@ module Client =
                       Severity = severity
                       Id = $"%s{r.Ref.Owner}/%s{r.Ref.Repo}#%d{r.Ref.Number}"
                       Short = r.Ref.Short
-                      Status = statusName r.Status
+                      Status = statusWireName r.Status
                       Url = $"https://github.com/%s{r.Ref.Owner}/%s{r.Ref.Repo}/issues/%d{r.Ref.Number}"
                       Detail = detail }
 
@@ -3432,7 +3422,7 @@ module Client =
                                   "NO-TOUCH-SET"
                                   "error"
                                   r
-                                  $"%s{statusName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)." ]
+                                  $"%s{statusWireName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)." ]
                         | Declared tokens when
                             // #646 — ANY unmatchable token, not just ALL of them. A PARTIAL declaration
                             // (some matchable, some not) was worse than a wholly dead one and yet lint stayed
@@ -3459,7 +3449,7 @@ module Client =
 
                             let detail =
                                 if allUnmatchable then
-                                    $"%s{statusName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+                                    $"%s{statusWireName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
                                 else
                                     // #646 — the PARTIAL case, and it is worse than the whole being dead: the
                                     // item looks declared and its matchable tokens reserve something, but each
@@ -3467,7 +3457,7 @@ module Client =
                                     // invisible to every other worker's overlap check — two workers can be
                                     // handed them at once. `batch` already refuses the item (#273); lint must
                                     // catch it at filing time, not leave it to be discovered by a double-book.
-                                    $"%s{statusName r.Status}, and at least one of its `Paths:` tokens is unmatchable: %s{bad}. This is WORSE than every token being so: the item looks declared and its other tokens reserve work, but an unmatchable token silently reserves NOTHING — the files it names are invisible to every other worker's overlap check, so two workers can be handed them at once. Spell the path(s) out — not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+                                    $"%s{statusWireName r.Status}, and at least one of its `Paths:` tokens is unmatchable: %s{bad}. This is WORSE than every token being so: the item looks declared and its other tokens reserve work, but an unmatchable token silently reserves NOTHING — the files it names are invisible to every other worker's overlap check, so two workers can be handed them at once. Spell the path(s) out — not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
 
                             [ mk "BAD-TOUCH-SET" "error" r detail ]
                         | _ -> []
