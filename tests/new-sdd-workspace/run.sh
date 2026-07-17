@@ -106,6 +106,10 @@ expect_err "--chore-locks swallowing the next flag as its value is caught" \
   "--chore-locks needs a value (got flag '--no-governance')" -- "$TGT" P --chore-locks --no-governance
 expect_err "--chore-locks with no following token needs a value" \
   "--chore-locks needs a value" -- "$TGT" P --chore-locks
+expect_err "--repo swallowing the next flag as its value is caught" \
+  "--repo needs a value (got flag '--board')" -- "$TGT" P --repo --board acme/R
+expect_err "--repo with no following token needs a value" \
+  "--repo needs a value" -- "$TGT" P --repo
 
 # ── Ok leg: the parse grammar accepts, reaching the fsgg-sdd preflight (exit 127, no scaffold) ─────
 
@@ -121,7 +125,8 @@ expect_ok "--no-governance toggles" -- "$TGT" P --no-governance
 expect_ok "--no-coordination toggles" -- "$TGT" P --no-coordination
 expect_ok "--board takes an owner/title value" -- "$TGT" P --board acme/Roadmap
 expect_ok "--board accepts an owner-only value (defaults the title)" -- "$TGT" P --board acme
-expect_ok "--chore-locks takes a value" -- "$TGT" P --board acme/Roadmap --chore-locks "acme/Product.X#5,acme/Product.Y#7"
+expect_ok "--repo takes an owner/repo value" -- "$TGT" P --repo acme/Product.X
+expect_ok "--chore-locks takes a value" -- "$TGT" P --board acme/Roadmap --repo acme/Product.X --chore-locks "acme/Product.X#5,acme/Product.Y#7"
 expect_ok "flags combine, and --ref takes a value" -- "$TGT" P --upgrade --no-governance --ref v1.2.3
 
 # ── main's non-parse dispatch: -h / --help print usage and exit 0 ─────────────────────────────────

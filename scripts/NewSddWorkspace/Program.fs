@@ -60,6 +60,10 @@ type Options =
       /// write the `FSGG_COORD_*` env so `/pnext-item` and `/check-board` work out of the box.
       /// `--no-coordination` skips the whole step. (Opens ADR-0019's deferred product-mirror slice.)
       Coordinate: bool
+      /// This workspace's own repo (`owner/repo`) — its identity on the board and the basis for its
+      /// chore-lock ref. Not consumed as env (the engine resolves the repo from the git remote); it
+      /// defaults the wizard's board-org prompt and drives the chore-lock next-step hint. `--repo`.
+      WorkspaceRepo: string option
       /// The board this workspace coordinates against — `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT`.
       /// Default `FS-GG` / `Coordination` (the org board); `--board <owner>/<title>` overrides.
       BoardOwner: string
@@ -477,6 +481,16 @@ let private summary (results: StepResult seq) (opts: Options) (fatal: bool) =
                 "[bold]Next:[/] cd %s && dotnet build && dotnet run   [grey]# then: fsgg-sdd charter[/]"
                 (Markup.Escape opts.Target)
         )
+        // The chore queue needs a per-repo lock issue, and this workspace's repo does not exist on GitHub
+        // yet — so the one thing the scaffolder cannot do for a NON-FS-GG board is name it in the summary.
+        if opts.Coordinate && opts.BoardOwner.ToLowerInvariant() <> "fs-gg" then
+            let repo = opts.WorkspaceRepo |> Option.defaultValue (sprintf "%s/%s" opts.BoardOwner opts.Product)
+            AnsiConsole.MarkupLine(
+                sprintf
+                    "[bold]Coord:[/] for [aqua]offer[/]/chores, create a closed [grey]`[[chore-lock]]`[/] issue in [green]%s[/] and add [grey]%s#<n>[/] to [grey]FSGG_COORD_CHORE_LOCKS[/] (.claude/settings.json)"
+                    (Markup.Escape repo)
+                    (Markup.Escape repo)
+            )
 
 /// The `fs-gg-ui` render profiles, in menu order — id + one-line gloss. `game` is the
 /// scaffold-provider default (a minimal Pong-style starter); the rest are the sibling lanes.
@@ -511,6 +525,7 @@ let private usage () =
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
     AnsiConsole.MarkupLine "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
+    AnsiConsole.MarkupLine "  [green]--repo[/] <owner/repo>    this workspace's own repo (its board identity + chore-lock basis)"
     AnsiConsole.MarkupLine "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
     AnsiConsole.MarkupLine "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
     AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
@@ -533,6 +548,7 @@ type private Draft =
       Pinned: bool option
       Upgrade: bool option
       Coordinate: bool option
+      WorkspaceRepo: string option
       BoardOwner: string option
       BoardTitle: string option
       ChoreLocks: string option }
@@ -546,6 +562,7 @@ let private emptyDraft =
       Pinned = None
       Upgrade = None
       Coordinate = None
+      WorkspaceRepo = None
       BoardOwner = None
       BoardTitle = None
       ChoreLocks = None }
@@ -589,9 +606,13 @@ let private paramsPanel (d: Draft) =
     row "coordination"
         (match d.Coordinate with
          | Some true ->
-             sprintf "[aqua]%s/%s[/]"
-                 (Markup.Escape(d.BoardOwner |> Option.defaultValue "FS-GG"))
-                 (Markup.Escape(d.BoardTitle |> Option.defaultValue "Coordination"))
+             let board =
+                 sprintf "board [aqua]%s/%s[/]"
+                     (Markup.Escape(d.BoardOwner |> Option.defaultValue "FS-GG"))
+                     (Markup.Escape(d.BoardTitle |> Option.defaultValue "Coordination"))
+             match d.WorkspaceRepo with
+             | Some r -> sprintf "%s [grey]· repo[/] [green]%s[/]" board (Markup.Escape r)
+             | None -> board
          | Some false -> "[grey]none (skipped)[/]"
          | None -> pendingCell)
     let panel = Panel(grid)
@@ -682,6 +703,9 @@ let private equivalentCommand (d: Draft) =
          let owner = d.BoardOwner |> Option.defaultValue "FS-GG"
          let title = d.BoardTitle |> Option.defaultValue "Coordination"
          if owner <> "FS-GG" || title <> "Coordination" then parts.Add(sprintf "--board %s/%s" owner title)
+         (match d.WorkspaceRepo with
+          | Some r when r <> sprintf "FS-GG/%s" (d.Product |> Option.defaultValue "") -> parts.Add(sprintf "--repo %s" r)
+          | _ -> ())
          (match d.ChoreLocks with Some cl -> parts.Add(sprintf "--chore-locks %s" cl) | None -> ())
      | None -> ())
     (match d.Pinned with Some true -> parts.Add "--pinned" | _ -> ())
@@ -776,33 +800,42 @@ let private interactive () : Options option =
     draft <- { draft with Upgrade = Some upgrade }
 
     draftView draft
-    let coordinate, boardOwner, boardTitle, choreLocks =
-        let choice =
-            AnsiConsole.Prompt(
-                SelectionPrompt<string>()
-                    .Title("[green]Coordinate[/] against a board?")
-                    .AddChoices(
-                        [| "FS-GG / Coordination — the org board (default)"
-                           "a different board…"
-                           "none — skip coordination (--no-coordination)" |]))
-        if choice.StartsWith "none" then
-            false, "FS-GG", "Coordination", None
-        elif choice.StartsWith "FS-GG" then
-            true, "FS-GG", "Coordination", None
+    // Coordination is an explicit sequence — org, board, this workspace's repo, chore-locks — each a
+    // step with FS-GG defaults, so the common case is still Enter-through but a product org is never
+    // buried behind a sub-choice. The repo's owner defaults the board org (a prompt default, no magic).
+    let coordinate, workspaceRepo, boardOwner, boardTitle, choreLocks =
+        if not (AnsiConsole.Confirm("Wire this workspace to a [green]coordination board[/]?", true)) then
+            false, sprintf "FS-GG/%s" product, "FS-GG", "Coordination", None
         else
-            let owner, title =
+            let repo =
                 AnsiConsole.Prompt(
-                    TextPrompt<string>("  Board [grey](owner/title)[/]?")
-                        .Validate(fun (s: string) -> required "board" s)).Trim()
-                |> parseBoard
+                    TextPrompt<string>("  This workspace's [green]repo[/] [grey](owner/repo)[/]?")
+                        .DefaultValue(sprintf "FS-GG/%s" product)
+                        .Validate(fun (s: string) -> required "repo" s)).Trim()
+            let owner =
+                AnsiConsole.Prompt(
+                    TextPrompt<string>("  Coordination board [green]org[/] [grey](owner)[/]?")
+                        .DefaultValue(fst (parseBoard repo))
+                        .Validate(fun (s: string) -> required "org" s)).Trim()
+            let title =
+                AnsiConsole
+                    .Prompt(TextPrompt<string>("  Board [green]title[/]?").DefaultValue("Coordination"))
+                    .Trim()
             let cl =
                 let raw =
-                    AnsiConsole.Prompt(TextPrompt<string>("  Chore-locks [grey](owner/repo#n,… — blank to skip)[/]?").AllowEmpty()).Trim()
+                    AnsiConsole
+                        .Prompt(
+                            TextPrompt<string>(
+                                "  [green]Chore-locks[/] [grey](owner/repo#n,… — non-FS-GG boards; blank to skip)[/]?"
+                            )
+                                .AllowEmpty())
+                        .Trim()
                 if String.IsNullOrWhiteSpace raw then None else Some raw
-            true, owner, title, cl
+            true, repo, owner, title, cl
     draft <-
         { draft with
             Coordinate = Some coordinate
+            WorkspaceRepo = Some workspaceRepo
             BoardOwner = Some boardOwner
             BoardTitle = Some boardTitle
             ChoreLocks = choreLocks }
@@ -819,6 +852,7 @@ let private interactive () : Options option =
               Pinned = pinned
               Profile = Some profile
               Coordinate = coordinate
+              WorkspaceRepo = Some workspaceRepo
               BoardOwner = boardOwner
               BoardTitle = boardTitle
               ChoreLocks = choreLocks }
@@ -856,6 +890,10 @@ let private parse (argv: string list) : Result<Options, string> =
             let owner, title = parseBoard value
             flags { acc with BoardOwner = owner; BoardTitle = title } t
         | [ "--board" ] -> Error "--board needs a value"
+        | "--repo" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--repo needs a value (got flag '%s')" value)
+        | "--repo" :: value :: t -> flags { acc with WorkspaceRepo = Some value } t
+        | [ "--repo" ] -> Error "--repo needs a value"
         | "--chore-locks" :: value :: _ when value.StartsWith "--" ->
             Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
         | "--chore-locks" :: value :: t -> flags { acc with ChoreLocks = Some value } t
@@ -876,6 +914,7 @@ let private parse (argv: string list) : Result<Options, string> =
               Pinned = false
               Profile = None
               Coordinate = true
+              WorkspaceRepo = None
               BoardOwner = "FS-GG"
               BoardTitle = "Coordination"
               ChoreLocks = None }
