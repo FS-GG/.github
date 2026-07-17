@@ -100,7 +100,7 @@
     },
     {
       "customType": "regex",
-      "description": "Generic annotation-driven manager: any embedded pin tagged `# renovate: datasource=<ds> depName=<pkg> [versioning=<v>]` on the line(s) above the version literal. Used for the FS.GG.Governance gate-set pin and any other non-standard embedded literal across repos.",
+      "description": "Generic annotation-driven manager: any embedded pin tagged `# renovate: datasource=<ds> depName=<pkg> [versioning=<v>]` on the line(s) above the version literal. Used for the FS.GG.Governance gate-set pin and any other non-standard embedded literal across repos. The `versioning` DEFAULT is `loose`, NOT `nuget` (.github#1135, the #576 class — same fix as the FsGgUiVersion manager above, #1131). Under `nuget` versioning a bare literal is a RANGE — `0.13.0` parses as `>=0.13.0`, which the newest release always satisfies — so Renovate finds the constraint met and proposes NOTHING, and the pin freezes silently. That froze the FS.GG.SDD.Cli pin four times (#127/#263/#566/#885) until #1119 added an explicit `versioning=loose`, whose own comment called that token *load-bearing* against this default. Making the default `loose` retires the trap: a bare-literal pin can no longer freeze by OMISSION, and `versioning=loose` on an annotation becomes belt-and-suspenders rather than the only thing standing between a pin and a silent freeze. An author who genuinely needs range semantics writes `versioning=nuget` explicitly. `loose` also tolerates the 4-segment / preview grammar strict semver rejects (the live `governance-reference-gate-set` pin is `1.2.1.1`). Do NOT drop this back to `nuget` without re-reading #576/#1131/#1135.",
       "managerFilePatterns": [
         "/\\.ya?ml$/",
         "/\\.props$/",
@@ -112,7 +112,7 @@
       "matchStrings": [
         "renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)(?:\\s+versioning=(?<versioning>\\S+))?[^\\n]*\\n(?:[^\\n]*\\n){0,1}?[^\\n]*?[\\s=:\"'>/]v?(?<currentValue>\\d+(?:\\.\\d+)*[\\w.+-]*)"
       ],
-      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}nuget{{/if}}"
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}loose{{/if}}"
     }
   ]
 }
