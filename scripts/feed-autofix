@@ -69,10 +69,10 @@ this bot REPORTS the comments its own write has contradicted (`--json` carries t
 lists them as a checklist). It does not edit them. Flagging is not fixing, and is not meant to be:
 it puts the judgement in front of the human who has it, which is the one thing the silence never did.
 
-Pure stdlib + PyYAML. The feed/tag readers are INJECTED (`resolve_feed`, `resolve_tag`), never
-reached for globally, so tests/feed-autofix drives every branch offline. `--fixture` refuses to run
-unless FSGG_FEED_FIXTURE_OK=1 — a test hook that can silently turn the response half into a no-op is
-the very defect class above.
+Pure stdlib + PyYAML. The feed/nuspec/tag readers are INJECTED (`resolve_feed`, `resolve_nuspec`,
+`resolve_tag`), never reached for globally, so tests/feed-autofix drives every branch offline.
+`--fixture` refuses to run unless FSGG_FEED_FIXTURE_OK=1 — a test hook that can silently turn the
+response half into a no-op is the very defect class above.
 
 Exit 0 = reconciled (or already coherent). Exit 1 = a finding a human must settle. Exit 2 = a defect.
 """
@@ -95,6 +95,8 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     feed_versions,
     is_prerelease,
     newest,
+    nuspec_dependency_ids,
+    package_nuspec,
     parse_version,
 )
 
@@ -113,52 +115,121 @@ CONTRACT = "fs-gg-ui-template"
 
 TEMPLATE_PACKAGE = "FS.GG.UI.Template"
 
-# The FS.GG.UI.* coherent set: every member a FRAMEWORK release republishes at one version.
-#
-# This list is what makes "framework release" a MEASURED claim rather than an inferred one. The
-# registry's own prose has recorded it being checked by hand every time ("verified against the org
-# feed PACKAGE-BY-PACKAGE, not inferred from the template alone"). This is that check, run by a
-# machine. FS.GG.UI.Template is excluded — it is the subject being classified, not evidence.
-#
-# Verified against BOTH sources, not copied from the prose: these 17 + FS.GG.UI.Template are exactly
-# the 18 ids the row enumerates, and exactly the ids that resolve on the org feed. FS.GG.UI is the
-# BOM (it packs from src/Meta); src/Shared and src/ColorPolicy are source-included and 404 on the
-# feed, so they are members of the SOLUTION but not of the coherent SET.
-#
-# A KNOWN BOUND, stated because a silent one is the defect this file exists to close: the list is
-# HAND-MAINTAINED, so if FS.GG.Rendering adds an 18th published member, a PARTIAL publish that left
-# ONLY the new member behind would classify here as a clean framework release and flip the pin to a
-# version that member cannot serve. Every OTHER shape is still caught, and a complete publish still
-# classifies correctly, so this is a narrow hole rather than a fail-open default.
-#
-# It is not closed by reading the producer's `src/` and diffing, which is the obvious repair: that
-# couples this bot to ANOTHER repo's private directory layout, so a reorganisation there turns this
-# into a permanently-red bot — and a check that cries wolf teaches exactly one lesson, which is the
-# one `skill-registry-autofix`'s header refuses to teach. The honest closure is an enumeration of
-# the feed's own ids, which GitHub Packages does not serve to a run-scoped token. Filed as .github#933.
-FRAMEWORK_MEMBERS: list[str] = [
-    "FS.GG.UI",
-    "FS.GG.UI.Build",
-    "FS.GG.UI.Canvas",
-    "FS.GG.UI.Controls",
-    "FS.GG.UI.Controls.Elmish",
-    "FS.GG.UI.DesignSystem",
-    "FS.GG.UI.Diagnostics",
-    "FS.GG.UI.Elmish",
-    "FS.GG.UI.KeyboardInput",
-    "FS.GG.UI.Layout",
-    "FS.GG.UI.Scene",
-    "FS.GG.UI.SkiaViewer",
-    "FS.GG.UI.Symbology",
-    "FS.GG.UI.Symbology.Render",
-    "FS.GG.UI.Testing",
-    "FS.GG.UI.Themes.AntDesign",
-    "FS.GG.UI.Themes.Default",
-]
+# The BOM / metapackage that DECLARES the coherent set. See `derive_members`.
+BOM_PACKAGE = "FS.GG.UI"
 
 
 class Finding(Exception):
     """A condition a human must settle. Never auto-resolved — see the header."""
+
+
+# --------------------------------------------------------------------------------------------
+# The FS.GG.UI.* coherent set: every member a FRAMEWORK release republishes at one version.
+#
+# Knowing this set is what makes "framework release" a MEASURED claim rather than an inferred one.
+# The registry's own prose records it being checked by hand every time ("verified against the org
+# feed PACKAGE-BY-PACKAGE, not inferred from the template alone"). This is that check, run by a
+# machine. FS.GG.UI.Template is excluded — it is the subject being classified, not evidence.
+#
+# The set is DERIVED, from the BOM's own nuspec, rather than hand-maintained here. It used to be a
+# 17-id literal, and that literal was a silent bound (.github#933): if FS.GG.Rendering published an
+# 18th member, a partial publish that left ONLY the new member behind classified as a clean
+# framework release and flipped the pin to a version that member cannot serve. Every other shape was
+# caught, so it was a narrow hole — but a SILENT one, which is the defect class this file exists to
+# close.
+#
+# Three repairs were considered and rejected before this one (.github#933):
+#
+#   1. Read the producer's `src/` and diff it. Couples this bot to ANOTHER repo's private directory
+#      layout, so a reorganisation there turns this into a permanently-red bot — and a check that
+#      cries wolf teaches exactly one lesson, the one `skill-registry-autofix`'s header refuses to
+#      teach. The mapping is not even mechanical: `src/Meta` packs as FS.GG.UI, and `src/Shared` /
+#      `src/ColorPolicy` are source-included and pack as nothing.
+#   2. Enumerate the feed's own ids. GitHub Packages does not serve an enumeration to a run-scoped
+#      token; the REST packages API wants a classic PAT with `read:packages`, a stored org secret
+#      and its own decision (`fsgg_feed.py` records why .github#267 avoided it).
+#   3. Assert the count against the registry's prose. Prose is the thing this bot exists to distrust.
+#
+# The BOM makes option 2's cost unnecessary: the PAT was only ever needed to ENUMERATE the feed, and
+# the set is a property of ONE package whose id we already know. `FS.GG.UI` "ships no assembly
+# (exact [$version$] member deps only)" and "its membership is locked to the packable FS.GG.UI.* set
+# by an always-on parity test" (registry/dependencies.yml, Feature 207) — so the org already
+# publishes a gated, machine-readable declaration of exactly this set, reachable over the same
+# authenticated path `feed_versions` already calls. That parity test is what makes the BOM
+# trustworthy here: it is not a second hand-maintained list, it is a gated one.
+#
+# The BOM is read at its OWN newest version, NOT at the classification `candidate`. That distinction
+# is load-bearing, and the obvious reading of it is a bug:
+#
+#   `candidate` is the newest FS.GG.UI.TEMPLATE, and a TEMPLATE-ONLY cut is defined by the members
+#   deliberately NOT publishing at it. FS.GG.UI@<candidate> therefore does not exist on exactly the
+#   path that must classify as template-only — measured, both cuts this bot's docstring names:
+#   the feed serves FS.GG.UI.Template 0.4.1 and 0.3.1-preview.1, and no FS.GG.UI at either. Deriving
+#   at `candidate` would 404 → Finding on every template-only cut, turning a legitimate release
+#   shape into a permanently-red bot: the failure mode option 1 was rejected for, reintroduced by
+#   the repair.
+#
+# The BOM's newest declares the CURRENT membership, which is the question ("what constitutes the
+# framework?"), where the BOM at a template's version asks something that need not exist. It keeps
+# the fail-closed property intact: a partial publish that leaves the BOM behind while its members
+# move leaves the BOM itself `behind`, so the set splits and PARTIAL PUBLISH raises — the BOM is a
+# member of its own set, and is measured like one.
+# --------------------------------------------------------------------------------------------
+
+def derive_members(resolve_feed, resolve_nuspec, stable_channel: bool) -> tuple[list[str], str]:
+    """The coherent set, read off the BOM's nuspec. Returns (members, note). Never guesses.
+
+    Returns the BOM's exact-pinned dependency ids PLUS the BOM's own id: a framework release
+    republishes the BOM alongside its members, so the BOM is a member of the set it declares.
+
+    There is deliberately NO fallback to a baked-in list. A stale hardcoded set is the bound this
+    derivation exists to remove, so reinstating it as a default on failure would restore that bound
+    at exactly the moment the derivation stopped working — and do it silently. If the BOM cannot be
+    read, say so and stop (.github#933).
+    """
+    live = resolve_feed(BOM_PACKAGE)
+    if stable_channel:
+        stable = [v for v in live if not is_prerelease(v)]
+        if not stable:
+            raise Finding(
+                f"the feed serves no stable {BOM_PACKAGE} — only prereleases {sorted(live)} — while "
+                f"the registry tracks the stable channel. The coherent set is declared by the BOM, "
+                f"and it cannot be derived from a BOM no consumer can restore."
+            )
+        live = stable
+    bom_version = newest(live)
+
+    try:
+        nuspec = resolve_nuspec(BOM_PACKAGE, bom_version)
+    except GateError as e:
+        raise Finding(
+            f"cannot read the {BOM_PACKAGE} BOM at {bom_version}, so the coherent set it declares "
+            f"cannot be derived: {e}. The set is NOT assumed — classifying a release against a "
+            f"guessed membership is how the pin ends up at a version some member cannot serve."
+        ) from e
+
+    members = nuspec_dependency_ids(nuspec)
+    if not members:
+        raise Finding(
+            f"the {BOM_PACKAGE}@{bom_version} nuspec declares NO dependencies. The BOM is defined "
+            f"as exact member deps only, so an empty set means the BOM was packed wrong — and an "
+            f"empty coherent set would classify EVERY publish as a clean framework release. "
+            f"Refusing."
+        )
+
+    # The BOM depends on its members; it cannot depend on itself, and it must not be omitted from
+    # the set it declares — a framework release republishes it too.
+    if BOM_PACKAGE not in members:
+        members.insert(0, BOM_PACKAGE)
+
+    # The template is the SUBJECT being classified, never evidence for its own classification. It is
+    # not a BOM dependency today; if it ever becomes one, classifying the template against itself
+    # would be trivially self-confirming, so drop it explicitly rather than rely on it staying out.
+    members = [m for m in members if m != TEMPLATE_PACKAGE]
+    note = (
+        f"coherent set = {len(members)} ids derived from the {BOM_PACKAGE}@{bom_version} BOM nuspec"
+    )
+    return members, note
 
 
 # --------------------------------------------------------------------------------------------
@@ -208,7 +279,9 @@ def _require_str(row: dict, field: str) -> str:
 # Classification: framework release vs template-only cut. The one judgement the feed can settle.
 # --------------------------------------------------------------------------------------------
 
-def classify(candidate: str, resolve_feed, stable_channel: bool) -> tuple[str, list[str]]:
+def classify(
+    candidate: str, resolve_feed, resolve_nuspec, stable_channel: bool
+) -> tuple[str, list[str]]:
     """Return ("framework"|"template-only", notes) for a template published at `candidate`.
 
     FRAMEWORK    — every FS.GG.UI.* member's newest is `candidate`: the libs moved with it.
@@ -217,12 +290,16 @@ def classify(candidate: str, resolve_feed, stable_channel: bool) -> tuple[str, l
 
     Anything between those two is a PARTIAL publish — a real defect — and raises rather than
     guessing. Averaging it away is how a bot writes a pin no consumer can restore.
+
+    The membership is derived from the BOM (see `derive_members`), so a member added upstream is
+    picked up here without an edit to this file.
     """
+    members, member_note = derive_members(resolve_feed, resolve_nuspec, stable_channel)
     at_candidate: list[str] = []
     behind: list[tuple[str, str]] = []
     want = parse_version(candidate)
 
-    for pkg in FRAMEWORK_MEMBERS:
+    for pkg in members:
         live = resolve_feed(pkg)
         if stable_channel:
             stable = [v for v in live if not is_prerelease(v)]
@@ -246,18 +323,18 @@ def classify(candidate: str, resolve_feed, stable_channel: bool) -> tuple[str, l
         else:
             behind.append((pkg, top))
 
-    if len(at_candidate) == len(FRAMEWORK_MEMBERS):
-        return "framework", [f"all {len(FRAMEWORK_MEMBERS)} FS.GG.UI.* members read {candidate}"]
+    if len(at_candidate) == len(members):
+        return "framework", [member_note, f"all {len(members)} FS.GG.UI.* members read {candidate}"]
     if not at_candidate:
         tops = {t for _, t in behind}
         note = (
             f"no FS.GG.UI.* member is at {candidate}"
             + (f"; all {len(behind)} read {tops.pop()}" if len(tops) == 1 else "")
         )
-        return "template-only", [note]
+        return "template-only", [member_note, note]
 
     raise Finding(
-        f"PARTIAL PUBLISH — {len(at_candidate)} of {len(FRAMEWORK_MEMBERS)} FS.GG.UI.* members are "
+        f"PARTIAL PUBLISH — {len(at_candidate)} of {len(members)} FS.GG.UI.* members are "
         f"at {candidate}, and {len(behind)} are not: "
         + ", ".join(f"{p}={t}" for p, t in sorted(behind))
         + ". That is neither a framework release nor a template-only cut, so the `version` pin "
@@ -378,7 +455,7 @@ def stale_prose(text: str, field: str, new: str) -> str | None:
     )
 
 
-def reconcile(path: str, resolve_feed, resolve_tag) -> dict:
+def reconcile(path: str, resolve_feed, resolve_nuspec, resolve_tag) -> dict:
     """Compute (and optionally apply) the flip. Returns a report dict."""
     row = load_row(path)
     pin = _require_str(row, "version")
@@ -408,7 +485,7 @@ def reconcile(path: str, resolve_feed, resolve_tag) -> dict:
             f"was unlisted, and make an unrestorable pin look deliberate. A human must decide."
         )
 
-    kind, kn = classify(candidate, resolve_feed, stable_channel)
+    kind, kn = classify(candidate, resolve_feed, resolve_nuspec, stable_channel)
     notes += kn
     package_tag, tn = verify_tags(candidate, kind, resolve_tag)
     notes += tn
@@ -549,11 +626,22 @@ def main() -> int:
         with open(args.fixture, encoding="utf-8") as fh:
             canned = json.load(fh)
         feeds, tags = canned.get("feed", {}), canned.get("tags", {})
+        # Keyed "<id>@<version>" -> the nuspec XML. The fixture serves the XML rather than a ready
+        # -made id list, so every case drives the REAL nuspec parser: a fixture that handed back a
+        # parsed set would leave `nuspec_dependency_ids` untested by every case but its own.
+        nuspecs = canned.get("nuspec", {})
 
         def resolve_feed(pkg: str) -> list[str]:
             if pkg not in feeds:
                 raise GateError(f"fixture serves no feed entry for {pkg!r}")
             return list(feeds[pkg])
+
+        def resolve_nuspec(pkg: str, version: str) -> str:
+            key = f"{pkg}@{version}"
+            if key not in nuspecs:
+                # Mirrors the live 404: a package the feed does not serve.
+                raise GateError(f"fixture serves no nuspec for {key!r}")
+            return nuspecs[key]
 
         def resolve_tag(t: str):
             return tags.get(t)
@@ -570,6 +658,9 @@ def main() -> int:
 
         def resolve_feed(pkg: str) -> list[str]:
             return feed_versions(pkg, token)
+
+        def resolve_nuspec(pkg: str, version: str) -> str:
+            return package_nuspec(pkg, version, token)
 
         def resolve_tag(t: str):
             import urllib.error
@@ -595,7 +686,7 @@ def main() -> int:
                 raise GateError(f"{PRODUCER} unreachable reading tag {t!r}: {e.reason}") from e
 
     try:
-        report = reconcile(args.registry, resolve_feed, resolve_tag)
+        report = reconcile(args.registry, resolve_feed, resolve_nuspec, resolve_tag)
     except Finding as e:
         print(f"feed-autofix: FINDING — {e}", file=sys.stderr)
         if args.json:
