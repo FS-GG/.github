@@ -1126,13 +1126,13 @@ module Reads =
             | true, n when n >= 0 -> n
             | _ -> 1000
 
-    /// Read a PR once: its mergeability state and head SHA (`None` if unreadable/absent).
+    /// Read a PR once: its mergeability state, head SHA, and head branch ref (`None` if unreadable/absent).
     let private prMergeAndSha
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
         (pr: int)
-        : (MergeState * string option) option =
+        : (MergeState * string option * string option) option =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
 
@@ -1162,12 +1162,57 @@ module Reads =
                     | true, v when v.ValueKind = JsonValueKind.Null -> Computing
                     | _ -> Absent
 
-                let sha =
+                // The head SHA and the BRANCH it names, read from the same object so they cannot disagree
+                // about which PR they describe. The ref is what lets a `false` be checked against the branch's
+                // real tip when the caller asserted no `--sha` of their own (#989).
+                let sha, headRef =
                     match root.TryGetProperty "head" with
-                    | true, h when h.ValueKind = JsonValueKind.Object -> str h "sha"
-                    | _ -> None
+                    | true, h when h.ValueKind = JsonValueKind.Object -> str h "sha", str h "ref"
+                    | _ -> None, None
 
-                Some(merge, sha)
+                Some(merge, sha, headRef)
+
+    /// The BRANCH's real tip — the commit `refs/heads/{branch}` names right now, or `None` if it cannot be
+    /// read. `None` is never "the branch is empty": an unreadable ref proves nothing, and the one caller
+    /// (#989) keeps its existing verdict rather than acting on a fact it does not have.
+    ///
+    /// UNCONDITIONAL, deliberately, where every neighbouring read is conditional. The whole question this
+    /// answers is "has the PR object caught up with the push YET?", so a 304 served from a validator stored
+    /// microseconds ago would answer with the state the caller is trying to see PAST. Memoising the read that
+    /// exists to detect staleness is how the detector inherits the staleness.
+    let private branchTip
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (branch: string)
+        : string option =
+
+        let subject = $"%s{owner}/%s{repo} branch %s{branch} tip"
+        let path = $"repos/%s{owner}/%s{repo}/git/ref/heads/%s{Uri.EscapeDataString branch}"
+
+        let request =
+            { Method = "GET"
+              Path = path
+              Query = []
+              Body = NoBody
+              // REST — the budget the claim lock lives on (ADR-0034 §3). Stated here, at the call, because
+              // this read is the whole COST of #989 and it must be visible where it is spent. It is paid
+              // only on the `false`-with-no-`--sha` path: a conflicted verdict, never the green hot path.
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error _ -> None
+        | Ok response ->
+            match parse subject response.Body with
+            | Error _ -> None
+            | Ok doc ->
+                use doc = doc
+
+                match doc.RootElement.TryGetProperty "object" with
+                | true, o when o.ValueKind = JsonValueKind.Object -> str o "sha"
+                | _ -> None
 
     /// The landable verdict AND the number of subjects it was scored over (`Landable.scoreN`). The count is
     /// what `landable --wait` polls on: a `red` over ZERO subjects is "CI has not started yet", not "CI
@@ -1207,10 +1252,10 @@ module Reads =
         // A `null` that OUTLIVES the budget is `PrPending`, not `PrUnknown` (#950): the budget is ~2s and a
         // background job is not, so exhausting it says "not yet", never "unreadable". The verdict below draws
         // that line; this re-read only decides how long to hold the question open before deferring it there.
-        let rec readMerge (triesLeft: int) : MergeState * string option =
+        let rec readMerge (triesLeft: int) : MergeState * string option * string option =
             match prMergeAndSha transport owner repo pr with
-            | None -> Absent, None
-            | Some(Computing, sha) when triesLeft > 1 ->
+            | None -> Absent, None, None
+            | Some(Computing, _, _) when triesLeft > 1 ->
                 let ms = mergeableRetryMs ()
 
                 if ms > 0 then
@@ -1252,7 +1297,7 @@ module Reads =
 
         let staleHead =
             match merge with
-            | Mergeable _, Some sha when expected |> Option.exists (fun e -> e <> sha) -> Some sha
+            | Mergeable _, Some sha, _ when expected |> Option.exists (fun e -> e <> sha) -> Some sha
             | _ -> None
 
         match staleHead with
@@ -1264,8 +1309,50 @@ module Reads =
             [ $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
         | None ->
 
+        // Bound HERE, past the early return above, and matched on `expected = None` — so the read is spent on
+        // exactly one path and no other. A caller who passed `--sha` has already been answered (agreeing, or
+        // returned as stale above) and must not pay for a second opinion; `Computing`/`Absent`/`true` never
+        // reach it at all. `Option.exists` is the fail-closed half: an unreadable tip is `None`, which is
+        // `false`, which leaves the conflict standing.
+        let staleAgainstBranch =
+            match merge, expected with
+            | (Mergeable false, Some sha, Some headRef), None ->
+                branchTip transport owner repo headRef |> Option.exists (fun tip -> tip <> sha)
+            | _ -> false
+
         match merge with
-        | Mergeable false, _ -> PrConflicted, 0, []
+        // A `false` NOBODY ASSERTED A SHA FOR — §5's own `landable <pr> --wait`, and the form every worker
+        // runs (#989). #955 made the guard above reachable for a `false`; it is reachable only by a caller
+        // that passes `--sha`, and the recipe passes none, so the repair could not fire on the path it was
+        // for.
+        //
+        // Asking the RECIPE to pass `--sha "$(git rev-parse HEAD)"` was #955's own recommendation, and it
+        // has a race #955 did not see: a bot pushes to your item branch (`lockfile-sync.yml` is a
+        // `workflow_call` reusable ending in a bare push; `feed-autofix.yml` triggers `on: pull_request` and
+        // force-pushes), your worktree HEAD is then NOT the PR's head, and the assertion fails through no
+        // fault of yours — turning #955's TRANSIENT false `conflicted` into a PERMANENT false `pending`.
+        // That is strictly worse: waiting is exactly what the recipe tells you to do about a 7.
+        //
+        // So ask GIT, not the caller. The push updated `refs/heads/{branch}` synchronously — that IS the
+        // push — while the PR object is re-pointed by a background job, and this function's own contract has
+        // recorded the consequence since `--sha` was built: "for a second or so `pulls/{n}` still names the
+        // PREVIOUS commit". A tip that disagrees with `head.sha` is therefore not an opinion about what the
+        // caller believes; it is GitHub disagreeing with itself, and it means precisely "has not caught up".
+        // That is the fact #955 is about, MEASURED rather than asserted — and it is immune to the bot-push
+        // race, because it never asks what the caller believes. It is also why #955's t1 read `conflicted`
+        // at all: `--wait` returns a conflicted TERMINALLY on the first read, and the first read is exactly
+        // the one inside that window.
+        //
+        // Only on this path. A caller who passed `--sha` was answered above at no cost, and the green path
+        // never reaches here — so the extra REST read is paid on a conflicted verdict only, never on the
+        // merge that follows a green one.
+        //
+        // FAIL-CLOSED both ways (#266). A tip we cannot READ proves nothing, so the conflict stands: an
+        // unreadable ref must not manufacture a `pending` any more than it may manufacture a green. And an
+        // AGREEING tip means the PR really does name the branch's real head, so its `false` is about the
+        // code that would be merged — a real conflict, still terminal, still exit 3 on the first read.
+        | Mergeable false, _, _ when staleAgainstBranch -> PrPending, 0, []
+        | Mergeable false, _, _ -> PrConflicted, 0, []
         // `Computing` and `Absent` MUST NOT share a body (#950). Both mean "no mergeability here", but only
         // one of them can change: a `null` outliving the bounded re-read above is a background job that has
         // not landed yet — GUARANTEED transient — while an absent field will never appear. Collapsing them
@@ -1279,12 +1366,12 @@ module Reads =
         // stderr it feeds says so in as many words ("These are assertions you asked for"). Nobody asked for
         // this one, so a reason here would print a true sentence under a false one. `PrConflicted`/`PrUnknown`
         // give none for the same reason.
-        | Computing, _ -> PrPending, 0, []
-        | Absent, _ -> PrUnknown, 0, []
-        | Mergeable true, None -> PrUnknown, 0, []
+        | Computing, _, _ -> PrPending, 0, []
+        | Absent, _, _ -> PrUnknown, 0, []
+        | Mergeable true, None, _ -> PrUnknown, 0, []
         // The head SHA is reconciled above, for `true` and `false` alike, so by here it is either the commit
         // the caller asked to gate or one they made no assertion about. Scoring is safe on both.
-        | Mergeable true, Some sha ->
+        | Mergeable true, Some sha, _ ->
             match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
             | Some runs, Some checks ->
                 let state, n = Landable.scoreRequired required (Some true) runs checks
