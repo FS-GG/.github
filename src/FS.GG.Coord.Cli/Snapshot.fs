@@ -769,6 +769,24 @@ module Snapshot =
 
             w.WriteEndArray()
 
+        // `writes` is a BOOL, not folded into the prose: the absence of a write is the #331 observable
+        // — it is what tells "preserved" from "restored" in the board's history — so a projection that
+        // rendered it as a phrase inside `endState` would put a fact a reader selects on back into text a
+        // reader parses. Same reason `blockerStates.holds` and `boardStatuses.startable` are their own
+        // members and not baked into `meaning`.
+        let writeReleaseColumns (key: string) (columns: Protocol.ReleaseColumnDoc list) =
+            w.WriteStartArray(key)
+
+            for c in columns do
+                w.WriteStartObject()
+                w.WriteString("condition", c.Condition)
+                w.WriteString("endState", c.EndState)
+                w.WriteBoolean("writes", c.Writes)
+                w.WriteString("stdout", c.Stdout)
+                w.WriteEndObject()
+
+            w.WriteEndArray()
+
         // THE FOLD IS THE DOCUMENT. The list's order is the JSON's key order, so document order is stated
         // once — in `Protocol.factsDocument` — rather than here as a sequence of calls that has to be kept
         // in step with it. An EXHAUSTIVE match, so a new fact shape cannot reach the payload unrendered:
@@ -781,6 +799,7 @@ module Snapshot =
             | Protocol.BlockerStates(key, bs) -> writeBlockerStates key bs
             | Protocol.BoardStatuses(key, ss) -> writeBoardStatuses key ss
             | Protocol.ExitCodes(key, cs) -> writeExitCodes key cs
+            | Protocol.ReleaseColumns(key, cs) -> writeReleaseColumns key cs
             | Protocol.SnapshotShape(key, schema, keys) -> writeSnapshotShape key schema keys
 
         w.WriteEndObject()

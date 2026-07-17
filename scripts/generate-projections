@@ -58,6 +58,8 @@ TARGETS=(
   "take-exit-codes:.agents/skills/pnext-item/SKILL.md"
   "landable-exit-codes:.claude/skills/pnext-item/SKILL.md"
   "landable-exit-codes:.agents/skills/pnext-item/SKILL.md"
+  "release-columns:.claude/skills/pnext-item/SKILL.md"
+  "release-columns:.agents/skills/pnext-item/SKILL.md"
   "filing-rules:.claude/skills/cross-repo-coordination/SKILL.md"
   "filing-rules:.agents/skills/cross-repo-coordination/SKILL.md"
   "reconcile-rules:.claude/skills/check-board/SKILL.md"
@@ -235,6 +237,34 @@ render_landable_exit_codes() {
   echo "-->"
   echo ""
   render_exit_code_table landableExitCodes
+}
+
+# `release-columns` — `release`/`reap`'s column precedence (#1099), for the driver skill's "Abandoning
+# an item" section. The THIRD table in the class #889/#900 proved: `release`'s column semantics is the
+# org's most-repaired behaviour (seven issues), and it was the one #1059 restatement that is a
+# PRECEDENCE rather than a `Rule`, so it could not join `driverRules`. `writes` renders as yes/no; the
+# `stdout` templates are wrapped as code because they are literal output a worker matches against.
+render_release_columns() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  This precedence was hand-authored here, and it is the single most-repaired behaviour in the"
+  echo "  org: seven issues (#331/#354/#531/#867/#911/#914/#921) corrected a prose copy of it while the"
+  echo "  engine's \`unclaimColumn\` was, eventually, right. #889/#900 proved the cure — the two exit-code"
+  echo "  tables that were GENERATED have never drifted since. This is the third. Edit Protocol.fs and"
+  echo "  regenerate."
+  echo "-->"
+  echo ""
+  echo "| release sees | the column becomes | writes? | stdout — the tell |"
+  echo "|---|---|---|---|"
+  # `|` is the CELL SEPARATOR, so a pipe inside a fact would silently split one cell and shift every
+  # column after it. Escape it here rather than forbidding it in Protocol.fs.
+  jq -r '
+    def cell: gsub("\\|"; "\\|");
+    .releaseColumns[]
+      | "| \(.condition | cell) | \(.endState | cell) | \(if .writes then "yes" else "no" end) | `\(.stdout | cell)` |"' "$FACTS"
+  echo ""
 }
 
 # `filing-rules` — the rules a worker FILING an item must satisfy (#889), for `cross-repo-coordination`.

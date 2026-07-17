@@ -94,7 +94,8 @@ jobs:
           # 14 → 16: `board-statuses` in both cross-repo-coordination roots (#889, #1057).
           # 16 → 18: `snapshot-shape` in both check-board roots (#889, #1058).
           # 18 → 20: `driver-rules` in both pnext-item roots (#889, #1059).
-          expected=20
+          # 20 → 22: `release-columns` in both pnext-item roots (#889/#900, #1099).
+          expected=22
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

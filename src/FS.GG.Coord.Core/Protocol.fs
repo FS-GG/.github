@@ -53,6 +53,18 @@ module Protocol =
           /// invents a remedy for.
           Action: string }
 
+    /// One row of `release`/`reap`'s column precedence — see `Protocol.fsi` for the shape and why it is
+    /// not an `ExitCodeDoc`.
+    type ReleaseColumnDoc =
+        { /// The input, in PRECEDENCE ORDER — the first row whose condition holds wins.
+          Condition: string
+          /// The column the item ends in.
+          EndState: string
+          /// Whether `release` writes the column, or leaves it as it is — the #331 observable.
+          Writes: bool
+          /// The stdout line — the tell, since exit 0 cannot confirm a park.
+          Stdout: string }
+
     /// One `BlockerState`, as a reader of the scan's JSON meets it.
     type BlockerStateDoc =
         { /// The string `scan` emits — `Types.blockerStateWireName`'s answer, never a second spelling.
@@ -400,6 +412,52 @@ module Protocol =
               "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
             Action = "Report it. Do not retry, and do not merge a PR you have no verdict on." } ]
 
+    // ---- release's column precedence ---------------------------------------------------------------
+    // #1099, and it is #889/#900 a THIRD time: `release`'s column semantics is the single most-repaired
+    // behaviour in this org — #331/#354/#531/#867/#911/#914/#921, seven issues, one behaviour — and
+    // every repair edited a hand copy while the engine's `Client.unclaimColumn` was (eventually) right.
+    // #1059 moved the org's four RULE-shaped restatements into `driverRules` and could NOT move this
+    // one: it is not a `Rule` but a PRECEDENCE with a documented end state, the same shape as the two
+    // exit-code tables, so it stayed authored prose in `pnext-item`'s "Abandoning an item" section.
+    //
+    // The rows are ordered as `Client.release` EVALUATES them: an explicit `--status` beats everything
+    // (#867/#914), then the recorded restore, then the `Ready` fallback, then the preserve arms, then
+    // the fail-closed case a chosen write shares with an unreadable column. The `Stdout` is the load-
+    // bearing field: `release` exits 0 even when the write does not land, so the exit code cannot
+    // confirm a park and the stdout LINE is the tell — a preserve names no column it set, a bare
+    // `released <ref>` means nothing landed and stderr says why (#331/#914).
+    let releaseColumns: ReleaseColumnDoc list =
+        [ { Condition =
+              "You pass an explicit `--status <col>`. It BEATS the recorded restore and the `Ready` fallback alike — the caller naming the deliberate end state (#867/#914), which is why parking an item into a column is `release <n> --status <col>`."
+            EndState = "`<col>` — the column you named."
+            Writes = true
+            Stdout = "released <ref> → <col>" }
+          { Condition =
+              "No `--status`; the live column is still the `In progress` the claim wrote, and the marker recorded NO other column (or recorded `In progress` — the same footprint written twice)."
+            EndState = "`Ready` — the fallback for a claim with nothing to restore (#481)."
+            Writes = true
+            Stdout = "released <ref> → Ready" }
+          { Condition =
+              "No `--status`; the live column is the claim's own `In progress`, and the marker recorded a DIFFERENT column at claim time — what the claim overwrote."
+            EndState = "the recorded column, RESTORED — a `Backlog` item returns to `Backlog`, not `Ready` (#481)."
+            Writes = true
+            Stdout = "released <ref> → <recorded>" }
+          { Condition =
+              "No `--status`; the live column is anything OTHER than the claim's `In progress` — it was chosen DURING the lease (you parked it `Blocked`, say). `reap` asks the same question, so a lapsed lease does not revert it either (#331/#911)."
+            EndState = "that column, PRESERVED — the write is skipped, and the absence of the write is what says the column was nobody's to change."
+            Writes = false
+            Stdout = "released <ref> (column left at <col>)" }
+          { Condition = "No `--status`; the item has no `Status` set, or is not on this board — so there is no column to reset."
+            EndState = "nothing to set."
+            Writes = false
+            Stdout = "released <ref> (no column to reset — not on this board, or no Status set)" }
+          { Condition =
+              "The live column could not be READ (unresolvable board, or a transient failure), OR a column `release` chose to write was DEFERRED on an exhausted budget or FAILED. A column it cannot read is one it will not overwrite (#266/#331)."
+            EndState =
+              "UNCHANGED — left exactly as it is; the lock is dropped regardless. The BARE line — no `→`, no `(...)` — is the tell, and stderr immediately above it names the repair."
+            Writes = false
+            Stdout = "released <ref>" } ]
+
     // ---- the rules ---------------------------------------------------------------------------------
 
     let touchSetGrammar: Rule =
@@ -571,6 +629,7 @@ module Protocol =
         | BlockerStates of key: string * BlockerStateDoc list
         | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
+        | ReleaseColumns of key: string * ReleaseColumnDoc list
         /// The snapshot document's SHAPE. The only case carrying a scalar beside its list, because the
         /// shape IS a schema string plus its keys — and a schema emitted as a one-member `keys` entry
         /// would be a lie about what it is. See `snapshotSchema` in Protocol.fsi for the ownership call.
@@ -581,7 +640,7 @@ module Protocol =
     ///
     /// /2 `takeExitCodes` (#889) · /3 `landableExitCodes` (#900) · /4 `filingRules` (#889) ·
     /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889) · /8 `snapshotDocument` (#889/#1058) ·
-    /// /9 `driverRules` (#889/#1059).
+    /// /9 `driverRules` (#889/#1059) · /10 `releaseColumns` (#889/#1099).
     ///
     /// Each bump is additive for a reader that ignores unknown members, and the number is bumped anyway:
     /// it says what the surface IS, not merely whether an old reader survives it.
@@ -595,7 +654,7 @@ module Protocol =
     /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
     /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
     /// attribute because it was `private` and had no signature entry to keep in step.
-    let factsSchema = "fsgg.coord.protocol/9"
+    let factsSchema = "fsgg.coord.protocol/10"
 
     /// The snapshot document's schema string — the `schema` member `Scan.snapshot` writes and
     /// `Snapshot.parse` refuses a document without.
@@ -691,4 +750,5 @@ module Protocol =
           BoardStatuses("boardStatuses", boardStatuses)
           ExitCodes("takeExitCodes", takeExitCodes)
           ExitCodes("landableExitCodes", landableExitCodes)
+          ReleaseColumns("releaseColumns", releaseColumns)
           SnapshotShape("snapshotDocument", snapshotSchema, snapshotKeys) ]
