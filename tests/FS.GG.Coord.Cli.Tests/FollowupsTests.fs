@@ -2,6 +2,7 @@ namespace FS.GG.Coord.Cli.Tests
 
 open System
 open System.IO
+open System.Threading
 open System.Threading.Tasks
 open Xunit
 open FS.GG.Coord.Types
@@ -236,7 +237,7 @@ module FollowupsTests =
             Assert.False(File.Exists file, "a drained queue must cease to exist, not linger zero-byte"))
 
     [<Fact>]
-    let ``concurrent pops hand each ref to exactly ONE caller`` () =
+    let ``concurrent pops CONSERVE the queue — no ref handed twice, none lost`` () =
         withCache (fun _ ->
             let w = workerNamed "rook-test"
             let n = 20
@@ -244,30 +245,67 @@ module FollowupsTests =
             for i in 1..n do
                 apply w (Add $"FS.GG.Game#%d{i}") |> ignore
 
-            // The read-then-delete shell could hand one head to two readers. Under contention this must
-            // either pop a DISTINCT ref or report Unreadable (the lock was held) — never the same ref
-            // twice, and never a ref deleted without being handed to anybody.
             let popped =
                 [| for _ in 1..n ->
                        Task.Run(fun () ->
                            let rec attempt tries =
                                match apply w Pop with
-                               | Unreadable _ when tries > 0 -> attempt (tries - 1)
+                               | Unreadable _ when tries > 0 ->
+                                   // Back off. A spin with no yield livelocks on a 2-core runner, which is
+                                   // how the first draft of this test failed in CI and passed here.
+                                   Thread.Sleep 1
+                                   attempt (tries - 1)
                                | o -> o
 
-                           attempt 50) |]
+                           attempt 200) |]
                 |> Task.WhenAll
                 |> fun t -> t.Result
 
-            let refs =
+            let poppedRefs =
                 popped
                 |> Array.choose (function
                     | Popped r -> Some r
                     | _ -> None)
 
-            Assert.Equal(n, refs.Length)
-            Assert.Equal(n, refs |> Array.distinct |> Array.length)
-            Assert.Equal(Empty, apply w Pop))
+            // WHAT IS ASSERTED IS CONSERVATION, AND NOT LIVENESS — because conservation is what the
+            // implementation promises and liveness is not. `withQueue` FAILS CLOSED on contention (an
+            // exclusive handle), so a loser is told to retry; "every thread eventually wins" is therefore
+            // a property of the SCHEDULER, and the first draft of this test asserted it (`popped = 20`).
+            // It passed here and went red in CI at 18/20 — two threads lost 50 races on a slower box.
+            // The tempting repair is more retries, which only moves the flake's probability: a test whose
+            // green depends on winning a race teaches exactly one lesson, "re-run it", and the next red
+            // will be real (#698).
+            //
+            // These two ARE the property, and they are exactly what a shared handle breaks: it lets two
+            // readers see one head (a ref popped twice) and lets a rewrite clobber the other's tail (a ref
+            // that is neither popped nor left behind — the promise deleted having been handed to nobody).
+            let poppedNums = poppedRefs |> Array.map (fun r -> r.Number) |> Set.ofArray
+
+            // 0. NON-VACUITY, and it is the reason this line exists rather than a stronger one.
+            //
+            // Conservation holds TRIVIALLY if nothing was popped at all — popped = ∅, remaining = all 20,
+            // and every assertion below passes while the test proves nothing. That is #266's shape aimed
+            // at this file: a check reporting green over a subject it never exercised. So the floor is
+            // ONE, which is the weakest claim that rules out a vacuous pass — and weak on purpose. `= 20`
+            // is the liveness assertion that made this test flaky in the first place; `>= 1` cannot be,
+            // because at most one caller holds the handle at any instant, so the first open to succeed
+            // pops something.
+            Assert.NotEmpty(poppedRefs)
+
+            // 1. NO REF TWICE. A duplicate would shrink the set.
+            Assert.Equal(poppedRefs.Length, Set.count poppedNums)
+
+            let remaining =
+                match apply w List with
+                | Listed rs -> rs |> List.map (fun r -> r.Number) |> Set.ofList
+                | Empty -> Set.empty
+                | other -> failwith $"the queue was left unreadable: %A{other}"
+
+            // 2. NOTHING IS IN BOTH PLACES — popped AND still owed.
+            Assert.Empty(Set.intersect poppedNums remaining)
+
+            // 3. NOTHING IS LOST — every ref that went in is either handed out or still queued.
+            Assert.Equal<Set<int>>(Set.ofList [ 1..n ], Set.union poppedNums remaining))
 
     // ---- the action parser -------------------------------------------------------------------------
 
