@@ -77,7 +77,7 @@ jobs:
       - name: Non-vacuity — the generated regions exist
         run: |
           set -euo pipefail
-          expected=5
+          expected=7
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

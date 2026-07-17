@@ -1,5 +1,6 @@
 namespace FS.GG.Coord.Tests
 
+open System.Reflection
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -95,32 +96,111 @@ module ProtocolTests =
         Assert.NotEmpty Protocol.rules
         Assert.NotEmpty Protocol.verdicts
         Assert.NotEmpty Protocol.takeExitCodes
+        Assert.NotEmpty Protocol.landableExitCodes
+
+    /// EVERY `ExitCodeDoc list` the protocol declares, found by REFLECTION rather than by a list
+    /// somebody remembers to update.
+    ///
+    /// A hand-written roster here would be the defect one level up: a table added to `Protocol.fs` and
+    /// not to the roster gets NONE of the invariants below, and nothing says so — a gate that silently
+    /// stops covering its subject (#266, #436). `take`'s table (#889) and `landable`'s (#900) were both
+    /// hand-written copies that drifted; answering that with a hand-written roster of them would be the
+    /// same mistake, wearing a test's clothes. So the invariants attach to the TYPE, and a third table
+    /// is covered the moment it is declared.
+    let private exitTables: (string * Protocol.ExitCodeDoc list) list =
+        let m =
+            typeof<Protocol.Rule>.Assembly.GetType "FS.GG.Coord.Protocol"
+
+        // The module type is found by NAME, so a rename would otherwise silently yield zero tables and
+        // pass every invariant vacuously. That is the exact failure this reflection exists to refuse.
+        Assert.True(not (isNull m), "FS.GG.Coord.Protocol not found — reflection cannot see the tables it is gating")
+
+        m.GetProperties(BindingFlags.Public ||| BindingFlags.Static)
+        |> Array.filter (fun p -> p.PropertyType = typeof<Protocol.ExitCodeDoc list>)
+        |> Array.map (fun p -> p.Name, p.GetValue null :?> Protocol.ExitCodeDoc list)
+        |> List.ofArray
+
+    /// THE FLOOR (#266, #436). Reflection finding NOTHING would make every invariant below iterate an
+    /// empty list and pass — the vacuity these gates exist to refuse. This fails when a table is
+    /// DELETED or renamed out of view; a table that is ADDED needs no edit here, because reflection has
+    /// already covered it.
+    [<Fact>]
+    let ``every exit-code table the protocol declares is gated`` () =
+        let names = exitTables |> List.map fst
+        Assert.NotEmpty exitTables
+        Assert.Contains("takeExitCodes", names)
+        Assert.Contains("landableExitCodes", names)
 
     /// A CODE WITHOUT A REMEDY IS A CODE A WORKER INVENTS A REMEDY FOR — and the invented one is
-    /// "retry", which is exactly wrong for 2 (the engine is broken) and for 5 (the queue is empty).
-    /// The `Meaning`/`Action` split is the whole reason this table beats the number alone.
+    /// "retry", which is exactly wrong for `take` 2 (the engine is broken), `take` 5 (the queue is
+    /// empty), and `landable` 3 (the PR is RED — the invented retry is the #900 hang itself).
+    /// The `Meaning`/`Action` split is the whole reason these tables beat the number alone.
     [<Fact>]
-    let ``every take exit code says what it saw and what to do`` () =
-        for c in Protocol.takeExitCodes do
-            Assert.False(
-                System.String.IsNullOrWhiteSpace c.Meaning,
-                $"take exit %d{c.Code} means nothing")
+    let ``every exit code says what it saw and what to do`` () =
+        for cmd, codes in exitTables do
+            for c in codes do
+                Assert.False(
+                    System.String.IsNullOrWhiteSpace c.Meaning,
+                    $"%s{cmd} exit %d{c.Code} means nothing")
 
-            Assert.False(
-                System.String.IsNullOrWhiteSpace c.Action,
-                $"take exit %d{c.Code} tells the caller to do nothing")
+                Assert.False(
+                    System.String.IsNullOrWhiteSpace c.Action,
+                    $"%s{cmd} exit %d{c.Code} tells the caller to do nothing")
 
     /// Two rows for one code is two remedies for one observation, and the worker reads whichever it
-    /// meets first. The old hand-written table had exactly this defect: its `≠0, ≠2` row also matched
-    /// 5, 6 and 75, so three codes carried two contradictory instructions each.
+    /// meets first. The old hand-written `take` table had exactly this defect: its `≠0, ≠2` row also
+    /// matched 5, 6 and 75, so three codes carried two contradictory instructions each.
     [<Fact>]
-    let ``take exit codes are unique`` () =
-        let codes = Protocol.takeExitCodes |> List.map (fun c -> c.Code)
-        Assert.Equal<int list>(List.distinct codes, codes)
+    let ``exit codes are unique within a table`` () =
+        for cmd, codes in exitTables do
+            let ns = codes |> List.map (fun c -> c.Code)
+            Assert.Equal<int list>(List.distinct ns, ns)
+            Assert.True(not ns.IsEmpty, $"%s{cmd}'s table is empty")
 
     /// 0 IS THE ONLY SUCCESS, and the table's first row is what a worker copies. `take && work_it`
-    /// firing on nothing is #585 itself.
+    /// firing on nothing is #585 itself; merging on a non-green `landable` is #900's.
     [<Fact>]
-    let ``take documents exactly one success code, and it leads`` () =
-        Assert.Equal(0, (List.head Protocol.takeExitCodes).Code)
-        Assert.Equal(1, Protocol.takeExitCodes |> List.filter (fun c -> c.Code = 0) |> List.length)
+    let ``every table documents exactly one success code, and it leads`` () =
+        for cmd, codes in exitTables do
+            Assert.Equal(0, (List.head codes).Code)
+
+            Assert.Equal(
+                1,
+                codes |> List.filter (fun c -> c.Code = 0) |> List.length)
+
+            Assert.True(
+                codes |> List.forall (fun c -> c.Code >= 0),
+                $"%s{cmd} documents a negative exit code, which no shell can report")
+
+    /// `landable`'s CONTRACT IS THE POLL LOOP, and #900 was that the recipe got the two codes the loop
+    /// reads backwards: it called 3 "pending" (3 is RED — so the loop waits forever on a PR that will
+    /// never go green) and had no row for 7 at all (7 is PENDING — so the loop reads it as an
+    /// unrecognised failure and stops waiting on a PR that is merely still running).
+    ///
+    /// This pins the DOCUMENTED MEANINGS, in `Core`, where the engine's constants are not visible.
+    /// `ExitContractTests` ties the same rows to `Client.ExitPending`/`ExitRed` — the two halves are
+    /// both needed, because generating a table only makes the copies AGREE; it does not make them TRUE.
+    [<Fact>]
+    let ``landable's 3 is red and its 7 is pending, never the reverse`` () =
+        let meaningOf code =
+            Protocol.landableExitCodes
+            |> List.tryFind (fun c -> c.Code = code)
+            |> Option.map (fun c -> c.Meaning.ToUpperInvariant())
+
+        match meaningOf 3 with
+        | None -> Assert.Fail "landable exit 3 (red/conflicted) is not documented"
+        | Some m ->
+            Assert.True(m.Contains "RED", "landable exit 3 does not say it is RED — #900 is that it said 'pending'")
+            Assert.False(m.StartsWith "PENDING", "landable exit 3 is documented as PENDING — that is #900 exactly, and a loop built on it hangs")
+
+        match meaningOf 7 with
+        | None -> Assert.Fail "landable exit 7 (pending) is not documented — the recipe's table had no 7, so a loop stops waiting on a PR that is still running"
+        | Some m -> Assert.True(m.Contains "PENDING", "landable exit 7 does not say it is PENDING")
+
+    /// THERE IS NO EX_RATE IN `landable`, and a reader of `take`'s table will expect one.
+    /// `Reads.prLandableRequire` returns a bare `PrState` with no error channel, so a rate limit is
+    /// `PrUnknown` — exit 4 — not 75. Documenting a 75 here would send a worker to wait out a budget
+    /// reset over what is actually an unread PR.
+    [<Fact>]
+    let ``landable documents no rate-limit code`` () =
+        Assert.DoesNotContain(75, Protocol.landableExitCodes |> List.map (fun c -> c.Code))

@@ -82,7 +82,10 @@ let private readInput (opts: Options) =
 /// rule exists once, and the prose is a build artifact.
 let private facts (opts: Options) =
     match opts.Render with
-    | Json -> printfn "%s" (Snapshot.renderFacts Protocol.rules Protocol.verdicts Protocol.takeExitCodes)
+    | Json ->
+        printfn
+            "%s"
+            (Snapshot.renderFacts Protocol.rules Protocol.verdicts Protocol.takeExitCodes Protocol.landableExitCodes)
     | Text ->
         for r in Protocol.rules do
             printfn "## %s" r.Title
