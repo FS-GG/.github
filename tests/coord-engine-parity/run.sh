@@ -2299,6 +2299,12 @@ fi
 # issue still open (DONE-STATUS-OPEN-ISSUE, a note); and an epic whose BODY declares a child the graph does
 # not contain (EPIC-UNLINKED-CHILD) — with a body-cited PR ref DROPPED (#346), a prose mention ignored, and
 # an unresolvable ref KEPT (fail closed, #266).
+#
+# ...and the two rules that read the SAME graph to the opposite conclusion: EPIC-NO-STATED-ACCEPTANCE
+# (#1003 — a body with no task lines, where #965's guard is vacuously satisfied) and EPIC-ROLLUP-READY
+# (#614 — every mechanical precondition to roll up holds, which is a CANDIDATE and not a verdict). The
+# epics above double as ROLLUP-READY's suppression cases: #440 is vacuously "all children resolved"
+# over an empty list, #404 over a truncated one.
 LE_OUT="$(mktemp)"; python3 "$HERE/lintepic_server.py" >"$LE_OUT" 2>/dev/null & LE_SRV=$!; LE_PORT=""
 for _ in $(seq 1 50); do LE_PORT="$(head -n1 "$LE_OUT" 2>/dev/null)"; [ -n "$LE_PORT" ] && break; sleep 0.1; done
 rm -f "$LE_OUT"
@@ -2348,10 +2354,49 @@ if [ -z "$LE_PORT" ]; then bad "lint-epic fixture bound a port"; else
   [ "$(jq -r '[.[] | select(has("unlinked"))] | length' <<<"$lej")" = "0" ] \
     && ok "case14: the PR-probe scratch field is not exposed in --json" \
     || bad "case14: no 'unlinked' scratch field" "$lej"
-  # #470 is a healthy epic (its one declared child is linked) — the negative control.
-  [ "$(jq -r '[.[] | select(.id|test("470"))] | length' <<<"$lej")" = "0" ] \
-    && ok "case14: a healthy epic (linked children, complete graph) yields nothing (#470)" \
-    || bad "case14: #470 must be clean" "$lej"
+  # #470 is a healthy epic (its one declared child is linked) — the negative control. It yields no
+  # DEFECT, which is what this control has always been about; it is not silent. Its one child is
+  # CLOSED and it is still OPEN, so it is exactly a roll-up candidate and says so as a `note` below.
+  [ "$(jq -r '[.[] | select((.id|test("470")) and .severity=="error")] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: a healthy epic (linked children, complete graph) yields no ERROR (#470)" \
+    || bad "case14: #470 must yield no error" "$lej"
+
+  # ---- EPIC-NO-STATED-ACCEPTANCE (#1003) -------------------------------------------------------
+  # The half EPIC-UNDELEGATED-ACCEPTANCE cannot see. #440 and #450 state `Paths: none` and nothing
+  # else: no task lines at all, so "every acceptance line is a child ref" is VACUOUSLY true and the
+  # #965 guard reports itself satisfied over a body nobody checked. #561 and #889 are what that cost.
+  # The epics with task lines (#404, #409, #470) must NOT fire it — that is the half #965 already had.
+  [ "$(codeids EPIC-NO-STATED-ACCEPTANCE)" = "FS.GG.SDD#440,FS.GG.SDD#450" ] \
+    && ok "case14: EPIC-NO-STATED-ACCEPTANCE fires on exactly the bodies with NO task lines (#440, #450)" \
+    || bad "case14: EPIC-NO-STATED-ACCEPTANCE must fire on exactly 440,450" "$(codeids EPIC-NO-STATED-ACCEPTANCE)"
+  # MUTUALLY EXCLUSIVE with #965's rule, which is asserted rather than argued: they partition the task
+  # lines, so no epic may ever carry both.
+  [ "$(jq -r '[group_by(.id)[] | select((map(.code) | index("EPIC-NO-STATED-ACCEPTANCE")) and (map(.code) | index("EPIC-UNDELEGATED-ACCEPTANCE")))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: no epic carries BOTH acceptance findings — they partition the task lines" \
+    || bad "case14: the two acceptance rules must be mutually exclusive" "$lej"
+
+  # ---- EPIC-ROLLUP-READY, AND THE TWO VACUOUS TRUTHS IT RIDES ON (#614) -------------------------
+  # It fires on exactly ONE epic here, and every other epic in this fixture is a suppression case:
+  #   #440 — ZERO children. `List.forall (not << .Open)` over an empty list is TRUE, so only
+  #          EPIC-NO-CHILDREN stands between a childless epic and "every child is resolved".
+  #   #404 — TRUNCATED (5 total, 2 visible, both CLOSED). `forall` over the VISIBLE children is TRUE,
+  #          so only EPIC-CHILDREN-TRUNCATED stands between an unread graph and a green verdict.
+  #          #266's signature exactly: an unverifiable subject must not report ready.
+  #   #450 — an OPEN child (#451). The non-vacuous case.
+  #   #409 — a declared child the graph lacks. The body says the set is incomplete.
+  # Reorder the `List.isEmpty refusals` gate and #440/#404 become "close this epic?" questions put to
+  # a human about an epic whose children were never read. These two lines are what notice.
+  [ "$(codeids EPIC-ROLLUP-READY)" = "FS.GG.SDD#470" ] \
+    && ok "case14: EPIC-ROLLUP-READY fires on exactly the epic whose every child is resolved (#470)" \
+    || bad "case14: EPIC-ROLLUP-READY must fire on exactly 470" "$(codeids EPIC-ROLLUP-READY)"
+  [ "$(jq -r '[.[] | select(.code=="EPIC-ROLLUP-READY" and (.id|test("440|404")))] | length' <<<"$lej")" = "0" ] \
+    && ok "case14: ...and NOT on the childless (#440) or truncated (#404) epic — `forall` is vacuously true over both" \
+    || bad "case14: ROLLUP-READY must not fire on 440/404 — the vacuous-truth guards" "$lej"
+  # A NOTE, not an error: it reports a question nobody has been asked, and reddening a gate on one
+  # teaches #698's lesson (the gate is noise, merge anyway). `--strict` is for the caller who wants it fatal.
+  [ "$(jq -r '.[] | select(.code=="EPIC-ROLLUP-READY") | .severity' <<<"$lej")" = "note" ] \
+    && ok "case14: ...and it is a NOTE — a candidate for a human, not a defect (#614)" \
+    || bad "case14: ROLLUP-READY must be a note" "$(jq -r '.[]|select(.code=="EPIC-ROLLUP-READY")|.severity' <<<"$lej")"
 
   # Fail closed (#266): a ref the PR-probe cannot resolve is KEPT, never dropped. Force #414's probe to 502.
   lefc_out="$(mktemp)"; FSGG_PARITY_FAIL_ISSUE=414 python3 "$HERE/lintepic_server.py" >"$lefc_out" 2>/dev/null & LEFC=$!; LEFC_PORT=""
