@@ -111,6 +111,27 @@ DOC_SURFACE = ("docs",)
 # tool was the last holdout after #551 unified the docs.
 CODE_SURFACE = ("src", "scripts")
 CODE_SUFFIXES = (".fs", ".fsi", ".py", ".sh")
+
+# WHAT THIS GATE READS, FOR THE WORKFLOW THAT RUNS IT (#996, epic #266).
+#
+# `check-paths-coherence.py` reads this constant BY AST — no import, no execution — and reds
+# `worker-id-attractor.yml` if its `paths:` does not select every entry. Without it, this gate could
+# not fire on a change to its own subject: the filter omitted `src/**` for as long as #569 had been
+# auditing it, so a PR reintroducing the exact `command not found` regression this gate was written
+# to catch — touching only `src/FS.GG.Coord.Cli/Client.fs` — did not run it. Green by absence, on the
+# gate whose purpose is closing a #266 fail-open.
+#
+# IT IS COMPOSED, NEVER RETYPED, and that is the whole reason it can be trusted. A literal list here
+# would be a second copy of the surface, free to drift from the constants above the moment one of
+# them changes — which is #865 exactly: a hand-maintained source moves the drift upstream and makes
+# it authoritative. Built this way, widening CODE_SURFACE widens the trigger, and no one has to
+# remember. What a reader must still do is ADD a new surface constant here when they add one above;
+# that is the seam this shape does not close, and it is a much narrower one than a free-standing copy.
+#
+# FALLBACK_ROOTS, not the roots this tree actually declares: the workflow filter is static and the
+# roots are read at RUN time from ROOTS_DECL. So the declaration file itself is a subject — a root
+# added there changes what this gate audits — and it is listed for exactly that reason.
+PATHS_SUBJECT = DOC_SURFACE + CODE_SURFACE + (ROOTS_DECL,) + FALLBACK_ROOTS
 # The engine, specifically. Its remedies are the non-vacuity subject below: this program demonstrably
 # prints them, so finding none means the extractor is broken, not that the tree is clean.
 ENGINE_SURFACE = "src/FS.GG.Coord.Cli"

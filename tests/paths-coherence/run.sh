@@ -574,6 +574,137 @@ cp "$REPO_ROOT/.github/workflows/coord-engine.yml" "$RB13/.github/workflows/"
 expect "...and coord-engine.yml, as this PR ships it, passes" 0 "ok:" "$RB13"
 
 # =============================================================================================
+# 6c. RULE (c) — A GATE SCRIPT'S DECLARED SURFACE (#996).
+#
+#     (b)'s shape over a different graph: the workflow's `paths:` names the script, the script's AST
+#     supplies the closure. The declaration is `PATHS_SUBJECT`, and it is opt-in — a script that
+#     declares nothing is silent, so the rule cannot blanket-red an unmigrated workflow (#698).
+# =============================================================================================
+
+# gate <root> <path> <PATHS_SUBJECT expr> [extra-lines…] — a gate script that declares a surface.
+# The expression is written verbatim, so a leg can pin the AST reader's folding as well as the rule.
+gate() {
+  local r="$1" f="$2" expr="$3"; shift 3
+  mkdir -p "$r/$(dirname "$f")"
+  { echo '#!/usr/bin/env python3'
+    echo '"""a fixture gate."""'
+    for line in "$@"; do echo "$line"; done
+    echo "PATHS_SUBJECT = $expr"
+    echo 'print("ok")'; } > "$r/$f"
+}
+
+RC="$(root "$WORK/subject-miss")"
+gate "$RC" "scripts/check-x.py" '("docs", "src")'
+mkdir -p "$RC/docs" "$RC/src"
+wf "$RC/.github/workflows/w.yml" '      - "docs/**"
+      - "scripts/check-x.py"' '      - "docs/**"
+      - "scripts/check-x.py"'
+expect "a filter naming a gate SCRIPT but omitting what it READS is caught" \
+  1 "nothing in the filter selects 'src'" "$RC"
+
+RC2="$(root "$WORK/subject-ok")"
+gate "$RC2" "scripts/check-x.py" '("docs", "src")'
+mkdir -p "$RC2/docs" "$RC2/src"
+wf "$RC2/.github/workflows/w.yml" '      - "docs/**"
+      - "src/**"
+      - "scripts/check-x.py"' '      - "docs/**"
+      - "src/**"
+      - "scripts/check-x.py"'
+expect "...and covering the declared surface satisfies the rule" 0 "ok:" "$RC2"
+
+# THE CONSTANT IS COMPOSED, AND THE READER MUST FOLD IT. This is not a convenience: a reader that
+# only took literals would force `PATHS_SUBJECT` to be a RETYPED copy of the surface, free to drift
+# from the constants beside it — #865, the cure reintroducing the disease. Every real declaration in
+# this repo is a sum of the script's own walk bounds, so a reader that cannot fold `+` and names
+# would silently see NO declaration and rule (c) would audit nothing.
+RC3="$(root "$WORK/subject-composed")"
+gate "$RC3" "scripts/check-x.py" 'DOCS + CODE + (DECL,)' 'DOCS = ("docs",)' 'CODE = ("src",)' 'DECL = ".roots"'
+mkdir -p "$RC3/docs" "$RC3/src"; touch "$RC3/.roots"
+wf "$RC3/.github/workflows/w.yml" '      - "docs/**"
+      - "src/**"
+      - "scripts/check-x.py"' '      - "docs/**"
+      - "src/**"
+      - "scripts/check-x.py"'
+expect "a COMPOSED PATHS_SUBJECT is folded — names and \`+\`, not just literals" \
+  1 "nothing in the filter selects '.roots'" "$RC3"
+
+# A FILE IS NOT A DIRECTORY, and the remedy must be one that works. `.roots` is a file; telling
+# somebody to add `.roots/**` is advice matching nothing, and the gate would keep reding after they
+# did exactly as told.
+expect "...and the fix it names for a FILE is the file, not a bogus \`/**\`" \
+  1 "Add a pattern covering '.roots'." "$RC3"
+
+# OPT-IN: a script declaring nothing is out of scope and SILENT. A rule that red every unmigrated
+# workflow would be a rule everyone turns off on day one (#698).
+RC4="$(root "$WORK/subject-none")"
+mkdir -p "$RC4/scripts" "$RC4/src"
+printf '#!/usr/bin/env python3\nprint("no declaration here")\n' > "$RC4/scripts/check-x.py"
+wf "$RC4/.github/workflows/w.yml" '      - "scripts/check-x.py"' '      - "scripts/check-x.py"'
+expect "a script that declares NO surface is out of scope, not a finding" 0 "ok:" "$RC4"
+
+# THE LINKAGE IS THE EXACT NAME, per (b)'s narrowness. `scripts/**` is a workflow watching a
+# directory, not naming a gate — reading it as one would impose EVERY declaring script's surface on
+# any workflow that watches scripts/.
+RC5="$(root "$WORK/subject-catchall")"
+gate "$RC5" "scripts/check-x.py" '("docs", "src")'
+mkdir -p "$RC5/docs" "$RC5/src"
+wf "$RC5/.github/workflows/w.yml" '      - "scripts/**"' '      - "scripts/**"'
+expect "a CATCH-ALL over scripts/ does not name a gate — no surface is imposed" 0 "ok:" "$RC5"
+
+# ---- the AST reader REFUSES rather than guesses (#266) --------------------------------------
+RC6="$(root "$WORK/subject-unfoldable")"
+gate "$RC6" "scripts/check-x.py" 'compute_surface()' 'def compute_surface(): return ("docs",)'
+mkdir -p "$RC6/docs"
+wf "$RC6/.github/workflows/w.yml" '      - "scripts/check-x.py"' '      - "scripts/check-x.py"'
+expect "a PATHS_SUBJECT the reader cannot fold is NO VERDICT, never a guess" \
+  3 "not a literal, a module-level constant" "$RC6"
+
+RC7="$(root "$WORK/subject-forward-ref")"
+gate "$RC7" "scripts/check-x.py" 'LATER'
+echo 'LATER = ("docs",)' >> "$RC7/scripts/check-x.py"   # defined BELOW the declaration
+mkdir -p "$RC7/docs"
+wf "$RC7/.github/workflows/w.yml" '      - "scripts/check-x.py"' '      - "scripts/check-x.py"'
+expect "a name defined BELOW PATHS_SUBJECT is refused, not read as empty" \
+  3 "is not a module-level literal defined above it" "$RC7"
+
+# THE GATE NEVER EXECUTES ITS SUBJECT. It runs on PRs that are editing these very scripts, so
+# importing one would run whatever the PR wrote, at gate time. A script whose import would BLOW UP
+# must still be read.
+RC8="$(root "$WORK/subject-no-exec")"
+gate "$RC8" "scripts/check-x.py" '("docs",)' 'raise SystemExit("if you are reading this, the gate EXECUTED me")'
+mkdir -p "$RC8/docs"
+wf "$RC8/.github/workflows/w.yml" '      - "docs/**"
+      - "scripts/check-x.py"' '      - "docs/**"
+      - "scripts/check-x.py"'
+expect "the reader PARSES and never executes — a script that would die on import still reads" \
+  0 "ok:" "$RC8"
+
+# ---- REGRESSION: both real instances, from the real working tree -----------------------------
+#
+# #996's instance 7. worker-id-attractor.yml omitted `src/**` while check-worker-id-attractor.py
+# WALKS src/ (its CODE_SURFACE) — so a PR reintroducing the `command not found` regression #569
+# wrote that gate to catch, touching only src/, did not run it.
+RC9="$(root "$WORK/subject-regression-attractor")"
+mkdir -p "$RC9/scripts" "$RC9/docs" "$RC9/src"; touch "$RC9/.agent-skill-roots"
+cp "$REPO_ROOT/scripts/check-worker-id-attractor.py" "$RC9/scripts/"
+undrift "$REPO_ROOT/.github/workflows/worker-id-attractor.yml" \
+        "$RC9/.github/workflows/worker-id-attractor.yml" "src/**" "scripts/**"
+expect "REGRESSION #996: worker-id-attractor.yml's real omission of its CODE_SURFACE is caught" \
+  1 "nothing in the filter selects 'src'" "$RC9"
+
+# ...and the instance the rule was NOT written against. check-recipe-pagination.py reads
+# `.agent-skill-roots` to decide which roots to scan — its own docstring says a second copy of that
+# list would be "the #266 fail-open this gate exists to close". Its TRIGGER omitted the file, so a
+# root added there did not re-run it and the new root's recipes went unaudited.
+RC10="$(root "$WORK/subject-regression-pagination")"
+mkdir -p "$RC10/scripts" "$RC10/.claude/skills" "$RC10/.agents/skills"; touch "$RC10/.agent-skill-roots"
+cp "$REPO_ROOT/scripts/check-recipe-pagination.py" "$RC10/scripts/"
+undrift "$REPO_ROOT/.github/workflows/recipe-pagination.yml" \
+        "$RC10/.github/workflows/recipe-pagination.yml" ".agent-skill-roots"
+expect "REGRESSION #996: recipe-pagination.yml omitting the file that DECIDES its roots is caught" \
+  1 "nothing in the filter selects '.agent-skill-roots'" "$RC10"
+
+# =============================================================================================
 # 7. FAIL CLOSED (#266). Examining nothing is a failure to audit, not a clean audit — and this is
 #    the leg that matters most, because a broken trigger reader finds zero pairs and reports green
 #    over a repo full of them.
@@ -593,6 +724,21 @@ if [ -n "$n" ] && [ "$n" -gt 0 ] 2>/dev/null; then
   ok "the shipped tree declares $n project subject(s) — rule (b) is auditing something"
 else
   bad "rule (b) audited NOTHING on the shipped tree — the prefix reader is blind (#266)" "$out"
+fi
+
+# RULE (c)'s VACUITY LEG, and it guards a footgun the rule creates. (c) attaches to a workflow that
+# names its script EXACTLY, so deleting that one pattern silently unlinks the rule — `scripts/**`
+# still triggers the workflow, and the coverage it was enforcing quietly stops being enforced. That
+# is not hypothetical: this PR's own first repair of worker-id-attractor.yml replaced the script
+# pattern with `scripts/**` and dropped the count from 4 to 3, unnoticed but for this number.
+#
+# So the shipped count is asserted, and asserted EXACTLY. ">0" would have been satisfied by that
+# broken repair. If you migrate another gate, this number goes up and this line is the one to edit.
+s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
+if [ "${s:-0}" = "4" ]; then
+  ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
+else
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 4 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"

@@ -28,6 +28,11 @@ on:
     paths:
       - ".claude/skills/**"
       - ".agents/skills/**"
+      # The gate READS this to decide which roots to scan (#517), so a root added here
+      # changes its subject. Omitting it meant a new root's recipes went unaudited and the
+      # gate stayed green by never being asked — the #266 fail-open its own docstring says
+      # it exists to close, reopened in its trigger (#996).
+      - ".agent-skill-roots"
       - "scripts/check-recipe-pagination.py"
       - "tests/recipe-pagination/**"
       - ".github/workflows/recipe-pagination.yml"
@@ -36,6 +41,11 @@ on:
     paths:
       - ".claude/skills/**"
       - ".agents/skills/**"
+      # The gate READS this to decide which roots to scan (#517), so a root added here
+      # changes its subject. Omitting it meant a new root's recipes went unaudited and the
+      # gate stayed green by never being asked — the #266 fail-open its own docstring says
+      # it exists to close, reopened in its trigger (#996).
+      - ".agent-skill-roots"
       - "scripts/check-recipe-pagination.py"
       - "tests/recipe-pagination/**"
       - ".github/workflows/recipe-pagination.yml"

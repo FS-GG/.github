@@ -29,6 +29,17 @@ on:
       - ".agents/skills/**"
       - "docs/**"
       - ".agent-skill-roots"
+      # CODE_SURFACE — the engine and the scripts print mint remedies too, and #569 made
+      # them this gate's subject. The filter did not follow, so the gate could not fire on
+      # the `command not found` regression it was written to catch (#996).
+      - "src/**"
+      - "scripts/**"
+      # NAMING THE SCRIPT IS NOT REDUNDANT WITH `scripts/**`, though it looks it. The exact
+      # pattern is what LINKS this workflow to its gate for rule (c) — the filter's own list
+      # is the declaration, because reading `run:` text cannot tell a mention from a use
+      # (#683). Drop this line and `scripts/**` still triggers the workflow, while rule (c)
+      # silently stops checking it: the coverage above would be unguarded and could rot back
+      # out. tests/paths-coherence/run.sh asserts the shipped count, so it reds if this goes.
       - "scripts/check-worker-id-attractor.py"
       - "tests/worker-id-attractor/**"
       - ".github/workflows/worker-id-attractor.yml"
@@ -39,6 +50,17 @@ on:
       - ".agents/skills/**"
       - "docs/**"
       - ".agent-skill-roots"
+      # CODE_SURFACE — the engine and the scripts print mint remedies too, and #569 made
+      # them this gate's subject. The filter did not follow, so the gate could not fire on
+      # the `command not found` regression it was written to catch (#996).
+      - "src/**"
+      - "scripts/**"
+      # NAMING THE SCRIPT IS NOT REDUNDANT WITH `scripts/**`, though it looks it. The exact
+      # pattern is what LINKS this workflow to its gate for rule (c) — the filter's own list
+      # is the declaration, because reading `run:` text cannot tell a mention from a use
+      # (#683). Drop this line and `scripts/**` still triggers the workflow, while rule (c)
+      # silently stops checking it: the coverage above would be unguarded and could rot back
+      # out. tests/paths-coherence/run.sh asserts the shipped count, so it reds if this goes.
       - "scripts/check-worker-id-attractor.py"
       - "tests/worker-id-attractor/**"
       - ".github/workflows/worker-id-attractor.yml"

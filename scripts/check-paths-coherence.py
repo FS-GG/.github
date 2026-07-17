@@ -4,16 +4,22 @@
 .github#880 and #930, epic #266 (coherence gates that fail open). Found by worker `finch-2e3f` while
 working #860 (the suite selector), which derives its answer from these very filters.
 
-TWO RULES, AND THEY ARE ONE GATE ON PURPOSE
+THREE RULES, AND THEY ARE ONE GATE ON PURPOSE
   (a) AGREEMENT — for every workflow declaring BOTH `pull_request.paths` and `push.paths`, the two
       lists are identical as sets.
-  (b) COVERAGE  — a workflow whose filter names a .NET project's own directory must also select
-      every project in that project's `ProjectReference` closure.
+  (b) COVERAGE / PROJECTS — a workflow whose filter names a .NET project's own directory must also
+      select every project in that project's `ProjectReference` closure.
+  (c) COVERAGE / GATE SCRIPTS — a workflow whose filter names a gate script must select everything
+      that script declares it READS, in its `PATHS_SUBJECT`.
 
-  #880 shipped (a) and deliberately left (b). They land as one gate because of how (b) is missed: a
-  worker fixing (a) reads the filter, sees two matching copies, and moves on — which is exactly what
-  happened three hours after #880 closed (#930). Set equality is satisfied when both copies are
-  wrong THE SAME WAY, and the gate stays green.
+  #880 shipped (a) and deliberately left the rest. #930 added (b), #996 added (c). They land as one
+  gate because of how (b) and (c) are missed: a worker fixing (a) reads the filter, sees two matching
+  copies, and moves on — which is exactly what happened three hours after #880 closed (#930). Set
+  equality is satisfied when both copies are wrong THE SAME WAY, and the gate stays green.
+
+  (b) and (c) are the same rule over two graphs. In both, the workflow's OWN `paths:` list says what
+  the workflow is about — that list is YAML, and structural — and something else supplies the
+  closure: the project files for (b), the script's AST for (c). Neither ever reads `run:` text.
 
 Nearly every workflow here duplicates its `paths:` list verbatim between the two triggers. That
 duplication is invisible: nothing reads both copies, so when one is edited and the other is not, the
@@ -52,15 +58,18 @@ WHAT THIS GATE DELIBERATELY DOES NOT DO
   FILES. No judgement in it, nothing for a human to say. So (b) below asks the one question it can
   answer from the graph, and asks nothing else.
 
-  STILL OUT OF SCOPE, and each for a reason rather than an omission:
+  A GATE SCRIPT'S SURFACE WAS THE OTHER HALF, AND #996 DECIDED IT — see RULE (c) below. #930 left it
+  because it needs a CONVENTION rather than a derivation, and a convention is a decision: keying off
+  one script's private constant name would have been a hardcode wearing a rule's clothes. The
+  convention is `PATHS_SUBJECT`, and what makes it trustworthy is that it is COMPOSED from the
+  constants the script already walks with, not retyped beside them.
 
-    - A GATE SCRIPT'S DECLARED SURFACE. `check-worker-id-attractor.py` audits `src/` (its
-      `CODE_SURFACE` constant, which it WALKS — so it cannot be stale) while its workflow's filter
-      omits `src/**`: a PR reintroducing the exact regression it was written to catch does not
-      trigger it (#930's instance 7). Deciding this needs a CONVENTION for how a script declares its
-      surface machine-readably, across scripts — an architectural call #930 reserves for a human.
-      Keying off one script's private constant name would be a hardcode wearing a rule's clothes.
-    - A `*-selftest`'S FIXTURE AND TOOL (#332, #334, #508). Same shape, same missing convention.
+  STILL OUT OF SCOPE, for a reason rather than an omission:
+
+    - A `*-selftest`'S FIXTURE AND TOOL (#332, #334, #508). Now expressible — a selftest that
+      declares `PATHS_SUBJECT` gets (c) for free — but none of the three is MIGRATED, so the class
+      is covered by a convention nobody has applied to it yet rather than by a rule. Migrating them
+      is ordinary work, not a decision.
 
   WHAT IS PERMANENTLY OUT OF SCOPE, and this one is a finding rather than a gap: DERIVING THE
   SUBJECT BY READING `run:` TEXT. It looks like the obvious general answer and it is unsound. A
@@ -109,6 +118,32 @@ RULE (b): WHAT COUNTS AS DECLARING A PROJECT, AND WHY IT IS NARROW
   input". Then a change to what that project is BUILT FROM is a change to its input, and the graph
   says exactly what that is.
 
+RULE (c): A GATE SCRIPT DECLARES WHAT IT READS, AND ITS WORKFLOW MUST SELECT IT (#996)
+  A gate script MAY declare a module-level `PATHS_SUBJECT`. If it does, any workflow whose `paths:`
+  NAMES that script (an exact literal path, per (b)'s narrowness) must select every entry.
+
+      PATHS_SUBJECT = DOC_SURFACE + CODE_SURFACE + (ROOTS_DECL,) + FALLBACK_ROOTS
+
+  WHY A DECLARATION AND NOT A DERIVATION. A script's subject is not written in a schema anywhere —
+  unlike a `ProjectReference`, there is nothing to read. The only other place it exists is the
+  `run:` line that invokes it, and reading `run:` text cannot tell a mention from a use (#683).
+  So it has to be declared, and declaring is a convention: #996 is the decision to have one.
+
+  WHY IT IS COMPOSED, NEVER RETYPED — this is the whole of why the declaration can be believed. A
+  retyped list is a SECOND copy of the surface, free to drift from the constants beside it the day
+  one changes, which is #865: a hand-maintained source moves the drift upstream and makes it
+  authoritative. Built from the constants the script WALKS with, widening a surface widens the
+  trigger and nobody has to remember. That is the same property that makes (b) derivable — not
+  "somebody wrote it down accurately", but "the thing that does the work is the thing being read".
+  It is why `declared_subject()` folds names and `+` instead of taking `ast.literal_eval`'s easy
+  road, which would have forced the retyped copy and quietly reintroduced the disease.
+
+  WHAT IT IS NOT. It is opt-in: a script declaring nothing is out of scope and silent, so the rule
+  cannot blanket-red a workflow nobody has migrated (#698). It is never IMPORTED or EXECUTED — this
+  gate runs on PRs that are editing these very scripts, and a gate that runs its subject is not a
+  gate. And an expression it cannot fold statically is a REFUSAL, never a guess: a subject read
+  wrong is worse than a subject not read (#266).
+
 THE ESCAPE HATCH
   A gate with no way to say "yes, on purpose" becomes a straitjacket that gets disabled. Two hatches,
   one per rule, because they license different things and a marker must not silently do more than it
@@ -145,6 +180,7 @@ usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import glob
 import os
 import re
@@ -439,6 +475,117 @@ def closure(graph: dict[str, list[str]], project: str) -> set[str]:
     return found
 
 
+def declared_subject(path: str, where: str) -> tuple[str, ...] | None:
+    """`PATHS_SUBJECT` from a gate script, read BY AST. None if it declares none.
+
+    NEVER IMPORTS AND NEVER EXECUTES, and that is not squeamishness — this gate runs on every PR,
+    against scripts the PR is editing. Importing them would run whatever the PR wrote, at gate time,
+    and a gate that executes its subject is not a gate. `ast.parse` reads the text; nothing in the
+    file gets a chance to act.
+
+    IT RESOLVES NAMES AND `+`, WHICH `ast.literal_eval` ALONE WILL NOT, and that is the whole design.
+    The declaration is worth trusting only because it is COMPOSED from the constants the script walks
+    with — `DOC_SURFACE + CODE_SURFACE + (ROOTS_DECL,) + FALLBACK_ROOTS` — so widening a surface
+    widens the trigger and nobody has to remember. A literal-only reader would force a retyped copy,
+    free to drift from the constants beside it, which is #865: the cure reintroducing the disease.
+    So this resolves module-level names to their literals and folds `+` over sequences. Nothing else:
+    no calls, no attributes, no comprehensions. An expression it cannot fold is a REFUSAL, never a
+    guess — a subject read wrong is worse than one not read (#266).
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            tree = ast.parse(fh.read(), filename=path)
+    except (OSError, SyntaxError) as e:
+        raise GateError(f"{where}: names {path!r}, which will not parse as Python — {e}") from e
+
+    # Module-level literal bindings, in source order: a name is only usable once bound, so a
+    # PATHS_SUBJECT referring to a constant defined below it is unresolvable and refused rather than
+    # silently read as empty.
+    env: dict[str, object] = {}
+    target: ast.expr | None = None
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        name = node.targets[0]
+        if not isinstance(name, ast.Name):
+            continue
+        if name.id == "PATHS_SUBJECT":
+            target = node.value
+            break
+        try:
+            env[name.id] = ast.literal_eval(node.value)
+        except ValueError:
+            continue  # not a literal; it cannot be part of a subject anyway
+
+    if target is None:
+        return None
+
+    def fold(node: ast.expr) -> object:
+        if isinstance(node, ast.Name):
+            if node.id not in env:
+                raise GateError(
+                    f"{path}: PATHS_SUBJECT refers to {node.id!r}, which is not a module-level "
+                    f"literal defined above it. This gate reads the declaration statically and will "
+                    f"not guess at one it cannot fold (#266)."
+                )
+            return env[node.id]
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            left, right = fold(node.left), fold(node.right)
+            if not isinstance(left, (list, tuple)) or not isinstance(right, (list, tuple)):
+                raise GateError(f"{path}: PATHS_SUBJECT adds something that is not a sequence.")
+            return tuple(left) + tuple(right)
+        # A sequence DISPLAY whose elements may themselves be names — `(ROOTS_DECL,)`, the idiom for
+        # lifting one constant into the sum. literal_eval refuses the whole node the moment one
+        # element is a Name, so the elements are folded one at a time rather than the tuple as a
+        # unit; without this the composed form is unwritable and the only shape left is a retyped
+        # copy, which is the drift this whole convention exists to avoid.
+        if isinstance(node, (ast.Tuple, ast.List)):
+            return tuple(fold(e) for e in node.elts)
+        try:
+            return ast.literal_eval(node)
+        except ValueError as e:
+            raise GateError(
+                f"{path}: PATHS_SUBJECT is not a literal, a module-level constant, or a `+` of "
+                f"those — {e}. Keep it foldable: this gate must read it without running the file."
+            ) from e
+
+    value = fold(target)
+    if not isinstance(value, (list, tuple)) or not value:
+        raise GateError(f"{path}: PATHS_SUBJECT is not a non-empty sequence ({value!r}).")
+    for entry in value:
+        if not isinstance(entry, str) or not entry:
+            raise GateError(f"{path}: PATHS_SUBJECT contains {entry!r}, which is not a path.")
+    return tuple(str(v) for v in value)
+
+
+def named_scripts(patterns: list[str], root: str) -> list[str]:
+    """The gate scripts this filter names EXACTLY — the linkage, and it is structural.
+
+    "Which script does this workflow run?" is a question about `run:` text, and reading `run:` text
+    cannot tell a mention from a use (#683 — measured: three false hits in this repo, every one a
+    `scripts/fsgg-coord` inside a comment). So it is not asked. The workflow's OWN `paths:` list is
+    YAML, and a filter naming `scripts/check-X.py` is the workflow saying that script is its input.
+    That is the same move rule (b) makes with the project graph: the filter's list IS the
+    declaration, and the AST supplies the closure.
+
+    EXACT literal paths only, for #930's reason: `scripts/**` is a catch-all, not a workflow naming
+    a script, and reading it as one would impose every script's subject on any workflow watching the
+    directory.
+    """
+    out = []
+    for p in patterns:
+        # The wildcard test is REDUNDANT with the isfile() below — no file is named `*.py`, so a
+        # glob fails that check anyway, and a mutation removing this line changes no behaviour. It
+        # stays because the two say different things: this states the RULE (only an exact name is a
+        # declaration), isfile() asks a question about the disk. Collapsing them would leave the
+        # rule resting on a filesystem accident.
+        if "*" in p or "?" in p or not p.endswith(".py"):
+            continue
+        if os.path.isfile(os.path.join(root, p)):
+            out.append(p)
+    return sorted(set(out))
+
+
 def uncovered(patterns: list[str], graph: dict[str, list[str]]) -> list[tuple[str, str]]:
     """`(subject, dependency)` for each project this filter NAMES whose closure it does not select.
 
@@ -505,6 +652,7 @@ def main(argv: list[str]) -> int:
     # anything. The fixture asserts on this number too, so an inflated one is a check agreeing with
     # its own arithmetic rather than with the repo.
     subjects_seen: set[tuple[str, str]] = set()
+    scripts_seen: set[tuple[str, str]] = set()
 
     graph = project_graph(args.root)
 
@@ -529,23 +677,56 @@ def main(argv: list[str]) -> int:
         # subjects on two triggers — and one omission stated four times reads as four problems. A
         # gate whose output has to be skimmed is one that gets skimmed (#698); the repair is the same
         # `src/FS.GG.Coord.GitHub/**` either way, so it is one finding that names its several causes.
+        # The value carries the RELATION as well as the causes: a project is BUILT FROM its
+        # references, a script READS its surface, and telling a reader their workflow "builds"
+        # `.agent-skill-roots` is the kind of confidently wrong sentence that gets a gate distrusted.
         excused = allow_uncovered(text)
-        missing: dict[str, tuple[set[str], set[str]]] = {}
+        missing: dict[str, tuple[set[str], set[str], set[str]]] = {}
+
+        def note(entry: str, cause: str, trigger: str, verb: str) -> None:
+            subs, trigs, verbs = missing.setdefault(entry, (set(), set(), set()))
+            subs.add(cause)
+            trigs.add(trigger)
+            verbs.add(verb)
+
         for trigger, raw in (("pull_request", pr_raw), ("push", push_raw)):
             if raw is None or not isinstance(raw, list) or not raw:
                 continue
             pats = [str(p) for p in raw]
             subjects_seen.update((where, sub) for sub in subjects(pats, graph))
             for project, dep in uncovered(pats, graph):
-                subs, trigs = missing.setdefault(os.path.dirname(dep), (set(), set()))
-                subs.add(os.path.dirname(project))
-                trigs.add(trigger)
+                note(os.path.dirname(dep), os.path.dirname(project), trigger, "builds")
 
-        for dep_dir, (subs, trigs) in sorted(missing.items()):
-            reason = excused.get(dep_dir)
+        # RULE (c): a filter naming a gate SCRIPT must select what that script READS.
+        #
+        # (b)'s shape with a different graph: the workflow's own `paths:` list names the script, and
+        # the script's AST supplies the closure. Folded into the same `missing` map so one absent
+        # directory is one finding however many rules reach it — a reader does not care which rule
+        # noticed, only what to add.
+        for trigger, raw in (("pull_request", pr_raw), ("push", push_raw)):
+            if raw is None or not isinstance(raw, list) or not raw:
+                continue
+            pats = [str(p) for p in raw]
+            for script in named_scripts(pats, args.root):
+                subject = declared_subject(os.path.join(args.root, script), where)
+                if subject is None:
+                    continue
+                scripts_seen.add((where, script))
+                for entry in subject:
+                    # A DIRECTORY IS COVERED WHEN ITS CONTENTS ARE, not when its own name matches.
+                    # `docs` names a directory the script WALKS, and a filter earns it with
+                    # `docs/**` — so the question is whether a push UNDER it triggers the workflow.
+                    # Asking `selects("docs", …)` instead would demand a bare `docs` pattern that
+                    # triggers on nothing, and red every workflow that had it right.
+                    probe = entry if os.path.isfile(os.path.join(args.root, entry)) else f"{entry}/x"
+                    if not selects(probe, pats):
+                        note(entry, script, trigger, "reads")
+
+        for entry, (subs, trigs, verbs) in sorted(missing.items()):
+            reason = excused.get(entry)
             if reason == UNSIGNED:
                 findings.append(
-                    f"{where}: carries `# paths-coherence: allow-uncovered {dep_dir}` with NO "
+                    f"{where}: carries `# paths-coherence: allow-uncovered {entry}` with NO "
                     f"reason. An unsigned hatch makes the omission neither a decision nor a typo "
                     f"— write the reason after the marker."
                 )
@@ -555,17 +736,19 @@ def main(argv: list[str]) -> int:
                 continue
             named = ", ".join(repr(s) for s in sorted(subs))
             plural = len(subs) > 1
-            scope = (
-                "both filters"
-                if len(trigs) > 1
-                else f"the `{next(iter(trigs))}` filter"
-            )
+            scope = "both filters" if len(trigs) > 1 else f"the `{next(iter(trigs))}` filter"
+            # `builds` and `reads` can both reach one absent path; say so rather than picking.
+            verb = " and ".join(sorted(verbs))
+            # A FILE IS NOT A DIRECTORY. `.agent-skill-roots` is a file, and telling somebody to add
+            # `.agent-skill-roots/**` is advice that matches nothing — the gate would keep reding
+            # after they did exactly as told, which is worse than saying nothing.
+            fix = entry if os.path.isfile(os.path.join(args.root, entry)) else entry + "/**"
             findings.append(
                 f"{where}: {scope} name{'' if len(trigs) > 1 else 's'} {named}, which "
-                f"{'reference' if plural else 'references'} {dep_dir!r} — and nothing in the filter "
-                f"selects {dep_dir!r}. A change there changes what "
-                f"{'they build' if plural else 'it builds'}, and this workflow would not run: green "
-                f"by absence (#266). Add a pattern covering {dep_dir + '/**'!r}."
+                f"{verb if plural else verb.rstrip('s') + 's'} {entry!r} — and nothing in the filter "
+                f"selects {entry!r}. A change there changes what "
+                f"{'they' if plural else 'it'} {verb}, and this workflow would not run: green by "
+                f"absence (#266). Add a pattern covering {fix!r}."
             )
 
         # An allow-list facing an ignore-list: two filters that both narrow the trigger, in opposite
@@ -667,8 +850,9 @@ def main(argv: list[str]) -> int:
         for f in findings:
             print(f"::error::check-paths-coherence: {f}", file=sys.stderr)
         print(
-            f"\n{len(findings)} finding(s), across {pairs_seen} workflow(s) declaring both filters "
-            f"and {len(subjects_seen)} declared project subject(s).\n"
+            f"\n{len(findings)} finding(s), across {pairs_seen} workflow(s) declaring both filters, "
+            f"{len(subjects_seen)} declared project subject(s), and {len(scripts_seen)} declared "
+            f"gate script surface(s).\n"
             "\n(a) A workflow duplicates its `paths:` list between `pull_request` and `push`. When "
             "the copies drift,\n    the gate still passes its own tests and simply STOPS RUNNING on "
             "`main` — green, and wrong (#880).\n"
@@ -687,7 +871,8 @@ def main(argv: list[str]) -> int:
 
     print(
         f"ok: {pairs_seen} workflow(s) declaring both filters agree; {len(subjects_seen)} declared "
-        f"project subject(s) cover their `ProjectReference` closure"
+        f"project subject(s) cover their `ProjectReference` closure; {len(scripts_seen)} declared "
+        f"gate script surface(s) covered"
         + (f"; {allowed} exception(s) signed" if allowed else "")
         + "."
     )

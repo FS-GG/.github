@@ -57,6 +57,15 @@ SURFACES = [
     "docs/coordination",
 ]
 
+# WHAT THIS GATE READS, FOR THE WORKFLOW THAT RUNS IT (#996, epic #266). `check-paths-coherence.py`
+# reads this BY AST and reds `graphql-monopoly.yml` if its `paths:` does not select every entry.
+#
+# This one is already correct, and it is declared anyway — a rule only ever exercised on the
+# workflows that violate it is a rule nobody can trust, because nothing proves it can say "yes". It
+# is the SURFACES list itself, not a copy of it: the thing this gate walks is the thing the filter
+# is checked against, so widening one widens the other.
+PATHS_SUBJECT = SURFACES
+
 # Commands that spend the shared GraphQL budget. `gh` prefers GraphQL for all of these.
 #   gh api graphql   — the raw thing
 #   gh project …     — Projects v2 is GraphQL-only (`item-list --limit 5` costs SIX points)
