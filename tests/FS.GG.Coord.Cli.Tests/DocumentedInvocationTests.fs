@@ -61,10 +61,21 @@ module DocumentedInvocationTests =
 
     /// The prescribing corpus: every root a worker's recipe is copied from. Both skill roots, because
     /// ADR-0011/0014 keep them byte-identical and a worker reads whichever its harness mounts.
+    ///
+    /// A MISSING root is a FAILURE, not an empty contribution. Skipping one silently — the obvious
+    /// `List.filter Directory.Exists` — would mean a rename quietly halves this gate's subject while the
+    /// suite stays green, which is the exact shape (#266) the gate exists to catch. If a root moves, this
+    /// says so and the list gets edited.
     let private corpus () =
         [ ".claude/skills"; ".agents/skills"; "docs/coordination" ]
-        |> List.map (fun rel -> Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar)))
-        |> List.filter Directory.Exists
+        |> List.map (fun rel ->
+            let d = Path.Combine(repoRoot, rel.Replace('/', Path.DirectorySeparatorChar))
+
+            if not (Directory.Exists d) then
+                failwith
+                    $"DocumentedInvocationTests: the prescribing root '%s{rel}' does not exist under %s{repoRoot}. If it moved, update this list — do not let the gate check a smaller corpus than it claims to."
+
+            d)
         |> List.collect (fun d -> Directory.EnumerateFiles(d, "*.md", SearchOption.AllDirectories) |> List.ofSeq)
         |> List.sort
 
@@ -174,8 +185,20 @@ module DocumentedInvocationTests =
         |> List.takeWhile (fun t -> not (stops.Contains t))
         |> List.map normalizeToken
 
+    /// Strip a markdown blockquote marker, so a fence inside a `>` box is still a fence.
+    ///
+    /// This is load-bearing and was a live fail-open in this gate's first draft. The corpus's WARNING
+    /// BOXES are blockquotes — 22 fence markers sit inside them — and a box is precisely where a
+    /// hard-won lesson gets written down ("do it THIS way, here is the command"). Without this, a
+    /// blockquoted fence never toggles `inFence`, its contents are read as prose, a bare invocation in
+    /// one carries no backticks to be found as an inline span, and the gate skips it in SILENCE. The
+    /// most carefully-documented invocation in the corpus would be the one nothing checks.
+    let private unquote (line: string) =
+        let t = line.TrimStart()
+        if t.StartsWith ">" then t.Substring(1).TrimStart() else line
+
     /// A fence opens/closes on ``` — nothing else on the line matters to us.
-    let private isFence (line: string) = line.TrimStart().StartsWith "```"
+    let private isFence (line: string) = (unquote line).TrimStart().StartsWith "```"
 
     /// An inline code span. A prose sentence that NAMES the tool is not prescribing an invocation; a
     /// span that spells one out is. `pnext-item:318` prescribes `say` exactly this way — inline, mid
@@ -192,8 +215,10 @@ module DocumentedInvocationTests =
               let rel = Path.GetRelativePath(repoRoot, file).Replace('\\', '/')
               let mutable inFence = false
 
-              for (i, line) in File.ReadAllLines file |> Array.indexed do
-                  if isFence line then
+              for (i, raw) in File.ReadAllLines file |> Array.indexed do
+                  let line = unquote raw
+
+                  if isFence raw then
                       inFence <- not inFence
                   else
                       // A ```console block echoes the prompt. The command is what follows it.
