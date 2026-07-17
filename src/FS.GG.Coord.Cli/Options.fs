@@ -191,7 +191,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   child  <parent-ref> <child-ref>            attach a child issue to a parent
   widen  <ref> --paths T...                  widen a HELD item's touch-set
   overlap <ref> --active | <a> <b>           does an item's touch-set collide? (repo-scoped, #353)
-  say    <ref> --to W --message M            message another worker
+  say    <ref> [--to W] <message>            message another worker; --to defaults to `*` (anyone
+               <ref> --to W --message M      holding the item). The message is POSITIONAL — the form
+                                             every skill prescribes — and --message is its alias
   inbox  [--repo NAME] [--peek] [--json]     messages addressed to this worker across every in-flight
                                              claim (ON the board and off it, #461/case 25); --peek does
                                              not advance the cursor
@@ -242,6 +244,48 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// refuses the flag rather than swallowing it.
     let private statusCommands = [ Ready; Release ]
 
+    /// `say`'s message is POSITIONAL, and `--to` is OPTIONAL — the shape bash shipped, the shape all seven
+    /// prescribing sites document, and the shape the port dropped (#919).
+    ///
+    /// The port re-typed the verb with a required `--message` and a required `--to`, so the documented form
+    /// collected `say: an issue ref takes exactly one argument (got 2)` — a refusal that blames the REF, i.e.
+    /// the one part of the line that was right. It fires exactly when a `widen` returns OVERLAP and §3 sends
+    /// the worker to `say` the holder, which is the one moment the protocol depends on the channel. A worker
+    /// who reads that as "I typed the ref wrong" goes looking down the wrong axis; one who reads it as "the
+    /// channel is broken" edits the shared paths anyway, which is the double-edit the protocol exists to
+    /// prevent.
+    ///
+    /// This is the third of its family — #861 (`add` never ported, verb absent), #867 (`release --status`
+    /// parsed and ignored, flag unread), this (arguments re-typed) — so the fix is DocumentedInvocationTests,
+    /// which parses every prescribed invocation in the corpus. This function is merely instance 3.
+    ///
+    /// Normalizing HERE, not in `Client.say`, is deliberate: argument shape is the parser's job, and it lets
+    /// `Client.say` keep receiving exactly the `[ref]` + `Message` + `ToWorker` it already expects.
+    let private normalizeSay (o: Options) : Result<Options, string> =
+        if o.Command <> Say then
+            Ok o
+        else
+            // bash joined the trailing positionals with a space, so an unquoted `say #1 hello world` said
+            // "hello world" rather than dropping "world" on the floor. Keep that: the alternative refuses a
+            // line that reads as obviously correct.
+            let withMessage =
+                match o.Args, o.Message with
+                | _ :: _ :: _, Some _ ->
+                    Error
+                        "say: the message was given BOTH positionally and with --message — pass it once (say <ref> [--to W] <message>)"
+                | ref :: (_ :: _ as rest), None -> Ok { o with Args = [ ref ]; Message = Some(String.concat " " rest) }
+                | _ -> Ok o
+
+            // `--to` defaults to `*` — anyone holding the item — as bash's `local to="*"` did. `Client.say`
+            // already implements the `*` target, so this restores a documented affordance rather than adding
+            // machinery: `say <issue> 'Anyone else in here?'` is prescribed by parallel-work.md and had no
+            // form in the port.
+            withMessage
+            |> Result.map (fun o ->
+                match o.ToWorker with
+                | None -> { o with ToWorker = Some "*" }
+                | Some _ -> o)
+
     let parse (args: string list) : Result<Options, string> =
         /// Runs at the parse's ONE funnel — `flags`'s terminal case, which every verb reaches — so a new
         /// command cannot quietly re-open the swallow. (`--help`/`--version` short-circuit before `flags`
@@ -251,7 +295,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | Some _ when not (List.contains o.Command statusCommands) ->
                 Error
                     "--status is not a flag of this command — only `ready` (filter to a column) and `release` (name the column to land in) read it"
-            | _ -> Ok o
+            | _ -> normalizeSay o
 
         let rec flags acc rest =
             match rest with
