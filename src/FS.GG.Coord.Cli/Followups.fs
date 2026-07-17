@@ -251,16 +251,21 @@ module Followups =
         | Unreadable _ -> Client.ExitError
 
     let run (opts: Options.Options) : int =
-        match Identity.resolve opts.Worker with
+        // THE ARGUMENTS FIRST, THEN THE ENVIRONMENT. `parse` is pure and cannot fail for a reason outside
+        // the command line, so it is the cheaper refusal and the one the caller can act on immediately.
+        // Resolving identity first would answer `followup bogus` with "could not derive a worker id" —
+        // true, unrelated, and costing the caller a second round trip to discover the typo they actually
+        // made. Two independent errors must be reported in the order the caller can fix them.
+        match parse opts.Args with
         | Error msg ->
             Console.Error.WriteLine $"fsgg-coord-engine: %s{msg}"
             Client.ExitError
-        | Ok worker ->
-            match parse opts.Args with
+        | Ok action ->
+            match Identity.resolve opts.Worker with
             | Error msg ->
                 Console.Error.WriteLine $"fsgg-coord-engine: %s{msg}"
                 Client.ExitError
-            | Ok action ->
+            | Ok worker ->
                 let outcome = apply worker action
                 let out, err = render outcome
 

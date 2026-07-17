@@ -28,26 +28,28 @@ module FollowupsTests =
         | Ok w -> w
         | Error e -> failwith $"the fixture's own worker id did not resolve: %s{e}"
 
-    /// Run `f` against a THROWAWAY cache root. Serialised: `FSGG_COORD_CACHE` is process-wide, so two
-    /// tests mutating it concurrently would read each other's queue — the exact bug property 1 is about,
-    /// rebuilt in the harness that checks for it.
-    let private lockObj = obj ()
-
+    /// Run `f` against a THROWAWAY cache root.
+    ///
+    /// `FSGG_COORD_CACHE` is process-global, so this is only safe because `AssemblyInfo.fs` disables
+    /// xUnit's cross-class parallelism — the assembly-wide guard the sibling `FS.GG.Coord.GitHub.Tests`
+    /// has carried for the same reason. A `lock` here would be a class-scoped answer to a process-scoped
+    /// hazard: it would serialise this class against itself and do nothing about the next class that
+    /// stands up a cache dir, which is precisely the "nobody else is looking" defence `Followups.fsi`
+    /// argues a component must not rely on.
     let private withCache (f: string -> 'a) : 'a =
-        lock lockObj (fun () ->
-            let dir = Path.Combine(Path.GetTempPath(), "fsgg-followups-" + Guid.NewGuid().ToString("n"))
-            let prior = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
-            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-followups-" + Guid.NewGuid().ToString("n"))
+        let prior = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+
+        try
+            f dir
+        finally
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", prior)
 
             try
-                f dir
-            finally
-                Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", prior)
-
-                try
-                    Directory.Delete(dir, true)
-                with _ ->
-                    ())
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
 
     let private ref' owner repo n : Ref = { Owner = owner; Repo = repo; Number = n }
 
