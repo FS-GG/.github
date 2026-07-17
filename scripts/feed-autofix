@@ -1,0 +1,613 @@
+#!/usr/bin/env python3
+"""The RESPONSE half of publish-before-flip (.github#748, epic #266).
+
+`check-feed-coherence.py` (.github#267) is the DETECTION half: it reads the live org feed and goes
+RED on `main` when a release published and `registry/dependencies.yml` was never flipped. Detection
+is sound — it caught the drift at #250, #263, and four more times since. What was missing is
+RESPONSE: nothing turned "a release published" into "a `.github` PR flipping the row exists". Every
+one of the SEVEN recorded instances was reconciled BY HAND, and the count grew rather than
+converged (#250 -> #263 -> the missed 0.4.0-preview.1 -> the unrecorded 0.4.2 -> 0.9.2 -> 0.10.0
+(#747) -> 0.11.0 (#856)).
+
+This runs the flip the humans were running, and opens the PR they were opening.
+
+WHY THE FEED, NOT THE DISPATCH. #748 proposes that FS.GG.Rendering `repository_dispatch` this repo
+on release, and that a receiver here verify-and-flip. The receiver is real (feed-autofix.yml listens
+for it), but the dispatch is a HINT ABOUT WHEN TO LOOK — never the source of truth. Three reasons,
+in ascending order of seriousness:
+
+  1. It cannot land alone. The sender is a PR in ANOTHER repo, so a dispatch-only response half is
+     inert until that lands, and "the receiver never ran" and "there was nothing to do" would be the
+     same silence — the exact #266 shape this exists to close.
+  2. The org already answered this question the other way, for a structurally identical problem.
+     `skill-registry-autofix.yml` is the response half of `skill-registry-coherence.yml`, and its
+     header says why it polls: "the simple version is the only one that lives entirely in `.github`".
+  3. THE DISPATCH FABRIC HAS ITSELF FAILED TO FIRE, TWICE, AND THE REGISTRY RECORDS BOTH. The 0.5.0
+     release went out via a manual `release.yml` workflow_dispatch, which does not fire
+     `template-dispatch.yml` at all ("FS.GG.Templates was NOT auto-notified ... re-fire owed"); and
+     at 0.4.0 the dispatch fired and was WRONG, passing the tag ref through `env: GITHUB_REF:`, a
+     name the runner reserves and re-injects (fixed in FS.GG.Rendering#232). A response half keyed
+     ONLY on the dispatch inherits every way the sender can fail to fire — which is the manual step
+     it replaces, moved one level down and made harder to see.
+
+So the feed is the subject on every trigger. A dispatch makes the flip land in minutes instead of
+within a day; it never decides WHAT the flip is. That also means this bot is correct for a release
+nobody dispatched, a hand-published one, and a re-publish.
+
+IT MUST NOT BLIND-WRITE (#748). The registry's whole value is that its provenance is CHECKED rather
+than inferred, so every write here is backed by an assertion, and every assertion FAILS CLOSED:
+
+  * FEED, PACKAGE-BY-PACKAGE. The template package alone cannot distinguish a FRAMEWORK release
+    (the libs moved; the `version` pin advances with the package) from a TEMPLATE-ONLY cut (only
+    template/ content moved; the pin HOLDS and the two fields decouple — 0.3.1-preview.1, 0.4.1).
+    Getting that wrong writes a pin no consumer can restore. So the template's 17 sibling members
+    are read and compared INDIVIDUALLY (the template itself is the subject being classified, not
+    evidence for it); a PARTIAL publish — some siblings at the new version, some not — is a real
+    defect and is reported, never averaged away into a guess.
+  * A TAG IS NOT A PUBLISH, and `package-tag` is the field that would carry that lie. The phantom
+    0.9.1 is three live tags backed by ZERO packages: `release-tags` pushed the triple from a job
+    that succeeded, both release-only gates then failed, and publish was correctly skipped — so the
+    tags outlived the publish. This bot writes `package-tag` only for a version the FEED serves, and
+    only when the tag it names actually exists and the triple resolves to ONE commit.
+
+WHY THERE IS NO "the publish job succeeded" ASSERTION, WHICH #748 ALSO LISTS. Because the feed read
+above is STRICTLY STRONGER EVIDENCE OF THE SAME FACT, and this bot can only ever flip to a version
+the feed already serves. "The release run says it published" is a self-report; "the package is
+downloadable at that version, and so are its 17 siblings" is the thing the self-report is evidence
+FOR. The 0.9.1 phantom is precisely a run whose tags exist and whose packages do not — and it is
+caught here by the feed, not by the run. Adding the run read would cost a cross-repo `actions: read`
+scope to re-derive a fact already in hand, and a second way to fail.
+
+THE PROSE STAYS HUMAN (#748). A bot must not write "what makes this a major" — that is the judgement
+the row exists to record. It writes the three MECHANICAL fields and nothing else.
+
+But the prose is not therefore safe to ignore, because it ROTS SILENTLY and the last hand-flip
+proves it: #856 moved `package-version` to 0.11.0 and left its comment reading "ADVANCED 0.9.2 ->
+0.10.0 ... (pin == package == 0.10.0)", and left `package-tag` at v0.10.0 entirely. Nothing went
+red — no gate reads `package-tag`, and `check-feed-coherence` reads the VALUE, never the comment. So
+this bot REPORTS the comments its own write has contradicted (`--json` carries them; the PR body
+lists them as a checklist). It does not edit them. Flagging is not fixing, and is not meant to be:
+it puts the judgement in front of the human who has it, which is the one thing the silence never did.
+
+Pure stdlib + PyYAML. The feed/tag readers are INJECTED (`resolve_feed`, `resolve_tag`), never
+reached for globally, so tests/feed-autofix drives every branch offline. `--fixture` refuses to run
+unless FSGG_FEED_FIXTURE_OK=1 — a test hook that can silently turn the response half into a no-op is
+the very defect class above.
+
+Exit 0 = reconciled (or already coherent). Exit 1 = a finding a human must settle. Exit 2 = a defect.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+
+import yaml
+
+# `scripts/` is not a package; the test harness loads this by path via importlib, which sets
+# sys.path[0] to the TEST's directory rather than here. Mirrors check-feed-coherence.py.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from fsgg_feed import (  # noqa: E402  (path shim above must run first)
+    GateError,
+    feed_versions,
+    is_prerelease,
+    newest,
+    parse_version,
+)
+
+# The repo that owns the fs-gg-ui coherent set and cuts its tags.
+PRODUCER = "FS-GG/FS.GG.Rendering"
+
+# The contract this bot reconciles. Deliberately ONE row, not "every row carrying a package-version".
+#
+# The other package-bearing contracts (fsgg-contracts, game-sim-core, fs-gg-audio, ...) have a
+# SINGLE version field whose flip is a one-line value swap. `fs-gg-ui-template` is the only row
+# whose flip requires a JUDGEMENT the feed can settle — framework release vs template-only cut, i.e.
+# whether `version` moves with `package-version` or holds — and it is the row that has drifted all
+# seven times. A bot that reconciled every row would be inventing a mechanism for six rows that do
+# not need one; when one of them drifts, widen this deliberately.
+CONTRACT = "fs-gg-ui-template"
+
+TEMPLATE_PACKAGE = "FS.GG.UI.Template"
+
+# The FS.GG.UI.* coherent set: every member a FRAMEWORK release republishes at one version.
+#
+# This list is what makes "framework release" a MEASURED claim rather than an inferred one. The
+# registry's own prose has recorded it being checked by hand every time ("verified against the org
+# feed PACKAGE-BY-PACKAGE, not inferred from the template alone"). This is that check, run by a
+# machine. FS.GG.UI.Template is excluded — it is the subject being classified, not evidence.
+#
+# Verified against BOTH sources, not copied from the prose: these 17 + FS.GG.UI.Template are exactly
+# the 18 ids the row enumerates, and exactly the ids that resolve on the org feed. FS.GG.UI is the
+# BOM (it packs from src/Meta); src/Shared and src/ColorPolicy are source-included and 404 on the
+# feed, so they are members of the SOLUTION but not of the coherent SET.
+#
+# A KNOWN BOUND, stated because a silent one is the defect this file exists to close: the list is
+# HAND-MAINTAINED, so if FS.GG.Rendering adds an 18th published member, a PARTIAL publish that left
+# ONLY the new member behind would classify here as a clean framework release and flip the pin to a
+# version that member cannot serve. Every OTHER shape is still caught, and a complete publish still
+# classifies correctly, so this is a narrow hole rather than a fail-open default.
+#
+# It is not closed by reading the producer's `src/` and diffing, which is the obvious repair: that
+# couples this bot to ANOTHER repo's private directory layout, so a reorganisation there turns this
+# into a permanently-red bot — and a check that cries wolf teaches exactly one lesson, which is the
+# one `skill-registry-autofix`'s header refuses to teach. The honest closure is an enumeration of
+# the feed's own ids, which GitHub Packages does not serve to a run-scoped token. Filed as .github#933.
+FRAMEWORK_MEMBERS: list[str] = [
+    "FS.GG.UI",
+    "FS.GG.UI.Build",
+    "FS.GG.UI.Canvas",
+    "FS.GG.UI.Controls",
+    "FS.GG.UI.Controls.Elmish",
+    "FS.GG.UI.DesignSystem",
+    "FS.GG.UI.Diagnostics",
+    "FS.GG.UI.Elmish",
+    "FS.GG.UI.KeyboardInput",
+    "FS.GG.UI.Layout",
+    "FS.GG.UI.Scene",
+    "FS.GG.UI.SkiaViewer",
+    "FS.GG.UI.Symbology",
+    "FS.GG.UI.Symbology.Render",
+    "FS.GG.UI.Testing",
+    "FS.GG.UI.Themes.AntDesign",
+    "FS.GG.UI.Themes.Default",
+]
+
+
+class Finding(Exception):
+    """A condition a human must settle. Never auto-resolved — see the header."""
+
+
+# --------------------------------------------------------------------------------------------
+# Reading the row.
+#
+# The row is read with PyYAML but WRITTEN with a targeted text substitution (see `rewrite_field`).
+# A load/dump round-trip would be far simpler and is not available: the fs-gg-ui-template row's
+# three fields carry ~15KB of hand-written provenance in trailing `#` comments, and PyYAML discards
+# every comment it parses. Dumping would silently delete the exact judgement the header promises to
+# preserve — the write must therefore touch only the bytes between the quotes.
+# --------------------------------------------------------------------------------------------
+
+def load_row(path: str) -> dict:
+    with open(path, encoding="utf-8") as fh:
+        doc = yaml.safe_load(fh)
+    contracts = (doc or {}).get("contracts")
+    if not isinstance(contracts, list):
+        raise Finding(f"{path}: no `contracts:` list — the registry's shape changed.")
+    for c in contracts:
+        if isinstance(c, dict) and c.get("id") == CONTRACT:
+            return c
+    raise Finding(f"{path}: no contract with id {CONTRACT!r}. It was renamed or removed.")
+
+
+def _require_str(row: dict, field: str) -> str:
+    v = row.get(field)
+    if not isinstance(v, str):
+        # YAML coerces an unquoted 1.10 to the float 1.1 — the .github#267 trap, restated: a
+        # bot that wrote a float back would corrupt the row it exists to repair.
+        raise Finding(
+            f"{CONTRACT}.{field} is {v!r} ({type(v).__name__}), not a quoted string. "
+            f"Quote it — an unquoted version is a float, not a version."
+        )
+    return v
+
+
+# --------------------------------------------------------------------------------------------
+# Classification: framework release vs template-only cut. The one judgement the feed can settle.
+# --------------------------------------------------------------------------------------------
+
+def classify(candidate: str, resolve_feed, stable_channel: bool) -> tuple[str, list[str]]:
+    """Return ("framework"|"template-only", notes) for a template published at `candidate`.
+
+    FRAMEWORK    — every FS.GG.UI.* member's newest is `candidate`: the libs moved with it.
+    TEMPLATE-ONLY — NO member is at `candidate`: only template/ content moved, and the members are
+                   byte-identical, packed @pin as a --skip-duplicate no-op (0.3.1-preview.1, 0.4.1).
+
+    Anything between those two is a PARTIAL publish — a real defect — and raises rather than
+    guessing. Averaging it away is how a bot writes a pin no consumer can restore.
+    """
+    at_candidate: list[str] = []
+    behind: list[tuple[str, str]] = []
+    want = parse_version(candidate)
+
+    for pkg in FRAMEWORK_MEMBERS:
+        live = resolve_feed(pkg)
+        if stable_channel:
+            live = [v for v in live if not is_prerelease(v)] or live
+        top = newest(live)
+        if parse_version(top) == want:
+            at_candidate.append(pkg)
+        else:
+            behind.append((pkg, top))
+
+    if len(at_candidate) == len(FRAMEWORK_MEMBERS):
+        return "framework", [f"all {len(FRAMEWORK_MEMBERS)} FS.GG.UI.* members read {candidate}"]
+    if not at_candidate:
+        tops = {t for _, t in behind}
+        note = (
+            f"no FS.GG.UI.* member is at {candidate}"
+            + (f"; all {len(behind)} read {tops.pop()}" if len(tops) == 1 else "")
+        )
+        return "template-only", [note]
+
+    raise Finding(
+        f"PARTIAL PUBLISH — {len(at_candidate)} of {len(FRAMEWORK_MEMBERS)} FS.GG.UI.* members are "
+        f"at {candidate}, and {len(behind)} are not: "
+        + ", ".join(f"{p}={t}" for p, t in sorted(behind))
+        + ". That is neither a framework release nor a template-only cut, so the `version` pin "
+        f"cannot be derived — it would be a guess either way. A coherent set is published at ONE "
+        f"version; this one is not, which is a release defect in {PRODUCER}, not a registry defect. "
+        f"Refusing to write."
+    )
+
+
+# --------------------------------------------------------------------------------------------
+# `package-tag`: the field that carries "a tag is not a publish" if nobody checks it.
+# --------------------------------------------------------------------------------------------
+
+def verify_tags(candidate: str, kind: str, resolve_tag) -> tuple[str, list[str]]:
+    """Return (package_tag, notes). Raises Finding unless the tags actually back the publish."""
+    template_tag = f"fs-gg-ui-template/v{candidate}"
+    shas: dict[str, str | None] = {template_tag: resolve_tag(template_tag)}
+
+    if shas[template_tag] is None:
+        raise Finding(
+            f"the feed serves {TEMPLATE_PACKAGE} {candidate}, but {PRODUCER} has no tag "
+            f"{template_tag!r}. `package-tag` names the tag the package was PUBLISHED from, so "
+            f"there is nothing honest to write. A publish with no tag is the inverse of the 0.9.1 "
+            f"phantom and is equally a release defect."
+        )
+
+    # A FRAMEWORK release cuts the full triple; a template-only cut deliberately cuts only the
+    # pair (no fs-gg-ui/v* library snapshot is owed — 0.4.1's coherence guard named exactly two).
+    expected = [template_tag, f"v{candidate}"]
+    if kind == "framework":
+        expected.insert(0, f"fs-gg-ui/v{candidate}")
+
+    for t in expected:
+        if t not in shas:
+            shas[t] = resolve_tag(t)
+        if shas[t] is None:
+            raise Finding(
+                f"{kind} release {candidate}: {PRODUCER} tag {t!r} does not exist, but the other "
+                f"tags of its set do ({', '.join(k for k, v in shas.items() if v)}). An incomplete "
+                f"tag set means the release did not finish as it claims. Refusing to write."
+            )
+
+    distinct = sorted(set(shas[t] for t in expected))
+    if len(distinct) != 1:
+        raise Finding(
+            f"{kind} release {candidate}: the tag set does not resolve to ONE commit — "
+            + ", ".join(f"{t}={shas[t][:8]}" for t in expected)
+            + ". The tags disagree about what was released, so none of them can be cited as the "
+            f"provenance of the published package. Refusing to write."
+        )
+
+    return template_tag, [f"{' -> '.join(expected)} all at {distinct[0][:8]}"]
+
+
+# --------------------------------------------------------------------------------------------
+# The write: bytes between the quotes, and nothing else.
+# --------------------------------------------------------------------------------------------
+
+def rewrite_field(text: str, field: str, new: str) -> tuple[str, bool]:
+    """Replace CONTRACT's `field` value in `text`, preserving its trailing comment verbatim.
+
+    Anchored inside the `- id: <CONTRACT>` block so a same-named field on another row cannot be
+    hit: the search starts at the id line and stops at the next list item.
+    """
+    start = re.search(rf"^\s*-\s+id:\s*{re.escape(CONTRACT)}\s*$", text, re.M)
+    if not start:
+        raise Finding(f"cannot locate the `- id: {CONTRACT}` block to write into.")
+    nxt = re.search(r"^\s*-\s+id:\s", text[start.end():], re.M)
+    lo, hi = start.end(), start.end() + (nxt.start() if nxt else len(text) - start.end())
+
+    block = text[lo:hi]
+    pat = re.compile(rf'^(\s*{re.escape(field)}:\s*")([^"]*)(")', re.M)
+    m = pat.search(block)
+    if not m:
+        raise Finding(f"cannot locate a quoted `{field}:` in the {CONTRACT} block.")
+    if m.group(2) == new:
+        return text, False
+    block = block[:m.start()] + m.group(1) + new + m.group(3) + block[m.end():]
+    return text[:lo] + block + text[hi:], True
+
+
+# The mechanical head of a provenance comment: "ADVANCED <from> -> <to>", which is the clause that
+# contradicts its own value when a flip lands and the prose does not follow (#856). Recognising it
+# is how the bot REPORTS the rot without presuming to rewrite the judgement that follows it.
+#
+# The version sub-pattern may not end in `.` — it is followed by PROSE, and prose ends in a full
+# stop. A greedy `[0-9A-Za-z.-]*` reads "ADVANCED 0.10.0 -> 0.11.0. FRAMEWORK MINOR" as a flip to
+# `0.11.0.`, which never equals the value `0.11.0`, so EVERY correctly-written comment in the file
+# would be reported as rot. The fixture caught it: a flag that fires on the happy path is the
+# cry-wolf shape `skill-registry-autofix`'s header refuses, and it would have buried the ONE real
+# finding this function exists to surface under two false ones.
+_VER = r"\d+(?:\.\d+){0,3}(?:-[0-9A-Za-z.-]*[0-9A-Za-z])?"
+_ADVANCED_RE = re.compile(rf"ADVANCED\s+(?P<from>{_VER})\s*->\s*(?P<to>{_VER})")
+
+
+def stale_prose(text: str, field: str, new: str) -> str | None:
+    """Return a description if `field`'s comment still describes a flip other than `-> new`."""
+    start = re.search(rf"^\s*-\s+id:\s*{re.escape(CONTRACT)}\s*$", text, re.M)
+    if not start:
+        return None
+    nxt = re.search(r"^\s*-\s+id:\s", text[start.end():], re.M)
+    block = text[start.end():start.end() + (nxt.start() if nxt else len(text) - start.end())]
+    m = re.search(rf'^\s*{re.escape(field)}:\s*"[^"]*"\s*#(?P<comment>.*)$', block, re.M)
+    if not m:
+        return None
+    # Only the FIRST clause describes this flip; every later "PRIOR — ... ADVANCED" is history and
+    # is correct exactly as written. Cutting at PRIOR is what keeps the bot from reporting the
+    # archive as rot.
+    head = m.group("comment").split("PRIOR")[0]
+    adv = _ADVANCED_RE.search(head)
+    if not adv:
+        return None
+    if adv.group("to") == new:
+        return None
+    return (
+        f"`{field}` is now {new}, but its comment still describes "
+        f"\"ADVANCED {adv.group('from')} -> {adv.group('to')}\""
+    )
+
+
+def reconcile(path: str, resolve_feed, resolve_tag) -> dict:
+    """Compute (and optionally apply) the flip. Returns a report dict."""
+    row = load_row(path)
+    pin = _require_str(row, "version")
+    package = _require_str(row, "package-version")
+    tag = _require_str(row, "package-tag")
+
+    stable_channel = not is_prerelease(package)
+    live = resolve_feed(TEMPLATE_PACKAGE)
+    if stable_channel:
+        stable = [v for v in live if not is_prerelease(v)]
+        if not stable:
+            raise Finding(
+                f"the feed serves no stable {TEMPLATE_PACKAGE} — only prereleases {sorted(live)} — "
+                f"while the registry declares the stable {package!r}. Nothing to flip TO."
+            )
+        live = stable
+    candidate = newest(live)
+
+    notes: list[str] = [f"{TEMPLATE_PACKAGE} newest on the org feed = {candidate}"]
+    cur, want = parse_version(package), parse_version(candidate)
+    if want < cur:
+        raise Finding(
+            f"the registry is AHEAD of the feed — `package-version` {package!r} but "
+            f"{TEMPLATE_PACKAGE} newest is {candidate!r}. That is the FR-007 INVERSION: the "
+            f"registry advertises a version consumers cannot restore. A bot must not 'fix' it by "
+            f"winding the registry BACK — that would erase the evidence of a publish that failed or "
+            f"was unlisted, and make an unrestorable pin look deliberate. A human must decide."
+        )
+
+    kind, kn = classify(candidate, resolve_feed, stable_channel)
+    notes += kn
+    package_tag, tn = verify_tags(candidate, kind, resolve_tag)
+    notes += tn
+
+    # A framework release moves the pin with the package; a template-only cut decouples them and
+    # the pin HOLDS. This is the whole reason classify() exists.
+    new_pin = candidate if kind == "framework" else pin
+
+    with open(path, encoding="utf-8") as fh:
+        text = original = fh.read()
+
+    changes: list[str] = []
+    flagged: list[str] = []
+    for field, old, new in (
+        ("version", pin, new_pin),
+        ("package-version", package, candidate),
+        ("package-tag", tag, package_tag),
+    ):
+        text, did = rewrite_field(text, field, new)
+        if did:
+            changes.append(f"{field}: {old} -> {new}")
+        # The prose check runs on EVERY field, changed or not: #856's `package-tag` was left
+        # untouched AND its comment left describing 0.10.0, so "unchanged" is not "coherent".
+        s = stale_prose(text, field, new)
+        if s:
+            flagged.append(s)
+
+    return {
+        "contract": CONTRACT,
+        "candidate": candidate,
+        "kind": kind,
+        "changed": bool(changes),
+        "changes": changes,
+        "stale_prose": flagged,
+        "notes": notes,
+        "text": text,
+        "original": original,
+    }
+
+
+def compose_body(report: dict, run_url: str) -> str:
+    """The standing PR's body. Deterministic: `run_url` is injected, never read from the env.
+
+    Says three things, in the order a reviewer needs them: what was ASSERTED (so the flip can be
+    disbelieved), what was WRITTEN, and what is left for a HUMAN. The last section is the point —
+    a PR that silently carried stale prose would reproduce #856 with a bot's signature on it.
+    """
+    kind = report["kind"]
+    v = report["candidate"]
+    lines = [
+        f"Publish-before-flip (FR-007) step 2, for **{kind} release {v}** — opened by "
+        f"`feed-autofix.yml` (.github#748).",
+        "",
+        "FS.GG.Rendering published; this row records it. The flip below is **derived from the "
+        "live org feed**, not from a release's self-report, so it is correct for a release that "
+        "was dispatched, hand-published, or re-published.",
+        "",
+        "## What was asserted",
+        "",
+    ]
+    lines += [f"- {n}" for n in report["notes"]]
+    lines += [
+        "",
+        f"Classified **{kind}**"
+        + (
+            " — every FS.GG.UI.* member moved, so the `version` framework pin advances with the "
+            "package."
+            if kind == "framework"
+            else " — no FS.GG.UI.* member moved, so the `version` framework pin HOLDS and the two "
+            "fields decouple (the 0.4.1 shape)."
+        ),
+        "",
+        "## What this PR writes",
+        "",
+        "```",
+    ]
+    lines += report["changes"] or ["(no field changed)"]
+    lines += ["```", ""]
+
+    if report["stale_prose"]:
+        lines += [
+            "## Still needs a human — provenance prose",
+            "",
+            "The bot writes the three mechanical fields and **not** the provenance comments: "
+            "\"what makes this a major\" is the judgement this row exists to record, and a bot "
+            "must not author it.",
+            "",
+            "But a comment that contradicts its own value is worse than no comment, and that is "
+            "not hypothetical — the last hand-flip (#856) moved `package-version` to 0.11.0 and "
+            "left its comment describing the 0.10.0 flip, with nothing to catch it. So: **please "
+            "rewrite these before merging.**",
+            "",
+        ]
+        lines += [f"- [ ] {s}" for s in report["stale_prose"]]
+        lines += [""]
+    else:
+        lines += [
+            "## Provenance prose",
+            "",
+            "Every comment in the row agrees with the value it annotates. Nothing owed.",
+            "",
+        ]
+
+    lines += [
+        "## What the bot did NOT check",
+        "",
+        "- The `version` pin on a **template-only** cut is carried over unchanged, not verified — "
+        "there is nothing on the feed to verify it against.",
+        "- Whether this release *should* have happened, and what it means. That is the prose above.",
+        "",
+        f"Computed by [this run]({run_url}).",
+        "",
+        "Refs #748, #267, #250.",
+    ]
+    return "\n".join(lines)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("registry", nargs="?", default="registry/dependencies.yml")
+    ap.add_argument("--write", action="store_true", help="apply the flip to the registry file")
+    ap.add_argument("--json", action="store_true", help="emit the report as JSON on stdout")
+    ap.add_argument("--pr-body", metavar="PATH", help="write the standing PR's body to PATH")
+    ap.add_argument("--run-url", default="", help="the run URL stamped into --pr-body (injected)")
+    ap.add_argument("--fixture", help="serve a canned feed+tags instead of the live ones (tests only)")
+    args = ap.parse_args()
+
+    if args.fixture:
+        # Mirrors check-feed-coherence.py: a hook that can silently turn this into a no-op must not
+        # be reachable from a real run.
+        if os.environ.get("FSGG_FEED_FIXTURE_OK") != "1":
+            print(
+                "feed-autofix: --fixture requires FSGG_FEED_FIXTURE_OK=1 and is for tests/ only. "
+                "Refusing: a canned feed is not a coherence signal.",
+                file=sys.stderr,
+            )
+            return 2
+        with open(args.fixture, encoding="utf-8") as fh:
+            canned = json.load(fh)
+        feeds, tags = canned.get("feed", {}), canned.get("tags", {})
+
+        def resolve_feed(pkg: str) -> list[str]:
+            if pkg not in feeds:
+                raise GateError(f"fixture serves no feed entry for {pkg!r}")
+            return list(feeds[pkg])
+
+        def resolve_tag(t: str):
+            return tags.get(t)
+    else:
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if not token:
+            print(
+                "feed-autofix: GITHUB_TOKEN is unset. The feed read needs `packages: read` and the "
+                "tag read needs `contents: read` on " + PRODUCER + ". Refusing to report a flip "
+                "computed from a feed it could not read.",
+                file=sys.stderr,
+            )
+            return 2
+
+        def resolve_feed(pkg: str) -> list[str]:
+            return feed_versions(pkg, token)
+
+        def resolve_tag(t: str):
+            import urllib.error
+            import urllib.request
+
+            url = f"https://api.github.com/repos/{PRODUCER}/git/ref/tags/{t}"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "fsgg-feed-autofix",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    return json.loads(resp.read().decode("utf-8"))["object"]["sha"]
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    return None   # the one honest "no" — every other failure raises.
+                raise GateError(f"tag read for {t!r} failed: HTTP {e.code} {e.reason}") from e
+            except urllib.error.URLError as e:
+                raise GateError(f"{PRODUCER} unreachable reading tag {t!r}: {e.reason}") from e
+
+    try:
+        report = reconcile(args.registry, resolve_feed, resolve_tag)
+    except Finding as e:
+        print(f"feed-autofix: FINDING — {e}", file=sys.stderr)
+        if args.json:
+            print(json.dumps({"changed": False, "finding": str(e)}))
+        return 1
+    except GateError as e:
+        print(f"feed-autofix: {e}", file=sys.stderr)
+        return 2
+
+    text = report.pop("text")
+    report.pop("original")
+
+    if args.write and report["changed"]:
+        with open(args.registry, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    if args.pr_body:
+        with open(args.pr_body, "w", encoding="utf-8") as fh:
+            fh.write(compose_body(report, args.run_url))
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        for n in report["notes"]:
+            print(f"  ok   {n}")
+        if report["changed"]:
+            print(f"\n{report['kind']} release {report['candidate']} — flip:")
+            for c in report["changes"]:
+                print(f"  {c}")
+        else:
+            print(f"\nalready coherent at {report['candidate']} ({report['kind']}).")
+        for s in report["stale_prose"]:
+            print(f"  NEEDS A HUMAN: {s}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
