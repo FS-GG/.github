@@ -208,3 +208,30 @@ module Types =
         | Red of reasons: string list
         /// "I could not reach an answer." Never green, never silently dropped.
         | NoVerdict of reason: string
+
+    /// **THE WIRE VOCABULARY: a `BoardStatus` as the Projects v2 OPTION NAME, spelled ONCE.**
+    ///
+    /// This is the string the board itself round-trips — what `Scan` reads a column back as, and what
+    /// `Writes` sends when it sets one. `NoStatus` renders as the EMPTY STRING, because on the wire an
+    /// unset column really is empty; that is the wire being honest, not a missing case.
+    ///
+    /// It exists because this rendering was FOUR private `statusName` functions — `Scan`, `Writes`,
+    /// `Client`, `Snapshot` — and `Chore.fs` already named all four in a comment explaining why its own
+    /// prose label is correctly a fifth, DIFFERENT thing. The author knew the count; the comment
+    /// documented the duplication without closing it. All four agreed, and agreement is the finding
+    /// rather than the reassurance: #916 measured a `take` exit table whose copies "agreed with each
+    /// other the whole time" and were wrong in three ways, and #972 is this identical class filed as a
+    /// bug — "three private fence trackers in one engine, agreeing in none". Four agreeing copies are
+    /// one careless edit from being #972 (#983, #485).
+    ///
+    /// **THIS IS NOT THE PROSE VOCABULARY, AND THE TWO MUST NOT BE COLLAPSED.** There are deliberately
+    /// two, and they differ on exactly one case — `NoStatus`:
+    ///
+    /// - **wire** (here): `NoStatus` → `""`. What the board stores.
+    /// - **prose** (`Schedulability.statusText`, `Chore.columnLabel`): `NoStatus` → `"no Status"` /
+    ///   `"no Status at all"`. A sentence reading *"the board column says "* is its own bug (#437), so
+    ///   in prose the case is NAMED.
+    ///
+    /// Merging them would reintroduce #437 in one direction or put `"no Status at all"` on the wire in
+    /// the other. Read `Chore.fs`'s comment before touching either.
+    val statusWireName: s: BoardStatus -> string
