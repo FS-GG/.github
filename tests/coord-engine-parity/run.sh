@@ -3102,7 +3102,7 @@ if [ -z "$SQ_PORT" ]; then bad "starved-queue fixture bound a port"; else
   printf '%s' "$sqerr" | grep -q 'soonest: lease EXPIRED — reapable' \
     && ok "#428: the soonest lease is named — an EXPIRED one frees now (case 25)" \
     || bad "#428: soonest lease" "$sqerr"
-  printf '%s' "$sqerr" | grep -q '1 of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo FS.GG.Rendering --apply' \
+  printf '%s' "$sqerr" | grep -q '1 of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo FS.GG.Rendering --apply' \
     && ok "#428: ...and an expired lease is a REAP, with the exact command (case 25)" \
     || bad "#428: expired-lease reap advice" "$sqerr"
 
@@ -3117,7 +3117,7 @@ if [ -z "$SQ_PORT" ]; then bad "starved-queue fixture bound a port"; else
   printf '%s' "$sqerr" | grep -q '#225 — overlaps FS.GG.Rendering#226, which the board says is In progress with NO claim marker' \
     && ok "#428: a markerless In-progress item is a reserver, not a holder (case 25)" \
     || bad "#428: #225 markerless reserver" "$sqerr"
-  printf '%s' "$sqerr" | grep -q 'there is no lease to wait out; see: fsgg-coord who' \
+  printf '%s' "$sqerr" | grep -q 'there is no lease to wait out; see: scripts/fsgg-coord who' \
     && ok "#428: ...and it says there is no lease to wait out (case 25)" \
     || bad "#428: #225 no-lease advice" "$sqerr"
   printf '%s' "$sqerr" | grep -q 'held by —' \

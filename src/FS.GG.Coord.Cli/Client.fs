@@ -753,7 +753,7 @@ module Client =
                         eprint "fsgg-coord-engine:   Do NOT reap or close it. Land it:"
 
                         for r in orphans do
-                            eprint $"fsgg-coord-engine:     fsgg-coord adopt %s{r.Ref.Short}"
+                            eprint $"fsgg-coord-engine:     scripts/fsgg-coord adopt %s{r.Ref.Short}"
 
                     // A markerless In-progress item is work happening OUTSIDE the protocol — warned on
                     // stderr (where case 20 looks for it) regardless of the stdout format, so a `who` piped
@@ -885,7 +885,7 @@ module Client =
                                             eprint
                                                 "fsgg-coord-engine:   This work is FINISHED — the worker died between \"green\" and \"merge\", the window this protocol leaves open on every item. Do NOT close it: that destroys a reviewed, passing fix. LAND IT:"
 
-                                            eprint $"fsgg-coord-engine:       fsgg-coord adopt %s{ref.Short}"
+                                            eprint $"fsgg-coord-engine:       scripts/fsgg-coord adopt %s{ref.Short}"
                                         | PrPending ->
                                             eprint
                                                 $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (checks running). The lease lapsed; the WORK did not."
@@ -894,7 +894,7 @@ module Client =
                                                 "fsgg-coord-engine:   Its checks are STILL RUNNING — it is UNFINISHED, not abandoned, and may be minutes from green. Do NOT close it. Let CI settle and look again:"
 
                                             eprint
-                                                $"fsgg-coord-engine:       fsgg-coord who --repo %s{repoName}        # green? then: fsgg-coord adopt %s{ref.Short}"
+                                                $"fsgg-coord-engine:       scripts/fsgg-coord who --repo %s{repoName}        # green? then: scripts/fsgg-coord adopt %s{ref.Short}"
                                         | PrUnknown ->
                                             eprint
                                                 $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), PR #%d{pr} is OPEN (state unknown). The lease lapsed; the WORK did not."
@@ -975,7 +975,7 @@ module Client =
                                                         // the lock is already gone.
                                                         | Error e ->
                                                             printfn
-                                                                "  column UNREADABLE (%s) — marker cleared, column left ALONE:  fsgg-coord set-field %s Status '<column>'"
+                                                                "  column UNREADABLE (%s) — marker cleared, column left ALONE:  scripts/fsgg-coord set-field %s Status '<column>'"
                                                                 (Errors.explain e)
                                                                 ref.Short
                                                         | Ok live ->
@@ -1012,13 +1012,13 @@ module Client =
                                                             | Ok Board.Written -> printfn "  reset to %s" name
                                                             | Ok Board.Deferred ->
                                                                 printfn
-                                                                    "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  fsgg-coord flush"
+                                                                    "  reset to %s DEFERRED (budget exhausted) — queued, not lost; nothing replays it on its own:  scripts/fsgg-coord flush"
                                                                     name
                                                             | Ok Board.NotOnBoard ->
                                                                 printfn "  not on board (marker cleared; nothing to reset)"
                                                             | Error e ->
                                                                 printfn
-                                                                    "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  fsgg-coord set-field %s Status '%s'"
+                                                                    "  reset to %s FAILED (%s) — marker cleared, column UNCHANGED:  scripts/fsgg-coord set-field %s Status '%s'"
                                                                     name
                                                                     (Errors.explain e)
                                                                     ref.Short
@@ -1376,8 +1376,8 @@ module Client =
                     eprint
                         $"fsgg-coord-engine: worker '%s{w.Id}' ALREADY HOLDS %s{names}. A claim reserves a touch-set, so a second one locks files nobody is editing for the rest of the lease (%d{opts.LeaseMinutes}m) — and `batch` will refuse every item that overlaps it (#516)."
 
-                    eprint "  Finish or drop the item you hold:  fsgg-coord-engine done <issue> --flip   (or: release <issue>)"
-                    eprint "  If you genuinely mean to hold two, say so:  fsgg-coord-engine claim <issue> --force"
+                    eprint "  Finish or drop the item you hold:  scripts/fsgg-coord done <issue> --flip   (or: release <issue>)"
+                    eprint "  If you genuinely mean to hold two, say so:  scripts/fsgg-coord claim <issue> --force"
                     ExitRed
                 | Ok [] ->
                     // #481: the claim records the column it OVERWRITES, so `release` (and `reap`) can put it
@@ -1543,10 +1543,10 @@ module Client =
                             $"fsgg-coord-engine: %s{ref.Short} is held by a LIVE claim — worker '%s{live.Worker.Value}', renewed %d{live.AgeSeconds / 60}m ago (lease %d{opts.LeaseMinutes}m). A worker that is alive is not an orphan, and taking their item is a steal, not an adoption."
 
                         eprint
-                            $"  Talk to them:  fsgg-coord-engine say %s{ref.Short} --to %s{live.Worker.Value} --message '<message>'"
+                            $"  Talk to them:  scripts/fsgg-coord say %s{ref.Short} --to %s{live.Worker.Value} --message '<message>'"
 
                         eprint
-                            $"  If you genuinely mean to take it anyway, that is a steal, and the flag says so:  fsgg-coord-engine claim %s{ref.Short} --force"
+                            $"  If you genuinely mean to take it anyway, that is a steal, and the flag says so:  scripts/fsgg-coord claim %s{ref.Short} --force"
 
                         ExitRed
                     | None ->
@@ -1557,7 +1557,7 @@ module Client =
                                 $"fsgg-coord-engine: %s{ref.Short} carries no expired claim — there is no orphan here to adopt."
 
                             eprint
-                                $"  If it is simply unclaimed, take it the ordinary way:  fsgg-coord-engine claim %s{ref.Short}"
+                                $"  If it is simply unclaimed, take it the ordinary way:  scripts/fsgg-coord claim %s{ref.Short}"
 
                             ExitRed
                         | Some stale ->
@@ -1572,7 +1572,7 @@ module Client =
                                     $"fsgg-coord-engine: worker '%s{ow}' claim on %s{ref.Short} is expired (idle %d{oage}m), but there is NO open PR on 'item/%d{ref.Number}-*' — so there is no finished work to adopt. That claim is simply dead."
 
                                 eprint
-                                    $"  Collect it and take the item normally:  fsgg-coord-engine reap --repo %s{ref.Repo} --apply && fsgg-coord-engine claim %s{ref.Short}"
+                                    $"  Collect it and take the item normally:  scripts/fsgg-coord reap --repo %s{ref.Repo} --apply && scripts/fsgg-coord claim %s{ref.Short}"
 
                                 ExitRed
                             | Ok LeaseHeld
@@ -1607,7 +1607,7 @@ module Client =
                                         eprint
                                             $"    gh api -X PUT repos/%s{ref.Owner}/%s{ref.Repo}/pulls/%d{pnum}/merge -f merge_method=squash"
 
-                                        eprint $"    fsgg-coord-engine done %s{ref.Short} --flip"
+                                        eprint $"    scripts/fsgg-coord done %s{ref.Short} --flip"
                                         ExitGreen
                                     else
                                         rc
@@ -1616,7 +1616,7 @@ module Client =
                                         $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is OPEN but CONFLICTED with its base — so it is not landable as it stands, and it is not finished work. Rebasing it is AUTHORING, not landing; and GitHub gives a conflicted PR no CI at all (it cannot build refs/pull/%d{pnum}/merge), so nothing about it has been verified since the conflict appeared."
 
                                     eprint
-                                        $"  Take the item the ordinary way and finish the job:  fsgg-coord-engine reap --repo %s{ref.Repo} --apply && fsgg-coord-engine claim %s{ref.Short}"
+                                        $"  Take the item the ordinary way and finish the job:  scripts/fsgg-coord reap --repo %s{ref.Repo} --apply && scripts/fsgg-coord claim %s{ref.Short}"
 
                                     ExitRed
                                 | PrPending ->
@@ -1629,7 +1629,7 @@ module Client =
                                         $"fsgg-coord-engine: PR #%d{pnum} on %s{ref.Short} is NOT green — either a check failed, or it has NO check runs at all. Both are one verdict here: a missing subject is a finding, not a pass (#606), and CI that never started has proved nothing. A red PR is not finished work."
 
                                     eprint
-                                        $"  If it is genuinely abandoned, close the PR and reap the claim. If it is salvageable, take the item and finish it:  fsgg-coord-engine reap --repo %s{ref.Repo} --apply && fsgg-coord-engine claim %s{ref.Short}"
+                                        $"  If it is genuinely abandoned, close the PR and reap the claim. If it is salvageable, take the item and finish it:  scripts/fsgg-coord reap --repo %s{ref.Repo} --apply && scripts/fsgg-coord claim %s{ref.Short}"
 
                                     ExitRed
                                 | PrUnknown ->
@@ -1833,7 +1833,7 @@ module Client =
                         match decision with
                         | Error why ->
                             eprint
-                                $"fsgg-coord-engine: %s{ref.Short}: %s{why} — the lock is dropped, but the column is UNCHANGED. A column we cannot read is not one we may overwrite (#331). Set it yourself if it needs setting:  fsgg-coord set-field %s{ref.Short} Status '<column>'"
+                                $"fsgg-coord-engine: %s{ref.Short}: %s{why} — the lock is dropped, but the column is UNCHANGED. A column we cannot read is not one we may overwrite (#331). Set it yourself if it needs setting:  scripts/fsgg-coord set-field %s{ref.Short} Status '<column>'"
 
                             printfn "released %s" ref.Short
                             ExitGreen
@@ -1871,7 +1871,7 @@ module Client =
                                 | Ok Board.Written -> true
                                 | Ok Board.Deferred ->
                                     eprint
-                                        $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  fsgg-coord flush"
+                                        $"fsgg-coord-engine: the Status restore to '%s{name}' is DEFERRED — the budget is exhausted, so it is QUEUED, not lost, and NOTHING replays it on its own:  scripts/fsgg-coord flush"
 
                                     false
                                 | Ok Board.NotOnBoard ->
@@ -1881,7 +1881,7 @@ module Client =
                                     false
                                 | Error e ->
                                     eprint
-                                        $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
+                                        $"fsgg-coord-engine: the Status restore to '%s{name}' FAILED (%s{Errors.explain e}) — the lock is dropped, but the column is UNCHANGED:  scripts/fsgg-coord set-field %s{ref.Short} Status '%s{name}'"
 
                                     false
                             | Error e ->
@@ -2979,7 +2979,7 @@ module Client =
                                 for f in drift do
                                     printfn "    %s" f
 
-                                eprint "  Widen the touch-set (fsgg-coord-engine widen), or split the PR."
+                                eprint "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
                                 if opts.Warn then ExitGreen else ExitRed
 
     // ---- identity --------------------------------------------------------------------------------------

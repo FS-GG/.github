@@ -176,6 +176,42 @@ MINT_CALL = re.compile(r"(?P<cmd>[\w./-]+)\s+whoami\s+--mint")
 # (`fsgg-coord-engine`) is NOT installed on PATH — that is exactly what #569 got wrong.
 RUNNABLE_MINT_CMD = "scripts/fsgg-coord"
 
+# THE ENGINE'S OWN VERBS, READ FROM ITS DISPATCH — never retyped here (#931). A literal list would be a
+# second copy of the engine's command set, free to drift the moment somebody adds a verb: the gate would
+# then be silent on the newest sites, which are the ones nothing has audited yet. `Options.fs` dispatches
+# on `| "<verb>" :: rest ->` and REFUSES anything else (`unknown command: --repo`), so this list is the
+# engine's own answer to "what is a verb", not our guess at it.
+DISPATCH_SOURCE = "src/FS.GG.Coord.Cli/Options.fs"
+DISPATCH_VERB = re.compile(r'^\s*\|\s*"(?P<verb>[a-z][a-z-]*)"\s*::\s*rest\b')
+
+# WHERE A PRINTED COMMAND CAN LIVE. The engine's own source, and only the F# in it: `scripts/` holds CI
+# linters whose docstrings DISCUSS commands ("`fsgg-coord landable` is the only sanctioned reader") — prose
+# naming a command, which nobody pastes and which must never be a finding.
+PRINTED_SURFACE = "src"
+PRINTED_SUFFIXES = (".fs", ".fsi")
+
+# THE VERB IS REQUIRED, AND IT IS WHAT KEEPS THIS OFF PROSE. Matching `fsgg-coord\s+\S` instead would read
+# "the fsgg-coord shim resolves…" as the verb `shim` and red a correct sentence. Anchoring on the engine's
+# real verbs means a command is recognised as a command.
+#
+# THE COLON DISCRIMINATOR, WHICH IS THE WHOLE REASON THIS CAN BE GATED AT ALL (#931). The engine prints
+# 124 `fsgg-coord-engine: <prose>` LOG PREFIXES, and they are not instances — a gate that flagged its own
+# log prefix would cry wolf 124 times on a clean tree, and a gate that cries wolf is one somebody deletes.
+# `\s+` after the command is the entire separation: a prefix is followed by `:`, which is not whitespace,
+# so `fsgg-coord-engine: claim failed` cannot match no matter what word follows the colon. Measured, not
+# reasoned: 124 prefixes, 0 findings.
+#
+# BOTH BROKEN SPELLINGS, because both are `command not found` and the issue's acceptance names both:
+# `fsgg-coord-engine` is the engine's apphost, which is on nobody's PATH (#569), and a BARE `fsgg-coord`
+# is not on PATH either — measured at 127. Only the resolver, at the path the docs teach, runs.
+PRINTED_CMD = r"(?P<cmd>(?:[\w.-]+/)*fsgg-coord(?:-engine)?)"
+
+# The one command that RUNS as printed, from a plain checkout, with nothing on PATH: the ADR-0034 §4.4
+# resolver, whose whole job is to find the engine and exec it. Since #931 it resolves from an item
+# worktree too — which is what makes this the right answer for EVERY printed command rather than only
+# the ones a worker happens to run from the shared checkout.
+RUNNABLE_CMD = "scripts/fsgg-coord"
+
 # A placeholder is prose REFERRING to the ritual (`eval "$(... whoami --mint)"` in a doc comment
 # about minting), not a line anybody pastes — fine here for the same reason `<id>` is fine above:
 # nobody runs a placeholder and gets `command not found`.
@@ -296,6 +332,146 @@ def code_files(root: Path) -> list[tuple[Path, str]]:
         for p in sorted(found):
             files.append((p, str(p.relative_to(root))))
     return files
+
+
+def engine_verbs(root: Path) -> list[str]:
+    """The verbs `Options.fs` dispatches on. Empty when the engine is not in this tree at all."""
+    src = root / DISPATCH_SOURCE
+    try:
+        text = src.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    verbs = [m.group("verb") for line in text.splitlines() if (m := DISPATCH_VERB.match(line))]
+    # LONGEST FIRST. Python's alternation is first-match, not longest-match, so `add|adopt` would match
+    # `add` inside `adopt` and leave `opt` — reading a correct `adopt` line as the verb `add` plus junk.
+    return sorted(set(verbs), key=len, reverse=True)
+
+
+# WHAT "THE TOOL PRINTS" MEANS, MECHANICALLY: the command sits inside a double-quoted string literal.
+#
+# This is the acceptance's own discriminator, and it is load-bearing in BOTH directions. A remedy the tool
+# prints lives in a string; prose ABOUT a command lives in a comment. Both spell the command identically,
+# so nothing cheaper than "is it in a string?" separates them:
+#
+#     eprint "  Talk to them:  fsgg-coord say …"      <- PRINTED. A worker pastes it. A finding.
+#     // exactly this: `fsgg-coord issues` listed …   <- a COMMENT naming a command. Not a finding.
+#
+# Flagging the second kind is not a harmless over-reach — it is how this gate dies. #931 is explicit that
+# a gate crying wolf on prose gets deleted, and the deleted gate then fails to catch the real thing.
+#
+# THE COMMENT TAIL GOES FIRST, AND "QUOTED" ALONE WOULD NOT HAVE BEEN ENOUGH. A doc comment quotes the
+# ritual it describes — `Identity.fsi` says: /// to pass `--worker` or `eval "$(scripts/fsgg-coord whoami
+# --mint)"` — so a rule reading only "is it between quotes?" counts that as something the tool PRINTS. It
+# is a comment. Measured: it was the one "printed command" a src/ stripped of every other .fs still
+# reported, which is how it was found. Benign there only because the command it names is the compliant
+# one; a comment quoting the BROKEN spelling would have been a finding nobody could act on, in a line
+# nobody prints — crying wolf, which is how this gate gets deleted.
+#
+# `//` INSIDE A STRING IS NOT A COMMENT (`"https://…"`), so the scan tracks quote state rather than
+# calling `line.split("//")`. Escapes are honoured INSIDE a string (`\"` neither opens nor closes),
+# which keeps a printed `--message '\"…\"'` from inverting every span after it.
+#
+# IT IS PER-FILE, NOT PER-LINE, BECAUSE THE BIGGEST PRINTED STRING IN THE TOOL SPANS 101 LINES. A
+# line-at-a-time reader cannot see a `"""…"""` block: its interior lines contain no quote at all, so
+# every one of them reads as "not a string" and the whole of `--help` — the single most-read thing the
+# engine prints — is invisible to the rule. That is this gate's own #266 signature, and it would have
+# shipped inside the change written to close one.
+#
+# F# HAS THREE STRING FLAVOURS AND ALL THREE HAD TO BE READ, because getting one wrong does not fail
+# quietly here — it corrupts every line AFTER it:
+#
+#     "…"        regular      — `\"` escapes
+#     """…"""    triple       — spans lines; no escapes; interior quotes are literal
+#     @"…"       verbatim     — `""` is an escaped quote, a LONE `"` closes
+#
+# THE VERBATIM CASE IS NOT OPTIONAL, and `Fake.fs` is why: it holds `@"""sub_issue_id""\s*:…"`, a regex.
+# Read that with no verbatim branch and the `@` is skipped as an ordinary character, the `"""` behind it
+# opens a triple block that never closes, and the scanner runs to the END OF THE FILE marking every
+# remaining line as printed — silent false positives downstream of one regex nobody was looking at.
+# Measured: with the branch removed, a plain COMMENT two lines later is read as a printed remedy.
+#
+# (The branch's POSITION relative to the `"""` test is not what saves it — checked, and reordering them
+# changes nothing, because the `@` sits at the scan position and claims the token either way. It is the
+# branch EXISTING that matters. This parenthesis is here because the obvious comment to write was "so
+# `@"` is tested BEFORE `"""`", and that would have been a load-bearing-sounding claim about a line that
+# carries no load — the kind a later reader trusts and preserves for the wrong reason.)
+def printed_regions(text: str) -> list[tuple[int, str, list[tuple[int, int]]]]:
+    out: list[tuple[int, str, list[tuple[int, int]]]] = []
+    in_triple = False
+    for lineno, line in enumerate(text.splitlines(), 1):
+        spans: list[tuple[int, int]] = []
+        # Spans are EXCLUSIVE bounds (`a < pos < b`), so an open recorded at the first content column
+        # is stored as `content - 1`. A block inherited from an earlier line opens at column 0, hence
+        # the -1: a command starting in column 0 of a `"""` body is still inside the string.
+        open_at: int | None = 0 if in_triple else None
+        i = 0
+        while i < len(line):
+            if in_triple:
+                j = line.find('"""', i)
+                if j < 0:
+                    break  # the block runs past this line; the tail append below closes it at EOL
+                spans.append(((open_at or 0) - 1, j))
+                in_triple, open_at = False, None
+                i = j + 3
+                continue
+            if line.startswith('@"', i):  # verbatim — see the note above this function
+                start = i + 2
+                i += 2
+                closed = False
+                while i < len(line):
+                    if line.startswith('""', i):
+                        i += 2
+                        continue
+                    if line[i] == '"':
+                        spans.append((start - 1, i))
+                        i += 1
+                        closed = True
+                        break
+                    i += 1
+                if not closed:
+                    open_at = start
+                continue
+            if line.startswith('"""', i):
+                in_triple = True
+                open_at = i + 3
+                i += 3
+                continue
+            c = line[i]
+            if c == "\\" and open_at is not None:
+                i += 2
+                continue
+            if c == '"':
+                if open_at is None:
+                    open_at = i + 1
+                else:
+                    spans.append((open_at - 1, i))
+                    open_at = None
+                i += 1
+                continue
+            if c == "/" and open_at is None and line.startswith("//", i):
+                break  # a comment tail: nothing after it is printed, whatever it quotes
+            i += 1
+        if open_at is not None:  # a string still open at EOL — a `"""` body, or a ragged literal
+            spans.append((open_at - 1, len(line)))
+        out.append((lineno, line, spans))
+    return out
+
+
+def printed_files(root: Path) -> list[tuple[Path, str]]:
+    """The engine's F# source — the surface that PRINTS to a worker."""
+    base = root / PRINTED_SURFACE
+    if not base.is_dir():
+        return []
+    out: list[tuple[Path, str]] = []
+    stack = [base]
+    while stack:
+        for p in sorted(stack.pop().iterdir()):
+            if p.is_dir():
+                if p.name not in CODE_EXCLUDE_DIRS:
+                    stack.append(p)
+            elif p.suffix in PRINTED_SUFFIXES:
+                out.append((p, str(p.relative_to(root))))
+    return sorted(out, key=lambda t: t[1])
 
 
 def main(argv: list[str]) -> int:
@@ -438,6 +614,67 @@ def main(argv: list[str]) -> int:
             f"(#266)."
         )
 
+    # 5. EVERY COMMAND THE TOOL PRINTS MUST RUN AS PRINTED (#931).
+    #
+    # Rule 4 is this rule, scoped to ONE verb. It asserts that a MINT remedy names a runnable command —
+    # so it audited the file the other sites live in, called it clean, and reported that N remedies "run
+    # as printed" while twenty of them did not. That is #266's shape INSIDE the change that closed a #266
+    # fail-open, and it is the strongest argument that #569's rule was scoped to the symptom rather than
+    # the defect. The defect is not about minting. It is: the tool tells a worker to run something, and
+    # the something does not run.
+    #
+    # BOTH SPELLINGS WERE BROKEN, WHICH IS WHY THIS GATE COULD NOT LAND ALONE (#931). `fsgg-coord-engine
+    # <verb>` is 127 (`command not found`). `scripts/fsgg-coord <verb>` was 69 (`no engine found`) from an
+    # ITEM WORKTREE — and pnext-item §2 MANDATES a worktree, so that was every worker following the
+    # recipe. Rewriting the sites to the other spelling would have traded one broken remedy for a MORE
+    # convincing one, because 69 looks like a real diagnostic. The resolver's tier 2b fallback is what
+    # makes `scripts/fsgg-coord` true from where its reader actually stands, and only then is there a
+    # right answer for this rule to demand. That is the "from where" clause in #931's acceptance, and it
+    # is why a rule reading merely "names a real path" would have been satisfied by the 69.
+    verbs = engine_verbs(root)
+    printed_calls = 0
+    if verbs:
+        printed_call = re.compile(PRINTED_CMD + r"\s+(?P<verb>" + "|".join(verbs) + r")(?![\w-])")
+        for path, rel in printed_files(root):
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for lineno, line, spans in printed_regions(text):
+                for m in printed_call.finditer(line):
+                    if not any(a < m.start() < b for a, b in spans):
+                        continue  # a comment naming a command, not a remedy anybody pastes
+                    printed_calls += 1
+                    cmd = m.group("cmd")
+                    if cmd == RUNNABLE_CMD:
+                        continue
+                    findings.append(
+                        f"{rel}:{lineno}: this PRINTS `{cmd} {m.group('verb')}`, which is not on PATH — "
+                        f"a worker who pastes it, exactly as the tool told them to, gets `command not "
+                        f"found` (#931, #569). Print the resolver the docs teach: "
+                        f"`{RUNNABLE_CMD} {m.group('verb')}`. It resolves from an item worktree too, "
+                        f"which is where pnext-item §2 puts every reader of this line."
+                    )
+
+        # Fail closed, on the real subject: the engine demonstrably prints these. Zero means the verb
+        # extractor, the surface walk, or the quoted-span reader is broken — and a gate that examines
+        # nothing must never be mistaken for a clean tree (#266). Counted over COMPLIANT sites too, so
+        # this stays honest once the tree is fixed: it asserts the gate can still SEE, not that the tree
+        # is still broken.
+        if printed_calls == 0:
+            raise GateError(
+                f"found NO printed command in {PRINTED_SURFACE}/, which prints them — the extractor is "
+                f"broken, not the tree. Examining nothing is a failure to audit, not a clean audit "
+                f"(#266)."
+            )
+    elif (root / DISPATCH_SOURCE).exists():
+        # The dispatch is THERE and yielded nothing: its shape changed, and this rule is now silent on
+        # every site. That is a broken gate, not a clean tree — say so rather than pass.
+        raise GateError(
+            f"{DISPATCH_SOURCE} exists but no verbs parsed out of it — DISPATCH_VERB no longer matches "
+            f"the engine's dispatch, so rule 5 would audit nothing and report green (#266)."
+        )
+
     # Fail closed: an extractor that sees nothing must not be mistaken for a clean surface. These
     # documents demonstrably discuss the worker id — if we found no mention of it at all, the glob or
     # the regex is broken, and every "ok" above is worthless.
@@ -461,16 +698,22 @@ def main(argv: list[str]) -> int:
         for f in findings:
             print(f"::error::check-worker-id-attractor: {f}", file=sys.stderr)
         print(
-            f"\n{len(findings)} finding(s). The collision attractor has been removed by hand twice "
-            f"already (#532, #551); this gate exists so there is no third time.",
+            f"\n{len(findings)} finding(s). Both of this gate's subjects decayed while a human was the "
+            f"only thing asserting them: the collision attractor was removed BY HAND twice (#532, "
+            f"#551), and the remedy the tool prints drifted to a command that does not run (#569, "
+            f"#931). This gate exists so there is no third time of either.",
             file=sys.stderr,
         )
         return FINDING
 
+    # The counts are the POINT, not decoration: each one is a surface this gate proved it can still see.
+    # A summary reporting only "ok" cannot tell a clean tree from an extractor that matched nothing —
+    # which is the failure every fail-closed guard above exists to make impossible (#266).
     print(
         f"ok: no literal worker id, and exactly one mint idiom — {mentions} worker-id mention(s) "
         f"audited, {sanctioned} showing the sanctioned mint; {engine_sites} printed remedy(s) in "
-        f"{ENGINE_SURFACE} run as printed."
+        f"{ENGINE_SURFACE} run as printed; {printed_calls} printed command(s) across "
+        f"{PRINTED_SURFACE}/ ({len(verbs)} engine verb(s)) run as printed."
     )
     return OK
 

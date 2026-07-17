@@ -57,7 +57,7 @@ module Batch =
             // nobody to `say` to. Dressing it up as a holder ("held by — (lease unknown)") would invite a
             // worker to wait for a marker that is never coming.
             | Unowned item ->
-                $"%s{id} — overlaps %s{item.Short}, which the board says is In progress with NO claim marker (someone is working outside the protocol — there is no lease to wait out; see: fsgg-coord who): %s{where}"
+                $"%s{id} — overlaps %s{item.Short}, which the board says is In progress with NO claim marker (someone is working outside the protocol — there is no lease to wait out; see: scripts/fsgg-coord who): %s{where}"
 
             | UnknownHolder -> $"%s{id} — overlaps in-flight work: %s{where}"
 
@@ -166,10 +166,10 @@ module Batch =
             match repos with
             | [ one ] ->
                 [ count
-                  $"  triage them to Ready, or schedule from Backlog as-is: fsgg-coord take --repo %s{one} --include-backlog" ]
+                  $"  triage them to Ready, or schedule from Backlog as-is: scripts/fsgg-coord take --repo %s{one} --include-backlog" ]
             | many ->
                 (count :: "  triage them to Ready, or schedule from Backlog as-is — one repo at a time:" :: [
-                    for r in many -> $"    fsgg-coord take --repo %s{r} --include-backlog"
+                    for r in many -> $"    scripts/fsgg-coord take --repo %s{r} --include-backlog"
                 ])
 
     /// Returns [] whenever the queue is NOT starved: work WAS handed out (a `chosen` batch is not starved),
@@ -241,10 +241,10 @@ module Batch =
                     match reapRepos with
                     | [] -> []
                     | [ one ] ->
-                        [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo %s{one} --apply" ]
+                        [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo %s{one} --apply" ]
                     | many ->
                         ($"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them, one repo at a time:"
-                         :: [ for r in many -> $"    fsgg-coord reap --repo %s{r} --apply" ])
+                         :: [ for r in many -> $"    scripts/fsgg-coord reap --repo %s{r} --apply" ])
 
                 // #636 — BUSY and UNTRIAGED are independent facts about one queue, and the live board that
                 // prompted this had both: two items behind live claims (soonest ~120m) and seven withheld at
@@ -318,7 +318,7 @@ module Batch =
 
                 let toks = String.concat ", " bad
 
-                $"in-flight work held by %s{who} declares unmatchable touch-set token(s): %s{toks} — it therefore reserves NOTHING, and scheduling against an unknown touch-set would hand its files to a second worker. Fix with: fsgg-coord widen <issue> --paths '<paths>'")
+                $"in-flight work held by %s{who} declares unmatchable touch-set token(s): %s{toks} — it therefore reserves NOTHING, and scheduling against an unknown touch-set would hand its files to a second worker. Fix with: scripts/fsgg-coord widen <issue> --paths '<paths>'")
             |> Red
 
         | [] ->

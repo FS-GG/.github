@@ -380,6 +380,119 @@ else
   bad "the shipped .agent-skill-roots is not the shape this fixture assumes"
 fi
 
+# =============================================================================================
+# 5. EVERY COMMAND THE TOOL PRINTS MUST RUN AS PRINTED (#931) — rule 5.
+#
+# Rule 4 asked this about ONE verb (`whoami --mint`), so it audited the very file the other sites live
+# in and called it clean. These legs are the generalisation, and the FAILURE ones are the point: a rule
+# that cannot say NO is the #266 defect it was written to close.
+#
+# The mutations go into `Client.fs`, which the REAL tree above already carries — so every leg here is a
+# one-line delta against a tree that is otherwise green, and the mutation is the only variable.
+# =============================================================================================
+ENGINE_FS="src/FS.GG.Coord.Cli/Client.fs"
+
+# (a) THE `-engine` SPELLING — #931's headline. 127, `command not found`, for every one of the 25 sites.
+REAL_P="$WORK/real-p"; cp -r "$REAL" "$REAL_P"
+printf '\n    eprint "  Finish the item you hold:  fsgg-coord-engine done <issue> --flip"\n' >>"$REAL_P/$ENGINE_FS"
+expect "rule 5: a PRINTED \`fsgg-coord-engine <verb>\` is red-lit — it is 127 for whoever pastes it (#931)" \
+  1 "this PRINTS \`fsgg-coord-engine done\`" "$REAL_P"
+
+# (b) THE BARE SPELLING, which is broken for the SAME reason and reads as correct. `fsgg-coord` is on
+#     nobody's PATH either (the leg above proves it), so a site printing it is the identical defect —
+#     and it is the one a reader is least likely to notice, because it is what every doc CALLS the tool.
+REAL_Q="$WORK/real-q"; cp -r "$REAL" "$REAL_Q"
+printf '\n    eprint "  Collect them:  fsgg-coord reap --repo <r> --apply"\n' >>"$REAL_Q/$ENGINE_FS"
+expect "rule 5: a PRINTED bare \`fsgg-coord <verb>\` is red-lit too — the acceptance names BOTH spellings" \
+  1 "this PRINTS \`fsgg-coord reap\`" "$REAL_Q"
+
+# (c) THE LOG PREFIX MUST NOT BE FLAGGED — #931 names this explicitly, and it is the leg that decides
+#     whether this gate survives. The engine prints 124 `fsgg-coord-engine: <prose>` prefixes; a gate
+#     that red-lit its own log prefix would cry wolf on every clean tree, and a gate that cries wolf is
+#     one somebody deletes. The colon is the whole discriminator — so this leg puts a real VERB directly
+#     after it, which is the only case where a naive rule would confuse the two.
+REAL_R="$WORK/real-r"; cp -r "$REAL" "$REAL_R"
+printf '\n    eprint "fsgg-coord-engine: claim refused — the lease is held by another worker"\n' >>"$REAL_R/$ENGINE_FS"
+expect "rule 5: \`fsgg-coord-engine: claim …\` is a LOG PREFIX, not an instance — the colon separates them (#931)" \
+  0 "ok: no literal worker id" "$REAL_R"
+
+# (d) PROSE NAMING A COMMAND IS NOT A REMEDY. A comment saying "`fsgg-coord issues` listed PRs as
+#     issues" names the command as a SUBJECT; nobody pastes it, and flagging it is the same crying-wolf
+#     failure as (c) wearing a different hat. This is why the rule keys on the string literal — the one
+#     mechanical difference between a line the tool PRINTS and a line that merely mentions a command.
+REAL_S="$WORK/real-s"; cp -r "$REAL" "$REAL_S"
+printf '\n// exactly this: `fsgg-coord-engine issues` listed PRs as issues, so the check was wrong\n' >>"$REAL_S/$ENGINE_FS"
+expect "rule 5: a COMMENT naming a command is prose, not a printed remedy — not a finding (#931)" \
+  0 "ok: no literal worker id" "$REAL_S"
+
+# (e) AND THE SANCTIONED SPELLING IS ACCEPTED, so the rule is satisfiable by the thing it demands. A
+#     rule nothing can satisfy is one the next worker deletes rather than obeys.
+REAL_T="$WORK/real-t"; cp -r "$REAL" "$REAL_T"
+printf '\n    eprint "  Finish the item you hold:  scripts/fsgg-coord done <issue> --flip"\n' >>"$REAL_T/$ENGINE_FS"
+expect "rule 5: the resolver spelling is accepted — the rule can be SATISFIED, not merely violated" \
+  0 "ok: no literal worker id" "$REAL_T"
+
+# (f) FAIL CLOSED WHEN THE VERB LIST BREAKS. The verbs are parsed out of the engine's dispatch rather
+#     than retyped, which is what stops them drifting — and it puts the whole rule at the mercy of that
+#     parse. If `Options.fs` changes shape, the alternation empties, NOTHING matches, and the gate
+#     reports a clean tree it never audited. That is the exact #266 signature this gate exists to end,
+#     rebuilt inside the rule written to end it — so it must be a NO VERDICT, never a pass.
+REAL_U="$WORK/real-u"; cp -r "$REAL" "$REAL_U"
+sed -i 's/^\( *\)| "\([a-z][a-z-]*\)" :: rest/\1| Verb "\2" :: rest/' "$REAL_U/src/FS.GG.Coord.Cli/Options.fs"
+expect "rule 5: a dispatch this gate can no longer parse is exit 3 (no verdict) — never a green audit (#266)" \
+  3 "no verbs parsed out of it" "$REAL_U"
+
+# (g) ...and the same fail-closed on the SURFACE, not just the verb list. The verbs can parse perfectly
+#     while the WALK or the span reader finds nothing — a different break with the identical symptom, so
+#     it needs its own leg. Everything but the dispatch is removed: verbs still parse (34 of them), and
+#     no printed command survives, which is a gate that examined nothing and must say so.
+#
+#     `.fsi` GOES TOO, and forgetting it is what this leg caught when it was written: the gate reads
+#     BOTH suffixes, so a `-name '*.fs'` sweep leaves the signatures behind and the leg fails for a
+#     reason that has nothing to do with the rule (#648's shape — a sweep that silently skips its
+#     subject).
+#
+#     `Identity.fsi` STAYS, and the reason is the interesting part. Rule 4's own fail-closed guard runs
+#     FIRST and demands at least one MINT remedy under src/FS.GG.Coord.Cli — so a tree stripped to the
+#     dispatch alone trips rule 4 and never reaches rule 5, testing the wrong guard. `Identity.fsi`
+#     resolves it because its mint sits in a `///` COMMENT: rule 4 counts it (it scans lines), rule 5
+#     does not (it reads string literals only). That gap is exactly what makes rule 5's guard reachable
+#     — and it is why the two guards are not redundant: they audit different walks, and either can break
+#     while the other still sees its subject.
+REAL_V="$WORK/real-v"; cp -r "$REAL" "$REAL_V"
+find "$REAL_V/src" \( -name '*.fs' -o -name '*.fsi' \) \
+     ! -name 'Options.fs' ! -name 'Identity.fsi' -delete
+expect "rule 5: an engine that yields NO printed command at all is exit 3 — examining nothing is not a clean audit" \
+  3 "found NO printed command" "$REAL_V"
+
+# (h) A MULTI-LINE `"""` STRING IS PRINTED TOO — and it is the biggest one the tool has. `--help` is a
+#     101-line triple-quoted block whose interior lines contain no quote at all, so a line-at-a-time
+#     reader calls every one of them "not a string" and the most-read output in the engine becomes
+#     invisible to this rule. Caught reviewing this change; pinned here so it cannot come back.
+REAL_W="$WORK/real-w"; cp -r "$REAL" "$REAL_W"
+python3 - "$REAL_W/src/FS.GG.Coord.Cli/Options.fs" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+# inject a broken remedy INTO the --help block, on an interior line (no quotes of its own)
+t = t.replace("DECISION (pure — no board, no network):",
+              "  run it:  fsgg-coord-engine claim <issue>\n\nDECISION (pure — no board, no network):", 1)
+p.write_text(t)
+PY
+expect "rule 5: a broken remedy inside the multi-line \`--help\` block IS caught — 101 lines with no quote of their own (#931)" \
+  1 "this PRINTS \`fsgg-coord-engine claim\`" "$REAL_W"
+
+# (i) ...and a VERBATIM `@"…"` must not open a `"""` block. `Fake.fs` holds `@"""sub_issue_id""…"` — a
+#     regex — and with no verbatim branch the `@` is skipped, the `"""` behind it opens a block that
+#     never closes, and every remaining line of the FILE reads as printed. This leg is shaped to catch
+#     exactly that: the assertion is a COMMENT placed AFTER the regex, which is a finding only if the
+#     leak reached it. Verified to red with the verbatim branch removed — the realistic regression, a
+#     later reader "simplifying" the scanner.
+REAL_X="$WORK/real-x"; cp -r "$REAL" "$REAL_X"
+printf '\nlet private _re = Regex.Match(body, @"""sub_issue_id""\\s*:\\s*(\\d+)")\n' >>"$REAL_X/$ENGINE_FS"
+printf '// and now a COMMENT naming `fsgg-coord-engine claim` — after the verbatim regex\n' >>"$REAL_X/$ENGINE_FS"
+expect "rule 5: a verbatim \`@\"…\"\` does not open a triple block that swallows the rest of the file (#931)" \
+  0 "ok: no literal worker id" "$REAL_X"
+
 echo
 echo "worker-id-attractor fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::worker-id-attractor fixture FAILED"; exit 1; }
