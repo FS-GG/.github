@@ -2,7 +2,7 @@
 # The machine-readable source of truth for who depends on whom and which contract
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
-schemaVersion: 1
+schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
 updated: "2026-07-17"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
@@ -47,7 +47,14 @@ repos:
 #                   can fix it. Do not move it back into a reusable workflow.
 #     owner         (required) the repo key (see repos:) that is the source of truth for the surface.
 #     surface       (required) prose/one-line description of the on-disk or package surface.
-#     consumers     (required) repo keys that depend on the contract.
+#     consumers     (required, MAY BE EMPTY as of schemaVersion 2 / .github#1114) repo keys that depend on
+#                   the contract. A present-but-EMPTY `consumers: []` is a legal, honest value — it says
+#                   "this contract has no in-graph consumer", the true state of a package-bearing contract
+#                   that nothing restores (`new-sdd-workspace`: a `dotnet new` tool humans install). It is
+#                   NOT the same as OMITTING the field (still an error). The three-state distinction
+#                   (absent / empty / non-empty) is modelled in Fsgg.Registry as `ConsumerDeclaration`
+#                   (SDD#508, mirroring `MirrorDeclaration`); do NOT invent a fictional consumer to avoid
+#                   an empty list — `fsgg-surface-impact` would then enforce an edge that does not exist.
 #     package-version  present ONLY where the contract ships as a NuGet package (fsgg-contracts,
 #                   governance-reference-gate-set, fs-gg-ui-template, game-sim-core, game-scene-adapter,
 #                   fs-gg-audio) — the NEWEST version LIVE on the org feed (publish-before-flip FR-007:
@@ -422,7 +429,7 @@ contracts:
     consumers: [rendering, sdd, governance, templates]
     docs: "docs/build/README.md"
   - id: registry-schema
-    version: "1"            # == THIS file's top-level `schemaVersion` — the on-disk registry-document schema contract.
+    version: "2"            # == THIS file's top-level `schemaVersion` — the on-disk registry-document schema contract. → 2 (.github#1114, SDD#508 step 3): `consumers` grew to "required, may be empty" (three-state ConsumerDeclaration), the FIRST schema growth since this contract was registered. Publish-before-flip (ADR-0037): FS.GG.SDD.Cli 0.13.0 (the accepting validator) went live FIRST (SDD#516), the pin below advanced with this bump. PRIOR "1": the registered-but-never-bumped state.
     owner: sdd              # Fsgg.Registry (in FS.GG.Contracts) is the typed authority: RegistryDocument model + validateDocument.
     # .github#135 (review §6.9, epic #124): register the registry's OWN schema as a governed contract — the one
     # contract in the system that previously wasn't. Rationale (H2 + M5 together): the typed-validator investment
@@ -436,10 +443,14 @@ contracts:
     # NOTE (.github#686): ADR-0015 §3 words that obligation as "in the SAME PR that teaches Fsgg.Registry". THAT PR
     # CANNOT EXIST — for THIS contract exactly as for `skill-registry`: the schema DOCUMENT is this file (in .github)
     # and the VALIDATOR (Fsgg.Registry, in FS.GG.Contracts) lives in FS.GG.SDD, and no PR spans two repos. Nor can
-    # the pin advance to a CLI that has not been published yet. It has never bitten only because this schemaVersion
-    # has never been bumped. The real sequence is the org's own publish-before-flip (FR-007), two ORDERED PRs:
+    # the pin advance to a CLI that has not been published yet. The real sequence is the org's own
+    # publish-before-flip (FR-007), two ORDERED PRs:
     #   1. FS.GG.SDD teaches Fsgg.Registry the field/rule and PUBLISHES a CLI carrying it;
     #   2. .github THEN bumps this `version` + the top-level schemaVersion and advances the pin to that CLI.
+    # RUN ONCE, EXACTLY THIS WAY (.github#1114, the schemaVersion 1→2 bump): SDD published FS.GG.Contracts 3.0.0 +
+    # FS.GG.SDD.Cli 0.13.0 (the three-state `consumers` validator, SDD#512/#516) FIRST, then this PR bumped and
+    # advanced the pin. The hazard above did not bite: 0.13.0 was measured to ACCEPT the un-bumped document too,
+    # so the pin could lead the bump on Renovate's PR without reddening step 2 (ADR-0037).
     # And note what counts as growth in the first place: an OPTIONAL, ADDITIVE, back-compatible field IS schema
     # growth (.github#686) — M5 above IS that defect, so "no consumer breaks" is its MECHANISM, not an exemption.
     #
@@ -456,7 +467,7 @@ contracts:
       registry/dependencies.yml DOCUMENT schema — the top-level `schemaVersion` scalar plus the field-vocabulary
       block (the schema-of-record comment near the head of this file). Modeled + validated by FS.GG.Contracts'
       Fsgg.Registry (RegistryDocument.load + validateDocument), shipped in the fsgg-sdd CLI (`fsgg-sdd registry
-      validate`). `version` tracks the on-disk schemaVersion (currently 1); the Fsgg.Registry code that reads it is
+      validate`). `version` tracks the on-disk schemaVersion (currently 2); the Fsgg.Registry code that reads it is
       a facet of the `fsgg-contracts` package version (advancing the schema advances both).
     consumers: [github]     # .github's own contract-coherence gate validates THIS file against the schema.
     validator: >
@@ -623,27 +634,29 @@ contracts:
     # "the fleet is running current code" — those are different facts (epic #266).
     surface: "the `fsgg-coord-engine` CLI verb surface (claim/take/batch/who/widen/say/landable/done/release/flush/…) + its exit-code contract, emitted from src/FS.GG.Coord.Core/Protocol.fs; shipped as the FS.GG.Coord.Cli dotnet tool"
     consumers: [sdd, rendering, governance, templates, game, audio]   # the SIX coordination-kit receivers (registry/repos.yml `receives: coordination-kit`) — NOT the build-config four. `scripts/fsgg-coord` is kit-borne and resolves this package and `exec`s it, so a receiver that cannot restore it "has no coordination tool at all — not a slower one, none" (release-coord-engine.yml). A TOOL edge, not a contract-surface one, and real either way: fsgg-surface-impact reads this list to say who a verb/exit-code change must flag. `.github` itself is NOT listed — it resolves the engine via THE SOURCE BUILD (`scripts/fsgg-coord`'s own name for that tier; the tier NUMBERS moved in #1018 and the names cannot rot, so this names it), not by restoring the package.
-  # FS.GG.NewSddWorkspace IS STILL ABSENT, AND THAT IS NOW A DELIBERATE, RECORDED GAP — NOT AN
-  # OMISSION NOBODY NOTICED (which is the decision that produced .github#1067 in the first place).
-  # It is BLOCKED on FS-GG/FS.GG.SDD#508, filed from here: the typed validator refuses the only honest
-  # row it could have. MEASURED against `fsgg-sdd registry validate` 0.12.0, not inferred:
-  #
-  #   { "entry": "new-sdd-workspace", "rule": "MissingField",
-  #     "message": "Contract 'new-sdd-workspace' is missing a non-empty 'consumers'." }
-  #
-  # Nothing restores that package — it is a `dotnet new` template humans install, and this repo's own
-  # fixture builds it from SOURCE, not from the feed — so `consumers: []` is the true value and the
-  # schema will not carry it. The remaining moves are (a) invent a consuming repo, which is a lie a
-  # gate would then enforce, or (b) drop the row, which is how the inventory went off by two. Neither
-  # is available, so the row waits on the schema, in the open, with its blocker named.
-  #
-  # Fsgg.Registry lives in FS.GG.SDD, so .github CANNOT fix this: no PR spans both repos, and growing
-  # the schema is a governed two-ordered-PR change (see the schemaVersion note above) — SDD teaches the
-  # validator and publishes a CLI, THEN .github bumps + pins to it. The real question is what this
-  # registry IS: a contract GRAPH (where a consumerless package does not belong) or the org's package
-  # INVENTORY (where it must). That is an architectural call, which is why it is filed rather than
-  # guessed. It is the coord-engine defect ASLEEP: 0 commits sit unreleased today, so it is invisible
-  # rather than fixed, and .github#1075's detector must acquire it as a subject when the row lands.
+  - id: new-sdd-workspace
+    version: "0.3.0"          # SOURCE SemVer — scripts/NewSddWorkspace/NewSddWorkspace.fsproj <Version>, in THIS repo. release-new-sdd-workspace.yml evaluates that property (dotnet msbuild -getProperty:Version) and requires any `new-sdd-workspace/v<version>` tag to match it, so the fsproj is the source of truth and the tag is a coherence check against it. == package-version: no source-outran-feed gap today (feed newest 0.3.0 on BOTH feeds, verified 2026-07-17).
+    package-version: "0.3.0"  # FEED newest, VERIFIED LIVE 2026-07-17 on nuget.pkg.github.com/FS-GG AND nuget.org (both serve 0.3.0 + 0.3.0-preview.1; 0.3.0 is the stable newest). publish-before-flip (FR-007): the package has been live since before this row. `check-feed-coherence.py` maps this contract to FS.GG.NewSddWorkspace (CONTRACT_PACKAGES) — a package-version with no mapping is a hard error there.
+    owner: github             # Registry.fs resolves owner against repoIds + the literal `github`. `.github` owns the scaffolder: ADR-0016 retired FS.GG.Templates' local `new-fullstack` for this single org CLI, and its release workflow lives here because the tool does (mirrors coord-engine).
+    # ADR-0016's single org scaffolder (renamed new-sdd-fullstack → new-sdd-workspace, package
+    # FS.GG.NewSddFullstack → FS.GG.NewSddWorkspace). A `dotnet new`-style CLI humans install
+    # (`dotnet tool install --global FS.GG.NewSddWorkspace`) that wraps the FS.GG.Templates `rendering`
+    # provider to scaffold a full-stack SDD workspace in one command. Dual-published (org feed +
+    # nuget.org via ADR-0012/0013 OIDC), release-new-sdd-workspace.yml.
+    #
+    # WHY consumers: [] AND WHY THAT IS NOT A DEFECT (.github#1067 → SDD#508, the decision this row
+    # completes). Nothing RESTORES this package — it is installed by a human, and this repo's own
+    # fixture builds it from SOURCE, not the feed — so it has no in-graph consumer, and `consumers: []`
+    # is the HONEST value. Until schemaVersion 2 the typed validator refused it (`MissingField:
+    # …missing a non-empty 'consumers'`), which forced a false choice: invent a consuming repo (a lie
+    # `fsgg-surface-impact` would then enforce as a real edge) or drop the row (how the inventory went
+    # off by two). The human RESOLVED it (SDD#508): this registry is the org's package INVENTORY, where
+    # a consumerless-but-published package MUST appear — not a pure contract GRAPH, where it would not.
+    # The three-state `ConsumerDeclaration` (absent=error / empty=this / non-empty) makes "deliberately
+    # no consumer" distinct from "forgot one", mirroring `MirrorDeclaration`. So: do NOT add a consumer
+    # here to make a gate happy — the empty list IS the recorded decision.
+    surface: "the `new-sdd-workspace` scaffolder CLI (package FS.GG.NewSddWorkspace) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider (ADR-0016); shipped as a dotnet tool"
+    consumers: []             # DELIBERATELY EMPTY — see the block above. A `dotnet new` tool humans install; nothing in the graph restores it, so it has no consumer edge. schemaVersion 2 (.github#1114) makes this a legal, honest value distinct from an OMITTED `consumers`.
 
 # Hard dependency edges (downstream -> upstream).
 dependencies:
@@ -1000,7 +1013,8 @@ coherence:
       validator pin advances with it. BEFORE: schema growth was invisible drift — H2 (.github#127) found the
       FS.GG.SDD.Cli pin frozen at 0.2.1 for three minors while the registry grew one-off fields under additive
       tolerance (M5), degrading the typed gate toward a YAML-parses check. NOW: (1) the `registry-schema` contract
-      entry versions the on-disk registry-document schema (== top-level `schemaVersion`, currently 1) with owner
+      entry versions the on-disk registry-document schema (== top-level `schemaVersion`, currently 2 — grown
+      once, by .github#1114/SDD#508 giving `consumers` its three-state "required, may be empty") with owner
       sdd / consumer github; (2) ADR-0015 makes schema growth a REGISTERED contract-change — a new Fsgg.Registry
       field/rule (INCLUDING an optional, additive, back-compatible one — .github#686: M5 above IS that defect, so
       "no consumer breaks" is its mechanism, not an exemption) bumps this contract `version` + the file's
@@ -1011,10 +1025,12 @@ coherence:
       (3) the pin<->feed coupling (org Renovate annotation manager, .github#127) keeps the validator
       current structurally so the additive-tolerance degradation cannot silently recur. The .github
       contract-coherence gate is the consumer and continues to validate this file via `fsgg-sdd registry validate`
-      (the typed Fsgg.Registry validator — see [[registry-validator-typed]]). No behavioural gate change lands
-      with the registration itself (schemaVersion stays 1; `fsgg-sdd registry validate` stays valid/0-diagnostics
-      over this file); this row records the GOVERNANCE decision, enforced going forward by ADR-0015 + the field-
-      vocabulary comment's schema-of-record.
+      (the typed Fsgg.Registry validator — see [[registry-validator-typed]]). No behavioural gate change landed
+      with the registration itself in #135 (schemaVersion stayed 1 then; `fsgg-sdd registry validate` stayed
+      valid/0-diagnostics over this file); this row records the GOVERNANCE decision, enforced going forward by
+      ADR-0015 + the field-vocabulary comment's schema-of-record. FIRST EXERCISED at .github#1114 (SDD#508 step 3):
+      schemaVersion 1→2 gave `consumers` its three-state "required, may be empty", validated end-to-end against the
+      published FS.GG.SDD.Cli 0.13.0 before the pin advanced — the two-ordered-PR sequence run exactly as designed.
     impact: "Registry schema growth is now a tracked contract-change, not silent additive drift; the gate's validator pin advancing in lockstep with the schema is a recorded obligation (ADR-0015) rather than an unowned one-off (H2/M5)."
     tracking: "https://github.com/FS-GG/.github/issues/135"
   - id: apicompat-publicapi-gate
