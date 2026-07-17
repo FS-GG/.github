@@ -118,7 +118,7 @@ module Chores =
         session: Types.SessionId option ->
         owner: string ->
         repo: string ->
-        items: Types.Item list ->
+        observed: Chore.Board ->
             (Chore.Chore * Types.Ref) option
 
     /// RENDER AN OFFER for a human worker — the `Statement` the chore already carries, plus what holding

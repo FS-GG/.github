@@ -77,6 +77,13 @@ module Chore =
             | AtNext -> "next"
             | AfterDone -> "done"
 
+    /// See the .fsi: the scope rides in the type because `Item list` could not say whether it was the whole
+    /// board or a slice, and `safePoint` answered the idleness question honestly about a board that could
+    /// not answer it (#1086).
+    type Board =
+        | Whole of Item list
+        | Filtered of Item list
+
     [<Sealed>]
     type SafePoint internal (boundary: Boundary, worker: WorkerId, items: Item list) =
         member _.Boundary = boundary
@@ -94,11 +101,18 @@ module Chore =
         | Some(claim, _) -> claim.Worker = worker
         | None -> false
 
-    let safePoint (boundary: Boundary) (worker: WorkerId) (items: Item list) : SafePoint option =
-        if items |> List.exists (holdsLock worker) then
-            None
-        else
-            Some(SafePoint(boundary, worker, items))
+    let safePoint (boundary: Boundary) (worker: WorkerId) (observed: Board) (subject: Item list) : SafePoint option =
+        match observed with
+        // #1086 — a slice cannot report us idle. A live claim of ours OUTSIDE the filter is invisible to
+        // this list, and `List.exists` over it would answer "no claim found" for a worker who is mid-item
+        // somewhere else. That is "I could not tell" wearing the costume of "no" (#266), and it is the one
+        // answer this function must never give.
+        | Filtered _ -> None
+        | Whole items ->
+            if items |> List.exists (holdsLock worker) then
+                None
+            else
+                Some(SafePoint(boundary, worker, subject))
 
     /// The chores ONE item's observed state implies.
     ///

@@ -90,7 +90,7 @@ let ``an idle worker on a board with a cleared blocker is offered the chore, and
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
 
-    match Chores.offer transport Chore.AtNext me None "FS-GG" ".github" blockerClearedBoard with
+    match Chores.offer transport Chore.AtNext me None "FS-GG" ".github" (Chore.Whole blockerClearedBoard) with
     | None -> failwith "expected an offer: the worker is idle and the board implies a chore"
     | Some(chore, got) ->
         // The chore names the SUBJECT it observed, not the lock it was serialised on. Conflating those
@@ -117,7 +117,7 @@ let ``a worker holding a live claim is offered NOTHING, and no lock is attempted
                   LeaseHeld
               )) ]
 
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" held)
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" (Chore.Whole held))
 
 [<Fact>]
 let ``a clean board costs NO REST — the lock is taken only when there is a chore to take it for`` () =
@@ -127,7 +127,7 @@ let ``a clean board costs NO REST — the lock is taken only when there is a cho
     // makes this an assertion rather than a comment.
     let clean = [ item 733 Ready Open [] None ]
 
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" clean)
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" (Chore.Whole clean))
 
 [<Fact>]
 let ``a repo with no chore lock offers nothing, and never asks the network`` () =
@@ -137,7 +137,7 @@ let ``a repo with no chore lock offers nothing, and never asks the network`` () 
     // offers nothing rather than broadcasting.
     let audit = blockerClearedBoard |> List.map (fun i -> { i with Ref = { i.Ref with Repo = "FS.GG.Audio" } })
 
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" "FS.GG.Audio" audit)
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" "FS.GG.Audio" (Chore.Whole audit))
 
 /// The same cleared-blocker condition, on a row belonging to a DIFFERENT repo. The org board is one board
 /// for seven repos, so this is what a bare `next` (no `--repo`, hence `Scan.scope None`) actually hands us.
@@ -155,7 +155,7 @@ let ``a chore is NEVER offered under another repo's lock — the subject and the
     // repos' locks could each be handed the same chore, which is condition 1 defeated by the mechanism meant
     // to enforce it. `unreachable`: the rows are dropped before the lock is ever reached, so this costs
     // nothing on a board whose chores all belong to somebody else.
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" otherRepoBoard)
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" (Chore.Whole otherRepoBoard))
 
 [<Fact>]
 let ``a worker mid-item in ANOTHER repo is not idle — idleness is asked of the WHOLE board`` () =
@@ -178,7 +178,7 @@ let ``a worker mid-item in ANOTHER repo is not idle — idleness is asked of the
 
     let board = busyElsewhere :: blockerClearedBoard
 
-    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" board)
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" (Chore.Whole board))
 
 [<Fact>]
 let ``a cross-repo board still yields THIS repo's chore, under THIS repo's lock`` () =
@@ -188,7 +188,7 @@ let ``a cross-repo board still yields THIS repo's chore, under THIS repo's lock`
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
 
-    match Chores.offer transport Chore.AtNext me None "FS-GG" ".github" (otherRepoBoard @ blockerClearedBoard) with
+    match Chores.offer transport Chore.AtNext me None "FS-GG" ".github" (Chore.Whole(otherRepoBoard @ blockerClearedBoard)) with
     | None -> failwith "expected the .github chore: a foreign row must not suppress this repo's own"
     | Some(chore, got) ->
         Assert.Equal(ref' 733, chore.Subject)
@@ -203,7 +203,7 @@ let ``a short-id repo still finds its lock — the scope is the LOCK's canonical
     let transport =
         scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
 
-    match Chores.offer transport Chore.AtNext me None "FS-GG" ".GitHub" blockerClearedBoard with
+    match Chores.offer transport Chore.AtNext me None "FS-GG" ".GitHub" (Chore.Whole blockerClearedBoard) with
     | None -> failwith "expected an offer: `.GitHub` is `.github`, and its rows are this lock's own"
     | Some(chore, got) ->
         Assert.Equal(ref' 733, chore.Subject)
@@ -222,4 +222,36 @@ let ``losing the lock race offers nothing — the rival is draining this repo, a
               ok (comments [ marker 901 "kite-461"; marker 902 "vole-418" ]) // they got there first
               ok "" ] // so we withdraw
 
-    Assert.Equal(None, Chores.offer transport Chore.AtNext me None "FS-GG" ".github" blockerClearedBoard)
+    Assert.Equal(None, Chores.offer transport Chore.AtNext me None "FS-GG" ".github" (Chore.Whole blockerClearedBoard))
+
+// ---- #1086: a FILTERED board is refused, and refused for FREE ------------------------------------------
+//
+// The composition's own fail-open. Every leg above hands `offer` a board it built WHOLE — which is what the
+// contract always asked for and what nothing enforced. `next --repo <r>` handed it a board `Scan.scope` had
+// already filtered, so the idleness question was put to a list that could not answer it: our claim in another
+// repo is not in it, and invisible read as absent. The scope now rides in the type, so "I have only a slice"
+// is expressible and `safePoint` refuses it.
+
+[<Fact>]
+let ``#1086: a FILTERED board offers nothing, and spends NOTHING finding that out`` () =
+    // `unreachable` failwiths on the FIRST transport call, so a green here asserts the refusal never touched
+    // the network — a claim about call SHAPE that `Assert.Equal(None, ...)` could not make on its own. It
+    // matters because the budget it would spend is REST, the one the item CAS itself lives on (ADR-0034 §3).
+    //
+    // The board carries a REAL chore, so the refusal is the FILTERING talking rather than an empty queue —
+    // see the control leg below, which offers on exactly these rows.
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" (Chore.Filtered blockerClearedBoard))
+
+[<Fact>]
+let ``#1086: the SAME rows offer when the board is WHOLE — the refusal above is the scope, not the rows`` () =
+    // The control, and the leg above is worthless without it: without this, that assertion would pass against
+    // a board that simply had no chore on it, and would keep passing if `Filtered` were quietly made to mean
+    // nothing at all. Same rows, same worker, one word different.
+    let transport =
+        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
+
+    match Chores.offer transport Chore.AtNext me None "FS-GG" ".github" (Chore.Whole blockerClearedBoard) with
+    | None -> failwith "a WHOLE board carrying a real chore must offer it — otherwise the Filtered leg proves nothing"
+    | Some(chore, got) ->
+        Assert.Equal(ref' 733, chore.Subject)
+        Assert.Equal(lockRef, got)

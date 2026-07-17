@@ -265,16 +265,52 @@ module Chore =
         /// board A and spent on board B would be a capability proving nothing about what it authorised.
         member internal Items: Item list
 
+    /// THE BOARD AN IDLENESS QUESTION MAY BE PUT TO — and, more to the point, whether it can answer.
+    ///
+    /// **`Item list` could not say, and that is what let condition 3 fail open** (#1086). "Is this worker
+    /// idle?" is a question about the WHOLE board: a worker mid-item in FS.GG.SDD is not idle while asking
+    /// about `.github`. `safePoint` answered it honestly about whatever list it was handed — and `next
+    /// --repo <r>` hands it a list `Scan.scope` has already filtered, in which that SDD claim does not
+    /// appear. Invisible read as absent, the worker read as idle, and the guard handed them the side-quest
+    /// it exists to withhold.
+    ///
+    /// So the scope rides IN THE TYPE. A bare list cannot reach `safePoint` any more; the caller has to say
+    /// which it has, and the only place `Whole` is constructible is where the unfiltered read happens.
+    type Board =
+        /// Every row the scan returned, UNFILTERED by repo — `Scan.scope None`. A live claim of ours in any
+        /// repo is visible here, so idleness derived from it is honest.
+        | Whole of Item list
+
+        /// A slice: `--repo` filtered it, or a caller narrowed it. It CANNOT answer the idleness question —
+        /// a claim outside the filter is invisible to it, and invisible is not absent (#266). Carried as a
+        /// case rather than forbidden outright so that "I have only a slice" is a thing the type can SAY,
+        /// and `safePoint` can refuse it, instead of a mistake it cannot see.
+        | Filtered of Item list
+
     /// MINT A `SafePoint` — the only door, and it looks rather than trusts.
     ///
-    /// `None` when this worker holds a live claim anywhere in `items`: that worker is mid-lease with a live
-    /// touch-set, and an unbounded side-quest is exactly what must not be handed to it. The evidence is
+    /// `None` when this worker holds a live claim anywhere in `observed`: that worker is mid-lease with a
+    /// live touch-set, and an unbounded side-quest is exactly what must not be handed to it. The evidence is
     /// DERIVED from the board we just read, never asserted by the caller — a caller that could pass
     /// `iAmIdle = true` is a caller that can be wrong, and this is the argument that stops the offer.
     ///
+    /// `None` ALSO when `observed` is `Filtered`, and that is #1086's fix: a board that cannot see our other
+    /// claims cannot report us idle. "I could not tell" is not a yes (#266), and here it never reaches the
+    /// call sites as a yes because it is not expressible.
+    ///
+    /// **EVIDENCE AND SUBJECT ARE TWO ARGUMENTS, because they are two sets and always were.** Idleness is a
+    /// fact about the WORKER, so it is asked of the whole board; a chore is a fact about a REPO, so it is
+    /// derived over that repo's rows (ADR-0041's lock is per-repo — deriving over more would hand a worker
+    /// one repo's chore under another's lock). `Chores.offer` used to fake this by minting TWICE — once over
+    /// the board for idleness, once over the scoped subject to spend — and leaning on the second being a
+    /// subset of the first. One mint, two arguments, no subset reasoning to get wrong.
+    ///
+    /// `subject` is what the resulting `SafePoint` carries, so `offer` still reads its board FROM the
+    /// capability and cannot be asked about a different one.
+    ///
     /// A stale-but-unreaped claim of our own counts as held: the lock is broken by `reap`, not by the clock
     /// (#461/#581), and its touch-set is still reserved.
-    val safePoint: boundary: Boundary -> worker: WorkerId -> items: Item list -> SafePoint option
+    val safePoint: boundary: Boundary -> worker: WorkerId -> observed: Board -> subject: Item list -> SafePoint option
 
     /// DERIVE EVERY CHORE THIS BOARD STATE IMPLIES. Pure, total, and the ONLY constructor of a `Chore`.
     ///
