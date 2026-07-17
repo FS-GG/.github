@@ -154,6 +154,21 @@ jobs:
             > /tmp/report.json 2> /tmp/err.txt
           rc=$?
           cat /tmp/err.txt >&2
+
+          # SAY WHAT YOU FOUND (#937). `--json` makes stdout the machine report, so without this the
+          # bot's own account of the run goes into a FILE and never reaches the log: a green run
+          # printed nothing at all, which reads exactly like "there was nothing to do" — the silence
+          # this workflow's header spends forty lines promising to abolish, reproduced inside it.
+          # Run 29547328129 is the proof: green, every later step skipped, empty log, while the bot
+          # had in fact classified 0.11.0 and found a real flip. It is narration of data already in
+          # hand, so it cannot fail the run — but `jq .` on an empty file would, hence the guard.
+          echo "--- what the bot found ---"
+          [ -s /tmp/report.json ] && jq . /tmp/report.json || echo "(no report — see the error above)"
+          if [ -s /tmp/pr-body.md ]; then
+            echo "--- the PR body it would post ---"
+            cat /tmp/pr-body.md
+          fi
+
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
           case "$rc" in
             0) echo "changed=$(jq -r '.changed' /tmp/report.json)" >> "$GITHUB_OUTPUT" ;;
@@ -277,6 +292,31 @@ jobs:
                   --jq '"opened PR #\(.number)  \(.html_url)"'
           fi
 
-      - name: Nothing to do
-        if: steps.run.outputs.rc == '0' && steps.run.outputs.changed == 'false'
-        run: echo "The row already matches the feed. No PR opened."
+      # EVERY terminal state names itself, out loud (#937). This used to be a single `Nothing to do`
+      # step gated on `changed == 'false'`, which meant the OTHER endings — the dry run, and the
+      # PR-opened path — ended in silence. Four different facts ("nothing owed", "PR opened",
+      # "a flip is owed and dry-run withheld it", "a human must settle it") produced one identical
+      # green tick, so the log could not tell a reader which had happened. `always()` because a
+      # summary that only prints on the happy path is a summary you cannot trust when it matters.
+      - name: Say which ending this was
+        if: always()
+        env:
+          RC: ${{ steps.run.outputs.rc }}
+          CHANGED: ${{ steps.run.outputs.changed }}
+          BRANCH: ${{ steps.push.outputs.branch }}
+          DRY: ${{ inputs.dry-run }}
+        run: |
+          set -uo pipefail
+          case "${RC}:${CHANGED}" in
+            0:false) echo "NOTHING OWED — the row already matches the feed. No PR opened." ;;
+            0:true)
+              if [ -n "${BRANCH}" ]; then
+                echo "FLIP OPENED — the standing PR carries it. Read the 'needs a human' section."
+              else
+                echo "FLIP WITHHELD — a flip IS owed and dry-run=${DRY} suppressed the push."
+                echo "The diff it would land is printed in the reconcile step above."
+              fi ;;
+            1:*) echo "FINDING — the bot refused to write; an issue carries it. Nothing landed." ;;
+            2:*) echo "DEFECT — the bot could not read its subject. This is NOT 'the registry is fine'." ;;
+            *)   echo "::warning::the reconcile step produced no verdict (rc='${RC}'). Treat this run as having told you NOTHING." ;;
+          esac
