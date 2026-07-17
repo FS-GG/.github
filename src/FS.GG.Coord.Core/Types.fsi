@@ -235,3 +235,38 @@ module Types =
     /// Merging them would reintroduce #437 in one direction or put `"no Status at all"` on the wire in
     /// the other. Read `Chore.fs`'s comment before touching either.
     val statusWireName: s: BoardStatus -> string
+
+    /// **THE BLOCKER WIRE VOCABULARY: a `BlockerState` as the scan's JSON spells it, spelled ONCE.**
+    ///
+    /// This is the string `scan` emits and `Snapshot.parse` reads back — and, because `check-board` §3
+    /// selects on `.state` in `jq` rather than parsing, it is also the string a RECONCILER matches
+    /// against. Lower case, deliberately: an issue's own `state` is upper case on the wire and a
+    /// blocker's is not, and those two conventions are not to be "unified" (`check-board` says so).
+    ///
+    /// It exists because this vocabulary was TWO private copies pointing in OPPOSITE directions —
+    /// `Scan.blockerStateName` rendered it, `Snapshot.blockerState` parsed it — in two different
+    /// projects, with nothing asserting they were inverse. That is worse than #983's four copies, which
+    /// at least all faced the same way: a render/parse pair that disagrees is not a stale doc, it is an
+    /// engine that cannot read what it just wrote. MEASURED: `merged` -> `"MERGED"` in the renderer left
+    /// **775 tests green** (#1012), because `ScanRoundTripTests` exercised exactly one case and both
+    /// functions were `private`, so nothing could reach them.
+    ///
+    /// The bite is a SILENT FALSE CLEAN in `check-board` — its worst output by its own account. A
+    /// rendered `"MERGED"` matches no `jq` selector, every merged blocker reads as still-holding,
+    /// `BLOCKER-CLEARED` never fires, and items rot in `Blocked` behind work that shipped. That is #476
+    /// exactly: the gate shuts precisely when the blocking work is FINISHED.
+    ///
+    /// **THIS IS NOT THE PROSE VOCABULARY** — `Schedulability.blockerText` is, on the same terms
+    /// `statusWireName` is not `Schedulability.statusText`. Read that note above before touching either.
+    val blockerStateWireName: s: BlockerState -> string
+
+    /// The INVERSE, and it is DERIVED from `blockerStateWireName` rather than restating it — so the
+    /// vocabulary is spelled exactly once in this engine and the pair cannot drift.
+    ///
+    /// `None` means the string is not a blocker state at all. It is deliberately not `BlockerUnknown`:
+    /// that case means "the ref parsed and we could not learn its state", which is a fact about the
+    /// BLOCKER. A wire string we cannot read is a fact about the DOCUMENT, and collapsing the two would
+    /// let a corrupt snapshot read as a legitimately-unreadable blocker — a parse failure wearing a
+    /// verdict's clothes (#266). The caller decides how to fail; `Snapshot` reports it as a parse error
+    /// against the JSON path, which is what it did before this function existed.
+    val blockerStateOfWireName: s: string -> BlockerState option
