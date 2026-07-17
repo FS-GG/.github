@@ -225,6 +225,15 @@ module Options =
     /// not an argument, so the parser never sees it), and to be tested directly.
     val resolveRepo: raw: string -> string
 
+    /// An owner + repo → the CLOSED issue whose comments are that repo's CHORE-LOCK CAS subject (ADR-0041),
+    /// resolved through the SAME map as `--repo` (so `sdd`, `FS-GG/FS.GG.SDD` and `FS.GG.SDD` agree).
+    ///
+    /// `None` is the FAIL-CLOSED answer and the caller must treat it as one: no lock ⇒ `offer` refuses, never
+    /// broadcasts (#266). An owner the map does not know is always `None` — the numbers are FS-GG's issues,
+    /// and the owner is configurable, so a foreign owner would otherwise be handed a real ref naming an
+    /// unrelated issue. Embedded rather than read from `registry/repos.yml`: ADR-0042 / .github#1026.
+    val choreLockRef: owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
+
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>
 

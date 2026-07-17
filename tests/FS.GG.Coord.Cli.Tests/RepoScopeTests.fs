@@ -60,6 +60,81 @@ module RepoScopeTests =
         let once = Options.resolveRepo raw
         Assert.Equal(once, Options.resolveRepo once)
 
+    // ---- ADR-0042 / #1026: the chore-lock ref is EMBEDDED, and absent means SHUT ------------------------
+
+    /// The lock resolves through the SAME map as `--repo`, so every documented spelling of the one repo that
+    /// has a lock names the one issue (#1033). A caller that spells it `sdd`-style must not get a different
+    /// answer from one that spells it out.
+    [<Theory>]
+    [<InlineData(".github")>]
+    [<InlineData(".GitHub")>] // never a casing bug — the map is case-insensitive, like the roster
+    [<InlineData("FS-GG/.github")>]
+    let ``.github's chore lock resolves to the closed lock issue`` (repo: string) =
+        let expected: FS.GG.Coord.Types.Ref =
+            { Owner = "FS-GG"
+              Repo = ".github"
+              Number = 1033 }
+
+        Assert.Equal(Some expected, Options.choreLockRef "FS-GG" repo)
+
+    /// FAIL CLOSED, and this is the rule the whole feature rests on: ADR-0041 — "Absent ⇒ `offer` refuses. A
+    /// chore queue that cannot find its lock must offer nothing, never broadcast." The six receivers have no
+    /// lock issue yet (.github#733 creates them as it wires `offer`), so they are `None` on purpose. A repo
+    /// nobody rostered is `None` for the same reason.
+    [<Theory>]
+    [<InlineData("sdd")>]
+    [<InlineData("rendering")>]
+    [<InlineData("governance")>]
+    [<InlineData("templates")>]
+    [<InlineData("game")>]
+    [<InlineData("audio")>]
+    [<InlineData("FS.GG.Nonexistent")>]
+    [<InlineData("")>]
+    let ``a repo with no lock issue has no lock`` (repo: string) =
+        Assert.Equal(None, Options.choreLockRef "FS-GG" repo)
+
+    /// THE FAIL-OPEN THIS KEYING EXISTS TO REFUSE. The owner is CONFIGURABLE (`FSGG_COORD_OWNER`), and the
+    /// embedded numbers are FS-GG's issues. Keyed on the repo alone, a caller under any other owner would be
+    /// handed `<their-owner>/.github#1033` — a WELL-FORMED ref naming an unrelated issue in a repo that has
+    /// nothing to do with this org, i.e. a lock that protects nothing while reporting that it does. That is
+    /// #266's shape exactly, so an unknown owner has no lock rather than a wrong one.
+    [<Theory>]
+    [<InlineData("acme")>]
+    [<InlineData("FS-GG-fork")>]
+    [<InlineData("")>]
+    let ``an owner the map does not know has no lock, never a foreign one`` (owner: string) =
+        Assert.Equal(None, Options.choreLockRef owner ".github")
+
+    /// CANONICAL OUT, CASE-INSENSITIVE IN — `resolveRepo`'s contract, applied to the owner as well. Echoing
+    /// the caller's casing back would mint a Ref structurally UNEQUAL to the canonical one while `Short`
+    /// renders both `.github#1033`: two locks that compare different and print the same. A CAS whose subject
+    /// can silently split that way is not a lock, and no log line would ever show it.
+    [<Theory>]
+    [<InlineData("FS-GG")>]
+    [<InlineData("fs-gg")>]
+    [<InlineData("Fs-Gg")>]
+    let ``the lock ref is canonical however the owner was spelled`` (owner: string) =
+        let expected: FS.GG.Coord.Types.Ref =
+            { Owner = "FS-GG"
+              Repo = ".github"
+              Number = 1033 }
+
+        Assert.Equal(Some expected, Options.choreLockRef owner ".github")
+
+    /// The lock issue must never be confused with WORK. ADR-0041 puts three properties on it and the ref is
+    /// only sound while all three hold — closed, unlocked, and never on the board. Only the number is
+    /// checkable from here (the live issue's state is asserted by the PR that created it), but pinning the
+    /// number is what makes a silent renumber a red test rather than a lock on the wrong subject.
+    [<Fact>]
+    let ``the embedded lock number is pinned`` () =
+        match Options.choreLockRef "FS-GG" ".github" with
+        | Some r ->
+            Assert.Equal(1033, r.Number)
+            Assert.Equal(".github", r.Repo)
+            Assert.Equal("FS-GG", r.Owner)
+            Assert.Equal(".github#1033", r.Short) // `Short` drops the owner — Types.Ref
+        | None -> failwith "the .github chore lock must resolve — ADR-0042 embeds it"
+
     /// THE REGRESSION THAT MATTERS, and the one no per-verb test can give you: `--repo` is resolved by the
     /// PARSER, so it is resolved for EVERY verb — including any verb written after this test.
     ///
