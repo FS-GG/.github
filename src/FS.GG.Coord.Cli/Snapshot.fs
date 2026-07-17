@@ -304,11 +304,19 @@ module Snapshot =
                 let w = stringField path "worker" el |> Result.map WorkerId
                 let r = refOf path el
                 let age = intField path "ageSeconds" el
+                // #712/#581: absent means "no proof of life" (a claim within its lease), NOT "unknown".
+                let livePr =
+                    match optProp "livePr" el with
+                    | None -> Ok None
+                    | Some _ -> intField path "livePr" el |> Result.map Some
 
-                match w, r, age with
-                | Ok w, Ok r, Ok a -> Ok(Batch.LiveClaim(w, r, a))
-                | a, b, c ->
-                    [ a |> Result.map ignore; b |> Result.map ignore; c |> Result.map ignore ]
+                match w, r, age, livePr with
+                | Ok w, Ok r, Ok a, Ok pr -> Ok(Batch.LiveClaim(w, r, a, pr))
+                | a, b, c, d ->
+                    [ a |> Result.map ignore
+                      b |> Result.map ignore
+                      c |> Result.map ignore
+                      d |> Result.map ignore ]
                     |> collect
                     |> Result.map (fun _ -> Batch.UnknownHolder)
             | "batch-member" -> refOf path el |> Result.map Batch.BatchMember
@@ -468,10 +476,16 @@ module Snapshot =
         w.WriteStartObject()
 
         match h with
-        | Batch.LiveClaim(WorkerId worker, item, age) ->
+        | Batch.LiveClaim(WorkerId worker, item, age, livePr) ->
             w.WriteString("kind", "live-claim")
             w.WriteString("worker", worker)
             w.WriteNumber("ageSeconds", age)
+            // #712: the #581 proof of life must survive the cache, or a later reader reconstructs a
+            // liveness-less claim and the bug returns one layer down. Optional, and written ONLY when
+            // present, so a claim within its lease round-trips byte-identically (the common case).
+            match livePr with
+            | Some pr -> w.WriteNumber("livePr", pr)
+            | None -> ()
             writeRef w item
         | Batch.BatchMember item ->
             w.WriteString("kind", "batch-member")

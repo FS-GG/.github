@@ -321,7 +321,15 @@ let ``a live claim survives the round trip, and RESERVES its touch-set`` () =
 
             // A LIVE CLAIM RESERVES ITS TOUCH-SET. That reservation is what stops a second worker being
             // handed the same files, and it comes from the body we already read — one read, two uses.
-            Assert.Equal(1, List.length request.InFlight)
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                // #712: a claim WITHIN its lease carries NO proof of life — `livePr = None`. `None` is the
+                // ordinary case, never a phantom PR, and the field is not even written (byte-identical
+                // round trip), so nothing here could mistake a healthy claim for a PR-kept-alive one.
+                | Batch.LiveClaim(_, _, _, livePr) -> Assert.Equal(None, livePr)
+                | other -> failwith $"a live claim reserves as a LiveClaim — got %A{other}"
+            | other -> failwith $"exactly one reservation expected — got %A{other}"
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"scan failed: %A{e}"
 
@@ -357,7 +365,7 @@ let ``an OFF-BOARD claim reserves its touch-set - the board scan misses it, the 
             match request.InFlight with
             | [ r ] ->
                 match r.Holder with
-                | Batch.LiveClaim(WorkerId w, ref, _) ->
+                | Batch.LiveClaim(WorkerId w, ref, _, _) ->
                     Assert.Equal("puffin-h11", w)
                     Assert.Equal(99, ref.Number)
                 | other -> failwith $"the off-board reservation must name its holder — got %A{other}"
@@ -405,7 +413,7 @@ let ``a STALE off-board claim still RESERVES its touch-set - a lock is broken on
             match request.InFlight with
             | [ r ] ->
                 match r.Holder with
-                | Batch.LiveClaim(WorkerId w, ref, age) ->
+                | Batch.LiveClaim(WorkerId w, ref, age, _) ->
                     Assert.Equal("ghost-222", w)
                     Assert.Equal(99, ref.Number)
                     // The EXPIRED age survives — it is what turns the collision into a reap, not a wait.
@@ -419,6 +427,91 @@ let ``a STALE off-board claim still RESERVES its touch-set - a lock is broken on
             with
             | Green result -> Assert.Empty(result.Chosen)
             | other -> failwith $"an overlap with a stale-but-unreaped claim is not schedulable — got %A{other}"
+        | Error e -> failwith $"parse failed: %A{e}"
+    | Error e -> failwith $"scan failed: %A{e}"
+
+[<Fact>]
+let ``#712 a STALE off-board claim held open by a PR carries livePr on its reservation - arm B`` () =
+    // #712/#581. A lapsed lease whose `item/<n>-*` PR is still open is NOT reapable — `reap` refuses it,
+    // so the tools must not call its reservation "reapable". The proof of life rides onto the reservation
+    // as `livePr = Some pr`, survives the scan→parse round trip, and is what lets `Batch` render the
+    // collision honestly (name the PR, no lease window) instead of advertising an action reap declines.
+    let stale =
+        """[{"id":701,"body":"<!-- fsgg:claim worker=ghost-222 lease=120 -->","updated_at":"2020-01-01T00:00:00Z"}]"""
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/pulls" then
+                // the item's own branch PR — server-side proof of life (#581).
+                ok """[{"number":777,"head":{"ref":"item/99-resume"}}]"""
+            elif req.Path.EndsWith "/issues" then
+                ok """[{"number":99,"title":"off-board, stale, PR alive","state":"open","body":"Paths: src/Dead"}]"""
+            elif req.Path.EndsWith "/99/comments" then
+                ok stale
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // the board candidate #42 carries no marker of its own
+            else
+                ok (issueBody "Paths: src/Live")) // #42's body — disjoint from the stale claim
+
+    match Scan.snapshot transport [ aRow ] None false None 120 with
+    | Ok(document, _) ->
+        match Snapshot.parse document with
+        | Ok request ->
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                | Batch.LiveClaim(WorkerId w, ref, age, livePr) ->
+                    Assert.Equal("ghost-222", w)
+                    Assert.Equal(99, ref.Number)
+                    Assert.True(age > 120 * 60, $"a stale claim must carry its expired age, got {age}s")
+                    // THE POINT: the PR that keeps this lapsed claim alive survives to the reservation.
+                    Assert.Equal(Some 777, livePr)
+                | other -> failwith $"the PR-alive stale claim must reserve, named, with livePr — got %A{other}"
+            | other -> failwith $"exactly one reservation expected — got %A{other}"
+        | Error e -> failwith $"parse failed: %A{e}"
+    | Error e -> failwith $"scan failed: %A{e}"
+
+[<Fact>]
+let ``#712 a STALE BOARD claim held open by a PR carries livePr, from the one liveness read - arm A`` () =
+    // #712/#581, the board loop. The candidate's claim block ALREADY reads the proof of life to decide
+    // whether the item is offered; the reservation reuses that same read rather than probing again (the
+    // budget that dies first, #418). So the claim renders `lease-expired-pr-open` AND the reservation
+    // carries `livePr = Some pr` — the two must agree, because they come from one read.
+    let stale =
+        """[{"id":901,"body":"<!-- fsgg:claim worker=vole-418 lease=120 prev=Ready -->","updated_at":"2020-01-01T00:00:00Z"}]"""
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/pulls" then
+                ok """[{"number":888,"head":{"ref":"item/42-keep-going"}}]"""
+            elif req.Path.EndsWith "/issues" then
+                ok "[]" // no off-board claim; the board candidate #42 is the whole story here
+            elif req.Path.EndsWith "/comments" then
+                ok stale
+            else
+                ok (issueBody "Paths: src/Audio/**"))
+
+    match Scan.snapshot transport [ aRow ] None false None 120 with
+    | Ok(document, _) ->
+        match Snapshot.parse document with
+        | Ok request ->
+            // The claim block reports the PR-open liveness (this is what withholds the item from `take`).
+            match request.Candidates.[0].Item.Claim with
+            | Some(claim, LeaseExpiredPrOpen pr) ->
+                Assert.Equal(WorkerId "vole-418", claim.Worker)
+                Assert.Equal(888, pr)
+            | other -> failwith $"the claim block must render the PR-open liveness — got %A{other}"
+
+            // AND the reservation carries the same PR — one read, both consumers agree.
+            match request.InFlight with
+            | [ r ] ->
+                match r.Holder with
+                | Batch.LiveClaim(WorkerId w, ref, _, livePr) ->
+                    Assert.Equal("vole-418", w)
+                    Assert.Equal(42, ref.Number)
+                    Assert.Equal(Some 888, livePr)
+                | other -> failwith $"the board reservation must carry livePr — got %A{other}"
+            | other -> failwith $"exactly one reservation expected — got %A{other}"
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"scan failed: %A{e}"
 

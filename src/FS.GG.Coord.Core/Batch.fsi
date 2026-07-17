@@ -25,7 +25,14 @@ module Batch =
     type Holder =
         /// A live claim. There is a worker to talk to and a lease to wait out — this is the only
         /// holder for which "wait ~Nm" is a truthful thing to tell an operator.
-        | LiveClaim of worker: WorkerId * item: Ref * ageSeconds: int
+        ///
+        /// `livePr` carries the #581 proof of life: `Some pr` when the holder's lease has lapsed but an
+        /// open `item/<n>-*` PR keeps the claim alive — so it is NOT reapable and there is no lease
+        /// window to wait out (talk to the worker instead). `None` is an ordinary claim within its
+        /// lease. It must NEVER mean "we could not read the PR state": a liveness that could not be read
+        /// never reaches here (it fails closed upstream), so `None` is always "no proof of life", which
+        /// is what lets `KnownLiveWork` be derived from it (`Batch.fs`) rather than hardcoded (#712).
+        | LiveClaim of worker: WorkerId * item: Ref * ageSeconds: int * livePr: int option
 
         /// An item already chosen into THIS batch. It frees at the end of this run, and no lease
         /// governs it.

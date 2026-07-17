@@ -132,7 +132,7 @@ module BatchTests =
 
         let d = r.Decisions |> List.find (fun d -> d.Item.Ref.Number = 2)
 
-        Assert.Equal(Some(LiveClaim(WorkerId "w-alice", ref 1, 900)), d.CollidedWith)
+        Assert.Equal(Some(LiveClaim(WorkerId "w-alice", ref 1, 900, None)), d.CollidedWith)
 
     [<Fact>]
     let ``#581 an EXPIRED lease whose PR is open still reserves — the work is alive, so are its files`` () =
@@ -200,7 +200,7 @@ module BatchTests =
             { Owner = "FS-GG"
               Repo = "FS.GG.Rendering"
               Paths = Declared [ Matchable "scripts/build.sh" ]
-              Holder = LiveClaim(WorkerId "w-bob", refIn "FS-GG" "FS.GG.Rendering" 9, 60) }
+              Holder = LiveClaim(WorkerId "w-bob", refIn "FS-GG" "FS.GG.Rendering" 9, 60, None) }
 
         let r = run [ elsewhere ] [ item 1 [ "scripts/build.sh" ] ]
 
@@ -212,12 +212,12 @@ module BatchTests =
             { Owner = "FS-GG"
               Repo = "FS.GG.SDD"
               Paths = Declared [ Matchable "scripts/build.sh" ]
-              Holder = LiveClaim(WorkerId "w-bob", ref 9, 60) }
+              Holder = LiveClaim(WorkerId "w-bob", ref 9, 60, None) }
 
         let r = run [ here ] [ item 1 [ "scripts/build.sh" ] ]
 
         Assert.Empty(r.Chosen)
-        Assert.Equal(Some(LiveClaim(WorkerId "w-bob", ref 9, 60)), (List.head r.Decisions).CollidedWith)
+        Assert.Equal(Some(LiveClaim(WorkerId "w-bob", ref 9, 60, None)), (List.head r.Decisions).CollidedWith)
 
     // ================================================================================================
     // FAIL CLOSED: a reservation that reserves NOTHING refuses the whole batch.
@@ -234,7 +234,7 @@ module BatchTests =
             { Owner = "FS-GG"
               Repo = "FS.GG.SDD"
               Paths = Declared [ Unmatchable "**/*.fs" ]
-              Holder = LiveClaim(WorkerId "w-bob", ref 9, 60) }
+              Holder = LiveClaim(WorkerId "w-bob", ref 9, 60, None) }
 
         match schedule false None [ blind ] [ item 1 [ "src/A.fs" ] ] with
         | Red reasons ->
@@ -355,8 +355,8 @@ module BatchTests =
     /// #225 overlapping a MARKERLESS In-progress reserver (#226) — reserved, but no holder to name.
     let private starvedResult () =
         let inFlight =
-            [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 0))
-              resv "FS.GG.SDD" [ "src/Dead" ] (LiveClaim(WorkerId "ghost-222", ref 216, 99999))
+            [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 0, None))
+              resv "FS.GG.SDD" [ "src/Dead" ] (LiveClaim(WorkerId "ghost-222", ref 216, 99999, None))
               resv "FS.GG.SDD" [ "src/Ghostly" ] (Unowned(ref 226)) ]
 
         let candidates =
@@ -432,7 +432,7 @@ module BatchTests =
     let ``#428 when every lease is FRESH the soonest is a countdown, and no reap advice fires`` () =
         // No expired lease means nothing to reap — the advice must not appear (there is nothing to collect),
         // and the soonest lease is a real countdown a worker can decide against.
-        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60)) ]
+        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60, None)) ]
         let r = run inFlight [ item 221 [ "src/Starve/Sub" ] ]
         Assert.Empty(r.Chosen)
 
@@ -510,7 +510,7 @@ module BatchTests =
     let ``#636 a BUSY and UNTRIAGED queue reports BOTH — the claim must not hide the flag`` () =
         // The live board's exact shape, and the whole defect: reporting only the claims left the worker
         // waiting ~120m over items that needed a flag, not a lease.
-        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60)) ]
+        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60, None)) ]
         let r = run inFlight [ item 221 [ "src/Starve/Sub" ]; backlogItem 300 [ "src/Untriaged.fs" ] ]
         Assert.Empty(r.Chosen)
 
@@ -555,7 +555,7 @@ module BatchTests =
         // construction") that generated both. Two expired leases in two repos must yield two reap commands;
         // naming only the first leaves the other repo's lease uncollected under a line that counted it.
         let deadIn repo n =
-            resv repo [ $"src/Dead%d{n}" ] (LiveClaim(WorkerId $"ghost-%d{n}", refIn "FS-GG" repo (900 + n), 99999))
+            resv repo [ $"src/Dead%d{n}" ] (LiveClaim(WorkerId $"ghost-%d{n}", refIn "FS-GG" repo (900 + n), 99999, None))
 
         let cand repo n =
             { item n [ $"src/Dead%d{n}/Sub" ] with
@@ -660,7 +660,7 @@ module BatchTests =
         let held' = item 900 [ "src/held.fs" ] |> held "otter-1" 0
         let r =
             run
-                [ resv "FS.GG.SDD" [ "src/held.fs" ] (LiveClaim(WorkerId "otter-1", ref 900, 0)) ]
+                [ resv "FS.GG.SDD" [ "src/held.fs" ] (LiveClaim(WorkerId "otter-1", ref 900, 0, None)) ]
                 [ ringItem 1 [ 2 ]; ringItem 2 [ 1 ]; held'; item 901 [ "src/held.fs" ] ]
 
         let banner = starvedBanner 120 r
