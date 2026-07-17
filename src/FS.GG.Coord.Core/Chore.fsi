@@ -44,12 +44,27 @@ namespace FS.GG.Coord
 ///    time; only the reading of it was missing.
 ///
 ///    So this module still ships as Phase 1 shipped: **deliberately dead code with a live test suite.**
-///    `derive` is reachable from `lint`-shaped reporting and from tests; `offer` is reachable from NOTHING,
-///    and it must stay that way until .github#733 wires it at the safe point and adds the `perform` path
-///    that re-verifies with `isRetired` against a FRESH read. A chore queue that offers without a lock is
-///    not a smaller version of this feature — the design doc says so in as many words: *"without those four,
-///    it is a machine for manufacturing duplicate work and false green."* The subset is the failure mode, so
-///    the unwired state remains the honest one until then. See .github#733 and ADR-0041.
+///    `derive` is reachable from `ChoreTests` and from `offer`/`isRetired` beside it; `offer` is reachable
+///    from NOTHING — so **no shipped code path derives a chore, and not one of the five rules fires.** A
+///    condition they name is a condition nothing observes. That must stay true until .github#733 wires it at
+///    the safe point and adds the `perform` path that re-verifies with `isRetired` against a FRESH read.
+///
+///    This line used to say `derive` was "reachable from `lint`-shaped reporting and from tests", and the
+///    CONTRAST — two callers against `offer`'s none — read as a module that was half live. It never was.
+///    `lint` is `NO-TOUCH-SET`/`BAD-TOUCH-SET` and nothing else (#496/#945/#1013); its own comment defers the
+///    other rule families to a later slice, and `Client.fs`, where it lives, does not contain the string
+///    `Chore` at all. **The cost was not cosmetic** (.github#1047): #733 — the item that wires THIS module —
+///    was parked `Blocked by #1026` under the note *"self-healing: BLOCKER-CLEARED flips it back the moment
+///    #1026 resolves"*. #1026 resolved; nothing flipped it; #733 sat blocked on a condition only #733 could
+///    clear, invisible to every `take`, until it was reconciled by hand. **The rule that would have
+///    unwedged it is a rule this module does not run** — and a reader who believed this line had no way to
+///    know that. An `.fsi` that overstates its own reachability does not merely mislead: it gets items parked
+///    behind promises nothing can keep.
+///
+///    A chore queue that offers without a lock is not a smaller version of this feature — the design doc says
+///    so in as many words: *"without those four, it is a machine for manufacturing duplicate work and false
+///    green."* The subset is the failure mode, so the unwired state remains the honest one until then. See
+///    .github#733 and ADR-0041.
 ///
 /// 2. **VERIFIABLE, NOT MERELY REPORTED.** "The agent said it did it" is a promise, and a promise that
 ///    nothing re-checks is exactly the #510 shape — *the fix for fail-open must not itself fail open*. So a
