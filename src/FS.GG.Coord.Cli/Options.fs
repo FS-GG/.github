@@ -172,7 +172,11 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              PR object lags). Neither can green; both are pending (#737)
 
   claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
-  take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step
+  take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step. Ready only:
+         [--include-backlog]                 a Backlog row is passed over AT THE COLUMN unless you ask for
+                                             it (#636 — the flag has always worked here; only this line
+                                             was missing, so the remedy for a Backlog-starved queue was
+                                             undiscoverable from the tool that refused)
   release <ref> [--worker W] [--force]       drop the lock, restoring the column it overwrote;
           [--status S]                       --status lands it in S instead (#867: name the column you
                                              mean, e.g. `--status Blocked`, or it goes back to Ready)

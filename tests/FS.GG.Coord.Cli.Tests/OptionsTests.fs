@@ -110,6 +110,26 @@ module OptionsTests =
         Assert.True((parse [ "ready"; "--all" ] |> ok).All)
 
     [<Fact>]
+    let ``#636 take --include-backlog is READ, not merely tolerated`` () =
+        // THE USAGE BLOCK IS A PRESCRIBING SITE, and it is the one #919's gate cannot see: that gate scans the
+        // corpus (`docs/coordination`, `.claude/skills`), so the engine's own `--help` — the text a worker reads
+        // at the moment the tool refuses them — is checked by nothing.
+        //
+        // `take --include-backlog` has always worked, purely because `--include-backlog` is a GLOBAL parser flag
+        // and `take` threads `opts` into `scanAndDecide`. Nothing pinned either half. #636 documented the flag on
+        // `take`; this is what keeps that line from becoming the next `release --status` — a flag the usage
+        // advertises, the parser accepts, and the command drops on the floor.
+        Assert.True((parse [ "take"; "--include-backlog" ] |> ok).AllowBacklog)
+
+        // The reads that were already true, pinned beside it: one flag, one meaning, across the three verbs
+        // whose usage advertises it.
+        Assert.True((parse [ "batch"; "--include-backlog" ] |> ok).AllowBacklog)
+        Assert.True((parse [ "scan"; "--include-backlog" ] |> ok).AllowBacklog)
+
+        // And the default is Ready-only — the premise the banner's "passed over AT THE COLUMN" rests on.
+        Assert.False((parse [ "take" ] |> ok).AllowBacklog)
+
+    [<Fact>]
     let ``ready defaults leave the not-Done filter on — no status, not --all`` () =
         let o = parse [ "ready" ] |> ok
         Assert.Equal(None, o.Status)

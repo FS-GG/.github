@@ -441,6 +441,150 @@ module BatchTests =
         Assert.False(anyLine "EXPIRED" banner, $"no lease has expired, so no EXPIRED line, got %A{banner}")
         Assert.False(anyLine "collect them: fsgg-coord reap" banner, $"no reap advice when nothing expired, got %A{banner}")
 
+    // ================================================================================================
+    // #636 — THE UNTRIAGED QUEUE. A queue starved at the COLUMN is not busy, and it is not empty either.
+    // ================================================================================================
+    // The live board that prompted this: 7 items in Backlog, 2 behind live claims. The banner named only
+    // the claims — "soonest: lease frees in ~120m" — so `take` told a worker to wait two hours over seven
+    // items that were one flag away. `take --include-backlog` has always worked; nothing said so.
+
+    let private backlogItem n paths = { item n paths with Status = Backlog }
+
+    [<Fact>]
+    let ``#636 a queue withheld at the COLUMN says so, and names the flag that schedules it`` () =
+        let r = run [] [ backlogItem 1 [ "src/A.fs" ]; backlogItem 2 [ "src/B.fs" ] ]
+        Assert.Empty(r.Chosen)
+
+        let banner = starvedBanner 120 r
+
+        Assert.True(
+            anyLine "2 item(s) are in BACKLOG, and were passed over AT THE COLUMN" banner,
+            $"expected the withheld-at-the-column line, got %A{banner}"
+        )
+
+        Assert.True(
+            anyLine "fsgg-coord take --repo FS.GG.SDD --include-backlog" banner,
+            $"expected the remedy to name the flag AND the repo, got %A{banner}"
+        )
+
+    [<Fact>]
+    let ``#636 an untriaged queue is UNTRIAGED, not BUSY — there is no lease to wait out`` () =
+        // The #428 judgement, applied to the column: "BUSY" over a queue nobody holds would send a worker
+        // to wait out a lease that does not exist. No holder is named, no lease window is offered, and no
+        // reap is advertised — none of the three exists.
+        let r = run [] [ backlogItem 1 [ "src/A.fs" ] ]
+        let banner = starvedBanner 120 r
+
+        Assert.True(anyLine "this queue is UNTRIAGED, not empty" banner, $"expected the UNTRIAGED headline, got %A{banner}")
+        Assert.False(anyLine "BUSY" banner, $"nobody holds this queue, so it is not BUSY, got %A{banner}")
+        Assert.False(anyLine "QUEUED BEHIND LIVE CLAIMS" banner, $"no claim is queued behind, got %A{banner}")
+        Assert.False(anyLine "soonest" banner, $"no lease exists to name a window for, got %A{banner}")
+
+    [<Fact>]
+    let ``#636 the banner may NOT promise the withheld items are startable — the scheduler never asked`` () =
+        // THE HONESTY CONSTRAINT. Both items are Backlog; #2 is ALSO blocked, so it would not be startable
+        // even with the flag. The scheduler stops at the column and never evaluates the blocker, so the
+        // banner counts BOTH — and must therefore describe them as UNASKED, never as startable. Promising
+        // "2 items are startable" here would be #440's defect: asserting a cause we did not observe.
+        let blockedToo =
+            { backlogItem 2 [ "src/B.fs" ] with
+                Blockers =
+                    [ { Ref = Some(ref 999)
+                        Raw = (ref 999).Short
+                        State = BlockerOpen } ] }
+
+        let r = run [] [ backlogItem 1 [ "src/A.fs" ]; blockedToo ]
+        let banner = starvedBanner 120 r
+
+        Assert.True(anyLine "2 item(s) are in BACKLOG" banner, $"the column is checked first, so BOTH are withheld there, got %A{banner}")
+        Assert.True(anyLine "UNASKED, not no" banner, $"expected the honesty hedge, got %A{banner}")
+
+        // The defect would be a PROMISED COUNT — "2 item(s) are startable" / "would be startable" — which is
+        // a claim about #2 the scheduler never evaluated (it stopped at #2's column, before its blocker).
+        // The hedge above legitimately contains the words "are startable"; what must never appear is the
+        // assertion.
+        Assert.False(anyLine "item(s) are startable" banner, $"the banner may not promise a startable count it never computed, got %A{banner}")
+        Assert.False(anyLine "would be startable" banner, $"the banner may not promise startability it never computed, got %A{banner}")
+
+    [<Fact>]
+    let ``#636 a BUSY and UNTRIAGED queue reports BOTH — the claim must not hide the flag`` () =
+        // The live board's exact shape, and the whole defect: reporting only the claims left the worker
+        // waiting ~120m over items that needed a flag, not a lease.
+        let inFlight = [ resv "FS.GG.SDD" [ "src/Starve" ] (LiveClaim(WorkerId "tern-y99", ref 223, 60)) ]
+        let r = run inFlight [ item 221 [ "src/Starve/Sub" ]; backlogItem 300 [ "src/Untriaged.fs" ] ]
+        Assert.Empty(r.Chosen)
+
+        let banner = starvedBanner 120 r
+
+        Assert.True(anyLine "1 item(s) are QUEUED BEHIND LIVE CLAIMS" banner, $"the claim fact survives, got %A{banner}")
+        Assert.True(anyLine "soonest: lease frees in ~" banner, $"the lease window survives, got %A{banner}")
+        Assert.True(anyLine "1 item(s) are in BACKLOG" banner, $"the column fact must NOT be hidden by the claim, got %A{banner}")
+        Assert.True(anyLine "--include-backlog" banner, $"the remedy must survive alongside the wait, got %A{banner}")
+
+    [<Fact>]
+    let ``#636 WITH --include-backlog a Backlog row is scheduled, and no banner claims it was withheld`` () =
+        // The invariant the whole banner rests on: `WrongStatus Backlog` is reachable ONLY when the flag is
+        // absent. With it, the row falls through to the ordinary checks and is handed out — so there is
+        // nothing withheld to report, and no banner at all.
+        let r = schedule true None [] [ backlogItem 1 [ "src/A.fs" ] ] |> ok
+
+        Assert.Equal<int list>([ 1 ], chosenNumbers r)
+        Assert.Empty(starvedBanner 120 r)
+
+    [<Fact>]
+    let ``#636 an ORG-WIDE batch names EVERY repo it withheld from, not just the first`` () =
+        // A batch is NOT repo-scoped: `--repo` is optional, and without it the scan keeps every row on the
+        // org board. A remedy built from `List.head` would print one `take --repo` under a count spanning
+        // several — the worker runs it, addresses a subset, and the rest stay invisible with the line still
+        // claiming they were covered.
+        let other n paths =
+            { item n paths with
+                Ref = refIn "FS-GG" "FS.GG.Game" n
+                Status = Backlog }
+
+        let r = run [] [ backlogItem 1 [ "src/A.fs" ]; other 2 [ "src/B.fs" ] ]
+        let banner = starvedBanner 120 r
+
+        Assert.True(anyLine "2 item(s) are in BACKLOG" banner, $"both repos' items are counted, got %A{banner}")
+        Assert.True(anyLine "fsgg-coord take --repo FS.GG.SDD --include-backlog" banner, $"expected the SDD remedy, got %A{banner}")
+        Assert.True(anyLine "fsgg-coord take --repo FS.GG.Game --include-backlog" banner, $"expected the Game remedy, got %A{banner}")
+
+    [<Fact>]
+    let ``#636 an ORG-WIDE reap advice names EVERY repo with a dead lease`` () =
+        // The same defect, in the line six above the one #636 added — and the false premise ("repo-scoped by
+        // construction") that generated both. Two expired leases in two repos must yield two reap commands;
+        // naming only the first leaves the other repo's lease uncollected under a line that counted it.
+        let deadIn repo n =
+            resv repo [ $"src/Dead%d{n}" ] (LiveClaim(WorkerId $"ghost-%d{n}", refIn "FS-GG" repo (900 + n), 99999))
+
+        let cand repo n =
+            { item n [ $"src/Dead%d{n}/Sub" ] with
+                Ref = refIn "FS-GG" repo n }
+
+        let r = run [ deadIn "FS.GG.SDD" 1; deadIn "FS.GG.Game" 2 ] [ cand "FS.GG.SDD" 1; cand "FS.GG.Game" 2 ]
+        Assert.Empty(r.Chosen)
+
+        let banner = starvedBanner 120 r
+
+        Assert.True(anyLine "2 of those lease(s) have EXPIRED" banner, $"both dead leases are counted, got %A{banner}")
+        Assert.True(anyLine "fsgg-coord reap --repo FS.GG.SDD --apply" banner, $"expected the SDD reap, got %A{banner}")
+        Assert.True(anyLine "fsgg-coord reap --repo FS.GG.Game --apply" banner, $"expected the Game reap, got %A{banner}")
+
+    [<Fact>]
+    let ``#636 a Ready-starved queue gains no untriaged noise`` () =
+        // Silence when nothing was withheld at the column: a queue starved by blockers alone is still
+        // #440's per-item business, and an UNTRIAGED banner over it would be the noise #428 refuses.
+        let blocked =
+            { item 1 [ "src/A.fs" ] with
+                Blockers =
+                    [ { Ref = Some(ref 999)
+                        Raw = (ref 999).Short
+                        State = BlockerOpen } ] }
+
+        let r = run [] [ blocked ]
+        Assert.Empty(r.Chosen)
+        Assert.Empty(starvedBanner 120 r)
+
     [<Fact>]
     let ``#428 a lease over its clock but with a live PR is NOT reapable — no phantom EXPIRED, no reap advice`` () =
         // #581. A `HeldByLiveWork` claim is past its lease by the clock, yet its open PR proves the work is
