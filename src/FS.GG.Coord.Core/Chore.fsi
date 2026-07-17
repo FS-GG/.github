@@ -237,7 +237,10 @@ module Chore =
     type Boundary =
         /// At `next`: the worker is idle and about to pick up work anyway.
         | AtNext
-        /// After `done --flip`: the item is stamped and the claim is already dropped (#533).
+        /// After `done`: the item is stamped and the claim is already dropped (#533) — the two facts that
+        /// make it a safe point, and `done` establishes both with or without `--flip` (the column write is
+        /// unconditional; `--flip` only rolls the parent up). Said as `done --flip` while nothing minted this
+        /// case, which was harmless until #733 wired it and the narrower label stopped being true.
         | AfterDone
 
         member Label: string

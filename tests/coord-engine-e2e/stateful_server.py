@@ -58,6 +58,13 @@ def now_iso():
 
 RATE_LIMIT = {"cost": 1, "remaining": 4999}
 
+# BOARD READS, COUNTED — so a leg can assert what was NOT spent. #733's `AfterDone` offer costs `done` a
+# scan it otherwise never makes, and `Chores.offer`'s step 1 (`choreLockRef`) is a pure string match that
+# answers None for six of the org's seven repos. Ordering the scan BEFORE that match would buy a board read,
+# on the budget the claim lock lives on, for a guaranteed refusal — in the COMMON case. That is a cost
+# regression no assertion on output could catch, because the output is identical either way: nothing.
+BOARD_READS = [0]
+
 
 def project_fields():
     return {
@@ -126,6 +133,8 @@ def graphql(query: str, variables: dict):
     if "fields(first" in query:
         return project_fields()
     if "items(first" in query:
+        with LOCK:
+            BOARD_READS[0] += 1
         return board_items()
     if "closedByPullRequestsReferences" in query:
         # done facts — the asked-for issue was closed by a merged PR. Keyed on the VARIABLE rather than
@@ -281,6 +290,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+
+        # THE FIXTURE'S OWN INSTRUMENTATION, not a GitHub route — hence the `_fixture/` prefix, which no
+        # real endpoint can collide with. It reports what the engine SPENT, so a leg can assert a read that
+        # must not happen. There is no other way to see it: a scan that should not have run and a scan that
+        # ran and found nothing produce byte-identical output.
+        if path.rstrip("/") == "/_fixture/board-reads":
+            with LOCK:
+                return self._send(200, {"boardReads": BOARD_READS[0]})
 
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)/comments$", path)
         if m:

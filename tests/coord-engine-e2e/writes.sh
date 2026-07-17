@@ -160,10 +160,21 @@ printf '%s' "$dso" | grep -q 'FSGG-DONE' && ! printf '%s' "$dso" | grep -qi 'cho
 # A REPO WITH NO CHORE LOCK IS REFUSED, NOT GUESSED AT. `choreLockRef` knows exactly one repo
 # (`.github#1033`, ADR-0041) and answers None for the other six receivers — so the queue drains in
 # `.github` ONLY, and honestly. A `done` there stamps exactly as before and offers nothing.
+br0="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g')"
 dn2="$("$ENGINE" "done" FS.GG.SDD#42 --worker snipe-733 2>&1)"; dn2rc=$?
 [ "$dn2rc" -eq 0 ] && printf '%s' "$dn2" | grep -q 'FSGG-DONE' && ! printf '%s' "$dn2" | grep -qi 'chore' \
   && ok "#733: a repo with no chore lock is offered nothing, and still stamps" \
   || bad "#733: no-lock repo offers nothing" "rc=$dn2rc: $dn2"
+
+# ...AND IT SPENDS NOTHING FINDING THAT OUT. `Chores.offer`'s step 1 is `choreLockRef` — a pure string
+# match, placed first "because it spends nothing" — and six of the org's seven repos answer None. Reaching
+# that match THROUGH a scan would buy a board read, on the budget the claim lock itself lives on, for a
+# guaranteed refusal, in the common case. No assertion on output can catch that regression: the output is
+# identical either way (nothing). So the fixture counts the read instead.
+br1="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g')"
+[ "$br0" = "$br1" ] \
+  && ok "#733: a no-lock repo costs NO board read — the free question is asked first (${br0}→${br1})" \
+  || bad "#733: no-lock done spends no board read" "board reads went ${br0} → ${br1}"
 
 # ---- verify-paths: a PR inside its touch-set is OK -------------------------------------------------
 vp="$("$ENGINE" verify-paths --pr 500 --repo FS.GG.SDD 2>&1)"; vprc=$?

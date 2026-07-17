@@ -451,9 +451,22 @@ module Client =
     /// engine that cannot parse its own snapshot: none of them may touch a verdict this function already
     /// printed. The offer is a courtesy appended to finished work, so it is allowed to do exactly nothing.
     let private offerChoreAfterDone (ctx: Context) (opts: Options) (ref: Ref) : unit =
-        match scanAndDecide ctx { opts with Repo = Some ref.Repo; Limit = Some 1 } Cache.Scheduling with
-        | Error _ -> ()
-        | Ok(_, doc, _) -> offerChoreAt ctx opts Chore.AfterDone ref.Repo doc
+        // IS THERE A LOCK AT ALL? — asked FIRST, and asked HERE rather than left to `Chores.offer`, which
+        // asks it as its own step 1 "because it is a pure string match that spends nothing".
+        //
+        // That reasoning is exactly right and it does not survive being reached through a scan. `next` may
+        // call `offer` unconditionally because `next` scans regardless — the board is already in its hand.
+        // `done` does not, so ordering the question after the read would spend the scan to learn something a
+        // string match answers for free. And it would spend it in the COMMON case: `choreLockRef` knows one
+        // repo (`.github#1033`, ADR-0041), so SIX of the org's seven receivers answer `None` — most `done`
+        // calls would buy a board scan, on the budget the claim lock lives on, for a guaranteed refusal.
+        // The cheapest question first is the module's own rule; this is the call site keeping it.
+        match Options.choreLockRef ctx.Owner ref.Repo with
+        | None -> ()
+        | Some _ ->
+            match scanAndDecide ctx { opts with Repo = Some ref.Repo } Cache.Scheduling with
+            | Error _ -> ()
+            | Ok(_, doc, _) -> offerChoreAt ctx opts Chore.AfterDone ref.Repo doc
 
     let next (ctx: Context) (opts: Options) : int =
         // `next` is `batch` capped at one. The cap is the ONLY difference — the decision is identical, so
