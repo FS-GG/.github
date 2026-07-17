@@ -967,9 +967,17 @@ kill "$GSRV" 2>/dev/null; rm -f "$G_OUT"
 # in the engine but had NO caller — `set-field` only ever took a single `<ref> <field> <value>`. This slice
 # lands with the fix that wires `set-field --batch` to it (and `Board.boardWriteBatch`, the batch sibling of
 # the one board write, carrying the same deferral policy). The corpus's harder halves are held too: an empty
-# value reaches the DISTINCT clear mutation; a refused pair spends ZERO GraphQL (a rejected value must not
-# spend the budget that dies first); a per-alias failure is EX_PARTIAL and NEVER queued (replaying rewrites
-# what landed); and an exhausted budget refused the whole document, so EVERY pair is queued.
+# value reaches the DISTINCT clear mutation; a refused pair sends NO field mutation, so a bad pair can never
+# fail the batch after earlier aliases have landed; a per-alias failure is EX_PARTIAL and NEVER queued
+# (replaying rewrites what landed); and an exhausted budget refused the whole document, so EVERY pair is
+# queued.
+#
+# That first clause used to read "a refused pair spends ZERO GraphQL", and it was measurably false — the
+# legs below only ever counted MUTATIONS, so nothing checked the budget half of the claim they made. An
+# unknown FIELD or OPTION cannot be refused without knowing the board's fields, so it MUST read the board
+# first: 3 GraphQL reads, on the budget the claim lock lives on. What those legs really certify is that
+# nothing is WRITTEN, which is the #448 property that matters. The genuinely zero-GraphQL refusals are the
+# ones that precede every read — the `Blocked by` value gate, and the ref parse the #1032 legs below pin.
 sfsrv() {  # sfsrv <env-kv...> --  ; sets globals SF_PORT and SF_SRV for the spawned fixture
   local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
   local out; out="$(mktemp)"
@@ -982,6 +990,11 @@ sfsrv() {  # sfsrv <env-kv...> --  ; sets globals SF_PORT and SF_SRV for the spa
 # The mutation count and the last document the fixture recorded — `gcount` + `cat "$GH_LOG"`, one transport
 # over (the same python3-off-the-server idiom the #533/#320 legs use).
 muts_on()  { python3 -c 'import sys,urllib.request; sys.stdout.write(urllib.request.urlopen("http://127.0.0.1:"+sys.argv[1]+"/_mutations").read().decode())' "$1" 2>/dev/null; }
+# Drive the engine at the fixture on $SF_PORT, stderr folded in, on a FRESH cache — every leg below wants a
+# cold read plan, not whatever a previous leg warmed. Hoisted to the top of the section because it is not
+# specific to any one leg: it lived inside a leg's `else` block, which left it in scope only if that leg's
+# fixture happened to bind, and cost this section a second identical copy the moment another leg wanted it.
+sfr() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@" 2>&1; }
 
 # 1. THE COUNT IS THE CRITERION. Three fields — a SINGLE_SELECT, a DATE and a TEXT — cost exactly ONE
 #    mutation request, aliased f0/f1/f2, each value routed to its field's own mutation shape.
@@ -1040,14 +1053,13 @@ fi
 #    refused BEFORE a document is sent, or a bad pair caught late fails the batch AFTER earlier aliases landed.
 sfsrv -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field refuse fixture bound a port"; else
-  sfr() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@" 2>&1; }
   uf="$(sfr set-field --batch --worker sf-448 FS.GG.SDD#42 'No Such Field=x')"; ufrc=$?
   { [ "$ufrc" -eq 1 ] && [ "$(muts_on "$SF_PORT" | jq -r '.count')" = "0" ]; } \
-    && ok "#448: an unknown field is refused (exit 1) and spends ZERO GraphQL" \
+    && ok "#448: an unknown field is refused (exit 1) and sends ZERO field mutations — nothing is half-written" \
     || bad "#448: unknown field must refuse before sending" "rc=$ufrc count=$(muts_on "$SF_PORT" | jq -r '.count') out=$uf"
   uo="$(sfr set-field --batch --worker sf-448 FS.GG.SDD#42 'Phase=No Such Option')"; uorc=$?
   { [ "$uorc" -eq 1 ] && [ "$(muts_on "$SF_PORT" | jq -r '.count')" = "0" ]; } \
-    && ok "#448: an unknown single-select OPTION is refused and spends ZERO GraphQL (the build aborts, not the value)" \
+    && ok "#448: an unknown single-select OPTION sends ZERO field mutations too (the build aborts, not the value)" \
     || bad "#448: unknown option must refuse before sending" "rc=$uorc count=$(muts_on "$SF_PORT" | jq -r '.count') out=$uo"
   printf '%s' "$uo" | grep -q 'No Such Option' \
     && ok "#448: ...and the reason names the OPTION, not a GraphQL parse error" \
@@ -1098,6 +1110,105 @@ if [ -z "$SF_PORT" ]; then bad "set-field rate-limit fixture bound a port"; else
   kill "$SF_SRV" 2>/dev/null
 fi
 rm -rf "$RLCACHE"
+
+# ---- SET-FIELD PARSES THE REF FIRST (#1032): the refusal names the ISSUE, not the FIELD -----------
+#
+# #611 existed because a bad ref was met with a VALUE/FIELD diagnostic: the caller was told they had named
+# the wrong FIELD when what they had misnamed was the wrong ISSUE — and those two send them looking in
+# opposite places. The engine retired it by parsing the ref BEFORE the field/value gate (`Client.setField`:
+# `parseRef`, then `gateField`, then any board read). #1024 is the evidence that this exact confusion cost
+# the org a SECOND issue after the first was "fixed": #548 taught the bare form to RESOLVE, which turned
+# #611's loud failure into a silent write to the wrong repo. Nothing pinned the ordering, so a refactor
+# that re-inverted it would be free — and the symptom is a MESSAGE, which no other leg in this suite reads.
+#
+# The ordering is observable only when a call is wrong in BOTH ways at once: an unrecognised ref AND a value
+# the field would refuse on its own. Either error alone proves nothing about which check ran first — hence
+# leg (b), which fires the value refusal on a GOOD ref. Without it, (a) would pass just as well against an
+# engine that had stopped checking values at all: a green from a gate that cannot see its subject (#266).
+# THE MESSAGE LEGS. These read stdout/stderr only, so they may share one fixture: a message is per-command,
+# and nothing about one leg's output can leak into the next. The BUDGET legs below may NOT share it — see
+# there for why.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field ref-first fixture bound a port"; else
+  # a. WRONG IN BOTH WAYS: an unrecognised ref, AND prose in `Blocked by` (which gateField refuses on its
+  #    own — b proves it). Ref-first means the REF refusal is the one the caller is handed.
+  r1="$(sfr set-field --worker sf-1032 not-an-issue 'Blocked by' 'the audio team is busy')"; r1rc=$?
+  { [ "$r1rc" -eq 1 ] && printf '%s' "$r1" | grep -q "unrecognised issue ref 'not-an-issue'"; } \
+    && ok "#1032: a bad ref is refused AS A REF — 'unrecognised issue ref', exit 1" \
+    || bad "#1032: a bad ref must be refused as a ref" "rc=$r1rc out=$r1"
+  printf '%s' "$r1" | grep -q "'Blocked by' takes issue refs" \
+    && bad "#1032: the REF refusal must win over the value refusal — #611's inversion is back" "out: $r1" \
+    || ok "#1032: ...and NOT as a value refusal — the ordering #611/#1024 were filed about holds"
+
+  # b. THE GATE IS ALIVE. The same prose value on a GOOD ref DOES reach the value refusal. This is what
+  #    makes (a) a statement about ORDERING rather than about a value check that never runs.
+  r2="$(sfr set-field --worker sf-1032 FS.GG.SDD#42 'Blocked by' 'the audio team is busy')"; r2rc=$?
+  { [ "$r2rc" -eq 1 ] && printf '%s' "$r2" | grep -q "'Blocked by' takes issue refs"; } \
+    && ok "#1032: a GOOD ref with the same prose value DOES reach the value refusal — (a) is not vacuous" \
+    || bad "#1032: the 'Blocked by' gate must still refuse prose on a good ref" "rc=$r2rc out=$r2"
+
+  # c. NOT A QUIRK OF ONE FIELD. An unknown FIELD is a different refusal down a different path. The ref
+  #    still precedes it.
+  r3="$(sfr set-field --worker sf-1032 not-an-issue 'No Such Field' x)"; r3rc=$?
+  { [ "$r3rc" -eq 1 ] && printf '%s' "$r3" | grep -q "unrecognised issue ref 'not-an-issue'"; } \
+    && ok "#1032: a bad ref beats the unknown-FIELD refusal too — the ordering is the parser's, not one field's" \
+    || bad "#1032: a bad ref must precede the unknown-field refusal" "rc=$r3rc out=$r3"
+
+  # d. BOTH SURFACES AGREE. `--batch` is a SECOND entry point into the same write (`setFieldBatchCmd`, its
+  #    own function), and #448's legs already hold that the two must not disagree about what a field
+  #    accepts. They must not disagree about this either, or the inversion returns on the surface nobody
+  #    pinned — green, because the other surface is the one under test.
+  r4="$(sfr set-field --batch --worker sf-1032 not-an-issue 'Blocked by=the audio team is busy')"; r4rc=$?
+  { [ "$r4rc" -eq 1 ] && printf '%s' "$r4" | grep -q "unrecognised issue ref 'not-an-issue'"; } \
+    && ok "#1032: set-field --batch parses the ref first too — the two surfaces cannot diverge" \
+    || bad "#1032: --batch must refuse a bad ref as a ref" "rc=$r4rc out=$r4"
+  kill "$SF_SRV" 2>/dev/null
+fi
+
+# THE BUDGET LEGS. The ordering is a BUDGET fact, not only a message, and that is why it is worth pinning:
+# `parseRef` precedes the board read, so a bad ref spends NOTHING, where refusing it later would first pay
+# the bootstrap reads — on the budget the claim lock lives on (ADR-0034 §3). The GraphQL meter, not the
+# mutation count, is the only thing that can see this: a mutation count of 0 is ALSO what "read the whole
+# board, then refused" looks like.
+#
+# ONE FIXTURE PER CLAIM, and this is not fastidiousness. The meter is CUMULATIVE over a fixture's lifetime,
+# so a meter shared with the legs above would be fed by every command they ran, and an assertion naming the
+# REF would be answering for all of them. It would pass today and mislead later: teach `gateField` to
+# validate the field name against the board — a plausible improvement — and leg (b)'s good-ref command
+# starts reading, the shared counter goes non-zero, and the red names the ref parse, which is innocent.
+# That is #611's own disease (a diagnostic naming the wrong culprit) rebuilt inside the test that pins
+# #611's fix. Each fixture below runs exactly the ONE command its assertion is about.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field ref-budget fixture bound a port"; else
+  sfr set-field --worker sf-1032 not-an-issue 'Blocked by' 'the audio team is busy' >/dev/null 2>&1
+  [ "$(muts_on "$SF_PORT" | jq -r '.graphql')" = "0" ] \
+    && ok "#1032: a refused ref spends ZERO GraphQL — no read is paid for a ref that can never be used" \
+    || bad "#1032: a refused ref must not spend the budget the lock lives on" "graphql=$(muts_on "$SF_PORT" | jq -r '.graphql')"
+  kill "$SF_SRV" 2>/dev/null
+fi
+
+# The `Blocked by` value gate is the OTHER refusal that precedes every read, and the section header above
+# claims as much. A claim with no leg behind it is the thing this whole section is about, so: pin it.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field value-gate budget fixture bound a port"; else
+  sfr set-field --worker sf-1032 FS.GG.SDD#42 'Blocked by' 'the audio team is busy' >/dev/null 2>&1
+  [ "$(muts_on "$SF_PORT" | jq -r '.graphql')" = "0" ] \
+    && ok "#1032: the 'Blocked by' value gate spends ZERO GraphQL too — it also precedes the board read" \
+    || bad "#1032: a refused value must not spend the budget either" "graphql=$(muts_on "$SF_PORT" | jq -r '.graphql')"
+  kill "$SF_SRV" 2>/dev/null
+fi
+
+# The CONTRAST that gives the two legs above their meaning, and the reason those refusals may not be
+# described like this one: an unknown FIELD cannot be refused without knowing the board's fields, so it MUST
+# read first. This is the leg that keeps "spends ZERO GraphQL" from being written over it again.
+sfsrv -- set-field
+if [ -z "$SF_PORT" ]; then bad "set-field ref-first contrast fixture bound a port"; else
+  sfr set-field --worker sf-1032 FS.GG.SDD#42 'No Such Field' x >/dev/null 2>&1
+  [ "$(muts_on "$SF_PORT" | jq -r '.graphql')" -gt 0 ] \
+    && ok "#1032: an unknown FIELD on a good ref DOES read the board first — so ref-first is what saves that read" \
+    || bad "#1032: the unknown-field refusal is expected to read the board" "graphql=$(muts_on "$SF_PORT" | jq -r '.graphql')"
+  kill "$SF_SRV" 2>/dev/null
+fi
 
 # ---- CLAIM RECORDS THE COLUMN IT OVERWRITES (case 21): #481 ---------------------------------------
 #
