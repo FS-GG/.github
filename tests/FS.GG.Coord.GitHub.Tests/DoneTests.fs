@@ -529,6 +529,27 @@ let ``#965 un-delegated acceptance is refused BEFORE the graph read is paid for`
     | other -> failwith $"expected a refusal that pays for no graph read — got %A{other}"
 
 [<Fact>]
+let ``#965 the rule holds for a parent that is NOT [epic]-titled - which is #561 exactly`` () =
+    use _sandbox = new Sandbox()
+
+    // THE TIDY-UP THAT MUST NEVER HAPPEN. `lint` scopes its twin rule to titles carrying `[epic]`, so
+    // narrowing this one to match looks like consistency. It would sail straight past the case the guard
+    // exists for: #561 is titled `[cross-repo]`, has four children of its own, and is precisely the parent
+    // that was closed over a criterion delegated to nobody.
+    //
+    // "Epic" is a fact about the GRAPH, not the title. `rollUp` never reads a title, and this pins that it
+    // must not start: the parent below is titled `[cross-repo]` and is refused all the same.
+    let transport =
+        scripted
+            [ ok parentAllDone
+              ok """{"number":350,"title":"[cross-repo] Roll the org SDK pin out to the four unpinned repos","body":"- [ ] #398 the delegated half\n- [ ] step 3: add global.json to FILES, delete the tripwire"}""" ]
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen(_, reasons) ] ->
+        Assert.Contains("step 3: add global.json to FILES, delete the tripwire", String.concat " " reasons)
+    | other -> failwith $"a non-epic PARENT must be refused too — a title is not what makes acceptance rollup-able — got %A{other}"
+
+[<Fact>]
 let ``#965 an epic whose every acceptance line is a child ref still rolls up`` () =
     use _sandbox = new Sandbox()
 

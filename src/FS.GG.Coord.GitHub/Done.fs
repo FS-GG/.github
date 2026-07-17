@@ -710,6 +710,15 @@ module Done =
             // exist: nothing can mechanically decide "the tripwire is intact" from prose. Deleting the
             // un-delegated prose is what makes the question answerable — which is why the fix is a REFUSAL
             // to close rather than an attempt to verify.
+            //
+            // IT APPLIES TO EVERY PARENT, AND IT MUST NOT BE NARROWED TO `[epic]`-TITLED ONES. That looks
+            // like the obvious tidy-up — `lint` scopes its twin rule exactly that way, from the title — and
+            // it would sail straight past the case this guard exists for: **#561 is titled `[cross-repo]`,
+            // not `[epic]`**, and it has four children of its own. "Epic" here is a fact about the GRAPH, not
+            // about the title: an issue with children is a parent, a parent's acceptance is discharged by its
+            // children, and one that kept a criterion for itself is the whole defect. A leaf's ref-less
+            // acceptance is ordinary prose and is never examined — the climb only ever reaches parents — so
+            // the breadth costs nothing and buys the motivating case.
             match FS.GG.Coord.EpicBody.undelegatedAcceptance parentBody with
             | undelegated when not (List.isEmpty undelegated) ->
                 results.Add(
@@ -717,7 +726,7 @@ module Done =
                         current,
                         [ $"the body states %d{List.length undelegated} acceptance line(s) that delegate to NO child, so nothing in the sub-issue graph can ever discharge them and closing this parent would close them unread (#965):"
                           yield! undelegated
-                          "an epic's acceptance IS its children: make each line a child (`fsgg-coord child <parent> <child>`), or drop it from the body if it is not acceptance." ]
+                          "a parent's acceptance IS its children: make each line a child (`fsgg-coord child <parent> <child>`), or drop it from the body if it is not acceptance." ]
                     )
                 )
 
