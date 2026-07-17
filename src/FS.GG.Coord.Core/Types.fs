@@ -127,3 +127,36 @@ module Types =
         | Blocked -> "Blocked"
         | InReview -> "In review"
         | Done -> "Done"
+
+    // THE OTHER WIRE VOCABULARY, ONCE — and this one had TWO copies pointing OPPOSITE ways: `Scan`
+    // rendered a `BlockerState` and `Snapshot` parsed one back, both `private`, in different projects,
+    // with nothing asserting they were inverse. 775 tests passed with them disagreeing (#1012).
+    //
+    // A TOTAL match, no wildcard, for `statusWireName`'s reason. There is no empty case here: a blocker
+    // has no "unset" state — `BlockerUnparseable` is a state we KNOW, not the absence of one.
+    let blockerStateWireName (s: BlockerState) =
+        match s with
+        | BlockerOpen -> "open"
+        | BlockerClosed -> "closed"
+        | BlockerMerged -> "merged"
+        | BlockerUnknown -> "unknown"
+        | BlockerUnparseable -> "unparseable"
+
+    /// Every `BlockerState`, as the subject `blockerStateOfWireName` searches.
+    ///
+    /// THE ONE PART THE COMPILER CANNOT CHECK, named rather than hidden — `Protocol.everyCase` carries
+    /// the identical caveat for the same reason. A case missing here is a wire name that renders fine
+    /// and no longer PARSES, which is the round-trip breaking in the one direction a total match cannot
+    /// see. `TypesTests` pins this list against the union by reflection, so nobody has to remember it.
+    let private everyBlockerState =
+        [ BlockerOpen; BlockerClosed; BlockerMerged; BlockerUnknown; BlockerUnparseable ]
+
+    // THE INVERSE, DERIVED — never a second list of the strings.
+    //
+    // This is the whole point of #1012. `Snapshot` hand-wrote the five strings a second time, in the
+    // parse direction, in another project; the pair could drift and did not have to be caught. Reading
+    // them back OUT of the renderer means the vocabulary is spelled exactly ONCE in this engine, and
+    // "these two functions are inverse" stops being a thing anybody has to maintain.
+    let blockerStateOfWireName (s: string) =
+        let t = s.Trim().ToLowerInvariant()
+        everyBlockerState |> List.tryFind (fun c -> blockerStateWireName c = t)

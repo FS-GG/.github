@@ -61,14 +61,15 @@ module Snapshot =
         | "CLOSED" -> Ok Closed
         | other -> err path $"unknown issue state '%s{other}' (expected OPEN or CLOSED)"
 
+    // ASK the vocabulary rather than restating it (#1012). This hand-listed the five strings a second
+    // time, in the opposite direction from `Scan`'s renderer, in a different project — and nothing
+    // asserted the two were inverse, so a typo in either left the engine unable to read what it wrote.
+    // The error stays HERE, because how to fail is this parser's business: `Core` answers "is this a
+    // blocker state?" and `Snapshot` says which JSON path asked.
     let private blockerState (path: string) (s: string) : Result<BlockerState, Error list> =
-        match s.Trim().ToLowerInvariant() with
-        | "open" -> Ok BlockerOpen
-        | "closed" -> Ok BlockerClosed
-        | "merged" -> Ok BlockerMerged
-        | "unknown" -> Ok BlockerUnknown
-        | "unparseable" -> Ok BlockerUnparseable
-        | other -> err path $"unknown blocker state '%s{other}'"
+        match Types.blockerStateOfWireName s with
+        | Some b -> Ok b
+        | None -> err path $"unknown blocker state '%s{s.Trim().ToLowerInvariant()}'"
 
     let private refOf (path: string) (el: JsonElement) : Result<Ref, Error list> =
         match stringField path "owner" el, stringField path "repo" el, intField path "number" el with

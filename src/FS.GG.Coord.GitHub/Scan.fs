@@ -368,13 +368,9 @@ module Scan =
 
     // ---- the snapshot --------------------------------------------------------------------------------
 
-    let private blockerStateName (s: BlockerState) =
-        match s with
-        | BlockerOpen -> "open"
-        | BlockerClosed -> "closed"
-        | BlockerMerged -> "merged"
-        | BlockerUnknown -> "unknown"
-        | BlockerUnparseable -> "unparseable"
+    // ONE owner, in `Core`, beside `statusWireName` — this was a private copy of the vocabulary, and
+    // `Snapshot` held the other half facing the other way (#1012).
+    let private blockerStateName = Types.blockerStateWireName
 
     /// WHO A RESERVATION IS HELD BY, as the assembler knows it. A marker-backed claim (live OR stale — a
     /// lock is a lock, #461) names its worker and item; a MARKERLESS In-progress board row (arm A of
