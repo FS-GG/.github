@@ -290,6 +290,37 @@ module ProtocolTests =
     let ``landable documents no rate-limit code`` () =
         Assert.DoesNotContain(75, Protocol.landableExitCodes |> List.map (fun c -> c.Code))
 
+    /// COMPLETENESS — THE HALF #916 COULD NOT BUILD (#918). Before the `ExitCode` union, a command's
+    /// return set was ints threaded through three modules, so nothing could ENUMERATE it: these tables
+    /// were hand-derived and their completeness could only be proof-read. That is exactly how the first
+    /// `takeExitCodes` shipped with no row for `ExitRed` — a code `take` reaches through `renderDecision`
+    /// and every gate missed, caught only by a human reading `take` line by line.
+    ///
+    /// Now the return set is a VALUE — `ExitCode.takeCodes` / `ExitCode.landableCodes` — and this pins
+    /// each table to it in BOTH directions: every code the command can return has a row (no omission),
+    /// and the table documents none the command cannot return (no invention — #889's `EX_PARTIAL`
+    /// under `take`). `exitTables` is reflection-discovered, so a NEW `ExitCodeDoc list` with no declared
+    /// domain fails here loudly rather than going unchecked.
+    [<Fact>]
+    let ``each exit table documents exactly the codes its command can return`` () =
+        let domainOf =
+            function
+            | "takeExitCodes" -> ExitCode.takeCodes
+            | "landableExitCodes" -> ExitCode.landableCodes
+            | other ->
+                failwith
+                    $"%s{other} is an exit-code table with no `ExitCode` domain declared — add one to `ExitCode` so its completeness can be checked (#918)"
+
+        for cmd, codes in exitTables do
+            let documented = codes |> List.map (fun c -> c.Code) |> Set.ofList
+            let domain = domainOf cmd |> List.map ExitCode.toInt |> Set.ofList
+
+            Assert.True(
+                (domain = documented),
+                $"%s{cmd} does not document exactly the codes its command returns (#918): "
+                + $"missing %A{Set.difference domain documented |> Set.toList}, "
+                + $"invented %A{Set.difference documented domain |> Set.toList}")
+
     // ================================================================================================
     // `releaseColumns` — `release`/`reap`'s column precedence (#1099), the third table in the class
     // #889/#900 proved. It is `Core`-side that these pins can live at all: the engine's `unclaimColumn`

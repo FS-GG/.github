@@ -1069,14 +1069,15 @@ fi
 
 # 5. THE PARTIAL ARM. Mutations run SERIALLY: when f1 fails, f0 has ALREADY been written. Reporting that as
 #    a failure claims nothing happened; reporting it as success is the bug #448 forbade by name. It is its
-#    own answer — EX_PARTIAL (4), naming what landed and what did not — and it is NEVER queued.
+#    own answer — EX_PARTIAL (9, renumbered off the NO-VERDICT code 4 it collided with — #918/ADR-0046),
+#    naming what landed and what did not — and it is NEVER queued.
 SFCACHE="$(mktemp -d)"
 sfsrv SF_FAIL_ALIAS=f1 -- set-field
 if [ -z "$SF_PORT" ]; then bad "set-field partial fixture bound a port"; else
   pout="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$SF_PORT" FSGG_COORD_CACHE="$SFCACHE" "$ENGINE" set-field --batch --worker sf-448 FS.GG.SDD#42 'Phase=P2 SDD' 'Target=2026-08-01' 'Contract=x' 2>&1)"; prc=$?
-  [ "$prc" -eq 4 ] \
-    && ok "#448: a per-alias failure is EX_PARTIAL (4), not success and not a generic error" \
-    || bad "#448: partial must exit 4" "rc=$prc out=$pout"
+  [ "$prc" -eq 9 ] \
+    && ok "#448: a per-alias failure is EX_PARTIAL (9), not success and not a generic error" \
+    || bad "#448: partial must exit 9 (EX_PARTIAL, #918)" "rc=$prc out=$pout"
   printf '%s' "$pout" | grep -q 'PARTIALLY APPLIED' && printf '%s' "$pout" | grep -q 'half-written' \
     && ok "#448: ...it says PARTIALLY APPLIED and that the board is half-written" \
     || bad "#448: partial must announce the half-written board" "out: $pout"

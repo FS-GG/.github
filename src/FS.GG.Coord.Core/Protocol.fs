@@ -309,40 +309,40 @@ module Protocol =
     // The list is ordered as a worker meets it: the one success first, then the failures by how likely
     // they are to be the reason a loop stopped.
     let takeExitCodes: ExitCodeDoc list =
-        [ { Code = 0
+        [ { Code = ExitCode.toInt ExitCode.Green
             Name = ""
             Meaning = "An item was CLAIMED. This is the ONLY code that means you hold one."
             Action = "Go work it — and only here." }
-          { Code = 5
+          { Code = ExitCode.toInt ExitCode.NoneStartable
             Name = "EX_NONE"
             Meaning =
               "Looked, and nothing was startable — an empty or all-blocked queue. A LOOK THAT SUCCEEDED and found nothing, which is why it is not 0 and not a read failure."
             Action =
               "Nothing to do: stop, or wait for the board to free up. Diagnose before you idle — `batch --include-backlog`, `who`, `next` each name a different reason a full board looks empty." }
-          { Code = 6
+          { Code = ExitCode.toInt ExitCode.Contended
             Name = "EX_CONTENDED"
             Meaning =
               "The item was startable when it was picked and the claim CAS lost every race for it — somebody else got there first."
             Action = "Back off briefly and retry. The board is busy, not empty." }
-          { Code = 75
+          { Code = ExitCode.toInt ExitCode.Rate
             Name = "EX_RATE"
             Meaning =
               "A rate budget is exhausted. The message names WHICH one (#897): REST takes `claim`/`take`/`who` with it, because the lock lives there (ADR-0034 §3); GraphQL takes the board reads. When it is REST, the fleet STANDING DOWN is the designed behaviour, not an outage (#976): answering \"is this item takeable?\" costs the very budget that is gone, and a lock you cannot verify is not a lock. So this is a stop, and it is meant to be."
             Action =
               "Back off until the reset it names — do not loop. Then `flush --dry-run`: a board write you made on an exhausted budget is QUEUED, and nothing replays it for you. AND IF YOU ARE HOLDING AN ITEM, `heartbeat` is REST too — an outage that outlives your lease cannot be renewed through, and the moment REST returns your item is startable again and the next `take` hands it to somebody else. Two things save you and neither is the timer: an OPEN `item/<n>-*` PR (#581 — the lease lapsed, the work did not), or a liveness probe that itself fails (which fails closed, #266). Push the branch and open the PR EARLY: it is the only proof of life that does not depend on the budget you just lost." }
-          { Code = 3
+          { Code = ExitCode.toInt ExitCode.Red
             Name = ""
             Meaning =
               "REFUSED — the batch cannot be scheduled at all. Some in-flight claim declares a touch-set that matches no file, so it reserves NOTHING, and scheduling against it would hand its files to a second worker. The message names the item and the offending tokens."
             Action =
               "Do NOT retry — it will refuse identically until the declaration is fixed. Fix the claim it names (`widen <issue> --paths '<paths>'`), or talk to its holder." }
-          { Code = 1
+          { Code = ExitCode.toInt ExitCode.Error
             Name = ""
             Meaning =
               "No verdict was reached, for one of two reasons the message tells apart: the engine refused your INPUT before it looked (no worker id resolves; the board document does not parse), or the board READ failed. A read failure is never an empty queue and never EX_NONE (#266) — \"I could not look\" and \"I looked, and it is empty\" keep different codes on purpose."
             Action =
               "Read the message. A refused input is not retryable — it names its own remedy. Retry only a read failure, and investigate one that persists." }
-          { Code = 2
+          { Code = ExitCode.toInt ExitCode.Defect
             Name = ""
             Meaning =
               "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."
@@ -381,35 +381,35 @@ module Protocol =
     // Ordered as a poll loop meets it: the one green, then the one code worth retrying, then the ways
     // to stop.
     let landableExitCodes: ExitCodeDoc list =
-        [ { Code = 0
+        [ { Code = ExitCode.toInt ExitCode.Green
             Name = ""
             Meaning =
               "GREEN — the PR is finished work: it merges cleanly, and every workflow run and check-run scored on its head SHA passed. The ONLY code that means merge it."
             Action = "Merge it. This is the only code that says so." }
-          { Code = 7
+          { Code = ExitCode.toInt ExitCode.Pending
             Name = ""
             Meaning =
               "PENDING — the verdict has not SETTLED: checks are still running, none have registered yet, the run set is still growing, GitHub has not finished computing the PR's mergeability (it does so in a BACKGROUND job, and `null` is the normal first answer for a PR you just opened — #950), or an assertion you added (`--require`, `--sha`) is not yet met. The ONE retryable verdict, which is why it has a code of its own rather than sharing one with a way to stop."
             Action =
               "Keep waiting — this is the only code that says wait. Prefer `--wait`, which polls until the verdict settles rather than believing an early green. A `pending` that NEVER resolves is a finding: the job was RENAMED, its workflow's `paths:` filter no longer matches, `--sha` named the wrong commit, or GitHub never finished computing mergeability (rare, and not something waiting longer fixes — read the PR yourself)." }
-          { Code = 3
+          { Code = ExitCode.toInt ExitCode.Red
             Name = ""
             Meaning =
               "RED or CONFLICTED — two words, one code, because both mean STOP and neither improves by waiting. Red: a run or check-run failed. Conflicted: the PR does not merge cleanly, so GitHub cannot build `refs/pull/N/merge` and gives it NO CI at all — which is why it is returned immediately rather than polled."
             Action =
               "Stop. Do NOT wait — 3 is the code the recipe used to call `pending`, and a loop that waits on it never terminates. A red check is a finding; a conflicted PR needs a rebase, which is AUTHORING, not landing." }
-          { Code = 4
+          { Code = ExitCode.toInt ExitCode.NoVerdict
             Name = ""
             Meaning =
               "UNKNOWN — no verdict, and this is the FAIL-CLOSED one (#266). The read could not be made or its answer was not conclusive: a rate limit, a 404, a PR whose `mergeable` field is ABSENT entirely. Note what it is NOT. A `mergeable` GitHub has not computed YET is PENDING (7), not this — it is guaranteed to change, and calling it unknown made `--wait` settle at once and abandon a seconds-old PR (#950). And there is no EX_RATE (75) here, unlike `take`: an exhausted budget arrives as this code, because `landable` has no error channel to carry a budget on."
             Action =
               "Do not merge, and do not treat it as a red. An unreachable answer is not a negative one. Look at why the read failed — check `budget` if you suspect a rate limit — and ask again." }
-          { Code = 1
+          { Code = ExitCode.toInt ExitCode.Error
             Name = ""
             Meaning =
               "REFUSED — the engine rejected your INPUT before it ever looked at the PR: no `--repo` (so which repo the PR is in is undefined), a ref that is not a PR number, or the wrong number of arguments. It is not a verdict about the PR, and no word is printed."
             Action = "Read the message and fix the call. Not retryable — it will refuse identically." }
-          { Code = 2
+          { Code = ExitCode.toInt ExitCode.Defect
             Name = ""
             Meaning =
               "The ENGINE broke — an unhandled defect, with a stack trace. Its own code, so a broken engine cannot hide behind a stream of what look like bad inputs."

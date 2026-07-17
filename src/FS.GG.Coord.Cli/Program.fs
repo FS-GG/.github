@@ -8,20 +8,15 @@ open FS.GG.Coord.Types
 open FS.GG.Coord.Cli
 open FS.GG.Coord.Cli.Options
 
-[<Literal>]
-let private ExitGreen = 0
-
-[<Literal>]
-let private ExitError = 1
-
-[<Literal>]
-let private ExitDefect = 2
-
-[<Literal>]
-let private ExitRed = 3
-
-[<Literal>]
-let private ExitNoVerdict = 4
+// These were a VERBATIM re-declaration of a subset of `Client.fs`'s codes — a fourth copy of the
+// numbers, `private` so the compiler could not even compare it to the other three (#918). They now
+// derive from the one union, `FS.GG.Coord.ExitCode` (ADR-0046): the names stay for readability at the
+// use sites below, but the digits live in exactly one place, `ExitCode.toInt`.
+let private ExitGreen = ExitCode.toInt ExitCode.Green
+let private ExitError = ExitCode.toInt ExitCode.Error
+let private ExitDefect = ExitCode.toInt ExitCode.Defect
+let private ExitRed = ExitCode.toInt ExitCode.Red
+let private ExitNoVerdict = ExitCode.toInt ExitCode.NoVerdict
 
 let private eprint (s: string) = Console.Error.WriteLine(s: string)
 

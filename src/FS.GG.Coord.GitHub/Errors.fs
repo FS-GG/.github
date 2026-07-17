@@ -3,6 +3,7 @@ namespace FS.GG.Coord.GitHub
 module Errors =
 
     open System
+    open FS.GG.Coord
 
     type RateLimitResource =
         | GraphQlBudget
@@ -21,14 +22,16 @@ module Errors =
 
     type IoResult<'a> = Result<'a, IoError>
 
-    [<Literal>]
-    let ExRate = 75
+    // The numbers live in ONE place now — `FS.GG.Coord.ExitCode.toInt` (#918, ADR-0046). These are the
+    // GitHub layer's three, derived from the union rather than re-declared, so the collision that put
+    // `ExOffboard` on `3` (a RED verdict) and `ExPartial` on `4` (a NO-VERDICT) cannot be reintroduced
+    // here without the compiler seeing it in `toInt`. They are no longer `[<Literal>]` — nothing pattern-
+    // matches or attributes them, only compares and returns them — which is what lets them derive.
+    let ExRate = ExitCode.toInt ExitCode.Rate
 
-    [<Literal>]
-    let ExOffboard = 3
+    let ExOffboard = ExitCode.toInt ExitCode.Offboard
 
-    [<Literal>]
-    let ExPartial = 4
+    let ExPartial = ExitCode.toInt ExitCode.Partial
 
     let exitCode (error: IoError) =
         match error with
