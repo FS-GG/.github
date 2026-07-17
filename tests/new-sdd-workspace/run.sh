@@ -97,6 +97,15 @@ expect_err "--ref with no following token needs a value" \
   "--ref needs a value" -- "$TGT" P --ref
 expect_err "an unknown flag is named, not silently ignored" \
   "unknown argument: --bogus" -- "$TGT" P --bogus
+# Coordination flags carry the same flag-as-value guard as --profile/--ref (#388).
+expect_err "--board swallowing the next flag as its value is caught" \
+  "--board needs a value (got flag '--upgrade')" -- "$TGT" P --board --upgrade
+expect_err "--board with no following token needs a value" \
+  "--board needs a value" -- "$TGT" P --board
+expect_err "--chore-locks swallowing the next flag as its value is caught" \
+  "--chore-locks needs a value (got flag '--no-governance')" -- "$TGT" P --chore-locks --no-governance
+expect_err "--chore-locks with no following token needs a value" \
+  "--chore-locks needs a value" -- "$TGT" P --chore-locks
 
 # ── Ok leg: the parse grammar accepts, reaching the fsgg-sdd preflight (exit 127, no scaffold) ─────
 
@@ -109,6 +118,10 @@ for prof in game app headless-scene governed sample-pack; do
 done
 expect_ok "--upgrade toggles" -- "$TGT" P --upgrade
 expect_ok "--no-governance toggles" -- "$TGT" P --no-governance
+expect_ok "--no-coordination toggles" -- "$TGT" P --no-coordination
+expect_ok "--board takes an owner/title value" -- "$TGT" P --board acme/Roadmap
+expect_ok "--board accepts an owner-only value (defaults the title)" -- "$TGT" P --board acme
+expect_ok "--chore-locks takes a value" -- "$TGT" P --board acme/Roadmap --chore-locks "acme/Product.X#5,acme/Product.Y#7"
 expect_ok "flags combine, and --ref takes a value" -- "$TGT" P --upgrade --no-governance --ref v1.2.3
 
 # ── main's non-parse dispatch: -h / --help print usage and exit 0 ─────────────────────────────────
