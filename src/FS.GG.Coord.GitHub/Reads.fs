@@ -610,6 +610,48 @@ module Reads =
 
     // ---- proof of life ----------------------------------------------------------------------------
 
+    /// Is there a pushed `item/<n>-*` branch on the remote? `prAlive` asks this only once it has found NO
+    /// open PR, to tell a pushed-but-PR-less branch (proof of life, #1055) from a genuinely dead claim.
+    ///
+    /// It CANNOT reuse `branchTip`, which collapses "unreadable" and "absent" both to `None`: here that
+    /// collapse is the #266 bug — "I could not ask" must NOT read as "no branch", or the same REST outage
+    /// that expired the lease would license the reap. So this is three-valued: `Ok true`/`Ok false`, and an
+    /// `Error` (rate-limited, propagated; anything else the caller maps to `LivenessUnknown`).
+    let private itemBranchPushed
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (number: int)
+        : IoResult<bool> =
+
+        let subject = $"%s{owner}/%s{repo} pushed item/%d{number}-* branches"
+
+        let request =
+            { Method = "GET"
+              // matching-refs returns EVERY ref under the prefix (an empty array when none), so this asks
+              // "does any `item/<n>-*` branch exist?" in one REST call, without guessing the slug. REST —
+              // the budget the claim lock lives on — and paid only on the reap/who proof-of-life path.
+              Path = $"repos/%s{owner}/%s{repo}/git/matching-refs/heads/item/%d{number}-"
+              Query = []
+              Body = NoBody
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = subject }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            match parse subject response.Body with
+            | Error e -> Error e
+            | Ok doc ->
+                use doc = doc
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    // A shape we did not expect is a read we could NOT make (#266), never "no branch".
+                    Error(Malformed(subject, "the matching-refs response is not a JSON array"))
+                else
+                    Ok(doc.RootElement.GetArrayLength() > 0)
+
     let prAlive
         (transport: IGitHubTransport)
         (owner: string)
@@ -669,11 +711,17 @@ module Reads =
 
                     match alive with
                     | Some pr -> Ok(LeaseExpiredPrOpen pr)
-                    // WE LOOKED, AND THERE IS NO OPEN PR ON THIS ITEM'S BRANCH. Now — and only now — is
-                    // abandonment a reasonable reading. Note this says nothing about the LEASE: the caller
-                    // owns that, and it must have found the lease lapsed before it asked this question at
-                    // all.
-                    | None -> Ok LeaseExpiredNoPr
+                    // NO OPEN PR — but §5 opens the PR only AFTER the work, so a worker in §3 has pushed a
+                    // branch and no PR yet (#1055). Ask whether that branch exists before calling this dead:
+                    // a pushed `item/<n>-*` branch is proof of life short of a PR. Fail closed — a branch
+                    // probe we could not make is `LivenessUnknown`, never "no branch" (#266/#581), because
+                    // the REST outage that expired the lease is the likely reason the probe fails too.
+                    | None ->
+                        match itemBranchPushed transport owner repo number with
+                        | Error(RateLimited _ as e) -> Error e
+                        | Error _ -> Ok LivenessUnknown
+                        | Ok true -> Ok LeaseExpiredBranchPushed
+                        | Ok false -> Ok LeaseExpiredNoPr
 
     let restId
         (transport: IGitHubTransport)

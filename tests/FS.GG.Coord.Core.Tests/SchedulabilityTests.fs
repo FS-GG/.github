@@ -221,6 +221,18 @@ module SchedulabilityTests =
         )
 
     [<Fact>]
+    let ``#1055 an EXPIRED lease with a pushed branch but NO PR is WITHHELD, not offered`` () =
+        // §5 opens the PR only after the work, so a REST outage can expire the lease while a pushed branch is
+        // the only artifact. The item must NOT be offered — `take` re-offering it would hand a second worker
+        // the files the first is standing in. Undetermined (a branch is weaker evidence than a PR), never
+        // Startable.
+        let branch = Some(claim "curlew-ab", LeaseExpiredBranchPushed)
+
+        match ask { item 1055 with Claim = branch } with
+        | Undetermined _ -> ()
+        | other -> failwith $"a pushed branch is proof of life; the item must not be offered; got %A{other}"
+
+    [<Fact>]
     let ``#581 we could not ask about the PR -> UNDETERMINED, never 'free'`` () =
         // THE CASE THAT DESTROYED WORK. "We could not check" is not "there is no PR". A type that
         // cannot express the difference is a type that will be asked to guess, and it will guess wrong

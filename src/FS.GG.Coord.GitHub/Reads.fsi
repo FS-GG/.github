@@ -146,6 +146,10 @@ module Reads =
     ///
     /// A failed read yields `LivenessUnknown`, NOT "no PR". That distinction is what stops a transient 5xx
     /// from reaping live work.
+    ///
+    /// When there is no open PR it asks one more thing (#1055): is a pushed `item/<n>-*` BRANCH on the
+    /// remote? A branch with no PR is `LeaseExpiredBranchPushed` — proof of life during §3, before §5 opens
+    /// the PR. That probe fails closed too: unreadable is `LivenessUnknown`, never `LeaseExpiredNoPr`.
     val prAlive: transport: IGitHubTransport -> owner: string -> repo: string -> number: int -> IoResult<Liveness>
 
     /// What the meter says right now.

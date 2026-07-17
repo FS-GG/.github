@@ -44,11 +44,18 @@ _DELETED = set()       # comment ids actually gone now (leg m's 819 is NEVER add
 _FAIL_DELETE = {819}   # comment ids whose DELETE answers 500 (GH_FAIL_DELETE, leg m) — marker STANDS.
 _COMMENT_READS = {}    # per-issue /comments read count, so #91 can flip stale→fresh on the RE-VERIFY.
 
-# The two stale off-board claims. Both last beat 3h ago (lease 120m → lapsed) on the SCAN read.
+# The stale off-board claims. All last beat 3h ago (lease 120m → lapsed) on the SCAN read.
 CLAIMS = {
     91: {"marker_id": 816, "worker": "finch-a3f", "lease": 120, "body": "Paths: src/H/**"},
     96: {"marker_id": 819, "worker": "ghost-555", "lease": 120, "body": "Paths: src/M/**"},
+    # (n) #97: STALE, NO open PR — but a pushed `item/97-*` branch (#1055). Proof of life before §5 opens
+    # the PR, so reap must REFUSE it (WorkAliveBranch) and DELETE nothing.
+    97: {"marker_id": 822, "worker": "swan-b7c", "lease": 120, "body": "Paths: src/N/**"},
 }
+
+# Item numbers whose `git/matching-refs/heads/item/<n>-` probe finds a pushed branch (#1055). Everyone
+# else's branch probe answers `[]` — no branch — so they stay LeaseExpiredNoPr.
+BRANCH_PUSHED = {97}
 
 
 def _iso(hours_ago):
@@ -159,7 +166,15 @@ class H(BaseHTTPRequestHandler):
         if re.match(r"^/repos/[^/]+/[^/]+/issues/?$", p):
             return self._send(200, open_issues())
         if re.match(r"^/repos/[^/]+/[^/]+/pulls/?$", p):
-            return self._send(200, [])  # no open item/<n>-* PR → LeaseExpiredNoPr → reaches the re-verify
+            return self._send(200, [])  # no open item/<n>-* PR → prAlive falls to the branch probe
+        m = re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/(\d+)-$", p)
+        if m:
+            # #1055: does a pushed `item/<n>-*` branch exist? A branch for BRANCH_PUSHED items (proof of
+            # life → reap REFUSES), an empty list for everyone else (→ LeaseExpiredNoPr → reap proceeds).
+            n = int(m.group(1))
+            if n in BRANCH_PUSHED:
+                return self._send(200, [{"ref": f"refs/heads/item/{n}-wip", "object": {"sha": "deadbee"}}])
+            return self._send(200, [])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))

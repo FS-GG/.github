@@ -172,6 +172,15 @@ module Schedulability =
             // fixing #485.
             HeldByLiveWork(claim.Worker, pr)
 
+        | Some(_, LeaseExpiredBranchPushed) ->
+            // #1055. The lease lapsed and no PR is open YET, but a pushed `item/<n>-*` branch is proof of
+            // life during §3 — a REST outage can expire the lease before §5 opens the PR, and `heartbeat`
+            // (REST) cannot renew through the same outage. WITHHELD, so `take` does not re-offer an item its
+            // worker is standing in. `Undetermined`, not `HeldByLiveWork`: a branch is WEAKER evidence than a
+            // PR (it can be a stale leftover), so this is the fail-closed "not certain the work is alive, but
+            // a lock we cannot rule dead we may not hand out" — the same posture `reap` takes (it refuses).
+            Undetermined "the claim's lease has expired, but a pushed item/<n>-* branch is proof of life before its PR is opened (#1055/#581) — not offered, and reap will not collect it"
+
         | Some(_, LivenessUnknown) ->
             // We could not ask whether the work is alive. That is NOT the same as "no PR", and
             // treating it as such is what destroyed uncommitted work. An unverifiable claim is not a

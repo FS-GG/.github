@@ -157,6 +157,10 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, open_issues())
         if re.match(r"^/repos/[^/]+/[^/]+/pulls/?$", p):
             return self._send(200, open_pulls())
+        if re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/", p):
+            # #1055: no pushed item/<n>-* branch is modeled here → prAlive's branch probe finds none →
+            # LeaseExpiredNoPr (the dead claim these legs are about), not LivenessUnknown.
+            return self._send(200, [])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))

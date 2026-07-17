@@ -701,6 +701,11 @@ module Client =
           /// did not (#581). Populated ONLY on a Stale row; `None` on held/unclaimed and on a genuinely dead
           /// stale claim a reaper may collect.
           LivePr: (int * string) option
+          /// #1055: the lease lapsed and there is NO open PR, but a pushed `item/<n>-*` branch exists — proof
+          /// of life during §3, before §5 opens the PR. `true` only on a Stale row whose probe found a branch
+          /// and no PR; it turns a bare `STALE` (which reads as reapable) into `STALE (item/<n>-* pushed)`.
+          /// Mutually exclusive with `LivePr` by construction: a PR-open row is `LeaseExpiredPrOpen`, not this.
+          BranchPushed: bool
           /// WHAT that PR says (#697), when there is one — is the finished work landable? `Some` exactly when
           /// `LivePr` is `Some`; `None` otherwise. It turns `STALE (#NNN OPEN)` into `STALE (#NNN OPEN —
           /// GREEN: LAND IT)` and points a human at `adopt` instead of `reap`. A held/unclaimed row has no
@@ -758,6 +763,12 @@ module Client =
                 match row.PrState with
                 | Some st -> w.WriteString("prState", Landable.name st)
                 | None -> w.WriteNull("prState")
+
+                // #1055: a pushed `item/<n>-*` branch with no PR — proof of life short of a PR. Emitted ONLY
+                // when true, so every existing stale-row shape (livePr null, no branch) stays byte-identical
+                // and a machine consumer can still tell this apart from a genuinely dead claim.
+                if row.BranchPushed then
+                    w.WriteBoolean("branchPushed", true)
             | Held _
             | Unclaimed -> ()
 
@@ -908,20 +919,28 @@ module Client =
                                 // one: the head ref `prAlive` matched on is not surfaced through `Liveness`,
                                 // so `who` reads it back with `prHeadRef`. Disposed as acceptable — the path
                                 // is a stale claim WITH an open PR, which is rare, and both reads are REST.
-                                let livePr =
+                                // Probe proof of life ONCE for the row (it is a REST call), then read both
+                                // facts off it: the open PR (#581), and — #1055 — whether a pushed
+                                // `item/<n>-*` branch exists with no PR yet, so a human sees WHY the item is
+                                // withheld rather than a bare `STALE` that reads as reapable.
+                                let liveness =
                                     match st with
-                                    | Stale _ ->
-                                        match Reads.prAlive ctx.Transport o r n with
-                                        | Ok(LeaseExpiredPrOpen pr) ->
-                                            match Reads.prHeadRef ctx.Transport o r pr with
-                                            | Ok headRef -> Some(pr, headRef)
-                                            | Error _ -> None
-                                        | Ok LeaseExpiredNoPr
-                                        | Ok LeaseHeld
-                                        | Ok LivenessUnknown
-                                        | Error _ -> None
+                                    | Stale _ -> Some(Reads.prAlive ctx.Transport o r n)
                                     | Held _
                                     | Unclaimed -> None
+
+                                let livePr =
+                                    match liveness with
+                                    | Some(Ok(LeaseExpiredPrOpen pr)) ->
+                                        match Reads.prHeadRef ctx.Transport o r pr with
+                                        | Ok headRef -> Some(pr, headRef)
+                                        | Error _ -> None
+                                    | _ -> None
+
+                                let branchPushed =
+                                    match liveness with
+                                    | Some(Ok LeaseExpiredBranchPushed) -> true
+                                    | _ -> false
 
                                 // #697: a bare `STALE (#NNN OPEN)` reads as an abandoned branch, and the
                                 // reader reaches for `reap` — the destructive verb — on FINISHED work. So
@@ -940,6 +959,7 @@ module Client =
                                       State = st
                                       Paths = paths
                                       LivePr = livePr
+                                      BranchPushed = branchPushed
                                       PrState = prState
                                       // Filled in below, once the worktree read has run once for the whole
                                       // set rather than per row — a claim's worktree is a local fact, not one
@@ -1011,6 +1031,12 @@ module Client =
                                             | Some PrRed -> $"STALE (#%d{pr} OPEN — not green)"
                                             | Some PrUnknown
                                             | None -> $"STALE (#%d{pr} OPEN)"
+                                        // #1055: no PR, but a pushed `item/<n>-*` branch is proof of life
+                                        // during §3 — say so, so a human sees WHY it is withheld rather than
+                                        // a bare `STALE` that reads as reapable. `reap` refuses it, `who`
+                                        // shows why. A truly dead claim (no branch) stays a bare `STALE`.
+                                        | None when row.BranchPushed ->
+                                            $"STALE (item/%d{row.Ref.Number}-* pushed — no PR yet)"
                                         | None -> "STALE"
 
                                     printfn
@@ -1202,6 +1228,20 @@ module Client =
 
                                             eprint
                                                 $"fsgg-coord-engine:   It is %s{Landable.name verdict}, so there is nothing to land as it stands (`adopt` only lands green, mergeable work). If the PR really is abandoned, close it, then reap."
+                                    | Error Writes.WorkAliveBranch ->
+                                        // #1055: no PR yet, but a pushed `item/<n>-*` branch — proof of life
+                                        // during §3, before §5 opens the PR. There is nothing to `adopt` (a
+                                        // branch is not a landable PR), so this refuses without the land/close
+                                        // advice: the worker is likely still writing, or a REST outage expired
+                                        // the lease mid-work and they have not re-claimed yet.
+                                        let idleM = marker.AgeSeconds / 60
+                                        let w = marker.Worker.Value
+
+                                        eprint
+                                            $"fsgg-coord-engine: REFUSING to reap %s{ref.Short} — worker %s{w} (idle %d{idleM}m), a pushed item/%d{ref.Number}-* branch has NO PR yet. The lease lapsed; the WORK did not (#1055/#581)."
+
+                                        eprint
+                                            "fsgg-coord-engine:   A branch with no PR is work IN PROGRESS, not an abandoned one — the worker may be mid-build, or a REST outage expired the lease before they opened the PR. Nothing to adopt (there is no PR to land). Leave it: they re-claim, or push the PR."
                                     | Error(Writes.Undetermined why) ->
                                         eprint
                                             $"fsgg-coord-engine: NOT reaping %s{ref.Short} — %s{why}; a lock we cannot rule dead we may not break."
@@ -1871,6 +1911,18 @@ module Client =
 
                                 eprint
                                     $"  Collect it and take the item normally:  scripts/fsgg-coord reap --repo %s{ref.Repo} --apply && scripts/fsgg-coord claim %s{ref.Short}"
+
+                                ExitRed
+                            | Ok LeaseExpiredBranchPushed ->
+                                // #1055: a pushed `item/<n>-*` branch with NO PR is work IN PROGRESS, not
+                                // finished work — `adopt` lands green PRs and there is none. Refuse: the
+                                // worker is likely mid-build, or a REST outage expired the lease before they
+                                // opened the PR and they will re-claim. Adopting would race a live worker.
+                                eprint
+                                    $"fsgg-coord-engine: worker '%s{ow}' claim on %s{ref.Short} is expired (idle %d{oage}m), and a pushed 'item/%d{ref.Number}-*' branch exists but has NO open PR — so there is no FINISHED work to adopt (#1055). A branch with no PR is work in progress, not a landable PR."
+
+                                eprint
+                                    "  Do NOT adopt: the worker may still be writing, or a REST outage expired the lease mid-work and they will re-claim. Leave it for proof of life (a PR), or coordinate on the item."
 
                                 ExitRed
                             | Ok LeaseHeld

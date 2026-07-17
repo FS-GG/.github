@@ -878,6 +878,16 @@ let ``#581 reapable REFUSES a claim whose item PR is open - the work is alive, n
     | other -> failwith $"an open PR must block the reap — got %A{other}"
 
 [<Fact>]
+let ``#1055 reapable REFUSES a claim whose branch is pushed but has no PR - work in progress`` () =
+    // §5 opens the PR only after the work, so a pushed `item/<n>-*` branch with no PR is a worker mid-flight
+    // (#1055). Refuse — and with its OWN case, WorkAliveBranch, NOT Undetermined: we DID tell (a branch is
+    // pushed), and collapsing "the work is alive" into "could not tell" is the #581 mistake this gate exists
+    // to prevent.
+    match reapable aRef staleMarker LeaseExpiredBranchPushed with
+    | Error WorkAliveBranch -> ()
+    | other -> failwith $"a pushed branch with no PR must block the reap, distinctly — got %A{other}"
+
+[<Fact>]
 let ``#581 reapable FAILS CLOSED when liveness is unknown - a lock we cannot rule dead we may not break`` () =
     // "We could not ask" is NOT "there is no PR". A transient read failure must not become a reaped claim.
     match reapable aRef staleMarker LivenessUnknown with

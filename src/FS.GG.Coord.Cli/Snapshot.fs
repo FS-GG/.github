@@ -139,6 +139,7 @@ module Snapshot =
             match kind with
             | "lease-held" -> Ok LeaseHeld
             | "lease-expired-no-pr" -> Ok LeaseExpiredNoPr
+            | "lease-expired-branch-pushed" -> Ok LeaseExpiredBranchPushed
             | "lease-expired-pr-open" ->
                 // The PR number is the PROOF. A `lease-expired-pr-open` with no number is a claim of
                 // proof without the proof, and accepting it would resurrect exactly the reasoning

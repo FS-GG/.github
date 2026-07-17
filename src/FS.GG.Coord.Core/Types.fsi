@@ -163,6 +163,14 @@ module Types =
         | LeaseExpiredNoPr
         /// The lease lapsed but an `item/<n>-*` PR is open. The worker is demonstrably still working.
         | LeaseExpiredPrOpen of pr: int
+        /// The lease lapsed, no PR is open YET, but a pushed `item/<n>-*` BRANCH exists — the worktree
+        /// protocol's own artifact, and proof of life BEFORE §5 opens the PR (#1055/#581). This is the
+        /// interval a REST outage strands a worker in: §5 opens the PR only after the work, so during §3
+        /// the branch is the only artifact, and `heartbeat` (REST) cannot renew the lease through the same
+        /// outage that is expiring it. Weaker evidence than an open PR — a branch can be a stale leftover —
+        /// so it withholds and REFUSES a reap without asserting the work is as demonstrably alive as a PR.
+        /// NOT `LeaseExpiredNoPr`, and NOT reapable.
+        | LeaseExpiredBranchPushed
         /// We could not ask. NOT the same as "no PR" — and this is the case that reaped live work.
         | LivenessUnknown
 

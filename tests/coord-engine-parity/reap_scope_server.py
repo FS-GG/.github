@@ -146,6 +146,9 @@ class H(BaseHTTPRequestHandler):
             with LOCK:
                 _REQUESTS.append(m.group(1))
             return self._send(200, open_issues(m.group(1)))
+        if re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/", p):
+            # #1055: no pushed item/<n>-* branch here → prAlive's branch probe finds none → LeaseExpiredNoPr.
+            return self._send(200, [])
         m = re.match(r"^/repos/[^/]+/([^/]+)/pulls/?$", p)
         if m:
             return self._send(200, [])  # no open PR anywhere → both claims are genuinely dead.
