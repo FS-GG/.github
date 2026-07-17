@@ -146,6 +146,34 @@ ALLOWED_FILES = frozenset(
 # pass on the real tree and red-light a verbatim copy of it.
 SELF_BASENAME = "check-engine-flag-narrative.py"
 
+# ---- THE TWO FAIL-CLOSED GUARDS, AND WHY ONE OF THEM IS NOT ENOUGH -------------------------------
+#
+# The obvious non-vacuity guard is "did we see the flag at all?" — and on THIS gate it fails open,
+# which was found by driving it rather than by reading it. The ADRs carry ~70 mentions and are
+# allowlisted, so a walk that silently stopped covering `src/` and `tests/` still counts those and
+# still prints a confident green over a tree it never read. Measured: pruning `src`/`tests` reports
+# `ok … 77 mention(s) audited`, rc=0. That is #266's signature exactly, and .github#930's sub-class
+# (b) — the subject is not covered, the check is satisfied, the gate stays green — which is the very
+# family this gate belongs to. A gate that fails the way its own class fails is not a gate.
+#
+# The deeper trap: once the repair lands, `src/` legitimately carries ZERO mentions. So "was `src/`
+# audited?" CANNOT be answered by looking for a mention in it — absence is the correct state, and
+# absence is also what a broken walker produces. The two are indistinguishable by counting mentions,
+# which is why a second guard has to assert COVERAGE rather than content.
+#
+# 1. COVERAGE. A directory that exists must have been WALKED. This is a floor, never a ceiling: it
+#    does not limit what is scanned (the surface is still the whole tree), so a new directory needs
+#    no entry here and is audited the day it is created. It only asserts that the big, known trees
+#    were actually reached — the one thing a silent prune or a broken walk takes away.
+REQUIRED_COVERAGE = ("src", "tests", "docs", "scripts", ".github")
+
+# 2. CONTENT. A file that demonstrably CARRIES the flag must be seen carrying it — proof the reader
+#    and the pattern still work, not just that the walk reached the file. The rejection test is the
+#    honest canary: its whole subject is the string, so it can never legitimately stop carrying it
+#    (a version of it that does not mention the flag has stopped asserting the flag is refused, which
+#    is itself the finding). This mirrors `check-worker-id-attractor.py`'s `engine_sites` guard.
+CANARY_FILE = "tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs"
+
 
 class GateError(Exception):
     """A condition under which the gate must fail rather than skip. Maps to exit 3."""
@@ -208,8 +236,12 @@ def main(argv: list[str]) -> int:
 
     findings: list[str] = []
     mentions = 0  # every mention, allowlisted or not — the non-vacuity subject.
+    canary_mentions = 0  # ...in the one file whose subject IS the string.
+    walked: set[str] = set()  # top-level dirs actually reached, for the coverage guard.
 
     for path, rel in walk(root):
+        top = rel.split("/", 1)[0]
+        walked.add(top)
         try:
             text = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -220,6 +252,8 @@ def main(argv: list[str]) -> int:
         for lineno, line in enumerate(text.splitlines(), 1):
             for m in ENGINE_FLAG.finditer(line):
                 mentions += 1
+                if rel == CANARY_FILE:
+                    canary_mentions += 1
                 if allowed:
                     continue
                 spelling = m.group(0)
@@ -244,6 +278,33 @@ def main(argv: list[str]) -> int:
             "audited the tree and found NO mention of `--engine` at all, in any file. The ADRs and "
             "the rejection test demonstrably carry it, so the walker or the pattern is broken — "
             "examining nothing is a failure to audit, not a clean audit (#266)."
+        )
+
+    # COVERAGE (guard 1). The global count above is satisfied by the ADRs alone, so on its own it
+    # would green a walk that silently stopped covering the source tree. Assert instead that every
+    # known tree that EXISTS was actually reached — the one claim a silent prune falsifies, and the
+    # one that a post-repair `src/` (legitimately zero mentions) cannot make by counting content.
+    for d in REQUIRED_COVERAGE:
+        if (root / d).is_dir() and d not in walked:
+            raise GateError(
+                f"'{d}/' exists in the tree but the walk never reached a file in it, so this audit "
+                f"has no opinion about it — and `{d}/` is exactly where a live-flag narrative would "
+                f"hide. The ADRs alone satisfy the mention count, so a green here would be a "
+                f"confident report over a tree that was never read (#266). The prune list or the "
+                f"walk is broken, not the tree."
+            )
+
+    # CONTENT (guard 2). Coverage proves the walk reached the file; it does not prove the reader or
+    # the pattern still work. The rejection test's entire subject is this string, so if it exists and
+    # we did not see the flag in it, ENGINE_FLAG or the decoder is broken — and every "ok" above is
+    # worthless rather than good news. Skipped when the file is absent (a synthetic fixture tree):
+    # there is genuinely nothing to be canary of, and asserting on a file that is not there would
+    # red every tree but this repo's.
+    if (root / CANARY_FILE).is_file() and canary_mentions == 0:
+        raise GateError(
+            f"found NO mention of `--engine` in {CANARY_FILE}, whose whole subject is that string "
+            f"(it asserts the flag is REFUSED). The pattern or the reader is broken — examining "
+            f"nothing is a failure to audit, not a clean audit (#266)."
         )
 
     if findings:

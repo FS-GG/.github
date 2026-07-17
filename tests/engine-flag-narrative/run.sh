@@ -195,6 +195,40 @@ else
   bad "a missing root must exit 3 (got rc=$RC)" "$OUT"
 fi
 
+# 10b. THE CANARY, and the fail-open this gate ALMOST shipped with. The global "did we see the flag
+#      at all?" count is satisfied by the ADRs alone — so a walk that silently stopped covering
+#      `tests/` still counted ~70 allowlisted mentions and printed a confident green over a tree it
+#      never read (measured, on the real tree, before the guard landed: `ok … 77 mention(s)`, rc=0).
+#      That is #266's signature and .github#930's sub-class (b): the subject is not covered, the
+#      check is satisfied, the gate stays green — the very family this gate belongs to.
+#
+#      Here the rejection test EXISTS and carries no mention, which is impossible while the reader
+#      and the pattern work: its whole subject is that string. So it must be NO VERDICT, not a pass.
+seed "$WORK/canary-blind"
+mkdir -p "$WORK/canary-blind/tests/FS.GG.Coord.Cli.Tests"
+printf 'let e = parse [ "decide" ] |> rejected  // the flag is gone from its own assertion\n' \
+  > "$WORK/canary-blind/tests/FS.GG.Coord.Cli.Tests/OptionsTests.fs"
+gate_on canary-blind
+if [ "$RC" = 3 ] && printf '%s' "$OUT" | grep -q 'no verdict'; then
+  ok "the CANARY fires: the rejection test carrying no mention is NO VERDICT (3), not a pass"
+else
+  bad "canary guard must exit 3 — the ADR count alone would otherwise green a blind read (got rc=$RC)" "$OUT"
+fi
+
+# 10c. COVERAGE. Once the repair lands, `src/` legitimately carries ZERO mentions — so "was `src/`
+#      audited?" cannot be answered by looking for content in it: absence is the correct state AND
+#      what a broken walk produces. The guard therefore asserts the tree was REACHED, not what was
+#      in it. A `src/` the walk never reaches a file in is an audit with no opinion about `src/`,
+#      and that must not read as clean.
+seed "$WORK/coverage-blind"
+mkdir -p "$WORK/coverage-blind/src"   # exists, holds nothing the walk can reach
+gate_on coverage-blind
+if [ "$RC" = 3 ] && printf '%s' "$OUT" | grep -q "src/"; then
+  ok "COVERAGE: a src/ the walk reached no file in is NO VERDICT (3), and the message names it"
+else
+  bad "coverage guard must exit 3 and name src/ (got rc=$RC)" "$OUT"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # THE REAL TREE. Without this, every leg above is synthetic: the gate could pass its own fixture
 # while the shipped tree describes a flag no worker can select.
