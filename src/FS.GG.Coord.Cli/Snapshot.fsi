@@ -103,6 +103,7 @@ module Snapshot =
     /// authored — so a rule cannot land in the engine and not in the prose that tells a worker about it.
     val renderFacts:
         rules: Protocol.Rule list ->
+        filingRules: Protocol.Rule list ->
         verdicts: Protocol.VerdictDoc list ->
         takeExitCodes: Protocol.ExitCodeDoc list ->
         landableExitCodes: Protocol.ExitCodeDoc list ->

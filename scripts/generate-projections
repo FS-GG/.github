@@ -58,6 +58,8 @@ TARGETS=(
   "take-exit-codes:.agents/skills/pnext-item/SKILL.md"
   "landable-exit-codes:.claude/skills/pnext-item/SKILL.md"
   "landable-exit-codes:.agents/skills/pnext-item/SKILL.md"
+  "filing-rules:.claude/skills/cross-repo-coordination/SKILL.md"
+  "filing-rules:.agents/skills/cross-repo-coordination/SKILL.md"
   "versions:docs/architecture.md"
 )
 
@@ -223,6 +225,34 @@ render_landable_exit_codes() {
   echo "-->"
   echo ""
   render_exit_code_table landableExitCodes
+}
+
+# `filing-rules` — the rules a worker FILING an item must satisfy (#889), for `cross-repo-coordination`.
+#
+# THE SUBSET IS CHOSEN IN `Protocol.fs`, NOT HERE. `facts --json` states `filingRules` outright, so this
+# renderer selects nothing: a `jq` filter picking ids out of `.rules` would be a second, hand-maintained
+# copy of the membership — living in the shell, where no test can reach it — and the rule that belongs in
+# a projection is a decision about the PROTOCOL, not about how a document renders.
+#
+# THE `Because` IS OMITTED, and that is the difference from `rules`. `Rule.Because` is the incident that
+# bought the rule; the canonical doc carries it because a reader there is learning WHY the protocol is
+# shaped this way. A filer is mid-task and needs the rule they must satisfy — this skill links to
+# `intra-repo-parallel-work` for the reasoning, which is the same division that makes the kind exist.
+render_filing_rules() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  These rules were restated by hand here, and #916 measured why that is not survivable: the"
+  echo "  hand-written copies AGREED with each other for as long as they existed and were wrong the"
+  echo "  whole time. Edit Protocol.fs and regenerate."
+  echo "-->"
+  echo ""
+  echo "*Generated from the typed core. The engine that refuses your \`Paths:\` line is the engine that"
+  echo "wrote this. The full rule set, with the incident behind each one, is in"
+  echo "[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).*"
+  echo ""
+  jq -r '.filingRules[] | "**\(.title)**\n\n\(.statement)\n"' "$FACTS"
 }
 
 # `versions` — the registry's version leads (#913), for the architecture map. THE ONLY REGION EMITTED

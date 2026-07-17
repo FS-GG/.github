@@ -655,11 +655,16 @@ module Snapshot =
     // /2 — the payload gained `takeExitCodes` (#889). Additive for a reader that ignores unknown members,
     // but the number says what the surface IS, not merely whether an old reader survives it.
     // /3 — and `landableExitCodes` (#900), on the same reasoning.
+    // /4 — and `filingRules` (#889): the subset `cross-repo-coordination` projects. Its members are the
+    // SAME values `rules` holds — the payload states the subset rather than making the generator re-derive
+    // it by id, because a `jq` filter listing ids in the shell would be a second copy of the membership,
+    // hand-maintained, in the file whose whole purpose is to end hand-maintained copies.
     [<Literal>]
-    let private FactsSchema = "fsgg.coord.protocol/3"
+    let private FactsSchema = "fsgg.coord.protocol/4"
 
     let renderFacts
         (rules: Protocol.Rule list)
+        (filingRules: Protocol.Rule list)
         (verdicts: Protocol.VerdictDoc list)
         (takeExitCodes: Protocol.ExitCodeDoc list)
         (landableExitCodes: Protocol.ExitCodeDoc list)
@@ -670,17 +675,24 @@ module Snapshot =
         w.WriteStartObject()
         w.WriteString("schema", FactsSchema)
 
-        w.WriteStartArray("rules")
+        // ONE writer for every rule list, for the reason `writeExitCodes` below is one: a second
+        // hand-written copy of these four members is exactly how `rules` and `filingRules` would come to
+        // spell `because` differently under the generator that reads both.
+        let writeRules (key: string) (rs: Protocol.Rule list) =
+            w.WriteStartArray(key)
 
-        for r in rules do
-            w.WriteStartObject()
-            w.WriteString("id", r.Id)
-            w.WriteString("title", r.Title)
-            w.WriteString("statement", r.Statement)
-            w.WriteString("because", r.Because)
-            w.WriteEndObject()
+            for r in rs do
+                w.WriteStartObject()
+                w.WriteString("id", r.Id)
+                w.WriteString("title", r.Title)
+                w.WriteString("statement", r.Statement)
+                w.WriteString("because", r.Because)
+                w.WriteEndObject()
 
-        w.WriteEndArray()
+            w.WriteEndArray()
+
+        writeRules "rules" rules
+        writeRules "filingRules" filingRules
 
         w.WriteStartArray("verdicts")
 
