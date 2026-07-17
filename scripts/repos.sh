@@ -20,7 +20,7 @@
 #                                                           # EVERY capability the roster claims —
 #                                                           # including one with no `capabilities:` row.
 #                                                           # The audit's closure check reads this (#628).
-#   repos.sh kit [--field id|kind|source] [--kind skill|client] [--registry <file>]
+#   repos.sh kit [--field id|kind|source|dest] [--kind skill|client|config] [--registry <file>]
 #                                                           # the kit item list, in roster order
 #   repos.sh relock [--registry <file>] [--root <dir>]      # REGENERATE registry/repos.lock from the
 #                                                           # kit: sources. The lock is a GENERATED, CI-gated
@@ -303,8 +303,8 @@ cmd_kit() {
       *)          die "kit: unknown arg '$1'." ;;
     esac
   done
-  case "$field" in id|kind|source) ;; *) die "kit: --field must be id, kind or source." ;; esac
-  case "$kind" in ""|skill|client) ;; *) die "kit: --kind must be skill or client." ;; esac
+  case "$field" in id|kind|source|dest) ;; *) die "kit: --field must be id, kind, source or dest." ;; esac
+  case "$kind" in ""|skill|client|config) ;; *) die "kit: --kind must be skill, client or config." ;; esac
   [ -f "$reg" ] || die "registry not found: $reg"
   yaml2json "$reg" | jq -r --arg f "$field" --arg k "$kind" \
     '(.kit // [])[] | select($k == "" or .kind == $k) | .[$f]'
@@ -518,20 +518,62 @@ cmd_validate() {
     | "\(.[0].base) <- \([.[].id] | join(", "))"')
 
   # --- the kit rows themselves: authored, and carrying NO digest (#527) ---
-  local kid kind ksrc ksha
-  while IFS=$'\t' read -r kid kind ksrc ksha; do
+  # Re-delimit with a unit separator, exactly as the capabilities loop above does and for the same
+  # reason: `dest` is empty on skill/client rows, so a plain `IFS=$'\t' read` — tab IS IFS-whitespace —
+  # would collapse the empty field and shift a config row's dest into `sha256`, mis-reporting a valid
+  # manifest as carrying a forbidden digest. `\x1f` is not IFS-whitespace and preserves empties.
+  local kid kind ksrc ksha kdest line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    IFS=$'\x1f' read -r kid kind ksrc ksha kdest <<< "${line//$'\t'/$'\x1f'}"
     [ -n "$kid" ] || continue
     # Same rule as repo ids. `repos.sh kit` feeds these straight into the propagate PR's title, so a
     # stray quote or control character in an id would surface there — validate at the source.
     [[ "$kid" =~ ^[a-z0-9.][a-z0-9._-]*$ ]] || err "kit id '$kid' must be lowercase kebab/dotted."
-    case "$kind" in skill|client) ;; *) err "kit '$kid' kind '$kind' invalid (skill|client)." ;; esac
+    case "$kind" in skill|client|config) ;; *) err "kit '$kid' kind '$kind' invalid (skill|client|config)." ;; esac
     [ -e "$root/$ksrc" ] || err "kit '$kid' source missing: $ksrc"
     # A digest back in the roster is SPLIT TRUTH, and the split is the whole bug (#527): two places
     # to state one fact, and the stale one is authoritative to whoever reads it first. Reject the
     # field outright rather than tolerate-and-ignore it — a tolerated field gets hand-edited, and a
     # hand-edited digest that nothing checks is exactly the silent staleness this move is avoiding.
     [ -z "$ksha" ] || err "kit '$kid' carries a 'sha256:' field — digests live in repos.lock (#527). Remove it and run: repos.sh relock"
-  done < <(echo "$json" | jq -r '(.kit // [])[] | [.id, .kind, .source, (.sha256 // "")] | @tsv')
+    # A `config` row is a plain file delivered to a path that is NOT its source (a client's dest IS its
+    # source; a skill's is derived from its basename), so it must NAME its receiver-relative dest — and
+    # that dest may not be absolute or escape the receiver root. Any OTHER kind carrying a `dest` is a
+    # confusion: its destination is already determined, so a stray `dest` would silently do nothing.
+    if [ "$kind" = config ]; then
+      [ -n "$kdest" ] || err "kit '$kid' is kind 'config' but declares no 'dest' — a config row must name the receiver-relative path it is delivered to."
+      case "$kdest" in
+        /*)   err "kit '$kid' dest '$kdest' must be receiver-RELATIVE, not absolute." ;;
+        *..*) err "kit '$kid' dest '$kdest' must not escape the receiver root (no '..')." ;;
+      esac
+    else
+      [ -z "$kdest" ] || err "kit '$kid' (kind '$kind') declares a 'dest' — only 'config' rows may; a skill's dest is derived from its basename and a client's IS its source path."
+    fi
+  done < <(echo "$json" | jq -r '(.kit // [])[] | [.id, .kind, .source, (.sha256 // ""), (.dest // "")] | @tsv')
+
+  # --- non-skill kit rows must not collide at one receiver path (#348, extended for config) ---
+  # A client lands at its source path, a config at its dest; two that resolve to one path make the
+  # fabric unsatisfiable — the same defect the skill-basename check above rejects, one kind over.
+  local ddups; ddups="$(echo "$json" | jq -r '
+    [ (.kit // [])[] | if .kind=="client" then .source elif .kind=="config" then .dest else empty end ]
+    | group_by(.)[] | select(length>1)[0]')"
+  [ -z "$ddups" ] || err "kit client/config rows share a receiver destination: $ddups"
+
+  # --- THE #1077 INVARIANT: the shim and its engine manifest ride the kit TOGETHER ---
+  # `scripts/fsgg-coord` execs `fs.gg.coord.cli`, so a receiver that gets the shim but not the
+  # `.config/dotnet-tools.json` that restores the engine has a tool it CANNOT run. That was the live
+  # state: the shim rode coordination-kit (6 receivers), the manifest rode build-config (4), and
+  # templates/audio fell in the gap — invisible to every gate because none asked "can this receiver run
+  # the engine?" (#1077, epic #266). Both are kit rows now, so the two receiver sets are EQUAL by
+  # construction; this asserts they cannot silently drift apart again — if the kit delivers the shim, it
+  # must deliver the manifest. Keyed on the delivered PATHS, not row ids, so a rename cannot slip past.
+  local shimmanifest; shimmanifest="$(echo "$json" | jq -r '
+    ( [ (.kit // [])[] | if .kind=="client" then .source elif .kind=="config" then .dest else empty end ] ) as $d
+    | if ($d | index("scripts/fsgg-coord")) and (($d | index(".config/dotnet-tools.json")) | not)
+      then "MISSING" else "" end')"
+  [ "$shimmanifest" != "MISSING" ] \
+    || err "the coordination kit delivers the fsgg-coord shim (scripts/fsgg-coord) but NOT the engine manifest (.config/dotnet-tools.json): a receiver would get a tool it cannot run (#1077). Add a 'kind: config' kit row whose dest is '.config/dotnet-tools.json', or the shim and its manifest have drifted onto different fabrics again."
 
   # --- content-addressed kit: repos.lock is exactly the digests of the declared sources ---
   # The lock must be a REGENERATION of the roster, not merely consistent with it: a source the lock

@@ -183,7 +183,7 @@ jobs:
           # per #903 — not a pending step), and a title that
           # claimed it would be describing a diff this PR does not contain. `.config/fsgg-build-config.sha`
           # IS in the diff (it is the provenance pin, #592) and so it is named.
-          title="chore: sync shared build config (Directory.Build.props, Directory.Packages.props, .config/dotnet-tools.json, .config/fsgg-build-config.sha)"
+          title="chore: sync shared build config (Directory.Build.props, Directory.Packages.props, .config/fsgg-build-config.sha)"
           # ONE LINE. A multi-line value here would start at column 0 and terminate the `run: |` block
           # scalar; indenting it to stay inside the block would prepend spaces to every line, which
           # markdown renders as a code block. coordination-propagate keeps its body on one line for the
