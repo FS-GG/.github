@@ -93,6 +93,90 @@ else
 fi
 rmdir "$NONGIT" 2>/dev/null || true
 
+# ---- 3. STALENESS: THE ARTIFACT IS NOT A REF (#929) ----------------------------------------------
+# Tier 4 execs a build output nothing keeps in step with the `src/` beside it, so the shim can hand a
+# worker code that is not in their tree — and twice on 2026-07-16 it handed them an engine that
+# silently ignored `release --status` and put a merged item back to Ready.
+#
+# These legs use a SYNTHETIC tier-4 checkout: a git toplevel with a fake engine and a fake source tree.
+# That is deliberate on two counts. It asserts the shim's mtime rule directly, with no 5s `dotnet build`
+# per leg; and it does not depend on the REAL bin/ being stale or fresh at test time — which is whatever
+# the last person happened to build, i.e. the very thing under test.
+# EVERY mtime IS SET EXPLICITLY, none left at "now". `-newer` is a STRICT comparison, so a fixture that
+# wrote the .dll and then touched the source would be asserting that two writes a few microseconds apart
+# land on different timestamps — true on ext4's nanosecond stamps, false the moment this runs on a
+# coarser filesystem, and a parity red is supposed to be EVIDENCE rather than a coin toss.
+FIXSRC="src/FS.GG.Coord.Core/Protocol.fs"
+fixture() {   # $1 = dir. A tier-4 checkout whose engine is NEWER than its source (i.e. FRESH).
+  mkdir -p "$1/src/FS.GG.Coord.Cli/bin/Release/net10.0" "$1/src/FS.GG.Coord.Core"
+  ( cd "$1" && git init -q . ) >/dev/null 2>&1
+  printf '// source\n' >"$1/$FIXSRC"
+  FIXBIN="$1/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+  printf '#!/usr/bin/env bash\necho "ENGINE RAN: $*"\n' >"$FIXBIN"; chmod +x "$FIXBIN"
+  : >"$FIXBIN.dll"
+  touch -d '3 hours ago' "$1/$FIXSRC"                  # source, then...
+  touch -d '2 hours ago' "$FIXBIN" "$FIXBIN.dll"       # ...the build that FOLLOWED it: 1h clear
+}
+stale() { touch -d '1 hour ago' "$1/$FIXSRC"; }        # edited an hour AFTER the build: 1h clear
+
+FIX="$(mktemp -d)"; fixture "$FIX"
+
+# FRESH: an engine newer than its source is the happy path, and it must stay SILENT. A guard that cried
+# wolf here would fire on every worker after every legitimate build — teaching the fleet to skim it.
+err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$err" ]; then
+  ok "staleness: an engine NEWER than its src/ is silent — no warning on the happy path"
+else
+  bad "staleness: a fresh engine must not warn" "rc=$rc err=$err"
+fi
+
+# STALE + a READ verb: WARN, but still run. A stale read misinforms one worker; blocking it would halt
+# the fleet the moment anyone touches src/, on a repo whose premise is N workers in one checkout.
+stale "$FIX"
+out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>/dev/null)"; rc=$?
+err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'ENGINE RAN' \
+   && printf '%s' "$err" | grep -qi 'stale'; then
+  ok "staleness: a stale engine WARNS on a read verb ('next') — and still runs, exit code intact"
+else
+  bad "staleness: a read must warn and still run" "rc=$rc out=$out err=$err"
+fi
+
+# STALE + a BOARD WRITE: REFUSE. A stale write corrupts state the whole fleet shares (#929's two live
+# incidents), so the engine must NOT run — asserted on the output, not merely the exit code.
+for verb in release set-field done claim; do
+  out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" .github#1 2>&1)"; rc=$?
+  if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
+     && printf '%s' "$out" | grep -qi 'refused'; then
+    ok "staleness: a stale engine REFUSES the board write '$verb' (exit $rc) — the engine never ran"
+  else
+    bad "staleness: '$verb' is a board write and must be refused on a stale engine" "rc=$rc out=$out"
+  fi
+done
+
+# NO SOURCE — the receivers' shape (ADR-0034 §4.4 tiers 2/3): there is nothing to be stale AGAINST, so
+# the guard must not fire. Asserted at tier 4 with the sources removed, which is the shim's own test for
+# it: no `*.fs` under src/, so no comparison exists to fail.
+find "$FIX/src" -name '*.fs' -delete
+err="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release .github#1 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$err" ]; then
+  ok "staleness: with NO source present, even a board write is unaffected — nothing to be stale against"
+else
+  bad "staleness: a source-less checkout must not warn or refuse" "rc=$rc err=$err"
+fi
+
+# AN EXPLICIT BIN IS EXEMPT, and structurally: tier 1 execs before tier 4 is ever reached. This is why
+# the D.1 corpus above (which drives the shim through FSGG_COORD_ENGINE_BIN) sees no warnings, and why
+# the receivers' shape cannot be broken by this guard.
+fixture "$FIX"; stale "$FIX"
+err="$(cd "$FIX" && FSGG_COORD_ENGINE_BIN="$FIXBIN" "$SHIM" release .github#1 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && [ -z "$err" ]; then
+  ok "staleness: an explicit FSGG_COORD_ENGINE_BIN is honoured silently — an instruction, not a hint"
+else
+  bad "staleness: tier 1 must not consult staleness" "rc=$rc err=$err"
+fi
+rm -rf "$FIX"
+
 echo
 total=$((pass+failcount))
 if [ "$failcount" -eq 0 ]; then
