@@ -16,19 +16,29 @@ namespace FS.GG.Coord
 ///    do it — that is #464 (*N workers file the same finding N times*) and #463 (*two workers hand-synced
 ///    the same kit twice in one day*), rediscovered inside the mechanism meant to help.
 ///
-///    **THIS CONDITION IS NOT BUILT YET, AND THAT IS WHY NOTHING CALLS `offer`.** The lock is IO — it cannot
-///    live in a pure core — and which substrate it takes is an open DECISION, not an omission: the item CAS
-///    (`Writes.claim`) is 145 lines of claim-specific policy (stale collection, twin detection #419,
-///    `prev=` #481, renew-in-place #550) that a chore lock wants none of, so reusing it means factoring the
-///    org's most safety-critical function, and NOT reusing it means a second compare-and-swap beside the
-///    first — which is #485, the defect this whole core exists to retire, re-committed inside its own fix.
+///    **THE SUBSTRATE IS DECIDED — ADR-0041, .github#873 — AND THE WIRING IS NOT DONE, WHICH IS WHY NOTHING
+///    CALLS `offer` YET.** A chore takes `Writes.claim`, UNCHANGED, on a dedicated per-repo chore-lock issue
+///    (closed, so it is never mistaken for work; never LOCKED, because the marker is a comment), with a
+///    short lease:
 ///
-///    So this module ships as Phase 1 shipped: **deliberately dead code with a live test suite.** `derive`
-///    is reachable from `lint`-shaped reporting and from tests; `offer` is reachable from NOTHING, and it
-///    must stay that way until the lock exists. A chore queue that offers without a lock is not a smaller
-///    version of this feature — the design doc says so in as many words: *"without those four, it is a
-///    machine for manufacturing duplicate work and false green."* The subset is the failure mode, so the
-///    unwired state is the honest one. See .github#733.
+///        Writes.claim transport choreLeaseMinutes worker session choreLockRef (fun () -> None)
+///
+///    This text used to say the substrate was an open DECISION, and that the item CAS was "145 lines of
+///    claim-specific policy a chore lock wants none of" — so reusing it meant factoring the org's most
+///    safety-critical function, and not reusing it meant a second CAS (#485). **That premise was wrong, and
+///    it is what kept this module dead:** `claim` touches only comments, its lease is already a PARAMETER,
+///    and its one board coupling is the caller-supplied `readPreviousStatus` callback. It is already a
+///    general comment-order CAS over an arbitrary issue ref — `WriteTests` had been driving it as
+///    `claim … aRef (fun () -> None)` all along, which IS this configuration. The lock was built the whole
+///    time; only the reading of it was missing.
+///
+///    So this module still ships as Phase 1 shipped: **deliberately dead code with a live test suite.**
+///    `derive` is reachable from `lint`-shaped reporting and from tests; `offer` is reachable from NOTHING,
+///    and it must stay that way until .github#733 wires it at the safe point and adds the `perform` path
+///    that re-verifies with `isRetired` against a FRESH read. A chore queue that offers without a lock is
+///    not a smaller version of this feature — the design doc says so in as many words: *"without those four,
+///    it is a machine for manufacturing duplicate work and false green."* The subset is the failure mode, so
+///    the unwired state remains the honest one until then. See .github#733 and ADR-0041.
 ///
 /// 2. **VERIFIABLE, NOT MERELY REPORTED.** "The agent said it did it" is a promise, and a promise that
 ///    nothing re-checks is exactly the #510 shape — *the fix for fail-open must not itself fail open*. So a

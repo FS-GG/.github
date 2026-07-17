@@ -64,6 +64,7 @@ registry like any other, and this org gates its registries.
 | [0038](0038-the-corpus-is-the-cut-over-gate.md) | The **defect corpus** is the cut-over gate; the shadow clock is demoted to telemetry | Accepted |
 | [0039](0039-nuget-org-is-the-read-path.md) | **nuget.org is the read path; the org feed is the publish path** | Accepted |
 | [0040](0040-port-the-io-layer.md) | The **IO layer is ported to F# too** — an `IGitHub` seam (HTTP adapter + call-counting fake) driven by the shell corpus through a configurable API base; each write's precondition lives in its type | Accepted |
+| [0041](0041-the-chore-lock-is-the-item-cas-on-another-subject.md) | A **chore takes the item CAS, unchanged**, on a closed per-repo lock issue — `Writes.claim` is already substrate-general (comments only; the lease is a parameter; the board coupling is a callback), so the refactor #873 priced was never needed | Accepted |
 
 ## Supersession map
 

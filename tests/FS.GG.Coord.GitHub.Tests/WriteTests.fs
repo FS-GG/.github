@@ -51,6 +51,115 @@ let private ok (body: string) =
           ETag = None
           NextLink = None }
 
+// ---- the CHORE LOCK: the same CAS, on a different SUBJECT (ADR-0041, #873) --------------------------
+//
+// #873 asked which substrate a chore lock takes, and framed `Writes.claim` as "145 lines of claim-specific
+// policy that a chore lock wants none of" — so reusing it meant factoring the org's most safety-critical
+// function, and not reusing it meant a second CAS (#485). ADR-0041 decides it by observing that the framing
+// is wrong on its load-bearing point: `claim` touches ONLY comments, its lease is already a PARAMETER, and
+// its one board coupling is the caller-supplied `readPreviousStatus` callback. It is already a general
+// comment-order CAS over an arbitrary issue ref.
+//
+// These pin that premise, because an ADR whose central claim nothing checks is a claim of coverage with
+// nothing behind it (#944). If somebody gives `claim` a board dependency — a `set-field`, a project read —
+// ADR-0041's decision silently stops being true, and the chore lock built on it stops being buildable.
+// That must fail HERE, not in #733's wiring.
+//
+// And it does, by a mechanism worth naming rather than trusting: `scripted` answers a FIXED list of
+// responses and `failwith`s the moment it is called a fourth time. So scripting exactly three responses
+// (read, post, re-read) asserts the CALL SHAPE, not merely the outcome — an added board read is a fourth
+// call and reds these instantly. Verified by mutation on this tree: inserting one extra transport read into
+// `claim` fails 26 of these 57 tests, including all three below.
+//
+// The subject is a CLOSED, off-board issue that exists only to be a lock (ADR-0041): closed, so it never
+// appears in an `--state open` read and can never be mistaken for work; not LOCKED, because a locked
+// conversation refuses comments and the marker IS a comment.
+
+/// The per-repo chore-lock issue — off the board, and not `aRef`. The prefix (`fsgg:claim`) needs no
+/// parameterising precisely because the SUBJECT disambiguates: only chore markers live here.
+let private choreLock =
+    { Owner = "FS-GG"
+      Repo = "FS.GG.SDD"
+      Number = 7 }
+
+/// A chore is seconds long, not two hours (#550). The lease is a parameter, so this costs no refactor.
+let private choreLease = 2
+
+[<Fact>]
+let ``the chore lock is the item CAS UNCHANGED — an off-board ref, a short lease, and no column`` () =
+    let transport =
+        scripted
+            [ ok "[]" // 1. read: the lock is free
+              ok """{"id":901}""" // 2. post our marker
+              ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we hold it
+
+    // The chore-lock configuration, in full: a short lease, and `fun () -> None` for the board callback —
+    // a lock issue has no column to restore, which is why the coupling belongs in the callback and not in
+    // the CAS. No new function, no new marker prefix, no parameter that does not already exist.
+    match claim transport choreLease me None choreLock (fun () -> None) with
+    | Ok(Won(held, _)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Equal(me, held.Worker)
+
+        // #481's `prev=` is ABSENT rather than empty — the column nobody recorded is not restored, and the
+        // chore lock never had one. This is the whole of what `claim` wanted from the board, declined.
+        Assert.Equal(None, held.PreviousStatus)
+    | other -> failwith $"the chore lock must be winnable with the CAS as it stands — got %A{other}"
+
+    // AND IT RAN ON THE CHORE-LOCK SUBJECT — asserted, because `scripted` cannot enforce it. The fake
+    // answers a queue and IGNORES the request, so every assertion above would hold identically if `claim`
+    // had addressed item #42. That is not a nitpick here: ADR-0041's argument for reusing the CAS verbatim
+    // is precisely that *the SUBJECT disambiguates* — only chore markers live on the lock issue, which is
+    // why the `fsgg:claim` prefix needs no parameterising. A test that cannot see the subject is not
+    // testing that argument.
+    Assert.True(transport.Logged "comment-list FS-GG/FS.GG.SDD 7", "the CAS did not read the chore-lock issue")
+    Assert.True(transport.Logged "comment-post FS-GG/FS.GG.SDD 7", "the marker was not posted to the chore-lock issue")
+
+    // ...and NOT on an item. The lock and the items it reconciles are different subjects, and conflating
+    // them would put a chore marker on somebody's live claim.
+    Assert.False(transport.Logged "comment-post FS-GG/FS.GG.SDD 42", "a chore marker was posted to an ITEM")
+
+[<Fact>]
+let ``a chore is CLAIMED, not broadcast — the CAS refuses the second worker`` () =
+    // CONDITION 1, and the reason the chore queue shipped unwired. If N workers each call `next` and each is
+    // handed the same chore, N of them do it — #464 (N workers file one finding N times) and #463 (two
+    // workers hand-synced the same kit twice in a day), rediscovered inside the mechanism meant to help.
+    //
+    // The item CAS already refuses this, on this subject, with no changes. That IS the decision.
+    let transport =
+        scripted
+            [ ok "[]"
+              ok """{"id":902}""" // ours
+              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // a rival got there first
+              ok "" ] // so we withdraw
+
+    match claim transport choreLease me None choreLock (fun () -> None) with
+    | Ok(Lost w) -> Assert.Equal(them, w)
+    | other -> failwith $"two workers must not hold one chore — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 902")
+
+[<Fact>]
+let ``the chore lock COLLECTS a dead holder's debris — the lock a worker died holding`` () =
+    // #873 argued a chore lock "has no debris to collect". It has exactly the debris every lock has: a
+    // worker that dies mid-chore leaves a marker, and with a short lease it lapses in minutes. Collection is
+    // not policy a chore lock wants NONE of — it is the thing that makes a short lease self-healing, and it
+    // is already written. This is one of three reasons ADR-0041 does not parameterise these protections off.
+    let transport =
+        scripted
+            [ ok (comments [ staleClaimJson 800 "kite-461" "" ]) // a lapsed chore lock, holder gone
+              ok """{"id":901}"""
+              ok (comments [ staleClaimJson 800 "kite-461" ""; marker 901 "vole-418" "" ])
+              ok "" ] // collect the dead marker
+
+    match claim transport choreLease me None choreLock (fun () -> None) with
+    | Ok(Won(held, evicted)) ->
+        Assert.Equal(901L, held.MarkerId)
+        Assert.Contains(them, evicted)
+    | other -> failwith $"a lapsed chore lock must be collectable — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 800")
+
 // ---- the CAS ---------------------------------------------------------------------------------------
 
 [<Fact>]
