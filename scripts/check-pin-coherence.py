@@ -31,6 +31,15 @@ WHAT IT ASSERTS. Three things, which together mean "this pin can move, and it ha
        * the dep is detected, the registry has a newer version,   -> THE BOT IS BLIND. What to do
          and Renovate opened no PR — ever                            about it depends on the ROUTE,
                                                                      and the gate says which (below).
+  4. MECHANISM (scheme) — .github#576/#1122. Every pin's literal must be a SINGLE version under the
+     versioning scheme Renovate resolves for it, not an open-ended `>=` range. This is the blind spot
+     that hid #576 for four rounds: the manager's versioningTemplate defaults to `nuget`, and under
+     `nuget` a bare literal `0.10.0` is `>=0.10.0` — satisfied by every newer release — so the bot
+     proposes nothing, while the pin sits at exactly newest and passes (1), (2) and (3) green. The
+     gate resolves the scheme (the manager's template, rendered with any `versioning=` capture) and
+     reds a literal that is a range: "this pin can never bump". `versioning=loose` was the fix (#1119);
+     this keeps it from being dropped again. isSingleVersion is a transcription of renovate's own,
+     driven not reasoned (see the block above check_pin_bumpable).
 
 THE #576 CORRECTION — READ THIS BEFORE YOU GO LOOKING FOR A TOKEN.
 
@@ -75,7 +84,11 @@ not share an exit code. Every one of these is an ERROR, not a skip:
   * this repo's Renovate config is absent;
   * the preset routes FS.GG.* to an auth-required host and this repo declares no token for it;
   * the preset routes FS.GG.* to a host this gate cannot classify (it must not guess that a host it
-    has never heard of is readable).
+    has never heard of is readable);
+  * the annotation manager declares no `versioningTemplate`, or one this gate cannot render, so the
+    scheme a pin resolves to is unknown (#1122);
+  * a pin resolves to a versioning scheme this gate has not verified against renovate's own
+    `isSingleVersion` — an unverified scheme must not read as "single version, fine" (#1122).
 
 Comparison is by NuGet version ORDER, never by substring — the .github#268 defect class, where
 `0.4.0` matches inside `0.4.0-preview.1`. Ordering and feed reads are shared with
@@ -212,6 +225,7 @@ class Pin(NamedTuple):
     datasource: str
     dep_name: str
     current_value: str
+    versioning: str | None  # the annotation's own `versioning=<v>` capture, or None (→ manager default)
 
 
 def _to_python_regex(renovate_regex: str) -> re.Pattern:
@@ -238,11 +252,17 @@ def _file_matcher(patterns: list[str]):
     return matches
 
 
-def load_annotation_manager(config_path: str) -> tuple[list[re.Pattern], object]:
-    """The org preset's annotation-driven custom manager: its regexes and its file matcher.
+def load_annotation_manager(config_path: str) -> tuple[list[re.Pattern], object, str]:
+    """The org preset's annotation-driven custom manager: its regexes, file matcher, and versioningTemplate.
 
     Identified structurally — the manager whose matchStrings capture both `depName` and
     `currentValue` — rather than by its description, which is prose and may be reworded.
+
+    The `versioningTemplate` is returned because the SCHEME Renovate applies to a pin is what
+    decides whether its literal is a single, bumpable version or an open-ended `>=` range — the
+    exact #576 blind spot. A manager that declares no versioningTemplate is refused rather than
+    guessed at: the gate cannot make the single-version assertion without knowing the scheme, and
+    "I could not tell the scheme" must not wear the same green as "the pin is fine" (epic #266).
     """
     try:
         with open(config_path, encoding="utf-8") as fh:
@@ -264,9 +284,21 @@ def load_annotation_manager(config_path: str) -> tuple[list[re.Pattern], object]
         if not all(isinstance(s, str) for s in strings):
             continue
         if any("(?<depName>" in s and "(?<currentValue>" in s for s in strings):
+            template = m.get("versioningTemplate")
+            if not isinstance(template, str) or not template.strip():
+                raise GateError(
+                    f"{config_path}'s annotation-driven custom manager declares no "
+                    f"`versioningTemplate`, so the gate cannot tell which versioning scheme Renovate "
+                    f"applies to its pins — and that scheme is what decides whether a bare literal is "
+                    f"a single, bumpable version or a `>=` floor that never bumps (#576). The gate "
+                    f"will not guess: declare a versioningTemplate (Renovate defaults an unset one to "
+                    f"the datasource's scheme — for nuget that is `nuget`, which is the very default "
+                    f"that froze the SDD.Cli pin)."
+                )
             return (
                 [_to_python_regex(s) for s in strings],
                 _file_matcher(m.get("managerFilePatterns") or []),
+                template.strip(),
             )
 
     raise GateError(
@@ -313,6 +345,10 @@ def scan_pins(root: str, regexes: list[re.Pattern], matches_path) -> list[Pin]:
         for rx in regexes:
             for m in rx.finditer(text):
                 g = m.groupdict()
+                # `versioning` is OPTIONAL in the manager's matchString, so an absent capture is a
+                # legitimate None (→ manager default), NOT the empty string. Keep the two apart:
+                # `versioning=` written empty would be a different, broken, thing from omitting it.
+                versioning = g.get("versioning")
                 pins.append(
                     Pin(
                         file=rel,
@@ -320,6 +356,7 @@ def scan_pins(root: str, regexes: list[re.Pattern], matches_path) -> list[Pin]:
                         datasource=(g.get("datasource") or "").strip(),
                         dep_name=(g.get("depName") or "").strip(),
                         current_value=(g.get("currentValue") or "").strip(),
+                        versioning=versioning.strip() if versioning is not None else None,
                     )
                 )
 
@@ -1313,6 +1350,122 @@ def _resolve_newest(pin: Pin, resolve) -> str:
     return newest(resolve(pin.dep_name))
 
 
+# ---- Does the pin's versioning scheme make its literal a SINGLE version, or a range? (#576, #1122) --
+#
+# THE DEFECT. #576's four-round freeze was NOT, at root, a credential or a route. It was the SCHEME:
+# the annotation manager's versioningTemplate defaults to `nuget`, and under `nuget` versioning a
+# BARE literal `0.10.0` is an inclusive minimum — `>=0.10.0` — which every newer release already
+# satisfies, so Renovate proposes nothing. The pin sat at exactly newest, so every other check in
+# this gate (freshness, routing, detection) was GREEN while the pin could not move by construction.
+# #1119 fixed it by writing `versioning=loose` onto the pin, under which the same bare literal is a
+# single pinned version and a newer release does NOT satisfy it. This asserts that property so the
+# `versioning=` token cannot be dropped again without a red.
+#
+# WHAT `isSingleVersion` MEANS, PROVEN not reasoned. Modelled here in Python (the house style — this
+# gate already models NuGet ordering in fsgg_feed rather than shelling to a bot), but the model is a
+# transcription of renovate 43.268.4's OWN `versioning.get(scheme).isSingleVersion(literal)`, driven
+# directly because reasoning about this is exactly what mis-diagnosed #576 for four rounds:
+#
+#     scheme          '0.10.0'   '[0.10.0]'   '>=0.10.0' / '^0.10.0'
+#     nuget           false      true         false
+#     loose/semver/…  true       false        false
+#
+# So: under `nuget`, ONLY the bracketed exact form `[x]` is single; a bare literal is a floor. Under
+# the semver family, a bare exact literal is single and every bracket/comparator/range is not. Any
+# OTHER scheme is refused (GateError), never assumed single — a scheme this gate has not verified
+# against renovate must not read as fine (epic #266). Extend the sets below only after driving the
+# real `isSingleVersion`, the way #576 taught.
+_SEMVER_LIKE_VERSIONINGS = frozenset({"loose", "semver", "semver-coerced", "npm"})
+_NUGET_EXACT_RE = re.compile(r"^\[\s*(?P<v>[^,\[\]()]+?)\s*\]$")
+
+# Renovate renders the manager's versioningTemplate to get a pin's scheme. Reproduce the two shapes
+# this org's presets actually use, and refuse the rest rather than mis-render a Handlebars template:
+#   * a PLAIN literal (`"nuget"`) — a constant scheme, and Renovate ignores a `versioning=` capture
+#     against it, so the capture is ignored here too;
+#   * the capture-or-default idiom `{{#if versioning}}{{{versioning}}}{{else}}<default>{{/if}}` — the
+#     scheme is the pin's `versioning=` capture when it has one, else <default>.
+_VERSIONING_CAPTURE_OR_DEFAULT_RE = re.compile(
+    r"^\{\{#if\s+versioning\}\}\s*\{\{\{\s*versioning\s*\}\}\}\s*\{\{else\}\}"
+    r"\s*(?P<default>[A-Za-z][\w.-]*)\s*\{\{/if\}\}$"
+)
+
+
+def resolve_versioning(versioning_template: str, captured: str | None) -> str:
+    """The versioning scheme Renovate applies to a pin: the manager's template, rendered with the
+    pin's own `versioning=` capture. Raises on a template shape this gate cannot render (fail closed).
+    """
+    t = (versioning_template or "").strip()
+    if not t:
+        raise GateError("the annotation manager declares no versioningTemplate")
+    if "{{" not in t:
+        # A constant scheme. Renovate renders the same literal regardless of any capture, so a stray
+        # `versioning=` on a pin is INERT under this manager — model that rather than silently
+        # honouring a capture the bot would ignore.
+        return t
+    m = _VERSIONING_CAPTURE_OR_DEFAULT_RE.match(t)
+    if m:
+        return (captured or m.group("default")).strip()
+    raise GateError(
+        f"the annotation manager's versioningTemplate {versioning_template!r} is neither a plain "
+        f"scheme nor the `{{{{#if versioning}}}}{{{{{{versioning}}}}}}{{{{else}}}}<default>{{{{/if}}}}` "
+        f"idiom, so this gate cannot tell which scheme a pin resolves to. Refusing to guess (#266) — "
+        f"simplify the template or extend resolve_versioning() deliberately."
+    )
+
+
+def is_single_version(scheme: str, literal: str) -> bool:
+    """True iff `literal` names a SINGLE version under `scheme` — i.e. one a newer release would NOT
+    already satisfy, so Renovate can bump it. Raises on a scheme this gate has not verified (#266).
+    """
+    lit = (literal or "").strip()
+    if not lit:
+        raise GateError("empty version literal — nothing to classify")
+    if scheme == "nuget":
+        # Under nuget versioning ONLY the bracketed exact form `[x]` is single; a bare literal is a
+        # `>=` floor (renovate 43.268.4: isSingleVersion('0.10.0') is false, '[0.10.0]' is true).
+        m = _NUGET_EXACT_RE.match(lit)
+        if not m:
+            return False
+        parse_version(m.group("v"))  # the bracketed form must still name a real version
+        return True
+    if scheme in _SEMVER_LIKE_VERSIONINGS:
+        # A bare exact version is single; a comparator, caret, bracket or range is not — and
+        # parse_version's anchored grammar rejects every one of those, so its success IS the test.
+        try:
+            parse_version(lit)
+        except GateError:
+            return False
+        return True
+    raise GateError(
+        f"versioning scheme {scheme!r} is one this gate has not verified against renovate's own "
+        f"`isSingleVersion`, so it cannot say whether {lit!r} is a single version or a range. A pin "
+        f"whose scheme the gate cannot evaluate must not read as fine (epic #266): drive renovate's "
+        f"isSingleVersion for {scheme!r} and add it to the sets in check-pin-coherence.py, or change "
+        f"the pin to a scheme the gate knows ({', '.join(sorted(_SEMVER_LIKE_VERSIONINGS | {'nuget'}))})."
+    )
+
+
+def check_pin_bumpable(pin: Pin, scheme: str) -> str | None:
+    """None if the pin's literal is a single, bumpable version under `scheme`; else the reason it is a
+    range that can never bump — the #576 blind spot, which a freshness check alone cannot see because
+    a `>=` floor equals newest today.
+    """
+    if is_single_version(scheme, pin.current_value):
+        return None
+    fix = (
+        f"the bracketed exact form `[{pin.current_value}]`"
+        if scheme == "nuget"
+        else f"an explicit `versioning=loose` (or semver), under which `{pin.current_value}` IS a single version"
+    )
+    return (
+        f"{pin.file}:{pin.line}: {pin.dep_name} is pinned at {pin.current_value!r} under "
+        f"versioning={scheme!r}, which reads it as a RANGE, not a single version — so this pin can "
+        f"NEVER bump: every newer release already satisfies it, and Renovate proposes nothing. This "
+        f"is the #576 blind spot exactly — the literal equals newest TODAY, so freshness and every "
+        f"other check here pass green while the pin is frozen by construction. Use {fix}."
+    )
+
+
 def check_pin(pin: Pin, resolve, evidence) -> str | None:
     """None if the pin is at feed-newest, else the reason it is not — WITH the cause, evidenced.
 
@@ -1511,7 +1664,7 @@ def main(argv: list[str]) -> int:
         # is reachable today, and it is the half that keeps the house rule true going forward.
         caps = load_caps(preset)
 
-        regexes, matches_path = load_annotation_manager(preset)
+        regexes, matches_path, versioning_template = load_annotation_manager(preset)
         pins = scan_pins(root, regexes, matches_path)
         if not pins:
             raise GateError(
@@ -1553,14 +1706,20 @@ def main(argv: list[str]) -> int:
     print(f"\ncomparing {len(pins)} annotated pin(s) against {', '.join(hosts)} (what Renovate reads):")
     for pin in sorted(pins):
         try:
-            problem = check_pin(pin, resolve, evidence)
+            # The scheme first: a pin whose versioning makes its literal a `>=` floor can never bump,
+            # and that is invisible to the freshness comparison below because such a pin equals newest
+            # today (#576). So it is checked BEFORE, and short-circuits the feed read when it reds.
+            scheme = resolve_versioning(versioning_template, pin.versioning)
+            problem = check_pin_bumpable(pin, scheme)
+            if problem is None:
+                problem = check_pin(pin, resolve, evidence)
         except GateError as e:
             problems.append(f"{pin.file}:{pin.line}: {e}")
             continue
         if problem:
             problems.append(problem)
         else:
-            print(f"  ok   {pin.file}:{pin.line:<4} {pin.dep_name:24} == {pin.current_value}")
+            print(f"  ok   {pin.file}:{pin.line:<4} {pin.dep_name:24} == {pin.current_value}  [versioning={scheme}]")
 
     if problems:
         print()
