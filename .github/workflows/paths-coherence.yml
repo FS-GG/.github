@@ -29,12 +29,28 @@ on:
       - ".github/workflows/**"
       - "scripts/check-paths-coherence.py"
       - "tests/paths-coherence/**"
+      # The PROJECT GRAPH is an input to rule (b) as surely as the workflows are (#930): a
+      # `ProjectReference` added here changes which filters are complete, so a PR that adds one
+      # and no more must re-run this gate. Omitting these is sub-class (b) of the very class the
+      # gate now checks — the filter and its copy agreeing perfectly about the wrong set.
+      # Kept in step with PROJECT_GLOBS in the gate.
+      - "**/*.fsproj"
+      - "**/*.csproj"
+      - "**/*.vbproj"
   push:
     branches: [main]
     paths:
       - ".github/workflows/**"
       - "scripts/check-paths-coherence.py"
       - "tests/paths-coherence/**"
+      # The PROJECT GRAPH is an input to rule (b) as surely as the workflows are (#930): a
+      # `ProjectReference` added here changes which filters are complete, so a PR that adds one
+      # and no more must re-run this gate. Omitting these is sub-class (b) of the very class the
+      # gate now checks — the filter and its copy agreeing perfectly about the wrong set.
+      # Kept in step with PROJECT_GLOBS in the gate.
+      - "**/*.fsproj"
+      - "**/*.csproj"
+      - "**/*.vbproj"
   workflow_dispatch:
 
 permissions:

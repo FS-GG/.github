@@ -20,6 +20,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.GitHub/**"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"
@@ -32,6 +33,7 @@ on:
     paths:
       - "src/FS.GG.Coord.Core/**"
       - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.GitHub/**"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"

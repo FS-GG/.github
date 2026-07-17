@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Assert a workflow's `pull_request.paths` and `push.paths` agree.
+"""Assert a workflow's `paths:` filters AGREE with each other, and COVER what they build.
 
-.github#880, epic #266 (coherence gates that fail open). Found by worker `finch-2e3f` while working
-#860 (the suite selector), which derives its answer from these very filters.
+.github#880 and #930, epic #266 (coherence gates that fail open). Found by worker `finch-2e3f` while
+working #860 (the suite selector), which derives its answer from these very filters.
 
-THE RULE, AND IT IS THE WHOLE RULE
-  For every workflow declaring BOTH `pull_request.paths` and `push.paths`, the two lists are
-  identical as sets.
+TWO RULES, AND THEY ARE ONE GATE ON PURPOSE
+  (a) AGREEMENT — for every workflow declaring BOTH `pull_request.paths` and `push.paths`, the two
+      lists are identical as sets.
+  (b) COVERAGE  — a workflow whose filter names a .NET project's own directory must also select
+      every project in that project's `ProjectReference` closure.
+
+  #880 shipped (a) and deliberately left (b). They land as one gate because of how (b) is missed: a
+  worker fixing (a) reads the filter, sees two matching copies, and moves on — which is exactly what
+  happened three hours after #880 closed (#930). Set equality is satisfied when both copies are
+  wrong THE SAME WAY, and the gate stays green.
 
 Nearly every workflow here duplicates its `paths:` list verbatim between the two triggers. That
 duplication is invisible: nothing reads both copies, so when one is edited and the other is not, the
@@ -33,10 +40,36 @@ WHY A GATE, AND NOT A FIFTH HAND-REPAIR
   regenerating the same finding, the finding is not the bug — the thing that regenerates it is.
 
 WHAT THIS GATE DELIBERATELY DOES NOT DO
-  The harder half — DOES A FILTER COVER THE WORKFLOW'S OWN SUBJECT? — is #334/#508's shape and is
-  NOT mechanically decidable: it needs a human to say what a given gate's inputs are. A narrow gate
-  that ships beats a broad one that does not, so that class stays a judgement call and this gate
-  stays an equality test. Do not grow it.
+  This paragraph used to read "Do not grow it", and #930 is the decision to grow it by exactly one
+  rule. The old text was right about the general case and wrong about the whole of it:
+
+  > The harder half — DOES A FILTER COVER THE WORKFLOW'S OWN SUBJECT? — is #334/#508's shape and is
+  > NOT mechanically decidable: it needs a human to say what a given gate's inputs are.
+
+  "What is this workflow's subject?" is still not mechanically decidable IN GENERAL, and this gate
+  still does not ask it. But it is not undecidable UNIFORMLY, and #930 named the seam: a .NET
+  suite's subject includes its `ProjectReference` closure, and that closure is a FACT IN THE PROJECT
+  FILES. No judgement in it, nothing for a human to say. So (b) below asks the one question it can
+  answer from the graph, and asks nothing else.
+
+  STILL OUT OF SCOPE, and each for a reason rather than an omission:
+
+    - A GATE SCRIPT'S DECLARED SURFACE. `check-worker-id-attractor.py` audits `src/` (its
+      `CODE_SURFACE` constant, which it WALKS — so it cannot be stale) while its workflow's filter
+      omits `src/**`: a PR reintroducing the exact regression it was written to catch does not
+      trigger it (#930's instance 7). Deciding this needs a CONVENTION for how a script declares its
+      surface machine-readably, across scripts — an architectural call #930 reserves for a human.
+      Keying off one script's private constant name would be a hardcode wearing a rule's clothes.
+    - A `*-selftest`'S FIXTURE AND TOOL (#332, #334, #508). Same shape, same missing convention.
+
+  WHAT IS PERMANENTLY OUT OF SCOPE, and this one is a finding rather than a gap: DERIVING THE
+  SUBJECT BY READING `run:` TEXT. It looks like the obvious general answer and it is unsound. A
+  scan of every `run:` block for repo paths, measured against this repo, returns THREE hits and all
+  three are false: `scripts/fsgg-coord` named inside a YAML or shell COMMENT in recipe-landable.yml,
+  recipe-pagination.yml and worker-id-attractor.yml. That is #683 exactly — a parser cannot tell a
+  MENTION from a USE — and it is the same trap the escape hatch below took two goes to escape. A
+  gate that cries wolf on a comment teaches workers to scroll past it (#698). So (b) reads the
+  PROJECT GRAPH and the workflow's own `paths:` list, both structural, and never free text.
 
 SHAPES THIS GATE REFUSES RATHER THAN SKIPS
   Set equality is only a sound reading of `paths:` while the lists are plain allow-lists. Two shapes
@@ -54,21 +87,53 @@ SHAPES THIS GATE REFUSES RATHER THAN SKIPS
   Neither shape is live in this repo today. They are refused anyway, because the gate must not
   quietly start being unsound the day one appears.
 
-THE ESCAPE HATCH
-  A gate with no way to say "yes, on purpose" becomes a straitjacket that gets disabled. A workflow
-  may diverge deliberately by carrying, anywhere in the file:
+RULE (b): WHAT COUNTS AS DECLARING A PROJECT, AND WHY IT IS NARROW
+  The obligation attaches to a project only when a pattern's LITERAL PREFIX is that project's own
+  directory — `src/FS.GG.Coord.Cli/**` declares it; `src/**` and `tests/**` do not, and neither does
+  `src/FS.GG.Coord.Cli/Options.fs`.
 
-      # paths-coherence: allow-divergence — <reason>
+  That narrowness is the whole soundness of the rule, and each exclusion is a false positive it was
+  measured to produce without it:
+
+    - A CATCH-ALL is not a declaration. `test-selector-selftest.yml` filters on `tests/**`, which
+      incidentally selects three .Tests projects it never builds — it runs a shell script that greps.
+      Requiring their closure would drag `src/**` onto a workflow whose subject it is not, and the
+      first thing a wrongly-red gate teaches is that this gate is noise (#698).
+    - NAMING ONE FILE is not declaring the project. `recipe-landable.yml` watches
+      `src/FS.GG.Coord.Cli/Options.fs` because it GREPS that file. Watching a file you read is not
+      building the project it lives in.
+    - A pattern that already covers the whole tree needs no obligation: `src/**` selects every
+      project's closure by construction, so there is nothing that could be missing.
+
+  Read positively: naming a project's directory is a workflow saying "this project's SOURCE is my
+  input". Then a change to what that project is BUILT FROM is a change to its input, and the graph
+  says exactly what that is.
+
+THE ESCAPE HATCH
+  A gate with no way to say "yes, on purpose" becomes a straitjacket that gets disabled. Two hatches,
+  one per rule, because they license different things and a marker must not silently do more than it
+  says. Both go anywhere in the workflow file, as a standalone YAML comment:
+
+      # paths-coherence: allow-divergence — <reason>            (rule a)
+      # paths-coherence: allow-uncovered <path> — <reason>       (rule b)
 
   The reason is REQUIRED and must be non-empty: the point is not to permit divergence but to make it
   a decision somebody made and signed, rather than a typo nobody saw. A bare marker with no reason
   is itself a finding.
 
+  `allow-uncovered` NAMES THE PATH it excuses, and that is not decoration (#496). A blanket "this
+  workflow is exempt from (b)" would render identically to a workflow nobody had thought about — the
+  absence must be deliberate AND readable, or it is `Paths:` with no declaration all over again. So
+  the hatch excuses `src/FS.GG.Coord.GitHub` and leaves every other uncovered dependency a finding,
+  including one added later.
+
 EXIT CODES — THE CONTRACT
-  0  every workflow declaring both filters declares them identically.
-  1  FINDING: a workflow's two copies have drifted.
-  3  NO VERDICT (permanent): a workflow would not parse, a shape cannot be compared, or NOTHING was
-     audited. Examining nothing is a failure to audit, not a clean audit (#266).
+  0  every workflow declaring both filters declares them identically, and every filter that names a
+     project covers that project's `ProjectReference` closure.
+  1  FINDING: a workflow's two copies have drifted (a), or a filter omits a project it builds (b).
+  3  NO VERDICT (permanent): a workflow would not parse, a shape cannot be compared, a project file
+     would not parse, or NOTHING was audited. Examining nothing is a failure to audit, not a clean
+     audit (#266).
 
   There is deliberately no exit 2 ("no verdict, retryable"): this gate is pure and offline. It reads
   files, makes no network call, and has no condition a re-run could resolve.
@@ -122,8 +187,20 @@ ALLOW_MARKER = re.compile(
     re.MULTILINE,
 )
 
+# Rule (b)'s hatch. It NAMES the path it excuses — see THE ESCAPE HATCH. Same standalone-YAML-comment
+# discipline as ALLOW_MARKER, and for the same reason: a `#` inside a `run: |` block is shell text.
+ALLOW_UNCOVERED = re.compile(
+    r"^[ \t]*#[ \t]*paths-coherence:[ \t]*allow-uncovered[ \t]+(?P<path>[^\s—:]+)"
+    r"[ \t]*[—:-]?[ \t]*(?P<reason>.*)$",
+    re.MULTILINE,
+)
+
 # Returned by allow_divergence() when a marker is present but none of them is signed.
 UNSIGNED = ""
+
+# The project files whose reference graph rule (b) reads. MSBuild's own languages; there is no
+# judgement in the list, only which extensions carry a `ProjectReference`.
+PROJECT_GLOBS = ("*.fsproj", "*.csproj", "*.vbproj")
 
 
 class GateError(Exception):
@@ -276,6 +353,130 @@ def allow_divergence(text: str, what: str) -> str | None:
     return UNSIGNED
 
 
+def glob_to_regex(pattern: str) -> re.Pattern[str]:
+    """A GitHub `paths:` pattern as a regex over repo-relative paths.
+
+    Actions' globbing, not fnmatch's: `**` crosses `/`, `*` and `?` do not. fnmatch would translate
+    `*` to `.*` and quietly decide `src/*` matches `src/a/b.fs` — a filter that selects more than it
+    does, which for rule (b) means silently reporting a dependency as covered when a push to it would
+    not trigger the workflow. Wrong in the fail-OPEN direction, so it is spelled out here.
+    """
+    i, out = 0, ["^"]
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            # `a/**/b` must also match `a/b` — the doubled star may stand for no directory at all.
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    out.append("$")
+    return re.compile("".join(out))
+
+
+def selects(path: str, patterns: list[str]) -> bool:
+    """Would a push touching `path` trigger a workflow filtered on `patterns`?"""
+    return any(glob_to_regex(p).match(path) for p in patterns)
+
+
+def literal_prefix(pattern: str) -> str:
+    """The pattern up to its first wildcard — the part that names a place rather than a shape.
+
+    `src/FS.GG.Coord.Cli/**` -> `src/FS.GG.Coord.Cli`.  `src/**` -> `src`.
+    """
+    cut = min((i for i in (pattern.find("*"), pattern.find("?")) if i != -1), default=len(pattern))
+    return pattern[:cut].rstrip("/")
+
+
+def project_graph(root: str) -> dict[str, list[str]]:
+    """Every MSBuild project in the tree, and the projects it references. Repo-relative paths.
+
+    Structural: a `ProjectReference`'s `Include=` is a path, in a schema, in a file — there is no
+    prose to misread here, which is precisely why rule (b) is derivable and reading `run:` is not.
+    """
+    graph: dict[str, list[str]] = {}
+    for pattern in PROJECT_GLOBS:
+        for path in glob.glob(os.path.join(root, "**", pattern), recursive=True):
+            rel = os.path.relpath(path, root).replace(os.sep, "/")
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    text = fh.read()
+            except OSError as e:
+                raise GateError(f"{rel}: unreadable — {e}") from e
+            refs = []
+            for m in re.finditer(r'ProjectReference\s+[^>]*Include\s*=\s*"([^"]+)"', text):
+                # MSBuild writes Windows separators; they are legal on every platform.
+                inc = m.group(1).replace("\\", "/")
+                target = os.path.normpath(os.path.join(os.path.dirname(path), inc))
+                refs.append(os.path.relpath(target, root).replace(os.sep, "/"))
+            graph[rel] = refs
+    return graph
+
+
+def closure(graph: dict[str, list[str]], project: str) -> set[str]:
+    """Every project `project` transitively references. Never includes `project` itself.
+
+    Cycle-safe: MSBuild forbids reference cycles, but a gate that hangs on a malformed tree is a gate
+    that stops the repo — and `seen` costs nothing.
+    """
+    found: set[str] = set()
+    stack = list(graph.get(project, []))
+    while stack:
+        p = stack.pop()
+        if p in found:
+            continue
+        found.add(p)
+        stack.extend(graph.get(p, []))
+    return found
+
+
+def uncovered(patterns: list[str], graph: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """`(subject, dependency)` for each project this filter NAMES whose closure it does not select.
+
+    "Names" is deliberately narrow — a pattern's literal prefix must BE the project's directory. See
+    RULE (b) in the module docstring for the three false positives that narrowness is measured to
+    prevent; the short of it is that a catch-all (`tests/**`) and a single file
+    (`src/.../Options.fs`) are not a workflow declaring a build subject, and treating them as one
+    reds workflows whose subject it is not.
+    """
+    out: list[tuple[str, str]] = []
+    for project in subjects(patterns, graph):
+        for dep in sorted(closure(graph, project)):
+            if not selects(dep, patterns):
+                out.append((project, dep))
+    return out
+
+
+def subjects(patterns: list[str], graph: dict[str, list[str]]) -> list[str]:
+    """The projects this filter DECLARES as its build subject — see uncovered()."""
+    prefixes = {literal_prefix(p) for p in patterns}
+    return [p for p in sorted(graph) if os.path.dirname(p) in prefixes]
+
+
+def allow_uncovered(text: str) -> dict[str, str]:
+    """`{path: reason}` for each signed `allow-uncovered` marker. An unsigned one maps to UNSIGNED.
+
+    Same block-scalar exclusion as allow_divergence(): a marker inside a `run: |` is shell text, and
+    honouring it would license a real omission from a line that is not a YAML comment at all.
+    """
+    opaque = block_scalar_lines(text)
+    out: dict[str, str] = {}
+    for m in ALLOW_UNCOVERED.finditer(text):
+        if text.count("\n", 0, m.start()) in opaque:
+            continue
+        out[m.group("path").strip().rstrip("/")] = (m.group("reason") or "").strip()
+    return out
+
+
 def workflow_files(root: str) -> list[str]:
     d = os.path.join(root, ".github", "workflows")
     if not os.path.isdir(d):
@@ -298,6 +499,15 @@ def main(argv: list[str]) -> int:
     pairs_seen = 0
     allowed = 0
 
+    # A SET OF (workflow, project), not a running count. Both triggers declare the same list on a
+    # paired workflow, so incrementing per trigger reported 26 subjects where the repo has 13 — a
+    # confidently wrong number, in the one line a human reads to decide whether the gate looked at
+    # anything. The fixture asserts on this number too, so an inflated one is a check agreeing with
+    # its own arithmetic rather than with the repo.
+    subjects_seen: set[tuple[str, str]] = set()
+
+    graph = project_graph(args.root)
+
     for path in workflow_files(args.root):
         where = os.path.relpath(path, args.root)
         with open(path, encoding="utf-8") as fh:
@@ -307,6 +517,56 @@ def main(argv: list[str]) -> int:
 
         pr_raw, pr_ignores = declared(on, "pull_request")
         push_raw, push_ignores = declared(on, "push")
+
+        # RULE (b), AND IT RUNS BEFORE THE PAIRING RULE RETURNS.
+        #
+        # Coverage is a property of ONE filter, so it is not the pairing rule's business and must not
+        # inherit its scope. A one-sided workflow (`build-config-propagate.yml` is push-only) declares
+        # a real filter that can omit a real project, and (a) skips it by design. Checking each
+        # declared list on its own terms means neither rule can hide a workflow from the other.
+        # ONE FINDING PER MISSING DEPENDENCY, not one per (trigger x subject) that reaches it. The
+        # first draft emitted four for coord-engine.yml — the same absent directory, reached from two
+        # subjects on two triggers — and one omission stated four times reads as four problems. A
+        # gate whose output has to be skimmed is one that gets skimmed (#698); the repair is the same
+        # `src/FS.GG.Coord.GitHub/**` either way, so it is one finding that names its several causes.
+        excused = allow_uncovered(text)
+        missing: dict[str, tuple[set[str], set[str]]] = {}
+        for trigger, raw in (("pull_request", pr_raw), ("push", push_raw)):
+            if raw is None or not isinstance(raw, list) or not raw:
+                continue
+            pats = [str(p) for p in raw]
+            subjects_seen.update((where, sub) for sub in subjects(pats, graph))
+            for project, dep in uncovered(pats, graph):
+                subs, trigs = missing.setdefault(os.path.dirname(dep), (set(), set()))
+                subs.add(os.path.dirname(project))
+                trigs.add(trigger)
+
+        for dep_dir, (subs, trigs) in sorted(missing.items()):
+            reason = excused.get(dep_dir)
+            if reason == UNSIGNED:
+                findings.append(
+                    f"{where}: carries `# paths-coherence: allow-uncovered {dep_dir}` with NO "
+                    f"reason. An unsigned hatch makes the omission neither a decision nor a typo "
+                    f"— write the reason after the marker."
+                )
+                continue
+            if reason:
+                allowed += 1
+                continue
+            named = ", ".join(repr(s) for s in sorted(subs))
+            plural = len(subs) > 1
+            scope = (
+                "both filters"
+                if len(trigs) > 1
+                else f"the `{next(iter(trigs))}` filter"
+            )
+            findings.append(
+                f"{where}: {scope} name{'' if len(trigs) > 1 else 's'} {named}, which "
+                f"{'reference' if plural else 'references'} {dep_dir!r} — and nothing in the filter "
+                f"selects {dep_dir!r}. A change there changes what "
+                f"{'they build' if plural else 'it builds'}, and this workflow would not run: green "
+                f"by absence (#266). Add a pattern covering {dep_dir + '/**'!r}."
+            )
 
         # An allow-list facing an ignore-list: two filters that both narrow the trigger, in opposite
         # directions, with no way to say whether they agree. Silently skipping it is how a coherence
@@ -385,25 +645,51 @@ def main(argv: list[str]) -> int:
             "is a failure to audit, not a clean audit (#266)."
         )
 
+    # #266 FOR RULE (b) IS ASSERTED BY THE FIXTURE, NOT HERE, AND THAT IS DELIBERATE.
+    #
+    # The obvious guard — "this tree has projects but no workflow names one, so the reader is broken"
+    # — was written, and it is UNSOUND. A repo with projects whose workflows all filter on catch-alls
+    # declares no subject and is perfectly healthy; the guard red-lit three of this fixture's own
+    # legs, each a legitimate shape (a `tests/**` catch-all, a single named file, a whole-tree
+    # `src/**`). It was encoding a fact about THIS repo — "our workflows name projects" — into a rule
+    # that runs against any tree, which is how a gate starts refusing correct work.
+    #
+    # The exposure it was aiming at is real: if the prefix reader broke, (b) would examine nothing and
+    # report the same green it reports when everything is covered. That belongs where the repo-specific
+    # knowledge is — `tests/paths-coherence/run.sh` asserts the shipped tree declares subjects and
+    # finds the real instances, so a reader that goes blind fails there, loudly, against real files.
+    # Same reasoning as #724: put the assertion somewhere that executes, not somewhere that reads well.
+    #
+    # What the gate owes instead is HONESTY about what it looked at, which the summary below prints
+    # as a count rather than implying with a bare "ok".
+
     if findings:
         for f in findings:
             print(f"::error::check-paths-coherence: {f}", file=sys.stderr)
         print(
-            f"\n{len(findings)} workflow(s) whose `paths:` copies disagree, of {pairs_seen} "
-            f"declaring both.\n"
-            "\nA workflow duplicates its `paths:` list between `pull_request` and `push`. When the "
-            "copies drift,\nthe gate still passes its own tests and simply STOPS RUNNING on `main` "
-            "— green, and wrong (#880).\n"
-            "\n  fix:  make the two lists identical.\n"
-            "        Diverging on purpose? Say so, and sign it:\n"
-            "          # paths-coherence: allow-divergence — <why>",
+            f"\n{len(findings)} finding(s), across {pairs_seen} workflow(s) declaring both filters "
+            f"and {len(subjects_seen)} declared project subject(s).\n"
+            "\n(a) A workflow duplicates its `paths:` list between `pull_request` and `push`. When "
+            "the copies drift,\n    the gate still passes its own tests and simply STOPS RUNNING on "
+            "`main` — green, and wrong (#880).\n"
+            "\n      fix:  make the two lists identical.\n"
+            "            Diverging on purpose? Say so, and sign it:\n"
+            "              # paths-coherence: allow-divergence — <why>\n"
+            "\n(b) A filter names a project's directory but omits something that project is BUILT "
+            "FROM. Both\n    copies can agree perfectly and both be wrong the same way — which is "
+            "how this class survived\n    (a) landing (#930).\n"
+            "\n      fix:  add a pattern covering the referenced project.\n"
+            "            Genuinely not an input? Say so, name it, and sign it:\n"
+            "              # paths-coherence: allow-uncovered <path> — <why>",
             file=sys.stderr,
         )
         return FINDING
 
     print(
-        f"ok: every workflow's `paths:` copies agree — {pairs_seen} workflow(s) declaring both "
-        f"audited" + (f", {allowed} diverging on purpose" if allowed else "") + "."
+        f"ok: {pairs_seen} workflow(s) declaring both filters agree; {len(subjects_seen)} declared "
+        f"project subject(s) cover their `ProjectReference` closure"
+        + (f"; {allowed} exception(s) signed" if allowed else "")
+        + "."
     )
     return OK
 

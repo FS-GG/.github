@@ -371,10 +371,230 @@ expect "a workflow that will not parse is NO VERDICT, not a clean audit" \
   3 "not parsable as YAML" "$RY"
 
 # =============================================================================================
+# 6b. RULE (b) — COVERAGE. A filter naming a project must select what that project is BUILT FROM.
+#
+#     Sub-class (b) of #880's class: both copies agree perfectly and are both wrong the same way, so
+#     rule (a) is satisfied and the gate stays green. It regenerated within three hours of #880
+#     closing (#930), which is why it is a rule and not a sixth hand-repair.
+# =============================================================================================
+
+# proj <root> <dir> [<include>…] — an MSBuild project, with the given ProjectReference includes.
+# The gate reads the project GRAPH and nothing else, so a fixture project needs no sources: these
+# five lines are the entire subject.
+proj() {
+  local r="$1" d="$2"; shift 2
+  mkdir -p "$r/$d"
+  local name; name="$(basename "$d")"
+  { echo '<Project Sdk="Microsoft.NET.Sdk">'
+    if [ "$#" -gt 0 ]; then
+      echo '  <ItemGroup>'
+      for inc in "$@"; do echo "    <ProjectReference Include=\"$inc\" />"; done
+      echo '  </ItemGroup>'
+    fi
+    echo '</Project>'; } > "$r/$d/$name.fsproj"
+}
+
+RB="$(root "$WORK/cover-miss")"
+proj "$RB" "src/A" "../B/B.fsproj"
+proj "$RB" "src/B"
+wf "$RB/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+expect "a filter naming a project but omitting what it REFERENCES is caught" \
+  1 "nothing in the filter selects 'src/B'" "$RB"
+
+RB2="$(root "$WORK/cover-ok")"
+proj "$RB2" "src/A" "../B/B.fsproj"
+proj "$RB2" "src/B"
+wf "$RB2/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/B/**"' '      - "src/A/**"
+      - "src/B/**"'
+expect "...and covering it satisfies the rule" 0 "ok:" "$RB2"
+
+# CLOSURE, not just direct references. A→B→C with C uncovered is the same fail-open one hop further
+# out, and it is the shape the real instance has: coord-engine names Cli, Cli→GitHub→Core.
+#
+# B IS COVERED BY A PATTERN THAT DOES NOT NAME IT (`**/B/**` has an empty literal prefix), and that
+# is the whole construction. The obvious fixture — naming `src/B/**` alongside `src/A/**` — passes
+# even when the closure walk is cut to direct references only: B becomes its OWN declared subject, C
+# is B's DIRECT reference, and the finding fires without ever crossing the A→B→C hop. It asserted
+# transitivity and pinned nothing. Measured: cutting `stack.extend(...)` left it green.
+RB3="$(root "$WORK/cover-transitive")"
+proj "$RB3" "src/A" "../B/B.fsproj"
+proj "$RB3" "src/B" "../C/C.fsproj"
+proj "$RB3" "src/C"
+wf "$RB3/.github/workflows/w.yml" '      - "src/A/**"
+      - "**/B/**"' '      - "src/A/**"
+      - "**/B/**"'
+expect "the rule follows the CLOSURE — a TRANSITIVE reference is an input too" \
+  1 "nothing in the filter selects 'src/C'" "$RB3"
+
+# ACTIONS' GLOBBING, NOT fnmatch's: `*` does not cross `/`. `src/*` selects `src/B` and NOT
+# `src/B/B.fsproj`, so it does not cover B — a push to B's source would not trigger the workflow.
+# Translating `*` to `.*` (fnmatch's reading, and the obvious shortcut) makes the gate believe the
+# dependency is covered and stay green: wrong in the fail-OPEN direction, which is the one that
+# costs. This leg is the difference between the two readings.
+RBG="$(root "$WORK/cover-glob")"
+proj "$RBG" "src/A" "../B/B.fsproj"
+proj "$RBG" "src/B"
+wf "$RBG/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/*"' '      - "src/A/**"
+      - "src/*"'
+expect "a single \`*\` does not cross \`/\` — \`src/*\` does not cover \`src/B/B.fsproj\`" \
+  1 "nothing in the filter selects 'src/B'" "$RBG"
+
+# ...and the mirror of that leg: `**` DOES cross `/`, so `src/nested/**` covers a project any depth
+# below it. Both halves need pinning — one reading of `*` is too loose and fails open, and a `**`
+# that stopped crossing `/` is too tight and would red a dependency that IS covered. A gate that
+# reds correct work is the one workers learn to ignore (#698).
+RBG2="$(root "$WORK/cover-glob-deep")"
+proj "$RBG2" "src/A" "../nested/B/B.fsproj"
+proj "$RBG2" "src/nested/B"
+wf "$RBG2/.github/workflows/w.yml" '      - "src/A/**"
+      - "src/nested/**"' '      - "src/A/**"
+      - "src/nested/**"'
+expect "\`**\` DOES cross \`/\` — \`src/nested/**\` covers a project nested below it" \
+  0 "ok:" "$RBG2"
+
+# ---- the three false positives the rule's narrowness is measured to prevent -----------------
+#
+# Each of these fires if "declares a project" is read loosely, and each would red a workflow whose
+# subject it is not. A gate that cries wolf on the happy path teaches "FAILED is noise" (#698).
+
+# A CATCH-ALL IS NOT A DECLARATION. This is test-selector-selftest.yml's real shape: it filters on
+# `tests/**`, which incidentally selects three .Tests projects it never builds — it runs a shell
+# script that greps. Reading that as a declaration drags `src/**` onto it.
+RB4="$(root "$WORK/cover-catchall")"
+proj "$RB4" "tests/T" "../../src/A/A.fsproj"
+proj "$RB4" "src/A"
+wf "$RB4/.github/workflows/w.yml" '      - "tests/**"' '      - "tests/**"'
+expect "a CATCH-ALL that incidentally selects a project does not declare it as a subject" \
+  0 "ok:" "$RB4"
+
+# NAMING ONE FILE IS NOT DECLARING THE PROJECT. recipe-landable.yml watches
+# `src/FS.GG.Coord.Cli/Options.fs` because it GREPS it. Watching a file you read is not building the
+# project it lives in.
+RB5="$(root "$WORK/cover-onefile")"
+proj "$RB5" "src/A" "../B/B.fsproj"
+proj "$RB5" "src/B"
+wf "$RB5/.github/workflows/w.yml" '      - "src/A/Options.fs"' '      - "src/A/Options.fs"'
+expect "naming ONE FILE of a project does not declare the project as a build subject" \
+  0 "ok:" "$RB5"
+
+# A pattern covering the whole tree needs no obligation — it selects every closure by construction.
+RB6="$(root "$WORK/cover-wide")"
+proj "$RB6" "src/A" "../B/B.fsproj"
+proj "$RB6" "src/B"
+wf "$RB6/.github/workflows/w.yml" '      - "src/**"' '      - "src/**"'
+expect "a filter covering the whole tree is closed by construction" 0 "ok:" "$RB6"
+
+# ---- rule (b) is NOT the pairing rule, and must not inherit its scope -----------------------
+# A one-sided filter is out of (a)'s scope by design, and can still omit a real project.
+RB7="$(root "$WORK/cover-onesided")"
+proj "$RB7" "src/A" "../B/B.fsproj"
+proj "$RB7" "src/B"
+{ echo "name: w"; echo "on:"; echo "  push:"; echo "    branches: [main]"
+  echo "    paths:"; echo '      - "src/A/**"'
+  echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
+  > "$RB7/.github/workflows/w.yml"
+# A SECOND, PAIRED workflow, present only to keep rule (a)'s own vacuity guard quiet: a tree with no
+# pair at all is exit 3 by design (§7), and this leg is about (b), not about that refusal.
+wf "$RB7/.github/workflows/pair.yml" '      - "docs/**"' '      - "docs/**"'
+expect "a ONE-SIDED filter is out of (a)'s scope and still answerable to (b)" \
+  1 "the \`push\` filter names 'src/A'" "$RB7"
+
+# ---- rule (b)'s escape hatch ---------------------------------------------------------------
+RB8="$(root "$WORK/cover-hatch")"
+proj "$RB8" "src/A" "../B/B.fsproj"
+proj "$RB8" "src/B"
+wf "$RB8/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+sed -i '1i # paths-coherence: allow-uncovered src/B — B is a stub with no compiled surface' \
+  "$RB8/.github/workflows/w.yml"
+expect "a SIGNED allow-uncovered licenses the omission" 0 "ok:" "$RB8"
+
+RB9="$(root "$WORK/cover-hatch-unsigned")"
+proj "$RB9" "src/A" "../B/B.fsproj"
+proj "$RB9" "src/B"
+wf "$RB9/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+sed -i '1i # paths-coherence: allow-uncovered src/B' "$RB9/.github/workflows/w.yml"
+expect "an UNSIGNED allow-uncovered is a finding — it is neither a decision nor a typo" \
+  1 "with NO reason" "$RB9"
+
+# THE HATCH NAMES THE PATH, and excusing one omission must not excuse the next (#496). A blanket
+# exemption would render identically to a workflow nobody had thought about.
+RB10="$(root "$WORK/cover-hatch-narrow")"
+proj "$RB10" "src/A" "../B/B.fsproj" "../C/C.fsproj"
+proj "$RB10" "src/B"
+proj "$RB10" "src/C"
+wf "$RB10/.github/workflows/w.yml" '      - "src/A/**"' '      - "src/A/**"'
+sed -i '1i # paths-coherence: allow-uncovered src/B — deliberate' "$RB10/.github/workflows/w.yml"
+expect "the hatch excuses the path it NAMES and no other" \
+  1 "nothing in the filter selects 'src/C'" "$RB10"
+
+# THE MENTION/USE DISCIPLINE, one layer down — a `#` inside a `run: |` is SHELL text, not a YAML
+# comment. Honouring it would license a real omission from a line that is not a comment at all.
+# This is the trap rule (a)'s hatch took two goes to escape; (b)'s hatch inherits the fix, and this
+# leg is what keeps it inherited.
+RB11="$(root "$WORK/cover-hatch-shell")"
+proj "$RB11" "src/A" "../B/B.fsproj"
+proj "$RB11" "src/B"
+{ echo "name: w"; echo "on:"
+  echo "  pull_request:"; echo "    paths:"; echo '      - "src/A/**"'
+  echo "  push:"; echo "    branches: [main]"; echo "    paths:"; echo '      - "src/A/**"'
+  echo "jobs:"; echo "  j:"; echo "    runs-on: ubuntu-latest"; echo "    steps:"
+  echo "      - run: |"
+  echo "          # paths-coherence: allow-uncovered src/B — inside a run block, not a YAML comment"
+  echo "          true"; } > "$RB11/.github/workflows/w.yml"
+expect "a hatch inside a \`run:\` block is SHELL TEXT and does not license anything" \
+  1 "nothing in the filter selects 'src/B'" "$RB11"
+
+# ---- REGRESSION: the real instance, from the real working tree ------------------------------
+#
+# #930's named instance. coord-engine.yml filtered on Cli/** and Core/** and NOT GitHub/**, while
+# Cli references GitHub — so a PR touching only src/FS.GG.Coord.GitHub did not run the engine's own
+# gate. Rule (a) certified it: "both triggers agree", perfectly, on a list omitting the subject.
+RB12="$(root "$WORK/cover-regression")"
+mkdir -p "$RB12/src" "$RB12/tests"
+for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests; do
+  mkdir -p "$RB12/$d"
+  cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB12/$d/"
+done
+undrift "$REPO_ROOT/.github/workflows/coord-engine.yml" \
+        "$RB12/.github/workflows/coord-engine.yml" \
+        "src/FS.GG.Coord.GitHub/**"
+expect "REGRESSION #930: coord-engine.yml's real coverage gap is caught" \
+  1 "nothing in the filter selects 'src/FS.GG.Coord.GitHub'" "$RB12"
+
+# ...and the SAME tree, with the file as this PR ships it, passes. The fix is the subject of the
+# assertion, not just the bug.
+RB13="$(root "$WORK/cover-regression-fixed")"
+for d in src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub tests/FS.GG.Coord.Cli.Tests; do
+  mkdir -p "$RB13/$d"
+  cp "$REPO_ROOT/$d/$(basename "$d").fsproj" "$RB13/$d/"
+done
+cp "$REPO_ROOT/.github/workflows/coord-engine.yml" "$RB13/.github/workflows/"
+expect "...and coord-engine.yml, as this PR ships it, passes" 0 "ok:" "$RB13"
+
+# =============================================================================================
 # 7. FAIL CLOSED (#266). Examining nothing is a failure to audit, not a clean audit — and this is
 #    the leg that matters most, because a broken trigger reader finds zero pairs and reports green
 #    over a repo full of them.
 # =============================================================================================
+
+# RULE (b)'s VACUITY LEG, AND IT LIVES HERE RATHER THAN IN THE GATE — see the long comment at the
+# gate's own #266 guard. "Projects exist but no workflow names one" is a LEGITIMATE tree (a repo
+# whose workflows all filter on catch-alls), so the gate may not refuse it; three legs above are
+# exactly that shape. The exposure is still real: if the prefix reader went blind, subjects would
+# drop to zero and the gate would print the same green it prints when everything is covered.
+#
+# So assert it where the repo IS known: the shipped tree declares subjects, and the number is not
+# zero. A reader that stops seeing them fails HERE, against real files, instead of passing quietly.
+out="$(python3 "$TOOL" --root "$REPO_ROOT" 2>&1)" || true
+n="$(sed -n 's/.*agree; \([0-9]*\) declared project subject(s).*/\1/p' <<<"$out")"
+if [ -n "$n" ] && [ "$n" -gt 0 ] 2>/dev/null; then
+  ok "the shipped tree declares $n project subject(s) — rule (b) is auditing something"
+else
+  bad "rule (b) audited NOTHING on the shipped tree — the prefix reader is blind (#266)" "$out"
+fi
+
 RZ="$(root "$WORK/no-pairs")"
 { echo "name: w"; echo "on: { workflow_dispatch: }"
   echo "jobs: { j: { runs-on: ubuntu-latest, steps: [{ run: 'true' }] } }"; } \
