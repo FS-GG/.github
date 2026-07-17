@@ -483,7 +483,14 @@ module Scan =
     /// worker to name and no lease to wait out, so it is `Unowned`. It is written to the wire as the
     /// codec's `live-claim` / `unowned` holder, which `Snapshot.parse` already reads.
     type private Reserved =
-        | RClaim of worker: WorkerId * holder: Ref * ageSeconds: int
+        /// `livePr` carries the #581 proof of life onto the RESERVATION, so the cache does not
+        /// reconstruct a liveness-less claim and re-open the bug one layer down (#712). `Some pr` when
+        /// the lease has LAPSED but an open `item/<n>-*` PR keeps the claim alive (NOT reapable — talk to
+        /// the worker, there is no lease window to wait out); `None` is an ordinary within-lease claim, a
+        /// lapsed claim with no PR, OR a liveness that could not be read. It must never distinguish that
+        /// last case — `None` always means "no proof of life", which is what lets `Batch` derive
+        /// `KnownLiveWork` from it rather than hardcode it.
+        | RClaim of worker: WorkerId * holder: Ref * ageSeconds: int * livePr: int option
         | RUnowned of holder: Ref
 
     let snapshot
@@ -670,6 +677,21 @@ module Scan =
                 // then decides whether the item is offered (#581), while the reservation stands regardless.
                 let holder = Reads.reserver leaseMinutes markers
 
+                // #712/#581: read the proof of life ONCE. The claim block below RENDERS it and the
+                // reservation CARRIES its PR (arm A) — probing again for the reservation would pay the
+                // budget that dies first (#418) twice for one fact. Only a STALE marker is probed: a
+                // within-lease claim needs no proof of life, and a markerless row has no claim to be
+                // alive. A read we could not make is `LivenessUnknown`, never "no PR" (Reads.prAlive's
+                // #581 contract) — and it collapses to `livePr = None`, so `None` never means "unread".
+                let liveness: Liveness option =
+                    match holder with
+                    | Some m when Reads.isStale leaseMinutes m ->
+                        match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
+                        | Ok l -> Some l
+                        | Error _ -> Some LivenessUnknown
+                    | Some _ -> Some LeaseHeld
+                    | None -> None
+
                 w.WriteStartObject()
 
                 // A REF IS THREE FIELDS ON THE WIRE, not one string. `FS.GG.SDD#42` is the DISPLAY form; the
@@ -731,20 +753,18 @@ module Scan =
 
                     // LIVENESS. The lease alone may not decide abandonment (#581), so an EXPIRED lease sends
                     // us to look for the item's own `item/<n>-*` PR — server-side proof of life. A read we
-                    // could not make is `unknown`, never "no PR".
+                    // could not make is `unknown`, never "no PR". Rendered from the single read above (#712).
                     w.WriteStartObject "liveness"
 
-                    if Reads.isStale leaseMinutes m then
-                        match Reads.prAlive transport row.Ref.Owner row.Ref.Repo row.Ref.Number with
-                        | Ok(LeaseExpiredPrOpen pr) ->
-                            w.WriteString("kind", "lease-expired-pr-open")
-                            w.WriteNumber("pr", pr)
-                        | Ok LeaseExpiredNoPr -> w.WriteString("kind", "lease-expired-no-pr")
-                        | Ok LeaseHeld -> w.WriteString("kind", "lease-held")
-                        | Ok LivenessUnknown
-                        | Error _ -> w.WriteString("kind", "unknown")
-                    else
-                        w.WriteString("kind", "lease-held")
+                    match liveness with
+                    | Some(LeaseExpiredPrOpen pr) ->
+                        w.WriteString("kind", "lease-expired-pr-open")
+                        w.WriteNumber("pr", pr)
+                    | Some LeaseExpiredNoPr -> w.WriteString("kind", "lease-expired-no-pr")
+                    | Some LeaseHeld -> w.WriteString("kind", "lease-held")
+                    | Some LivenessUnknown -> w.WriteString("kind", "unknown")
+                    // Unreachable: this block is entered only under `Some m`, where `liveness` is `Some _`.
+                    | None -> w.WriteString("kind", "lease-held")
 
                     w.WriteEndObject()
                     w.WriteEndObject()
@@ -779,9 +799,17 @@ module Scan =
                 //     `Unowned`. Dressing it up as a holder would send a worker to wait for a marker that is
                 //     never coming (#428). Only the `In progress` COLUMN licenses this: a Ready/Backlog row
                 //     with no marker reserves nothing, because nobody is working it.
+                // #712: carry the #581 proof of life onto the reservation. `Some pr` ONLY for a lapsed
+                // lease held open by a PR — every other liveness (within lease, no PR, unread) is `None`,
+                // "no proof of life", so the reservation never claims a liveness it does not have.
+                let livePr =
+                    match liveness with
+                    | Some(LeaseExpiredPrOpen pr) -> Some pr
+                    | _ -> None
+
                 let reserveAs =
                     match holder with
-                    | Some m -> Some(RClaim(m.Worker, row.Ref, m.AgeSeconds))
+                    | Some m -> Some(RClaim(m.Worker, row.Ref, m.AgeSeconds, livePr))
                     | None when row.Status = InProgress -> Some(RUnowned row.Ref)
                     | None -> None
 
@@ -857,11 +885,27 @@ module Scan =
                                                 | Matchable s -> s
                                                 | Unmatchable s -> s)
 
+                                        // #712/#581: an off-board claim reserves too, and the tools must not
+                                        // call it "reapable" if a PR is keeping it alive. Probed HERE — after
+                                        // the touch-set is known to reserve something — so a stale claim that
+                                        // declares no files never pays a proof-of-life read it would discard
+                                        // (the budget that dies first, #418). Probe ONLY a STALE claim: a
+                                        // within-lease one is not reapable anyway, so its `livePr` is `None`.
+                                        // A read we could not make collapses to `None`, never distinguished
+                                        // from "no PR", so the reservation never asserts a liveness it lacks.
+                                        let livePr =
+                                            if Reads.isStale leaseMinutes m then
+                                                match Reads.prAlive transport o r n with
+                                                | Ok(LeaseExpiredPrOpen pr) -> Some pr
+                                                | _ -> None
+                                            else
+                                                None
+
                                         inFlight.Add(
                                             o,
                                             r,
                                             names,
-                                            RClaim(m.Worker, { Owner = o; Repo = r; Number = n }, m.AgeSeconds)
+                                            RClaim(m.Worker, { Owner = o; Repo = r; Number = n }, m.AgeSeconds, livePr)
                                         )
                                     | _ -> ()
 
@@ -880,13 +924,19 @@ module Scan =
             w.WriteStartObject "holder"
 
             match held with
-            | RClaim(worker, holderRef, age) ->
+            | RClaim(worker, holderRef, age, livePr) ->
                 w.WriteString("kind", "live-claim")
                 w.WriteString("worker", worker.Value)
                 w.WriteString("owner", holderRef.Owner)
                 w.WriteString("repo", holderRef.Repo)
                 w.WriteNumber("number", holderRef.Number)
                 w.WriteNumber("ageSeconds", age)
+                // #712/#581: written ONLY when present, so a within-lease claim round-trips
+                // byte-identically and only a PR-kept-alive lapsed claim carries the extra field. The
+                // codec's `live-claim` reader (`Snapshot.parse`) reads it back into `LiveClaim`'s `livePr`.
+                match livePr with
+                | Some pr -> w.WriteNumber("livePr", pr)
+                | None -> ()
             | RUnowned holderRef ->
                 // A MARKERLESS In-progress reserver — the codec's `unowned` holder, which carries only the
                 // ref (there is no worker, and no age, because there is no lease).

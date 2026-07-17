@@ -6,7 +6,7 @@ module Batch =
     open Schedulability
 
     type Holder =
-        | LiveClaim of worker: WorkerId * item: Ref * ageSeconds: int
+        | LiveClaim of worker: WorkerId * item: Ref * ageSeconds: int * livePr: int option
         | BatchMember of item: Ref
         | Unowned of item: Ref
         | UnknownHolder
@@ -47,7 +47,14 @@ module Batch =
             let where = Schedulability.collisionText hits
 
             match holder with
-            | LiveClaim(WorkerId w, item, age) ->
+            // A lapsed lease kept alive by an open PR (#581) has NO lease window to quote — the work is
+            // demonstrably alive and the claim is NOT reapable, so `leaseWindow` would print the phantom
+            // "lease EXPIRED — reapable" that #712 is about: advice `reap` will decline, one nudge away
+            // from closing a live PR to clear the lane. Name the PR and point at the worker instead.
+            | LiveClaim(WorkerId w, item, _, Some pr) ->
+                $"%s{id} — overlaps in-flight work held by %s{w} on %s{item.Short} (lease lapsed, but PR #%d{pr} is open: the work is alive and this is NOT reapable — #581; talk to %s{w}, there is no lease window to wait out): %s{where}"
+
+            | LiveClaim(WorkerId w, item, age, None) ->
                 $"%s{id} — overlaps in-flight work held by %s{w} on %s{item.Short} (%s{Schedulability.leaseWindow leaseMinutes age}): %s{where}"
 
             | BatchMember item -> $"%s{id} — overlaps batch member %s{item.Short} (%s{where})"
@@ -100,12 +107,18 @@ module Batch =
                       Holder = d.Item.Ref
                       AgeSeconds = itemAge d.Item
                       KnownLiveWork = true }
-            | OverlapsInFlight _, Some(LiveClaim(w, holder, age)) ->
+            | OverlapsInFlight _, Some(LiveClaim(w, holder, age, livePr)) ->
                 Some
                     { Worker = w
                       Holder = holder
                       AgeSeconds = age
-                      KnownLiveWork = false }
+                      // DERIVED, not hardcoded (#712). This used to be `false` because the collided
+                      // `LiveClaim` had thrown its liveness away at the reserve site, so there was
+                      // nothing to set it from — which silently defeated the `leaseExpired` guard below
+                      // for the one shape it was written for, letting the phantom "lease EXPIRED —
+                      // reapable" reach the batch summary too. `livePr` restores the fact: `Some` proof
+                      // of life is exactly the #581 claim that is over its lease yet not reapable.
+                      KnownLiveWork = Option.isSome livePr }
             | _ -> None)
 
     /// A lease a `reap` would collect: expired by the clock, and NOT one whose PR proves the work is alive.
@@ -385,7 +398,7 @@ module Batch =
             |> List.map (fun (r, bad) ->
                 let who =
                     match r.Holder with
-                    | LiveClaim(WorkerId w, item, _) -> $"worker %s{w} on %s{item.Short}"
+                    | LiveClaim(WorkerId w, item, _, _) -> $"worker %s{w} on %s{item.Short}"
                     | BatchMember item -> $"batch member %s{item.Short}"
                     | Unowned item -> $"%s{item.Short} (in progress, no claim marker)"
                     | UnknownHolder -> "an unnameable holder"
@@ -471,8 +484,11 @@ module Batch =
 
             // Held — by a live lease, or by a lapsed one whose `item/<n>-*` PR proves the work is
             // still alive (#581). Either way its worker is IN those files.
-            | HeldBy worker -> reserve item (LiveClaim(worker, item.Ref, ageOf item))
-            | HeldByLiveWork(worker, _) -> reserve item (LiveClaim(worker, item.Ref, ageOf item))
+            | HeldBy worker -> reserve item (LiveClaim(worker, item.Ref, ageOf item, None))
+            // #712's root cause was HERE: the PR that proves this claim is alive (#581) was dropped
+            // (`_`), so every later item that collided with this reservation saw a liveness-less
+            // `LiveClaim` and was told to wait out a lease that will never free. Carry it through.
+            | HeldByLiveWork(worker, pr) -> reserve item (LiveClaim(worker, item.Ref, ageOf item, Some pr))
 
             | WrongStatus _
             | IssueClosed
