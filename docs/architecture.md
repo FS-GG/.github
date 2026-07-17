@@ -20,10 +20,11 @@ split of the archived [`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI)
 monolith into four focused, independently shippable components plus an
 organization-level coordination repository. It has since grown two more: **FS.GG.Game**,
 the render-independent simulation core extracted from Rendering under
-[ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md) and published at
-0.5.0, and **FS.GG.Audio**, onboarded as a standalone component under
-[ADR-0023](adr/0023-onboard-fs-gg-audio-as-an-sdd-driven-component.md) and published at
-0.3.0. **Six framework components**, plus `.github`.
+[ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md), and **FS.GG.Audio**,
+onboarded as a standalone component under
+[ADR-0023](adr/0023-onboard-fs-gg-audio-as-an-sdd-driven-component.md). Both are **published**
+to the org feed and nuget.org — [§5](#5-the-contract-registry--the-single-source-of-truth) carries
+the versions, generated from the registry. **Six framework components**, plus `.github`.
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
@@ -77,12 +78,13 @@ the decision records linked throughout.
 
 Seven repositories under [github.com/FS-GG](https://github.com/FS-GG) (six framework
 components + `.github`; **FS.GG.Game** was extracted under ADR-0022 — its packages
-`FS.GG.Game.Core` + `.Render` are **published at 0.5.0** to the org feed + nuget.org;
+`FS.GG.Game.Core` + `.Render` are **published** to the org feed + nuget.org;
 `game-extraction` **`coherent: true`** since P5, 2026-07-06; and **FS.GG.Audio** was onboarded
-as a standalone render-independent component under ADR-0023, its `FS.GG.Audio.*` set published
-at **0.3.0** — promoted off the `-preview` channel on 2026-07-09 (FS.GG.Audio#4), which made it
+as a standalone render-independent component under ADR-0023, its `FS.GG.Audio.*` set
+**published** — promoted off the `-preview` channel on 2026-07-09 (FS.GG.Audio#4), which made it
 the **last `FS.GG.*` producer to go stable**, so every producer in the org now ships on a stable
-channel):
+channel). [§5](#5-the-contract-registry--the-single-source-of-truth) carries what each is
+published *at*:
 
 | Repository | Role | Ships |
 |---|---|---|
@@ -90,8 +92,8 @@ channel):
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI + the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / gate tooling — a pure inference kernel, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
-| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), **0.5.0** on the org feed + nuget.org |
-| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, **0.3.0** on the org feed + nuget.org |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), on the org feed + nuget.org |
+| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, on the org feed + nuget.org |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns the two org-level CLIs, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`) + `FS.GG.Coord.Cli` (the ADR-0034 engine) — **both published**, org feed + nuget.org |
 
 ---
@@ -233,7 +235,7 @@ Two packages in one repo (**11 projects: 5 src + 6 test**).
 **FSharp.Core-only BCL leaf** (no project references, no I/O), namespace `Fsgg`,
 five modules:
 
-- `Fsgg.ContractVersion` — a self-describing package SemVer (`val value = "2.0.1"`) so a consumer knows which surface it compiled against.
+- `Fsgg.ContractVersion` — a self-describing package SemVer (`val value`, carrying the `fsgg-contracts` version [§5](#5-the-contract-registry--the-single-source-of-truth) records) so a consumer knows which surface it compiled against.
 - [`Fsgg.Schemas`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Schemas.fsi) — one typed source of truth for every `.fsgg` schema shape and its version constant (SDD- and Governance-owned).
 - [`Fsgg.Provider`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Provider.fsi) — the extended scaffold-provider descriptor (canonical `NameParameter`).
 - [`Fsgg.Registry`](https://github.com/FS-GG/FS.GG.SDD/blob/main/src/FS.GG.Contracts/Registry.fsi) — **the validator for this repo's [`registry/dependencies.yml`](../registry/dependencies.yml)**. Its version grammar deliberately mirrors `scripts/validate-registry.py` byte-for-byte, including the 4-segment `major.minor.patch.revision` form (ADR-0007), so the typed validator and the (now retired) Python authority cannot disagree.
@@ -332,9 +334,10 @@ SDD-owned field. `fsgg-governance route --mode gate` returns exit `2`
 **The reference gate set** — `samples/sdd-reference-gate-set/.fsgg/`
 (`governance.yml`/`policy.yml`/`capabilities.yml`/`tooling.yml`) — is packed *in
 place* into a **content-only** NuGet package `FS.GG.Governance.ReferenceGateSet`
-whose version (`1.2.1.1`) is *derived from* the four contained `schemaVersion`s
-(ADR-0007). This is the one versioned source of truth the Templates overlay diffs
-against.
+whose version is *derived from* the four contained `schemaVersion`s rather than
+chosen (ADR-0007 — hence its four segments;
+[§5](#5-the-contract-registry--the-single-source-of-truth) carries the current one). This is the
+one versioned source of truth the Templates overlay diffs against.
 
 ### 4.4 FS.GG.Templates — the scaffold-time composition
 
@@ -495,6 +498,38 @@ The contracts that hold the system together:
 | `registry-schema` | SDD | the `registry/dependencies.yml` document schema (`schemaVersion` + field vocabulary), modeled by `Fsgg.Registry` | **.github** (the contract-coherence gate) |
 | `skill-registry` | **.github** | [`registry/skills.yml`](../registry/skills.yml) — the org's authoritative skill catalog (process + product; `id`, `scope`, `owner`, `source`, canonical-body `sha256`, `materializes-when`, and the optional `mirrored` frozen-mirror obligation — absent means *not classified*, never `false`), reconciled from the producer skill-manifests (ADR-0017). An OPTIONAL, ADDITIVE field **is** schema growth under ADR-0015 (decided [#686](https://github.com/FS-GG/.github/issues/686)), so `mirrored` owes a `schemaVersion` 1→2 bump — paid publish-before-flip, once `Fsgg.Registry` learns the field ([FS.GG.SDD#420](https://github.com/FS-GG/FS.GG.SDD/issues/420)) | **.github** (the union gate + registry validation) |
 
+<!-- BEGIN GENERATED: fsgg-versions -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from registry/dependencies.yml by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
+
+  This region exists because this page was the one version-bearing projection with no generator
+  and no gate (#913). Every number below is the registry's, and the registry is held to the live
+  feed by check-feed-coherence.py. Edit registry/dependencies.yml and regenerate; if a number
+  here is wrong, the registry is wrong, and fixing it HERE would only hide that.
+-->
+
+*Generated from `registry/dependencies.yml`. `version` is the contract SURFACE's SemVer and
+`package-version` is what is LIVE on the org feed: different facts, and publish-before-flip
+(FR-007) means `package-version` never leads `version` — so read them together, because
+`version` alone never tells you what a consumer can restore. One exception the schema itself
+carves: for `fs-gg-ui-template`, `version` is the FRAMEWORK pin (`FsGgUiVersion` — the generated
+product's `FS.GG.UI.*` pin), which is a different axis from the template package's
+`package-version`, not a lagging copy of it.*
+
+| Contract | Owner | `version` | `package-version` |
+|---|---|---|---|
+| `fsgg-contracts` | FS.GG.SDD | `2.0.1` | `2.0.1` |
+| `governance-reference-gate-set` | FS.GG.Governance | `1.2.1.1` | `1.2.1.1` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.11.0` | `0.11.0` |
+| `game-sim-core` | FS.GG.Game | `0.5.0` | `0.5.0` |
+| `game-scene-adapter` | FS.GG.Game | `0.5.0` | `0.5.0` |
+| `fs-gg-audio` | FS.GG.Audio | `0.3.0` | `0.3.0` |
+
+**The orchestrator axis.** `fs-gg-ui-template` pins `minimum-fsgg-sdd` at **`0.6.0`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below).
+
+<!-- END GENERATED: fsgg-versions -->
+
 Dependency edges (downstream → upstream): Templates → Rendering (template),
 Templates → SDD (scaffold-provider), Templates → Governance (policy/overlay),
 SDD → Governance (handoff, **optional**), **.github → SDD** (`registry-schema` —
@@ -538,7 +573,8 @@ invocations. **ADR-0030** carves the one creation-time exception: `new-sdd-works
 self-updates the CLI to the newest coherent set before scaffolding **by default**
 (`--pinned` restores a reproducible pin), because at creation there is no consumer artifact
 to clobber. Truth stays declarative in the registry so it can be diffed, gated, and flipped
-after publish (`FR-007`). The registry pins `minimum-fsgg-sdd: 0.6.0` — the oldest published CLI
+after publish (`FR-007`). The registry pins `minimum-fsgg-sdd` (the version is above, with the other
+version leads) — the oldest published CLI
 that seeds those artifacts, advanced `0.4.0→0.6.0` on 2026-07-04 because feature 073
 (the transient-artifact taxonomy) made `fsgg-sdd` seed a `.gitignore` for regenerable output
 into scaffolded products, growing the expected seeded surface (FR-011). Both halves are in

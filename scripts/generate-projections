@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Emit the coordination protocol into every document that states it (ADR-0034 §4.5).
+# Emit each fact into every document that states it, from the one place that owns it (ADR-0034 §4.5).
+#
+# TWO SOURCES, ONE MECHANISM. The coordination protocol comes from the engine's `Protocol.fs`; the
+# version leads come from `registry/dependencies.yml` (#913). A region names its source in its own
+# marker and in every drift message, because "where did this number come from" is the only question a
+# reader of a generated region ever has, and two sources make it answerable wrongly.
 #
 # THE INVERSION. A coordination rule was stated in up to six places — the ADR, the canonical doc, the
 # tool, and four `SKILL.md` bodies across two skill roots — then content-addressed into `repos.lock` and
@@ -20,7 +25,7 @@
 #
 #   scripts/generate-projections            # rewrite every generated region in place
 #   scripts/generate-projections --check    # verify they are current; exit 1 on any drift (the GATE)
-#   scripts/generate-projections --list     # print `kind<TAB>path` per region; the gate's subject list
+#   scripts/generate-projections --list     # print `kind<TAB>path<TAB>BEGIN-marker` per region; the gate's subject list
 #
 set -euo pipefail
 
@@ -53,26 +58,87 @@ TARGETS=(
   "take-exit-codes:.agents/skills/pnext-item/SKILL.md"
   "landable-exit-codes:.claude/skills/pnext-item/SKILL.md"
   "landable-exit-codes:.agents/skills/pnext-item/SKILL.md"
+  "versions:docs/architecture.md"
 )
+
+# The marker a kind uses. One function, so the BEGIN a target is searched for, the BEGIN written into
+# it, and the BEGIN the gate asserts cannot disagree — `--list` emits this rather than making the gate
+# re-derive it, because a mapping stated in two places is the drift this whole file exists to refuse.
+#
+# `rules` keeps the original unnamed spelling (three files already carry it); renaming it would rewrite
+# three documents to no end. `versions` is NOT `fsgg-protocol:*` on purpose: every other region is
+# emitted from the engine's `Protocol.fs`, and this one is emitted from `registry/dependencies.yml`. A
+# marker names its SOURCE, and calling the registry "protocol" would be a lie in the one place a reader
+# looks to find out where a number came from.
+marker() { # kind, BEGIN|END
+  case "$1" in
+    rules)    echo "<!-- $2 GENERATED: fsgg-protocol -->" ;;
+    versions) echo "<!-- $2 GENERATED: fsgg-versions -->" ;;
+    *)        echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
+  esac
+}
+
+# The FILE a kind is emitted from. There are two sources now, so "this region is stale" has to name the
+# right one: a drift report that sends the reader to Protocol.fs for a number that lives in the registry
+# is worse than no report — it is a wrong answer with a gate's authority behind it, and the reader's next
+# move is to hand-edit the generated region, which is the one thing every marker here tells them not to do.
+source_of() { # kind
+  case "$1" in
+    versions) echo "registry/dependencies.yml" ;;
+    *)        echo "src/FS.GG.Coord.Core/Protocol.fs" ;;
+  esac
+}
 
 if [ -n "$LIST" ]; then
   for spec in "${TARGETS[@]}"; do
-    printf '%s\t%s\n' "${spec%%:*}" "${spec#*:}"
+    kind="${spec%%:*}"
+    printf '%s\t%s\t%s\n' "$kind" "${spec#*:}" "$(marker "$kind" BEGIN)"
   done
   exit 0
 fi
 
-# THE ENGINE IS THE SOURCE, AND IT IS BUILT FROM SOURCE HERE. `.github` never takes the engine from the
-# feed — that asymmetry is deliberate (ADR-0034 §4.3): fixing coord would otherwise require publishing,
-# and publishing would require coord to schedule the fix.
+# THE ENGINE IS THE SOURCE FOR THE PROTOCOL REGIONS, AND IT IS BUILT FROM SOURCE HERE. `.github` never
+# takes the engine from the feed — that asymmetry is deliberate (ADR-0034 §4.3): fixing coord would
+# otherwise require publishing, and publishing would require coord to schedule the fix.
+#
+# It is required unconditionally even though `versions` does not read it, because this script rewrites
+# EVERY region on every run: a mode that regenerated only the registry-sourced ones would be a way to
+# leave the protocol regions stale without noticing, and `--check` has to answer for all of them anyway.
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$HERE/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
 if [ ! -x "$ENGINE" ]; then
   echo "::error::no engine at $ENGINE — build it: dotnet build src/FS.GG.Coord.Cli -c Release" >&2
   exit 2
 fi
 
-FACTS="$(mktemp)"; trap 'rm -f "$FACTS"' EXIT
+FACTS="$(mktemp)"
+REG="$(mktemp)"
+trap 'rm -f "$FACTS" "$REG"' EXIT
 "$ENGINE" facts --json >"$FACTS"
+
+# THE SECOND SOURCE. `versions` is emitted from the REGISTRY, not the engine — the two regions project
+# different truths and neither is the other's source. Python is a YAML→JSON transcoder here and nothing
+# more: every projection in this file renders through `jq`, so the rendering has one shape regardless of
+# which source it reads.
+#
+# WHY THE REGISTRY IS ALLOWED TO BE A SOURCE AT ALL. A projection is only as honest as the thing it
+# projects, and generating a wrong number just centralises the lie (#916). The registry earns it by
+# being gated against reality on both scalars it carries: `check-feed-coherence.py` asserts every
+# `package-version` against the newest version live on the org feed, and `check-source-coherence.py`
+# asserts `fsgg-contracts`' `version` against the FS.GG.Contracts source SemVer on FS.GG.SDD@main. The
+# numbers below are therefore held to the feed by a gate, not by whoever last edited the page.
+#
+# Checked up front, in the same spirit as the missing-renderer check below: without this the run dies on
+# a `ModuleNotFoundError` traceback, which is fail-closed but names PYTHON's problem rather than the
+# author's. The engine gets a sentence telling you how to fix it; so should this.
+if ! python3 -c 'import yaml' 2>/dev/null; then
+  echo "::error::PyYAML is not installed, and the 'versions' region is emitted from registry/dependencies.yml — install it: python -m pip install pyyaml" >&2
+  exit 2
+fi
+
+python3 -c '
+import json, sys, yaml
+json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)
+' "$HERE/registry/dependencies.yml" >"$REG"
 
 # ---- the projections -----------------------------------------------------------------------------
 # ONE rendering PER REGION KIND, and a document says which kind it carries. There is still exactly one
@@ -159,14 +225,64 @@ render_landable_exit_codes() {
   render_exit_code_table landableExitCodes
 }
 
-# The marker a kind uses. `rules` keeps the original unnamed spelling (three files already carry it);
-# every other kind is suffixed. One function, so the BEGIN a target is searched for and the BEGIN that
-# is written into it cannot disagree.
-marker() { # kind, BEGIN|END
-  case "$1" in
-    rules) echo "<!-- $2 GENERATED: fsgg-protocol -->" ;;
-    *)     echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
-  esac
+# `versions` — the registry's version leads (#913), for the architecture map. THE ONLY REGION EMITTED
+# FROM THE REGISTRY RATHER THAN THE ENGINE.
+#
+# The map hand-wrote version claims the registry already owned, and each value appeared in three or four
+# places on ONE page — so a bump was a four-site hand-edit and any missed site was a silent
+# self-contradiction. #910 had to hand-repair four at once: Game 0.4.0 (registry: 0.5.0), Audio 0.2.0
+# (0.3.0), `ContractVersion 1.4.0` (2.0.1 — stale by a MAJOR), `minimum-fsgg-sdd 0.4.0` (0.6.0). The
+# tier-1/tier-2 flips landed the bumps and never touched the map, because nothing made them.
+#
+# THE ROWS ARE DERIVED, NOT LISTED. Every contract carrying a `package-version` gets one. A hand-listed
+# subset would be the #916 trap — an enumeration only beats a catch-all if it is COMPLETE — and a new
+# package-bearing contract would be silently absent from the projection that claims to be the map's
+# source. Same for the orchestrator axis: any contract growing a `minimum-fsgg-sdd` states one.
+#
+# WHAT THIS REGION DELIBERATELY DOES NOT SWALLOW. Only CURRENT-STATE claims belong to the registry.
+# Dated history — "advanced 0.4.0→0.6.0 on 2026-07-04", "re-pinned at 0.1.0 in FS.GG.Rendering#238" —
+# is true forever, cannot drift, and is NOT the registry's to state; generating over it would flatten
+# prose the page needs and assert facts this document does not own (#913's own boundary note).
+render_versions() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from registry/dependencies.yml by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  This region exists because this page was the one version-bearing projection with no generator"
+  echo "  and no gate (#913). Every number below is the registry's, and the registry is held to the live"
+  echo "  feed by check-feed-coherence.py. Edit registry/dependencies.yml and regenerate; if a number"
+  echo "  here is wrong, the registry is wrong, and fixing it HERE would only hide that."
+  echo "-->"
+  echo ""
+  echo "*Generated from \`registry/dependencies.yml\`. \`version\` is the contract SURFACE's SemVer and"
+  echo "\`package-version\` is what is LIVE on the org feed: different facts, and publish-before-flip"
+  echo "(FR-007) means \`package-version\` never leads \`version\` — so read them together, because"
+  echo "\`version\` alone never tells you what a consumer can restore. One exception the schema itself"
+  echo "carves: for \`fs-gg-ui-template\`, \`version\` is the FRAMEWORK pin (\`FsGgUiVersion\` — the generated"
+  echo "product's \`FS.GG.UI.*\` pin), which is a different axis from the template package's"
+  echo "\`package-version\`, not a lagging copy of it.*"
+  echo ""
+  echo "| Contract | Owner | \`version\` | \`package-version\` |"
+  echo "|---|---|---|---|"
+  # `// error(...)`, not a bare lookup: an owner missing from `repos:` would otherwise interpolate as
+  # the literal string "null" and be SPLICED INTO THE MAP as a fact. A generator's failure mode must be
+  # a red gate, never a confident wrong render — the whole point of this region is that the page stops
+  # being able to state a version nobody vouched for.
+  jq -r '
+    .repos as $repos
+    | .contracts[]
+    | select(has("package-version"))
+    | . as $c
+    | ($repos[.owner].name // error("contract `\($c.id)` names owner `\($c.owner)`, which is not a key in repos:"))
+    | "| `\($c.id)` | \(.) | `\($c.version)` | `\($c["package-version"])` |"
+  ' "$REG"
+  echo ""
+  jq -r '
+    .contracts[]
+    | select(has("minimum-fsgg-sdd"))
+    | "**The orchestrator axis.** `\(.id)` pins `minimum-fsgg-sdd` at **`\(.["minimum-fsgg-sdd"].version)`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below)."
+  ' "$REG"
+  echo ""
 }
 
 drift=0
@@ -191,7 +307,7 @@ for spec in "${TARGETS[@]}"; do
   # trailing space would satisfy `grep -F`, never match in awk, and the splice would then delete the END
   # marker while inserting nothing, report "regenerated", and exit 0. Silent corruption, reported green.
   if ! grep -qxF "$b" "$f"; then
-    echo "::error::$rel has no '$kind' generated region on a line of its own — it must carry one, or it is a copy of the protocol that nothing holds in step" >&2
+    echo "::error::$rel has no '$kind' generated region on a line of its own — it must carry one, or it is a hand-maintained copy of $(source_of "$kind") that nothing holds in step" >&2
     exit 2
   fi
   if ! grep -qxF "$e" "$f"; then
@@ -225,7 +341,7 @@ for spec in "${TARGETS[@]}"; do
   fi
 
   if [ -n "$CHECK" ]; then
-    echo "::error::$rel is STALE — its '$kind' region does not match src/FS.GG.Coord.Core/Protocol.fs" >&2
+    echo "::error::$rel is STALE — its '$kind' region does not match $(source_of "$kind")" >&2
     diff -u "$f" "$new" | sed -n '1,25p' >&2 || true
     drift=1
     rm -f "$new"

@@ -22,6 +22,8 @@ on:
       - "src/FS.GG.Coord.Cli/**"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
+      - "docs/architecture.md"
+      - "registry/dependencies.yml"
       - ".claude/skills/**"
       - ".agents/skills/**"
       - ".github/workflows/projections.yml"
@@ -32,6 +34,8 @@ on:
       - "src/FS.GG.Coord.Cli/**"
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
+      - "docs/architecture.md"
+      - "registry/dependencies.yml"
       - ".claude/skills/**"
       - ".agents/skills/**"
       - ".github/workflows/projections.yml"
@@ -63,6 +67,11 @@ jobs:
           dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
           dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
 
+      # The `versions` region is emitted from registry/dependencies.yml, so the generator reads YAML.
+      # Without this the generator dies on `import yaml` — loudly, and before it renders anything.
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
       - name: Every projection is current
         run: bash scripts/generate-projections --check
 
@@ -77,7 +86,7 @@ jobs:
       - name: Non-vacuity — the generated regions exist
         run: |
           set -euo pipefail
-          expected=7
+          expected=8
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"
@@ -90,16 +99,29 @@ jobs:
           }
 
           # Every DECLARED region is actually PRESENT in its document. `--check` alone cannot catch a
-          # deleted marker pair on a target it no longer knows about, and a `fsgg-protocol` marker is a
-          # PREFIX of `fsgg-protocol:<kind>`, so the match is anchored to the exact marker.
-          while IFS="$(printf '\t')" read -r kind path; do
+          # deleted marker pair on a target it no longer knows about.
+          #
+          # THE MARKER COMES FROM `--list`, not from a case statement here. This gate used to re-derive
+          # it — a second copy of a mapping the generator already owns, which is the exact drift this
+          # whole fabric refuses. It survived two kinds agreeing by luck; the third would not have
+          # (#913's `versions` region is `fsgg-versions`, NOT `fsgg-protocol:versions`, because it is
+          # emitted from the registry rather than the engine). The generator states the marker once.
+          while IFS="$(printf '\t')" read -r kind path marker; do
             [ -n "$kind" ] || continue
-            case "$kind" in
-              rules) marker="<!-- BEGIN GENERATED: fsgg-protocol -->" ;;
-              *)     marker="<!-- BEGIN GENERATED: fsgg-protocol:$kind -->" ;;
-            esac
+
+            # THE MARKER MUST BE NON-EMPTY, AND THIS LINE IS NOT DEFENSIVE PROGRAMMING. Taking the
+            # marker from `--list` means taking it from INPUT, and `grep -qxF ''` matches any blank
+            # line — so a `--list` that ever emitted a short row would make this gate pass VACUOUSLY
+            # on a document carrying no region at all. That is the exact #266 failure this gate was
+            # built to refuse, and the case statement that used to live here could not express it
+            # (it built the marker locally, so it was never empty). Trusting a source means checking it.
+            [ -n "$path" ] && [ -n "$marker" ] || {
+              echo "::error::generate-projections --list emitted a malformed row for kind '$kind' (path='$path', marker='$marker') — refusing to check a region against an empty pattern"
+              exit 1
+            }
+
             grep -qxF "$marker" "$path" || {
-              echo "::error::$path carries no '$kind' region — it is a hand-maintained copy of the protocol again"
+              echo "::error::$path carries no '$kind' region — nothing holds it in step with its source any more, so it is a hand-maintained copy again (run scripts/generate-projections, which names the source for that kind)"
               exit 1
             }
           done <<< "$list"
