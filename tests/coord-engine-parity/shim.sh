@@ -271,7 +271,7 @@ rm -rf "$FIX"
 # THE FIXTURE IS A REAL WORKTREE, not a directory that resembles one. `--git-dir` vs `--git-common-dir`
 # is the shim's own question, and only `git worktree add` makes them diverge — a hand-built lookalike
 # would answer it wrong and pass for the wrong reason.
-wtfixture() {  # $1 = dir, $2 = marker. A COMMITTED source-build checkout, engine NEWER than source.
+committed_fixture() {  # $1 = dir, $2 = marker. A COMMITTED source-build checkout, engine NEWER than source.
   mkdir -p "$1/src/FS.GG.Coord.Cli/bin/Release/net10.0" "$1/src/FS.GG.Coord.Core"
   printf '// source\n' >"$1/$FIXSRC"
   # `bin/` is IGNORED, exactly as the real repo ignores it — and it is what makes this fixture test the
@@ -287,7 +287,7 @@ wtfixture() {  # $1 = dir, $2 = marker. A COMMITTED source-build checkout, engin
   touch -d '2 hours ago' "$bin" "$bin.dll"
 }
 
-SH="$(mktemp -d)/shared"; wtfixture "$SH" "SHARED ENGINE"
+SH="$(mktemp -d)/shared"; committed_fixture "$SH" "SHARED ENGINE"
 WT="$(mktemp -d)/wt"; ( cd "$SH" && git worktree add -q --detach "$WT" ) >/dev/null 2>&1
 
 # THE 69 IS GONE: a worktree with no build of its own resolves the SHARED checkout's engine.
@@ -357,6 +357,192 @@ fi
 
 ( cd "$SH" && git worktree remove --force "$WT" ) >/dev/null 2>&1
 rm -rf "$SH" "$WT"
+
+# ---- 6. DIRTINESS: THE SOURCE IS NOT A REF EITHER (#709) -----------------------------------------
+# §3 pins `stale_guard`: is the ARTIFACT behind the source beside it? These pin `dirty_guard`, which asks
+# the other half — is that SOURCE on main? — and the difference is not academic. #929's guard separates
+# the two states that do NOT matter:
+#
+#   edited, NOT built  → .fs newer than .dll → stale_guard FIRES.  The engine is the OLD, merged code.
+#   edited AND built   → .dll newer than .fs → stale_guard SILENT. The engine is somebody's WIP.
+#
+# It is loudest where nothing is wrong and mute where the whole fleet is running uncommitted code — and
+# building is what a worker does NEXT, so #929's window closes itself exactly as the risk arrives. #709
+# observed the consequence live: ` M scripts/fsgg-coord` in a checkout the reporter had not touched, found
+# only because they diffed against HEAD afterwards. Under `src/` live the scheduler, the claim CAS and the
+# board writer, and every worker on this board runs THIS checkout's engine.
+#
+# SO EVERY LEG BELOW KEEPS THE BUILD NEWER THAN ITS SOURCE — `stale_guard` silent by construction — and
+# asserts what `dirty_guard` ALONE can see. A fixture that let the two guards overlap would pass on the
+# wrong one's output, which is the failure these legs exist to make impossible.
+#
+# AND THE FIXTURE MUST BE COMMITTED, which is the one thing §3's is not: `fixture()` does `git init` and
+# never commits, so `dirty_guard` returns at its no-HEAD gate for every leg above and §3 says nothing
+# about this guard either way. `committed_fixture` is the shape with a baseline to be dirty AGAINST.
+D="$(mktemp -d)/main"; committed_fixture "$D" "MAIN ENGINE"
+DBIN="$D/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+# AND IT PINS ITS OWN `status.showUntrackedFiles`, because `git init` INHERITS the global config and the
+# guard's probe obeys it: `--porcelain` does not override that setting (measured — it is a formatting flag,
+# not a scope one). A developer who sets it to `no` — the usual remedy for a huge repo — would red the
+# untracked and truncation legs below against a guard that has not changed. These legs measure the GUARD,
+# not the environment of whoever runs them; a parity red has to be evidence rather than a coin toss (§3).
+# That the guard ITSELF goes silent under that setting is a real hole, and NOT what these legs are for.
+( cd "$D" && git config status.showUntrackedFiles normal ) >/dev/null 2>&1
+# The guard's pathspec is wider than `src/`, so the fixture must carry the rest of it to be tested for it.
+mkdir -p "$D/scripts"
+for f in scripts/fsgg-coord Directory.Build.props Directory.Packages.props global.json; do
+  printf 'seed\n' >"$D/$f"
+done
+( cd "$D" && git add -A && git -c user.email=t@t -c user.name=t commit -qm paths ) >/dev/null 2>&1
+
+# CLEAN → SILENT, asserted on a BOARD WRITE. The happy path is what a false positive would ruin, and this
+# fixture is the happy path in full: it HAS a built `bin/` sitting in the tree (written after the commit),
+# gitignored exactly as the real repo ignores it. Were it not, this guard would fire on every worker after
+# every legitimate build — a permanent false positive, and a fleet taught to skim the one warning that
+# matters. `MAIN ENGINE RAN` is asserted, not just the silence (#1008): silence alone cannot tell "the
+# guard stayed quiet" from "the fixture engine was never reached", and that is how #1008 stayed green for
+# its whole life.
+err="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" claim "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+out="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" claim "$FIXREF" 2>/dev/null)"
+if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'MAIN ENGINE RAN'; then
+  ok "dirtiness: a COMMITTED checkout is silent — a built, gitignored bin/ is not dirt (#709)"
+else
+  bad "dirtiness: a clean checkout must not warn — building is not modifying" "rc=$rc out=$out err=$err"
+fi
+
+# DIRTY + a BOARD WRITE: WARN, AND STILL RUN. This is the decision the issue asked for ("warn always,
+# refuse never") and the line where this guard parts company with §3's. #929 may refuse a write because
+# its remedy is local, cheap and YOURS: rebuild, and you are clear. Dirtiness has no such exit — the
+# checkout is dirty because somebody ELSE is mid-edit, and nothing you can run will clean it. Refusing
+# would let one worker's §2 violation halt every OTHER worker's board writes: a fleet-wide outage
+# manufactured by the guard rather than by the bug. So `refused` must NOT appear and the engine MUST run.
+#
+# THE MTIME IS RESTORED AFTER THE EDIT, and that is load-bearing rather than tidy: appending makes the
+# source newer than the build, which is `stale_guard`'s trigger — it would REFUSE this write, and the leg
+# would go green on the wrong guard's word while proving nothing about this one.
+printf '// WIP\n' >>"$D/$FIXSRC"; touch -d '3 hours ago' "$D/$FIXSRC"
+out="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" claim "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'UNCOMMITTED' \
+   && printf '%s' "$out" | grep -q 'MAIN ENGINE RAN' \
+   && ! printf '%s' "$out" | grep -qi 'refused'; then
+  ok "dirtiness: a dirty checkout WARNS on the board write 'claim' and STILL RUNS it — warn, never refuse (#709)"
+else
+  bad "dirtiness: a board write on a dirty checkout must warn and still run, unlike a STALE one" "rc=$rc out=$out"
+fi
+
+# STAGED WIP IS STILL NOT ON MAIN. This is why the guard reads `status --porcelain` and not the
+# `diff --quiet` the issue proposed: `git add` hides an edit from `diff` entirely, and a staged edit
+# compiles into the engine exactly as an unstaged one does.
+( cd "$D" && git add -A ) >/dev/null 2>&1
+err="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$err" | grep -q 'UNCOMMITTED'; then
+  ok "dirtiness: STAGED work still warns — 'status --porcelain' sees what 'diff --quiet' cannot"
+else
+  bad "dirtiness: a staged edit is still uncommitted and must warn" "rc=$rc err=$err"
+fi
+( cd "$D" && git reset -q --hard ) >/dev/null 2>&1; touch -d '3 hours ago' "$D/$FIXSRC"
+
+# AND SO IS AN UNTRACKED ONE — `diff --quiet` is blind to it too, and a new module arrives untracked.
+printf '// new module\n' >"$D/src/FS.GG.Coord.Core/New.fs"; touch -d '3 hours ago' "$D/src/FS.GG.Coord.Core/New.fs"
+err="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$err" | grep -q 'UNCOMMITTED'; then
+  ok "dirtiness: an UNTRACKED source file warns — it is not on main either"
+else
+  bad "dirtiness: an untracked file under src/ must warn" "rc=$rc err=$err"
+fi
+rm -f "$D/src/FS.GG.Coord.Core/New.fs"
+
+# THE SUBJECT IS BIGGER THAN src/, and this is the leg that keeps the guard from rebuilding #266 inside
+# itself. The root `Directory.Build.props`, `Directory.Packages.props` and `global.json` are imported
+# implicitly by every project beneath them, so a dirty package pin or SDK band changes the compiled engine
+# exactly as an edited `.fs` does — and #672 is an epic whose whole subject is editing those files.
+# `scripts/fsgg-coord` is in the pathspec for the plainest reason of all: it is the file #709 actually
+# watched somebody edit, and it is the resolver every one of these tiers runs through.
+#
+# THE MATCH IS ON THE PORCELAIN MARKER (` M <path>`), NOT THE BARE PATH, and that is not fussiness: the
+# guard's FIXED prose already contains the string `scripts/fsgg-coord` ("board runs THIS
+# scripts/fsgg-coord…"), which it prints whatever is dirty. A bare `grep "$f"` would therefore match
+# boilerplate rather than the listing, and that one leg would pass while asserting nothing — #1008's
+# shape, rebuilt inside the legs written to end it. The status code only ever appears in the DETAIL.
+for f in scripts/fsgg-coord Directory.Build.props Directory.Packages.props global.json; do
+  printf 'x\n' >>"$D/$f"
+  err="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"; rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s' "$err" | grep -q 'UNCOMMITTED' && printf '%s' "$err" | grep -q "M $f"; then
+    ok "dirtiness: a dirty '$f' warns and is NAMED — it ends up inside the engine as surely as a .fs does"
+  else
+    bad "dirtiness: '$f' is part of what builds the engine and must be watched" "rc=$rc err=$err"
+  fi
+  ( cd "$D" && git checkout -q -- "$f" ) >/dev/null 2>&1
+done
+
+# THE MESSAGE TRUNCATES AT 5 AND COUNTS THE REST — real arithmetic, on a path nobody reads until the day
+# it matters, and a worker mid-rollout of #672 dirties more than five.
+for i in 1 2 3 4 5 6 7; do printf '// wip\n' >"$D/src/FS.GG.Coord.Core/f$i.fs"; done
+touch -d '3 hours ago' "$D"/src/FS.GG.Coord.Core/*.fs
+err="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$err" | grep -q '7 path(s)' && printf '%s' "$err" | grep -q 'and 2 more'; then
+  ok "dirtiness: the warning lists 5 paths and counts the remainder — '7 path(s)', 'and 2 more'"
+else
+  bad "dirtiness: the message must count every dirty path and truncate the list" "rc=$rc err=$err"
+fi
+rm -f "$D"/src/FS.GG.Coord.Core/f?.fs
+
+# TIER 1 IS EXEMPT, STRUCTURALLY — an explicit bin execs before tier 2 is ever reached. This is why §1's
+# corpus, which drives the shim through FSGG_COORD_ENGINE_BIN from a checkout that may well be dirty
+# (somebody is always working this repo), cannot be polluted by this guard.
+printf '// WIP\n' >>"$D/$FIXSRC"; touch -d '3 hours ago' "$D/$FIXSRC"
+err="$(cd "$D" && FSGG_COORD_ENGINE_BIN="$DBIN" "$SHIM" claim "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+out="$(cd "$D" && FSGG_COORD_ENGINE_BIN="$DBIN" "$SHIM" claim "$FIXREF" 2>/dev/null)"
+if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'MAIN ENGINE RAN'; then
+  ok "dirtiness: an explicit FSGG_COORD_ENGINE_BIN never consults the guard — tier 1 execs first"
+else
+  bad "dirtiness: tier 1 must not consult dirtiness" "rc=$rc out=$out err=$err"
+fi
+( cd "$D" && git checkout -q -- "$FIXSRC" ) >/dev/null 2>&1; touch -d '3 hours ago' "$D/$FIXSRC"
+
+# A LINKED WORKTREE IS EXEMPT, AND GETTING THIS WRONG AIMS THE GUARD AT THE ONE WORKER OBEYING THE RULE IT
+# ENFORCES. pnext-item §2 ORDERS you to work the item in a worktree; a kit author who does that and builds
+# there resolves their OWN build (tier 2a) against a tree their own correct edits have made dirty. Warning
+# them would accuse them of the §2 violation they are in the middle of avoiding — and there is nothing to
+# warn about: no other worker resolves an engine through their worktree, so that WIP is reachable by
+# nobody but them. Only the MAIN checkout is shared, and only its dirt is everyone's problem.
+#
+# THE COMPLEMENT IS §5's LAST-BUT-ONE LEG, and the two must be read together: there, a worktree with NO
+# build of its own resolves the SHARED engine, and the shared checkout's dirt DOES reach that reader. The
+# exemption is about whose tree is being measured, never about suppressing the warning.
+#
+# THE FIXTURE IS A REAL WORKTREE (§5's rule): `--git-dir` vs `--git-common-dir` is the guard's own
+# question, and only `git worktree add` makes them diverge. A hand-built lookalike would answer it wrong
+# and pass for the wrong reason.
+DWT="$(mktemp -d)/kitwt"; ( cd "$D" && git worktree add -q --detach "$DWT" ) >/dev/null 2>&1
+OWN2="$DWT/src/FS.GG.Coord.Cli/bin/Release/net10.0"; mkdir -p "$OWN2"
+printf '#!/usr/bin/env bash\necho "WORKTREE ENGINE RAN: $*"\n' >"$OWN2/fsgg-coord-engine"
+chmod +x "$OWN2/fsgg-coord-engine"; : >"$OWN2/fsgg-coord-engine.dll"
+printf '// my own correct edit, in the worktree §2 ordered me into\n' >>"$DWT/$FIXSRC"
+touch -d '3 hours ago' "$DWT/$FIXSRC"
+touch -d '2 hours ago' "$OWN2/fsgg-coord-engine" "$OWN2/fsgg-coord-engine.dll"
+err="$(cd "$DWT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" claim "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+out="$(cd "$DWT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" claim "$FIXREF" 2>/dev/null)"
+if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'WORKTREE ENGINE RAN'; then
+  ok "dirtiness: a kit author's DIRTY worktree is exempt — §2's sanctioned flow is not the violation it enforces (#709)"
+else
+  bad "dirtiness: a linked worktree must be exempt — nobody else resolves an engine through it" "rc=$rc out=$out err=$err"
+fi
+( cd "$D" && git worktree remove --force "$DWT" ) >/dev/null 2>&1
+
+# NO HEAD, NO VERDICT. A checkout with no commit has no baseline to be dirty AGAINST, so there is nothing
+# to assert — the same shape as `stale_guard`'s "no IL to measure against" (§3), and as `release`'s "a
+# column we cannot read is not one we may overwrite" (#331). Everything here is untracked and the guard
+# must still say nothing.
+NOHEAD="$(mktemp -d)/nohead"; fixture "$NOHEAD"
+err="$(cd "$NOHEAD" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" claim "$FIXREF" 2>&1 >/dev/null)"; rc=$?
+out="$(cd "$NOHEAD" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" claim "$FIXREF" 2>/dev/null)"
+if [ "$rc" -eq 0 ] && [ -z "$err" ] && printf '%s' "$out" | grep -q 'ENGINE RAN'; then
+  ok "dirtiness: a checkout with NO HEAD has no baseline to be dirty against — no verdict, not a false alarm"
+else
+  bad "dirtiness: a commit-less checkout must not warn" "rc=$rc out=$out err=$err"
+fi
+rm -rf "$NOHEAD" "$D" "$DWT"
 
 echo
 total=$((pass+failcount))
