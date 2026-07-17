@@ -283,27 +283,32 @@ must_fail "a pin is AHEAD of a feed serving only its prerelease" "$BASE" "$(feed
 echo
 echo "--- a pin's versioning scheme must make its literal a SINGLE version, not a >= floor (#576/#1122) ---"
 #
-# The blind spot that hid #576 for four rounds: the annotation manager's versioningTemplate defaults
-# to `nuget`, and under `nuget` a BARE literal `0.9.0` is `>=0.9.0` — every newer release satisfies
-# it, so the bot proposes nothing while the pin sits at exactly newest and passes freshness. The
-# baseline carries `versioning=loose` (the #1119 fix), under which the same literal is single and
-# bumpable; these legs flip only that token.
+# The blind spot that hid #576 for four rounds: under `nuget` versioning a BARE literal `0.9.0` is
+# `>=0.9.0` — every newer release satisfies it, so the bot proposes nothing while the pin sits at
+# exactly newest and passes freshness. The annotation manager's versioningTemplate DEFAULT is now
+# `loose` (#1135, the sibling of #1131's FsGgUiVersion fix), so a bare literal at the default is a
+# SINGLE, bumpable version — the freeze-by-omission is retired. The range that reds this gate is now
+# reachable only by an EXPLICIT `versioning=nuget`; these legs flip only that token.
 
-# versioning= OMITTED => the manager default nuget => bare literal is a >= floor => RED
+# versioning= OMITTED => the manager default is `loose` (#1135) => bare literal is a SINGLE version
+# => GREEN. This is the #1135 behaviour change: a pin can no longer freeze by forgetting `versioning=`.
 DEFAULTVER="$(make_repo defaultver 0.9.0)"; set_versioning "$DEFAULTVER" ""
-must_fail "a pin left at the manager-default nuget scheme (bare literal = >= floor) fails" "$DEFAULTVER" "$FEED" \
-  "can NEVER bump"
-# ...and it reds EVEN THOUGH the pin equals feed-newest — the property freshness cannot see (#576).
-must_fail "...and it says so though the pin equals feed-newest (the #576 blind spot)" "$DEFAULTVER" "$FEED" \
-  "equals newest TODAY"
+must_pass "a pin left at the manager default is now single-version and bumpable (#1135 retires the freeze-by-omission)" \
+  "$DEFAULTVER" "$FEED"
 
-# an EXPLICIT versioning=nuget over a bare literal is the same floor => RED
+# an EXPLICIT versioning=nuget over a bare literal is a >= floor => RED. This is the range the gate
+# still catches; making the DEFAULT loose did not remove the check, only the way a pin fell into it by
+# omission. (An author who genuinely wants range semantics opts in here, and the gate holds them to it.)
 EXPLICITNUGET="$(make_repo explicitnuget 0.9.0)"; set_versioning "$EXPLICITNUGET" "nuget"
-must_fail "an explicit versioning=nuget over a bare literal fails too" "$EXPLICITNUGET" "$FEED" \
+must_fail "an explicit versioning=nuget over a bare literal fails (bare literal = >= floor)" "$EXPLICITNUGET" "$FEED" \
+  "can NEVER bump"
+must_fail "...and it says so though the pin equals feed-newest (the #576 blind spot)" "$EXPLICITNUGET" "$FEED" \
+  "equals newest TODAY"
+must_fail "...naming the explicit scheme that made it a range" "$EXPLICITNUGET" "$FEED" \
   "versioning='nuget', which reads it as a RANGE"
 
-# versioning=loose (the baseline) is the GREEN case — pinned here beside its failing sibling.
-must_pass "versioning=loose makes the bare literal a single, bumpable version (#1119)" "$BASE"
+# versioning=loose (the baseline) is also GREEN — now belt-and-suspenders over the loose default.
+must_pass "an explicit versioning=loose makes the bare literal a single, bumpable version (#1119)" "$BASE"
 
 # an UNVERIFIED scheme fails CLOSED — the gate must not assume a scheme it never drove is 'single'.
 BOGUSVER="$(make_repo bogusver 0.9.0)"; set_versioning "$BOGUSVER" "maven"
@@ -590,9 +595,10 @@ git -C "$THIRDPARTY" add -A
 must_fail "renaming the required pin away fails" "$THIRDPARTY" "$FEED" "no longer sees 1 known pin(s): FS.GG.SDD.Cli in .github/workflows/contract-coherence.yml"
 
 EXTRA="$(make_repo extra)"
-# `versioning=loose` so this pin is a SINGLE version and reaches the FS.GG-resolution check — the
-# property under test here. Without it the manager-default `nuget` reds it on the #576 blind spot
-# first, and this leg would then assert a reason (single-version) it is not about.
+# `versioning=loose` so this pin is unambiguously a SINGLE version and reaches the FS.GG-resolution
+# check — the property under test here. Since #1135 the manager default is `loose` too, so the token
+# is belt-and-suspenders rather than load-bearing; kept explicit so this leg's subject stays the
+# resolution check and not the versioning scheme, whatever a future default becomes.
 cat >> "$EXTRA/$PIN_FILE" <<'YAML'
       - run: |
           # renovate: datasource=nuget depName=Expecto versioning=loose

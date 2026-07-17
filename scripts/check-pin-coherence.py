@@ -33,13 +33,16 @@ WHAT IT ASSERTS. Three things, which together mean "this pin can move, and it ha
                                                                      and the gate says which (below).
   4. MECHANISM (scheme) — .github#576/#1122. Every pin's literal must be a SINGLE version under the
      versioning scheme Renovate resolves for it, not an open-ended `>=` range. This is the blind spot
-     that hid #576 for four rounds: the manager's versioningTemplate defaults to `nuget`, and under
-     `nuget` a bare literal `0.10.0` is `>=0.10.0` — satisfied by every newer release — so the bot
-     proposes nothing, while the pin sits at exactly newest and passes (1), (2) and (3) green. The
-     gate resolves the scheme (the manager's template, rendered with any `versioning=` capture) and
-     reds a literal that is a range: "this pin can never bump". `versioning=loose` was the fix (#1119);
-     this keeps it from being dropped again. isSingleVersion is a transcription of renovate's own,
-     driven not reasoned (see the block above check_pin_bumpable).
+     that hid #576 for four rounds: under `nuget` versioning a bare literal `0.10.0` is `>=0.10.0` —
+     satisfied by every newer release — so the bot proposes nothing, while the pin sits at exactly
+     newest and passes (1), (2) and (3) green. The annotation manager's versioningTemplate DEFAULT is
+     now `loose` (#1135, the sibling of #1131's FsGgUiVersion fix), so a bare literal at the default is
+     SINGLE and bumpable; the range this gate reds is now reachable only by an explicit
+     `versioning=nuget`. The gate resolves the scheme (the manager's template, rendered with any
+     `versioning=` capture) and reds a literal that is a range: "this pin can never bump".
+     `versioning=loose` was the per-pin fix (#1119) and is now belt-and-suspenders over the loose
+     default; this keeps the check itself from being dropped. isSingleVersion is a transcription of
+     renovate's own, driven not reasoned (see the block above check_pin_bumpable).
 
 THE #576 CORRECTION — READ THIS BEFORE YOU GO LOOKING FOR A TOKEN.
 
