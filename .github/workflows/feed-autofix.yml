@@ -158,8 +158,12 @@ jobs:
           case "$rc" in
             0) echo "changed=$(jq -r '.changed' /tmp/report.json)" >> "$GITHUB_OUTPUT" ;;
             1) echo "changed=false" >> "$GITHUB_OUTPUT"
-               # Env-passed to the issue step, never interpolated into a run script.
-               { echo "finding<<EOF"; cat /tmp/err.txt; echo EOF; } >> "$GITHUB_OUTPUT" ;;
+               # Env-passed to the issue step, never interpolated into a run script. The delimiter
+               # is unguessable rather than `EOF`: a finding containing a line that IS the delimiter
+               # would close the block early and leave its own tail to be parsed as further
+               # `key=value` output.
+               { echo "finding<<FSGG_FINDING_a7f3c1"; cat /tmp/err.txt; echo "FSGG_FINDING_a7f3c1"; } \
+                 >> "$GITHUB_OUTPUT" ;;
             *) echo "changed=false" >> "$GITHUB_OUTPUT" ;;
           esac
           exit 0
@@ -184,8 +188,24 @@ jobs:
           TITLE="[feed-autofix] the fs-gg-ui-template row cannot be reconciled automatically"
           # ONE standing issue. A bot that opened a fresh issue every morning would be teaching
           # people to filter its mail, which is the same lesson a permanently-red check teaches.
-          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --paginate \
-            --jq --arg t "$TITLE" '.[] | select(.title == $t) | .number' | head -1)"
+          #
+          # THREE traps are avoided here deliberately, and the first two were live bugs in review:
+          #
+          #   * `gh api` has NO `--arg` flag. `--jq --arg t "$TITLE" '...'` looks natural and dies
+          #     with "accepts 1 arg(s), received 4" — jq's `--arg` conflated with gh's `--jq`, the
+          #     #874 class. The title match therefore happens in awk, outside gh, where the title is
+          #     passed as DATA (-v) and never lexed as a jq program.
+          #   * CAPTURE, don't pipe (#874's rationale). `gh ... | head -1` under `pipefail` aborts
+          #     the step on SIGPIPE when head closes the pipe first — intermittently, so it passes in
+          #     testing. Capturing also makes the read's exit code checkable, and this is the ONE
+          #     read that must not read a failure as "nothing filed": that answer opens a duplicate.
+          #   * `--paginate` with no `--jq`/`--slurp` emits ONE ARRAY PER PAGE (`[...][...]`), which
+          #     is not a JSON document. The `--jq` below applies per page, so it stays valid past
+          #     issue #100 — which this repo passed long ago.
+          issues="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&per_page=100" --paginate \
+            --jq '.[] | [.number, .title] | @tsv')" \
+            || { echo "::error::could not read the issue list — refusing to guess whether the standing issue exists." >&2; exit 1; }
+          existing="$(printf '%s\n' "$issues" | awk -F'\t' -v t="$TITLE" '$2 == t { print $1; exit }')"
           body="$(printf '%s\n\n```\n%s\n```\n\n%s\n\n%s\n' \
             "\`feed-autofix\` read the live org feed and REFUSED to write the registry. This is the bot working: it does not guess." \
             "$FINDING" \

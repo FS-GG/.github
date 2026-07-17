@@ -25,29 +25,51 @@ pass=0; fail=0
 ok()   { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf '  FAIL %s\n     %s\n' "$1" "$2"; fail=$((fail+1)); }
 
-# The 17 coherent-set members, mirroring FRAMEWORK_MEMBERS. Kept here rather than imported so a
-# silent edit to the bot's list cannot silently rewrite its own test's expectations too.
+# The 17 coherent-set members, mirroring the bot's FRAMEWORK_MEMBERS. Written out HERE rather than
+# imported from the bot, deliberately: a fixture that derived its expectations from the code under
+# test would ratify any edit to that list, including a wrong one. This is the independent copy that
+# makes such an edit show up as a failure.
+#
+# So it must actually BE the fixture's source of truth. It is passed to build_feed below; there is
+# no second copy. (There WAS, in review: this list sat unused beside a hardcoded duplicate inside
+# build_feed's heredoc, so the comment above described a protection that did not exist — a lying
+# comment in the fixture for a bot whose entire thesis is that prose rots silently.)
 MEMBERS='FS.GG.UI FS.GG.UI.Build FS.GG.UI.Canvas FS.GG.UI.Controls FS.GG.UI.Controls.Elmish
 FS.GG.UI.DesignSystem FS.GG.UI.Diagnostics FS.GG.UI.Elmish FS.GG.UI.KeyboardInput FS.GG.UI.Layout
 FS.GG.UI.Scene FS.GG.UI.SkiaViewer FS.GG.UI.Symbology FS.GG.UI.Symbology.Render FS.GG.UI.Testing
 FS.GG.UI.Themes.AntDesign FS.GG.UI.Themes.Default'
 
-# build_feed <member-version> [template-versions...] -> JSON feed object
+# build_feed <member-version> <template-versions...> -> JSON feed object
 build_feed() {
   local mv="$1"; shift
-  local tmpl="$*"
-  python3 - "$mv" "$tmpl" <<'PY'
+  python3 - "$MEMBERS" "$mv" "$*" <<'PY'
 import json, sys
-mv, tmpl = sys.argv[1], sys.argv[2].split()
-members = """FS.GG.UI FS.GG.UI.Build FS.GG.UI.Canvas FS.GG.UI.Controls FS.GG.UI.Controls.Elmish
-FS.GG.UI.DesignSystem FS.GG.UI.Diagnostics FS.GG.UI.Elmish FS.GG.UI.KeyboardInput FS.GG.UI.Layout
-FS.GG.UI.Scene FS.GG.UI.SkiaViewer FS.GG.UI.Symbology FS.GG.UI.Symbology.Render FS.GG.UI.Testing
-FS.GG.UI.Themes.AntDesign FS.GG.UI.Themes.Default""".split()
+members, mv, tmpl = sys.argv[1].split(), sys.argv[2], sys.argv[3].split()
 feed = {m: [mv] for m in members}
 feed["FS.GG.UI.Template"] = tmpl
 print(json.dumps(feed))
 PY
 }
+
+# The fixture's own guard: if the bot's list and this one ever diverge, every case below would be
+# testing a feed that does not match the code, and would do it QUIETLY — the bot would just report
+# whichever members the fixture happened to serve. Assert they are the same set, and name the delta.
+python3 - "$MEMBERS" "$ROOT/scripts/feed-autofix" <<'PY' || exit 1
+import re, sys
+mine = set(sys.argv[1].split())
+src = open(sys.argv[2], encoding="utf-8").read()
+block = re.search(r"FRAMEWORK_MEMBERS: list\[str\] = \[(.*?)\]", src, re.S)
+if not block:
+    sys.exit("fixture: cannot find FRAMEWORK_MEMBERS in the bot — it was renamed.")
+theirs = set(re.findall(r'"([^"]+)"', block.group(1)))
+if mine != theirs:
+    sys.exit(
+        "fixture: the member list has DRIFTED from the bot's FRAMEWORK_MEMBERS.\n"
+        f"  only in the fixture: {sorted(mine - theirs) or '-'}\n"
+        f"  only in the bot:     {sorted(theirs - mine) or '-'}\n"
+        "Reconcile them: every case below serves a feed built from the fixture's list."
+    )
+PY
 
 # A registry stub carrying the row's real SHAPE — quoted values plus a trailing provenance comment,
 # because preserving that comment is half of what the write must get right.
@@ -306,6 +328,41 @@ if [ "$rc" -eq 1 ] && echo "$out" | grep -q "renamed or removed"; then
   ok "vanished row: reported as a finding, not silence"
 else
   bad "vanished row: reported as a finding, not silence" "rc=$rc: $out"
+fi
+
+# A member with NO stable version, while the registry tracks the stable channel. Must be a FINDING,
+# not a silent fall-back to comparing against the prereleases — check-feed-coherence.py raises on
+# this exact condition, and two gates reading one feed must not disagree about what it says.
+registry "$WORK/r11.yml" "0.10.0" "0.9.2 -> 0.10.0" "0.10.0" "0.9.2 -> 0.10.0" "fs-gg-ui-template/v0.10.0"
+prerel="$(build_feed 0.11.0 0.10.0 0.11.0 | python3 -c \
+  'import json,sys; f=json.load(sys.stdin); f["FS.GG.UI.Scene"]=["0.11.0-preview.1"]; print(json.dumps(f))')"
+fixture "$prerel" "$TRIPLE_11" "$WORK/f11.json"
+before="$(cat "$WORK/r11.yml")"
+out="$(python3 "$BOT" "$WORK/r11.yml" --fixture "$WORK/f11.json" --write 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && echo "$out" | grep -q "no stable version of FS.GG.UI.Scene"; then
+  ok "member with only prereleases: refused as a finding"
+else
+  bad "member with only prereleases: refused as a finding" "rc=$rc: $out"
+fi
+if [ "$before" = "$(cat "$WORK/r11.yml")" ]; then
+  ok "member with only prereleases: registry untouched"
+else
+  bad "member with only prereleases: registry untouched" "the bot wrote on a refusal"
+fi
+
+# A MISSING field and a MIS-TYPED one need different remedies, so they must not share a message:
+# telling a human to "quote" a key that is not there sends them after a bug that does not exist.
+cat > "$WORK/r12.yml" <<'YAML'
+contracts:
+  - id: fs-gg-ui-template
+    version: "0.10.0"
+    package-version: "0.10.0"
+YAML
+out="$(python3 "$BOT" "$WORK/r12.yml" --fixture "$WORK/f6.json" 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && echo "$out" | grep -q "has no .package-tag."; then
+  ok "missing field: reported as MISSING, not as a quoting bug"
+else
+  bad "missing field: reported as MISSING, not as a quoting bug" "rc=$rc: $out"
 fi
 
 # An unquoted version is a float — the .github#267 trap. A bot must not write one back.

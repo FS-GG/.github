@@ -184,7 +184,16 @@ def load_row(path: str) -> dict:
 
 
 def _require_str(row: dict, field: str) -> str:
-    v = row.get(field)
+    # A MISSING field and a MIS-TYPED one need different remedies, so they get different messages.
+    # Collapsing them tells a human to "quote" a key that is not there, sending them to look for a
+    # quoting bug that does not exist.
+    if field not in row:
+        raise Finding(
+            f"{CONTRACT} has no `{field}` — the row lost a field this bot writes. It was renamed "
+            f"or dropped; either way the flip cannot be recorded. Restore it, or retire this bot's "
+            f"claim on it."
+        )
+    v = row[field]
     if not isinstance(v, str):
         # YAML coerces an unquoted 1.10 to the float 1.1 — the .github#267 trap, restated: a
         # bot that wrote a float back would corrupt the row it exists to repair.
@@ -216,7 +225,21 @@ def classify(candidate: str, resolve_feed, stable_channel: bool) -> tuple[str, l
     for pkg in FRAMEWORK_MEMBERS:
         live = resolve_feed(pkg)
         if stable_channel:
-            live = [v for v in live if not is_prerelease(v)] or live
+            stable = [v for v in live if not is_prerelease(v)]
+            if not stable:
+                # NOT `or live`. Falling back to the prereleases would silently compare a stable
+                # candidate against a channel the registry does not track, and this file claims to
+                # fail closed. It is also the exact condition check-feed-coherence.py raises as a
+                # problem in its own words ("the feed serves no stable version of {pkg} ... which no
+                # consumer can restore") — two gates reading one feed must not disagree about what
+                # it says.
+                raise Finding(
+                    f"the feed serves no stable version of {pkg} — only prereleases "
+                    f"{sorted(live)} — while the registry tracks the stable channel. The coherent "
+                    f"set cannot be classified against a member no consumer can restore. Publish "
+                    f"the stable package, or move the registry to a prerelease channel."
+                )
+            live = stable
         top = newest(live)
         if parse_version(top) == want:
             at_candidate.append(pkg)
