@@ -476,8 +476,8 @@ let ``#481 a column NOBODY recorded is not restored - release says so rather tha
 ///
 /// A test suite that could mint the capability would be testing a different type from the one that ships.
 let private acquire (transport: Fake.Recorder) =
-    match verifyHeld transport 120 me aRef with
-    | Ok(Some held) -> held
+    match verifyHeld transport 120 me None aRef with
+    | Ok(Holds held) -> held
     | other -> failwith $"the fixture must actually hold the lock — got %A{other}"
 
 [<Fact>]
@@ -719,11 +719,11 @@ let ``#523 the PATCH cannot precede its own validation - the re-check PRODUCES w
 [<Fact>]
 let ``verifyHeld fails CLOSED - an unreadable marker set yields an error, never a capability`` () =
     // Manufacturing a capability from a failed read would be the fail-open this whole type exists to
-    // prevent, sitting inside its own constructor. `None` says "we looked, and this worker does not hold
-    // it" — which is a claim a failed read is not entitled to make.
+    // prevent, sitting inside its own constructor. `DoesNotHold` says "we looked, and this worker does not
+    // hold it" — which is a claim a failed read is not entitled to make.
     let transport = Fake.Recorder(fun _ -> Error(Malformed("FS.GG.SDD#42", "not JSON")))
 
-    match verifyHeld transport 120 me aRef with
+    match verifyHeld transport 120 me None aRef with
     | Error(Malformed _) -> ()
     | other -> failwith $"a failed read must not mint a capability — got %A{other}"
 
@@ -731,17 +731,75 @@ let ``verifyHeld fails CLOSED - an unreadable marker set yields an error, never 
 let ``verifyHeld returns the capability when the live winner IS us`` () =
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" "" ]))
 
-    match verifyHeld transport 120 me aRef with
-    | Ok(Some held) -> Assert.Equal(901L, held.MarkerId)
+    match verifyHeld transport 120 me None aRef with
+    | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
     | other -> failwith $"we hold it — got %A{other}"
 
 [<Fact>]
-let ``verifyHeld returns None when SOMEBODY ELSE holds it - and None is not a capability`` () =
+let ``verifyHeld does NOT hold when SOMEBODY ELSE holds it - and that is not a capability`` () =
     let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "kite-461" "" ]))
 
-    match verifyHeld transport 120 me aRef with
-    | Ok None -> ()
+    match verifyHeld transport 120 me None aRef with
+    | Ok DoesNotHold -> ()
     | other -> failwith $"another worker's lock is not ours — got %A{other}"
+
+// ---- verifyHeld matches on a SESSION predicate, not the worker id (#1031) ----------------------------
+
+[<Fact>]
+let ``#1031 verifyHeld REFUSES the capability over a TWIN's marker - our id, another session`` () =
+    // THE GAP THIS CLOSES. `claim` has refused a twin since #419, and `release`/`heartbeat` scope to the
+    // winning comment id (#550) — so the reachable path was already shut. But `verifyHeld` still matched on
+    // the WORKER ID alone, and it is the only door to `Held`: a deliberately mis-targeted ref matched a
+    // twin's marker here and was handed the capability that authorises PATCHing and DELETING it. The id was
+    // the last place this invariant was asserted by convention rather than construction (#839 residual 2/4).
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+
+    match verifyHeld transport 120 me (Some(SessionId "ed60050b")) aRef with
+    | Ok(TwinHolds(SessionId theirs)) -> Assert.Equal("79b9e347", theirs)
+    | other -> failwith $"our id in another session is a TWIN, not us — got %A{other}"
+
+[<Fact>]
+let ``#1031 a twin is a case of its OWN - collapsing it into DoesNotHold would misdiagnose the lease`` () =
+    // WHY IT IS NOT `DoesNotHold`. A caller handed `DoesNotHold` re-reads the markers to say WHY, keys on
+    // the worker id, finds OUR id on the live winner — and concludes the only other thing that fits: "your
+    // lease expired, re-claim it". That is advice to go take a lock a twin is working behind. The outcome
+    // has to carry the twin, because no id-keyed question downstream can recover it.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+
+    match verifyHeld transport 120 me (Some(SessionId "ed60050b")) aRef with
+    | Ok DoesNotHold -> failwith "a twin must not be reported as a plain non-hold — the caller cannot tell"
+    | Ok(TwinHolds _) -> ()
+    | other -> failwith $"expected a twin — got %A{other}"
+
+[<Fact>]
+let ``#1031 a SESSIONLESS marker with our id still verifies - the boundary of the rule`` () =
+    // The same boundary `claim` draws (#419 leg 4), and it must be drawn identically or the tool refuses you
+    // the lock in one verb and hands it to you in another. A marker with no `session=` — a human, a harness
+    // exporting none, any pre-#419 marker — is indistinguishable from ours. Failing closed here would lock a
+    // worker out of an item they really hold, and `release`/`heartbeat` would break for every such marker.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" "" ]))
+
+    match verifyHeld transport 120 me (Some(SessionId "ed60050b")) aRef with
+    | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"a sessionless marker with our id must stay ours — got %A{other}"
+
+[<Fact>]
+let ``#1031 our OWN session verifies its own marker - or no worker could ever renew`` () =
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+
+    match verifyHeld transport 120 me (Some(SessionId "79b9e347")) aRef with
+    | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"our own session must verify its own lock — got %A{other}"
+
+[<Fact>]
+let ``#1031 a SESSIONLESS caller keeps the old behaviour over a marker that carries one`` () =
+    // The other half of "both sessions must be known": a worker whose own session is unknown cannot call
+    // anything a twin, because it has nothing to compare. `claim` treats this as ours; so must this.
+    let transport = Fake.Recorder(fun _ -> ok (comments [ marker 901 "vole-418" " session=79b9e347" ]))
+
+    match verifyHeld transport 120 me None aRef with
+    | Ok(Holds held) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"a caller with no session of its own cannot conclude twin — got %A{other}"
 
 // ---- child: the id is a NUMBER ----------------------------------------------------------------------
 
