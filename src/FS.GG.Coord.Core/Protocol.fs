@@ -53,6 +53,16 @@ module Protocol =
           /// invents a remedy for.
           Action: string }
 
+    /// One `BlockerState`, as a reader of the scan's JSON meets it.
+    type BlockerStateDoc =
+        { /// The string `scan` emits — `Types.blockerStateWireName`'s answer, never a second spelling.
+          Wire: string
+          /// Whether the blocker HOLDS. The one bit a reconciler acts on, and the one the union's case
+          /// name does not carry: `unknown` and `unparseable` read like non-answers and BLOCK.
+          Holds: bool
+          /// What the state says about the blocker, and why it holds or does not.
+          Meaning: string }
+
     // ---- the verdicts ------------------------------------------------------------------------------
     // ONE TOTAL FUNCTION, ONE UNION. Fourteen of the scheduler family's issues were a missing case in
     // it; #485 named the cause — startability was computed in five places and agreed in none. These are
@@ -132,6 +142,56 @@ module Protocol =
         |> List.map (fun c ->
             { Kind = Schedulability.kind c
               Meaning = meaning c })
+
+    // ---- the blocker wire vocabulary ---------------------------------------------------------------
+    // `check-board` §1 spelled the five cases by hand, in a sentence that NAMED its source: "the five
+    // cases of the engine's `BlockerState`". Naming the source is not reading it. A reconciler selects
+    // on these strings in `jq`, so a list that drifts does not merely mislead — it matches nothing, every
+    // blocker reads as still-holding, `BLOCKER-CLEARED` never fires, and the pass reports a CLEAN BOARD
+    // over items rotting behind shipped work (#476). A false clean is this skill's worst output by its
+    // own account, and the doc was one edit away from producing it.
+    //
+    // This could not be generated before #1012. The vocabulary was two `private` INVERSE copies outside
+    // `Core` (`Scan` rendered, `Snapshot` parsed), so `Protocol.fs` could not reach it, and typing the
+    // five cases here would have been a THIRD copy wearing a generator's authority — #865's defect, and
+    // the trap #916 wrote down. `Types.blockerStateWireName` owns the strings now; this module asks it.
+
+    /// Every `BlockerState` case, by reflection.
+    ///
+    /// NOT a hand-written list, and the asymmetry with `everyCase` above is the point rather than an
+    /// inconsistency. `everyCase` must be written out because `Schedulability`'s cases carry FIELDS, so
+    /// there is no value to build without inventing one — which is exactly why it needs `ProtocolTests`
+    /// to pin it by reflection, and why #865 got in. `BlockerState`'s five cases are all NULLARY, so the
+    /// list can be DERIVED, and a list nobody writes is a list that cannot omit a case. No pin is needed
+    /// here because there is no copy to pin — the defect is absent rather than tested for.
+    let private everyBlockerState: BlockerState list =
+        FSharp.Reflection.FSharpType.GetUnionCases typeof<BlockerState>
+        |> Array.map (fun c -> FSharp.Reflection.FSharpValue.MakeUnion(c, [||]) :?> BlockerState)
+        |> Array.toList
+
+    /// What the state SAYS — a total match, on the same terms as `meaning` above.
+    let private blockerMeaning =
+        function
+        | BlockerOpen -> "The blocker is open. It HOLDS."
+        | BlockerClosed -> "The blocker issue is closed. It does not hold — the work it named is finished or abandoned."
+        | BlockerMerged ->
+            "The blocker is a MERGED pull request. It does not hold. A rule that cleared only on CLOSED would unblock when the PR was ABANDONED and block forever once it was FINISHED — the gate opening precisely when the work is thrown away (#476)."
+        | BlockerUnknown ->
+            "The ref parsed and its state could not be read. It HOLDS: \"I could not look\" is not \"I looked and it is fine\" (#266). Usually an off-board ref the scan could not resolve — board it, and it becomes `open` or clears."
+        | BlockerUnparseable ->
+            "The `Blocked by` text is not an issue ref at all. It HOLDS: prose in a dependency field is a question nobody answered, and a field this pass cannot read is not a field it may declare empty."
+
+    // NEITHER of the two facts here is decided in this module. `Wire` is `Types.blockerStateWireName`;
+    // `Holds` is `Blockers.isResolvedState`, negated. This file DOCUMENTS the protocol — the moment it
+    // also DECIDES a bit of it, it is a copy with a generator's authority behind it, which is strictly
+    // worse than the hand-written table it replaced (#865). The first draft of this function typed the
+    // five `Holds` answers out by hand and they were right, which is exactly how that defect gets in.
+    let blockerStates: BlockerStateDoc list =
+        everyBlockerState
+        |> List.map (fun b ->
+            { Wire = blockerStateWireName b
+              Holds = not (Blockers.isResolvedState b)
+              Meaning = blockerMeaning b })
 
     // ---- take's exit contract ----------------------------------------------------------------------
     // #585 gave `take` codes that tell "I claimed you an item" apart from the four ways it can claim

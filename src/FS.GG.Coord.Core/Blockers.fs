@@ -6,13 +6,17 @@ module Blockers =
     open System.Text.RegularExpressions
     open Types
 
-    let isResolved (blocker: Blocker) : bool =
-        match blocker.State with
+    let isResolvedState (state: BlockerState) : bool =
+        match state with
         | BlockerClosed
         | BlockerMerged -> true
         | BlockerOpen
         | BlockerUnknown
         | BlockerUnparseable -> false
+
+    // ONE decision, asked twice — never two matches that agree today. A `Blocker` resolves iff its STATE
+    // does; there is nothing else in the record to consult.
+    let isResolved (blocker: Blocker) : bool = isResolvedState blocker.State
 
     let unresolved (blockers: Blocker list) : Blocker list =
         blockers |> List.filter (isResolved >> not)

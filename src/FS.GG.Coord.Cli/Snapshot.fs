@@ -655,8 +655,12 @@ module Snapshot =
     // `filingRules`. A SECOND subset is the point at which "the generator selects nothing" stops being a
     // preference and starts being load-bearing: two `jq` id-filters in the shell would be two copies of
     // two memberships, and the only thing distinguishing them would be a list nothing tests.
+    // /6 — and `blockerStates` (#889): the blocker wire vocabulary `check-board` §1 restated by hand. NOT
+    // a subset of anything — it is the five cases of `Types.BlockerState`, each carrying the string
+    // `blockerStateWireName` writes. It could not be stated here before #1012 gave that vocabulary an
+    // owner in `Core`; until then the strings lived in two `private` inverse copies outside it.
     [<Literal>]
-    let private FactsSchema = "fsgg.coord.protocol/5"
+    let private FactsSchema = "fsgg.coord.protocol/6"
 
     let renderFacts
         (rules: Protocol.Rule list)
@@ -665,6 +669,7 @@ module Snapshot =
         (verdicts: Protocol.VerdictDoc list)
         (takeExitCodes: Protocol.ExitCodeDoc list)
         (landableExitCodes: Protocol.ExitCodeDoc list)
+        (blockerStates: Protocol.BlockerStateDoc list)
         : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
@@ -698,6 +703,17 @@ module Snapshot =
             w.WriteStartObject()
             w.WriteString("kind", v.Kind)
             w.WriteString("meaning", v.Meaning)
+            w.WriteEndObject()
+
+        w.WriteEndArray()
+
+        w.WriteStartArray("blockerStates")
+
+        for b in blockerStates do
+            w.WriteStartObject()
+            w.WriteString("wire", b.Wire)
+            w.WriteBoolean("holds", b.Holds)
+            w.WriteString("meaning", b.Meaning)
             w.WriteEndObject()
 
         w.WriteEndArray()

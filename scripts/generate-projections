@@ -62,6 +62,8 @@ TARGETS=(
   "filing-rules:.agents/skills/cross-repo-coordination/SKILL.md"
   "reconcile-rules:.claude/skills/check-board/SKILL.md"
   "reconcile-rules:.agents/skills/check-board/SKILL.md"
+  "blocker-states:.claude/skills/check-board/SKILL.md"
+  "blocker-states:.agents/skills/check-board/SKILL.md"
   "versions:docs/architecture.md"
 )
 
@@ -285,6 +287,50 @@ render_reconcile_rules() {
   echo "[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).*"
   echo ""
   jq -r '.reconcileRules[] | "**\(.title)**\n\n\(.statement)\n"' "$FACTS"
+}
+
+# `blocker-states` — the blocker WIRE vocabulary (#889), for the skill that reads it with `jq`.
+#
+# This is the sharpest region in the file, and the reason is mechanical rather than rhetorical. Every
+# other region misleads a HUMAN when it drifts; this one is selected on by a `.state == "merged"` filter
+# in `check-board` §3, so a drifted string matches NOTHING and the pass reports a clean board over items
+# rotting behind shipped work (#476). Its worst output, by its own account — and silent.
+#
+# `holds` is emitted as the ✓/✗ column rather than left to the prose, because that bit is what a reader
+# ACTS on and burying it in a sentence is how `unknown` — a non-answer that BLOCKS — reads as "fine".
+#
+# WHAT IS NOT HERE: §3's remedies (resolve `unknown` over REST, re-write an `unparseable` field by hand)
+# and its finding codes. Those are `check-board`'s OWN procedure — what it does about a state — and the
+# engine holds no opinion about them. A region carries the protocol its document restates, not the
+# document's whole subject (#916, and `render_reconcile_rules` above).
+render_blocker_states() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  The hand-written copy NAMED its own source — \"the five cases of the engine's \`BlockerState\`\""
+  echo "  — and was still a copy. Naming a source is not reading it. Generatable only since #1012 gave"
+  echo "  the vocabulary an owner in Core; before that it was two private INVERSE copies outside it, and"
+  echo "  typing the cases into Protocol.fs would have been a THIRD (#865)."
+  echo ""
+  echo "  TWO sources, because this region states two different facts. The \`.state\` strings and the case"
+  echo "  list come from Types.fs (\`BlockerState\`, \`blockerStateWireName\`) — that is where a NEW state or"
+  echo "  a renamed one belongs. The \`holds?\` bit and the prose are Protocol.fs. Regenerate either way."
+  echo "-->"
+  echo ""
+  echo "*Generated from the typed core: \`Types.blockerStateWireName\` writes these strings, so the engine"
+  echo "that emits \`.state\` is the engine that wrote this table. Lower case, deliberately — an issue's own"
+  echo "\`state\` is UPPER case on the wire and a blocker's is not, and the two conventions are not to be"
+  echo "\"unified\" (§3).*"
+  echo ""
+  echo "| \`.state\` | holds? | what it means |"
+  echo "|---|---|---|"
+  # `|` is ESCAPED, and this is not defensive noise: the prose it replaced was literally
+  # `open | closed | merged | unknown | unparseable`, so a pipe is the single most likely character
+  # for an author of `blockerMeaning` to reach for. An unescaped one ends the cell, silently — and
+  # `--check` compares generated to generated, so it would never notice.
+  jq -r '.blockerStates[]
+    | "| `\(.wire)` | \(if .holds then "**YES**" else "no" end) | \(.meaning | split("|") | join("\\|")) |"' "$FACTS"
 }
 
 # `versions` — the registry's version leads (#913), for the architecture map. THE ONLY REGION EMITTED

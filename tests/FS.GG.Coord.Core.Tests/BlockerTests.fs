@@ -1,5 +1,8 @@
 namespace FS.GG.Coord.Tests
 
+open System
+open System.IO
+open System.Text.RegularExpressions
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -194,3 +197,94 @@ module BlockerTests =
     [<Fact>]
     let ``a value that is not a ref at all is refused`` () =
         Assert.Equal<Result<string option, _>>(Error Blockers.NotIssueRefs, canon "not a ref")
+
+    // ---- #889: the rule is ONE decision, and everything else ASKS ----------------------------------
+    //
+    // `Chore.fs` carried a `private resolved` that was byte-identical to `Blockers.isResolved`, two
+    // modules later in compile order, with nothing holding them in step — and `BLOCKER-CLEARED` turned
+    // on it. That is #1000's four `statusName`s and #1012's two inverse `BlockerState` renderers, a
+    // third time. The copies agreed, which is why nobody saw it; agreement is not the property.
+
+    /// THE PAIR IS ONE DECISION ASKED TWICE. `isResolved` must BE `isResolvedState` of the state — if
+    /// somebody re-expands it into its own match, the two drift the moment one is edited, and the
+    /// resolution rule is back to being decided in two places.
+    [<Fact>]
+    let ``#889 isResolved is isResolvedState of the blocker's state - over every case`` () =
+        for c in FSharp.Reflection.FSharpType.GetUnionCases typeof<BlockerState> do
+            let state = FSharp.Reflection.FSharpValue.MakeUnion(c, [||]) :?> BlockerState
+
+            let viaRecord = Blockers.isResolved (blocker 1 state)
+            let viaState = Blockers.isResolvedState state
+
+            Assert.True(
+                (viaRecord = viaState),
+                $"{c.Name}: isResolved and isResolvedState disagree — the rule is decided twice")
+
+    /// AND NOBODY ELSE DECIDES IT — asserted against the SOURCE, because reflection cannot see this.
+    ///
+    /// THE FIRST DRAFT OF THIS GUARD WAS VACUOUS, and it is worth saying how: it swept the assembly for
+    /// `BlockerState -> bool` methods outside `Blockers`. The copy it was written to catch —
+    /// `Chore.resolved` — took a `Blocker`, matched on `.State` INSIDE, and returned bool. MEASURED: the
+    /// original defect re-introduced verbatim, **320 tests green**. A guard named for a copy it cannot
+    /// see is #266's signature, and writing one inside the fix for a duplication defect is how this
+    /// family keeps regenerating (#916's trap 1: the copies agree; agreement is not the property).
+    ///
+    /// Signatures cannot express "decides resolution" — the decision is a `match` in a BODY, under any
+    /// parameter type. So this reads the source, on the same terms `DocumentedInvocationTests` does: the
+    /// property is about what is WRITTEN, so the text is the honest subject.
+    ///
+    /// IT MATCHES ON THE ARM'S RESULT, NOT MERELY ON THE CASE NAME. Naming `BlockerMerged` is not the
+    /// defect — `Schedulability.blockerText` and `Protocol.blockerMeaning` both name every case to render
+    /// PROSE, which is the deliberate second vocabulary `Types.fsi` tells you not to collapse. Mapping a
+    /// resolving case to a BOOL is the defect, because that is the resolution rule and `Blockers` owns
+    /// it. A first cut flagged the case name alone and reported both prose renderers as offenders — a
+    /// guard that cries wolf on correct code teaches exactly one lesson, and it is the wrong one.
+    [<Fact>]
+    let ``#889 no module outside Blockers decides a blocker's resolution`` () =
+        let coreSrc =
+            let rec up (d: DirectoryInfo) =
+                if isNull (box d) then
+                    failwith "BlockerTests: no repo root above the test binary (looked for `src/FS.GG.Coord.Core`)."
+                elif Directory.Exists(Path.Combine(d.FullName, "src", "FS.GG.Coord.Core")) then
+                    Path.Combine(d.FullName, "src", "FS.GG.Coord.Core")
+                else
+                    up d.Parent
+
+            up (DirectoryInfo AppContext.BaseDirectory)
+
+        // `Blockers.fs` IS the owner. Every other module in Core is subject to this.
+        let files =
+            Directory.GetFiles(coreSrc, "*.fs")
+            |> Array.filter (fun f -> Path.GetFileName f <> "Blockers.fs")
+
+        // A rename that emptied this list would make the sweep pass by iterating nothing — the very shape
+        // this test exists to refuse.
+        Assert.NotEmpty files
+
+        // `| BlockerClosed` / `| BlockerMerged`, possibly grouped with other cases, arriving at `-> true`
+        // or `-> false`. That is a resolution DECISION. The window is short so it cannot leap out of the
+        // match arm it starts in.
+        let decides =
+            Regex(@"\|\s*Blocker(Closed|Merged)\b[\s\S]{0,120}?->\s*(true|false)\b")
+
+        // COMMENTS ARE STRIPPED FIRST, and in this codebase that is not a nicety. Every module here
+        // documents the defect it removed, in prose, quoting the code that was wrong — this file does it
+        // twice. A guard that read comments would red on a module for CORRECTLY describing the bug it no
+        // longer has, which is the same "cries wolf on correct code" failure as the first cut above.
+        let stripComments (text: string) =
+            text.Split('\n')
+            |> Array.map (fun line ->
+                match line.IndexOf "//" with
+                | -1 -> line
+                | i -> line.Substring(0, i))
+            |> String.concat "\n"
+
+        let offenders =
+            files
+            |> Array.filter (fun f -> decides.IsMatch(stripComments (File.ReadAllText f)))
+            |> Array.map Path.GetFileName
+            |> Array.toList
+
+        Assert.True(
+            List.isEmpty offenders,
+            $"""these decide a blocker's resolution outside Blockers.fs: {String.concat ", " offenders} — that is the rule, decided a second time, and `BLOCKER-CLEARED` turns on it. Ask `Blockers.isResolved`/`isResolvedState` (#889).""")

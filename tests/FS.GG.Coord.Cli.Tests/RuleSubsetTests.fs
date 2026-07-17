@@ -122,6 +122,7 @@ module RuleSubsetTests =
                 Protocol.verdicts
                 Protocol.takeExitCodes
                 Protocol.landableExitCodes
+                Protocol.blockerStates
 
         use doc = JsonDocument.Parse json
 

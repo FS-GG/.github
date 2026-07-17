@@ -91,7 +91,8 @@ let private facts (opts: Options) =
                 Protocol.reconcileRules
                 Protocol.verdicts
                 Protocol.takeExitCodes
-                Protocol.landableExitCodes)
+                Protocol.landableExitCodes
+                Protocol.blockerStates)
     | Text ->
         for r in Protocol.rules do
             printfn "## %s" r.Title

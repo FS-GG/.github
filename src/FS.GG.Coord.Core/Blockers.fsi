@@ -23,6 +23,16 @@ module Blockers =
     /// an unresolvable blocker is the safe direction, and it is the only safe direction.
     val isResolved: blocker: Blocker -> bool
 
+    /// The same rule, asked of a bare `BlockerState` — for callers that hold a STATE rather than a
+    /// `Blocker`, and must not answer it themselves.
+    ///
+    /// `isResolved` is this function applied to `blocker.State`, not a second decision: the resolution
+    /// rule is spelled ONCE and everything else asks. The pair exists because `Protocol.blockerStates`
+    /// documents whether each state HOLDS, and it has no `Blocker` to hand — only a case. Without this
+    /// it would have hand-typed the five answers into the DOC, which is the copy the doc exists to end
+    /// (#865, and #916's trap 1: generation makes copies agree, it does not make them true).
+    val isResolvedState: state: BlockerState -> bool
+
     /// The blockers still holding this item. Empty = not blocked.
     val unresolved: blockers: Blocker list -> Blocker list
 

@@ -100,14 +100,6 @@ module Chore =
         else
             Some(SafePoint(boundary, worker, items))
 
-    let private resolved (b: Blocker) =
-        match b.State with
-        | BlockerClosed
-        | BlockerMerged -> true
-        | BlockerOpen
-        | BlockerUnknown
-        | BlockerUnparseable -> false
-
     /// The chores ONE item's observed state implies.
     ///
     /// **THE RESERVER OWNS THE SCHEDULING COLUMN, and this `match` is where that is decided — once, for
@@ -195,7 +187,7 @@ module Chore =
                   item.State = Open
                   && item.Status = Blocked
                   && not item.Blockers.IsEmpty
-                  && item.Blockers |> List.forall resolved
+                  && item.Blockers |> List.forall Blockers.isResolved
               then
                   Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)
 
