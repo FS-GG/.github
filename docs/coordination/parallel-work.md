@@ -63,17 +63,36 @@ Resolution order:
 | | Rule | When |
 |---|---|---|
 | 1 | `--worker <id>` (global flag) | an orchestrator naming an agent it spawns |
-| 2 | `$FSGG_WORKER` | same, via the environment |
-| 3 | the **git worktree's name** | the normal case — §2 gives each item its own worktree, so the worktree *is* an identity |
-| 4 | the **agent harness's session id**, hashed to a memorable name | a fallback; deterministic, no state |
-| 5 | generated, persisted per checkout | last resort — a single worker in the primary checkout |
+| 2 | `$FSGG_WORKER` | same, via the environment — and what §0's mint sets |
+| 3 | the **agent harness's session id**, hashed to a memorable name | a fallback; deterministic, no state |
+| — | **nothing else. It REFUSES.** | no `--worker`, no `$FSGG_WORKER`, no session: the engine errors rather than invent one |
 
-Rules 4 and 5 **warn on every claim**, because each can hand one id to several workers — and they say
-which reason applies. Rule 5: a checkout shared by several workers gives them one id. Rule 4: on
-Claude Code every subagent of a session shares its `CLAUDE_CODE_SESSION_ID`, so a fan-out collapses
-onto one id — the same-account bug, one level down. (On OpenCode subagents are *child* sessions with
-their own ids, so rule 4 is genuinely per-worker there and does not warn. `fsgg-coord` knows the
-difference per harness; unknown harnesses are assumed shared, which is the safe default.)
+Rule 3 **warns on every claim**, because it can hand one id to several workers: on Claude Code every
+subagent of a session shares its `CLAUDE_CODE_SESSION_ID`, so a fan-out collapses onto one id — the
+same-account bug, one level down. (On OpenCode subagents are *child* sessions with their own ids, so
+rule 3 is genuinely per-worker there and does not warn. `fsgg-coord` knows the difference per harness;
+unknown harnesses are assumed shared, which is the safe default.)
+
+**THE LAST RULE IS A REFUSAL, AND THAT IS A DESIGN DECISION — not a gap.** This table used to carry
+two more rules: *the git worktree's name* ("the normal case"), and *generated, persisted per
+checkout* ("last resort"). **The engine implements neither** — `Identity.resolve` is the four legs
+above and nothing else. Both were the **bash** client's, and ADR-0040's port dropped them
+deliberately. The engine says why, in its own words:
+
+> REFUSE rather than invent a shared id. The bash client persists a per-checkout id here; the engine
+> does not, because a persisted-per-checkout id is itself a shared id under a fan-out sharing one
+> checkout — the exact thing ADR-0027 forbids. Make the caller say who they are.
+
+So a worker with no id gets a **loud error naming the mint**, not a quiet default that might collide.
+That is the whole point: every remaining rule is one somebody had to *state*, so no id arrives by
+accident.
+
+**Do not reason from the deleted rules.** They generated advice all over this protocol that is still
+being followed and is no longer true — [#629](https://github.com/FS-GG/.github/issues/629) is a
+worker following rule 3's consequence faithfully and reporting a bug the engine cannot have. If you
+are about to write "the worktree names your worker", measure it first: `whoami` from a worktree
+returns the **same** id as the checkout it was cut from, because neither `$FSGG_WORKER` nor a session
+id is a function of the path.
 
 **A session id is not an identity, and it was never going to be.** It is unique per *session*, not per
 *worker*, and the mapping between the two is a property of the harness. See
@@ -86,20 +105,39 @@ What the session id *is* good for is **provenance**: every claim marker records
 question the incident behind [#255](https://github.com/FS-GG/.github/issues/255) could only answer
 with file mtimes and the process list.
 
-The id is stamped where attribution is later needed — `claim` prints the exact commit trailer to use,
-with your id already filled in. **Use the line it printed**; do not retype one, and do not derive one:
+The id is stamped where attribution is later needed — the commit trailer:
 
 ```sh
-git commit --trailer "FSGG-Worker: <the id `claim` printed>"
+git commit --trailer "FSGG-Worker: $FSGG_WORKER"
 ```
 
-There is no id written here to copy, and no expression to substitute for one, because **both of the
-obvious shortcuts are wrong**. `$FSGG_WORKER` is empty for a worker whose id came from the worktree
-name (rule 3 — the normal case), so it yields a blank trailer. And `$(git config fsgg.worker)` reads
-the id of *whoever claimed most recently*: `claim` stamps `fsgg.worker` per-worktree only when
+**`claim` does NOT print this line, and this page used to say it did** — *"`claim` prints the exact
+commit trailer to use, with your id already filled in. **Use the line it printed**"*. It prints one
+line and always has, since the port:
+
+```
+claimed <repo>#<n> by worker <id>
+```
+
+`grep -rn 'FSGG-Worker' src/` matches nothing. The **bash** client printed the trailer; ADR-0040's
+port dropped that output and this instruction outlived it — so a worker was told to copy a line that
+does not exist, *and* forbidden to reconstruct one, which leaves no legal move at all.
+
+**`$FSGG_WORKER` is the right answer, and the old reason for forbidding it is gone.** This page used
+to reject it because *"`$FSGG_WORKER` is empty for a worker whose id came from the worktree name (rule
+3 — the normal case)"*. There is no rule 3: worktree-name derivation does not exist, so that is not a
+way `$FSGG_WORKER` can be empty. And §0 **mandates the mint**, which sets it — so for anyone who
+followed §0, `$FSGG_WORKER` **is** the id holding the lock, and expanding it is not a shortcut but the
+direct read.
+
+If it is empty, you skipped §0 and your id came from the session (rule 3). Do not paper over that with
+a trailer: mint one, because a session-derived id is the one every subagent of your session shares.
+
+**`$(git config fsgg.worker)` is still wrong**, and for a reason nothing retired: it reads the id of
+*whoever claimed most recently*. `claim` stamps `fsgg.worker` per-worktree only when
 `extensions.worktreeConfig` is set, which is **not** git's default, so it falls back to the shared
-repo config that every linked worktree reads (`fsgg-coord` says so when it happens). A blank trailer
-loses the attribution; a borrowed one asserts a false one, which is worse.
+repo config every linked worktree reads (`fsgg-coord` says so when it happens). A blank trailer loses
+the attribution; a borrowed one asserts a false one, which is worse.
 
 Without that, "who edited these files?" is answerable only by mtime forensics, which is where this
 protocol's first real incident ended up.
@@ -311,8 +349,10 @@ GitHub computes the PR's diff against the new base, the foreign commits disappea
 sees them at all (.github#319).
 
 Integration is by PR into a green `main`. Agents should prefer the harness's built-in worktree
-isolation (`isolation: "worktree"`), which is the same discipline managed for them. The worktree also
-supplies the worker id (§0 rule 3), so this is not merely hygiene.
+isolation (`isolation: "worktree"`), which is the same discipline managed for them. The worktree
+isolates the *tree*, and nothing else — it does **not** supply the worker id. This line used to say it
+did ("§0 rule 3"), and that rule does not exist: your id comes from §0's mint, and a worktree cannot
+change it.
 
 `claim` stamps the worker into the worktree (`git config fsgg.worker`), which is what `who --local`
 reads back. Git only scopes those keys per-worktree when the repo enables the worktree-config
@@ -769,8 +809,8 @@ a claim that the epic has that child.
 scripts/fsgg-coord batch --repo <r> -n 4
 
 # each worker, independently — named, isolated, and safe against a lost race:
-eval "$(scripts/fsgg-coord whoami --mint)"    # MINT one; never invent or copy one (§0). Or let the
-                                              # worktree name it (§0 rule 3).
+eval "$(scripts/fsgg-coord whoami --mint)"    # MINT one; never invent or copy one (§0). There is no
+                                              # second way: no mint, no id (the engine REFUSES).
 scripts/fsgg-coord take --repo <r>            # pick + claim the next SCHEDULABLE item, retrying on a lost race
 git fetch origin                              # NOTHING else does — the base is otherwise the PAST (§2)
 git worktree add ../<repo>-<n> -b item/<n>-<slug> origin/main   # name the base: HEAD is not `main` (§2)

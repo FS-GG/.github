@@ -76,14 +76,27 @@ trailer. A session id satisfies (b), fails (c), and satisfies (a) **only on some
 
 So `fsgg-coord` uses it where it genuinely helps, and nowhere else:
 
-1. **Not as the primary identity.** The **git worktree name** (rule 3) is unique per worker by
-   construction, because ADR-0021 already gives each item its own worktree. That is the identity.
-2. **As a fallback (rule 4), ahead of a generated per-checkout name (rule 5).** Two agent sessions
-   sharing one checkout get *different* ids from their session ids, where rule 5 would give them the
-   same one. Strictly better — but on a harness that shares the session across subagents, it still
-   cannot separate them, so `whoami`/`claim` **warn**, naming the reason. `fsgg-coord` knows the
-   cardinality per harness (`session_is_per_worker`): OpenCode does not warn; Claude Code and unknown
-   harnesses do (fail safe).
+1. **Not as the primary identity.** The primary identity is one somebody **states** — `--worker`, or
+   the `$FSGG_WORKER` that §0's mint sets. It is not derived from anything, on purpose: a derived id
+   is one that arrives without anybody deciding it, and an id nobody decided is one two workers can
+   share.
+2. **As the LAST resort before a refusal (rule 3).** If no id was stated, `fsgg-coord` hashes the
+   harness session id to a memorable name — deterministic, no state. But on a harness that shares one
+   session across subagents it cannot separate them, so `whoami`/`claim` **warn**, naming the reason.
+   `fsgg-coord` knows the cardinality per harness (`sessionIsPerWorker`): OpenCode does not warn;
+   Claude Code and unknown harnesses do (fail safe). Past that, the engine **refuses** — it does not
+   invent one.
+
+> **This section used to name two rules the engine does not have**, and they were the load-bearing
+> ones: *"The **git worktree name** (rule 3) … **That is the identity**"*, with the session id a mere
+> fallback "ahead of a generated per-checkout name (rule 5)". `Identity.resolve` has three legs and a
+> refusal — `--worker` → `$FSGG_WORKER` → session → error — and `grep -rn worktree
+> src/FS.GG.Coord.Cli/Identity.fs` matches nothing. Both deleted rules were the **bash** client's, and
+> ADR-0040's port dropped them deliberately: a persisted-per-checkout id is *itself* a shared id under
+> a fan-out sharing one checkout, which is what ADR-0027 forbids. So the session id is no longer "not
+> the primary identity, and not the last resort" — **it is the last resort**, and the thing after it
+> is an error message. See [#629](https://github.com/FS-GG/.github/issues/629), which is a worker
+> following the deleted rule 3 to a conclusion the engine cannot reach.
 3. **Always as provenance.** Whatever named the worker, the claim marker records
    `harness=<name> session=<id>`, so "which agent transcript claimed this item?" is a lookup instead of
    the mtime-and-`ps` forensics that [#255](https://github.com/FS-GG/.github/issues/255) was reduced to.
@@ -99,8 +112,17 @@ the provenance start working with no code change. Its session is assumed **share
 added to `session_is_per_worker` in `scripts/fsgg-coord` — assume-shared is the safe default, because
 the failure mode of assuming per-worker is two workers holding one item.
 
-If the harness gives each agent its own worktree (Claude Code's `isolation: "worktree"`, OpenCode
-child sessions with separate checkouts), none of this matters: rule 3 already names the worker.
+**A worktree per agent does NOT solve this, and this page used to say it did** — *"If the harness
+gives each agent its own worktree (Claude Code's `isolation: "worktree"`, OpenCode child sessions with
+separate checkouts), none of this matters: rule 3 already names the worker."*
+
+It matters most exactly there. There is no rule 3 to name the worker: the engine never reads the
+worktree, so N Claude Code subagents in N worktrees still share one `CLAUDE_CODE_SESSION_ID` and all
+resolve to **one id** — the collision ADR-0027 exists to prevent, arriving through the mechanism the
+reader was told made them safe. A worktree isolates the *tree*, not the *identity*.
+
+So fan out with **ids**, not with worktrees: mint one per worker (§0), or set `FSGG_WORKER` per
+worker. Use worktrees as well — they isolate the tree, which is §2's job — but never instead.
 
 ## Sources
 
