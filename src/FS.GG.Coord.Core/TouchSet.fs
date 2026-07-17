@@ -140,6 +140,17 @@ module TouchSet =
                 | Unmatchable t -> Some t
                 | Matchable _ -> None)
 
+    type Usability =
+        | Usable
+        | Unusable of tokens: string list
+
+    /// THE USABILITY RULE (#864). See the .fsi for the threshold, and for the one copy that still
+    /// decides it independently.
+    let usability (touchSet: TouchSet) : Usability =
+        match unmatchable touchSet with
+        | [] -> Usable
+        | bad -> Unusable bad
+
     /// The token with its trailing `/**` or `/*` taken off — the SUBTREE it actually names.
     ///
     /// This is the form a collision is REPORTED in, not just the form it is matched in. `src/Off/Sub/**`

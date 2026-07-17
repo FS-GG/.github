@@ -191,17 +191,82 @@ module LanesTests =
         | other -> failwith $"expected UnusableTokens, got %A{other}"
 
     [<Fact>]
-    let ``a PARTLY-unmatchable declaration still lanes on the tokens that DO match`` () =
-        // It reserves something, so it is real. The unmatchable token is a separate finding (the
-        // scheduler already reports it); it must not cost the item its lane.
+    let ``a PARTLY-unmatchable declaration is NOT laned — the scheduler refuses it, so it is a chore (#864)`` () =
+        // THIS TEST USED TO ASSERT THE OPPOSITE, and it was green the whole time — beside a green
+        // `SchedulabilityTests` asserting that this very item is NEVER startable. Two modules, one
+        // question, opposite answers, a passing test pinning each. Its argument was "it reserves
+        // something, so it is real; the unmatchable token is a separate finding the scheduler already
+        // reports" — which sounds right and is wrong twice:
+        //
+        //   * the scheduler does not merely REPORT it, it REFUSES the item forever. An item nobody can
+        //     start cannot contend with anybody, so it was never a lane.
+        //   * "it must not cost the item its lane" had it backwards. The lane cost the BOARD: the dead
+        //     token still glues real lanes together through `TouchSet.conflicts`, understating the
+        //     ceiling on a token that reserves NOTHING — and `explain`'s chore list never named it, so
+        //     the one surface whose job is board health was silent about the broken declaration.
         let mixed =
             item 1 [] |> withTouchSet (Declared [ Matchable "src/A/"; Unmatchable "**/x" ])
 
         let p = partition [ mixed; item 2 [ "src/A/thing.fs" ] ]
 
+        // ONLY the good item lanes. #1 is a chore, not a lane-mate — even though `src/A/` genuinely
+        // overlaps #2's file.
         Assert.Equal(1, List.length p.Lanes)
-        Assert.Equal(2, List.length (List.head p.Lanes).Items)
-        Assert.Empty p.Unlanable
+        Assert.Equal(2, (List.head p.Lanes).Id.Number)
+        Assert.Equal(1, List.length (List.head p.Lanes).Items)
+
+        match List.exactlyOne p.Unlanable with
+        | UnusableTokens(it, tokens) ->
+            Assert.Equal(1, it.Ref.Number)
+            // ONLY the dead token is named — the live `src/A/` is not the worker's problem to fix.
+            Assert.Equal<string list>([ "**/x" ], tokens)
+        | other -> failwith $"expected UnusableTokens, got %A{other}"
+
+    [<Fact>]
+    let ``LANES AND THE SCHEDULER AGREE ABOUT EVERY TOUCH-SET SHAPE — the invariant #864 broke`` () =
+        // THE REGRESSION GUARD, and the reason the two green tests above could not catch each other:
+        // nothing ever asserted the two modules against ONE another. ADR-0034's central promise is ONE
+        // schedulability function, and `Lanes.free`/`explain` keep it by taking `startable` as a
+        // parameter — but `partition` re-decided USABILITY on its own, before that parameter was ever
+        // consulted. This pins the two together over every shape a touch-set can take, so a future
+        // divergence fails HERE rather than on a board.
+        //
+        // The contract: an item `partition` puts in a lane must be one the scheduler could start, and an
+        // item the scheduler refuses for its TOUCH-SET must be reported as unlanable. (Refusals for a
+        // reason that is not the touch-set — a lock, a blocker, a column — are not `partition`'s
+        // business: those items are laned and simply not startable yet.)
+        let shapes =
+            [ "every token live", Declared [ Matchable "src/A/" ], true
+              "every token dead", Declared [ Unmatchable "**/x" ], false
+              "SOME tokens dead — the #864 case", Declared [ Matchable "src/A/"; Unmatchable "**/x" ], false
+              "some tokens dead, dead one first", Declared [ Unmatchable "**/x"; Matchable "src/A/" ], false
+              "no declaration", Undeclared, false
+              "the `none` sentinel", DeclaredNone, false
+              "body never read", Unreadable "boom", false ]
+
+        for name, ts, expectedLanable in shapes do
+            let it = item 1 [] |> withTouchSet ts
+            let p = partition [ it ]
+
+            let laned = p.Lanes |> List.collect (fun l -> l.Items) |> List.isEmpty |> not
+            let startable = Schedulability.schedulable false [] it = Schedulability.Startable
+
+            Assert.True(
+                (laned = expectedLanable),
+                $"%s{name}: expected lanable=%b{expectedLanable}, partition said %b{laned}"
+            )
+
+            // THE AGREEMENT ITSELF: laned and startable are the same answer for every shape. If this
+            // ever splits again, the two modules are deciding the question twice (#485, #864).
+            Assert.True(
+                (laned = startable),
+                $"%s{name}: Lanes says lanable=%b{laned} but Schedulability says startable=%b{startable} — the two modules disagree about the same item (#864)"
+            )
+
+            // And an unlanable item is never silently dropped: it is on the chore list, by name.
+            if not expectedLanable then
+                Assert.Equal(1, List.length p.Unlanable)
+                Assert.Equal(1, (List.exactlyOne p.Unlanable).Item.Ref.Number)
 
     // ---- determinism ------------------------------------------------------------------------------
 
