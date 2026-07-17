@@ -85,7 +85,12 @@ let private facts (opts: Options) =
     | Json ->
         printfn
             "%s"
-            (Snapshot.renderFacts Protocol.rules Protocol.verdicts Protocol.takeExitCodes Protocol.landableExitCodes)
+            (Snapshot.renderFacts
+                Protocol.rules
+                Protocol.filingRules
+                Protocol.verdicts
+                Protocol.takeExitCodes
+                Protocol.landableExitCodes)
     | Text ->
         for r in Protocol.rules do
             printfn "## %s" r.Title

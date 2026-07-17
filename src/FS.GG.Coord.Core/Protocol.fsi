@@ -84,3 +84,12 @@ module Protocol =
 
     /// Every rule, in the order a projection presents them.
     val rules: Rule list
+
+    /// The rules a worker FILING an item must satisfy — the subset `cross-repo-coordination` restates
+    /// (#889). A SUBSET of `rules`, holding the same values, never a second list: the containment is
+    /// pinned, so a rule cannot reach a projection without the canonical doc stating it too.
+    ///
+    /// It is a subset rather than the whole block because a filer does not schedule, claim, or hold a
+    /// lease — they link to `intra-repo-parallel-work` for that. A region carries what its document is
+    /// FOR (#916).
+    val filingRules: Rule list

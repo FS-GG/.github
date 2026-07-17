@@ -325,3 +325,24 @@ module Protocol =
           claimLock
           leaseRule
           failClosed ]
+
+    /// The rules a worker FILING an item must satisfy — the subset `cross-repo-coordination` restates
+    /// (#889).
+    ///
+    /// A SUBSET OF `rules`, NEVER A SECOND LIST. Every member is the same value the canonical list holds,
+    /// so the two cannot disagree about what a rule SAYS — which is the only thing #731's mechanism was
+    /// built to guarantee. `ProtocolTests` pins the containment, because the failure this invites is a
+    /// rule authored straight into here and reaching a projection while the canonical doc never states it.
+    ///
+    /// WHY A SUBSET AT ALL, rather than emitting `rules`. `cross-repo-coordination` files work into
+    /// ANOTHER repo; it does not schedule, claim, or hold a lease, and it links to
+    /// `intra-repo-parallel-work` for all of that. Emitting the full block would bury the four lines it
+    /// needs under `check-order`, `claim-lock`, `claim-lease` and `fail-closed` — seventy lines of
+    /// scheduler internals a filer does not act on. That is the trap #916 named: a region carries what its
+    /// document is FOR, which is why the kinds exist.
+    ///
+    /// What a FILER acts on: how to declare a touch-set (`touch-set-declaration`), what the grammar will
+    /// actually accept (`touch-set-grammar`), and what `Blocked by` does once the edge is recorded
+    /// (`blocker-resolution`). Nothing else on this list is a decision they make.
+    let filingRules: Rule list =
+        [ touchSetDeclaration; touchSetGrammar; blockerResolution ]

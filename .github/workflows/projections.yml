@@ -86,7 +86,8 @@ jobs:
       - name: Non-vacuity — the generated regions exist
         run: |
           set -euo pipefail
-          expected=8
+          # 8 → 10: `filing-rules` in both cross-repo-coordination roots (#889).
+          expected=10
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

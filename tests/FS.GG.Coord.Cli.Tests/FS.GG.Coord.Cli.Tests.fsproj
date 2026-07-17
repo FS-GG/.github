@@ -15,6 +15,7 @@
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
     <Compile Include="ExitContractTests.fs" />
+    <Compile Include="FilingRulesTests.fs" />
     <Compile Include="IdentityTests.fs" />
     <Compile Include="RepoScopeTests.fs" />
     <Compile Include="RefParseTests.fs" />
