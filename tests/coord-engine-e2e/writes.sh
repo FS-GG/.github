@@ -134,6 +134,37 @@ dn="$(run "done" FS.GG.SDD#42 2>&1)"; dnrc=$?   # quoted: the coord VERB, not th
   && ok "done stamps an item closed by a merged PR" \
   || bad "done stamps a completed item" "rc=$dnrc: $dn"
 
+# ---- #733/§4.6: `done` is a SAFE POINT, and it is the one a working fleet reaches --------------------
+# Condition 3 names two boundaries — after `done`, or at `next`. #1056 wired `next`; `Chore.AfterDone` was
+# a case Core declared and NOTHING minted. That matters because of WHERE the two sit in the recipe:
+# `/pnext-item` takes (§1), stamps (§5), and loops back to `take` (§6), calling `next` only in its
+# "take found nothing" DIAGNOSTIC. An offer that fires only at `next` fires only when the board has no
+# work — and a board with no work has no fleet to conscript. This leg is the whole claim: stamping an item
+# offers a chore.
+#
+# .github#51 is stamped; .github#50 is the chore (CLOSED, board column still Ready → CLOSED-ISSUE-NOT-DONE).
+dc="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker snipe-733 2>&1)"; dcrc=$?
+[ "$dcrc" -eq 0 ] && printf '%s' "$dc" | grep -q 'FSGG-DONE' \
+  && printf '%s' "$dc" | grep -qi 'chore' && printf '%s' "$dc" | grep -q '#50' \
+  && ok "#733: done --flip offers a chore at AfterDone — the safe point the happy path reaches" \
+  || bad "#733: done offers a chore at AfterDone" "rc=$dcrc: $dc"
+
+# THE OFFER IS A COURTESY, AND THE STAMP OUTRANKS IT. The chore rides on STDERR, never stdout: `done`'s
+# stdout carries the FSGG-DONE verdict a caller greps, and an offer printed there would corrupt the answer
+# it is attached to — the same rule `next` keeps for its item ref.
+dso="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker snipe-733 2>/dev/null)"
+printf '%s' "$dso" | grep -q 'FSGG-DONE' && ! printf '%s' "$dso" | grep -qi 'chore' \
+  && ok "#733: the AfterDone offer is on stderr — done's stdout verdict is untouched" \
+  || bad "#733: offer does not pollute done's stdout" "$dso"
+
+# A REPO WITH NO CHORE LOCK IS REFUSED, NOT GUESSED AT. `choreLockRef` knows exactly one repo
+# (`.github#1033`, ADR-0041) and answers None for the other six receivers — so the queue drains in
+# `.github` ONLY, and honestly. A `done` there stamps exactly as before and offers nothing.
+dn2="$("$ENGINE" "done" FS.GG.SDD#42 --worker snipe-733 2>&1)"; dn2rc=$?
+[ "$dn2rc" -eq 0 ] && printf '%s' "$dn2" | grep -q 'FSGG-DONE' && ! printf '%s' "$dn2" | grep -qi 'chore' \
+  && ok "#733: a repo with no chore lock is offered nothing, and still stamps" \
+  || bad "#733: no-lock repo offers nothing" "rc=$dn2rc: $dn2"
+
 # ---- verify-paths: a PR inside its touch-set is OK -------------------------------------------------
 vp="$("$ENGINE" verify-paths --pr 500 --repo FS.GG.SDD 2>&1)"; vprc=$?
 [ "$vprc" -eq 0 ] && printf '%s' "$vp" | grep -q 'FSGG-PATHS OK' \

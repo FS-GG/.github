@@ -24,15 +24,32 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LOCK = threading.Lock()
 
-# issue number -> {"body": str, "state": "OPEN"|"CLOSED", "status": str}
+# issue number -> {"body": str, "state": "OPEN"|"CLOSED", "status": str, "repo": str}
+#
+# `repo` defaults to FS.GG.SDD — the fixture's original single repo, and what every pre-#733 leg means.
+# #733 needs a SECOND repo, because the chore lock is per-repo and `Options.choreLockRef` knows exactly
+# one: `.github#1033` (ADR-0041). An `AfterDone` offer in FS.GG.SDD is REFUSED for want of a lock, so a
+# one-repo fixture can only ever prove the refusal — never the offer.
 ISSUES = {
     42: {"body": "A schedulable item.\n\nPaths: src/Thing/**", "state": "OPEN", "status": "Ready"},
     43: {"body": "Another item.\n\nPaths: src/Other/**", "state": "OPEN", "status": "Ready"},
     99: {"body": "A parent epic.\n\nPaths: none", "state": "OPEN", "status": "In progress"},
     44: {"body": "A verify-paths subject.\n\nPaths: src/Verify/**", "state": "OPEN", "status": "In progress"},
+    # #733 — a `.github` item that is CLOSED while its board column still says Ready. That is
+    # CLOSED-ISSUE-NOT-DONE: a real chore, derived (never stored), and the one this fixture offers.
+    50: {"body": "A closed .github item the board still calls Ready.\n\nPaths: src/X/**",
+         "state": "CLOSED", "status": "Ready", "repo": ".github"},
+    # #733 — the item whose `done` triggers the AfterDone offer. In `.github`, so its offer resolves a lock.
+    51: {"body": "A finished .github item.\n\nPaths: src/Y/**", "state": "CLOSED", "status": "In review",
+         "repo": ".github"},
 }
 
-COMMENTS = {42: [], 43: [], 99: [], 44: []}      # issue -> [{"id", "body", "updated_at"}]
+def repo_of(n):
+    return ISSUES.get(n, {}).get("repo", "FS.GG.SDD")
+
+# 1033 is the CHORE LOCK (ADR-0041) and is deliberately NOT in ISSUES: it is not on the board and must
+# never be. `Writes.claim` reaches it as a bare comment thread, which is all a CAS needs.
+COMMENTS = {42: [], 43: [], 99: [], 44: [], 50: [], 51: [], 1033: []}
 NEXT_COMMENT_ID = [900]
 def now_iso():
     # REAL current time, so a just-posted marker is fresh — a fixed timestamp would land it at the
@@ -84,7 +101,7 @@ def board_items():
                     "number": n,
                     "title": f"item {n}",
                     "state": issue["state"],
-                    "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"},
+                    "repository": {"nameWithOwner": f"FS-GG/{repo_of(n)}"},
                 },
             }
         )
@@ -111,18 +128,23 @@ def graphql(query: str, variables: dict):
     if "items(first" in query:
         return board_items()
     if "closedByPullRequestsReferences" in query:
-        # done facts — issue 42 was closed by a merged PR #77.
+        # done facts — the asked-for issue was closed by a merged PR. Keyed on the VARIABLE rather than
+        # hardcoded to 42 since #733: `done` must be drivable on a `.github` item (#51), because that is
+        # the only repo whose AfterDone offer can resolve a chore lock.
+        # int(): the wire carries it as a JSON NUMBER, so Python hands us 51.0 — and 51.0 misses every
+        # int-keyed lookup below without erroring, which would silently answer for the wrong repo.
+        n = int(variables.get("number", 42))
         return {
             "data": {
                 "repository": {
                     "issue": {
-                        "number": 42,
+                        "number": n,
                         "state": "CLOSED",
                         "closedByPullRequestsReferences": {"nodes": [
                             {"number": 77, "merged": True, "mergedAt": "2026-02-01T00:00:00Z",
                              "mergeCommit": {"abbreviatedOid": "77abc12"},
                              "closingIssuesReferences": {"nodes": [
-                                 {"number": 42, "repository": {"nameWithOwner": "FS-GG/FS.GG.SDD"}}]}}]},
+                                 {"number": n, "repository": {"nameWithOwner": f"FS-GG/{repo_of(n)}"}}]}}]},
                         "timelineItems": {"nodes": []},
                         "subIssues": {"totalCount": 0, "nodes": []},
                         "projectItems": {"nodes": [{"project": {"number": 12}, "status": {"name": "In review"}}]},
@@ -264,6 +286,24 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             with LOCK:
                 return self._send(200, list(COMMENTS.get(int(m.group(1)), [])))
+
+        # THE OFF-BOARD OPEN-ISSUE SCAN (bash's `active_claims` arm B). `Scan.snapshot` asks each in-scope
+        # repo for its open issues so it can reserve a live claim on an issue the BOARD never listed.
+        #
+        # This route did not exist while nothing in this suite called `scan`, and its absence was not quiet:
+        # a 500 fails the whole scan CLOSED (#461 — an unreadable scan is never an empty one), so #733's
+        # AfterDone offer printed NOTHING rather than something wrong. That is the offer's "silent on every
+        # failure" contract working, and it is also why this leg looked like a wiring bug and was not.
+        #
+        # Scoped by repo, because "off the board" is a question about one repo's issues — serving FS.GG.SDD's
+        # list for a `.github` scan would reserve claims that repo never made.
+        m = re.match(r"^/repos/[^/]+/([^/]+)/issues/?$", path)
+        if m:
+            r = m.group(1)
+            with LOCK:
+                return self._send(200, [{"number": n, "state": i["state"].lower(), "body": i["body"]}
+                                        for n, i in sorted(ISSUES.items())
+                                        if repo_of(n) == r and i["state"] == "OPEN"])
 
         # The existing-sub-issues read `child` now makes before it POSTs (#320 — an unreachable read is not
         # an absent edge). No pre-existing edges here, so an empty array: `child` proceeds to link.

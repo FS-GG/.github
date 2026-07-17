@@ -370,11 +370,17 @@ module Client =
 
                 ExitGreen
 
-    /// `next`'s chore offer — condition 3's safe point, which `Chore.Boundary.AtNext` names: the worker is
-    /// idle and about to pick up work anyway.
+    /// THE CHORE OFFER, at whichever of condition 3's safe points the caller is standing on — `AtNext` (the
+    /// worker is idle and about to pick up work anyway) or `AfterDone` (the item is stamped and the claim is
+    /// already dropped, #533).
+    ///
+    /// BOTH BOUNDARIES GO THROUGH HERE, and that is the point rather than tidiness. `AfterDone` was a
+    /// `Boundary` case Core declared and NOTHING minted, so the offer reached exactly one verb — and
+    /// #733's own §4.6 names both. A second spelling of "how do I offer a chore" is the thing that drifts
+    /// (#485); the boundary is a parameter because it is the only thing that actually differs.
     ///
     /// SILENT ON EVERY REFUSAL, which is `Chores.offer`'s whole contract — an offer is a COURTESY to a
-    /// worker who asked for something else, so nothing here may change `next`'s answer or its exit code.
+    /// worker who asked for something else, so nothing here may change the caller's answer or its exit code.
     ///
     /// STDERR, NEVER STDOUT. `next`'s stdout is a machine contract: one line, the chosen item's ref, which a
     /// caller reads with `$(…)`. A chore printed there would be read as an ITEM REF by every script that
@@ -385,7 +391,7 @@ module Client =
     /// alternative changes that function's shape for `batch` and `take` as well — to avoid a pure re-parse
     /// of a document already in hand. It is the SAME `Snapshot.parse` either way, so there is no second
     /// spelling to drift (#485).
-    let private offerChoreAtNext (ctx: Context) (opts: Options) (doc: string) : unit =
+    let private offerChoreAt (ctx: Context) (opts: Options) (boundary: Chore.Boundary) (repo: string) (doc: string) : unit =
         // No worker id resolves ⇒ no lock is possible ⇒ no offer. `next` itself needs no worker, and that
         // asymmetry is deliberate: the ANSWER does not touch a lock, the OFFER is nothing but one. Note this
         // uses `Identity.resolve` directly rather than `worker`, which PRINTS a #419 warning and would make
@@ -396,15 +402,6 @@ module Client =
         | Ok w, Ok request ->
             let session = w.Session |> Option.map SessionId
 
-            // The repo the offer is FOR. `--repo` when given, else the checkout we are standing in — the
-            // same default `parseRef` uses for a bare ref. `choreLockRef` canonicalises it (`Governance` →
-            // `FS.GG.Governance`) and answers `None` for anything it does not know, so a typo cannot lock
-            // the wrong repo: it offers nothing, which is #979's lesson applied where a WRITE is at stake.
-            let repo =
-                opts.Repo
-                |> Option.orElse ctx.DefaultRepo
-                |> Option.defaultValue ""
-
             // The snapshot's candidates are the UNFILTERED in-scope set — `Scan.snapshot` drops only PRs and
             // out-of-scope repos, never a board column. That is what makes the chore rules reachable at all:
             // `BLOCKER-CLEARED` needs a `Blocked` row and `CLOSED-ISSUE-NOT-DONE` needs a closed one, and
@@ -413,8 +410,50 @@ module Client =
             // already carries it — this is the first caller to spend it.
             let items = request.Candidates |> List.map (fun c -> c.Item)
 
-            Chores.offer ctx.Transport Chore.AtNext (WorkerId w.Id) session ctx.Owner repo items
+            Chores.offer ctx.Transport boundary (WorkerId w.Id) session ctx.Owner repo items
             |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
+
+    /// `next`'s call site. The repo the offer is FOR: `--repo` when given, else the checkout we are standing
+    /// in — the same default `parseRef` uses for a bare ref. `choreLockRef` canonicalises it (`Governance` →
+    /// `FS.GG.Governance`) and answers `None` for anything it does not know, so a typo cannot lock the wrong
+    /// repo: it offers nothing, which is #979's lesson applied where a WRITE is at stake.
+    let private offerChoreAtNext (ctx: Context) (opts: Options) (doc: string) : unit =
+        let repo =
+            opts.Repo |> Option.orElse ctx.DefaultRepo |> Option.defaultValue ""
+
+        offerChoreAt ctx opts Chore.AtNext repo doc
+
+    /// `done --flip`'s call site — condition 3's OTHER safe point, and the one a working fleet reaches.
+    ///
+    /// IT PAYS A BOARD READ THAT `next` DOES NOT, AND THAT IS THE WHOLE COST OF THIS BOUNDARY. `next` offers
+    /// for free: it is already holding the snapshot it just decided from. `done` holds no snapshot — it reads
+    /// one item's facts and stamps it — so the offer costs a scan. Condition 3 justifies `next` by "the worker
+    /// is about to pick up work anyway"; nothing says that of `done`, so the read is real and is spent here
+    /// deliberately.
+    ///
+    /// It is worth it because of WHERE THE TWO BOUNDARIES SIT IN THE RECIPE. `/pnext-item` takes (§1), works,
+    /// stamps (§5), and loops back to `take` (§6). It calls `next` in exactly one place: the "if `take` finds
+    /// nothing" diagnostic. So an offer that only fires at `next` fires only when the board has NO work — and
+    /// a board with no work is a board with no fleet to conscript. `done --flip` runs on every completed item,
+    /// which is the only moment a busy board is ever handed a thread.
+    ///
+    /// SCOPED TO THE STAMPED ITEM'S REPO, which is also the repo whose lock the offer will take. Not free of
+    /// consequence, and named rather than buried: `Scan.snapshot` spends TWO REST reads per OPEN candidate
+    /// (body + markers, the markers deliberately uncached — a lock may not be read from a cache), so an
+    /// UNSCOPED scan here would spend hundreds of requests of the 5,000/hr budget THE CLAIM LOCK ITSELF LIVES
+    /// ON (ADR-0034 §3) — on every `done`, to decide whether to offer a courtesy. That is #418's shape, caused
+    /// by the feature meant to help. The cost of scoping is that idleness is asked only of this repo's rows,
+    /// so a live claim of ours in ANOTHER repo is not seen — the same gap `next --repo <r>` already has, and
+    /// bounded by §6's own rule that a worker holds one item at a time. Filed rather than papered over.
+    ///
+    /// SILENT ON EVERY FAILURE, and this is the one that matters most. The stamp is EARNED — the merge
+    /// happened, the column is set, the claim is dropped. A board read that fails, a budget that is gone, an
+    /// engine that cannot parse its own snapshot: none of them may touch a verdict this function already
+    /// printed. The offer is a courtesy appended to finished work, so it is allowed to do exactly nothing.
+    let private offerChoreAfterDone (ctx: Context) (opts: Options) (ref: Ref) : unit =
+        match scanAndDecide ctx { opts with Repo = Some ref.Repo; Limit = Some 1 } Cache.Scheduling with
+        | Error _ -> ()
+        | Ok(_, doc, _) -> offerChoreAt ctx opts Chore.AfterDone ref.Repo doc
 
     let next (ctx: Context) (opts: Options) : int =
         // `next` is `batch` capped at one. The cap is the ONLY difference — the decision is identical, so
@@ -2867,6 +2906,24 @@ module Client =
                             | Error e ->
                                 eprint
                                     $"fsgg-coord-engine: the stamp is GREEN, but %s{w.Id}'s claim on %s{ref.Short} could not be checked: %s{Errors.explain e}. If it is still held, run `release` so it stops reserving its touch-set (#533)."
+
+                            // #733/§4.6 — THE OTHER SAFE POINT, and the one the fleet actually reaches.
+                            //
+                            // Condition 3 names two boundaries: "offer after `done`, or at `next` when the
+                            // worker is idle". #1056 wired `next`. But `/pnext-item` — the recipe every worker
+                            // runs — calls `take` on its happy path, NOT `next`: §1 takes, §5 stamps, §6 loops
+                            // back to `take`. `next` appears in that recipe exactly once, inside the "if `take`
+                            // finds nothing" DIAGNOSTIC. So the conscription point was wired to the one verb a
+                            // working fleet does not call, and the queue drained only when the board had no work
+                            // — never on a busy board, which is precisely when drift accumulates. `done --flip`
+                            // runs on EVERY completed item.
+                            //
+                            // It goes here, AFTER the claim is dropped (#533) rather than merely after the
+                            // stamp, because that ordering is what makes the offer legal: `safePoint` refuses a
+                            // worker holding a live claim, so offering before the release would offer to a
+                            // worker this very function is about to make idle — and be refused, silently,
+                            // forever. Condition 3's guard and #533's drop are the same instant, in this order.
+                            offerChoreAfterDone ctx opts ref
 
                             ExitGreen
 
