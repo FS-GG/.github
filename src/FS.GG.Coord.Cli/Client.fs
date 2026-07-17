@@ -232,6 +232,17 @@ module Client =
             Scan.snapshot ctx.Transport rows opts.Repo opts.AllowBacklog opts.Limit opts.LeaseMinutes
             |> Result.map (fun (doc, receipt) -> rows, doc, receipt))
 
+    /// `snapshot` already scoped by `--repo`; this is the SAYING half (#979).
+    ///
+    /// `next`/`batch`/`take` each report an empty queue in their own words — `printChosen`'s "nothing
+    /// schedulable right now.", `take`'s EX_NONE — and every one of those sentences is TRUE of a
+    /// `--repo` that named nothing, which is exactly what makes it invisible. This is the verb family
+    /// where that costs the most: `--repo <short-id>` is the documented spelling, a typo is the single
+    /// likeliest thing a worker types, and `take` is the one command in a worker's loop. So the reason
+    /// rides out with the verdict rather than being dropped with the receipt.
+    let private sayRepoAdvisory (receipt: Scan.Receipt) =
+        receipt.RepoAdvisory |> Option.iter eprint
+
     let private renderDecision (opts: Options) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
@@ -284,7 +295,9 @@ module Client =
     let batch (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
-        | Ok(_, doc, _) ->
+        | Ok(_, doc, receipt) ->
+            sayRepoAdvisory receipt
+
             match renderDecision opts doc with
             | Error code -> code
             | Ok result ->
@@ -327,7 +340,9 @@ module Client =
 
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
-        | Ok(_, doc, _) ->
+        | Ok(_, doc, receipt) ->
+            sayRepoAdvisory receipt
+
             match renderDecision opts doc with
             | Error code -> code
             | Ok result ->
@@ -1956,7 +1971,9 @@ module Client =
             // different codes (#266). bash's hard board-read failure exits the same way (#344's fatal
             // die), so the two engines agree.
             | Error e -> fail e
-            | Ok(_, doc, _) ->
+            | Ok(_, doc, receipt) ->
+                sayRepoAdvisory receipt
+
                 match renderDecision { opts with Limit = Some 1 } doc with
                 | Error code -> code
                 | Ok result ->

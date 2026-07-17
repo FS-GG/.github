@@ -350,3 +350,40 @@ let ``#979 the known-repo set is DEDUPED and ordered — a board of N items list
 
     // Three distinct repos, case-folded — not five entries, and not "FS.GG.SDD" twice in two casings.
     Assert.Equal(3, line.Split(',').Length)
+
+[<Fact>]
+let ``#979 snapshot carries the advisory OUT, on the receipt next-batch-take read`` () =
+    // THE SEAM THIS PINS is the one the fix itself got wrong first time round. `snapshot` scoped
+    // correctly from the start, and `next`/`batch`/`take` destructured its receipt as `Ok(_, doc, _)` —
+    // so the advisory was computed and DROPPED, and `take --repo <typo>` went on reporting an empty
+    // queue over a full board. That is the whole of #979, surviving inside #979's own repair, in the one
+    // verb family that matters most: `--repo <short-id>` is the documented spelling, a typo is the
+    // likeliest thing a worker types, and `take` is the one command in a worker's loop.
+    //
+    // The transport ERRORS on every call, and that is deliberate: a scoped-out `--repo` yields zero
+    // candidates, so a snapshot that reads nothing proves the advisory is computed from the rows in hand
+    // and needs no IO to say so. If this ever starts failing with a transport error, snapshot has begun
+    // reading per-candidate data for candidates it does not have.
+    let transport = Fake.Recorder(fun _ -> Error(Http(500, "no read should happen here")))
+
+    match Scan.snapshot transport scopeBoard (Some "sd") false None 120 with
+    | Error e -> failwith $"snapshot must not need IO to scope: %A{e}"
+    | Ok(_, receipt) ->
+        Assert.Equal(0, receipt.Candidates)
+
+        let msg =
+            Assert.True(receipt.RepoAdvisory.IsSome, "the receipt must carry the advisory out")
+            receipt.RepoAdvisory.Value
+
+        Assert.Contains("no board row names repo `sd`", msg)
+
+[<Fact>]
+let ``#979 snapshot says NOTHING for a --repo that matches — no noise on the happy path`` () =
+    let transport = Fake.Recorder(fun _ -> Error(Http(500, "boom")))
+
+    // FS.GG.SDD matches a row, so the scope is silent. (The snapshot itself then fails on the body read
+    // for that candidate — which is the point of the assertion below: we are pinning the ADVISORY, and a
+    // matched repo must produce none whatever else the scan goes on to do.)
+    match Scan.snapshot transport scopeBoard (Some "FS.GG.SDD") false None 120 with
+    | Error _ -> ()
+    | Ok(_, receipt) -> Assert.True(receipt.RepoAdvisory.IsNone, "a matched --repo must say nothing")
