@@ -110,9 +110,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     GateError,
+    is_prerelease,
     newest,
+    nuget_org_nuspec,
     nuget_org_versions,
+    nuspec_dependency_ranges,
     parse_version,
+    range_admits,
 )
 
 # Hosts a Renovate `registryUrls` may route FS.GG.* to, and what each one COSTS to read.
@@ -698,6 +702,296 @@ def assert_synced_files_unmanaged(preset_path: str) -> None:
             )
 
 
+# ---- A CAP's expiry condition must be EXECUTABLE, not prose (.github#943, #850) ------------------
+#
+# THE DEFECT. An `allowedVersions` cap is written for a reason, and the reason expires. Every cap the
+# org has ever written said so, in its own description:
+#
+#     ACTION WHEN YoloDev.Expecto.TestSdk ships a release supporting Expecto >= 11:
+#     delete this allowedVersions cap
+#
+# That condition came true — adapter 0.16.0 shipped, depending on Expecto 10.2.3 as a MINIMUM with no
+# upper bound, so it had stopped constraining Expecto at all. Nothing re-checked it. The cap went on
+# holding FS.GG.Rendering at Expecto 10.x for months after the only reason for it was gone (#850,
+# FS.GG.Rendering#845). The trigger fired into a void, because a `description` is prose and nothing
+# reads prose. A rule nothing re-checks is a rule that outlives its reason.
+#
+# THE ENCODING, AND WHY IT IS THIS ONE. The trigger is an annotation inside the rule's own
+# `description`. The three alternatives were not rejected on taste:
+#
+#   * A STRUCTURED SIBLING FIELD (`"fsggCapTrigger": {...}`) is INEXPRESSIBLE. Renovate's own
+#     validator rejects it — `Invalid configuration option: packageRules[0].fsggCapTrigger`, measured
+#     against renovate-config-validator 43.265.4, not inferred — and default.json is the SHARED org
+#     preset every repo extends, so a config error here is an org-wide break. `description` is a
+#     legal field that Renovate ignores, and the same probe validates clean through it.
+#   * A COMPANION FILE keyed by package is the shape this very preset already argues against (the
+#     #925 paragraph in default.json): "one place, no ordering dependency, and no second file that
+#     must be kept in step". A trigger that can drift away from the cap it governs is the defect.
+#   * A HAND-WRITTEN GATE LEG PER CAP is what #942 deliberately declined. It covers the cap somebody
+#     remembered to write a leg for, which is the same "somebody remembers" this exists to replace.
+#
+# It is also the spelling this repo already uses for exactly this job: the preset's OWN annotation
+# manager reads `# renovate: datasource=… depName=…` out of a comment. A cap trigger is that idea
+# aimed at the cap instead of the pin.
+#
+# WHAT IT ASSERTS. A cap excludes a set of published versions. It exists because those versions are
+# unusable for a stated reason. The trigger states that reason as a fact about a nuspec:
+#
+#     fsgg-cap-expires-when: dependency=Expecto admits=11.0.0
+#
+# read as: "this cap expires when a version it EXCLUDES declares a dependency on Expecto whose range
+# admits 11.0.0". The gate resolves that daily against api.nuget.org — the same registry Renovate
+# reads — and reds when it comes true, naming the cap, the version, and the range that retired it.
+# That is a literal transcription of the prose ACTION line into something that executes.
+#
+# THE SENTINEL, AND WHY IT IS NOT AN ESCAPE HATCH. Not every cap's expiry is a nuspec fact.
+# FS.GG.Audio caps FSharp.Core at `<11.0.0` because the org majority is on 10.1.x — a COORDINATION
+# decision, which api.nuget.org cannot answer and never will. So a cap may instead declare:
+#
+#     fsgg-cap-expires-when: manual — <why no automatic check is possible>
+#
+# and the gate reports it as UNCHECKED rather than pretending. What the gate refuses is a cap with
+# NEITHER: silence is the state that produced #850. This is `Paths: none` from the org's own
+# parallel-work protocol, one level down — a real sentinel that makes an absence DELIBERATE and
+# machine-readable, where prose and an omission rendered identically. Write the predicate, or write
+# the sentinel; those are the only two honest states.
+#
+# WHAT THE PREDICATE DOES NOT EXPRESS, stated here so the next writer meets the boundary instead of
+# discovering it. It quantifies over the versions THIS cap excludes, and reads THEIR nuspecs. So it
+# fits a cap whose reason is a fact about the capped package itself — which is every cap the org
+# holds today. It does NOT fit a cap on A whose trigger is a fact about B's nuspec: FS.GG.Rendering's
+# retired cap was exactly that shape (it capped Expecto, and its ACTION condition was about the
+# ADAPTER's nuspec), and it would have to use the `manual` sentinel here. That cap is gone (#845), so
+# there is no live subject to build the second quantifier against, and building one on a hypothetical
+# is how a gate grows a leg nobody can test. If such a cap is written again, extend this — do not
+# reach for `manual` to avoid the work.
+# A trigger is a WHOLE description unit — an array entry, or a line of a string description — and not
+# a substring found anywhere in the prose. That distinction is not fussiness; the looser rule was
+# written first and it rebuilt #850 inside the fix for it.
+#
+# A cap's description is where the mechanism gets EXPLAINED, so the annotation's own spelling appears
+# in the prose around it ("...write `fsgg-cap-expires-when: manual — <why>` if..."). A regex that
+# searched the joined text matched that sentence too, and took whichever came FIRST. The real
+# trigger won only because it happened to sit earlier in the array. Reorder the array — a harmless
+# edit nobody would think twice about — and this cap silently reads as the `manual` sentinel: never
+# checked again, reported as green, which is precisely the state that let Rendering's cap outlive its
+# reason. Documentation that disables the thing it documents is the trap #919 hit when a gate parsed
+# a quoted sample invocation as a real one.
+#
+# Anchoring to the unit lets the prose quote the annotation freely, and makes "is this a trigger?" a
+# question about structure rather than about what else the sentence happens to contain.
+_CAP_TRIGGER_PREFIX = "fsgg-cap-expires-when:"
+_CAP_PREDICATE_RE = re.compile(r"^dependency=(?P<dep>\S+)\s+admits=(?P<admits>\S+)$")
+# `manual`, then a separator (em dash, hyphen or colon), then a REASON. The reason is required: a
+# bare `manual` is the silence this gate exists to refuse, wearing the sentinel's clothes.
+_CAP_MANUAL_RE = re.compile(r"^manual\s*[—\-:]\s*(?P<why>\S.*)$")
+
+
+class Cap(NamedTuple):
+    where: str              # human-readable locator: the preset path + the rule's subject
+    packages: tuple[str, ...]
+    allowed: str            # the `allowedVersions` spec itself
+    dependency: str | None  # None => the manual sentinel
+    admits: str | None
+    manual_why: str | None
+
+
+def _description_units(rule: dict) -> list[str]:
+    """A packageRule's `description`, split into the units a trigger may occupy.
+
+    Renovate allows a string OR an array of them, and a string may itself carry newlines — so the
+    unit is "an array entry, or a line within one", which is what a human means by "put it on its
+    own line".
+    """
+    desc = rule.get("description")
+    if isinstance(desc, str):
+        desc = [desc]
+    if not isinstance(desc, list):
+        return []
+    return [line for d in desc for line in str(d).split("\n")]
+
+
+def _cap_triggers(rule: dict) -> list[str]:
+    """Every declared trigger on `rule`: the payload of each unit that IS a trigger, in order."""
+    return [
+        u.strip()[len(_CAP_TRIGGER_PREFIX):].strip()
+        for u in _description_units(rule)
+        if u.strip().startswith(_CAP_TRIGGER_PREFIX)
+    ]
+
+
+def cap_allows(spec: str, version: str) -> bool:
+    """True if the `allowedVersions` cap `spec` ADMITS `version` — i.e. does not exclude it.
+
+    Only the spellings the org's house rule permits. Anything else raises rather than guessing, and
+    guessing here is not a small error: mis-reading which versions a cap excludes silently changes
+    the SUBJECT of the trigger check, which is the fails-open direction.
+
+    A `/regex/` cap is refused outright. Renovate tries allowedVersions as a regex FIRST, so one is
+    legal there — but a regex describes no version ORDER, so this gate cannot say which published
+    versions it excludes, and a trigger whose subject cannot be enumerated cannot be checked.
+    """
+    spec = (spec or "").strip()
+    if not spec:
+        raise GateError("`allowedVersions` is empty")
+    if len(spec) > 1 and spec.startswith("/") and spec.rsplit("/", 1)[-1] in ("", "i"):
+        raise GateError(
+            f"`allowedVersions: {spec!r}` is a REGEX, and this gate cannot enumerate the versions a "
+            f"regex excludes — so its expiry trigger cannot be checked. Write the cap as a "
+            f"comparator (`<1.0.0`) or a NuGet range, which is the org house rule, or declare the "
+            f"`manual` sentinel and say why."
+        )
+    m = re.match(r"^(?P<op><=|>=|<|>|=)\s*(?P<v>\S+)$", spec)
+    if m:
+        op, want, have = m.group("op"), parse_version(m.group("v")), parse_version(version)
+        return {
+            "<": have < want, "<=": have <= want, ">": have > want,
+            ">=": have >= want, "=": have == want,
+        }[op]
+    # Not a comparator: the remaining legal spelling is a NuGet bracket range.
+    return range_admits(spec, version)
+
+
+def load_caps(preset_path: str) -> list[Cap]:
+    """Every `allowedVersions` cap in the preset, with its declared trigger. Raises on an UNDECLARED one.
+
+    This is the half that makes the house rule enforceable rather than merely written down: a cap
+    added without a trigger is red on the PR that adds it, which is the only moment anybody has the
+    context to state one.
+    """
+    try:
+        with open(preset_path, encoding="utf-8") as fh:
+            cfg = json.load(fh)
+    except (OSError, ValueError) as e:
+        raise GateError(f"cannot read the org preset {preset_path}: {e}") from e
+
+    caps: list[Cap] = []
+    for i, rule in enumerate(cfg.get("packageRules") or []):
+        if not isinstance(rule, dict) or "allowedVersions" not in rule:
+            continue
+        names = rule.get("matchPackageNames") or []
+        where = f"{preset_path}: packageRules[{i}] ({', '.join(names) or 'no matchPackageNames'})"
+        for n in names:
+            if n.startswith("/"):
+                raise GateError(
+                    f"{where}: this cap matches packages by REGEX, so the gate cannot name the "
+                    f"package whose nuspec its trigger is about. Caps name a package literally — "
+                    f"which is the org house rule anyway (a plain string reaches minimatch with "
+                    f"`nocase: true`, so it already matches a re-cased id; see this rule's own "
+                    f"description)."
+                )
+        if not names:
+            raise GateError(
+                f"{where}: a cap with no `matchPackageNames` applies to EVERY package, and this "
+                f"gate will not enumerate the whole registry to find out what it excludes."
+            )
+
+        triggers = _cap_triggers(rule)
+        if len(triggers) > 1:
+            raise GateError(
+                f"{where}: this cap declares {len(triggers)} expiry triggers "
+                f"({'; '.join(repr(t) for t in triggers)}). Which one is checked would come down to "
+                f"their ORDER in the description, and a cap whose meaning depends on the order of "
+                f"its prose is one edit away from silently going unchecked. Declare exactly one."
+            )
+        if not triggers:
+            raise GateError(
+                f"{where}: this `allowedVersions` cap declares NO expiry trigger, so nothing will "
+                f"ever re-check it. That is the #850 defect exactly: FS.GG.Rendering's Expecto cap "
+                f"stated its own ACTION condition in prose, the condition came true, nothing read "
+                f"the prose, and the cap outlived its reason by months.\n"
+                f"    Add ONE line to this rule's `description`, either:\n"
+                f"      fsgg-cap-expires-when: dependency=<id> admits=<version>\n"
+                f"        (the cap expires when a version it EXCLUDES declares a dependency on <id> "
+                f"whose range admits <version> — checked daily against api.nuget.org)\n"
+                f"      fsgg-cap-expires-when: manual — <why no automatic check is possible>\n"
+                f"        (for a cap whose trigger is not a fact about a nuspec — an org "
+                f"coordination decision, say. Reported as UNCHECKED, never as green.)\n"
+                f"    It must be a WHOLE description entry, or a whole line within one. A mention "
+                f"inside a sentence is prose, and prose is what this replaces."
+            )
+        rest = triggers[0]
+        if manual := _CAP_MANUAL_RE.match(rest):
+            caps.append(Cap(where, tuple(names), rule["allowedVersions"], None, None,
+                            manual.group("why")))
+            continue
+        pred = _CAP_PREDICATE_RE.match(rest)
+        if not pred:
+            raise GateError(
+                f"{where}: the expiry trigger {rest!r} is not readable. It must be either "
+                f"`dependency=<id> admits=<version>` or `manual — <why>`. A trigger the gate cannot "
+                f"parse is a trigger nothing checks, which is the state this annotation exists to "
+                f"end — so it is an error rather than a warning."
+            )
+        try:
+            parse_version(pred.group("admits"))
+        except GateError as e:
+            raise GateError(f"{where}: the trigger's `admits=` is not a version: {e}") from e
+        caps.append(Cap(where, tuple(names), rule["allowedVersions"],
+                        pred.group("dep"), pred.group("admits"), None))
+    return caps
+
+
+def check_cap(cap: Cap, resolve, dep_ranges) -> str | None:
+    """None if the cap is still justified, else the reason it has EXPIRED.
+
+    `resolve` is (package -> list[str] of published versions); `dep_ranges` is
+    (package, version, dep_id -> list[str] of declared ranges). Both raise rather than return empty
+    to mean "could not tell", so an unreadable registry reds the gate instead of retiring a cap.
+    """
+    if cap.dependency is None:
+        # Callers dispatch on the sentinel; this is the backstop, and it is not decoration. A manual
+        # cap carries no dependency to look up, and asking for one anyway HAPPENS not to crash
+        # today only because the package it is asked about (FSharp.Core) declares no dependencies at
+        # all — so the empty result reads as "declares no dependency on <None>", i.e. CAP EXPIRED.
+        # A manual cap silently reported as expired is the exact wrong answer, arrived at by luck.
+        raise GateError(
+            f"{cap.where}: this cap declares the `manual` sentinel, so there is no automatic check "
+            f"to run and its trigger must not be evaluated as though there were."
+        )
+    for package in cap.packages:
+        stable = [v for v in resolve(package) if not is_prerelease(v)]
+        excluded = sorted((v for v in stable if not cap_allows(cap.allowed, v)), key=parse_version)
+        if not excluded:
+            raise GateError(
+                f"{cap.where}: `allowedVersions: {cap.allowed!r}` excludes NO published stable "
+                f"version of {package}. Its trigger therefore has no subject, and a check with no "
+                f"subject must not report green (epic #266). Either the cap is dead weight and "
+                f"should be deleted, or it is capping a version line that no longer exists."
+            )
+        for version in excluded:
+            ranges = dep_ranges(package, version, cap.dependency)
+            if not ranges:
+                return (
+                    f"{cap.where}: CAP EXPIRED — {package} {version} is excluded by "
+                    f"`allowedVersions: {cap.allowed!r}`, but its nuspec declares NO dependency on "
+                    f"{cap.dependency} at all, so it does not constrain {cap.dependency} and the "
+                    f"cap's stated reason no longer holds for it.\n"
+                    f"    Re-read the nuspec, then delete the cap or narrow it — and update this "
+                    f"rule's `fsgg-cap-expires-when:` line to whatever is true now."
+                )
+            if len(ranges) > 1:
+                raise GateError(
+                    f"{cap.where}: {package} {version} declares DISAGREEING ranges on "
+                    f"{cap.dependency} across its target-framework groups ({', '.join(ranges)}). "
+                    f"The gate will not guess which one the trigger is about — state the cap's "
+                    f"reason per-framework, or declare the `manual` sentinel and say why."
+                )
+            if range_admits(ranges[0], cap.admits):
+                return (
+                    f"{cap.where}: CAP EXPIRED — {package} {version} is excluded by "
+                    f"`allowedVersions: {cap.allowed!r}`, but its nuspec declares "
+                    f"{cap.dependency} {ranges[0]!r}, which ADMITS {cap.dependency} "
+                    f"{cap.admits}. The cap's own trigger — "
+                    f"`dependency={cap.dependency} admits={cap.admits}` — has come true, so the "
+                    f"reason it was written for is gone.\n"
+                    f"    Delete the cap, or narrow it to keep excluding whatever is still bad and "
+                    f"restate the trigger. Do NOT reason from the version number: this cap exists "
+                    f"BECAUSE the number lies (#850)."
+                )
+    return None
+
+
 def check_bump_mechanism(root: str, preset_path: str) -> tuple[str, list[str]]:
     """Every host the preset routes FS.GG.* to must be one Renovate can actually read.
 
@@ -1053,12 +1347,56 @@ def main(argv: list[str]) -> int:
         # whole defect #566 is about, and it would be absurd to rebuild it inside the fix.
         canned = table.pop("_renovate", None)
 
+        # ...and a `_nuspecs` block for the cap-trigger leg (#943): {pkg: {version: {dep: range}}}.
+        # Same reasoning as `_renovate` above: absent it, the gate says the trigger is UNVERIFIED
+        # rather than reading "no fixture" as "cap still justified", which would rebuild the very
+        # fails-open shape the leg exists to close.
+        canned_nuspecs = table.pop("_nuspecs", None)
+
         def resolve(pkg: str) -> list[str]:
             if pkg not in table:
                 raise GateError(f"package {pkg!r} is not on the registry (fixture: absent)")
             if not table[pkg]:
                 raise GateError(f"the feed served zero versions for {pkg!r}")
             return list(table[pkg])
+
+        def dep_ranges(package: str, version: str, dep_id: str) -> list[str]:
+            if canned_nuspecs is None:
+                raise GateError(
+                    f"the cap on {package} needs {package}@{version}'s nuspec, and this fixture "
+                    f"carries no `_nuspecs` block. The gate will not read a missing nuspec as "
+                    f"'declares no constraint' (#266)."
+                )
+            if package not in canned_nuspecs or version not in canned_nuspecs[package]:
+                raise GateError(
+                    f"fixture has no nuspec for {package}@{version} — an unreadable nuspec must "
+                    f"not read as 'no constraint'."
+                )
+            # Synthesise a real nuspec and read it back with the REAL parser, rather than answering
+            # from the dict directly. The canned value is a range, or a LIST of them (a nuspec
+            # declares its dependencies once per target-framework group, so "pinned differently per
+            # TFM" is a state the fixture must be able to express — it is the one the gate refuses
+            # to guess about).
+            #
+            # Going through nuspec_dependency_ranges is not ceremony. Answering from the dict is a
+            # SECOND implementation of "what ranges does this nuspec declare on X", and it drifted
+            # from the first immediately: the real parser deduplicates identical groups, the dict
+            # read did not, so the fixture called YoloDev 1.0.0's two identical Expecto entries
+            # DISAGREEING while the live gate — reading the same package — deduplicated them and
+            # passed. A fixture that answers differently from the thing it is a fixture for proves
+            # nothing about it.
+            deps = canned_nuspecs[package][version]
+            decls = "".join(
+                f'<dependency id="{did}" version="{s}" />'
+                for did, spec in deps.items()
+                for s in (spec if isinstance(spec, list) else [spec])
+            )
+            return nuspec_dependency_ranges(
+                '<?xml version="1.0"?>'
+                '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">'
+                f"<metadata><dependencies>{decls}</dependencies></metadata></package>",
+                dep_id,
+            )
 
         def evidence(dep: str) -> BotEvidence:
             if canned is None:
@@ -1103,6 +1441,9 @@ def main(argv: list[str]) -> int:
         def resolve(pkg: str) -> list[str]:
             return nuget_org_versions(pkg)
 
+        def dep_ranges(package: str, version: str, dep_id: str) -> list[str]:
+            return nuspec_dependency_ranges(nuget_org_nuspec(package, version), dep_id)
+
         _items: list = []  # the dep-independent search, fetched at most once per run
 
         def evidence(dep: str) -> BotEvidence:
@@ -1138,6 +1479,10 @@ def main(argv: list[str]) -> int:
             )
         )
 
+        # Before the feed is read: an UNDECLARED cap trigger is a finding whether or not nuget.org
+        # is reachable today, and it is the half that keeps the house rule true going forward.
+        caps = load_caps(preset)
+
         regexes, matches_path = load_annotation_manager(preset)
         pins = scan_pins(root, regexes, matches_path)
         if not pins:
@@ -1152,8 +1497,32 @@ def main(argv: list[str]) -> int:
         print(f"::error::check-pin-coherence: {e}", file=sys.stderr)
         return 1
 
-    print(f"comparing {len(pins)} annotated pin(s) against {', '.join(hosts)} (what Renovate reads):")
     problems: list[str] = []
+
+    # The caps, first: a cap that has outlived its reason is silently holding a whole repo back, and
+    # unlike a stale pin nothing else in the org will ever notice (#943, #850).
+    print(f"re-checking {len(caps)} allowedVersions cap(s) against their declared expiry triggers:")
+    for cap in caps:
+        subject = ", ".join(cap.packages)
+        if cap.dependency is None:
+            print(f"  MANUAL {subject:28} unchecked — {cap.manual_why}")
+            continue
+        try:
+            expired = check_cap(cap, resolve, dep_ranges)
+        except GateError as e:
+            # No `cap.where` prefix here: every GateError check_cap raises already carries one, and
+            # re-prefixing printed the locator twice in the same sentence.
+            problems.append(str(e))
+            continue
+        if expired:
+            problems.append(expired)
+        else:
+            print(
+                f"  ok     {subject:28} still justified — no version it excludes admits "
+                f"{cap.dependency} {cap.admits}"
+            )
+
+    print(f"\ncomparing {len(pins)} annotated pin(s) against {', '.join(hosts)} (what Renovate reads):")
     for pin in sorted(pins):
         try:
             problem = check_pin(pin, resolve, evidence)
@@ -1179,7 +1548,10 @@ def main(argv: list[str]) -> int:
         print(f"\ncheck-pin-coherence: {len(problems)} problem(s).", file=sys.stderr)
         return 1
 
-    print("\nok: every annotated pin equals the newest version on the registry Renovate reads.")
+    print(
+        "\nok: every annotated pin equals the newest version on the registry Renovate reads, and "
+        "every allowedVersions cap still has the reason it was written for."
+    )
     return 0
 
 

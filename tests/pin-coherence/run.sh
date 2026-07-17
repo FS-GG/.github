@@ -58,11 +58,29 @@ PIN_FILE=".github/workflows/contract-coherence.yml"
 # a cause — it reads Renovate's own dashboard + PRs and names the one the evidence supports. Offline,
 # that evidence comes from here. The default is the LIVE defect: the bot detected the dependency
 # (so the manager's regex is fine) and never opened a bump PR — i.e. it is blind to the feed.
+#
+# `_nuspecs` is the canned nuspec block for the CAP-trigger leg (#943): {pkg: {version: {dep: range}}}.
+# The real default.json carries an `allowedVersions` cap on YoloDev.Expecto.TestSdk, and make_repo
+# copies the REAL preset — so every leg here re-checks that cap, and the feed must serve its subject
+# or the whole fixture reds for a reason that has nothing to do with the leg under test.
+#
+# The versions and the range are the REAL ones, read from api.nuget.org: 1.0.0 is the only stable
+# version the `<1.0.0` cap excludes, and its nuspec really does say Expecto [9.0.0, 10.0.0) — which
+# does NOT admit Expecto 11, so the cap is still justified and the baseline is green. That is what
+# makes the red legs below mean something: they flip this one measured fact, nothing else.
 FEED="$WORK/feed.json"
 cat > "$FEED" <<'JSON'
 {
   "FS.GG.SDD.Cli":   ["0.5.0", "0.9.0", "0.9.0-preview.1", "0.8.0", "0.6.0", "0.7.0"],
   "FS.GG.Contracts": ["1.4.0"],
+  "YoloDev.Expecto.TestSdk": ["0.15.6", "0.16.0", "1.0.0"],
+  "_nuspecs": {
+    "YoloDev.Expecto.TestSdk": {
+      "0.15.6": { "Expecto": "[10.2.2, 11.0.0)" },
+      "0.16.0": { "Expecto": "10.2.3" },
+      "1.0.0":  { "Expecto": "[9.0.0, 10.0.0)" }
+    }
+  },
   "_renovate": { "detected": true, "bump_prs": [], "dashboard": 54 }
 }
 JSON
@@ -169,10 +187,20 @@ open(path, "w", encoding="utf-8").write(after)
 PY
 }
 
-# feed_with <name> <json-version-list> — a feed serving those versions for FS.GG.SDD.Cli.
+# feed_with <name> <json-version-list> — the standard feed, serving those versions for FS.GG.SDD.Cli.
+#
+# It DERIVES from $FEED rather than building a fresh dict, so the blocks every leg needs but no leg
+# is about — `_nuspecs` for the real preset's cap (#943), `_renovate` for bot evidence — come along.
+# Built from scratch, a feed here would omit the cap's subject and red every caller for a reason
+# unrelated to the version list it exists to vary.
 feed_with() {
   local out="$WORK/feed-$1.json"
-  python3 -c 'import json,sys; json.dump({"FS.GG.SDD.Cli": json.loads(sys.argv[1])}, open(sys.argv[2],"w"))' "$2" "$out"
+  python3 -c '
+import json, sys
+d = json.load(open(sys.argv[1]))
+d["FS.GG.SDD.Cli"] = json.loads(sys.argv[2])
+json.dump(d, open(sys.argv[3], "w"))
+' "$FEED" "$2" "$out"
   printf '%s' "$out"
 }
 
@@ -727,6 +755,160 @@ for e in "Directory.Packages.props" "Directory.Build.props"; do
   must_fail "ignorePaths ['$e'] is refused (it swallows dist/dotnet/ by substring)" \
     "$PSUB" "$FEED" "is a SUBSTRING of dist/dotnet/$e"
 done
+
+echo
+echo "--- a CAP's expiry trigger is EXECUTED, not merely written down (#943, #850) ---"
+#
+# The defect: an `allowedVersions` cap states its own expiry condition in its `description`, the
+# condition comes true, and nothing reads prose. FS.GG.Rendering's Expecto cap outlived its reason by
+# months exactly that way. So the gate now reads a `fsgg-cap-expires-when:` annotation out of the
+# rule and re-checks it daily against the registry.
+#
+# These legs flip ONE measured fact at a time against the real preset's real cap. The baseline above
+# is already green with the real ranges (see $FEED), which is what makes a red here mean something.
+
+# cap_edit <repo> <python-stmt-over-`c`> — mutate the preset's allowedVersions cap. Refuses a no-op.
+cap_edit() {
+  local root="$1" stmt="$2"
+  edit_json "$root/default.json" "
+for c in d['packageRules']:
+    if 'allowedVersions' in c:
+        $stmt
+        break
+else:
+    raise SystemExit('vacuous fixture: the preset carries no allowedVersions cap to mutate')
+"
+  git -C "$root" add -A
+}
+
+# feed_nuspec <name> <python-stmt-over-`n`> — the standard feed with a mutated _nuspecs block.
+feed_nuspec() {
+  local out="$WORK/feed-ns-$1.json"
+  python3 - "$FEED" "$2" "$out" <<'PY'
+import json, sys
+src, stmt, dst = sys.argv[1:4]
+d = json.load(open(src))
+n = d["_nuspecs"]
+before = json.dumps(d, sort_keys=True)
+exec(stmt)  # noqa: S102 — fixture-local, mutates `n`
+if json.dumps(d, sort_keys=True) == before:
+    sys.exit(f"vacuous fixture: {stmt!r} changed nothing")
+json.dump(d, open(dst, "w"))
+PY
+  printf '%s' "$out"
+}
+
+out="$(gate "$BASE")"
+printf '%s' "$out" | grep -qF "still justified — no version it excludes admits Expecto 11.0.0" \
+  && ok "the real cap is re-checked, and says WHY it still holds" \
+  || bad "the real cap is re-checked, and says WHY it still holds" "$out"
+
+# THE EVENT THE CAP IS WAITING FOR: YoloDev ships an adapter above 1.0.0 whose nuspec admits
+# Expecto 11. This is the exact thing the prose ACTION line asks a human to notice, and didn't.
+must_fail "a cap whose excluded version starts admitting the dep is EXPIRED" "$BASE" \
+  "$(feed_nuspec admits 'n["YoloDev.Expecto.TestSdk"]["1.0.0"]["Expecto"] = "[9.0.0, 12.0.0)"')" \
+  "CAP EXPIRED"
+
+# THE #850 DEFECT ITSELF, on real data: a cap that excludes 0.16.0 — the version whose nuspec really
+# does say `Expecto 10.2.3` (a bare MINIMUM, so it admits 11). That bare-minimum spelling is the one
+# whose meaning is invisible in its punctuation, and it is what actually retired Rendering's cap.
+EXPIRED="$(make_repo expired)"; cap_edit "$EXPIRED" "c['allowedVersions'] = '<0.16.0'"
+must_fail "the #850 condition (a bare-MINIMUM range) retires a cap" "$EXPIRED" "$FEED" \
+  "CAP EXPIRED"
+must_fail "...and it names the version and the range that retired it" "$EXPIRED" "$FEED" \
+  "declares Expecto '10.2.3', which ADMITS Expecto 11.0.0"
+
+# The half that keeps the house rule true: a cap written with no trigger is red on the PR adding it.
+NOTRIG="$(make_repo notrig)"
+cap_edit "$NOTRIG" "c['description'] = 'Cap it below 1.0.0. ACTION WHEN a version above 1.0.0 ships: delete this cap.'"
+must_fail "a cap with NO trigger is refused (prose is not a trigger)" "$NOTRIG" "$FEED" \
+  "declares NO expiry trigger"
+
+BADTRIG="$(make_repo badtrig)"
+cap_edit "$BADTRIG" "c['description'] = 'fsgg-cap-expires-when: when Expecto 11 works'"
+must_fail "an unreadable trigger is refused, not ignored" "$BADTRIG" "$FEED" \
+  "is not readable"
+
+# A trigger is a WHOLE description unit, never a substring of the prose. The real cap's description
+# EXPLAINS the annotation, so it quotes the spelling — including the `manual` one. Under the first
+# spelling of this gate, a regex searched the joined text and took whichever match came first, so
+# that quoted example was a live trigger: reordering the description array silently reclassified the
+# real cap as `manual`, i.e. never checked again. That is #850 rebuilt inside the fix for #850, and
+# it is the #919 trap (a gate parsing a quoted sample as a real invocation) one repo over.
+#
+# The real preset is the subject on purpose — this asserts the SHIPPING description cannot shadow
+# its own trigger, whatever order its paragraphs end up in.
+SHADOW="$(make_repo shadow)"
+edit_json "$SHADOW/default.json" "
+for c in d['packageRules']:
+    if 'allowedVersions' in c:
+        c['description'] = list(reversed(c['description']))
+        break
+"
+git -C "$SHADOW" add -A
+must_pass "prose QUOTING the annotation cannot shadow the real trigger" "$SHADOW"
+out="$(gate "$SHADOW")"
+printf '%s' "$out" | grep -qF "still justified — no version it excludes admits Expecto 11.0.0" \
+  && ok "...and the reordered description still resolves to the REAL trigger, not the quoted one" \
+  || bad "...and the reordered description still resolves to the REAL trigger, not the quoted one" "$out"
+
+TWOTRIG="$(make_repo twotrig)"
+cap_edit "$TWOTRIG" "c['description'] = ['fsgg-cap-expires-when: dependency=Expecto admits=11.0.0', 'fsgg-cap-expires-when: manual — and also this']"
+must_fail "TWO triggers are refused (which one wins must not depend on prose order)" "$TWOTRIG" "$FEED" \
+  "declares 2 expiry triggers"
+
+# The sentinel: a cap whose trigger is NOT a fact about a nuspec (FS.GG.Audio's FSharp.Core cap is
+# this shape — its trigger is an org coordination decision). Reported UNCHECKED, never as green.
+MANUAL="$(make_repo manual)"
+cap_edit "$MANUAL" "c['description'] = 'fsgg-cap-expires-when: manual — the org majority pins 10.1.x; raising this ceiling is a cross-repo decision, not a fact about a nuspec'"
+must_pass "the manual sentinel is accepted" "$MANUAL"
+out="$(gate "$MANUAL")"
+printf '%s' "$out" | grep -qF "MANUAL" && printf '%s' "$out" | grep -qF "unchecked — the org majority" \
+  && ok "...and is reported as UNCHECKED, with its reason, not as green" \
+  || bad "...and is reported as UNCHECKED, with its reason, not as green" "$out"
+
+BARE="$(make_repo bare)"
+cap_edit "$BARE" "c['description'] = 'fsgg-cap-expires-when: manual'"
+must_fail "a bare 'manual' with no reason is refused (that is the silence, in costume)" "$BARE" "$FEED" \
+  "is not readable"
+
+# Every way the check can fail to LOOK is an error, never a green (epic #266).
+VACUOUS="$(make_repo vacuous)"; cap_edit "$VACUOUS" "c['allowedVersions'] = '<99.0.0'"
+must_fail "a cap that excludes NOTHING has no subject, and must not pass" "$VACUOUS" "$FEED" \
+  "excludes NO published stable version"
+
+REGEXCAP="$(make_repo regexcap)"; cap_edit "$REGEXCAP" "c['allowedVersions'] = '/^0\\\\./'"
+must_fail "a REGEX cap is refused (its excluded set cannot be enumerated)" "$REGEXCAP" "$FEED" \
+  "is a REGEX"
+
+REGEXPKG="$(make_repo regexpkg)"; cap_edit "$REGEXPKG" "c['matchPackageNames'] = ['/^YoloDev\\\\./']"
+must_fail "a cap matching packages by REGEX is refused" "$REGEXPKG" "$FEED" \
+  "matches packages by REGEX"
+
+NONAMES="$(make_repo nonames)"; cap_edit "$NONAMES" "c.pop('matchPackageNames')"
+must_fail "a cap with no matchPackageNames is refused" "$NONAMES" "$FEED" \
+  "applies to EVERY package"
+
+must_fail "an UNREADABLE nuspec is an error, never 'declares no constraint'" "$BASE" \
+  "$(feed_nuspec gone 'n["YoloDev.Expecto.TestSdk"].pop("1.0.0")')" \
+  "must not read as 'no constraint'"
+
+# A version that stops depending on the dep at all no longer constrains it — so the cap's reason is
+# gone. Real, not hypothetical: it is how a package drops a peer it used to pin.
+must_fail "an excluded version that drops the dep ENTIRELY retires the cap" "$BASE" \
+  "$(feed_nuspec dropped 'n["YoloDev.Expecto.TestSdk"]["1.0.0"] = {}')" \
+  "declares NO dependency on Expecto at all"
+
+# A nuspec declares its dependencies once per target-framework group. YoloDev.Expecto.TestSdk 1.0.0
+# really does declare Expecto TWICE — identically, so the two collapse to the one fact they carry
+# (that dedupe is what keeps the baseline green). Groups that genuinely DISAGREE carry two facts,
+# and there is no honest way to pick one: the cap might be retired on one framework and needed on
+# the other. Refuse, rather than answer at random.
+must_pass "identical per-framework groups collapse to the one fact they carry" "$BASE" \
+  "$(feed_nuspec dup 'n["YoloDev.Expecto.TestSdk"]["1.0.0"]["Expecto"] = ["[9.0.0, 10.0.0)", "[9.0.0, 10.0.0)"]')"
+must_fail "DISAGREEING per-framework groups are refused, not guessed between" "$BASE" \
+  "$(feed_nuspec disagree 'n["YoloDev.Expecto.TestSdk"]["1.0.0"]["Expecto"] = ["[9.0.0, 10.0.0)", "[9.0.0, 12.0.0)"]')" \
+  "DISAGREEING ranges"
 
 echo
 echo "--- CI guard on the real repo (no network: structure only) ---"
