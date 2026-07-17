@@ -749,6 +749,43 @@ module Client =
 
                     ExitGreen
 
+    /// What undoing a claim does to the board column — the ONE question `release` and `reap` both ask (#331).
+    ///
+    /// Two verbs, one question, deliberately: they are the only two ways a claim goes away, and bash closed
+    /// this split by making them share `unclaim_status`. The port re-opened it by giving each verb its own
+    /// copy that consulted the marker alone. A fix that lands in one and not the other re-creates it.
+    type private UnclaimColumn =
+        /// The claim's own footprint is being undone — write the column it overwrote.
+        | ResetTo of BoardStatus
+        /// The column was chosen DURING the lease. Leave it exactly as it is, with NO write at all.
+        | Preserve of BoardStatus option
+
+    /// Decide from the item's LIVE column and the marker's recorded one. PURE — the read is the caller's, so
+    /// the decision is testable without a board, and the failed-read case never reaches here at all.
+    ///
+    /// `claim` writes `In progress` (`CLAIM_STATUS`). Undoing a claim resets THAT — the claim's own footprint
+    /// — and only that. **Any other column was chosen during the lease, deliberately**: a worker who hits a
+    /// blocker and parks the item `Blocked` is following pnext-item §4's own prescribed sequence, and
+    /// reverting it is #331 — the defect where `release` silently undid the column the protocol had just told
+    /// the worker to set.
+    ///
+    /// The preserve arm writes **NOTHING**, rather than a redundant write of the column already there. That is
+    /// not a micro-optimisation: a matching write would land the same end state while spending a GraphQL point
+    /// on the budget that dies first under fan-out (#418), and — the part that actually bites — it would make
+    /// "preserved" and "restored" indistinguishable to every test and every reader of the board's history. The
+    /// absence of the write IS the observable that says the column was nobody's to change.
+    let private unclaimColumn (live: BoardStatus option) (recorded: BoardStatus option) : UnclaimColumn =
+        match live with
+        | Some InProgress ->
+            match recorded with
+            // A recorded `In progress` is that same footprint written twice — still a column nobody chose, so
+            // it falls back exactly as an unrecorded one does (#481).
+            | Some InProgress
+            | None -> ResetTo BoardStatus.Ready
+            | Some s -> ResetTo s
+        // ANY other column — including NO column at all, which has no footprint to reset either.
+        | other -> Preserve other
+
     /// #581 — collect expired claims whose WORK is dead, and REFUSE any whose work is alive.
     ///
     /// A lease is EVIDENCE of abandonment, never PROOF. Its false positive is SYSTEMATIC — work that simply
@@ -904,14 +941,33 @@ module Client =
                                                         Board.itemIdCached ctx.Transport bm ref.Owner ref.Repo ref.Number
                                                     with
                                                     | Ok(Some _) ->
-                                                        // A recorded `In progress` is the dead claim's OWN
-                                                        // footprint, not a column anyone chose — restore to
-                                                        // `Ready`, as an unrecorded column does (#481).
-                                                        let restoreTo =
-                                                            match reapable.PreviousStatus with
-                                                            | Some InProgress
-                                                            | None -> BoardStatus.Ready
-                                                            | Some s -> s
+                                                        // #331's read, in `reap`'s copy — because the reaper
+                                                        // collects a LEASE and knows nothing about whether the
+                                                        // item became startable. A worker whose lease lapsed on
+                                                        // an item it had deliberately marked `Blocked` had that
+                                                        // column reset on its way out, which is #331 with a
+                                                        // dead worker instead of a live one. bash asked ONE
+                                                        // question here (`unclaim_status`); so does this.
+                                                        match
+                                                            Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number
+                                                        with
+                                                        // A column we could not read is not one we may
+                                                        // overwrite (#266, aimed at a writer). Never fatal —
+                                                        // the lock is already gone.
+                                                        | Error e ->
+                                                            printfn
+                                                                "  column UNREADABLE (%s) — marker cleared, column left ALONE:  fsgg-coord set-field %s Status '<column>'"
+                                                                (Errors.explain e)
+                                                                ref.Short
+                                                        | Ok live ->
+
+                                                        match unclaimColumn live reapable.PreviousStatus with
+                                                        | Preserve(Some s) ->
+                                                            printfn
+                                                                "  column left at %s (chosen during the lease — reap collects a lease, not a decision)"
+                                                                (statusName s)
+                                                        | Preserve None -> printfn "  no column set (nothing to reset)"
+                                                        | ResetTo restoreTo ->
 
                                                         let name = statusName restoreTo
 
@@ -1692,26 +1748,74 @@ module Client =
                     match Writes.release ctx.Transport held with
                     | Error e -> fail e
                     | Ok previousStatus ->
-                        // The marker is gone; the lease is dropped. Restore the column it overwrote — or
-                        // `Ready` if it recorded none (#481).
-                        let restoreTo =
+                        // THE LEASE IS ALREADY DROPPED, and everything below runs in that shadow. The marker is
+                        // the lock, so a board we cannot read or write from here leaves a column wrong — never a
+                        // claim stranded. That ordering is why the live read below may fail without being fatal.
+                        //
+                        // The board is resolved ONCE and shared by the live read and the write. `bootstrapCached`
+                        // is the same call both would make; resolving it twice would spend #418's budget twice
+                        // for one answer.
+                        let board = Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title
+
+                        // WHAT THE COLUMN BECOMES.
+                        //
+                        // #867: an explicit `--status` IS the caller naming the deliberate column, so it beats
+                        // both the recorded restore and the `Ready` fallback — that is #331/#481's precedence,
+                        // and the skill has documented it since. The port dropped the flag on the floor:
+                        // `opts.Status` was never consulted, so the documented way to abandon an item into a
+                        // column was a no-op that exited 0. It is how #732 kept coming back — four workers
+                        // correctly parked it `Blocked`, and the board kept saying `Ready` (#888).
+                        //
+                        // It also spends NO live read: the caller stated the end state, so there is no default
+                        // left to derive, and the read exists only to derive the default.
+                        let decision =
                             match requested with
-                            // #867: an explicit `--status` IS the caller naming the deliberate column, so it
-                            // beats both the recorded restore and the `Ready` fallback — that is #331/#481's
-                            // precedence, and the skill has documented it since. The port dropped the flag on
-                            // the floor: `opts.Status` was never consulted, so the documented way to abandon
-                            // an item into a column was a no-op that exited 0. It is how #732 kept coming
-                            // back — four workers correctly parked it `Blocked`, and the board kept saying
-                            // `Ready` (#888).
-                            | Some s -> s
+                            | Some s -> Ok(ResetTo s)
                             | None ->
-                                match previousStatus with
-                                // A recorded `In progress` is the claim's OWN footprint, not a column anybody
-                                // chose — restoring it would leave the item looking claimed with no claim on
-                                // it. It falls back to `Ready`, exactly as an unrecorded column does (#481).
-                                | Some InProgress
-                                | None -> BoardStatus.Ready
-                                | Some s -> s
+                                // #331's read. The recorded column answers "what did the claim overwrite?"; it
+                                // CANNOT answer "did somebody choose a column since?" — the marker was written
+                                // at claim time and never updated. Only the live column knows, so `release`
+                                // asks it rather than reverting a `Blocked` the protocol itself told the worker
+                                // to set.
+                                // The two ways the answer can be missing are REPORTED APART, because they send
+                                // the reader somewhere different: an unresolvable board is an auth/plumbing
+                                // problem, an unreadable column is this item's own read.
+                                match board with
+                                | Error e -> Error $"the board could not be resolved (%s{Errors.explain e})"
+                                | Ok bm ->
+                                    match Board.itemStatus ctx.Transport bm ref.Owner ref.Repo ref.Number with
+                                    | Ok live -> Ok(unclaimColumn live previousStatus)
+                                    // A COLUMN WE COULD NOT READ IS NOT A COLUMN WE MAY OVERWRITE. #266's
+                                    // fail-closed rule, aimed at a WRITER: the obvious read-compare-write fails
+                                    // OPEN here — treat an unreadable column as "not In progress" and you
+                                    // preserve blindly; treat it as "In progress" and you revert a deliberate
+                                    // column on a transient 502. Neither is knowledge. So the column is left
+                                    // alone and SAID SO, naming the repair.
+                                    | Error e -> Error $"its current column could not be read (%s{Errors.explain e})"
+
+                        match decision with
+                        | Error why ->
+                            eprint
+                                $"fsgg-coord-engine: %s{ref.Short}: %s{why} — the lock is dropped, but the column is UNCHANGED. A column we cannot read is not one we may overwrite (#331). Set it yourself if it needs setting:  fsgg-coord set-field %s{ref.Short} Status '<column>'"
+
+                            printfn "released %s" ref.Short
+                            ExitGreen
+                        | Ok(Preserve live) ->
+                            // NO WRITE. The column was chosen during the lease, so there is nothing to undo —
+                            // and stdout must not imply `release` put it there.
+                            match live with
+                            | Some s -> printfn "released %s (column left at %s)" ref.Short (statusName s)
+                            // NO COLUMN TO RESET — the item is off this board, or on it with no `Status` set.
+                            // SAY THAT. A bare `released <ref>` is this recipe's documented tell for "the
+                            // column did NOT land, and stderr says why", so printing one here would raise that
+                            // alarm with nothing behind it — and it would lose the plain "not an item on this
+                            // board" that the pre-#331 write path reported. `itemStatus` cannot tell the two
+                            // apart (`Ok None` is both), so this states what is TRUE of both rather than
+                            // guessing which.
+                            | None -> printfn "released %s (no column to reset — not on this board, or no Status set)" ref.Short
+
+                            ExitGreen
+                        | Ok(ResetTo restoreTo) ->
 
                         let name = statusName restoreTo
 
@@ -1722,7 +1826,7 @@ module Client =
                         // one that bites hardest — an exhausted budget QUEUES the write and nothing replays it
                         // on its own (#510/#878), so a silent defer is a column that never lands.
                         let landed =
-                            match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                            match board with
                             | Ok board when name <> "" ->
                                 match
                                     Board.boardWrite ctx.Transport board ref.Owner ref.Repo ref.Number "Status" (Board.Set name) w.Id
