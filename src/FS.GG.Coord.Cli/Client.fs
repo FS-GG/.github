@@ -2656,8 +2656,20 @@ module Client =
                                                 eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
                                                 eprint $"  %s{toks}"
 
+                                                // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
+                                                // overlap is TRANSIENT — the scheduler already sequences it and
+                                                // it self-clears the moment a claim drops — whereas `Blocked by`
+                                                // is a DURABLE edge nothing ever recomputes. Offering the durable
+                                                // remedy for the transient condition is how a ring got drawn on a
+                                                // premise withdrawn 60 seconds later and held #1059 hostage: a
+                                                // category error the tool used to recommend first. `Blocked by` is
+                                                // correct ONLY for a real logical dependency (this work must be
+                                                // authored against the other's LANDED result), which outlives any
+                                                // claim — and that distinction is the thing the worker has to
+                                                // decide, so the message names it instead of defaulting to the
+                                                // edge that closes rings.
                                                 let msg =
-                                                    $"heads up: I widened %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). We cannot run these in parallel as declared — sequence one behind the other (`Blocked by`) or split the touch-set, and reply here."
+                                                    $"heads up: I widened %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
 
                                                 match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
                                                 | Error e ->
@@ -4206,9 +4218,37 @@ module Client =
                             | Error e -> Error e
                             | Ok epic -> classify (acc @ tsFindings @ doneOpenNote @ epic) rest
 
+                // The BLOCKER-CYCLE rule (#1090) — the one lint rule that is NOT per-item, and could not be.
+                // A `Blocked by` ring passes every per-item blocker check (#343/#476/#602/#620), because
+                // every item on it is individually well-formed: a non-empty blocker list, every blocker
+                // OPEN, every ref a real issue, correctly never handed out. The defect lives in the GRAPH,
+                // which no per-item rule has to look at, and no worker can see — each edge is drawn by a
+                // different worker from locally correct information, and the ring is visible only from
+                // above. `Blockers.cycles` owns that graph (#1092); `Scan.blockerGraph` builds it from the
+                // rows already scanned, with no extra read. Error severity: a ring can NEVER clear on its
+                // own — no lease, no merge frees it — so it is not a note a human might adjudicate but a
+                // deadlock a human must break.
+                let byRef = items |> List.map (fun r -> r.Ref, r) |> Map.ofList
+
+                let cycleFindings =
+                    Blockers.cycles (Scan.blockerGraph items)
+                    |> List.collect (fun ring ->
+                        let members = ring |> List.map (fun r -> r.Short) |> String.concat ", "
+
+                        ring
+                        |> List.choose (fun r ->
+                            Map.tryFind r byRef
+                            |> Option.map (fun row ->
+                                mk
+                                    "BLOCKER-CYCLE"
+                                    "error"
+                                    row
+                                    $"on a `Blocked by` CYCLE that can NEVER become startable — no lease, no merge and no waiting frees it; a human must break one edge. The ring: %s{members}")))
+
                 match classify [] items with
                 | Error e -> fail e
-                | Ok findings ->
+                | Ok perItemFindings ->
+                    let findings = perItemFindings @ cycleFindings
                     let errors = findings |> List.filter (fun f -> f.Severity = "error") |> List.length
                     let notes = findings |> List.filter (fun f -> f.Severity = "note") |> List.length
 

@@ -31,6 +31,7 @@
     <Compile Include="DoneTests.fs" />
     <Compile Include="HttpTransportTests.fs" />
     <Compile Include="ScanBoardTests.fs" />
+    <Compile Include="BlockerGraphTests.fs" />
     <Compile Include="DoneFactsTests.fs" />
   </ItemGroup>
 

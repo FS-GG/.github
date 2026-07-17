@@ -117,6 +117,13 @@ module Scan =
     /// attributable to the board, not to the scope, and the caller's empty output already says so.
     val scope: repo: string option -> rows: Row list -> Scoped
 
+    /// The board's `Blocked by` graph, ready for `Blockers.cycles` — resolved from the scanned ROWS ALONE,
+    /// with no transport read (#1090). A ring runs only through on-board items, whose OPEN/CLOSED state is
+    /// already in `rows`; an off-board blocker draws no ring edge, so it is a `BlockerUnknown` PLACEHOLDER,
+    /// not a resolved verdict. Accurate for on-board refs only — the exact slice `Blockers.cycles` reads;
+    /// not a substitute for `snapshot`'s fully-resolved blocker set. Total and pure.
+    val blockerGraph: rows: Row list -> (Ref * Blocker list) list
+
     /// What the scan cost, and what it could not do — so a caller can say so rather than imply it.
     type Receipt =
         { Candidates: int
