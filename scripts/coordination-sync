@@ -160,6 +160,14 @@ KIT_CONFIG_DSTS="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field dest --kind con
 KIT_CONFIG_PAIRS=""
 [ -z "$KIT_CONFIG_SRCS" ] \
   || KIT_CONFIG_PAIRS="$(paste <(printf '%s\n' "$KIT_CONFIG_SRCS") <(printf '%s\n' "$KIT_CONFIG_DSTS"))"
+# Fail CLOSED on a config row with no usable dest. `repos.sh validate` enforces the dest, but this
+# script does not run it, and `repos.sh kit --field dest` renders a MISSING dest as the literal "null"
+# (jq -r) — so on an unvalidated registry a dest-less row would otherwise be distributed to `$target/null`
+# (or, if empty, the target root). "I read a malformed row" must not become a silent mis-write.
+[ -z "$KIT_CONFIG_PAIRS" ] || while IFS=$'\t' read -r _s _d; do
+  [ -n "$_s" ] || continue
+  case "$_d" in ""|null) die "kit config source '$_s' has no usable dest (got '$_d') — a 'kind: config' row must declare a receiver-relative 'dest' (run: scripts/repos.sh validate)." ;; esac
+done <<< "$KIT_CONFIG_PAIRS"
 
 # Build the managed source::dest list (dest is relative to the receiver root).
 managed() {
