@@ -133,7 +133,8 @@ an omission nobody noticed.
 
 #549 asked for the mirror-image gate: have each repo read its own
 `branches/main/protection` and assert every required context is actually produced. **That check
-cannot run in GitHub Actions — by anyone, in any repo.**
+cannot run in a receiver's OWN CI, by anyone** — which is why it lives here, as a central scheduled
+gate, and not in the receiver.
 
 - The protection endpoint requires **`administration: read`**.
 - **`administration` is not a valid `permissions:` scope for a workflow's `GITHUB_TOKEN`.**
@@ -141,14 +142,19 @@ cannot run in GitHub Actions — by anyone, in any repo.**
   run at all**, and therefore shows as neither red nor green — the same
   [#478](https://github.com/FS-GG/.github/issues/478) blind spot that hid 119 dead `lockfile-sync`
   runs. (#549's own first attempt shipped exactly this, and was caught only by reading the
-  *workflow-run* list rather than the *check-run* list.)
-- The org's **dispatch App does not hold the scope either**. [#463](https://github.com/FS-GG/.github/issues/463)
-  learned this the hard way: `coordination-propagate`'s protection probe returned `403 Resource not
-  accessible by integration` on every receiver, fell through to the fail-closed arm, and stopped the
-  kit landing anywhere. It was rewritten to ask the *pull request* instead of branch protection —
-  and its code still carries the comment *"We deliberately cannot see branch protection (no
-  `administration: read` — that is the whole point)."* Re-verified 2026-07-14 (#574): the App holds
-  `contents`, `metadata`, `packages`, `pull_requests` — **no `administration`**.
+  *workflow-run* list rather than the *check-run* list.) No receiver can read its own protection from
+  its own `GITHUB_TOKEN`, and no amount of central wiring changes that — it is why the gate is
+  central and App-authenticated rather than a `workflow_call` fanned out to each receiver.
+- The org's **dispatch App now holds the scope**, but did not until recently.
+  [#463](https://github.com/FS-GG/.github/issues/463) learned the hard way that it did not:
+  `coordination-propagate`'s protection probe returned `403 Resource not accessible by integration`
+  on every receiver, fell through to the fail-closed arm, and stopped the kit landing anywhere. It was
+  rewritten to ask the *pull request* instead of branch protection — a change that turned out to be
+  the better design regardless (`mergeStateStatus` accounts for required reviews too), so it stays
+  even now the scope exists. On **2026-07-17** an org admin granted the App `administration: read`
+  ([#574](https://github.com/FS-GG/.github/issues/574), Option A), so a **per-receiver-scoped
+  installation token** can now read protection. That is what
+  [`required-context-coherence.yml`](../../.github/workflows/required-context-coherence.yml) mints.
 
 > **This is true of CLASSIC protection. The ruleset store is different — but it does NOT give you a
 > credential-free gate** ([#574](https://github.com/FS-GG/.github/issues/574)).
@@ -165,30 +171,45 @@ cannot run in GitHub Actions — by anyone, in any repo.**
 > half-read is not a verdict, and a gate that reported on half the stores is how this whole class
 > of bug started.
 >
-> The credential is still the blocker for a scheduled org-wide gate. Rulesets do not retire it.
+> The credential was, for a long time, the blocker for a scheduled org-wide gate; rulesets did not
+> retire it. It was granted on 2026-07-17 (#574) — see below.
 
-So the gate asks a question that needs **no credential**, and it asks it at the **source**: on the PR
-that would cause the outage, rather than in the victim's repo afterwards. That is strictly better —
-it *prevents* the deadlock instead of *explaining* it.
+So the **preventive** gate asks a question that needs **no credential**, and it asks it at the
+**source**: [`reusable-job-id-coherence.yml`](../../.github/workflows/reusable-job-id-coherence.yml)
+runs on the PR that would cause the outage, rather than in the victim's repo afterwards. That is
+strictly better for the failure it covers — it *prevents* the deadlock instead of *explaining* it.
+But it can only see a rename authored **here**; a typo authored in a *receiver's* protection, or a
+context required before its caller is wired, is invisible to it. That is what the scheduled gate below
+now covers.
 
-## The verifier that still exists
+## The scheduled gate — the receiver-side half
 
-[`scripts/check-required-contexts.py`](../../scripts/check-required-contexts.py) does implement
+[`scripts/check-required-contexts.py`](../../scripts/check-required-contexts.py) implements
 #549's original question: point it at a repo and it proves every required status check is a context
 some `pull_request` workflow can produce, deriving the producible set statically from committed YAML
 (job `name:` else id; `<caller> / <callee>` nested to any depth; matrix suffixes). It also catches a
 plain **typo** in a protection setting for free — a misspelled required context is indistinguishable
 from a renamed one, and both deadlock identically.
 
-It needs an **admin token**, so it is a tool a person runs, not a gate CI runs:
+Reading protection needs a token with `administration: read`. A person with an admin token can run it
+by hand:
 
 ```sh
 python3 scripts/check-required-contexts.py --repo FS-GG/FS.GG.Audio --root <a checkout of it>
 ```
 
-Its fixture — [`tests/required-contexts/`](../../tests/required-contexts/) — runs on every PR, so the
-tool cannot rot, and its headline leg *is* the outage: FS.GG.Audio's real `gate.yml` against this
-repo's real `lock-range-coherence.yml` with the job renamed, asserting Audio deadlocks.
+Since the #574 grant, **CI runs it too.**
+[`required-context-coherence.yml`](../../.github/workflows/required-context-coherence.yml) sweeps the
+`contract-coherence` receivers on a daily schedule (and on demand via `workflow_dispatch`): for each,
+it mints a dispatch-App installation token scoped to that one repo — restricted to
+`administration: read` + `contents: read` — checks the repo out, and runs the verifier against it. A
+finding (exit 1) or a permanent no-verdict (exit 3) fails that matrix leg red, naming the receiver and
+the deadlock; a retryable read failure (exit 2) is retried, then surfaced. It runs centrally in
+`.github`, not as a per-receiver `workflow_call`, for the reason above: a receiver's own
+`GITHUB_TOKEN` can never hold `administration: read`.
 
-Wiring it into CI is blocked on a credential the org does not have (a GitHub App with
-`administration: read` on the receivers). That is filed separately.
+Its fixture — [`tests/required-contexts/`](../../tests/required-contexts/) — runs on every PR that
+touches the verifier, so the tool cannot rot, and its headline leg *is* the outage: FS.GG.Audio's real
+`gate.yml` against this repo's real `lock-range-coherence.yml` with the job renamed, asserting Audio
+deadlocks. (The scheduled workflow itself needs the App and a live protection read, so like
+`coordination-propagate` it has no offline fixture — only the script it drives does.)
