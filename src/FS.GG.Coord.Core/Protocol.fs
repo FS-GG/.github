@@ -437,15 +437,15 @@ module Protocol =
         { Id = "claim-lock"
           Title = "The claim lock is a comment-order CAS, and the ASSIGNEE cannot hold it"
           Statement =
-            "A claim is an `fsgg:claim` marker COMMENT, and the lowest live marker id wins. GitHub issues comment ids from one server-side sequence, so \"lowest live marker\" is a total order every racer observes identically. The GitHub ASSIGNEE cannot be the lock, because N agents share one account."
+            "A claim is an `fsgg:claim` marker COMMENT, and the lowest live marker id wins. GitHub issues comment ids from one server-side sequence, so \"lowest live marker\" is a total order every racer observes identically. The GitHub ASSIGNEE cannot be the lock, because N agents share one account. That total order is over MARKERS, and it separates WORKERS only while their ids are DISTINCT: an id two workers share is an id this lock cannot separate, and `release`, `heartbeat`, `say` and `inbox` then act on one another's claims. So a worker id is MINTED, never chosen — a worker asked to pick one is not a random source."
           Because =
-            "ADR-0027. The lock lives on REST, and the invariant it serves — a lock may never live on the budget that dies first — is unamended. What inverted is WHICH budget that is, so this rule no longer asserts a standing answer. #418 measured GraphQL dying first (five workers looping `take` drained 5,000 pt/hr in ~15 minutes), and REST was chosen as the survivor. #895 measured the reverse, twice on 2026-07-16: REST core hit 0/5,000 and took `claim`/`take`/`who` down with it, while GraphQL stayed healthy through both — 3,639/5,000 at the first of them. This rule used to state \"GraphQL is the first budget to die\" as standing fact, and that premise is what kept regenerating the doctrine that caused the inversion — a recipe steering every worker's reads onto REST to save GraphQL points, on one shared account, spending the lock's own budget to save 7 points of 5,000. #895 decided (2026-07-17) that the lock STAYS and the DOCTRINE moves (#968): REST is metered per request and cannot be batched, so under fan-out it is structurally the scarcer budget with no lever to pull, where GraphQL batches 100 nodes to a query. Discretionary reads belong on GraphQL; REST carries the lock, which has no alternative." }
+            "ADR-0027, and #419 for the distinctness half: agents asked to invent an id converge on the same corner of the name space, and this board carried FOUR `finch-*` workers at once — every one of them lifted from the single example id that then sat in the recipe. The attractor is the WORD, not the suffix, which is why the remedy is a mint rather than a reminder to be careful, and why #532/#551/#570 had to remove the pasteable id from the docs twice by hand before a gate asserted it. The lock lives on REST, and the invariant it serves — a lock may never live on the budget that dies first — is unamended. What inverted is WHICH budget that is, so this rule no longer asserts a standing answer. #418 measured GraphQL dying first (five workers looping `take` drained 5,000 pt/hr in ~15 minutes), and REST was chosen as the survivor. #895 measured the reverse, twice on 2026-07-16: REST core hit 0/5,000 and took `claim`/`take`/`who` down with it, while GraphQL stayed healthy through both — 3,639/5,000 at the first of them. This rule used to state \"GraphQL is the first budget to die\" as standing fact, and that premise is what kept regenerating the doctrine that caused the inversion — a recipe steering every worker's reads onto REST to save GraphQL points, on one shared account, spending the lock's own budget to save 7 points of 5,000. #895 decided (2026-07-17) that the lock STAYS and the DOCTRINE moves (#968): REST is metered per request and cannot be batched, so under fan-out it is structurally the scarcer budget with no lever to pull, where GraphQL batches 100 nodes to a query. Discretionary reads belong on GraphQL; REST carries the lock, which has no alternative." }
 
     let leaseRule: Rule =
         { Id = "claim-lease"
           Title = "The lease is a WINDOW, and an unknown age says so"
           Statement =
-            "A claim's lease is 120 minutes by default (`FSGG_CLAIM_LEASE_MIN`). Past it the claim is REAPABLE — not free: only `reap` may break a lock, and an item's touch-set stays reserved until it does. A claim whose age cannot be read reports `lease unknown`, never a window."
+            "A claim's lease is 120 minutes by default (`FSGG_CLAIM_LEASE_MIN`), and `heartbeat` renews it only while it is LIVE. Past it the claim is REAPABLE — not free: only `reap` may break a lock, and an item's touch-set stays reserved until it does. An EXPIRED lease cannot be renewed in place; the holder must re-claim. Evidence that the work is alive — an open `item/<n>-*` PR — withholds the item from `take` and REFUSES a `reap`, but it does not revive the lease. A claim whose age cannot be read reports `lease unknown`, never a window."
           Because =
             "#428 (\"nothing schedulable\" and \"queued behind a claim held by <w>, lease frees in ~96m\" are the same fact and two completely different operator instructions — the first reads as an empty queue and sends a worker home) and #440/#488 (inventing \"frees in ~120m\" from a missing timestamp is a confident-but-unfounded sentence, which is the class both were closed for). And the lease is a TIMER, which is why it never decides alone: it cannot see a REST outage, and `heartbeat` is REST, so an outage on the lock's budget spends a lease nobody can renew and silently reads as abandonment (#976, ratifying that the fleet stops there rather than making the clock outage-aware). What answers instead is evidence — an open `item/<n>-*` PR (#581), or a liveness probe that failed and therefore fails closed (#266). Expiry is EVIDENCE of abandonment, never proof." }
 
@@ -516,6 +516,37 @@ module Protocol =
     let reconcileRules: Rule list =
         [ touchSetDeclaration; blockerResolution; failClosed ]
 
+    /// The rules a worker DRIVING an item must satisfy — the subset `pnext-item` restates (#889/#1059).
+    ///
+    /// A SUBSET OF `rules`, on exactly the terms `filingRules` is: same values, containment pinned, never a
+    /// second list. See that list's note for why the containment is the whole assertion.
+    ///
+    /// WHY THESE FOUR — and this list is the one whose subset is least obvious, because a driver does more
+    /// of the protocol than any other role. It files, it schedules, it claims, it holds a lease. So the
+    /// naive answer is "project `rules`", and `RuleSubsetTests` refuses that outright: a kind that covers
+    /// everything is not a kind. The question that actually cuts is not "what does a driver TOUCH" but
+    /// "what does a driver DECIDE" — the rest is the engine's, and a driver reads its verdict rather than
+    /// applying the rule themselves.
+    ///
+    /// - `claim-lock` — §0 IS this rule. A driver MINTS an id and takes a lock with it, and the two facts
+    ///   that make that safe are the total order and the distinctness of the id it is over (#419).
+    /// - `claim-lease` — §3. A driver HOLDS a lease and must heartbeat it; that an EXPIRED one cannot be
+    ///   renewed in place is the fact §3 and §6 disagreed about for as long as both were prose (#1059).
+    /// - `touch-set-declaration` — §3. A driver AUTHORS a `Paths:` line, with `widen`, mid-flight.
+    /// - `touch-set-grammar` — §3. A driver's `widen` is refused by this grammar, so it is the one role
+    ///   that meets it as an error message rather than a description.
+    ///
+    /// NOT `check-order`, for `reconcileRules`' reason exactly: it is the scheduler's internal order, and
+    /// `take` performs it FOR the driver. A worker acts on the one sentence it prints, never on the order
+    /// that produced it. NOT `blocker-resolution`: a driver RECORDS an edge (§4) but never resolves one —
+    /// that is `take`'s question on the way in and a reconciler's on the way back (`reconcileRules`), and a
+    /// driver who applied it by hand would be deciding their own item is startable. NOT `fail-closed`: it
+    /// is the engine's discipline about its own reads, and where a driver does meet it — `landable`'s
+    /// UNKNOWN, `take`'s read failure — the exit-code regions already carry it, stated as the code to act
+    /// on rather than as a principle to apply.
+    let driverRules: Rule list =
+        [ touchSetDeclaration; touchSetGrammar; claimLock; leaseRule ]
+
     // ================================================================================================
     // THE INVENTORY (#1027) — which facts the document states, and in what order.
     // ================================================================================================
@@ -549,7 +580,8 @@ module Protocol =
     /// document rather than in the writer that renders it (#1027).
     ///
     /// /2 `takeExitCodes` (#889) · /3 `landableExitCodes` (#900) · /4 `filingRules` (#889) ·
-    /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889) · /8 `snapshotDocument` (#889/#1058).
+    /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889) · /8 `snapshotDocument` (#889/#1058) ·
+    /// /9 `driverRules` (#889/#1059).
     ///
     /// Each bump is additive for a reader that ignores unknown members, and the number is bumped anyway:
     /// it says what the surface IS, not merely whether an old reader survives it.
@@ -563,7 +595,7 @@ module Protocol =
     /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
     /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
     /// attribute because it was `private` and had no signature entry to keep in step.
-    let factsSchema = "fsgg.coord.protocol/8"
+    let factsSchema = "fsgg.coord.protocol/9"
 
     /// The snapshot document's schema string — the `schema` member `Scan.snapshot` writes and
     /// `Snapshot.parse` refuses a document without.
@@ -653,6 +685,7 @@ module Protocol =
         [ Rules("rules", rules)
           Rules("filingRules", filingRules)
           Rules("reconcileRules", reconcileRules)
+          Rules("driverRules", driverRules)
           Verdicts("verdicts", verdicts)
           BlockerStates("blockerStates", blockerStates)
           BoardStatuses("boardStatuses", boardStatuses)

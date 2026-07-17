@@ -60,6 +60,7 @@ module RuleSubsetTests =
         Assert.NotEmpty subsets
         Assert.Contains("filingRules", names)
         Assert.Contains("reconcileRules", names)
+        Assert.Contains("driverRules", names)
 
     [<Fact>]
     let ``#889 every rule in every subset is one of the canonical rules, by VALUE`` () =

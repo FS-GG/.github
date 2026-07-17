@@ -217,6 +217,17 @@ module Protocol =
     /// false clean is its worst output), and what a `Paths:` line actually IS (`touch-set-declaration`).
     val reconcileRules: Rule list
 
+    /// The rules a worker DRIVING an item must satisfy — the subset `pnext-item` restates (#889/#1059). A
+    /// SUBSET of `rules` on the same terms as `filingRules`, and pinned by the same containment invariant.
+    ///
+    /// A driver touches more of the protocol than any other role, so the cut is what they DECIDE rather
+    /// than what they meet: they mint an id and take a lock with it (`claim-lock`, whose total order
+    /// separates workers only while their ids are distinct), they hold a lease that cannot be renewed once
+    /// it expires (`claim-lease`), and they author a `Paths:` line mid-flight against a grammar that
+    /// refuses them (`touch-set-declaration`, `touch-set-grammar`). The scheduler's own order, blocker
+    /// resolution, and fail-closed reads are the ENGINE's — a driver reads their verdict.
+    val driverRules: Rule list
+
     /// One section of the facts document: a key, and the facts stated under it.
     ///
     /// ONE CASE PER JSON SHAPE, NOT PER KEY — `rules`, `filingRules` and `reconcileRules` are three keys
