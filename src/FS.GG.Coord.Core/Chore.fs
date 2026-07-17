@@ -100,13 +100,6 @@ module Chore =
         else
             Some(SafePoint(boundary, worker, items))
 
-    // `Blockers.isResolved`, not a copy of it. This was a `private` match here, byte-identical to the
-    // public one two modules earlier in compile order, with nothing holding the two in step — the shape
-    // #1000 and #1012 each removed one level over (four `statusName`s; two inverse `BlockerState`
-    // renderers). `BLOCKER-CLEARED` at `choresFor` turns on it, so a drift here would not misprint a
-    // doc: it would decide, wrongly and silently, which items this queue unblocks.
-    let private resolved (b: Blocker) = Blockers.isResolved b
-
     /// The chores ONE item's observed state implies.
     ///
     /// **THE RESERVER OWNS THE SCHEDULING COLUMN, and this `match` is where that is decided — once, for
@@ -194,7 +187,7 @@ module Chore =
                   item.State = Open
                   && item.Status = Blocked
                   && not item.Blockers.IsEmpty
-                  && item.Blockers |> List.forall resolved
+                  && item.Blockers |> List.forall Blockers.isResolved
               then
                   Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)
 

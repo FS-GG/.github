@@ -136,7 +136,7 @@ so every jq starts at `.items`:
 
 Two shape details that will bite you if you skim:
 
-- **`blockers[].state` is lower case** — the five values are the table below, generated from the
+- **`blockers[].state` is lower case** — its values are the table below, generated from the
   engine that writes them. Compare against `"CLOSED"` and it never matches, so every blocker
   classifies as still-holding and every finding vanishes. (`ascii_upcase` in §3 is for **REST**,
   which is a different read with the opposite convention. Do not "unify" them.)

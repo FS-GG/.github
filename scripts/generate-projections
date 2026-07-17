@@ -325,8 +325,12 @@ render_blocker_states() {
   echo ""
   echo "| \`.state\` | holds? | what it means |"
   echo "|---|---|---|"
+  # `|` is ESCAPED, and this is not defensive noise: the prose it replaced was literally
+  # `open | closed | merged | unknown | unparseable`, so a pipe is the single most likely character
+  # for an author of `blockerMeaning` to reach for. An unescaped one ends the cell, silently — and
+  # `--check` compares generated to generated, so it would never notice.
   jq -r '.blockerStates[]
-    | "| `\(.wire)` | \(if .holds then "**YES**" else "no" end) | \(.meaning) |"' "$FACTS"
+    | "| `\(.wire)` | \(if .holds then "**YES**" else "no" end) | \(.meaning | split("|") | join("\\|")) |"' "$FACTS"
 }
 
 # `versions` — the registry's version leads (#913), for the architecture map. THE ONLY REGION EMITTED

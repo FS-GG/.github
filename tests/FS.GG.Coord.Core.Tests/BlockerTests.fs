@@ -267,9 +267,21 @@ module BlockerTests =
         let decides =
             Regex(@"\|\s*Blocker(Closed|Merged)\b[\s\S]{0,120}?->\s*(true|false)\b")
 
+        // COMMENTS ARE STRIPPED FIRST, and in this codebase that is not a nicety. Every module here
+        // documents the defect it removed, in prose, quoting the code that was wrong — this file does it
+        // twice. A guard that read comments would red on a module for CORRECTLY describing the bug it no
+        // longer has, which is the same "cries wolf on correct code" failure as the first cut above.
+        let stripComments (text: string) =
+            text.Split('\n')
+            |> Array.map (fun line ->
+                match line.IndexOf "//" with
+                | -1 -> line
+                | i -> line.Substring(0, i))
+            |> String.concat "\n"
+
         let offenders =
             files
-            |> Array.filter (fun f -> decides.IsMatch(File.ReadAllText f))
+            |> Array.filter (fun f -> decides.IsMatch(stripComments (File.ReadAllText f)))
             |> Array.map Path.GetFileName
             |> Array.toList
 
