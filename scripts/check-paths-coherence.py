@@ -498,7 +498,13 @@ def main(argv: list[str]) -> int:
     findings: list[str] = []
     pairs_seen = 0
     allowed = 0
-    subjects_seen = 0
+
+    # A SET OF (workflow, project), not a running count. Both triggers declare the same list on a
+    # paired workflow, so incrementing per trigger reported 26 subjects where the repo has 13 — a
+    # confidently wrong number, in the one line a human reads to decide whether the gate looked at
+    # anything. The fixture asserts on this number too, so an inflated one is a check agreeing with
+    # its own arithmetic rather than with the repo.
+    subjects_seen: set[tuple[str, str]] = set()
 
     graph = project_graph(args.root)
 
@@ -529,7 +535,7 @@ def main(argv: list[str]) -> int:
             if raw is None or not isinstance(raw, list) or not raw:
                 continue
             pats = [str(p) for p in raw]
-            subjects_seen += len(subjects(pats, graph))
+            subjects_seen.update((where, sub) for sub in subjects(pats, graph))
             for project, dep in uncovered(pats, graph):
                 subs, trigs = missing.setdefault(os.path.dirname(dep), (set(), set()))
                 subs.add(os.path.dirname(project))
@@ -662,7 +668,7 @@ def main(argv: list[str]) -> int:
             print(f"::error::check-paths-coherence: {f}", file=sys.stderr)
         print(
             f"\n{len(findings)} finding(s), across {pairs_seen} workflow(s) declaring both filters "
-            f"and {subjects_seen} declared project subject(s).\n"
+            f"and {len(subjects_seen)} declared project subject(s).\n"
             "\n(a) A workflow duplicates its `paths:` list between `pull_request` and `push`. When "
             "the copies drift,\n    the gate still passes its own tests and simply STOPS RUNNING on "
             "`main` — green, and wrong (#880).\n"
@@ -680,7 +686,7 @@ def main(argv: list[str]) -> int:
         return FINDING
 
     print(
-        f"ok: {pairs_seen} workflow(s) declaring both filters agree; {subjects_seen} declared "
+        f"ok: {pairs_seen} workflow(s) declaring both filters agree; {len(subjects_seen)} declared "
         f"project subject(s) cover their `ProjectReference` closure"
         + (f"; {allowed} exception(s) signed" if allowed else "")
         + "."
