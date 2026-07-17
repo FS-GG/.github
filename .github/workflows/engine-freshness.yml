@@ -1,0 +1,99 @@
+# Is the fleet's coordination engine older than this repo's own protocol? (.github#1075, epic #266)
+#
+# feed-coherence asserts registry `package-version` == feed(newest). source-coherence asserts
+# registry `version` == source. NEITHER compares SOURCE to FEED — the direction this engine has
+# failed in four times (#844, #846, #964, #1067): the fix merges, nobody releases, and every
+# receiver keeps `exec`ing an engine that predates it.
+#
+# No version comparison CAN see it. This engine's `<Version>` moves only at RELEASE time (the bump
+# IS the release act, per release-coord-engine.yml), so while the source outruns the feed the two
+# scalars are EQUAL — the registry row is green *because* the defect is happening. So the gate
+# counts COMMITS since the tag that produced the feed's newest version.
+#
+# WHY THIS IS NOT A pull_request GATE. The `freshness` job would red every PR that touches the wire
+# surface — you could not change the protocol without first releasing the protocol you had not
+# changed yet. The subject is a property of MAIN plus the feed, not of a PR, and it is fixed by
+# releasing, not by editing the PR. So the live job runs on main, on a schedule, and on demand. The
+# `fixture` job DOES run on PRs, because that one's subject IS the diff.
+#
+# THE SCHEDULE IS THE POINT, as it is for feed-coherence: a release that never happened touches no
+# file here, so no path-filtered trigger can ever see it. Only a periodic read of the feed can.
+#
+# The gate FAILS CLOSED (epic #266): an unreadable feed, an untagged feed version, or a measured
+# path that has moved is an ERROR, never a skip and never "no drift". So this workflow must never
+# gain a `continue-on-error` or a conditional that lets the live job be skipped into green —
+# "nothing to check" and "checked, and it's fine" must not share an exit code.
+name: engine-freshness
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-engine-freshness.py"
+      - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
+      - "tests/engine-freshness/**"
+      - ".github/workflows/engine-freshness.yml"
+  push:
+    branches: [main]
+    # DELIBERATELY UNFILTERED, unlike feed-coherence's push trigger. The verdict is a function of
+    # main's HEAD *and* the feed, and both move without touching any one path: an engine commit
+    # changes the drift, and a release changes the feed while touching no file here at all. A paths
+    # filter over the engine trees would therefore leave a red standing for up to a day AFTER the
+    # release that fixed it — the tag push publishes, but nothing pushes main, so nothing re-asks.
+    # main is busy enough that re-asking on every push keeps the answer within a merge of the truth.
+  schedule:
+    # Daily, offset from feed-coherence's 06:17 so the two do not contend for the same feed reads.
+    # This is the trigger that catches a release nobody made: it touches no file, so no push can see
+    # it, and the drift grows in silence until something periodic reads the feed.
+    - cron: "43 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-freshness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate goes red on every drift/fails-open condition before we trust its green.
+  fixture:
+    name: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Run the engine-freshness fixture (no network)
+        run: bash tests/engine-freshness/run.sh
+
+  # Online. The actual freshness signal.
+  freshness:
+    name: freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fixture
+    # The live read is about main + the feed, not about a PR's diff (see the header). On a PR the
+    # fixture above is the whole subject.
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read   # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # THE TAGS AND THE HISTORY ARE THE SUBJECT. The default shallow checkout has neither, so
+          # `git log <tag>..HEAD` would fail — which this gate reports as an ERROR rather than as
+          # "no drift", but an error every run is a gate nobody reads. Fetch it all.
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Has the engine's source outrun the version the fleet restores?
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern (cf. feed-coherence.yml, architecture-map.yml). The run-scoped token carries
+          # `packages: read`, which is what the feed's HTTP Basic auth wants.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check-engine-freshness.py --repo . --ref HEAD
