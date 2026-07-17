@@ -83,6 +83,8 @@
     <Compile Include="Options.fs" />
     <Compile Include="Identity.fsi" />
     <Compile Include="Identity.fs" />
+    <Compile Include="Chores.fsi" />
+    <Compile Include="Chores.fs" />
     <Compile Include="Client.fs" />
     <Compile Include="Program.fs" />
     <None Include="README.md" Pack="true" PackagePath="\" />

@@ -20,6 +20,7 @@
     <Compile Include="RepoScopeTests.fs" />
     <Compile Include="RefParseTests.fs" />
     <Compile Include="TouchSetLintTests.fs" />
+    <Compile Include="ChoresTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
