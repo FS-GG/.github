@@ -346,3 +346,31 @@ module Protocol =
     /// (`blocker-resolution`). Nothing else on this list is a decision they make.
     let filingRules: Rule list =
         [ touchSetDeclaration; touchSetGrammar; blockerResolution ]
+
+    /// The rules a RECONCILER must satisfy — the subset `check-board` restates (#889).
+    ///
+    /// A SUBSET OF `rules`, on exactly the terms `filingRules` is: same values, containment pinned, never
+    /// a second list. See that list's note for why the containment is the whole assertion.
+    ///
+    /// WHY THESE THREE. `check-board` answers two questions — "is the board in sync with the issues?" and
+    /// "do the recorded blockers still hold?" — and its own finding codes (`BLOCKER-CLEARED`,
+    /// `UNDECLARED-PATHS`, …) are PROCEDURE, not protocol: they are decisions that skill makes, and they
+    /// stay authored. What it may not restate is the protocol those decisions read:
+    ///
+    /// - `blocker-resolution` — §3 IS this rule. A reconciler that clears on CLOSED but not MERGED
+    ///   unblocks abandoned work and blocks finished work (#476).
+    /// - `fail-closed` — the reconciler's worst output is a FALSE CLEAN: a snapshot it could not read,
+    ///   reported as a board with nothing wrong. It buys confidence in the projection instead of
+    ///   correcting it, which is worse than not running (#266).
+    /// - `touch-set-declaration` — `UNDECLARED-PATHS` turns on the fence rule and the `Paths: none`
+    ///   sentinel. A hand-rolled `^Paths:` grep is a fourth parser of a grammar that has one, and it is
+    ///   the loosest: it reads a QUOTED line as a declaration (#277) and a deliberate epic as a
+    ///   forgotten touch-set (#496).
+    ///
+    /// NOT `claim-lock` or `claim-lease`, though this skill reports `STALE-CLAIM` and
+    /// `UNCLAIMED-IN-PROGRESS`: it does not TAKE the lock or hold a lease — it reads `who` and delegates
+    /// to `reap`. NOT `check-order`, which is the scheduler's internal order and not a fact a reconciler
+    /// acts on. NOT `touch-set-grammar`: this skill never authors a `Paths:` line — `UNDECLARED-PATHS` is
+    /// report-only precisely because the fix is an ISSUE edit, and it never writes to an issue.
+    let reconcileRules: Rule list =
+        [ touchSetDeclaration; blockerResolution; failClosed ]

@@ -88,6 +88,7 @@ let private facts (opts: Options) =
             (Snapshot.renderFacts
                 Protocol.rules
                 Protocol.filingRules
+                Protocol.reconcileRules
                 Protocol.verdicts
                 Protocol.takeExitCodes
                 Protocol.landableExitCodes)

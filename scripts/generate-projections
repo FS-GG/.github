@@ -60,6 +60,8 @@ TARGETS=(
   "landable-exit-codes:.agents/skills/pnext-item/SKILL.md"
   "filing-rules:.claude/skills/cross-repo-coordination/SKILL.md"
   "filing-rules:.agents/skills/cross-repo-coordination/SKILL.md"
+  "reconcile-rules:.claude/skills/check-board/SKILL.md"
+  "reconcile-rules:.agents/skills/check-board/SKILL.md"
   "versions:docs/architecture.md"
 )
 
@@ -253,6 +255,36 @@ render_filing_rules() {
   echo "[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).*"
   echo ""
   jq -r '.filingRules[] | "**\(.title)**\n\n\(.statement)\n"' "$FACTS"
+}
+
+# `reconcile-rules` — the rules a RECONCILER must satisfy (#889), for `check-board`.
+#
+# THE SUBSET IS CHOSEN IN `Protocol.fs`, NOT HERE, for the reason `render_filing_rules` states: a `jq`
+# filter picking ids would be a second copy of the membership, in the shell, where no test can reach it.
+# With two subsets that stops being a preference — the shell would hold two memberships and nothing
+# would hold either in step. `RuleSubsetTests` pins that `facts --json` states each subset under its own
+# name, so this renderer selecting nothing is enforced rather than merely intended.
+#
+# WHAT IS NOT HERE, and deliberately: `check-board`'s finding codes. `CLOSED-ISSUE-NOT-DONE`,
+# `BLOCKER-CLEARED`, `UNDECLARED-PATHS` and the rest are that skill's OWN procedure — decisions it makes
+# about what to report and what to refuse to fix — and the engine holds no opinion about them. A region
+# carries the protocol its document restates, not the document's whole subject (#916).
+render_reconcile_rules() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  These rules were restated by hand here, and a RECONCILER restating them is the sharpest form"
+  echo "  of the problem: this pass exists to correct the projection, so a rule it gets wrong is a rule"
+  echo "  it enforces WRONG across the whole board. The hand-written copies agreed with each other for"
+  echo "  as long as they existed (#916). Edit Protocol.fs and regenerate."
+  echo "-->"
+  echo ""
+  echo "*Generated from the typed core. The engine that resolves your blockers is the engine that wrote"
+  echo "this. The full rule set, with the incident behind each one, is in"
+  echo "[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).*"
+  echo ""
+  jq -r '.reconcileRules[] | "**\(.title)**\n\n\(.statement)\n"' "$FACTS"
 }
 
 # `versions` — the registry's version leads (#913), for the architecture map. THE ONLY REGION EMITTED
