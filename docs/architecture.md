@@ -673,12 +673,14 @@ install is what keeps the composition honest. See the
 ## 7. Build, release, and CI conventions
 
 - **One org-shared build config.** [`dist/dotnet/`](../dist/dotnet/) holds the
-  canonical `Directory.Build.props`, `Directory.Packages.props`, and pinned
-  `.config/dotnet-tools.json`, distributed verbatim by
-  [`sync-build-config.sh`](../scripts/sync-build-config.sh). Each repo imports a
-  `*.local.props` for repo-specific settings. A `--check` mode is the drift gate,
-  run by the reusable `contract-coherence.yml` workflow (ADR-0006) and by each
-  receiver's own `gate.yml`. See [`docs/build/README.md`](build/README.md).
+  canonical `Directory.Build.props` and `Directory.Packages.props`, distributed
+  verbatim by [`sync-build-config.sh`](../scripts/sync-build-config.sh). Each repo
+  imports a `*.local.props` for repo-specific settings. A `--check` mode is the drift
+  gate, run by the reusable `contract-coherence.yml` workflow (ADR-0006) and by each
+  receiver's own `gate.yml`. See [`docs/build/README.md`](build/README.md). The pinned
+  `.config/dotnet-tools.json` also lives under `dist/dotnet/`, but since #1077 it is
+  distributed by the **coordination-kit** (not build-config) — so it reaches all six kit
+  receivers, alongside the `fsgg-coord` shim that execs the engine it names.
 - **`dist/dotnet/` also holds `global.json`, and it is deliberately NOT managed**
   (ADR-0006's 2026-07-17 amendment,
   [#903](https://github.com/FS-GG/.github/issues/903)). It is a fourth canonical
