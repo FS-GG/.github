@@ -15,6 +15,21 @@ module Schedulability =
 
     open Types
 
+    /// Whether the scheduler hands an item out in a given board column — the answer `columnStartability`
+    /// gives, and the one `Protocol.boardStatuses` publishes.
+    ///
+    /// THREE CASES, NOT A BOOL, because the truth has three states. See `columnStartability`.
+    type ColumnStartability =
+        /// The scheduler offers this column unconditionally. `Ready`, and only `Ready`.
+        | AlwaysStartable
+
+        /// Offered ONLY when the caller opts in — `batch/take/next --include-backlog`. `Backlog`, and
+        /// only `Backlog`. This case is the reason the type is not a `bool`.
+        | WithBacklogOptIn
+
+        /// Never offered, whatever the flags. The column is not a queue.
+        | NeverStartable
+
     /// Why an item can or cannot be started.
     ///
     /// NOT A BOOL. Each case is a distinct fact a worker acts on differently, and collapsing them is
@@ -78,6 +93,46 @@ module Schedulability =
         /// every other case a lie waiting to happen.
         | Undetermined of reason: string
 
+    /// **WHETHER THE SCHEDULER HANDS AN ITEM OUT IN A COLUMN — the `Status` half of `schedulable`,
+    /// NAMED.**
+    ///
+    /// NOT A BOOL, and that is the whole reason this type exists rather than a `bool` return. `Backlog`
+    /// is neither startable nor not: it is startable *iff the caller opted in* (`--include-backlog`),
+    /// and flattening that to either answer is a lie in the case it is most often asked about. `Backlog`
+    /// is the most common park on this board, so "is a parked item startable?" is the question, and both
+    /// bare answers are wrong — `false` hides `take --include-backlog`, `true` hides that plain `take`
+    /// will never offer it.
+    ///
+    /// It exists because this fact had NO OWNER. It was three legs of a `match` INLINE in `schedulable`
+    /// — reachable only by running the scheduler against a synthetic `Item` — so a document that wanted
+    /// to state it had no way to READ it, and the only remaining option was to type the six answers out
+    /// again. That is #865's defect and #916's trap 1: a generator whose source is hand-maintained just
+    /// moves the drift upstream and hands it a generator's authority. `Protocol.boardStatuses` derives
+    /// the published `startable?` column from this function, so the table a filer reads is the predicate
+    /// that schedules, not a copy that agrees with it today (#983's move for `statusWireName`, #1012's
+    /// for `blockerStateWireName`).
+    ///
+    /// `schedulable` CALLS this — it is the same decision, not a second one kept in step.
+    val columnStartability: status: BoardStatus -> ColumnStartability
+
+    /// **THE STARTABILITY WIRE VOCABULARY: a `ColumnStartability` as `facts --json` spells it, ONCE.**
+    ///
+    /// `Protocol.boardStatuses` publishes this string and `scripts/generate-projections` selects on it to
+    /// render the `startable?` column. It lives HERE, in `Core`, beside the union it names — on exactly
+    /// the terms `Types.statusWireName` (#983) and `Types.blockerStateWireName` (#1012) live there, and
+    /// `kind` below.
+    ///
+    /// The first draft of #1057 spelled these three strings in `Snapshot.fs` instead, inside the writer.
+    /// That is the defect this whole change is about, one level down: a wire vocabulary owned by a
+    /// projection rather than by `Core`. MEASURED — renaming `with-backlog-opt-in` there compiled with
+    /// ZERO F# errors, and only a `jq` filter in a shell script noticed. A vocabulary the compiler cannot
+    /// check is a vocabulary that drifts.
+    ///
+    /// A TOTAL match: a fourth `ColumnStartability` case fails the BUILD here rather than reaching the
+    /// wire unnamed. (The `jq` on the far side of the JSON boundary cannot be type-checked at all, so it
+    /// ERRORS on a string it does not know rather than rendering it as "not startable" — #266.)
+    val columnStartabilityWireName: c: ColumnStartability -> string
+
     /// Is `item` startable, given what is already in flight?
     ///
     /// `inFlight` is every touch-set currently held by a live claim IN THE SAME REPO. Tokens are
@@ -85,7 +140,7 @@ module Schedulability =
     ///
     /// `allowBacklog` mirrors `batch --include-backlog`: `next`/`take` fall back to Backlog when no
     /// Ready item is startable, and pretending otherwise is how a full queue read as an empty one
-    /// (#440).
+    /// (#440). It is the opt-in `ColumnStartability.WithBacklogOptIn` names.
     val schedulable: allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
 
     /// The verdict's WIRE KIND — the token the divergence log speaks and `facts` documents, spelled ONCE

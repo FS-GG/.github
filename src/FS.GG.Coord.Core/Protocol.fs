@@ -63,6 +63,16 @@ module Protocol =
           /// What the state says about the blocker, and why it holds or does not.
           Meaning: string }
 
+    /// One board `Status` option, as a filer meets it. See Protocol.fsi.
+    type BoardStatusDoc =
+        { /// The Projects v2 option name — `Types.statusWireName`'s answer, never a second spelling.
+          Wire: string
+          /// Whether a scheduler offers an item in this column — `columnStartability`'s answer, spelled by
+          /// `columnStartabilityWireName`. A string on `VerdictDoc.Kind`'s terms; see Protocol.fsi.
+          Startable: string
+          /// What the column asserts, and why a scheduler does or does not offer it.
+          Meaning: string }
+
     // ---- the verdicts ------------------------------------------------------------------------------
     // ONE TOTAL FUNCTION, ONE UNION. Fourteen of the scheduler family's issues were a missing case in
     // it; #485 named the cause — startability was computed in five places and agreed in none. These are
@@ -192,6 +202,65 @@ module Protocol =
             { Wire = blockerStateWireName b
               Holds = not (Blockers.isResolvedState b)
               Meaning = blockerMeaning b })
+
+    // ---- the board's Status vocabulary -------------------------------------------------------------
+    // `cross-repo-coordination` spelled the six options by hand, in the field table a filer reads before
+    // setting a column — the same defect as `blockerStates` above, in the vocabulary the org has already
+    // drifted on once (`Repo Scope`'s row on that same table carries a "**not** `Repository`" warning
+    // because a previous reader used the wrong field).
+    //
+    // The bite is asymmetric, and it is the asymmetry that makes this worth generating. A filer who
+    // copies a drifted spelling is fine: `set-field` refuses an unknown option, loudly, before it writes.
+    // A RECONCILER is not: it selects these strings in `jq`, a `.status` selector that matches nothing
+    // yields no rows, and no rows reads as a CLEAN BOARD (#476, and #1012's measured shape).
+    //
+    // `Wire` is `Types.statusWireName` and `Startable` is `Schedulability.columnStartability` — this
+    // module decides NEITHER. `Startable` was not publishable at all until #1057: it lived as three legs
+    // of a `match` inside `schedulable`, reachable only by running the scheduler, so the only way to
+    // state it here was to type the six answers out again — a copy with a generator's authority behind
+    // it (#865, #916's trap 1). The fix was to name the fact, not to copy it carefully.
+
+    /// Every `BoardStatus` case, by reflection — nullary cases, so derivable on `everyBlockerState`'s
+    /// terms, and a list nobody writes is a list that cannot omit a case.
+    let private everyBoardStatus: BoardStatus list =
+        FSharp.Reflection.FSharpType.GetUnionCases typeof<BoardStatus>
+        |> Array.map (fun c -> FSharp.Reflection.FSharpValue.MakeUnion(c, [||]) :?> BoardStatus)
+        |> Array.toList
+
+    /// What the column ASSERTS — and, by returning an option, whether the board offers it as a column
+    /// option at all. ONE total match, deliberately: "is this a `Status` option?" and "what does it mean?"
+    /// are answered in the same place, so a new `BoardStatus` case must be classified exactly ONCE and
+    /// cannot be added to one list while being forgotten by the other.
+    ///
+    /// `NoStatus` is the only `None`, and it is not an omission. Its wire form is `""` — the ABSENCE of a
+    /// column, not an option a filer can select — and a document that published `""` as a settable option
+    /// would be inviting exactly #437: `NoStatus` read as though it were `Backlog`.
+    let private boardOptionMeaning =
+        function
+        | NoStatus -> None
+        | Backlog ->
+            Some
+                "Filed, not triaged. The honest resting place for a finding nobody has scheduled yet. A scheduler passes it over unless the caller asks for it (`--include-backlog`), so a park here is invisible to a plain `take` BY DESIGN — that is what parking means."
+        | Ready ->
+            Some
+                "Triaged and startable. The only column a scheduler hands out unconditionally, so an item that is real work belongs here or it will not be worked."
+        | InProgress ->
+            Some
+                "A worker holds it — the claim's own footprint, written by `claim` and reset by `release`. Not a column to set by hand: the claim marker is the lock, and this column is only its shadow."
+        | Blocked ->
+            Some
+                "Something else must land first, and `Blocked by` names what. Mirrors the `blocked` label. Not offered — and an item sitting here whose blockers have all resolved is startable work no `take` will ever offer, which is why /check-board re-verifies them."
+        | InReview -> Some "The work is written and its PR is open. Not offered: claiming it would duplicate an implementation already in flight."
+        | Done -> Some "Finished and merged, and the stamp says so. `done --flip` sets it once it confirms the merge; setting it by hand is how a board starts lying."
+
+    let boardStatuses: BoardStatusDoc list =
+        everyBoardStatus
+        |> List.choose (fun s ->
+            boardOptionMeaning s
+            |> Option.map (fun m ->
+                { Wire = statusWireName s
+                  Startable = s |> Schedulability.columnStartability |> Schedulability.columnStartabilityWireName
+                  Meaning = m }))
 
     // ---- take's exit contract ----------------------------------------------------------------------
     // #585 gave `take` codes that tell "I claimed you an item" apart from the four ways it can claim
@@ -457,6 +526,7 @@ module Protocol =
         | Rules of key: string * Rule list
         | Verdicts of key: string * VerdictDoc list
         | BlockerStates of key: string * BlockerStateDoc list
+        | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
 
     /// The facts document's schema version — a fact about the document's SHAPE, so it lives with the
@@ -477,7 +547,7 @@ module Protocol =
     /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
     /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
     /// attribute because it was `private` and had no signature entry to keep in step.
-    let factsSchema = "fsgg.coord.protocol/6"
+    let factsSchema = "fsgg.coord.protocol/7"
 
     /// THE INVENTORY — every fact the document states, under the key it states it, in document order.
     ///
@@ -504,5 +574,6 @@ module Protocol =
           Rules("reconcileRules", reconcileRules)
           Verdicts("verdicts", verdicts)
           BlockerStates("blockerStates", blockerStates)
+          BoardStatuses("boardStatuses", boardStatuses)
           ExitCodes("takeExitCodes", takeExitCodes)
           ExitCodes("landableExitCodes", landableExitCodes) ]

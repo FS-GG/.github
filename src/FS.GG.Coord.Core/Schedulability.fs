@@ -4,6 +4,11 @@ module Schedulability =
 
     open Types
 
+    type ColumnStartability =
+        | AlwaysStartable
+        | WithBacklogOptIn
+        | NeverStartable
+
     type Schedulability =
         | Startable
         | WrongStatus of BoardStatus
@@ -17,6 +22,36 @@ module Schedulability =
         | ItemPrOpen of pr: int
         | OverlapsInFlight of (string * string) list
         | Undetermined of reason: string
+
+    // THE COLUMN DECISION, NAMED — so a document can READ it instead of restating it (#1057).
+    //
+    // These three legs were inline in `schedulable` below. They still decide exactly what they decided
+    // there; what changed is that the fact now has a name, and `Protocol.boardStatuses` derives the
+    // published `startable?` column from it. Typing those six answers into `Protocol.fs` instead would
+    // have been a copy with a generator's authority behind it — #865's defect, #916's trap 1 — and the
+    // copy would have been RIGHT on the day it was written, which is precisely how that defect gets in.
+    //
+    // A TOTAL match, no wildcard, for `statusWireName`'s reason: a new `BoardStatus` case must fail the
+    // BUILD here rather than default to "not startable" and go quietly missing from the queue.
+    let columnStartability (status: BoardStatus) : ColumnStartability =
+        match status with
+        | Ready -> AlwaysStartable
+        | Backlog -> WithBacklogOptIn
+        | NoStatus
+        | InProgress
+        | Blocked
+        | InReview
+        | Done -> NeverStartable
+
+    // THE STARTABILITY WIRE VOCABULARY, ONCE — in `Core`, beside the union, on `statusWireName`'s and
+    // `blockerStateWireName`'s terms. The first draft of #1057 spelled these three strings in the Cli's
+    // writer; renaming one there compiled with zero F# errors and only a `jq` filter caught it. See the
+    // .fsi.
+    let columnStartabilityWireName (c: ColumnStartability) =
+        match c with
+        | AlwaysStartable -> "always"
+        | WithBacklogOptIn -> "with-backlog-opt-in"
+        | NeverStartable -> "never"
 
     let schedulable (allowBacklog: bool) (inFlight: TouchSet list) (item: Item) : Schedulability =
 
@@ -32,15 +67,16 @@ module Schedulability =
         | Open ->
 
         // 2. The column. `NoStatus` is its own case and must not read as `Backlog` (#437).
-        match item.Status with
-        | NoStatus
-        | InProgress
-        | Blocked
-        | InReview
-        | Done -> WrongStatus item.Status
-        | Backlog when not allowBacklog -> WrongStatus Backlog
-        | Backlog
-        | Ready ->
+        //
+        //    WHICH columns are startable is `columnStartability`'s answer, not a second match here
+        //    (#1057). `WrongStatus` still carries `item.Status` itself, so the case a worker is told
+        //    about is the one the board actually holds — that is #437's bug, and it is a fact about the
+        //    ITEM rather than about the vocabulary.
+        match columnStartability item.Status with
+        | NeverStartable -> WrongStatus item.Status
+        | WithBacklogOptIn when not allowBacklog -> WrongStatus item.Status
+        | WithBacklogOptIn
+        | AlwaysStartable ->
 
         // 3. THE BLOCKERS, BEFORE THE TOUCH-SET — and this is the ORDERING DECISION that ADR-0034 left
         //    open for the flip to make. The two engines checked in different orders, both were right

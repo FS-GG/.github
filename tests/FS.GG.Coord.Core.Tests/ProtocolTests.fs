@@ -14,6 +14,13 @@ open FS.GG.Coord.Types
 /// problem this module exists to end.
 module ProtocolTests =
 
+    /// Every `BoardStatus` case, by reflection — the subject the `boardStatuses` guards search, derived
+    /// rather than typed so this file cannot forget a case in the same breath as `Protocol.fs` does.
+    let private everyBoardStatusCase: BoardStatus list =
+        FSharpType.GetUnionCases typeof<BoardStatus>
+        |> Array.map (fun c -> FSharpValue.MakeUnion(c, [||]) :?> BoardStatus)
+        |> Array.toList
+
     /// A RULE THAT RESTATES ITS SOURCE IS STILL A COPY. `touchSetGrammar.Statement` must BE
     /// `Schedulability.TouchSetGrammar` — not a paraphrase of it, not a version of it that was correct
     /// when it was typed. If somebody replaces the reference with a literal, the two drift the moment
@@ -375,6 +382,152 @@ module ProtocolTests =
             Assert.False(System.String.IsNullOrWhiteSpace b.Meaning, $"blocker state '%s{b.Wire}' means nothing")
 
     // ================================================================================================
+    // `boardStatuses` — the board vocabulary `cross-repo-coordination` restated by hand (#889, #1057).
+    //
+    // Same stakes as `blockerStates` above, and asymmetric in the same direction: a filer who copies a
+    // drifted option gets a LOUD refusal from `set-field`, but a reconciler selecting `.status` in `jq`
+    // gets NO ROWS, and no rows reads as a clean board (#476).
+    // ================================================================================================
+
+    /// An item that is startable but for its column — so `schedulable`'s answer below turns on the
+    /// `Status` and on nothing else. Every other field is the benign case: open issue, declared paths,
+    /// no blockers, no claim, no in-flight PR.
+    let private columnProbe (status: BoardStatus) : Item =
+        { Ref =
+            { Owner = "FS-GG"
+              Repo = "FS.GG.SDD"
+              Number = 1 }
+          Status = status
+          State = Open
+          TouchSet = Declared [ Matchable "src/Scene/**" ]
+          Blockers = []
+          Claim = None
+          ItemPr = None }
+
+    /// REFLECTION CAN SEE THE UNION — so the guards below are not vacuous (#266), and the count is
+    /// asserted against `BoardStatus` rather than against `6`.
+    ///
+    /// SIX, NOT SEVEN, and the arithmetic is stated rather than hardcoded: every case except `NoStatus`,
+    /// whose wire form is `""` — the absence of a column, not an option a filer can select. Pinning `6`
+    /// here would pass just as happily if a new case were added and silently dropped from the doc.
+    [<Fact>]
+    let ``the documented board statuses are exactly the cases of BoardStatus, less NoStatus`` () =
+        let cases = FSharpType.GetUnionCases typeof<BoardStatus>
+        let documented = Protocol.boardStatuses |> List.map (fun s -> s.Wire)
+
+        Assert.NotEmpty documented
+        Assert.Equal<int>(cases.Length - 1, List.length documented)
+
+        // Two options sharing a wire name would let one hide behind the other and still pass the count.
+        // It is also the bug directly: `jq` cannot tell them apart either.
+        Assert.Equal<string list>(List.distinct documented, documented)
+
+        // The one case that must NOT be published. `""` is not a settable option, and a table offering it
+        // as one invites #437 — `NoStatus` read as though it were `Backlog`.
+        Assert.DoesNotContain("", documented)
+
+    /// THE DOC'S STRING IS THE BOARD'S STRING — the same function, not two spellings that agree today.
+    [<Fact>]
+    let ``every documented board status renders the option name the engine writes`` () =
+        let engineSpellings = everyBoardStatusCase |> List.map statusWireName
+
+        for s in Protocol.boardStatuses do
+            Assert.True(
+                List.contains s.Wire engineSpellings,
+                $"the docs publish '%s{s.Wire}' as a board Status option and `statusWireName` never writes it — `set-field` would refuse it, and a reconciler selecting it in jq matches nothing and reports a clean board (#476)")
+
+    /// THE `startable?` COLUMN IS THE SCHEDULER'S ANSWER, NOT THE DOC'S — and this is the pin that is
+    /// NOT vacuous.
+    ///
+    /// `Protocol.boardStatuses` derives `Startable` from `Schedulability.columnStartability`, so pinning
+    /// it against `columnStartability` would compare the extraction to itself and pass however wrong both
+    /// were. This asks `schedulable` — the real scheduler, whole, by the path `batch` actually calls —
+    /// and it is what proves #1057's extraction did not quietly change the queue.
+    [<Fact>]
+    let ``a documented status is startable exactly when the scheduler offers it`` () =
+        for s in Protocol.boardStatuses do
+            let status =
+                everyBoardStatusCase
+                |> List.tryFind (fun c -> statusWireName c = s.Wire)
+                |> Option.defaultWith (fun () -> failwith $"'{s.Wire}' is not a board status")
+
+            let offered allowBacklog =
+                Schedulability.schedulable allowBacklog [] (columnProbe status) = Schedulability.Startable
+
+            // The doc's WORD, decoded independently of the engine's own renderer — so this test states
+            // what each published word must MEAN and checks the scheduler against it, rather than asking
+            // `columnStartability` to confirm itself.
+            let expectedPlain, expectedOptIn =
+                match s.Startable with
+                | "always" -> true, true
+                | "with-backlog-opt-in" -> false, true
+                | "never" -> false, false
+                | other -> failwith $"the docs publish startable=\"{other}\", which is not a word this pin knows"
+
+            let saidPlain = if offered false then "DOES" else "does NOT"
+            let saidOptIn = if offered true then "DOES" else "does NOT"
+
+            Assert.True(
+                (offered false = expectedPlain),
+                $"'%s{s.Wire}': the generated table says startable=%A{s.Startable}, but a plain `take` %s{saidPlain} offer it")
+
+            Assert.True(
+                (offered true = expectedOptIn),
+                $"'%s{s.Wire}': the generated table says startable=%A{s.Startable}, but `take --include-backlog` %s{saidOptIn} offer it")
+
+    /// THE THREE-STATE CASES, NAMED. The property above is relative — it would hold just as well if the
+    /// doc and the scheduler were wrong together in the same direction. This one is absolute, and it is
+    /// the row whose failure is a real incident: `Backlog` is the board's most common park, and BOTH bare
+    /// answers about it are lies. `false` hides `--include-backlog`; `true` promises a queue a plain
+    /// `take` never reads.
+    [<Fact>]
+    let ``Ready is always startable, Backlog only on opt-in, and the rest never`` () =
+        let startabilityOf w =
+            Protocol.boardStatuses |> List.tryFind (fun s -> s.Wire = w) |> Option.map (fun s -> s.Startable)
+
+        Assert.Equal(Some "always", startabilityOf "Ready")
+        Assert.Equal(Some "with-backlog-opt-in", startabilityOf "Backlog")
+        Assert.Equal(Some "never", startabilityOf "In progress")
+        Assert.Equal(Some "never", startabilityOf "Blocked")
+        Assert.Equal(Some "never", startabilityOf "In review")
+        Assert.Equal(Some "never", startabilityOf "Done")
+
+    /// THE THREE WORDS ARE A CONTRACT WITH A `jq` FILTER, so a rename must red HERE — in F# — and not
+    /// only in a shell script.
+    ///
+    /// MEASURED, and it is why this test exists: renaming a startability spelling used to compile with
+    /// ZERO F# errors, and the only thing that noticed was `render_board_statuses` erroring at generation
+    /// time. That is the right LAST line of defence and a terrible first one — nothing in the engine's own
+    /// suite could see a vocabulary its own projection depends on.
+    ///
+    /// `generate-projections` selects on exactly these three words. Change one, and this test tells you
+    /// the other half of the change is in a `jq` filter.
+    [<Fact>]
+    let ``the startability wire words are exactly the three generate-projections selects on`` () =
+        let spelled =
+            [ Schedulability.AlwaysStartable; Schedulability.WithBacklogOptIn; Schedulability.NeverStartable ]
+            |> List.map Schedulability.columnStartabilityWireName
+
+        Assert.Equal<string list>([ "always"; "with-backlog-opt-in"; "never" ], spelled)
+
+        // Reflection sees the union, so this is not vacuous: a FOURTH case would reach the wire with no
+        // word in the filter, and `render_board_statuses` would error at generation time.
+        let cases = FSharpType.GetUnionCases typeof<Schedulability.ColumnStartability>
+        Assert.Equal<int>(cases.Length, List.length spelled)
+        Assert.Equal<string list>(List.distinct spelled, spelled)
+
+    /// A STATUS DOCUMENTED UNDER AN EMPTY STRING IS UNGREPPABLE BY CONSTRUCTION, and one that means
+    /// nothing is a row a filer skips.
+    [<Fact>]
+    let ``every board status is documented with a meaning`` () =
+        for s in Protocol.boardStatuses do
+            Assert.False(
+                System.String.IsNullOrWhiteSpace s.Wire,
+                "a board status is documented under an empty option name")
+
+            Assert.False(System.String.IsNullOrWhiteSpace s.Meaning, $"board status '%s{s.Wire}' means nothing")
+
+    // ================================================================================================
     // THE INVENTORY (#1027) — `factsDocument`, and the schema that describes its shape.
     // ================================================================================================
 
@@ -385,6 +538,7 @@ module ProtocolTests =
         | Protocol.Rules(key, _) -> key
         | Protocol.Verdicts(key, _) -> key
         | Protocol.BlockerStates(key, _) -> key
+        | Protocol.BoardStatuses(key, _) -> key
         | Protocol.ExitCodes(key, _) -> key
 
     /// How many facts a section states. `0` is the interesting answer — see the emptiness gate below.
@@ -393,6 +547,7 @@ module ProtocolTests =
         | Protocol.Rules(_, rs) -> List.length rs
         | Protocol.Verdicts(_, vs) -> List.length vs
         | Protocol.BlockerStates(_, bs) -> List.length bs
+        | Protocol.BoardStatuses(_, ss) -> List.length ss
         | Protocol.ExitCodes(_, cs) -> List.length cs
 
     /// THE PIN THAT FORCES THE BUMP (#1027) — the one thing `factsDocument` could not do for itself.
@@ -425,12 +580,13 @@ module ProtocolTests =
               "reconcileRules"
               "verdicts"
               "blockerStates"
+              "boardStatuses"
               "takeExitCodes"
               "landableExitCodes" ],
             keys
         )
 
-        Assert.Equal("fsgg.coord.protocol/6", Protocol.factsSchema)
+        Assert.Equal("fsgg.coord.protocol/7", Protocol.factsSchema)
 
     /// THE FLOOR (#266, #436), and the vacuity every gate in this file refuses: an inventory that stated
     /// nothing would make the fold emit `{"schema": …}` and nothing else, and every projection would
