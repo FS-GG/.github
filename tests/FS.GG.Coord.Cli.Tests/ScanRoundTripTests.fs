@@ -474,3 +474,63 @@ let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of 
             | other -> failwith $"an overlap with an In-progress reserver is not schedulable — got %A{other}"
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"scan failed: %A{e}"
+
+// ====================================================================================================
+// THE OWNERSHIP PIN (#1058) — `Protocol` states a document it does not render.
+// ====================================================================================================
+
+/// `Protocol.snapshotSchema` is a THIRD copy of a string `Scan` writes and `Snapshot` reads, and #1058
+/// chose that deliberately: the snapshot's shape is owned in `Core`, beside #1027's fact inventory, so
+/// `generate-projections` can read it off the one `facts` surface it already reads. The rejected
+/// alternative — own the shape where it is rendered — is the stricter reading of #865/#916 trap 1.
+///
+/// THIS TEST IS THE PRICE OF THAT CALL, and it is the whole reason the call is defensible. A module
+/// stating the shape of a document it does not render can drift from it, silently, in the direction
+/// that matters most: `check-board`'s `jq` filters are generated FROM `Protocol`, so a `Protocol` that
+/// disagrees with `Scan` publishes selectors that match nothing — and no rows reads as a CLEAN BOARD
+/// (#476, #1058). The doc would be confidently, generatedly wrong.
+///
+/// It lives HERE rather than in `ProtocolTests` because `Core.Tests` references `Core` and nothing else:
+/// it cannot see `Scan` or `Snapshot`, so it cannot compare `Protocol`'s claim against either. This file
+/// already exists to assert exactly this class of cross-project agreement.
+[<Fact>]
+let ``Protocol states the schema Scan actually writes, and Snapshot actually accepts`` () =
+    // The REAL writer, against a fake transport — never a hand-written fixture, per this file's rule.
+    let transport = routed (issueBody "Paths: src/Audio/**") "[]"
+
+    match Scan.snapshot transport [ aRow ] None false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+
+    let written =
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        doc.RootElement.GetProperty("schema").GetString()
+
+    Assert.Equal(Protocol.snapshotSchema, written)
+
+    // And the parser accepts what Protocol claims: a document carrying Protocol's string parses.
+    match Snapshot.parse document with
+    | Ok _ -> ()
+    | Error errors ->
+        let detail = errors |> List.map (fun e -> $"{e.Path}: {e.Message}") |> String.concat "; "
+        failwith $"Snapshot.parse refused a document carrying Protocol.snapshotSchema: {detail}"
+
+/// The keys `Protocol` states are the keys the writer EMITS — no more, and none missing.
+///
+/// `snapshotKeys` is what `check-board`'s generated region tells a reader they may select on. A key
+/// `Protocol` invents is a selector that matches nothing; a key it omits is a fact the reader is never
+/// told exists. The literal this replaced had BOTH bugs latent — it spelled `leaseMinutes` before
+/// `limit` while the writer emits `limit` first, and nothing compared them, because nothing could.
+[<Fact>]
+let ``Protocol states exactly the snapshot's top-level keys, in the writer's order`` () =
+    let transport = routed (issueBody "Paths: src/Audio/**") "[]"
+
+    match Scan.snapshot transport [ aRow ] None false None 120 with
+    | Error e -> failwith $"the scan must produce a snapshot — got %A{e}"
+    | Ok(document, _) ->
+
+    let written =
+        use doc = System.Text.Json.JsonDocument.Parse(document: string)
+        doc.RootElement.EnumerateObject() |> Seq.map (fun p -> p.Name) |> List.ofSeq
+
+    Assert.Equal<string list>(written, Protocol.snapshotKeys |> List.map (fun k -> k.Key))

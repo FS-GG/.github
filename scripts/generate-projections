@@ -66,6 +66,8 @@ TARGETS=(
   "blocker-states:.agents/skills/check-board/SKILL.md"
   "board-statuses:.claude/skills/cross-repo-coordination/SKILL.md"
   "board-statuses:.agents/skills/cross-repo-coordination/SKILL.md"
+  "snapshot-shape:.claude/skills/check-board/SKILL.md"
+  "snapshot-shape:.agents/skills/check-board/SKILL.md"
   "versions:docs/architecture.md"
 )
 
@@ -333,6 +335,62 @@ render_blocker_states() {
   # `--check` compares generated to generated, so it would never notice.
   jq -r '.blockerStates[]
     | "| `\(.wire)` | \(if .holds then "**YES**" else "no" end) | \(.meaning | split("|") | join("\\|")) |"' "$FACTS"
+}
+
+# `snapshot-shape` — the snapshot document's TOP-LEVEL shape (#889, #1058), for the skill whose every
+# `jq` filter starts at one of these keys.
+#
+# THE READER OF THIS REGION IS A `jq` FILTER, which is what makes it worth generating rather than
+# proof-reading. `check-board` §1 hands its whole pass a selector derived from this shape; a selector that
+# matches nothing does not error — it returns empty, and empty renders as "nothing wrong with the board"
+# (#476). So this region's failure mode is a FALSE CLEAN, the worst output that skill has.
+#
+# The literal this replaced was wrong twice and nobody noticed, because nothing compared it to the writer:
+# it spelled `leaseMinutes` before `limit` and `inFlight` before `items`, where `Scan.snapshot` emits
+# `limit` and `items` first. It also hardcoded `leaseMinutes: 90` against an engine default of 120 — which
+# is the tell that a reader cannot distinguish an EXAMPLE from a CONTRACT when both are hand-typed.
+#
+# `reconciled` is emitted as its own column rather than left to the prose, for `render_blocker_states`'s
+# reason exactly: it is the bit a reader ACTS on. Only `items` carries board facts; the rest are the scan's
+# own parameters echoed back, and a pass that selects on those reconciles against its own request.
+render_snapshot_shape() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  The hand-written literal this replaced was ILLUSTRATIVE and read as NORMATIVE — the ambiguity"
+  echo "  was the defect, not any one of its errors. It had the key order wrong in two places and a"
+  echo "  leaseMinutes that matched no default."
+  echo ""
+  echo "  TWO sources, as blocker-states has. The schema string and the key list are Protocol.fs"
+  echo "  (snapshotSchema, snapshotKeys); the document they describe is written by Scan.snapshot and"
+  echo "  read by Snapshot.parse, and ScanRoundTripTests PINS Protocol against both — Core states a"
+  echo "  shape it does not render, which is #1058's ownership call and the test is its price."
+  echo "-->"
+  echo ""
+  echo "*Generated from the typed core. The keys are in the order \`Scan.snapshot\` WRITES them, and"
+  echo "\`ScanRoundTripTests\` drives the real writer to assert it — so this table cannot disagree with the"
+  echo "document \`scan --json\` actually emits. \`reconciled\` is the column that matters: it says which"
+  echo "keys a reconciler may select on.*"
+  echo ""
+  echo "\`\`\`json"
+  # The ENVELOPE, derived from the same key list as the table — so the order shown is the order stated,
+  # and neither can drift from the writer without `ScanRoundTripTests` going red. The old literal spelled
+  # this blob by hand and had the order wrong twice; a shape re-typed beside the table it illustrates is
+  # exactly the second copy this region exists to delete.
+  jq -r '"{ " + ([ .snapshotDocument.keys[]
+                   | if .key == "schema" then "\"schema\": \"" + $schema + "\""
+                     elif .key == "items" or .key == "inFlight" then "\"" + .key + "\": [ … ]"
+                     else "\"" + .key + "\": …" end ] | join(", ")) + " }"' \
+    --arg schema "$(jq -r '.snapshotDocument.schema' "$FACTS")" "$FACTS"
+  echo "\`\`\`"
+  echo ""
+  echo "| key | reconciled? | what it carries |"
+  echo "|---|---|---|"
+  # `|` is ESCAPED for `render_blocker_states`'s reason: an unescaped pipe in a meaning ends the cell,
+  # silently, and `--check` compares generated to generated so it would never notice.
+  jq -r '.snapshotDocument.keys[]
+    | "| `\(.key)` | \(if .reconciled then "**YES**" else "no" end) | \(.meaning | split("|") | join("\\|")) |"' "$FACTS"
 }
 
 # `board-statuses` — the six `Status` options `cross-repo-coordination` spelled by hand, in the field

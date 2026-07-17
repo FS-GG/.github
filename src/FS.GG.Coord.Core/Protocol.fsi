@@ -29,6 +29,22 @@ module Protocol =
 
     /// One board `Status` option, as a filer meets it: the option name the board stores, and whether the
     /// scheduler hands the item out while it sits there.
+    /// One TOP-LEVEL key of the snapshot document (`scan --json`), as the `jq` filters in `check-board`
+    /// meet it. See `snapshotKeys`.
+    type SnapshotKeyDoc =
+        { /// The key as it appears on the wire — the string `Scan.snapshot` writes.
+          Key: string
+
+          /// Whether a RECONCILER acts on this key, or merely carries it.
+          ///
+          /// The bit a key NAME cannot carry, and the one a reader needs: `limit` and `leaseMinutes`
+          /// look like board facts and are the scan's own PARAMETERS echoed back, so a pass that
+          /// selects on them is reconciling against its own request rather than against the board.
+          Reconciled: bool
+
+          /// What the key carries, and why a reconciler does or does not act on it.
+          Meaning: string }
+
     type BoardStatusDoc =
         { /// The Projects v2 option name — `Types.statusWireName`'s answer, never a second spelling. This
           /// is the string `set-field` accepts and a `jq` `.status` selector matches.
@@ -100,6 +116,30 @@ module Protocol =
     /// twice — and `Startable` could not be published at all until #1057 gave that fact a name, since it
     /// lived as three legs of a `match` inside `schedulable` where no document could read it.
     val boardStatuses: BoardStatusDoc list
+
+    /// The snapshot document's schema string — the `schema` member `Scan.snapshot` writes.
+    ///
+    /// THE OWNERSHIP CALL, STATED SO IT IS ARGUABLE (#1058). This module is `Core`; the document is
+    /// rendered by `Scan` and parsed by `Snapshot`, both outside it. So `Protocol` states the shape of a
+    /// document it does not itself render, and this string is a THIRD copy of one that already lives in
+    /// both. That is a real cost, taken deliberately: the rejected alternative — own the shape where it
+    /// is rendered and teach `generate-projections` a second source — is the stricter reading of
+    /// #865/#916 trap 1, and it was declined on cost, not on principle.
+    ///
+    /// What makes the cost payable is a TEST, not a convention: `ProtocolTests` pins this against the
+    /// strings `Scan` writes and `Snapshot` accepts. A doc that drifts from its subject is the failure
+    /// this module exists to end, and an ownership call that leaves drift unpinned would have re-created
+    /// it one file over.
+    val snapshotSchema: string
+
+    /// The snapshot document's top-level keys, in the order the WRITER emits them — not the order a
+    /// prose author found readable. The literal this replaced had `leaseMinutes` and `limit` swapped and
+    /// nothing noticed, because nothing compared them.
+    ///
+    /// `Reconciled` is the column a reader acts on: it says which keys a `jq` filter may select on.
+    /// Only `items` carries board facts. The rest are the scan's own parameters echoed back, and a pass
+    /// that reconciles against those is reconciling against its own request.
+    val snapshotKeys: SnapshotKeyDoc list
 
     /// The verdict union, as prose. Emitted from the same cases the scheduler returns, so the list a
     /// worker reads cannot omit one — which is what fourteen of the scheduler family's issues were.
@@ -191,6 +231,10 @@ module Protocol =
         | BlockerStates of key: string * BlockerStateDoc list
         | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
+        /// The snapshot document's SHAPE — a schema string and its top-level keys. The one case carrying
+        /// a scalar beside its list: the shape IS schema-plus-keys, and folding the schema in as a
+        /// one-member `keys` entry would misdescribe it to every reader of the emitted JSON.
+        | SnapshotShape of key: string * schema: string * keys: SnapshotKeyDoc list
 
     /// The facts document's schema version — a fact about the document's shape, so it lives with the
     /// document and not with the writer that renders it (#1027).

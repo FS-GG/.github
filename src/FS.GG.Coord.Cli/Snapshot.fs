@@ -712,6 +712,29 @@ module Snapshot =
 
             w.WriteEndArray()
 
+        // The ONE section that writes an OBJECT rather than an array, because the fact has a scalar in it:
+        // the snapshot's shape is a schema string PLUS its keys. Flattening the schema into `keys` would
+        // make it look like a key of the document it describes, which it is not.
+        //
+        // THE SCHEMA STRING IS NOT THIS FILE'S, and that is the whole point of #1058's ownership call:
+        // `Scan.snapshot` writes `fsgg.coord.snapshot/1` and THIS module's parser refuses a document
+        // without it, and neither reads it from `Protocol`. So three copies exist and `ProtocolTests` pins
+        // them together — which is what makes the call payable rather than a doc that rots.
+        let writeSnapshotShape (key: string) (schema: string) (keys: Protocol.SnapshotKeyDoc list) =
+            w.WriteStartObject(key)
+            w.WriteString("schema", schema)
+            w.WriteStartArray("keys")
+
+            for k in keys do
+                w.WriteStartObject()
+                w.WriteString("key", k.Key)
+                w.WriteBoolean("reconciled", k.Reconciled)
+                w.WriteString("meaning", k.Meaning)
+                w.WriteEndObject()
+
+            w.WriteEndArray()
+            w.WriteEndObject()
+
         // `startable` is a STRING, not a bool, because the truth has three states: `Backlog` is startable
         // IFF the caller passed `--include-backlog`. Rendering that as `false` would publish the board's
         // most common park as plain unstartable and hide the flag that starts it; as `true`, it would
@@ -758,6 +781,7 @@ module Snapshot =
             | Protocol.BlockerStates(key, bs) -> writeBlockerStates key bs
             | Protocol.BoardStatuses(key, ss) -> writeBoardStatuses key ss
             | Protocol.ExitCodes(key, cs) -> writeExitCodes key cs
+            | Protocol.SnapshotShape(key, schema, keys) -> writeSnapshotShape key schema keys
 
         w.WriteEndObject()
         w.Flush()
