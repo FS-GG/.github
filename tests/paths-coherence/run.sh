@@ -766,11 +766,15 @@ fi
 #
 # So the shipped count is asserted, and asserted EXACTLY. ">0" would have been satisfied by that
 # broken repair. If you migrate another gate, this number goes up and this line is the one to edit.
+#
+# 4 -> 5: repo-filter-monopoly.yml (.github#979) declares a PATHS_SUBJECT and names its gate script
+# exactly, so rule (c) attaches to it and the census counts it. The tripwire fired on the very first
+# CI run of that gate, which is the leg working as designed rather than a cost of it.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "4" ]; then
+if [ "${s:-0}" = "5" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 4 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 5 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"

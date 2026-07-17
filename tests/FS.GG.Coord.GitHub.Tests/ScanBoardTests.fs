@@ -260,3 +260,130 @@ let ``#344 a FAILED scan is never written to the cache`` () =
     // confidently, to the next ninety seconds of workers. One failed read, multiplied by the fleet.
     let cached = Directory.GetFiles(sandbox.Dir, "scan-*.json")
     Assert.Empty(cached)
+
+// ---- `Scan.scope` — the `--repo` filter's one home (#979) --------------------------------------------
+//
+// The filter was hand-rolled FIVE times (snapshot, ready, who, inbox, lint) and every copy fell open the
+// same way: a `--repo` naming no repo resolved to itself, matched nothing, and reported an EMPTY QUEUE
+// WITH A GREEN EXIT — indistinguishable from a repo that genuinely has no items. That is what kept #962
+// silent through three occurrences (#381, #446, #962): each presented as "an empty queue" rather than "I
+// could not find that repo", so each repair added the missing verb instead of removing the list.
+//
+// These are pure — no board, no transport. `scripts/check-repo-filter-monopoly.py` is the other half:
+// it makes a sixth copy unwritable.
+
+let private scopeRow (repo: string) (n: int) : Scan.Row =
+    { Ref = { Owner = "FS-GG"; Repo = repo; Number = n }
+      Title = $"item %d{n}"
+      Status = BoardStatus.Ready
+      BlockedByRaw = ""
+      State = IssueState.Open
+      IsPullRequest = false }
+
+let private scopeBoard =
+    [ scopeRow "FS.GG.SDD" 99; scopeRow "FS.GG.Rendering" 202; scopeRow ".github" 54 ]
+
+[<Fact>]
+let ``#979 a --repo naming no board row REPORTS, and does not merely return empty`` () =
+    let scoped = Scan.scope (Some "sd") scopeBoard
+
+    Assert.Empty scoped.Rows
+
+    // The whole bug: `[]` was the entire answer. The advisory is what makes a green exit MEAN something.
+    let msg = Assert.True(scoped.Advisory.IsSome, "a --repo that names no row must be reported"); scoped.Advisory.Value
+
+    Assert.Contains("no board row names repo `sd`", msg)
+    // The known set is derived from the ROWS IN HAND — never a roster (#266's corollary: compare against
+    // reality, not a record of it). So it cannot go stale, and the `kind: client` shim never needs repos.yml.
+    Assert.Contains("FS.GG.SDD", msg)
+    Assert.Contains("FS.GG.Rendering", msg)
+    Assert.Contains(".github", msg)
+
+[<Fact>]
+let ``#979 a --repo that MATCHES is silent — the advisory is not noise on the happy path`` () =
+    let scoped = Scan.scope (Some "FS.GG.SDD") scopeBoard
+
+    Assert.Equal(1, List.length scoped.Rows)
+    // A gate that cries wolf on the happy path teaches exactly one lesson: that its warnings are noise.
+    Assert.True(scoped.Advisory.IsNone, "a --repo that names a real row must say nothing")
+
+[<Fact>]
+let ``#979 no --repo is the identity, and says nothing`` () =
+    let scoped = Scan.scope None scopeBoard
+
+    Assert.Equal(3, List.length scoped.Rows)
+    Assert.True(scoped.Advisory.IsNone)
+
+[<Fact>]
+let ``#979 the match is case-insensitive, as every hand-rolled copy was`` () =
+    let scoped = Scan.scope (Some "fs.gg.sdd") scopeBoard
+
+    Assert.Equal(1, List.length scoped.Rows)
+    Assert.True(scoped.Advisory.IsNone)
+
+[<Fact>]
+let ``#979 an EMPTY board yields NO advisory — #266's defect, inside the fix for it`` () =
+    // With zero rows there is no known-repo set, so "no row names `X`" would be a confident claim about a
+    // board nobody could see, and "The board knows: " would name nothing. A failed scan is never an empty
+    // one (#344), so this is a genuinely empty board: the emptiness is the BOARD's, not the scope's.
+    let scoped = Scan.scope (Some "anything") []
+
+    Assert.Empty scoped.Rows
+    Assert.True(scoped.Advisory.IsNone, "an empty board cannot support a claim about which repos exist")
+
+[<Fact>]
+let ``#979 the advisory states BOTH readings — a typo and a repo with no items are one fact from here`` () =
+    let scoped = Scan.scope (Some "FS.GG.Audio") scopeBoard
+
+    // FS.GG.Audio is a REAL, rostered repo that simply has no board items. It is indistinguishable from a
+    // typo at this layer, so the message must not pronounce it one — it says both, and the exit stays 0.
+    let msg = scoped.Advisory.Value
+    Assert.Contains("Check the spelling, or this repo has no items on the board yet", msg)
+
+[<Fact>]
+let ``#979 the known-repo set is DEDUPED and ordered — a board of N items lists each repo once`` () =
+    let board = scopeBoard @ [ scopeRow "FS.GG.SDD" 100; scopeRow "fs.gg.sdd" 101 ]
+    let scoped = Scan.scope (Some "nope") board
+
+    let msg = scoped.Advisory.Value
+    let line = msg.Split('\n') |> Array.find (fun l -> l.Contains "The board knows")
+
+    // Three distinct repos, case-folded — not five entries, and not "FS.GG.SDD" twice in two casings.
+    Assert.Equal(3, line.Split(',').Length)
+
+[<Fact>]
+let ``#979 snapshot carries the advisory OUT, on the receipt next-batch-take read`` () =
+    // THE SEAM THIS PINS is the one the fix itself got wrong first time round. `snapshot` scoped
+    // correctly from the start, and `next`/`batch`/`take` destructured its receipt as `Ok(_, doc, _)` —
+    // so the advisory was computed and DROPPED, and `take --repo <typo>` went on reporting an empty
+    // queue over a full board. That is the whole of #979, surviving inside #979's own repair, in the one
+    // verb family that matters most: `--repo <short-id>` is the documented spelling, a typo is the
+    // likeliest thing a worker types, and `take` is the one command in a worker's loop.
+    //
+    // The transport ERRORS on every call, and that is deliberate: a scoped-out `--repo` yields zero
+    // candidates, so a snapshot that reads nothing proves the advisory is computed from the rows in hand
+    // and needs no IO to say so. If this ever starts failing with a transport error, snapshot has begun
+    // reading per-candidate data for candidates it does not have.
+    let transport = Fake.Recorder(fun _ -> Error(Http(500, "no read should happen here")))
+
+    match Scan.snapshot transport scopeBoard (Some "sd") false None 120 with
+    | Error e -> failwith $"snapshot must not need IO to scope: %A{e}"
+    | Ok(_, receipt) ->
+        Assert.Equal(0, receipt.Candidates)
+
+        let msg =
+            Assert.True(receipt.RepoAdvisory.IsSome, "the receipt must carry the advisory out")
+            receipt.RepoAdvisory.Value
+
+        Assert.Contains("no board row names repo `sd`", msg)
+
+[<Fact>]
+let ``#979 snapshot says NOTHING for a --repo that matches — no noise on the happy path`` () =
+    let transport = Fake.Recorder(fun _ -> Error(Http(500, "boom")))
+
+    // FS.GG.SDD matches a row, so the scope is silent. (The snapshot itself then fails on the body read
+    // for that candidate — which is the point of the assertion below: we are pinning the ADVISORY, and a
+    // matched repo must produce none whatever else the scan goes on to do.)
+    match Scan.snapshot transport scopeBoard (Some "FS.GG.SDD") false None 120 with
+    | Error _ -> ()
+    | Ok(_, receipt) -> Assert.True(receipt.RepoAdvisory.IsNone, "a matched --repo must say nothing")

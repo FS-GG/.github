@@ -232,6 +232,17 @@ module Client =
             Scan.snapshot ctx.Transport rows opts.Repo opts.AllowBacklog opts.Limit opts.LeaseMinutes
             |> Result.map (fun (doc, receipt) -> rows, doc, receipt))
 
+    /// `snapshot` already scoped by `--repo`; this is the SAYING half (#979).
+    ///
+    /// `next`/`batch`/`take` each report an empty queue in their own words — `printChosen`'s "nothing
+    /// schedulable right now.", `take`'s EX_NONE — and every one of those sentences is TRUE of a
+    /// `--repo` that named nothing, which is exactly what makes it invisible. This is the verb family
+    /// where that costs the most: `--repo <short-id>` is the documented spelling, a typo is the single
+    /// likeliest thing a worker types, and `take` is the one command in a worker's loop. So the reason
+    /// rides out with the verdict rather than being dropped with the receipt.
+    let private sayRepoAdvisory (receipt: Scan.Receipt) =
+        receipt.RepoAdvisory |> Option.iter eprint
+
     let private renderDecision (opts: Options) (doc: string) : Result<Batch.BatchResult, int> =
         match Snapshot.parse doc with
         | Error errors ->
@@ -284,7 +295,9 @@ module Client =
     let batch (ctx: Context) (opts: Options) : int =
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
-        | Ok(_, doc, _) ->
+        | Ok(_, doc, receipt) ->
+            sayRepoAdvisory receipt
+
             match renderDecision opts doc with
             | Error code -> code
             | Ok result ->
@@ -327,7 +340,9 @@ module Client =
 
         match scanAndDecide ctx opts Cache.Scheduling with
         | Error e -> fail e
-        | Ok(_, doc, _) ->
+        | Ok(_, doc, receipt) ->
+            sayRepoAdvisory receipt
+
             match renderDecision opts doc with
             | Error code -> code
             | Ok result ->
@@ -389,13 +404,15 @@ module Client =
                 // projection the reconciler exists to reconcile, and hiding a closed-but-Ready row by its
                 // state is exactly the disagreement `/check-board` is run to find. A PR is not an item of
                 // work (#641), so it is the one thing dropped unconditionally.
+                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+
+                // #979 — SAY IT, do not imply it. `ready --repo <typo>` used to print `[]` and exit 0,
+                // which is indistinguishable from a repo that genuinely has no items. The exit is
+                // deliberately unchanged: `ready` is a truth read, and an empty board is a real answer.
+                scoped.Advisory |> Option.iter eprint
+
                 let wanted =
-                    rows
-                    |> List.filter (fun r -> not r.IsPullRequest)
-                    |> List.filter (fun r ->
-                        match opts.Repo with
-                        | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
-                        | None -> true)
+                    scoped.Rows
                     |> List.filter (fun r ->
                         // The DEFAULT excludes Done and nothing else (bash's `board_filter` xd=1). Naming a
                         // column (`--status S`) or `--all` widens past it — asking for a column, Done
@@ -530,13 +547,16 @@ module Client =
                 // The board rows in scope, no PRs (#641). #480 — `--repo` scopes to the checkout. These
                 // carry the ONE thing the off-board scan cannot: the In-progress COLUMN, which is the only
                 // fact that licenses an `unclaimed` verdict on a markerless item (work outside the protocol).
-                let boardRows =
-                    rows
-                    |> List.filter (fun r ->
-                        not r.IsPullRequest
-                        && (match opts.Repo with
-                            | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
-                            | None -> true))
+                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+
+                // #979. `who` does not fail OPEN on an unrostered `--repo` the way `ready` did — the
+                // off-board fallback below scans `<owner>/<name>` directly, so a repo that does not
+                // exist fails the read and takes the verb with it (exit 1, measured). The advisory still
+                // earns its place: it names the MISSPELLING, where the failed read only reports that
+                // some HTTP call died — which reads as an outage, and sends the worker down that axis.
+                scoped.Advisory |> Option.iter eprint
+
+                let boardRows = scoped.Rows
 
                 // A CLAIM LIVES OFF THE BOARD TOO (#461/#581, case 25). The board's In-progress column is not
                 // the claim set: a marker sits on the ISSUE, and the issue's board Status may be Ready (a
@@ -1108,6 +1128,9 @@ module Client =
                         not r.IsPullRequest
                         && r.Status = InProgress
                         && r.Ref.Number <> ref.Number
+                        // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter. This asks
+                        // "which other in-flight items live in THIS ref's repo?", a question `--repo`
+                        // has no part in: `opts.Repo` is not read here and scoping it would be wrong.
                         && String.Equals(r.Ref.Repo, ref.Repo, StringComparison.OrdinalIgnoreCase)
                         && String.Equals(r.Ref.Owner, ref.Owner, StringComparison.OrdinalIgnoreCase))
 
@@ -1948,7 +1971,9 @@ module Client =
             // different codes (#266). bash's hard board-read failure exits the same way (#344's fatal
             // die), so the two engines agree.
             | Error e -> fail e
-            | Ok(_, doc, _) ->
+            | Ok(_, doc, receipt) ->
+                sayRepoAdvisory receipt
+
                 match renderDecision { opts with Limit = Some 1 } doc with
                 | Error code -> code
                 | Ok result ->
@@ -2531,13 +2556,16 @@ module Client =
                 match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
                 | Error e -> fail e
                 | Ok rows ->
-                    let boardRows =
-                        rows
-                        |> List.filter (fun r ->
-                            not r.IsPullRequest
-                            && (match opts.Repo with
-                                | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
-                                | None -> true))
+                    let scoped =
+                        rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+
+                    // #979 — a mailbox that reports "no new messages" over a repo it never found is the
+                    // one failure this verb must not have. Like `who`, the fallback below fails closed on
+                    // a repo that does not exist; the advisory is what names the cause as a spelling
+                    // rather than an outage.
+                    scoped.Advisory |> Option.iter eprint
+
+                    let boardRows = scoped.Rows
 
                     // The repos an off-board claim could live in — derived from the board scan in hand, with
                     // the same `--repo`-names-no-board-item fallback `who` uses, so a message on an issue that
@@ -3423,15 +3451,18 @@ module Client =
             match Scan.board ctx.Transport Cache.Reconciling ctx.Owner ctx.Title board.Number with
             | Error e -> fail e
             | Ok rows ->
-                let repoFilter = opts.Repo |> Option.map resolveRepo
-                // A PR is not an item of work (#641), and `--repo` scopes the pass (short-ids resolved).
-                let items =
-                    rows
-                    |> List.filter (fun r -> not r.IsPullRequest)
-                    |> List.filter (fun r ->
-                        match repoFilter with
-                        | Some name -> String.Equals(r.Ref.Repo, name, StringComparison.OrdinalIgnoreCase)
-                        | None -> true)
+                // A PR is not an item of work (#641), and `--repo` scopes the pass.
+                //
+                // The local `Option.map resolveRepo` that stood here is gone (#979). Resolution is the
+                // PARSER's job since #962/#978 — `Options.parse` has already resolved `opts.Repo`, and
+                // `resolveRepo` is idempotent, so the second call was a no-op. It was worth deleting
+                // anyway: it was the last thing in the tree implying a verb still resolves for itself,
+                // which is the habit that made the filter five copies in the first place.
+                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+
+                scoped.Advisory |> Option.iter eprint
+
+                let items = scoped.Rows
 
                 let mk code severity (r: Scan.Row) detail =
                     { Code = code
@@ -3649,8 +3680,10 @@ module Client =
                         for f in findings do
                             printfn "FSGG-LINT %s  %s  %s  — %s" (f.Severity.ToUpperInvariant()) f.Code f.Short f.Detail
 
+                        // `opts.Repo` is the RESOLVED name — the parser did it (#962/#978), so this prints
+                        // exactly what the deleted local `resolveRepo` used to produce.
                         let repoSuffix =
-                            match repoFilter with
+                            match opts.Repo with
                             | Some r -> $" for repo '%s{r}'"
                             | None -> ""
 
