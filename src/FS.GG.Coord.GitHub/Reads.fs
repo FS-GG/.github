@@ -1219,7 +1219,52 @@ module Reads =
                 readMerge (triesLeft - 1)
             | Some result -> result
 
-        match readMerge 3 with
+        // THE HEAD-SHA RECONCILIATION, ONCE, AHEAD OF EVERY MERGEABLE VERDICT (#955).
+        //
+        // `mergeable` is a fact about the commit GitHub LAST EVALUATED, not about the commit you pushed. So
+        // the question "is this verdict even about my PR?" is prior to the verdict itself, and it is the same
+        // question whichever way `mergeable` came back. It must therefore be asked ONCE, before the arms —
+        // not inside one of them.
+        //
+        // It used to live inside the `true` arm, and the `false` arm was ordered FIRST and bound the SHA to
+        // `_`. That made the guard UNREACHABLE for a `false`, and `--sha` — the flag whose whole purpose is
+        // "gate on THIS commit" — could not reach it either. The asymmetry was the bug in one line: a stale
+        // `true` was SHA-checked and demoted to `pending`, while a stale `false` was trusted and PROMOTED to
+        // a terminal verdict. It contradicted this function's own documented contract ("a disagreement scores
+        // `PrPending` — never green, NEVER A VERDICT ABOUT THE WRONG COMMIT"), because `conflicted` is
+        // precisely a verdict about the wrong commit.
+        //
+        // It fails closed, so nothing unsafe merged; the cost was to the worker. §2 branches from
+        // `origin/main` and N workers merge while you work, so conflict-then-rebase IS §5's happy path — and
+        // the recipe defines exit 3 as terminal, prescribing "a conflicted PR needs a rebase". Follow it
+        // literally against a stale `false` and you rebase, push, poll, get `conflicted`, and rebase the
+        // commit you just made: a loop whose exit condition is the thing it keeps destroying. The only escape
+        // was to disbelieve the tool and read the API by hand — the exact lesson #698 says a gate that cries
+        // wolf on the happy path teaches, and the one §5 cannot afford it to teach.
+        //
+        // Only a PROVEN disagreement demotes. `expected = None` (§5's own `landable <pr> --wait`) asserts
+        // nothing, and a `Mergeable false` carrying no head SHA gives nothing to compare — both leave the
+        // verdict exactly as it was, so this widens the guard's REACH without widening its CLAIM.
+
+        // ONE read, bound once. `readMerge` spends the re-read budget (3 PR reads, ~1s apart), so asking it
+        // twice would double every caller's reads to answer one question.
+        let merge = readMerge 3
+
+        let staleHead =
+            match merge with
+            | Mergeable _, Some sha when expected |> Option.exists (fun e -> e <> sha) -> Some sha
+            | _ -> None
+
+        match staleHead with
+        | Some sha ->
+            let want = defaultArg expected ""
+
+            PrPending,
+            0,
+            [ $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
+        | None ->
+
+        match merge with
         | Mergeable false, _ -> PrConflicted, 0, []
         // `Computing` and `Absent` MUST NOT share a body (#950). Both mean "no mergeability here", but only
         // one of them can change: a `null` outliving the bounded re-read above is a background job that has
@@ -1237,15 +1282,8 @@ module Reads =
         | Computing, _ -> PrPending, 0, []
         | Absent, _ -> PrUnknown, 0, []
         | Mergeable true, None -> PrUnknown, 0, []
-        // THE PR STILL NAMES A DIFFERENT COMMIT than the caller pushed, so its checks are the OLD commit's.
-        // Not a verdict about this PR — a read taken too early. `PrPending` keeps `--wait` polling until
-        // GitHub catches up, and keeps a single-shot read from ever calling the wrong commit's green ours.
-        | Mergeable true, Some sha when expected |> Option.exists (fun e -> e <> sha) ->
-            let want = defaultArg expected ""
-
-            PrPending,
-            0,
-            [ $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
+        // The head SHA is reconciled above, for `true` and `false` alike, so by here it is either the commit
+        // the caller asked to gate or one they made no assertion about. Scoring is safe on both.
         | Mergeable true, Some sha ->
             match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
             | Some runs, Some checks ->
