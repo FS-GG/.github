@@ -33,7 +33,7 @@ truth read exists to show.
 import json
 import re
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 RATE = {"cost": 1, "remaining": 4988}
 
@@ -86,6 +86,11 @@ def graphql(q):
 
 
 class H(BaseHTTPRequestHandler):
+    # Keep-alive, so the server does not close after every response: HTTP/1.0's close-per-response
+    # races the engine's pooling HttpClient and RSTs away a written response (#761). Pairs with
+    # ThreadingHTTPServer below — a kept-alive connection would pin a single-threaded server.
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, *a):
         pass
 
@@ -122,7 +127,7 @@ class H(BaseHTTPRequestHandler):
 
 
 def main():
-    s = HTTPServer(("127.0.0.1", 0), H)
+    s = ThreadingHTTPServer(("127.0.0.1", 0), H)
     print(s.server_address[1], flush=True)
     s.serve_forever()
 
