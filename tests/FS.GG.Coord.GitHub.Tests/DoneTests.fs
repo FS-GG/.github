@@ -432,7 +432,12 @@ let ``#613 a rolled-up parent is stamped Done AND CLOSED - not one or the other`
             [ ok parentAllDone // the parent's facts
               // The EPIC-UNLINKED-CHILD check re-reads the body + graph (#325): a body declaring no
               // extra children clears it, so the roll-up proceeds.
-              ok """{"number":350,"body":"Paths: none"}""" // the parent's body
+              // The parent's body. It STATES ACCEPTANCE, and since #1003 it has to: a parent whose body
+              // carries no task line has nothing to check against its graph and is refused. This fixture
+              // read `"Paths: none"` — written when a body was only ever read for unlinked children — and
+              // that is now a body that cannot close. The line delegates to #398, the child in the graph
+              // below, which is what a rollup-able parent looks like.
+              ok """{"number":350,"body":"- [ ] #398 the only criterion, and it IS a child"}""" // the parent's body
               ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}""" // its graph, with refs
               ok itemOnBoard // boardWrite: resolve the item
               ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" // the Status write
@@ -548,6 +553,69 @@ let ``#965 the rule holds for a parent that is NOT [epic]-titled - which is #561
     | Ok [ ParentLeftOpen(_, reasons) ] ->
         Assert.Contains("step 3: add global.json to FILES, delete the tripwire", String.concat " " reasons)
     | other -> failwith $"a non-epic PARENT must be refused too — a title is not what makes acceptance rollup-able — got %A{other}"
+
+[<Fact>]
+let ``#1003 a parent whose body states NO task-line acceptance is left open - #889's shape`` () =
+    use _sandbox = new Sandbox()
+
+    // THE HOLE #965 SHIPPED WITH, AND THE ONE THAT BIT WITHIN THE HOUR. This body is #889's: prose
+    // bullets, no checkbox. `undelegatedAcceptance` returns [] — there are no task lines to be ref-less —
+    // so #965's guard reported itself satisfied and this parent CLOSED, over a `## The work` section
+    // naming three driver skills of which one had never been done.
+    //
+    // #561, the false closure #965 was written about, has this same shape. A fix that does not catch it
+    // has not addressed #965.
+    let transport =
+        scripted
+            [ ok parentAllDone
+              ok """{"number":350,"body":"## The work\n\nFold the restatements into generated regions:\n\n- `pnext-item` — the mint ritual\n- `check-board`"}""" ]
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen(p, reasons) ] ->
+        Assert.Equal(parentRef, p)
+        let joined = String.concat " " reasons
+
+        // It must say what it could NOT verify — a silent refusal teaches nothing, and the whole defect
+        // here was a guard reporting green on a subject it never read.
+        Assert.Contains("states NO task-line acceptance", joined)
+        Assert.Contains("#561", joined)
+
+        Assert.False(transport.Logged "--single-select-option-id opt_done")
+        Assert.False(transport.Logged "issue-patch FS-GG/FS.GG.SDD 350")
+
+    | other -> failwith $"a parent stating no acceptance must not close — got %A{other}"
+
+[<Fact>]
+let ``#1003 the refusal costs no graph read either - it is a property of the body`` () =
+    use _sandbox = new Sandbox()
+
+    // Same discipline as #965's guard: `scripted` throws once its queue empties, so a script of exactly
+    // the facts and the body IS the assertion, and the call counts make it non-vacuous.
+    let transport = scripted [ ok parentAllDone; ok """{"number":350,"body":"just prose, no criteria"}""" ]
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen _ ] ->
+        Assert.Equal(1, transport.GraphQlCalls)
+        Assert.Equal(1, transport.RestCalls)
+    | other -> failwith $"expected a refusal paying for no graph read — got %A{other}"
+
+[<Fact>]
+let ``#1003 does not fire on a body #965 already governs - the two guards do not double-report`` () =
+    use _sandbox = new Sandbox()
+
+    // A ref-less task line STATES acceptance (badly). That is #965's finding and #965 must own it: if
+    // #1003's rule also fired, the reader would get two refusals for one defect and the remedies differ.
+    let transport =
+        scripted
+            [ ok parentAllDone
+              ok """{"number":350,"body":"- [ ] step 3: global.json into FILES, tripwire deleted"}""" ]
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen(_, reasons) ] ->
+        let joined = String.concat " " reasons
+        Assert.Contains("delegate to NO child", joined) // #965's wording
+        Assert.DoesNotContain("states NO task-line acceptance", joined) // ...not #1003's
+    | other -> failwith $"expected #965's refusal, not #1003's — got %A{other}"
 
 [<Fact>]
 let ``#965 an epic whose every acceptance line is a child ref still rolls up`` () =

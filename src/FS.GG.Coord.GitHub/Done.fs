@@ -734,6 +734,35 @@ module Done =
 
             | _ ->
 
+            // ...AND THE HALF THAT GUARD COULD NOT SEE (#1003). The check above reads the ref-less task
+            // lines. A body with NO task lines has none — so "every acceptance line is a child ref" is
+            // VACUOUSLY TRUE, the guard reports itself satisfied, and the close proceeds over whatever the
+            // prose says.
+            //
+            // It shipped that way, and it was not a corner: 13 of the 28 parents in `.github` state no
+            // task-line acceptance. Two of them are the ones that matter. **#561 — the false closure #965
+            // was written about — has zero task lines**, so the fix could not have caught the bug it was
+            // built for. And #889 was closed by this very function ~10 minutes after #965's guard landed,
+            // its prose `## The work` naming three driver skills of which one was never done.
+            //
+            // "Every criterion is delegated" and "no criterion is written down in a form anything can
+            // check" are opposite facts, and until now they were the same empty list. So: no acceptance
+            // stated, no close. The remedy is a declaration, never an escape sentinel — one that let an
+            // author assert "it is all delegated" would be a loophole that PAYS its user, and #889 would
+            // have taken it.
+            if not (FS.GG.Coord.EpicBody.statesAcceptance parentBody) then
+                results.Add(
+                    ParentLeftOpen(
+                        current,
+                        [ "this parent's body states NO task-line acceptance, so there is nothing in it to check against the sub-issue graph — and closing it on the strength of that graph would close an unread body (#1003)."
+                          "a criterion delegated to NOBODY is what closed #561: its four children were closed, its graph was whole, and its step 3 was a sentence nobody was given (#965)."
+                          "an epic's acceptance IS its children: state each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `fsgg-coord child <parent> <child>`." ]
+                    )
+                )
+
+                Ok()
+            else
+
             match Reads.subIssues transport current.Owner current.Repo current.Number with
             | Error e -> Error e
             | Ok graph ->
