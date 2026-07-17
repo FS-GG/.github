@@ -644,42 +644,38 @@ module Snapshot =
     // THE PROTOCOL (ADR-0034 §4.5) — the rules, as a document nobody authors.
     // ================================================================================================
 
-    // /2 — the payload gained `takeExitCodes` (#889). Additive for a reader that ignores unknown members,
-    // but the number says what the surface IS, not merely whether an old reader survives it.
-    // /3 — and `landableExitCodes` (#900), on the same reasoning.
-    // /4 — and `filingRules` (#889): the subset `cross-repo-coordination` projects. Its members are the
-    // SAME values `rules` holds — the payload states the subset rather than making the generator re-derive
-    // it by id, because a `jq` filter listing ids in the shell would be a second copy of the membership,
-    // hand-maintained, in the file whose whole purpose is to end hand-maintained copies.
-    // /5 — and `reconcileRules` (#889): the subset `check-board` projects, on the same reasoning as
-    // `filingRules`. A SECOND subset is the point at which "the generator selects nothing" stops being a
-    // preference and starts being load-bearing: two `jq` id-filters in the shell would be two copies of
-    // two memberships, and the only thing distinguishing them would be a list nothing tests.
-    // /6 — and `blockerStates` (#889): the blocker wire vocabulary `check-board` §1 restated by hand. NOT
-    // a subset of anything — it is the five cases of `Types.BlockerState`, each carrying the string
-    // `blockerStateWireName` writes. It could not be stated here before #1012 gave that vocabulary an
-    // owner in `Core`; until then the strings lived in two `private` inverse copies outside it.
-    [<Literal>]
-    let private FactsSchema = "fsgg.coord.protocol/6"
+    // WHAT THIS WRITER KNOWS, AND WHAT IT DOES NOT (#1027). It knows how each fact SHAPE renders — which
+    // members a rule has, that an exit code's `code` is a number. It does not know which keys the document
+    // states, in what order, or that `filingRules` exists at all: `Protocol.factsDocument` states the
+    // inventory, and this folds it.
+    //
+    // The two halves used to be split the other way round, and the split is what made `Snapshot.fs` a
+    // chokepoint: `renderFacts` took one positional parameter per fact kind, so the INVENTORY — which keys
+    // exist, and in what order — was hand-maintained here, in the Cli, for facts `Protocol` owns outright.
+    // Adding one Core-owned key cost five edits across four files, four of them carrying no information
+    // the fact had not already stated in `Protocol.fs`; and because one of them landed in THIS file, every
+    // remaining #889 slice declared it and serialised behind whoever held it.
+    //
+    // THIS FILE ALREADY MADE THAT ARGUMENT — in the very block the inventory replaced. The schema note
+    // that stood here said a `jq` filter listing rule ids in the shell would be *"a second copy of the
+    // membership, hand-maintained, in the file whose whole purpose is to end hand-maintained copies"*. It
+    // simply never turned the sentence on itself: `rules` was emitted rather than authored, and the list
+    // of what got emitted was authored, four lines above the words. The argument still stands where it is
+    // load-bearing — `render_filing_rules` in `scripts/generate-projections` — and now it holds here too.
+    //
+    // `FactsSchema` moved with the inventory, for the same reason: the schema version describes the
+    // document's SHAPE, and the document's shape is `Protocol.factsDocument`. It is `Protocol.factsSchema`.
 
-    let renderFacts
-        (rules: Protocol.Rule list)
-        (filingRules: Protocol.Rule list)
-        (reconcileRules: Protocol.Rule list)
-        (verdicts: Protocol.VerdictDoc list)
-        (takeExitCodes: Protocol.ExitCodeDoc list)
-        (landableExitCodes: Protocol.ExitCodeDoc list)
-        (blockerStates: Protocol.BlockerStateDoc list)
-        : string =
+    let renderFacts (document: Protocol.FactSection list) : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = true, SkipValidation = false))
 
         w.WriteStartObject()
-        w.WriteString("schema", FactsSchema)
+        w.WriteString("schema", Protocol.factsSchema)
 
-        // ONE writer for every rule list, for the reason `writeExitCodes` below is one: a second
-        // hand-written copy of these four members is exactly how `rules` and `filingRules` would come to
-        // spell `because` differently under the generator that reads both.
+        // ONE writer per SHAPE, and the keys come from the caller. A second hand-written copy of a shape's
+        // members is exactly how `rules` and `filingRules` would come to spell `because` differently under
+        // the generator that reads both — and how two exit-code tables' key names would drift apart.
         let writeRules (key: string) (rs: Protocol.Rule list) =
             w.WriteStartArray(key)
 
@@ -693,33 +689,29 @@ module Snapshot =
 
             w.WriteEndArray()
 
-        writeRules "rules" rules
-        writeRules "filingRules" filingRules
-        writeRules "reconcileRules" reconcileRules
+        let writeVerdicts (key: string) (verdicts: Protocol.VerdictDoc list) =
+            w.WriteStartArray(key)
 
-        w.WriteStartArray("verdicts")
+            for v in verdicts do
+                w.WriteStartObject()
+                w.WriteString("kind", v.Kind)
+                w.WriteString("meaning", v.Meaning)
+                w.WriteEndObject()
 
-        for v in verdicts do
-            w.WriteStartObject()
-            w.WriteString("kind", v.Kind)
-            w.WriteString("meaning", v.Meaning)
-            w.WriteEndObject()
+            w.WriteEndArray()
 
-        w.WriteEndArray()
+        let writeBlockerStates (key: string) (states: Protocol.BlockerStateDoc list) =
+            w.WriteStartArray(key)
 
-        w.WriteStartArray("blockerStates")
+            for b in states do
+                w.WriteStartObject()
+                w.WriteString("wire", b.Wire)
+                w.WriteBoolean("holds", b.Holds)
+                w.WriteString("meaning", b.Meaning)
+                w.WriteEndObject()
 
-        for b in blockerStates do
-            w.WriteStartObject()
-            w.WriteString("wire", b.Wire)
-            w.WriteBoolean("holds", b.Holds)
-            w.WriteString("meaning", b.Meaning)
-            w.WriteEndObject()
+            w.WriteEndArray()
 
-        w.WriteEndArray()
-
-        // ONE writer for both exit-code tables: they are the same SHAPE, and a second hand-written copy
-        // of these four members is how the key names drift apart under the generator that reads them.
         let writeExitCodes (key: string) (codes: Protocol.ExitCodeDoc list) =
             w.WriteStartArray(key)
 
@@ -733,8 +725,17 @@ module Snapshot =
 
             w.WriteEndArray()
 
-        writeExitCodes "takeExitCodes" takeExitCodes
-        writeExitCodes "landableExitCodes" landableExitCodes
+        // THE FOLD IS THE DOCUMENT. The list's order is the JSON's key order, so document order is stated
+        // once — in `Protocol.factsDocument` — rather than here as a sequence of calls that has to be kept
+        // in step with it. An EXHAUSTIVE match, so a new fact shape cannot reach the payload unrendered:
+        // the compiler refuses a case with no writer, which is the coupling that makes the Cli's half of
+        // this contract un-forgettable.
+        for section in document do
+            match section with
+            | Protocol.Rules(key, rs) -> writeRules key rs
+            | Protocol.Verdicts(key, vs) -> writeVerdicts key vs
+            | Protocol.BlockerStates(key, bs) -> writeBlockerStates key bs
+            | Protocol.ExitCodes(key, cs) -> writeExitCodes key cs
 
         w.WriteEndObject()
         w.Flush()

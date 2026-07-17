@@ -83,16 +83,7 @@ let private readInput (opts: Options) =
 let private facts (opts: Options) =
     match opts.Render with
     | Json ->
-        printfn
-            "%s"
-            (Snapshot.renderFacts
-                Protocol.rules
-                Protocol.filingRules
-                Protocol.reconcileRules
-                Protocol.verdicts
-                Protocol.takeExitCodes
-                Protocol.landableExitCodes
-                Protocol.blockerStates)
+        printfn "%s" (Snapshot.renderFacts Protocol.factsDocument)
     | Text ->
         for r in Protocol.rules do
             printfn "## %s" r.Title

@@ -101,12 +101,9 @@ module Snapshot =
 
     /// The PROTOCOL, as the document the projections are generated from (ADR-0034 §4.5). Emitted, never
     /// authored — so a rule cannot land in the engine and not in the prose that tells a worker about it.
-    val renderFacts:
-        rules: Protocol.Rule list ->
-        filingRules: Protocol.Rule list ->
-        reconcileRules: Protocol.Rule list ->
-        verdicts: Protocol.VerdictDoc list ->
-        takeExitCodes: Protocol.ExitCodeDoc list ->
-        landableExitCodes: Protocol.ExitCodeDoc list ->
-        blockerStates: Protocol.BlockerStateDoc list ->
-            string
+    ///
+    /// Takes the INVENTORY (`Protocol.factsDocument`), not a parameter per fact kind (#1027): the keys and
+    /// their order are the document's business, and this renders the shapes. Adding a Core-owned fact key
+    /// no longer touches this file — which is what stopped `Snapshot.fs` being the chokepoint every #889
+    /// slice queued behind.
+    val renderFacts: document: Protocol.FactSection list -> string
