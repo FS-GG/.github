@@ -1,0 +1,204 @@
+# The RESPONSE half of the required-context verifier (.github#574, from #549, epic #266).
+#
+# scripts/check-required-contexts.py answers a question nothing else can: is every status check a
+# repo's branch protection REQUIRES one that some `pull_request` workflow can actually PRODUCE? A
+# receiver requires `<caller job> / <callee job>`, and half of that string is a job id inside
+# FS-GG/.github's reusable workflows, tracked at a MOVING ref (@main). Rename that job here — an
+# ordinary internal refactor in a green, reviewed repo — and the receiver's gate starts waiting on a
+# context that can never report. Its protection is `enforce_admins: true` with no bypass, so the whole
+# repo stops merging, no commit in it changed, and the cause is a commit somewhere else. A plain typo
+# in a protection setting deadlocks it identically. That is the silent outage this exists to break.
+#
+# #549 shipped the PREVENTIVE half — reusable-job-id-coherence.yml catches the rename HERE, on the PR
+# that would cause it, with no credential. This is the DETECTION half for everything that gate cannot
+# see from the source side: a typo authored in a RECEIVER's protection, a context required before its
+# caller was wired, drift on the receiver side generally. It is a pure function of a repo's protection
+# plus its committed YAML, needs no PR context, and so it runs on a SCHEDULE over the roster.
+#
+# WHY THIS CANNOT BE A PER-RECEIVER `pull_request` GATE, and needs the org App. Reading
+# `branches/<b>/protection` (and the rulesets store) requires `administration: read`. That is NOT a
+# valid `permissions:` scope for a workflow's GITHUB_TOKEN — declaring it is a STARTUP validation
+# error that produces no check run at all (the #478 blind spot), so no receiver can read its own
+# protection from its own CI. The org dispatch App now holds `administration: read` (#574's org-admin
+# grant, decided 2026-07-17), so a per-receiver-scoped installation token can. This workflow mints one
+# per repo, exactly as coordination-propagate / feed-autofix do.
+#
+# WHY THE ROSTER, AND WHY `contract-coherence`. The subject set is read from registry/repos.yml — no
+# hardcoded targets (ADR-0019). `contract-coherence` is the receives capability that means "this repo
+# participates in the cross-repo contract fabric", and a reusable workflow's job ids ARE a cross-repo
+# contract (a fourth coupling across `workflow_call`, alongside its `permissions:` (#478) and secrets
+# (#482)). It also happens to enumerate exactly the six framework repos the dispatch App is installed
+# on — the only repos it can mint a token for at all. `.github` (role: authority) is not a receiver:
+# it OWNS the callee side, and the App is not installed on it, so it is not a subject here.
+#
+# NO OFFLINE FIXTURE HERE, DELIBERATELY — like coordination-propagate, this workflow needs the App and
+# a live protection read, so it cannot be exercised in a hermetic fixture. The SCRIPT it drives is
+# fully fixture-covered by required-context-coherence-selftest.yml (the stubbed-gh failure legs, 25
+# assertions). Review this file as a privileged-infra change: what it adds is the wiring, not logic.
+#
+# FAIL LOUDLY, NEVER SILENTLY (#266). A finding (exit 1) or a permanent no-verdict (exit 3) fails the
+# matrix leg RED, with `::error::` naming the receiver and the deadlock, and it is FIXABLE (correct the
+# protection, or the job name) — the bar for a red that is not learned-to-ignore. A retryable read
+# failure (exit 2 — rate limit, outage) is retried, then failed with a note that it self-heals: "I
+# could not check" must never read as "I checked, and it's fine".
+#
+# NOTE on how a red sweep SURFACES: GitHub routes a scheduled-run failure only to the account that last
+# changed this file on the default branch, NOT to the owner of the deadlocked receiver — so this red is
+# a dashboard/notification signal, not a page to the right person. That matches every other *-coherence
+# gate in this org (they red; they do not open issues). If that reach proves too weak in practice, the
+# feed-autofix / skill-registry-autofix precedent is the upgrade: aggregate the matrix findings and open
+# ONE standing issue per deadlocked receiver. Deliberately not built here to keep the first cut minimal.
+name: required-context-coherence
+
+on:
+  # Daily. A deadlock authored in a receiver's protection is invisible until someone works out why the
+  # repo stopped merging; a nightly sweep bounds that to a day. Off the hour, clear of feed-* (06:xx).
+  schedule:
+    - cron: "23 5 * * *"
+  # Manual re-check — after granting a scope, fixing a rename, or investigating a red sweep.
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Check only this one receiver (owner/name). Empty = the whole roster."
+        type: string
+        default: ""
+
+# GITHUB_TOKEN here only READS this repo, and only to check out the roster + the verifier script. Every
+# privileged read — a receiver's protection, its rulesets — goes through the per-repo App token minted
+# in `verify`, never this one, because `administration: read` is not grantable to a GITHUB_TOKEN.
+permissions:
+  contents: read
+
+concurrency:
+  # One sweep at a time; a schedule and a manual dispatch must not run the matrix twice concurrently.
+  group: required-context-coherence
+  cancel-in-progress: false
+
+jobs:
+  # Read the subject list from the roster into a matrix — {full, owner, name} per receiver. A manual
+  # `repo` input narrows it to one, for a targeted re-check.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      repos: ${{ steps.roster.outputs.repos }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: roster
+        env:
+          ONE: ${{ inputs.repo }}
+        run: |
+          set -euo pipefail
+          roster() { bash scripts/repos.sh list --receives contract-coherence --field full; }
+          if [ -n "${ONE:-}" ]; then
+            # A targeted re-check. Validate it is actually a rostered contract-coherence receiver, so a
+            # dispatch typo fails here loudly instead of minting a token for a repo we do not verify.
+            if ! roster | grep -qxF "$ONE"; then
+              echo "::error::'$ONE' is not a contract-coherence receiver in registry/repos.yml." >&2
+              echo "::error::Roster receivers:" >&2
+              roster | sed 's/^/::error::  /' >&2
+              exit 1
+            fi
+            subjects="$ONE"
+          else
+            subjects="$(roster)"
+          fi
+          # ONE place turns the newline-list into the {full,owner,name} matrix — so the element shape
+          # cannot drift between the targeted and whole-roster paths.
+          repos="$(printf '%s\n' "$subjects" \
+            | jq -R -s -c 'split("\n") | map(select(length>0)) | map({full:., owner:(split("/")[0]), name:(split("/")[1])})')"
+          [ "$repos" != "[]" ] || { echo "::error::roster names no contract-coherence receivers." >&2; exit 1; }
+          echo "repos=$repos" >> "$GITHUB_OUTPUT"
+          echo "required-context subjects: $repos"
+
+  verify:
+    needs: plan
+    if: ${{ needs.plan.outputs.repos != '[]' && needs.plan.outputs.repos != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false          # one receiver's deadlock must not hide another's
+      matrix:
+        repo: ${{ fromJSON(needs.plan.outputs.repos) }}
+    steps:
+      # The verifier script and its callee-resolution logic live HERE. Checked out to the default
+      # workspace; the subject repo is checked out beside it, under `receiver/`.
+      - name: Checkout FS-GG/.github (the verifier + the callee side)
+        uses: actions/checkout@v7
+
+      # An installation token scoped to this ONE receiver, restricted to exactly the two reads the
+      # verifier makes of it: its branch protection (`administration: read`) and its committed workflow
+      # YAML (`contents: read`, also what the checkout below needs). The callee side lives in
+      # FS-GG/.github, which is PUBLIC, so the same token reads its `contents/…@<ref>` without .github
+      # being in the token's repository scope.
+      - name: Mint App installation token (scoped to ${{ matrix.repo.full }})
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: ${{ matrix.repo.owner }}
+          repositories: ${{ matrix.repo.name }}
+          permission-administration: read
+          permission-contents: read
+
+      - name: Checkout the receiver (its own workflow YAML is the subject)
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ matrix.repo.full }}
+          token: ${{ steps.app-token.outputs.token }}
+          path: receiver
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+
+      - name: Verify ${{ matrix.repo.full }}'s required contexts are all producible
+        env:
+          # The verifier's gh_api() reads the receiver's protection/rulesets and the callee workflows
+          # in .github through this — never GITHUB_TOKEN, which cannot read protection.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ matrix.repo.full }}
+        run: |
+          set -uo pipefail
+          # NOT `set -e`: the exit code IS the verdict, and this step branches on it. Its four meanings
+          # (0 producible / 1 a context can never report / 2 retryable read failure / 3 permanent
+          # no-verdict) must stay distinct — collapsing "could not check" into either "fine" or "broken"
+          # is the #266/#320 sin the script's own exit contract exists to prevent.
+          run_once() { python scripts/check-required-contexts.py --repo "$REPO" --root receiver; }
+
+          run_once; rc=$?
+          # Exit 2 is RETRYABLE by the script's contract (rate limit, outage). Give it a few tries with
+          # backoff before deciding — a scheduled sweep over six repos on one shared account can brush a
+          # limit. Only exit 2 is retried; a verdict (0/1/3) is acted on at once.
+          attempt=1
+          while [ "$rc" -eq 2 ] && [ "$attempt" -lt 3 ]; do
+            attempt=$((attempt + 1))
+            echo "::notice::$REPO: read failure (exit 2) — retrying ($attempt/3) after backoff."
+            sleep 30
+            run_once; rc=$?
+          done
+
+          case "$rc" in
+            0) echo "::notice::$REPO: every required context is producible."; exit 0 ;;
+            1) echo "::error::$REPO: a required status check names a context NO pull_request workflow"
+               echo "::error::can produce — this repo is (or will be) deadlocked: GitHub holds every PR"
+               echo "::error::at 'Expected — waiting for status to be reported'. Fix the protection"
+               echo "::error::setting or the job name it points at. Detail is in the log above."
+               exit 1 ;;
+            2) echo "::error::$REPO: the protection/rulesets read kept failing (exit 2, retryable) after"
+               echo "::error::3 attempts — a rate limit or outage, not a verdict. This self-heals on the"
+               echo "::error::next scheduled sweep if it was transient; if it persists, look at the log."
+               exit 1 ;;
+            3) echo "::error::$REPO: no verdict, and it will not clear on its own (exit 3) — protection is"
+               echo "::error::unreadable for want of permission (has the App's administration:read been"
+               echo "::error::revoked?), a workflow will not parse, a pinned callee is missing, or a"
+               echo "::error::required matrix cannot be enumerated. The log names which. A human must act."
+               exit 1 ;;
+            *) echo "::error::$REPO: check-required-contexts.py exited $rc — an unexpected code the engine"
+               echo "::error::does not define as a verdict. Treat this run as having told you NOTHING."
+               exit 1 ;;
+          esac

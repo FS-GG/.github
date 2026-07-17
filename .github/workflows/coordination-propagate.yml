@@ -219,14 +219,18 @@ jobs:
           #
           # ASK THE PULL REQUEST, NOT BRANCH PROTECTION. This used to read
           # /repos/$TARGET/branches/main/protection/required_status_checks and count `contexts[]`. That
-          # endpoint needs `administration: read`, which the dispatch App does not have on the
-          # receivers, so it returned 403 `Resource not accessible by integration` — which is neither a
-          # contexts[] body nor the "Branch not protected" 404 the classifier knew. It fell through to
-          # the fail-closed arm and exited 1, on EVERY receiver whose sync PR was already clean. That is
-          # #463: propagation opened the PRs and then could not land them, so the kit stayed stale and
-          # the receiver's `coordination-kit` gate stayed red (FS.GG.Templates#139, FS.GG.Game#142 sat
-          # open and CLEAN for hours).
+          # endpoint needs `administration: read`, which the dispatch App did NOT hold on the receivers
+          # when #463 was written, so it returned 403 `Resource not accessible by integration` — which
+          # is neither a contexts[] body nor the "Branch not protected" 404 the classifier knew. It fell
+          # through to the fail-closed arm and exited 1, on EVERY receiver whose sync PR was already
+          # clean. That is #463: propagation opened the PRs and then could not land them, so the kit
+          # stayed stale and the receiver's `coordination-kit` gate stayed red (FS.GG.Templates#139,
+          # FS.GG.Game#142 sat open and CLEAN for hours).
           #
+          # The App has SINCE gained `administration: read` (the #574 org-admin grant, 2026-07-17 — the
+          # same grant that lets required-context-coherence.yml read protection), so this could read the
+          # protection endpoint directly again. It deliberately does NOT, because asking the PR is the
+          # BETTER design regardless of the credential, not merely the workaround #463 was forced into:
           # `mergeStateStatus` answers the question we actually have — "are this PR's gates satisfied?"
           # — needs only `pull_requests: read`, and is strictly MORE honest than counting required
           # checks: it accounts for required REVIEWS too, which the old probe never looked at.
@@ -279,9 +283,10 @@ jobs:
               ;;
           esac
 
-          # We deliberately cannot see branch protection (no administration: read — that is the whole
-          # point), so we can no longer say "this receiver has no required checks" the way the old probe
-          # did. An EMPTY check rollup is the readable proxy for it, and the warning must survive: the
+          # We deliberately do NOT read branch protection here (see the mergeStateStatus block above:
+          # the App now holds administration:read since #574, but the PR's own answer is more honest),
+          # so we do not enumerate "this receiver's required checks" the way the old probe did. An EMPTY
+          # check rollup is the readable proxy for an ungated receiver, and the warning must survive: the
           # old code shouted here, and dropping the shout would quietly normalise an ungated receiver —
           # a green "Merged (CLEAN)" line reads identically whether six checks passed or none ran.
           if [ "$(rollup '(.statusCheckRollup // []) | length')" = "0" ]; then
