@@ -10,9 +10,19 @@ it answers the engine's `fieldValueByName` pre-claim read, records every posted/
 — #481 spends exactly ONE item-scoped read, on the winning path only, never a board scan (#418) — can be
 re-expressed at the HTTP layer.
 
+THE STATUS COLUMN IS STATEFUL, and #331 is why. A Status write UPDATES what the next item-Status read
+returns, so the fixture models a board rather than merely recording writes at it. It was static until
+#331: the read's answer was fixed at startup, so a `claim` — whose whole job is to write `In progress`
+over the column it recorded — left the fixture still reporting the PRE-claim column. That is a world the
+real board cannot produce, and it mattered the moment `release` began READING the live column (#331):
+every claim→release leg would have seen the pre-claim column at release time and preserved it, reporting
+a defect the engine does not have. A fixture that answers reads from its own writes cannot drift from the
+board it stands in for.
+
 Env, all optional (each parity leg spawns a fresh server):
-  FSGG_PARITY_STATUS=<name>   the column the item-Status read returns (default "Backlog"); "" = on the
-                              board with NO Status set (`fieldValueByName` null).
+  FSGG_PARITY_STATUS=<name>   the column the item-Status read returns BEFORE any write (default
+                              "Backlog"); "" = on the board with NO Status set (`fieldValueByName` null).
+                              A Status write moves it — seed the world, then let the engine act on it.
   FSGG_PARITY_FAIL_STATUS=1   the item-Status read fails (a 502) — the corpus's GH_FAIL_ITEM_STATUS.
   FSGG_PARITY_MARKERS=<json>  a JSON array of pre-existing markers to seed, each
                               {"n":<issue>, "id":<comment-id>, "worker":<w>, "prev":<enc?>, "age_hours":<h?>,
@@ -32,7 +42,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 RATE = {"cost": 1, "remaining": 4980}
 
-STATUS_NAME = os.environ.get("FSGG_PARITY_STATUS", "Backlog")
 FAIL_STATUS = os.environ.get("FSGG_PARITY_FAIL_STATUS") == "1"
 
 # The full Status option set, verbatim from harness.sh (fields.json): the restore target may be any of them.
@@ -45,7 +54,12 @@ OPTIONS = [
     {"id": "opt_done", "name": "Done"},
 ]
 
+_BY_ID = {o["id"]: o["name"] for o in OPTIONS}
+
 LOCK = threading.Lock()
+# The board's LIVE Status column, seeded from the env and moved by every Status write — see the module
+# docstring. A single cell is enough: each leg drives one item on one board.
+_STATUS = [os.environ.get("FSGG_PARITY_STATUS", "Backlog")]
 _STORE = {}          # issue number -> [ {id, body, user, updated_at} ]
 _NEXT_ID = [900]
 _WRITES = []         # [ {item, field, optionId} ] — every Status board write, in order
@@ -97,7 +111,7 @@ def graphql(query, variables):
             _GQL["itemStatus"] += 1
             if FAIL_STATUS:
                 return ("FAIL_502", None)
-            fv = None if STATUS_NAME == "" else {"name": STATUS_NAME}
+            fv = None if _STATUS[0] == "" else {"name": _STATUS[0]}
             return {"data": {"repository": {"issue": {"projectItems": {"nodes": [
                 {"project": {"number": 7}, "fieldValueByName": {"name": "Wrong board"}},
                 {"project": {"number": 12}, "fieldValueByName": fv}]}}}, "rateLimit": RATE}}
@@ -107,11 +121,20 @@ def graphql(query, variables):
                 {"id": "PVTI_item", "project": {"number": 12}}]}}}, "rateLimit": RATE}}
         if "updateProjectV2ItemFieldValue" in query:
             _GQL["mutations"] += 1
+            opt = variables.get("optionId")
             _WRITES.append({"item": variables.get("itemId"), "field": variables.get("fieldId"),
-                            "optionId": variables.get("optionId")})
+                            "optionId": opt})
+            # THE WRITE MOVES THE COLUMN. Without this the fixture would report the seeded column forever,
+            # and a `claim`'s own `In progress` write would be invisible to the release-time read (#331).
+            if opt in _BY_ID:
+                _STATUS[0] = _BY_ID[opt]
             return {"data": {"updateProjectV2ItemFieldValue": {"clientMutationId": None}}}
         if "clearProjectV2ItemFieldValue" in query:
             _GQL["mutations"] += 1
+            # Clearing is a write too: it moves the column to "no Status set", the `fieldValueByName` null
+            # arm above. A fixture that answered reads from its writes for one mutation and not the other
+            # would be exactly as incoherent as the static cell this replaced.
+            _STATUS[0] = ""
             return {"data": {"clearProjectV2ItemFieldValue": {"clientMutationId": None}}}
         return None
 
@@ -213,9 +236,19 @@ class H(BaseHTTPRequestHandler):
         if m:
             with LOCK:
                 return self._send(200, list(_STORE.get(int(m.group(1)), [])))
+        # The open-issue LIST — the set `reap`'s claim scan runs over (#581). Every issue the store knows
+        # about, which is exactly the seeded markers' issues. Must precede the single-issue regex below:
+        # `/issues` and `/issues/<n>` are one token apart.
+        if re.match(r"^/repos/[^/]+/[^/]+/issues$", p):
+            with LOCK:
+                return self._send(200, [{"number": n, "body": ""} for n in sorted(_STORE)])
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             return self._send(200, {"number": int(m.group(1)), "body": ""})
+        # `reap`'s PROOF-OF-LIFE probe (#581): the item's own `item/<n>-*` PRs. An empty list is "no PR
+        # found", the ONLY state in which a lapsed lease is collectable — which is what these legs want.
+        if re.match(r"^/repos/[^/]+/[^/]+/pulls$", p):
+            return self._send(200, [])
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4980, "limit": 5000}}})
         self._send(500, {"message": f"unhandled GET {p}"})

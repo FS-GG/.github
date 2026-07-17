@@ -1100,10 +1100,11 @@ rm -rf "$RLCACHE"
 #   • §f (a `--force` steal inherits the EVICTED claim's column) — the engine's `--force` overrides the #516
 #     self-hold check; it does not evict another worker's LIVE lease, so there is no steal to inherit
 #     through. That is a separate matter from #481.
-#   • §i/§h2 (#331: a column set DURING the lease is preserved; the unreadable-column repair advice) — the
-#     engine's `release` does not yet read-and-preserve the current column; #331 is a distinct defect with
-#     its own read (bash's "release spends 1"), ported separately. #481 changes what release restores TO,
-#     not WHETHER it first reads the live column.
+#   (§i/§h2 — #331's preserve half — were disposed here for the life of the port and are now PORTED; they
+#   live below as (i)/(i2)/(i3)/(i4). The disposition said "#481 changes what release restores TO, not
+#   WHETHER it first reads the live column", which was true and was also the whole defect: the recipe
+#   promised the preserve behaviour throughout, so the corpus knew, the doc asserted, and nothing
+#   connected the two (#911).)
 #   • the human wording (`board: Backlog`, `restored`) is asserted here at the HTTP layer (the board write's
 #     option id), not on stdout — the engine's `release` reports `released <ref> → <column>`, which names the
 #     column but not in bash's words (#867 added the column; the silent `released <ref>` is what let the
@@ -1174,7 +1175,14 @@ fi
 
 # (g) BACKWARD COMPATIBILITY. A marker minted before #481 carries no `prev=` key. It must keep releasing to
 #     `Ready` — the old behaviour, now scoped to the one case where there is genuinely nothing to restore.
-rsrv 'FSGG_PARITY_MARKERS=[{"n":356,"id":856,"worker":"pika-r01"}]' --
+#
+#     THE LIVE COLUMN IS SEEDED `In progress`, and that is the premise, not a detail. The recorded-column
+#     fallback is only REACHABLE when the live column is the claim's own footprint — any other live column is
+#     preserved by (i) below, whatever the marker recorded. This leg seeded the fixture's default (`Backlog`)
+#     until #331 landed the live read, which made it assert `Ready` for a world where bash preserves
+#     `Backlog`: a held item sitting in `Backlog` is a worker's deliberate park, not a claim to undo. The
+#     assertion is unchanged; the world it runs in is now one the board can actually produce.
+rsrv FSGG_PARITY_STATUS='In progress' 'FSGG_PARITY_MARKERS=[{"n":356,"id":856,"worker":"pika-r01"}]' --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (g) bound a port"; else
   renv release FS.GG.SDD#356 --worker pika-r01 >/dev/null 2>&1
   [ "$(rlastopt)" = "opt_ready" ] \
@@ -1185,7 +1193,9 @@ fi
 
 # (h) A claim that recorded `In progress` recorded its OWN footprint, not a column anybody chose. Restoring
 #     it would leave the item looking claimed with no claim on it — so it, too, falls back to Ready.
-rsrv 'FSGG_PARITY_MARKERS=[{"n":357,"id":857,"worker":"pika-r01","prev":"In%20progress"}]' --
+#     The live column is seeded `In progress` for (g)'s reason: it is the only world where the recorded
+#     column is consulted at all.
+rsrv FSGG_PARITY_STATUS='In progress' 'FSGG_PARITY_MARKERS=[{"n":357,"id":857,"worker":"pika-r01","prev":"In%20progress"}]' --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (h) bound a port"; else
   renv release FS.GG.SDD#357 --worker pika-r01 >/dev/null 2>&1
   [ "$(rlastopt)" = "opt_ready" ] \
@@ -1232,6 +1242,114 @@ if [ -z "$RS_PORT" ]; then bad "restore fixture (k2) bound a port"; else
   rbodies 359 | grep -q 'fsgg:claim' \
     && ok "#867: ...and the lock is STILL HELD — the refusal lands before the marker is dropped" \
     || bad "#867: a refused --status must not drop the lease" "bodies=$(rbodies 359)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (i) #331 — THE DEFECT, AND IT IS THE RECIPE'S OWN PRESCRIBED SEQUENCE. A worker hits a blocker and parks
+#     the item (`set-field Status Blocked`), then releases — pnext-item §4's blocked-item fence, verbatim.
+#     `release` must PRESERVE the Blocked, because a column set DURING the lease was chosen deliberately and
+#     is not the claim's to undo.
+#
+#     THE ASSERTION IS THE ABSENCE OF A WRITE, and that is the whole design (the changelog's "with no Status
+#     write at all rather than a redundant matching one"). A `release` that wrote `opt_blocked` here would
+#     reach the same end state and be indistinguishable from one that preserved — so the observable has to be
+#     that `release` added nothing after the worker's own write. Pre-fix, the trailing write is `opt_ready`:
+#     the deliberate Blocked reverted, reported as `released → Ready`, exit 0. Verified to fire.
+rsrv FSGG_PARITY_STATUS=Ready --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (i) bound a port"; else
+  renv claim FS.GG.SDD#374 --force --worker pika-r01 >/dev/null 2>&1
+  renv set-field FS.GG.SDD#374 Status Blocked --worker pika-r01 >/dev/null 2>&1
+  iout="$(renv release FS.GG.SDD#374 --worker pika-r01 2>/dev/null)"
+  [ "$(rget "$RS_PORT" /_writes | jq -r '[.writes[].optionId] | join(",")')" = "opt_wip,opt_blocked" ] \
+    && ok "#331: a column set DURING the lease is PRESERVED — release adds NO Status write (not even a matching one)" \
+    || bad "#331: release must not write over a column chosen during the lease" "writes=$(rget "$RS_PORT" /_writes | jq -c '[.writes[].optionId]')"
+  printf '%s' "$iout" | grep -q 'column left at Blocked' \
+    && ok "#331: ...and stdout says the column was LEFT, never claiming release put it there" \
+    || bad "#331: release must report the preserved column honestly" "stdout=$iout"
+  [ -z "$(rbodies 374)" ] \
+    && ok "#331: ...and the lease is still dropped (the marker is deleted)" \
+    || bad "#331: a preserving release must still drop the marker" "bodies=$(rbodies 374)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (i2) #331/#266 — A COLUMN WE COULD NOT READ IS NOT A COLUMN WE MAY OVERWRITE. The read fails (502); the
+#      lease must still drop, the column must be left ALONE, and the failure must be SAID.
+#
+#      This is the fail-CLOSED arm, and it is the one the obvious implementation gets wrong in whichever
+#      direction it guesses: read-compare-write with an unreadable read either preserves blindly (leaving a
+#      dead claim's `In progress` on the board forever) or reverts blindly (#331 again, on a transient 502).
+#      Neither is knowledge. The marker records `prev=Backlog`, so a release that fell back to the recorded
+#      column on a failed read would write `opt_backlog` — which would look exactly like a correct #481
+#      restore.
+rsrv FSGG_PARITY_FAIL_STATUS=1 'FSGG_PARITY_MARKERS=[{"n":375,"id":875,"worker":"pika-r01","prev":"Backlog"}]' --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (i2) bound a port"; else
+  i2out="$(renv release FS.GG.SDD#375 --worker pika-r01 2>&1)"; i2rc=$?
+  [ "$(rget "$RS_PORT" /_writes | jq -r '.count')" = "0" ] \
+    && ok "#331/#266: an UNREADABLE column is left ALONE — release writes nothing rather than guessing" \
+    || bad "#331: a failed column read must not be written over" "writes=$(rget "$RS_PORT" /_writes | jq -c '[.writes[].optionId]')"
+  [ -z "$(rbodies 375)" ] \
+    && ok "#331: ...and the lease is STILL dropped — a board we cannot read never strands a lock" \
+    || bad "#331: an unreadable column must not strand the lease" "bodies=$(rbodies 375)"
+  printf '%s' "$i2out" | grep -q 'could not be read' \
+    && ok "#331: ...and it SAYS so, naming the repair (a silent leave-alone is indistinguishable from a preserve)" \
+    || bad "#331: an unreadable column must be reported" "out=$i2out"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (i2b) #331 — NO COLUMN TO RESET IS SAID, NOT SWALLOWED. The item is on the board with NO `Status` set
+#       (`fieldValueByName` null), which `itemStatus` answers `Ok None` — the same answer it gives for an
+#       item that is not on this board at all. Either way there is nothing to reset and nothing to preserve,
+#       so no write is correct; being SILENT about it is not. A bare `released <ref>` is this recipe's
+#       documented tell for "the column did NOT land — stderr says why", so emitting one with an empty
+#       stderr raises that alarm with nothing behind it, and drops the plain "not an item on this board"
+#       the pre-#331 write path reported.
+rsrv FSGG_PARITY_STATUS= 'FSGG_PARITY_MARKERS=[{"n":378,"id":878,"worker":"pika-r01","prev":"Backlog"}]' --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (i2b) bound a port"; else
+  i2bout="$(renv release FS.GG.SDD#378 --worker pika-r01 2>/dev/null)"
+  [ "$(rget "$RS_PORT" /_writes | jq -r '.count')" = "0" ] \
+    && ok "#331: an item with NO column set gets no write — there is no footprint to reset" \
+    || bad "#331: a no-column item must not be written" "writes=$(rget "$RS_PORT" /_writes | jq -c '[.writes[].optionId]')"
+  printf '%s' "$i2bout" | grep -q 'no column to reset' \
+    && ok "#331: ...and release SAYS so, rather than a bare 'released <ref>' that reads as a failed write" \
+    || bad "#331: a no-column release must not be silent" "stdout=$i2bout"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (i3) #331/#418 — `--status S` SPENDS NO LIVE READ. The read exists ONLY to derive the default; a caller who
+#      states the end state has left no default to derive. Cheap to get wrong (read first, then notice the
+#      flag), and it would put a GraphQL point on the budget that dies first, per release, for an answer
+#      nothing consults.
+rsrv FSGG_PARITY_STATUS=Backlog --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (i3) bound a port"; else
+  renv claim FS.GG.SDD#376 --force --worker pika-r01 >/dev/null 2>&1
+  base="$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')"   # the claim's own pre-claim read
+  renv release FS.GG.SDD#376 --worker pika-r01 --status Blocked >/dev/null 2>&1
+  [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "$base" ] \
+    && ok "#331/#418: release --status spends ZERO item-Status reads — the caller stated the end state, so no default is derived" \
+    || bad "#331: --status must not pay the live read" "before=$base after=$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')"
+  [ "$(rlastopt)" = "opt_blocked" ] \
+    && ok "#331/#867: ...and it still lands the named column, beating the live column AND the recorded one" \
+    || bad "#867: --status must land the named column" "last write=$(rlastopt)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# (i4) #331 — THE SAME QUESTION IN `reap`. bash closed this split by making both verbs ask ONE question
+#      (`unclaim_status`); the port re-opened it by giving each its own marker-only copy. A reaper collects a
+#      LEASE and knows nothing about whether the item became startable — so a worker whose lease lapsed on an
+#      item it had deliberately marked `Blocked` had that column reset on its way out. That is #331 with a
+#      dead worker instead of a live one, and a fix landing only in `release` leaves it live.
+#
+#      The marker is stale (age 3h > the 120m lease) and has no PR, so #581's proof-of-life gate passes it to
+#      the delete. It records `prev=Ready`, so a reap that consulted the marker alone writes `opt_ready`.
+rsrv FSGG_PARITY_STATUS=Blocked 'FSGG_PARITY_MARKERS=[{"n":377,"id":877,"worker":"pika-r01","prev":"Ready","age_hours":-3}]' --
+if [ -z "$RS_PORT" ]; then bad "restore fixture (i4) bound a port"; else
+  i4out="$(renv reap --repo FS.GG.SDD --apply --worker pika-r02 2>&1)"
+  [ "$(rget "$RS_PORT" /_writes | jq -r '.count')" = "0" ] \
+    && ok "#331: reap PRESERVES a column chosen during the lease — it collects a lease, not a decision" \
+    || bad "#331: reap must not reset a deliberate column" "writes=$(rget "$RS_PORT" /_writes | jq -c '[.writes[].optionId]') out=$i4out"
+  [ -z "$(rbodies 377)" ] \
+    && ok "#331: ...and the stale marker is still collected (the lock is broken; only the column is spared)" \
+    || bad "#331: reap must still break the stale lock" "bodies=$(rbodies 377)"
   kill "$RS_SRV" 2>/dev/null
 fi
 
