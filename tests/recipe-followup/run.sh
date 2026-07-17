@@ -71,6 +71,21 @@ else
   bad "a recipe grep/sed-ing the raw queue file must be refused" "rc=$rc"$'\n'"$OUT"
 fi
 
+# --- #1162: the fence may be INDENTED. A ```sh fence nested under a list item carries leading
+#     whitespace, and anchoring at column 0 left every such fence unscanned. An indented hand-rolled
+#     queue write must be refused just like a flush-left one.
+rc=0; run_on '# bad — a list-nested, indented fence
+1. Record the follow-up.
+
+   ```sh
+   echo "FS-GG/game#5" >> "$HOME/.fsgg-followups-$FSGG_WORKER"
+   ```' || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q 'follow-up queue'; then
+  ok "#1162: an INDENTED (list-nested) fence hand-rolling the queue is refused"
+else
+  bad "#1162: an indented fence must be scanned, not skipped" "rc=$rc"$'\n'"$OUT"
+fi
+
 # --- the refusal must NAME the remedy. A gate that says "no" without "do this instead" gets worked
 #     around, and the workaround is another copy.
 rc=0; run_on '# bad

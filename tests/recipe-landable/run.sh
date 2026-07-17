@@ -75,6 +75,42 @@ else
   bad "a recipe reading check-runs must be refused" "rc=$rc"$'\n'"$OUT"
 fi
 
+# --- #1162: the fence may be INDENTED. A ```sh fence nested under a list item carries leading
+#     whitespace, and anchoring the fence at column 0 left every such fence UNSCANNED — a hand-rolled
+#     gate could hide in one. An indented check-runs rollup must be refused just like a flush-left one.
+rc=0; run_on '# bad — a list-nested, indented fence
+1. First, find the head SHA.
+
+   ```sh
+   gh api "repos/FS-GG/x/commits/$SHA/check-runs" --paginate --slurp | jq "[.[].check_runs[]]"
+   ```' || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q 'check runs'; then
+  ok "#1162: an INDENTED (list-nested) fence hand-rolling check-runs is refused"
+else
+  bad "#1162: an indented fence must be scanned, not skipped" "rc=$rc"$'\n'"$OUT"
+fi
+
+# --- #1162: the actions/runs matcher must catch the `-f head_sha=` FORM-FIELD shape, which carries no
+#     literal `?`. The old `actions/runs\?` required the `?` and missed this call entirely.
+rc=0; run_on '# bad — form field, no query string
+```sh
+gh api repos/FS-GG/x/actions/runs -f head_sha=$SHA --paginate --slurp | jq "[.[].workflow_runs[]]"
+```' || rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q 'workflow runs'; then
+  ok "#1162: actions/runs filtered by \`-f head_sha=\` (no \`?\`) is refused"
+else
+  bad "#1162: the form-field shape of actions/runs must be caught" "rc=$rc"$'\n'"$OUT"
+fi
+
+# --- #1162: ...but the SINGLE-run object read (`actions/runs/<id>`) is legitimate — the #721 remedy
+#     reads `referenced_workflows` off ONE run — and must NOT be flagged. The matcher excludes it.
+rc=0; run_on '# ok — a single run object, not the runs collection
+```sh
+gh api repos/FS-GG/x/actions/runs/$RUN_ID --jq ".referenced_workflows[].sha"
+```' || rc=$?
+[ "$rc" -eq 0 ] && ok "#1162: a single-run read (\`actions/runs/<id>\`) is not a rollup and passes (#721)" \
+                || bad "#1162: the matcher must not flag the legitimate single-run read" "rc=$rc"$'\n'"$OUT"
+
 # --- the refusal must NAME the remedy. A gate that says "no" without saying "do this instead" gets
 #     worked around, and the workaround is another copy.
 rc=0; run_on '# bad

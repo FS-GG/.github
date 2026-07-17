@@ -93,7 +93,11 @@ WORKFLOW_ROOT = ".github/workflows"
 # growing back in a WORKFLOW is exactly what it now watches for — and the trigger has to see it.
 PATHS_SUBJECT = ROOTS + (WORKFLOW_ROOT,)
 
-FENCE = re.compile(r"^```(\w*)\s*$")
+# The fence may be INDENTED — a ```sh fence nested under a list item carries leading whitespace, and
+# anchoring at column 0 meant every list-nested fence went unscanned (a hand-rolled gate could hide in
+# one). `\s*` allows the indent; a blockquoted `> ```sh` still does NOT match, because a `>` is prose —
+# that is where the docs QUOTE the banned endpoints as examples, and must stay legal.
+FENCE = re.compile(r"^\s*```(\w*)\s*$")
 
 # The escape hatch, in the comment syntax of the thing being scanned. A recipe is markdown, so it is an
 # HTML comment before the fence; a workflow's `run:` block is SHELL, where `<!--` is not a comment but a
@@ -105,8 +109,14 @@ EXEMPT_SH = re.compile(r"#\s*landable-exempt:")
 
 # The two endpoints that ARE the merge gate. Matched loosely on purpose: any shape of `gh api` call,
 # any quoting, any interpolation.
+#
+# `actions/runs` matches the runs COLLECTION however it is filtered — `actions/runs?head_sha=…` (a query
+# string) AND `actions/runs -f head_sha=…` (a `gh api` form field, which has no `?`), the two shapes the
+# recipes actually use. The old `actions/runs\?` required a literal `?` and so missed the form-field call
+# entirely. The `(?![/\w])` excludes `actions/runs/<run-id>` — a SINGLE run object, which the recipe reads
+# legitimately to check `referenced_workflows` (#721) and is not a rollup.
 BANNED = (
-    (re.compile(r"actions/runs\?"), "workflow runs (`actions/runs?head_sha=…`)"),
+    (re.compile(r"actions/runs(?![/\w])"), "workflow runs (`actions/runs` filtered by head_sha)"),
     (re.compile(r"/check-runs"), "check runs (`commits/<sha>/check-runs`)"),
 )
 
