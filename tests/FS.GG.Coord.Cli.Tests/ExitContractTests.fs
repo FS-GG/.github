@@ -17,15 +17,15 @@ open FS.GG.Coord.Cli
 /// engine returns rather than to a digit, so retyping `ExitNone` as 8 fails here instead of shipping a
 /// table that lies.
 ///
-/// WHAT IT DOES NOT DO, said plainly, because the gap has already cost this change once: it pins the
-/// documentation to the engine's CONSTANTS, not to `take`'s BEHAVIOUR. Rewire `take` to return
-/// `ExitGreen` on an empty queue and every assertion here still passes. Nothing enumerates the set of
-/// codes `take` can actually return — the return paths are ints threaded through three modules, not a
-/// union the compiler can force a match on. That is exactly how the first draft of this table shipped
-/// with no row for `ExitRed`, which `take` propagates from `renderDecision`'s Red arm. The rows below
-/// that assert reachability are hand-derived from reading `Client.take`, and they are only as good as
-/// that reading. Making this total needs `take` to return a typed verdict rather than an int — a
-/// refactor across `Cli`/`GitHub`, filed rather than smuggled in here.
+/// WHAT #918 CLOSED, AND WHAT IT DID NOT. There is now a union — `FS.GG.Coord.ExitCode` — with one
+/// `toInt` and a declared per-command domain (`takeCodes`/`landableCodes`), and `Core.Tests` checks
+/// `Protocol.takeExitCodes`/`landableExitCodes` COMPLETE against that domain. So a code the command's
+/// declared return set contains, but the table omits, now fails a gate — the defect that shipped the
+/// first table with no row for `ExitRed`. What is STILL hand-derived is the domain list itself: `take`'s
+/// handler returns an int, not an `ExitCode`, so the compiler cannot force `takeCodes` to equal the set
+/// of arms `Client.take` actually reaches. The reachability rows below remain a reading of `Client.take`,
+/// now cross-checked against `takeCodes`. Full behavioural totality needs `take` to RETURN the union —
+/// a further refactor, left for when `Client.fs` is free (a live claim held it as this landed).
 ///
 /// It lives in `Cli.Tests` for a dependency reason: the codes are declared in `Cli`/`GitHub`, which
 /// reference `Core`, so `Protocol.fs` cannot see them. `Cli.Tests` references `Cli` and therefore sees
@@ -63,9 +63,11 @@ module ExitContractTests =
     /// batch write. A table that lists it under `take` sends a worker to retry a board that somebody
     /// else's command has already half-written.
     ///
-    /// KEYED ON THE NAME, NOT THE NUMBER, and that distinction is load-bearing: `Errors.ExPartial` and
-    /// `Client.ExitNoVerdict` are BOTH 4 (they are ints in different modules — see the collision this
-    /// PR files rather than fixes). Asserting "4 is undocumented" would therefore also forbid
+    /// KEYED ON THE NAME, NOT THE NUMBER, and that distinction was load-bearing when `Errors.ExPartial`
+    /// and `Client.ExitNoVerdict` were BOTH 4 (the collision #918 has since fixed — they are now 9 and 4).
+    /// The name is the right key anyway: it is the semantic identity, and asserting "9 is undocumented"
+    /// would forbid nothing useful, whereas "the meaning EX_PARTIAL is not a `take` outcome" is the true
+    /// claim. Asserting "4 is undocumented" would ALSO have forbidden
     /// documenting a NoVerdict, which `renderDecision` has a live arm for and `take` would propagate
     /// the day `Batch.schedule` grows a NoVerdict leg. The defect was the NAME and its meaning, so that
     /// is what this refuses.
@@ -98,6 +100,37 @@ module ExitContractTests =
             Protocol.takeExitCodes |> List.exists (fun c -> c.Name <> ""),
             "no EX_* code is documented at all — the table has gone vacuous")
 
+    /// #918 — THE ONE SOURCE, ENFORCED ACROSS THE THREE MODULES THAT USED TO DISAGREE.
+    ///
+    /// The codes are one union now, `FS.GG.Coord.ExitCode`, with one `toInt`. `Errors` and `Program`
+    /// derive their constants from it directly. `Client` still spells its own literals — a live claim
+    /// held `Client.fs` when this landed, so its derivation is a follow-up — which is exactly why this
+    /// pins every module's constant to the union's number: until `Client.fs` derives them too, this is
+    /// what refuses a drift. Retype any constant, or the union, and the two disagree here.
+    [<Fact>]
+    let ``every module's exit constant is the union's number`` () =
+        Assert.Equal(ExitCode.toInt ExitCode.Green, Client.ExitGreen)
+        Assert.Equal(ExitCode.toInt ExitCode.Error, Client.ExitError)
+        Assert.Equal(ExitCode.toInt ExitCode.Red, Client.ExitRed)
+        Assert.Equal(ExitCode.toInt ExitCode.NoVerdict, Client.ExitNoVerdict)
+        Assert.Equal(ExitCode.toInt ExitCode.NoneStartable, Client.ExitNone)
+        Assert.Equal(ExitCode.toInt ExitCode.Contended, Client.ExitContended)
+        Assert.Equal(ExitCode.toInt ExitCode.Pending, Client.ExitPending)
+        Assert.Equal(ExitCode.toInt ExitCode.Rate, Errors.ExRate)
+        Assert.Equal(ExitCode.toInt ExitCode.Offboard, Errors.ExOffboard)
+        Assert.Equal(ExitCode.toInt ExitCode.Partial, Errors.ExPartial)
+
+    /// #918 — AND THE COLLISION IS GONE. `Errors.ExOffboard` was `3` (colliding with `Client.ExitRed`)
+    /// and `Errors.ExPartial` `4` (colliding with `Client.ExitNoVerdict`). Distinct meanings — off-board
+    /// is a fact on a successful read, partial is a half-landed write — so they moved to their own
+    /// numbers rather than merging into the verdict codes.
+    [<Fact>]
+    let ``the github-layer codes no longer collide with the verdict codes`` () =
+        Assert.NotEqual(Errors.ExOffboard, Client.ExitRed)
+        Assert.NotEqual(Errors.ExPartial, Client.ExitNoVerdict)
+        Assert.Equal(8, Errors.ExOffboard)
+        Assert.Equal(9, Errors.ExPartial)
+
     // ---- `landable` (#944) -------------------------------------------------------------------------
     //
     // `Protocol.landableExitCodes` (#900) is prose, exactly as `takeExitCodes` above is, and it arrived
@@ -110,10 +143,13 @@ module ExitContractTests =
     // `Client.ExitPending`/`ExitRed`". Until this block, it did not. A comment claiming a gate that does
     // not exist is #266's signature landing inside the file written to refuse it.
     //
-    // Keyed on the CONSTANT, never the digit — the same discipline #889 used above, and here it is load
-    // bearing twice over: `Client.ExitRed`/`Errors.ExOffboard` are BOTH 3, and
-    // `Client.ExitNoVerdict`/`Errors.ExPartial` are BOTH 4 (#918). This block asserts what `landable`
-    // returns; it does not try to resolve that collision.
+    // Keyed on the CONSTANT, never the digit — the same discipline #889 used above. This USED to be load
+    // bearing twice over, because `Client.ExitRed`/`Errors.ExOffboard` were BOTH 3 and
+    // `Client.ExitNoVerdict`/`Errors.ExPartial` BOTH 4, so a digit could not tell a verdict from a
+    // GitHub-layer fact. #918 RESOLVED that: the codes are one union now (`FS.GG.Coord.ExitCode`), and it
+    // moved `ExOffboard` to 8 and `ExPartial` to 9, off the verdict codes they collided with. Keying on
+    // the constant remains right — it is the semantic identity, not the number — and
+    // `every module's exit constant is the union's number` below pins all three modules to that one union.
 
     let private landableDocuments (code: int) =
         Protocol.landableExitCodes |> List.exists (fun c -> c.Code = code)
@@ -207,19 +243,17 @@ module ExitContractTests =
     let ``landable's contract is actually stated`` () =
         Assert.NotEmpty Protocol.landableExitCodes
 
-    /// WHAT THIS BLOCK CANNOT PIN, said out loud rather than left as a silent hole (#889's discipline).
+    /// #918 CLOSED THIS GAP — it used to be the one row pinned by a bare digit.
     ///
-    /// `landable` returns SIX codes; five are pinned above. The sixth is 2 — `Program.main`'s defect
-    /// handler — and `Program.fs` declares it `let private ExitDefect = 2`, so `Cli.Tests` cannot
-    /// reference the constant and this asserts the DIGIT. That is strictly weaker: retyping
-    /// `ExitDefect = 9` leaves this green and the table lying, which is the exact failure the rest of
-    /// the file exists to refuse.
-    ///
-    /// It is left this way deliberately. Making it public is an edit to `Program.fs` — outside this
-    /// item's touch-set, and the same class of problem #918 owns (the codes are ints across three
-    /// modules, two of them colliding). Fixing it here would smuggle #918's decision into a test file.
+    /// `landable` returns SIX codes; the sixth is the defect handler's 2. `Program.fs` declared it
+    /// `let private ExitDefect = 2`, so `Cli.Tests` could not see the constant and this asserted the
+    /// DIGIT — strictly weaker (retyping `ExitDefect = 9` left it green and the table lying). Strengthening
+    /// it then meant editing `Program.fs`, "the same class of problem #918 owns", and would have smuggled
+    /// #918's decision into a test file. #918 is now made: the number lives in `FS.GG.Coord.ExitCode`, and
+    /// `Program.fs`'s `ExitDefect` derives from it — so this pins the documented row to
+    /// `ExitCode.toInt ExitCode.Defect`, the union case itself, not a digit.
     [<Fact>]
-    let ``landable's defect code is documented — pinned only by number, see #918`` () =
+    let ``landable's defect code is documented, pinned to the union (#918)`` () =
         Assert.True(
-            landableDocuments 2,
+            landableDocuments (ExitCode.toInt ExitCode.Defect),
             "2 (the engine broke — Program.main's defect handler) is reachable from `landable` and is not documented")

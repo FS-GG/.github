@@ -189,7 +189,7 @@ does.
 
 | Contract | Consumer |
 |---|---|
-| Exit codes `0` ok / `1` error / `3` EX_OFFBOARD / `75` EX_RATE | every worker loop; `EX_RATE` must read as *back off*, never *no work* |
+| Exit codes `0` ok / `1` error / `8` EX_OFFBOARD / `75` EX_RATE (one union, `FS.GG.Coord.ExitCode`; `3`/`4` are the RED/NO-VERDICT verdicts — #918/ADR-0046) | every worker loop; `EX_RATE` must read as *back off*, never *no work* |
 | `FSGG-PATHS OK\|DRIFT\|INVALID\|SKIP` on stdout | `touch-set-drift.yml` greps it |
 | `FSGG-DONE` / `FSGG-NOT-DONE` / `FSGG-LINT <SEV> <CODE> <id> — <detail>` | CI + skills |
 | `<!-- fsgg:claim worker= lease= harness= session= prev= -->` | the lock itself; any format change is a fleet-wide flag day |

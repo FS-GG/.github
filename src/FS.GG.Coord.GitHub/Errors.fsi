@@ -91,7 +91,7 @@ module Errors =
         ///
         /// GraphQL executes mutations SERIALLY and reports the failure as HTTP 200 carrying BOTH `data`
         /// and `errors`, with `errors[].path[0]` naming the failing alias. So the body says exactly which
-        /// writes took effect. This is `EX_PARTIAL` (4), and it is the one failure that must NEVER be
+        /// writes took effect. This is `EX_PARTIAL` (9), and it is the one failure that must NEVER be
         /// queued for replay: replaying the document would rewrite the half that already landed.
         | Partial of applied: string list * failed: (string * string) list
 
@@ -113,17 +113,19 @@ module Errors =
     /// confirming the same 403.
     val exitCode: error: IoError -> int
 
-    /// `EX_RATE` — the budget is exhausted. Try again later.
-    [<Literal>]
-    val ExRate: int = 75
+    // These three derive from `FS.GG.Coord.ExitCode.toInt` now (#918, ADR-0046) — one number space,
+    // one declaration site — so they are plain `val`s, not `[<Literal>]`s pinning a digit here.
 
-    /// `EX_OFFBOARD` — not an item on the board. A different fact, and a PERMANENT one.
-    [<Literal>]
-    val ExOffboard: int = 3
+    /// `EX_RATE` (75) — the budget is exhausted. Try again later.
+    val ExRate: int
 
-    /// `EX_PARTIAL` — a batch document that applied some aliases and failed others.
-    [<Literal>]
-    val ExPartial: int = 4
+    /// `EX_OFFBOARD` (8) — not an item on the board. A different fact from a RED verdict, and a
+    /// PERMANENT one. Was `3` until #918 moved it off the verdict code it collided with.
+    val ExOffboard: int
+
+    /// `EX_PARTIAL` (9) — a batch document that applied some aliases and failed others. Was `4` until
+    /// #918 moved it off the NO-VERDICT code it collided with.
+    val ExPartial: int
 
     /// The operator-facing sentence. It must NAME the condition, because the whole failure class this
     /// port exists to end is one where the tool said nothing and the caller assumed the best.
