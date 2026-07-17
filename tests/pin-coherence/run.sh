@@ -129,13 +129,18 @@ make_repo() {
 }
 JSON
 
+  # `versioning=loose` is the CORRECTED (#1119) state: under it the bare literal is a single, bumpable
+  # version. Omitting it — the manager default `nuget` — reads the literal as a `>=` floor that never
+  # bumps (#576), which the single-version check below now reds; the `versioning`-omitted leg exercises
+  # exactly that. So the green baseline must carry the token, or every leg reds on a scheme it is not
+  # about. `bare_pin`/`repin_versioning` below vary this line to test the new assertion.
   cat > "$root/$PIN_FILE" <<YAML
 name: contract-coherence
 jobs:
   coherence:
     steps:
       - run: |
-          # renovate: datasource=nuget depName=FS.GG.SDD.Cli
+          # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
           dotnet tool install --global FS.GG.SDD.Cli --version $version
 YAML
 
@@ -172,6 +177,28 @@ if not m:
     sys.exit("vacuous fixture: no --version literal to rewrite")
 if m.group(1) == new:
     sys.exit(f"vacuous fixture: the pin is already {new!r} — this mutation is a no-op")
+open(path, "w", encoding="utf-8").write(text[:m.start(1)] + new + text[m.end(1):])
+PY
+  git -C "$root" add -A
+}
+
+# set_versioning <repo> <value|""> — rewrite the pin's `# renovate:` annotation to carry
+# `versioning=<value>`, or REMOVE the token (→ the manager default, nuget) when <value> is "". Refuses
+# a no-op. This is the #576/#1122 subject: the token is what decides single-version vs `>=` floor.
+set_versioning() {
+  local root="$1" val="$2"
+  python3 - "$root/$PIN_FILE" "$val" <<'PY'
+import re, sys
+path, val = sys.argv[1:3]
+text = open(path, encoding="utf-8").read()
+m = re.search(r"^(\s*#\s*renovate:.*)$", text, re.MULTILINE)
+if not m:
+    sys.exit("vacuous fixture: no `# renovate:` annotation line to edit")
+line = m.group(1)
+without = re.sub(r"\s+versioning=\S+", "", line)
+new = without + (f" versioning={val}" if val else "")
+if new == line:
+    sys.exit(f"vacuous fixture: the annotation is already {'versioning='+val if val else 'versioning-less'} — no-op")
 open(path, "w", encoding="utf-8").write(text[:m.start(1)] + new + text[m.end(1):])
 PY
   git -C "$root" add -A
@@ -252,6 +279,36 @@ PRE="$(make_repo pre 0.9.0)"; repin "$PRE" 0.9.0-preview.1
 must_fail "'0.9.0-preview.1' is not 'equal' to feed-newest '0.9.0'" "$PRE" "$FEED" "is pinned at '0.9.0-preview.1' but the newest on the registry Renovate reads is '0.9.0'"
 must_pass "a release outranks its own prerelease" "$BASE" "$(feed_with onlyrelease '["0.9.0","0.9.0-preview.1"]')"
 must_fail "a pin is AHEAD of a feed serving only its prerelease" "$BASE" "$(feed_with onlypre '["0.9.0-preview.1"]')" "AHEAD"
+
+echo
+echo "--- a pin's versioning scheme must make its literal a SINGLE version, not a >= floor (#576/#1122) ---"
+#
+# The blind spot that hid #576 for four rounds: the annotation manager's versioningTemplate defaults
+# to `nuget`, and under `nuget` a BARE literal `0.9.0` is `>=0.9.0` — every newer release satisfies
+# it, so the bot proposes nothing while the pin sits at exactly newest and passes freshness. The
+# baseline carries `versioning=loose` (the #1119 fix), under which the same literal is single and
+# bumpable; these legs flip only that token.
+
+# versioning= OMITTED => the manager default nuget => bare literal is a >= floor => RED
+DEFAULTVER="$(make_repo defaultver 0.9.0)"; set_versioning "$DEFAULTVER" ""
+must_fail "a pin left at the manager-default nuget scheme (bare literal = >= floor) fails" "$DEFAULTVER" "$FEED" \
+  "can NEVER bump"
+# ...and it reds EVEN THOUGH the pin equals feed-newest — the property freshness cannot see (#576).
+must_fail "...and it says so though the pin equals feed-newest (the #576 blind spot)" "$DEFAULTVER" "$FEED" \
+  "equals newest TODAY"
+
+# an EXPLICIT versioning=nuget over a bare literal is the same floor => RED
+EXPLICITNUGET="$(make_repo explicitnuget 0.9.0)"; set_versioning "$EXPLICITNUGET" "nuget"
+must_fail "an explicit versioning=nuget over a bare literal fails too" "$EXPLICITNUGET" "$FEED" \
+  "versioning='nuget', which reads it as a RANGE"
+
+# versioning=loose (the baseline) is the GREEN case — pinned here beside its failing sibling.
+must_pass "versioning=loose makes the bare literal a single, bumpable version (#1119)" "$BASE"
+
+# an UNVERIFIED scheme fails CLOSED — the gate must not assume a scheme it never drove is 'single'.
+BOGUSVER="$(make_repo bogusver 0.9.0)"; set_versioning "$BOGUSVER" "maven"
+must_fail "an unverified versioning scheme fails closed, not assumed-fine (#266)" "$BOGUSVER" "$FEED" \
+  "has not verified against renovate"
 
 echo
 echo "--- the bump MECHANISM is gated, not assumed (the #263 / #576 root cause) ---"
@@ -533,9 +590,12 @@ git -C "$THIRDPARTY" add -A
 must_fail "renaming the required pin away fails" "$THIRDPARTY" "$FEED" "no longer sees 1 known pin(s): FS.GG.SDD.Cli in .github/workflows/contract-coherence.yml"
 
 EXTRA="$(make_repo extra)"
+# `versioning=loose` so this pin is a SINGLE version and reaches the FS.GG-resolution check — the
+# property under test here. Without it the manager-default `nuget` reds it on the #576 blind spot
+# first, and this leg would then assert a reason (single-version) it is not about.
 cat >> "$EXTRA/$PIN_FILE" <<'YAML'
       - run: |
-          # renovate: datasource=nuget depName=Expecto
+          # renovate: datasource=nuget depName=Expecto versioning=loose
           dotnet tool install --global Expecto --version 10.2.1
 YAML
 git -C "$EXTRA" add -A
@@ -939,8 +999,17 @@ cfg, hosts = gate.check_bump_mechanism(root, f"{root}/default.json")
 assert hosts, "the preset routes FS.GG.* nowhere at all"
 unreadable = [h for h in hosts if h not in gate.PUBLIC_HOSTS and h not in gate.AUTH_HOSTS]
 assert not unreadable, f"the preset routes FS.GG.* to unreadable host(s): {unreadable}"
-rx, mp = gate.load_annotation_manager(f"{root}/default.json")
+rx, mp, vt = gate.load_annotation_manager(f"{root}/default.json")
 pins = gate.scan_pins(root, rx, mp)
+# The real preset's manager must resolve to a scheme the gate knows, and the real SDD.Cli pin must be
+# a single version under it — the #576/#1122 property, asserted against the real tree so a dropped
+# `versioning=loose` breaks a test, not a release.
+for _p in pins:
+    _scheme = gate.resolve_versioning(vt, _p.versioning)
+    assert gate.is_single_version(_scheme, _p.current_value), (
+        f"{_p.dep_name} at {_p.current_value!r} is NOT a single version under versioning={_scheme!r} "
+        f"— it can never bump (#576)"
+    )
 gate.assert_required_pins(pins)
 assert pins, "no pins found in the real repo"
 
