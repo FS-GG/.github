@@ -44,6 +44,14 @@ RATELIMIT = os.environ.get("SF_RATELIMIT", "") == "1"
 LOCK = threading.Lock()
 # Every FIELD mutation document the engine POSTs, in order. The count IS the #448 assertion.
 MUTATIONS = []
+# How many GraphQL documents the engine POSTed, mutation OR read. MUTATIONS alone cannot express "spent NO
+# budget": a bootstrap that resolves the board is a GraphQL request that emits no mutation, so a zero
+# mutation count is also what "read the board, then refused" looks like. #1032 needs the stronger fact —
+# a refusal that precedes the ref parse sends NOTHING — and a counter that cannot see reads would report
+# green on a subject it never looked at. A COUNT, not a list: unlike MUTATIONS (whose `last` the #448 legs
+# read back), nothing inspects these documents, and retaining every board query to call len() on them is
+# waste that invites a reader to think otherwise.
+GRAPHQL_COUNT = 0
 
 FIELDS = [
     {"id": "PVTSSF_status", "name": "Status", "dataType": "SINGLE_SELECT",
@@ -89,6 +97,9 @@ def mutation_response(doc):
 
 
 def graphql(q):
+    global GRAPHQL_COUNT
+    with LOCK:
+        GRAPHQL_COUNT += 1
     if "projectsV2" in q:
         return {"data": {"organization": {"projectsV2": {"nodes": [
             {"number": 12, "title": "Coordination", "id": "PVT_coord"}]}}, "rateLimit": RATE}}
@@ -139,7 +150,9 @@ class H(BaseHTTPRequestHandler):
         # transport over.
         if p.rstrip("/") == "/_mutations":
             with LOCK:
-                return self._send(200, {"count": len(MUTATIONS), "last": MUTATIONS[-1] if MUTATIONS else ""})
+                return self._send(200, {"count": len(MUTATIONS),
+                                        "last": MUTATIONS[-1] if MUTATIONS else "",
+                                        "graphql": GRAPHQL_COUNT})
         m = re.match(r"^/repos/[^/]+/[^/]+/issues/(\d+)$", p)
         if m:
             n = int(m.group(1))
