@@ -81,7 +81,10 @@ git_toplevel() { git rev-parse --show-toplevel 2>/dev/null || true; }
 
 # THE ARTIFACT IS NOT A REF (#929). Tier 2 execs a BUILD OUTPUT, and nothing keeps it in step with the
 # `src/` beside it: `git pull` does not rebuild it, `git status` cannot see it, and `--version` answers
-# 0.2.0.0 from every build ever made. So a worker can run — and WRITE TO THE BOARD WITH — code that is
+# the same assembly version from every build ever made — `0.2.0.0` when this line was written, `0.3.0.0`
+# today, and never once a per-commit answer, which is the whole point rather than a detail that rotted.
+# (#1018 measured exactly that: a global tool and a current `src/` both said `0.3.0.0`, hours apart in
+# build time.) So a worker can run — and WRITE TO THE BOARD WITH — code that is
 # not in their own tree. Twice on 2026-07-16 a stale engine silently ignored `release --status`, putting
 # a merged item back to `Ready`: #914's own fix, absent from an engine whose `src/` contained it.
 #

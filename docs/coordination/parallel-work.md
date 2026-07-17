@@ -840,11 +840,26 @@ scripts/fsgg-coord release <issue>            # ...or hand it back
   resolves ONE engine, in this order, and fails loudly if it finds none (never a silent no-op, #266):
 
   1. `FSGG_COORD_ENGINE_BIN` — an explicit path, honoured or refused, never fallen back from.
-  2. a global tool on `PATH` — `dotnet tool install -g FS.GG.Coord.Cli`.
-  3. a **local manifest** — `.config/dotnet-tools.json` + `dotnet tool run`; the shim runs
+  2. a **repo-local source build** — `.github` alone builds the engine from source, and never from the
+     feed (ADR-0034 decision 2), so fixing coord never requires publishing coord. Where a source build
+     exists it is the **authority**, and it outranks both packaged forms below.
+  3. a global tool on `PATH` — `dotnet tool install -g FS.GG.Coord.Cli`.
+  4. a **local manifest** — `.config/dotnet-tools.json` + `dotnet tool run`; the shim runs
      `dotnet tool restore` for you the first time (a manifest is a *declaration*, not an installation, #655).
-  4. a **repo-local source build** — `.github` alone builds the engine from source (ADR-0034 §4.3), so
-     fixing coord never requires publishing coord.
+
+  **The source build used to be listed LAST — beneath both packaged forms — and the shim resolved it that
+  way** ([#1018](https://github.com/FS-GG/.github/issues/1018)). This list stated decision 2's invariant in
+  item 4 while item 2 contradicted it: in `.github`, a **feed** build beat the authoritative source, so the
+  one repo that never depends on the feed silently did, and a repair sitting in `src/` never ran. It falsely
+  closed epic 889 with the guard that refuses exactly that built and present
+  ([#1005](https://github.com/FS-GG/.github/issues/1005)), and it made the shim's own fixtures post 2 real
+  claims to this board ([#1008](https://github.com/FS-GG/.github/issues/1008)).
+
+  **In a receiver the order below item 1 is unchanged**, and structurally so: the condition is the source
+  build's *existence*, not a repo name — only the repo that owns coord's source can have one — so a receiver
+  resolves exactly as it always did. If you deliberately want the packaged engine inside `.github`, item 1
+  outranks the source build and is the way to say so:
+  `FSGG_COORD_ENGINE_BIN="$(command -v fsgg-coord-engine)"`.
 
 - **In a receiver you install nothing.** Every receiver already declares the engine in
   `.config/dotnet-tools.json` — Renovate keeps its version current, the kit distributes the file — and the
