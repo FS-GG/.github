@@ -178,7 +178,10 @@ module OptionsTests =
     [<Fact>]
     let ``lint --json / --repo / --strict are all captured`` () =
         let o = parse [ "lint"; "--repo"; "sdd"; "--json"; "--strict" ] |> ok
-        Assert.Equal(Some "sdd", o.Repo)
+        // RESOLVED, not the raw token (#962): the parser owns `--repo`'s meaning, so every verb gets the
+        // repo NAME board rows carry. This asserted `Some "sdd"` for as long as resolution was a per-verb
+        // opt-in downstream — which is exactly what let `ready` be left out of it.
+        Assert.Equal(Some "FS.GG.SDD", o.Repo)
         Assert.Equal(Json, o.Render)
         Assert.True(o.Strict)
 
@@ -226,7 +229,9 @@ module OptionsTests =
         let o = parse [ "landable"; "801"; "--repo"; "FS-GG/FS.GG.SDD" ] |> ok
         Assert.Equal(Landable, o.Command)
         Assert.Equal<string list>([ "801" ], o.Args)
-        Assert.Equal(Some "FS-GG/FS.GG.SDD", o.Repo)
+        // The owner is dropped and the repo part kept (#962) — `owner/repo` is one of the three documented
+        // `--repo` spellings, and all three reduce to the name board rows carry.
+        Assert.Equal(Some "FS.GG.SDD", o.Repo)
         // Without --wait, the poll knobs are unset (the single-shot verdict).
         Assert.False(o.Wait)
         Assert.Equal(None, o.Tries)

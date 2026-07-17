@@ -2712,24 +2712,14 @@ module Client =
                             ExitGreen
 
     /// resolve_repo (bash): a `--repo` value is a registry short-id (`sdd`), an `owner/repo`, or a literal
-    /// repo name. It reduces to the repo NAME board rows carry — a short-id maps, an `owner/repo` keeps its
-    /// repo part, a literal name passes through — so `--repo sdd`, `--repo FS-GG/FS.GG.SDD` and
-    /// `--repo FS.GG.SDD` all name one queue. (The roster map is embedded, not read from repos.yml, because
-    /// the shim ships as a `kind: client` kit item WITHOUT the roster — case 13 §6c / #381.) Shared by the
-    /// #480 worker-command scoping below and by verify-paths' `--repo`/`--issue` boundary (#479).
-    let private resolveRepo (raw: string) : string =
-        match raw.ToLowerInvariant() with
-        | "sdd" -> "FS.GG.SDD"
-        | "rendering" -> "FS.GG.Rendering"
-        | "governance" -> "FS.GG.Governance"
-        | "templates" -> "FS.GG.Templates"
-        | "game" -> "FS.GG.Game"
-        | "audio" -> "FS.GG.Audio"
-        | _ ->
-            // owner/repo -> the repo part (bash's `${1#*/}`); a literal name -> itself.
-            match raw.IndexOf('/') with
-            | -1 -> raw
-            | i -> raw.Substring(i + 1)
+    /// A repo token → the repo NAME board rows carry. THE MAP NOW LIVES IN THE PARSER (`Options.resolveRepo`,
+    /// #962), because that is the one funnel every verb reaches; this alias keeps the call sites that resolve
+    /// something the parser never saw — a GIT REMOTE (`scopedRepo`, `defaultRepoScope`) or a POSITIONAL repo
+    /// arg (`issues <repo>`) — reading in the local vocabulary.
+    ///
+    /// An explicit `--repo` is ALREADY resolved by the time it reaches this module, so it needs no call here.
+    /// The remaining ones are idempotent and harmless: they resolve a name that may already be resolved.
+    let private resolveRepo (raw: string) : string = Options.resolveRepo raw
 
     // ---- #480/#430: the repo a command scopes to — the checkout you are STANDING IN ------------------
     // Defined ABOVE verify-paths (and the worker-command `scopedRepo` below) because BOTH read the same
@@ -3035,14 +3025,29 @@ module Client =
     // `parseGitHubSlug` + `gitRemoteRepo` are defined above verify-paths (its #430 default reads the same
     // remote); only the worker-command wrapper lives here.
 
-    /// The repo a worker command (`next`/`take`/`batch`/`who`) scopes to. An explicit `--repo` wins and is
-    /// resolved through `resolveRepo`; otherwise the scope defaults to the checkout you are standing in
-    /// (#480). Reconcilers (`ready`) do NOT call this — /check-board runs a bare `ready --all` to reconcile
-    /// the WHOLE board, so narrowing it to the checkout would silently shrink the reconciler to one repo,
-    /// trading this scope bug for a strictly worse one in the very tool that exists to catch it.
+    /// The DEFAULT scope of a worker command (`next`/`take`/`batch`/`who`) when no `--repo` spells one out:
+    /// the checkout you are standing in (#480). Reconcilers (`ready`) do NOT call this — /check-board runs a
+    /// bare `ready --all` to reconcile the WHOLE board, so narrowing it to the checkout would silently shrink
+    /// the reconciler to one repo, trading this scope bug for a strictly worse one in the very tool that
+    /// exists to catch it.
+    ///
+    /// DEFAULTING IS ALL THIS DOES NOW, AND THE SPLIT IS THE FIX (#962). It used to also RESOLVE an explicit
+    /// `--repo`, and those are two different questions:
+    ///
+    ///   1. "no `--repo` — which repo do I mean?"  → per-verb. A reconciler must answer "the whole org".
+    ///   2. "`--repo sdd` — which repo is that?"   → universal. `sdd` is `FS.GG.SDD` for every verb alive.
+    ///
+    /// Conflating them made the ONLY available choice both-or-neither, so excluding `ready` to get (1) right
+    /// silently dropped (2) as well: `ready --repo governance` compared `"governance"` against the row's
+    /// `"FS.GG.Governance"` verbatim, matched nothing, and printed `[]` with exit 0 over a 50-item board —
+    /// indistinguishable from an empty queue, in the read `/pnext-item` §1 makes the truth-check for a park.
+    /// (2) is now the PARSER's, for every verb at once, so this answers (1) alone.
     let private scopedRepo (opts: Options) : string option =
         match opts.Repo with
-        | Some r -> Some(resolveRepo r)
+        // Already resolved by `parse`. Resolving again would be idempotent, but it would also re-plant the
+        // habit that grew this bug: resolution living at each site that remembers to ask for it.
+        | Some r -> Some r
+        // A git remote is not an argument, so the parser never saw it — this one is genuinely ours.
         | None -> gitRemoteRepo () |> Option.map resolveRepo
 
     /// #548: the repo a BARE `<n>` ref resolves against — `Context.DefaultRepo`. An explicit `--repo` wins
@@ -3591,13 +3596,23 @@ module Client =
         // `scopedRepo`, which drops the owner — so reading `opts.Repo` after it would launder a non-FS-GG
         // remote into an "explicit --repo" and defeat the owner check that keeps a bare number a hard error
         // outside the org.
+        //
+        // #962's parse-time resolution does not disturb this. What is guarded against here is the git-remote
+        // FILL-IN — `None` becoming `Some` — and the parser only ever rewrites a `Some` in place. A caller
+        // who passed no `--repo` still arrives with `None` and still reaches the owner check.
         let callerOpts = opts
 
-        // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
+        // #480: a WORKER command DEFAULTS to the repo you are standing in when no `--repo` spells it out; a
         // reconciler stays org-wide. `take` ACTS — it claims an item and prints a worktree command against
         // THIS checkout's origin — so an undetectable scope is a hard error, not a quiet fall-back to the
         // whole org, which is what once handed a `.github` worker another repo's item and a worktree
         // command that would have built it in the wrong repository.
+        //
+        // This list is about DEFAULTING ONLY (#962) — resolution happened above, for everything. Membership
+        // here is a real per-verb judgement ("is this a worker command or a reconciler?"), and a verb left
+        // out of it fails LOUDLY rather than silently: it simply has no `--repo`, which `take`/`landable`/
+        // `reap` already refuse by name. That is the whole difference from the resolution list this replaced,
+        // where being left out bought you a verbatim string compare that matched nothing and exited 0.
         let opts =
             match opts.Command with
             | Next
