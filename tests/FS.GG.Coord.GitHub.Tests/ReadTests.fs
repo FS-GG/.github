@@ -1,6 +1,7 @@
 module FS.GG.Coord.GitHub.Tests.ReadTests
 
 open Xunit
+open FS.GG.Coord
 open FS.GG.Coord.Types
 open FS.GG.Coord.GitHub
 open FS.GG.Coord.GitHub.Errors
@@ -782,3 +783,104 @@ let ``a page we cannot COUNT is never memoised - headroom unproven is headroom r
     match validatorsFor "check-runs" with
     | [ None; Some _ ] -> ()
     | other -> failwith $"a countable page with headroom must still revalidate — got %A{other}"
+
+/// Drives the mergeability re-read budget without paying its wall-clock: the production delay is ~1s and the
+/// budget is 3, so an un-nulled `FSGG_COORD_MERGEABLE_RETRY_MS` would cost these tests ~2s each to prove a
+/// decision that has nothing to do with the sleeping.
+type private NoMergeableRetryDelay() =
+    do System.Environment.SetEnvironmentVariable("FSGG_COORD_MERGEABLE_RETRY_MS", "0")
+
+    interface System.IDisposable with
+        member _.Dispose() =
+            System.Environment.SetEnvironmentVariable("FSGG_COORD_MERGEABLE_RETRY_MS", null)
+
+/// A PR whose `mergeable` is whatever the caller says, counting how many times it was read. `mergeable` is
+/// rendered as a raw JSON token so a test can serve `null` (COMPUTING) and `true`/`false` through one fixture.
+type private MergeablePrServer(tokenFor: int -> string) =
+    let mutable prReads = 0
+
+    member _.PrReads = prReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.EndsWith "pulls/801" then
+                    prReads <- prReads + 1
+
+                    $"""{{"number":801,"state":"open","mergeable":%s{tokenFor prReads},"head":{{"ref":"item/42-x","sha":"sha-x"}}}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                else
+                    """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+[<Fact>]
+let ``a mergeable still COMPUTING past the re-read budget is pending, not unknown — so --wait waits`` () =
+    // #950. GitHub computes `mergeable` in a background job and serves `null` until it lands, which is the
+    // NORMAL first answer for a seconds-old PR — exactly the PR §5 tells a worker to run `landable --wait`
+    // on, immediately after opening it. A `null` outliving the bounded re-read is therefore a job that has
+    // not finished, not a PR nobody can read: it is GUARANTEED to change. Read as `PrUnknown` it settled at
+    // once (`Landable.settled`), so `--wait` returned exit 4 without waiting at all and §5's `|| exit 1`
+    // walked the worker away from finished, green, mergeable work.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeablePrServer(fun _ -> "null")
+
+    let state, n, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrPending, state)
+    Assert.Equal(0, n)
+
+    // No unmet reason: that channel carries assertions the CALLER added, and its stderr tells the operator
+    // "These are assertions you asked for". Nobody asked for GitHub's background job, so a reason here would
+    // be a true sentence printed under a false one.
+    Assert.Empty unmet
+
+    // A pending verdict is one `--wait` may never stop on. This is the half that actually fixes the bug:
+    // a `PrPending` that settled would return exit 7 just as promptly as the exit 4 it replaced.
+    Assert.False(Landable.settled state n 0, "a computing mergeable must NEVER settle — --wait must poll it")
+
+    // The re-read budget is unchanged (#697): 3 tries, no more. `--wait` does the waiting now, so widening
+    // the budget here would only make every single-shot caller pay for it.
+    Assert.Equal(3, server.PrReads)
+
+[<Fact>]
+let ``an ABSENT mergeable field is still unknown, and still settles — the fail-closed half`` () =
+    // The counterweight to the test above, and the reason `Computing` and `Absent` are split rather than
+    // both promoted. An absent field is not a background job: it will not appear on a second look, so
+    // "pending" would promise a resolution that can never arrive and `--wait` would poll until its cap.
+    // Unknown/4 is the honest, fail-closed answer — and a re-read would be a no-op dressed as diligence.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.EndsWith "pulls/801" then
+                    // Parses, and carries no `mergeable` at all.
+                    """{"number":801,"state":"open","head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                else
+                    """{"total_count":0,"workflow_runs":[]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrUnknown, state)
+    Assert.True(Landable.settled state 0 0, "an absent mergeable cannot change — it must settle")
+
+[<Fact>]
+let ``a mergeable that lands WITHIN the budget is still scored on the spot, not deferred to --wait`` () =
+    // The third leg, and the one that stops the fix passing for the wrong reason: promoting `Computing` to
+    // `PrPending` must not make the bounded re-read pointless. A `null` that flips to `true` on the second
+    // look is still resolved inside ONE call — a single-shot caller (`adopt`, `who`, `reap`) gets its real
+    // verdict without a `--wait` loop, exactly as before.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeablePrServer(fun reads -> if reads = 1 then "null" else "true")
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+    Assert.Equal(2, server.PrReads)
