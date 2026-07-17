@@ -50,3 +50,54 @@ let ``the result is deduplicated and sorted - the set is stable and diffable`` (
 let ``an empty or null body declares nothing`` () =
     Assert.Equal<string list>([], refs "")
     Assert.Equal<string list>([], EpicBody.childRefs "FS-GG" "FS.GG.SDD" null)
+
+[<Fact>]
+let ``a task line inside a fenced code block declares nothing - a quote is a mention`` () =
+    // #965's own first draft quoted #672's acceptance line in a fence to DEMONSTRATE this bug, and thereby
+    // declared #561 as a child of the issue reporting it. A doc that quotes a parser's input is parsed.
+    let body = "This is what #672 carries today:\n\n```\n- [ ] #561's three steps land in their gated order.\n```\n\n- [ ] #900 the only real child"
+
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#900" ], refs body)
+
+[<Fact>]
+let ``both fence spellings are honoured, with an info string and any indent`` () =
+    let backticks = "```markdown\n- [ ] #1 quoted\n```\n- [ ] #2 real"
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs backticks)
+
+    let tildes = "~~~\n- [ ] #1 quoted\n~~~\n- [ ] #2 real"
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs tildes)
+
+    // Up to three leading spaces still opens a fence, and the closer need not share the opener's indent.
+    let indented = "   ```\n- [ ] #1 quoted\n  ```\n- [ ] #2 real"
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs indented)
+
+[<Fact>]
+let ``a fence is closed only by its OWN character, at least as long as the opener`` () =
+    // GFM: a ``` block carries a ~~~ line as content, and a shorter run of its own char too. Reading either
+    // as a closer would end the block early and declare the quoted children that follow.
+    let crossed = "```\n~~~\n- [ ] #1 still quoted\n```\n- [ ] #2 real"
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs crossed)
+
+    let shortRun = "````\n```\n- [ ] #1 still quoted\n````\n- [ ] #2 real"
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs shortRun)
+
+    // A closer carries no info string; a run with one is still content.
+    let infoOnCloser = "```\n``` not a closer\n- [ ] #1 still quoted\n```\n- [ ] #2 real"
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#2" ], refs infoOnCloser)
+
+[<Fact>]
+let ``an unclosed fence runs to the end of the body - as GitHub renders it`` () =
+    // The parser and the human must agree about where the code stops. GitHub renders an unclosed fence to
+    // the end of the document, so a task line after one is code to the reader — and declares nothing.
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#1" ], refs "- [ ] #1 real\n\n```\n- [ ] #2 quoted, forever")
+
+[<Fact>]
+let ``a backtick run whose info string contains a backtick is NOT a fence - the gate must not fail open`` () =
+    // ```` ```#5``` is the ref ```` is a paragraph per CommonMark, not an opener. Reading it as one would
+    // swallow every real task line after it and report the epic as childless — the gate failing OPEN, which
+    // is the direction that loses declarations rather than inventing them.
+    let body = "```#5``` is the ref\n- [ ] #1 real\n- [ ] #2 real"
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#1"; "FS-GG/FS.GG.SDD#2" ], refs body)
+
+    // The tilde spelling has no such rule: `~~~foo~bar` opens a block.
+    Assert.Equal<string list>([], refs "~~~foo~bar\n- [ ] #1 quoted")

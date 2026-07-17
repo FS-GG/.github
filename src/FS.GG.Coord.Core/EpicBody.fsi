@@ -13,7 +13,10 @@ module EpicBody =
     /// A child is declared by a markdown TASK-LIST line — `- [ ]` / `- [x]`, and the `*` and `+` bullets
     /// GitHub renders a task list for too. The FIRST ref on the line is the child: `- [x] (b) #268 — see
     /// #100` declares #268, not #100. Prose, tables, and links elsewhere in the body declare nothing — a
-    /// mention is not a declaration. A ref may be `#n`, `owner/repo#n`, or a full issue URL; a bare `#n`
+    /// mention is not a declaration. A task line inside a fenced code block (``` or ~~~) is one of those
+    /// mentions: an issue that QUOTES a task list to talk about one declares nothing by doing so, which is
+    /// what a body's reader already assumes, because it is what GitHub renders (#965). A ref may be `#n`,
+    /// `owner/repo#n`, or a full issue URL; a bare `#n`
     /// resolves against the epic's OWN repo, so all three land in the `owner/repo#n` form the sub-issue
     /// graph is compared in. Deduplicated and sorted, so the set is stable and directly diffable.
     val childRefs: selfOwner: string -> selfRepo: string -> body: string -> string list
