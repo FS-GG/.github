@@ -131,29 +131,25 @@ def feed_versions(package: str, token: str) -> list[str]:
     return [str(v) for v in versions]
 
 
-def nuspec_dependency_ids(xml: str) -> list[str]:
-    """Every `<dependency id=…>` in a .nuspec, deduplicated, in document order. Raises on junk.
+def _nuspec_dependencies(xml: str):
+    """Yield `(id, version-spec-or-None)` for every `<dependency>` in a .nuspec. Raises on junk.
 
-    PURE — no network — so a recorded nuspec pins this parse offline. The network half is
-    `package_nuspec` below; keeping them apart is what lets a test assert the derived set against a
-    real recorded package rather than against a mock of our own parsing.
+    The ONE walk over a nuspec's dependencies, shared by the two questions asked of it — "which
+    packages?" (`nuspec_dependency_ids`) and "at which ranges?" (`nuspec_dependency_ranges`). They
+    had a walk each for about an hour, and this module's own docstring says why that is not allowed:
+    two copies is how the two copies drift.
 
     The nuspec is namespaced (`xmlns=…/nuspec.xsd`), and the namespace URI is VERSIONED — packages
     in this feed carry the 2013/05 one, but older/newer ones differ. Matching on a hardcoded URI
-    would make a namespace bump read as "zero dependencies", i.e. an empty coherent set, so tags are
-    matched on their LOCAL name and the namespace is ignored.
-
-    A nuspec with no `<dependencies>` is NOT an error here (a leaf package legitimately has none) —
-    it returns []. That is the one place this module returns an empty list, and it is a real answer
-    rather than a "could not tell": the caller that needs a non-empty set must say so itself, which
-    feed-autofix's `derive_members` does.
+    would make a namespace bump read as "zero dependencies" — an empty coherent set to one caller, an
+    absent constraint to the other, and a fails-open answer to both. So tags are matched on their
+    LOCAL name and the namespace is ignored.
     """
     try:
         root = ET.fromstring(xml.lstrip("﻿"))
     except ET.ParseError as e:
         raise GateError(f"the .nuspec is not parsable XML: {e}") from e
 
-    ids: list[str] = []
     for dep in root.iter():
         if dep.tag.rsplit("}", 1)[-1] != "dependency":
             continue
@@ -163,6 +159,22 @@ def nuspec_dependency_ids(xml: str) -> list[str]:
                 "the .nuspec has a <dependency> with no `id` attribute — an unreadable dependency "
                 "must not silently shrink the set derived from it."
             )
+        yield pkg, dep.get("version")
+
+
+def nuspec_dependency_ids(xml: str) -> list[str]:
+    """Every `<dependency id=…>` in a .nuspec, deduplicated, in document order. Raises on junk.
+
+    PURE — no network — so a recorded nuspec pins this parse offline. The network half is
+    `package_nuspec` below; keeping them apart is what lets a test assert the derived set against a
+    real recorded package rather than against a mock of our own parsing.
+
+    A nuspec with no `<dependencies>` is NOT an error here (a leaf package legitimately has none) —
+    it returns []. That is a real answer rather than a "could not tell": the caller that needs a
+    non-empty set must say so itself, which feed-autofix's `derive_members` does.
+    """
+    ids: list[str] = []
+    for pkg, _ in _nuspec_dependencies(xml):
         if pkg not in ids:
             ids.append(pkg)
     return ids
@@ -325,3 +337,118 @@ def nuget_org_versions(package: str) -> list[str]:
 def newest(versions: list[str]) -> str:
     """The greatest version by NuGet order. The feed returns creation order, not version order."""
     return max(versions, key=parse_version)
+
+
+def nuget_org_nuspec(package: str, version: str) -> str:
+    """The .nuspec XML of `package`@`version` on nuget.org. Anonymous. Any failure raises — never "".
+
+    The sibling of `package_nuspec`, and deliberately NOT the same function. That one reads the ORG
+    feed, which does not serve a nuspec at its own path and must be made to yield one by downloading
+    and unzipping the whole .nupkg, with a token. nuget.org DOES serve it directly, anonymously, at
+    the flat-container path — so this is a plain GET, and it works for the packages that are the
+    point of it: a cap's subject is a THIRD-PARTY id (YoloDev.Expecto.TestSdk), which is on nuget.org
+    and not on the org feed at all. Routing that read through `package_nuspec` would 404.
+    """
+    ident = package.lower()
+    url = f"{NUGET_ORG}/{ident}/{version.lower()}/{ident}.nuspec"
+    req = urllib.request.Request(
+        url,
+        headers={"Accept": "application/xml", "User-Agent": "fsgg-check-pin-coherence"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise GateError(
+                f"{package}@{version} has no .nuspec on nuget.org (HTTP 404) — the version is in "
+                f"the flat-container index but its nuspec is not served, so its dependency ranges "
+                f"cannot be read. An unreadable nuspec must not read as 'no constraint'."
+            ) from e
+        raise GateError(
+            f"nuget.org nuspec read for {package}@{version} failed: HTTP {e.code} {e.reason}"
+        ) from e
+    except urllib.error.URLError as e:
+        raise GateError(
+            f"nuget.org unreachable while reading the {package}@{version} nuspec: {e.reason}"
+        ) from e
+    except UnicodeDecodeError as e:
+        raise GateError(f"the {package}@{version} nuspec is not decodable as UTF-8: {e}") from e
+
+
+def nuspec_dependency_ranges(xml: str, dep_id: str) -> list[str]:
+    """Every DISTINCT version range a .nuspec declares on `dep_id`, in document order. Raises on junk.
+
+    PURE — no network — so a recorded nuspec pins this parse offline, exactly as
+    `nuspec_dependency_ids` does. Both walk the nuspec through `_nuspec_dependencies`.
+
+    Returns [] when the nuspec declares no dependency on `dep_id` at all. That is a real answer, not
+    a "could not tell": the package genuinely does not depend on it. The CALLER decides what that
+    means, because it is not the same answer for every question.
+
+    Ids are compared CASE-INSENSITIVELY. NuGet ids are case-preserving but case-insensitive, so a
+    nuspec spelling `expecto` declares a constraint on Expecto — and reading it as a different
+    package would drop the constraint, which is the fails-open direction.
+
+    A nuspec may declare the same dependency once per target-framework group — YoloDev.Expecto.TestSdk
+    1.0.0 declares Expecto TWICE, identically. Deduplicating on the range text collapses that to the
+    one fact it actually carries, while leaving genuinely DISAGREEING groups as the two entries they
+    are, for the caller to refuse to guess between.
+    """
+    ranges: list[str] = []
+    for pkg, spec in _nuspec_dependencies(xml):
+        if pkg.lower() != dep_id.lower():
+            continue
+        if not spec:
+            raise GateError(
+                f"the .nuspec declares a <dependency id={pkg!r}> with no `version` attribute. An "
+                f"unversioned dependency admits everything, and reading it as such would retire a "
+                f"cap on a fact the nuspec does not state."
+            )
+        if spec not in ranges:
+            ranges.append(spec)
+    return ranges
+
+
+# NuGet version-range syntax (docs: "Package versioning §Version ranges"). `1.0` is a bare MINIMUM,
+# not an exact match — the one spelling whose meaning is not visible in its punctuation, and the one
+# that matters here: YoloDev.Expecto.TestSdk 0.16.0 declares `Expecto 10.2.3`, which admits Expecto
+# 11 and is exactly why that version is the one the cap must not exclude.
+_RANGE_RE = re.compile(r"^(?P<lo_br>[\[(])\s*(?P<lo>[^,\[\]()]*?)\s*(?:,\s*(?P<hi>[^,\[\]()]*?)\s*)?(?P<hi_br>[\])])$")
+
+
+def range_admits(spec: str, version: str) -> bool:
+    """True if the NuGet version range `spec` admits `version`. Raises GateError on an unparsable one.
+
+    Fails CLOSED on junk, per this module's contract: a range nobody can parse must not be reported
+    as admitting (which would retire a cap) OR as excluding (which would keep one forever) — the
+    caller gets an exception and decides in the open.
+    """
+    want = parse_version(version)
+    spec = (spec or "").strip()
+    if not spec:
+        raise GateError("cannot read an empty string as a NuGet version range")
+
+    m = _RANGE_RE.match(spec)
+    if not m:
+        # No brackets: a bare version is an inclusive MINIMUM with no upper bound.
+        return want >= parse_version(spec)
+
+    lo, hi = m.group("lo"), m.group("hi")
+    lo_inc, hi_inc = m.group("lo_br") == "[", m.group("hi_br") == "]"
+
+    if m.group("hi") is None:
+        # No comma: `[1.0]` is exact. `(1.0)` is meaningless and NuGet rejects it.
+        if not (lo_inc and hi_inc):
+            raise GateError(f"NuGet version range {spec!r} is not valid (an exact range is `[x]`)")
+        if not lo:
+            raise GateError(f"NuGet version range {spec!r} names no version")
+        return want == parse_version(lo)
+
+    if not lo and not hi:
+        raise GateError(f"NuGet version range {spec!r} bounds nothing on either side")
+    if lo and not (want >= parse_version(lo) if lo_inc else want > parse_version(lo)):
+        return False
+    if hi and not (want <= parse_version(hi) if hi_inc else want < parse_version(hi)):
+        return False
+    return True
