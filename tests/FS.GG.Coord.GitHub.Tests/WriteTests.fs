@@ -747,3 +747,115 @@ let ``reap treats a marker a peer already collected as AlreadyGone, deleting not
         match reap transport 120 r with
         | Ok AlreadyGone -> Assert.False(transport.Logged "comment-delete FS-GG/FS.GG.SDD 880")
         | other -> failwith $"a marker a peer already collected must read AlreadyGone — got %A{other}"
+
+// ---- #895/#977: the LOCK's transport — the one enforced fact the doctrine rests on -----------------
+//
+// `Protocol.claimLock` states it, four ADRs rest on it (ADR-0027, ADR-0034 §3, ADR-0040 C4, ADR-0038),
+// and three generated projections repeat it: THE LOCK LIVES ON REST. A lock may never live on the budget
+// that dies first, and #418 measured GraphQL dying first under fan-out — five workers looping `take`
+// drained it in ~15 minutes, while REST's per-request meter carried on.
+//
+// Nothing asserted it. `TransportTests` pins the ASSIGNEE's transport (#418) and never the LOCK's — so if
+// the CAS ever took a GraphQL point (a refactor, an added board read on the claim path), the lock would
+// silently move onto the budget the fleet drains by scanning, four ADRs' invariant would be false, and
+// EVERY DOCUMENT WOULD STILL CLAIM IT HELD. That is #895's own condition — *the recipe steering the fleet
+// onto the lock's budget* — reachable by accident, with nothing to catch it.
+//
+// #977 asked for a GATE on the REST-thrift doctrine and found no prose gate is possible: a string-matcher
+// cannot tell a quotation from a use, so it would red the very text that RETIRES the advice (#968, #974)
+// and red §4's sanctioned dedupe reads. `check-graphql-monopoly.py` refuses that trap in as many words.
+// These tests are what a gate on this doctrine can honestly be: not a checker of English, but a pin on
+// the one fact the English is ABOUT — structural, offline, and red only on a real violation.
+//
+// WHY EVERY LEG ASSERTS `RestCalls` TOO. `Assert.Equal(0, GraphQlCalls)` is green on a claim that made no
+// calls at all — it cannot tell "the lock is REST" from "the CAS never ran". That is #606's signature
+// exactly (zero checks scoring as all-passed), and it is the failure this file must not reproduce while
+// pinning it.
+
+[<Fact>]
+let ``#895 the LOCK ITSELF goes over REST - the winning CAS never spends a GraphQL point`` () =
+    let transport =
+        scripted
+            [ ok "[]" // 1. read the live markers
+              ok """{"id":901}""" // 2. POST our marker — the linearisation point
+              ok (comments [ marker 901 "vole-418" "" ]) ] // 3. re-read: we are the lowest live id
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Won(held, _)) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"we should have won — got %A{other}"
+
+    // THE ASSERTION: the whole CAS — read, post, re-read — is billed to REST, and not one call to GraphQL.
+    Assert.Equal(0, transport.GraphQlCalls)
+
+    // ...and it actually RAN. Three calls, the three legs above. Without this, a `claim` that made no call
+    // whatsoever would satisfy the line above and report the invariant green (#606).
+    Assert.Equal(3, transport.RestCalls)
+
+[<Fact>]
+let ``#895 the WITHDRAW is on the lock's budget too - a lost race never reaches for GraphQL`` () =
+    // The withdraw is the leg most likely to drift onto the wrong budget, and the worst one to lose. It is
+    // the path a CONTENDED board takes — exactly when REST is scarcest and the fleet is racing — and a
+    // marker we posted and could not withdraw is a lock held by a worker who does not know they hold it.
+    // If the delete ever needed a GraphQL point, an exhausted GraphQL budget would strand orphaned markers
+    // on every lost race, and `take`'s documented "back off briefly and retry" (EX_CONTENDED) would be
+    // advice that cannot be followed.
+    let transport =
+        scripted
+            [ ok "[]"
+              ok """{"id":902}""" // ours
+              ok (comments [ marker 901 "kite-461" ""; marker 902 "vole-418" "" ]) // 901 beat us
+              ok "" ] // DELETE our 902
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Lost w) -> Assert.Equal(them, w)
+    | other -> failwith $"we should have lost to the lower id — got %A{other}"
+
+    Assert.True(transport.Logged "comment-delete FS-GG/FS.GG.SDD 902")
+    Assert.Equal(0, transport.GraphQlCalls)
+    Assert.Equal(4, transport.RestCalls) // read, post, re-read, delete
+
+[<Fact>]
+let ``#895 the RENEW is on the lock's budget too - holding a claim never spends a GraphQL point`` () =
+    // The lease renewal is what a long-running worker does every few minutes for the life of an item, so it
+    // is the highest-FREQUENCY write on the lock's path and the one whose cost compounds across a fleet.
+    // `heartbeat` on GraphQL would put KEEPING a lock on the budget that dies first — a worker would lose
+    // an item it never stopped working, to a budget it never spent on the work.
+    let transport =
+        scripted
+            [ ok (comments [ marker 901 "vole-418" "" ]) // 1. read: our own live marker
+              ok """{"id":901}""" ] // 2. PATCH: renew in place
+
+    match claim transport 120 me None aRef (fun () -> None) with
+    | Ok(Renewed(held, _)) -> Assert.Equal(901L, held.MarkerId)
+    | other -> failwith $"re-claiming our own live lock renews it in place — got %A{other}"
+
+    Assert.Equal(0, transport.GraphQlCalls)
+    Assert.Equal(2, transport.RestCalls) // read, patch
+
+[<Fact>]
+let ``#895 the pre-claim column read is the CALLER's - the CAS routes no board read of its own`` () =
+    // The sharp one, and the reason the invariant is TRUE rather than merely observed.
+    //
+    // `claim` really does need the column it is about to overwrite (#481, so `release` can put it back),
+    // and that read is Projects v2 — GraphQL, with no REST form. If `claim` made it, the lock's path would
+    // spend a GraphQL point by construction and this whole invariant would be unattainable.
+    //
+    // It does not make it. The column arrives as an INJECTED `unit -> BoardStatus option` (`Writes.fs:184`)
+    // — so the board read is the caller's to make and the caller's to bill, and the CAS's transport traffic
+    // stays REST whatever the callback does. That injection is not a testing convenience; it is the seam
+    // that keeps the lock off the dying budget, and it is worth a test of its own so that a future refactor
+    // "simplifying" the callback into a transport call fails HERE, loudly, rather than in production on an
+    // exhausted budget six months later.
+    //
+    // So: a callback that answers (the #481 path, `prev=In%20review` on the wire), and the counters unmoved.
+    let transport =
+        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" " prev=In%20review" ]) ]
+
+    match claim transport 120 me None aRef (fun () -> Some InReview) with
+    | Ok(Won(held, _)) -> Assert.Equal(Some InReview, held.PreviousStatus)
+    | other -> failwith $"the previous column must be recorded — got %A{other}"
+
+    // The column was read and recorded, and the CAS STILL spent nothing on GraphQL: the read never crossed
+    // this transport.
+    Assert.Equal(0, transport.GraphQlCalls)
+    Assert.Equal(3, transport.RestCalls)
