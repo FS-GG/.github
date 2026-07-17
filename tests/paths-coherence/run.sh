@@ -770,11 +770,14 @@ fi
 # 4 -> 5: repo-filter-monopoly.yml (.github#979) declares a PATHS_SUBJECT and names its gate script
 # exactly, so rule (c) attaches to it and the census counts it. The tripwire fired on the very first
 # CI run of that gate, which is the leg working as designed rather than a cost of it.
+#
+# 5 -> 6: recipe-followup.yml (.github#1073) names scripts/check-recipe-followup.py exactly, the same way
+# recipe-landable.yml names its own gate — so rule (c) attaches and the census counts the new surface.
 s="$(sed -n 's/.*closure; \([0-9]*\) declared gate script surface(s).*/\1/p' <<<"$out")"
-if [ "${s:-0}" = "5" ]; then
+if [ "${s:-0}" = "6" ]; then
   ok "the shipped tree links $s gate script surface(s) — rule (c) is auditing all of them"
 else
-  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 5 — a workflow stopped naming its gate (#996)" "$out"
+  bad "rule (c) links ${s:-0} gate script surface(s), want exactly 6 — a workflow stopped naming its gate (#996)" "$out"
 fi
 
 RZ="$(root "$WORK/no-pairs")"

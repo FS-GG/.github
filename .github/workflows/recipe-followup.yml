@@ -1,0 +1,83 @@
+# A recipe NAMES the follow-up-queue verb; it never HAND-ROLLS the queue file (.github#1073).
+#
+# `/pnext-item` §4/§6 keep the "take it next" promise with a per-worker queue. For one commit that queue
+# was ten lines of shell in the recipe (#1061), and it was wrong four ways — a shared default path, control
+# flow in comments, a pop that spent the ref before the take, a hardcoded owner re-arming the bare-ref trap
+# — all caught by one hand review, because nothing executes a recipe and so nothing tests one (#1063/#724).
+# The queue moved into `fsgg-coord followup`; `scripts/check-recipe-followup.py` makes a FIFTH copy
+# unwritable.
+#
+# THE `paths:` FILTER IS PART OF THE GATE. Every entry below is an INPUT, and a gate that cannot fire on
+# its own subject is #508's mistake:
+#
+#   scripts/check-recipe-followup.py  — the rule itself.
+#   tests/recipe-followup/**          — the fixture that proves the rule still fires.
+#   .claude/skills/**, .agents/skills/**, docs/coordination/**
+#                                     — the RECIPES it governs. This is the one that matters: a PR that
+#                                       hand-rolls the queue touches ONLY a SKILL.md, and if that did not
+#                                       trigger this workflow the rule would be decorative.
+#   src/FS.GG.Coord.Cli/**            — the engine that IMPLEMENTS `followup`. If the verb is removed or
+#                                       renamed, every recipe's instruction to call it becomes a lie, and
+#                                       this gate says so (#266: assert the subject, do not assume it).
+#   .github/workflows/**              — the rule reaches `jobs.*.steps[*].run` too, so a hand-rolled queue
+#                                       growing back in a workflow must trigger the gate that watches for it.
+name: recipe-followup
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-recipe-followup.py"
+      - "tests/recipe-followup/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli/Followups.fs"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-recipe-followup.py"
+      - "tests/recipe-followup/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "src/FS.GG.Coord.Cli/Options.fs"
+      - "src/FS.GG.Coord.Cli/Followups.fs"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      # The gate PARSES workflows (a recipe is fence-scanned; a workflow's shell lives in `run:` blocks,
+      # and its comments are prose that must stay legal). That needs PyYAML.
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the recipe-followup fixture
+        run: bash tests/recipe-followup/run.sh
+      # The plain, unmediated verdict on the tree as it stands — so a PR that hand-rolls the queue fails
+      # on a line that names the file and the remedy, not inside a fixture's output.
+      - name: Assert no recipe hand-rolls the follow-up queue
+        run: python3 scripts/check-recipe-followup.py
+
+      # `followup` is what every recipe now tells the worker to run. If it stops existing, the instruction
+      # becomes a lie and this gate is where that surfaces (#266: assert the subject, do not assume it).
+      - name: Assert the command the recipes name still exists
+        run: |
+          # `scripts/fsgg-coord` is the shim that execs the compiled engine, the ONE implementation of
+          # `followup`. This is the source-level check: the command is both PARSEABLE (a subcommand token
+          # routed to `Command = Followup`) and REACHABLE (dispatched to a handler). Rename or drop it in
+          # either place and every recipe that tells a worker to run it becomes a lie. Whitespace-robust,
+          # so a formatter reflow does not red the gate on a `followup` that is in fact still wired.
+          grep -qE '"followup"[[:space:]]*::[[:space:]]*rest' src/FS.GG.Coord.Cli/Options.fs \
+            && grep -qE 'Command[[:space:]]*=[[:space:]]*Followup' src/FS.GG.Coord.Cli/Options.fs \
+            || { echo "::error::src/FS.GG.Coord.Cli/Options.fs does not route the 'followup' subcommand token to Command = Followup, but every recipe tells workers to call it."; exit 1; }
+          grep -qE '\|[[:space:]]*Followup[[:space:]]*->[[:space:]]*Followups\.run' src/FS.GG.Coord.Cli/Options.fs src/FS.GG.Coord.Cli/Client.fs src/FS.GG.Coord.Cli/Program.fs \
+            || { echo "::error::'followup' is not dispatched to Followups.run in the Cli."; exit 1; }
