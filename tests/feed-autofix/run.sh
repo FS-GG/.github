@@ -582,5 +582,70 @@ else
   bad "unquoted version: refused as a finding" "rc=$rc: $out"
 fi
 
+# --- #1081 option 2 CLOSURE: a flip is not done when the YAML is written — it is done when the
+# projections it feeds are regenerated. This is the exact bug #1081 names: feed-autofix wrote the
+# registry and the REQUIRED `projection` gate stayed red, so no flip it opened could ever merge. Every
+# case above checks the YAML write, which the issue says "reproduces this bug exactly". So drive the
+# WHOLE closure: flip the row(s) → the required gate is RED on the write alone → regenerate → GREEN.
+#
+# TWICE-MOVED FEED (the #1081 thread): a second step-2 flip (coord-engine 0.4.0) came due while the
+# first (fs-gg-ui-template) sat, and the bot never noticed the moving feed. So move BOTH — a fixture
+# that moves the feed once reproduces this bug's easier half and misses the one that kept `main` red.
+CHECKPROJ="$ROOT/scripts/check-projection.py"
+
+# The flip, applied to a COPY of the REAL registry: two contracts advanced, each `version` and any
+# `package-version`. A regex substitution (not a YAML round-trip) so the file the gate reads keeps the
+# real shape; bounded to each `- id:` block so it cannot bleed into a sibling that shares a version.
+FLIPPED="$WORK/registry-twice-moved.yml"
+python3 - "$ROOT/registry/dependencies.yml" "$FLIPPED" <<'PY'
+import re, sys
+s = open(sys.argv[1], encoding="utf-8").read()
+def bump(text, cid, frm, to):
+    # inside `- id: <cid>` up to (not into) the next `- id:`, advance version/package-version == frm
+    pat = re.compile(
+        r'(- id: ' + re.escape(cid) + r'\n(?:(?!\s*- id:).*\n)*?\s*(?:package-)?version: ")'
+        + re.escape(frm) + r'(")')
+    n = 1
+    while n:
+        text, n = pat.subn(r'\g<1>' + to + r'\g<2>', text, count=1)
+    return text
+s = bump(s, "fs-gg-ui-template", "0.12.0", "0.13.0")
+s = bump(s, "coord-engine", "0.4.0", "0.5.0")
+open(sys.argv[2], "w", encoding="utf-8").write(s)
+PY
+
+# RED half — no engine: the write alone leaves the REQUIRED gate red against the un-regenerated
+# region. The direct #1081 regression guard; it must fail while the region is stale, naming both moves.
+if red="$(python3 "$CHECKPROJ" "$FLIPPED" "$ROOT/docs/registry/compatibility.md" 2>&1)"; then
+  bad "closure: a flip WITHOUT regeneration must red the required projection gate" \
+      "the gate passed on a stale region — the write-only bug #1081 names is not caught: $red"
+elif printf '%s' "$red" | grep -q "0.13.0" && printf '%s' "$red" | grep -q "0.5.0"; then
+  ok "closure: a flip without regeneration reds the required gate (both moved contracts)"
+else
+  bad "closure: gate red, but not for the two moved contracts" "$red"
+fi
+
+# GREEN half — regenerate from the flipped registry and assert the required `projection` gate AND
+# `generate-projections --check` both go green. Needs the engine (the CI fixture job builds it); a
+# local run without one SKIPs, leaving the always-on RED half as the guard. Runs in a throwaway copy
+# of the tracked tree so it never touches the real checkout.
+ENGINE="${FSGG_COORD_ENGINE_BIN:-$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
+if [ -x "$ENGINE" ]; then
+  TREE="$WORK/closure-tree"
+  mkdir -p "$TREE"
+  git -C "$ROOT" archive HEAD | tar -x -C "$TREE"
+  cp "$FLIPPED" "$TREE/registry/dependencies.yml"
+  if FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$TREE/scripts/generate-projections" >/dev/null 2>&1 \
+     && python3 "$CHECKPROJ" "$TREE/registry/dependencies.yml" "$TREE/docs/registry/compatibility.md" >/dev/null 2>&1 \
+     && FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$TREE/scripts/generate-projections" --check >/dev/null 2>&1; then
+    ok "closure: regenerating greens BOTH the projection gate and generate-projections --check"
+  else
+    bad "closure: regeneration did not green the gates" \
+        "$(python3 "$CHECKPROJ" "$TREE/registry/dependencies.yml" "$TREE/docs/registry/compatibility.md" 2>&1)"
+  fi
+else
+  printf '  SKIP closure GREEN half — no engine at %s (the CI fixture job builds it)\n' "$ENGINE"
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
