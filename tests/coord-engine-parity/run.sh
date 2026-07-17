@@ -4148,6 +4148,67 @@ if [ -z "$ARGV_PORT" ]; then bad "argv fixture bound a port"; else
   kill "$ARGV_SRV" 2>/dev/null
 fi
 
+# ---- #966: FLUSH TELLS A SKIP FROM A DROP FROM A REPLAY --------------------------------------------
+#
+# A SKIP and a DROP are opposite facts — a dropped write is gone forever, a skipped one is queued against
+# ANOTHER board and is still owed — and #963 taught the ENGINE to tell them apart while the CLI went on
+# telling the worker neither. `replayed 0 of 1` and nothing else is exactly the "my write did not replay
+# and nothing said why" that #882 felt like from the outside.
+#
+# NO SERVER, and that is the point rather than a convenience: `flush --dry-run` is the read that must work
+# when NO board read can (an exhausted budget is the only reason a queue exists), so it must answer "which
+# board is this owed to?" from the queue and the environment alone. If any leg here starts needing HTTP,
+# that property has been lost.
+FLCACHE="$(mktemp -d)"
+cat >"$FLCACHE/pending.jsonl" <<'JSONL'
+{"ref":".github#100","field":"Status","value":"Done","at":"2026-07-17T05:00:00Z","worker":"w-here","boardOwner":"FS-GG","boardTitle":"Coordination"}
+{"ref":"FS.GG.SDD#200","field":"Status","value":"Ready","at":"2026-07-17T05:01:00Z","worker":"w-other","boardOwner":"FS-GG","boardTitle":"OtherBoard"}
+{"ref":".github#300","field":"Status","value":"","at":"2026-07-17T05:02:00Z","worker":"w-legacy"}
+JSONL
+
+fl="$(FSGG_COORD_CACHE="$FLCACHE" "$ENGINE" flush --dry-run 2>&1)"; flrc=$?
+
+[ "$flrc" -eq 0 ] \
+  && ok "#966: flush --dry-run over a mixed queue exits 0 (a dry run reports; it never replays)" \
+  || bad "#966: flush --dry-run must exit 0" "rc=$flrc: $fl"
+
+# THE BOARD IS NAMED. "Which board is this owed to?" has to be answerable exactly here.
+printf '%s' "$fl" | grep -q "FS-GG/Coordination" \
+  && ok "#966: flush --dry-run names the board a flush HERE would write" \
+  || bad "#966: flush --dry-run must name this flush's board" "$fl"
+
+# THE CROSS-BOARD ENTRY IS MARKED, and rendered differently from the one that would replay. Before this,
+# an entry this pass would SKIP printed identically to one it would land.
+printf '%s' "$fl" | grep -E 'FS.GG.SDD#200.*SKIP' | grep -q "FS-GG/OtherBoard" \
+  && ok "#966: ...and marks the cross-board entry as one a flush here would SKIP, naming ITS board" \
+  || bad "#966: the cross-board entry must be marked SKIP and name its own board" "$fl"
+
+# THE REMEDY THAT WORKS. "Re-run flush after the reset" can never land another board's entry, so the
+# cross-board count gets the remedy that does: re-point the board.
+printf '%s' "$fl" | grep -q "FSGG_COORD_PROJECT" \
+  && ok "#966: ...and gives the remedy that fixes it (re-point the board), not 'flush again here'" \
+  || bad "#966: a skipped write must carry the re-point remedy" "$fl"
+
+# AN ENTRY THIS PASS WOULD LAND IS NOT MARKED. The signal is worthless if it fires on everything.
+printf '%s' "$fl" | grep -E '\.github#100' | grep -q "SKIP" \
+  && bad "#966: an entry queued against THIS board must NOT be marked SKIP" "$fl" \
+  || ok "#966: an entry queued against this board is not marked — the signal means something"
+
+# A PRE-#882 ENTRY RECORDED NO BOARD. It replays against the current board — the behaviour it was queued
+# under — and that is the one entry whose target is a DEFAULT rather than a fact, so it is said out loud.
+printf '%s' "$fl" | grep -E '\.github#300' | grep -q "no board recorded" \
+  && ok "#966: a legacy entry with no recorded board is named as such, not silently defaulted" \
+  || bad "#966: a pre-#882 entry must be distinguishable from one that names this board" "$fl"
+
+# AND NO NOISE WHEN THERE IS NOTHING TO SAY: drop the cross-board entry and the remedy must go with it.
+grep -v OtherBoard "$FLCACHE/pending.jsonl" >"$FLCACHE/p2" && mv "$FLCACHE/p2" "$FLCACHE/pending.jsonl"
+fl2="$(FSGG_COORD_CACHE="$FLCACHE" "$ENGINE" flush --dry-run 2>&1)"
+printf '%s' "$fl2" | grep -q "FSGG_COORD_PROJECT" \
+  && bad "#966: the re-point remedy must not fire when no entry is cross-board" "$fl2" \
+  || ok "#966: ...and a queue with no cross-board entry says nothing about re-pointing"
+
+rm -rf "$FLCACHE"
+
 echo
 echo "coord-engine parity: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::coord-engine parity FAILED"; exit 1; }
