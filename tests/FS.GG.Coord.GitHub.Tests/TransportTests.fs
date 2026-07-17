@@ -56,9 +56,10 @@ let ``a FAILED call still counts - you were charged for it`` () =
 [<Fact>]
 let ``the two budgets are counted apart - GraphQL and REST are not one meter`` () =
     // They are separate limits with different units (nodes vs requests) and different exhaustion
-    // behaviour, and the lock lives on REST *because* GraphQL dies first under fan-out (#418). A single
-    // counter would make that distinction unobservable — and it is the distinction the whole design rests
-    // on.
+    // behaviour, and the lock lives on REST because a lock may never live on the budget that dies first
+    // (ADR-0027). WHICH budget that is has already inverted once — #418 measured GraphQL dying first,
+    // #895 measured REST — so a single counter would make the distinction unobservable exactly when it
+    // matters. It is the distinction the whole design rests on.
     let recorder = Fake.Recorder(fun _ -> ok "{}")
     let transport = recorder :> IGitHubTransport
 
@@ -184,8 +185,8 @@ let ``the comment verbs are the stub's verbs - post, delete, patch, list`` () =
 [<Fact>]
 let ``#418 the assignee goes over REST - it is never a GraphQL issue-edit`` () =
     // `gh issue edit --add-assignee @me` costs 4 measured GraphQL points; the REST assignees endpoint costs
-    // zero of them. Claim + release used to hand back 8 points per item for nothing — on the budget that
-    // dies first, in the loop that drains it.
+    // zero of them. Claim + release used to hand back 8 points per item for nothing — on the budget #418
+    // measured dying first, in the loop that drains it.
     let recorder = Fake.Recorder(fun _ -> ok "{}")
     let transport = recorder :> IGitHubTransport
 
