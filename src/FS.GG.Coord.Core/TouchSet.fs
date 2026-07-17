@@ -9,9 +9,6 @@ module TouchSet =
     /// A `Paths:` line: up to three leading spaces, either case.
     let private declRe = Regex(@"^ {0,3}[Pp]aths:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// A fence opens or closes on ``` or ~~~ at up to three leading spaces.
-    let private fenceRe = Regex(@"^ {0,3}(```|~~~)", RegexOptions.Compiled)
-
     /// The sentinel, after normalisation.
     ///
     /// PUBLIC because the sentinel is part of the GRAMMAR, and the grammar lives here — in one place.
@@ -23,17 +20,12 @@ module TouchSet =
 
     /// Lines OUTSIDE any fenced code block. A `Paths:` line inside a fence is a QUOTATION of the
     /// grammar, not a use of it (#277) — and the protocol docs quote it constantly.
-    let private unfenced (body: string) : string list =
-        let lines = body.Replace("\r\n", "\n").Split('\n')
-
-        let mutable inFence = false
-        let acc = ResizeArray<string>()
-
-        for line in lines do
-            if fenceRe.IsMatch line then inFence <- not inFence
-            elif not inFence then acc.Add line
-
-        List.ofSeq acc
+    ///
+    /// ASKED, NOT DECIDED (#972). This was a private `inFence` toggle over a private `^ {0,3}(```|~~~)`,
+    /// and `Writes.rewrite` and `EpicBody.childRefs` each had their own — three answers to one question,
+    /// agreeing in none, which is the #485 shape this module's own header calls "reproduced inside its own
+    /// remedy". `Markdown` is the one place now; the threshold this used to get wrong is gone.
+    let private unfenced (body: string) : string list = Markdown.unfenced body
 
     let classify (token: string) : PathToken =
         // The sentinel is never a PATH. `parse` answers `DeclaredNone` before it gets here when every

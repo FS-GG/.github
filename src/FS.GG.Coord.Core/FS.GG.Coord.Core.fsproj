@@ -27,6 +27,8 @@
   <ItemGroup>
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
+    <Compile Include="Markdown.fsi" />
+    <Compile Include="Markdown.fs" />
     <Compile Include="TouchSet.fsi" />
     <Compile Include="TouchSet.fs" />
     <Compile Include="EpicBody.fsi" />
