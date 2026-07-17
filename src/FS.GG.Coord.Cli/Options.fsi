@@ -93,6 +93,10 @@ module Options =
         /// List a repo's issues over REST, ETag-revalidated — the GraphQL-budget-free read
         /// (`issues <repo> [--label L] [--state S] [--refresh]`, #446/#418).
         | Issues
+        /// This worker's follow-up queue — the §4-case-2 promise, at an altitude something tests
+        /// (`followup add <ref> | peek | pop | list`, #1063). LOCAL: a file, no board, no token, so the
+        /// promise survives the exhausted budget that strands the worker who made it.
+        | Followup
 
         | Help
         | Version

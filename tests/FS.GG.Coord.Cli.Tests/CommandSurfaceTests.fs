@@ -74,7 +74,10 @@ module CommandSurfaceTests =
 
           // The board-health gate (#496) and the REST listing (#446).
           "lint", LintCmd
-          "issues", Issues ]
+          "issues", Issues
+
+          // The follow-up queue (#1063) — LOCAL, like `whoami`: a file, no board, no token.
+          "followup", Followup ]
 
     /// The two commands with no verb form — they are reached by flag (`--help`, `--version`), so the
     /// verb inventory cannot account for them and the DU cross-check must be told so explicitly.

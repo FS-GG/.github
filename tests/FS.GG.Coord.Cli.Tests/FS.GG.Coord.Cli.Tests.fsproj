@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="SnapshotTests.fs" />
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="OptionsTests.fs" />
@@ -21,6 +22,7 @@
     <Compile Include="RefParseTests.fs" />
     <Compile Include="TouchSetLintTests.fs" />
     <Compile Include="ChoresTests.fs" />
+    <Compile Include="FollowupsTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

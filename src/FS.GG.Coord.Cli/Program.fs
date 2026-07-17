@@ -324,6 +324,12 @@ let main argv =
             // `whoami` reads no board — identity is local, and `--mint` needs no token.
             | WhoAmI -> Client.whoami opts
 
+            // `followup` is local for the same reason, and it is load-bearing here rather than incidental:
+            // the queue is a worker's own promise, and the state that most reliably strands one is an
+            // exhausted budget (#1063/§1). A promise you cannot pop without a board read is a promise that
+            // breaks exactly when it is needed.
+            | Followup -> Followups.run opts
+
             // The client command surface — the shim's targets. Each reads/writes GitHub through the typed
             // IO layer; `Client.run` owns the token check, the transport lifetime, and the exit contract.
             | Next

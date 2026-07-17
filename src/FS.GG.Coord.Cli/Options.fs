@@ -37,6 +37,7 @@ module Options =
         | Flush
         | LintCmd
         | Issues
+        | Followup
         | Help
         | Version
 
@@ -209,6 +210,15 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   whoami [--mint]                            this worker's id and how it was derived
   budget [--json]                            the GraphQL budget, and the depth of the deferral queue
                                              (`pendingBoardWrites`) — free, and 0 GraphQL
+  followup add <ref> | peek | pop | list     this worker's follow-up queue — the "I can fix this, just not
+                                             in THIS PR" promise, kept where something can test it (#1063).
+                                             A FILE: no board, no token, so it survives the exhausted budget
+                                             that strands the worker who made the promise. Keyed on the
+                                             resolved worker id, so a fan-out cannot race it. `add` refuses a
+                                             BARE ref — the queue outlives the checkout that wrote it, where
+                                             a bare number silently resolves onto an unrelated row. `peek`/
+                                             `pop`/`list` exit 5 (EX_NONE) on an empty queue: "nothing owed"
+                                             is a LOOK THAT SUCCEEDED, and never a failed read (#266/#585)
 
   bootstrap [--refresh]                      resolve the board + field/option ids (2 GraphQL, then
                                              day-cached; --refresh drops the cache and re-resolves)
@@ -424,6 +434,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Flush -> "flush"
         | LintCmd -> "lint"
         | Issues -> "issues"
+        | Followup -> "followup"
         | Help -> "--help"
         | Version -> "--version"
 
@@ -818,5 +829,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `issues` emits the raw JSON array (bash's `issues` prints the REST body); the caller projects it
         // with jq, so the default Json render stands.
         | "issues" :: rest -> flags { defaults with Command = Issues } rest
+        // `followup` prints the REF on stdout and nothing else — a query whose caller is `widen`/`claim`,
+        // not a reader. Text, for `whoami`'s reason: there is no board document here to be the contract.
+        | "followup" :: rest -> flags { defaults with Command = Followup; Render = Text } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"
