@@ -1168,36 +1168,52 @@ module Client =
         else
             None
 
-    /// The skill kits whose two roots have diverged — enumerate every `.claude/skills/*/SKILL.md` and pair
-    /// it with its `.agents/skills/<name>/SKILL.md` mirror for `Kit.divergedRoots` to byte-compare. A client
-    /// kit (no skill root) yields nothing, so a client-only staleness never nags about roots.
-    let private kitDivergedRoots (root: string) : string list =
-        let claudeDir = Path.Combine(root, ".claude", "skills")
-        let agentsDir = Path.Combine(root, ".agents", "skills")
+    /// The kit lane's skill roots — `coordination-sync`'s `DEFAULT_ROOTS`, which is what a receiver holds.
+    /// NOT ADR-0011's three.
+    let private kitSkillRoots = [ ".claude/skills"; ".agents/skills" ]
 
-        if not (Directory.Exists claudeDir) || not (Directory.Exists agentsDir) then
-            []
-        else
-            let readBytes p =
-                if File.Exists p then
-                    try
-                        Some(File.ReadAllBytes p)
-                    with _ ->
-                        None
-                else
+    /// The KIT's skills whose two roots have diverged, as `(source, mirror)` directory pairs — read off the
+    /// lock's declared sources, never off a directory listing (#647). A client kit yields no mirror, so a
+    /// client-only staleness never nags about roots; a repo's OWN skills are not the kit's business and are
+    /// not in the lock, so they are not policed here at all.
+    ///
+    /// A source this tree does not carry is SILENT, not diverged — the same rule `Kit.staleSources` keeps for
+    /// the same reason: a receiver that mirrors the kit but not a given source must not be nagged about a
+    /// file it has not got. A source present while its mirror is MISSING FROM AN EXISTING ROOT is diverged:
+    /// the kit really does owe both roots.
+    ///
+    /// **A ROOT THIS TREE HAS NOT GOT AT ALL IS SILENT TOO, AND THAT IS NOT THE SAME RULE.** A receiver may
+    /// materialize the kit into ONE root (`AGENT_SKILL_ROOTS` is configurable, and `coordination-sync`'s two
+    /// are only its DEFAULT), and telling it to `cp` a skill into a root it deliberately does not have would
+    /// be #647's own bug in a narrower coat: a warning, on a green tree, about a layout that is nobody's
+    /// mistake. An absent root is a repo's decision; an absent FILE inside a root it does keep is drift.
+    let private kitDivergedRoots (root: string) (lock: (string * string) list) : (string * string) list =
+        let abs (p: string) =
+            Path.Combine(root, p.Replace('/', Path.DirectorySeparatorChar))
+
+        let readBytes p =
+            if File.Exists p then
+                try
+                    Some(File.ReadAllBytes p)
+                with _ ->
                     None
+            else
+                None
 
-            Directory.GetDirectories claudeDir
-            |> Array.toList
-            |> List.choose (fun d ->
-                let name = Path.GetFileName d
-                let claude = Path.Combine(d, "SKILL.md")
+        let skillMd (dir: string) = Path.Combine(abs dir, "SKILL.md")
+        let rootExists (r: string) = Directory.Exists(abs r)
 
-                if File.Exists claude then
-                    Some(name, readBytes claude, readBytes (Path.Combine(agentsDir, name, "SKILL.md")))
-                else
-                    None)
-            |> Kit.divergedRoots
+        lock
+        |> List.choose (fun (_want, src) -> Kit.skillMirror kitSkillRoots src)
+        |> List.choose (fun (source, mirror) ->
+            // The mirror's ROOT, not the skill's own directory: `.agents/skills` for `.agents/skills/x`.
+            let mirrorRoot = Path.GetDirectoryName(mirror.Replace('/', Path.DirectorySeparatorChar))
+
+            match readBytes (skillMd source) with
+            | None -> None // the kit's source is not in this tree — "not here", never a divergence
+            | Some _ when not (rootExists mirrorRoot) -> None // this tree keeps no such root — its choice
+            | Some bytes -> Some((source, mirror), Some bytes, readBytes (skillMd mirror)))
+        |> Kit.divergedRoots
 
     /// OBSERVE the kit-digest obligation and warn on stderr (advisory, never fatal — `repos-registry-selftest`
     /// is the authority). Silent when there is no root or no lock to read.
@@ -1233,15 +1249,17 @@ module Client =
                     eprint "touch-set. It is a GENERATED, CI-GATED artifact, so a collision in it is a REBASE, not a"
                     eprint "decision (#309). Reserving it is the three-worker deadlock #527 removed (#428)."
 
-                match kitDivergedRoots root with
+                match kitDivergedRoots root lock with
                 | [] -> ()
                 | roots ->
                     eprint ""
-                    eprint "fsgg-coord-engine: SKILL ROOTS — a skill kit must stay BYTE-IDENTICAL across every root"
+                    eprint "fsgg-coord-engine: SKILL ROOTS — a KIT skill must stay BYTE-IDENTICAL across every root"
                     eprint "(ADR-0011/0014), or the `roots` gate reds `main`. These have diverged:"
 
-                    for name in roots do
-                        eprint $"  cp .claude/skills/%s{name}/SKILL.md .agents/skills/%s{name}/SKILL.md"
+                    // FROM the registry-declared source, TO its mirror. Never the reverse: the source is the
+                    // copy the lock digests and `coordination-sync` fans out (#647).
+                    for source, mirror in roots do
+                        eprint $"  cp %s{source}/SKILL.md %s{mirror}/SKILL.md"
 
     /// Name the relock a worker has just signed up for, off the touch-set they claimed (#509).
     ///

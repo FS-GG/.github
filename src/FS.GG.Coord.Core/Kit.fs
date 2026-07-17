@@ -32,9 +32,37 @@ module Kit =
             else
                 None)
 
-    let divergedRoots (roots: (string * byte[] option * byte[] option) list) : string list =
+    let skillMirror (roots: string list) (src: string) : (string * string) option =
+        // The source's own root is read OFF THE DECLARATION, never assumed. `.claude/skills/<id>` is a
+        // convention nothing enforces — `repos.sh validate` accepts a row whose id and source directory
+        // differ — so a mirror rebuilt from the id would be a location invented here instead of read from
+        // the registry that owns it, which is the bug this function exists to fix, one field over.
+        let trim (s: string) = s.TrimEnd([| '/' |])
+        let src = trim src
+        let lane = roots |> List.map trim
+
+        // ORDINAL, like every other path comparison in the engine (`TouchSet.tokensOverlap`). A path is
+        // bytes, not prose: the culture-sensitive default can match across ignorable characters.
+        let sourceRoot =
+            lane |> List.tryFind (fun r -> src.StartsWith(r + "/", System.StringComparison.Ordinal))
+
+        match sourceRoot with
+        | None -> None // not under a root of this kit lane: no mirror this rule can name
+        | Some sr ->
+            let name = src.Substring(sr.Length + 1)
+
+            if name = "" || name.Contains "/" then
+                None // a root itself, or a nested path: not a skill directory
+            else
+                // The OTHER root of the lane. Direction is a CONSEQUENCE of which root the registry
+                // declared, so the mirror can never be copied back over its own source.
+                match lane |> List.filter (fun r -> r <> sr) with
+                | [ mirrorRoot ] -> Some(src, mirrorRoot + "/" + name)
+                | _ -> None // no single opposite root — say nothing rather than guess
+
+    let divergedRoots (roots: ('a * byte[] option * byte[] option) list) : 'a list =
         roots
-        |> List.choose (fun (name, a, b) ->
+        |> List.choose (fun (key, a, b) ->
             match a, b with
             | Some x, Some y when x = y -> None // byte-identical across both roots
-            | _ -> Some name) // diverged, or one root is missing the mirror
+            | _ -> Some key) // diverged, or one root is missing the mirror

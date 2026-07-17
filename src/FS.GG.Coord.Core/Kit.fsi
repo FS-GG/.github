@@ -45,8 +45,34 @@ module Kit =
     /// of advice, and the cost of missing it is a red `main`. Order follows the lock.
     val declaredSources: lock: (string * string) list -> declared: string list -> string list
 
+    /// The mirror of a DECLARED skill source: `(source, mirror)`, each the directory whose `SKILL.md` the
+    /// roots rule compares. `None` when `src` names no single opposite root — a client kit like
+    /// `scripts/fsgg-coord`, a path outside the lane, or a root itself — which is silence, not a divergence.
+    ///
+    /// **THE CALLER MUST PASS THE LOCK'S SOURCES, NOT A DIRECTORY LISTING, AND THAT IS THE WHOLE POINT
+    /// (#647).** The roots rule is ADR-0011/0014's, and ADR-0014 §4 scopes it to the skills the kit SYNCS —
+    /// the `kind: skill` rows of `registry/repos.yml`, digested into `registry/repos.lock`. It has no claim
+    /// on a repo's own skills. The check used to enumerate `.claude/skills/*/` off the filesystem and
+    /// byte-compare every directory it found, which asked the tree a question only the registry can answer:
+    /// it flagged **33** repo-local skills in FS.GG.Rendering and **28** in FS.GG.SDD, on green `main`s, and
+    /// stayed silent about the four it actually governs (which were fine). ADR-0014 §1 requires manifests,
+    /// never ad-hoc directory scans; `staleSources` above already reads the lock, and this is that same
+    /// roster, asked the other question.
+    ///
+    /// **DIRECTION IS A CONSEQUENCE, NOT A CONVENTION.** The mirror is derived from whichever root the
+    /// registry DECLARED, so the remedy always copies FROM the digested source — the one `coordination-sync`
+    /// fans out and the lock content-addresses. The scan it replaces hardcoded `.claude` → `.agents` and so
+    /// ran the mirror BACKWARDS in every repo whose source root is `.agents/` (`materialize-skill-roots.fsx`
+    /// fans `.agents/` → `.claude/`/`.codex/`): its advice destroyed the source root it claimed to protect,
+    /// overwriting the per-agent `Codex-active` wrapper that `specs/227-layout-product-skill/data-model.md`
+    /// REQUIRES, and which `skill-parity` validates by pairing rather than by byte-identity.
+    val skillMirror: roots: string list -> src: string -> (string * string) option
+
     /// A skill kit carries the BYTE-IDENTICAL union across its two roots (ADR-0011/0014); a divergence reds
-    /// the `roots` gate. Given, per skill name, the two roots' `SKILL.md` bytes (`None` = that root is
-    /// missing the file), the names whose roots are NOT byte-identical — a missing mirror counts as
-    /// diverged. Order follows the input.
-    val divergedRoots: roots: (string * byte[] option * byte[] option) list -> string list
+    /// the `roots` gate. Given, per key, the two roots' `SKILL.md` bytes (`None` = that root is missing the
+    /// file), the keys whose roots are NOT byte-identical — a missing mirror counts as diverged. Order
+    /// follows the input.
+    ///
+    /// The key is opaque: this is the byte-comparison and nothing else, so the caller keys it by whatever it
+    /// must carry to the remedy — `skillMirror`'s `(source, mirror)` pair, in `kitDigestWarn`'s case.
+    val divergedRoots: roots: ('a * byte[] option * byte[] option) list -> 'a list

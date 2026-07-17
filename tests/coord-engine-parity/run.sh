@@ -3975,6 +3975,98 @@ if [ -z "$KIT_PORT" ]; then bad "kit fixture bound a port"; else
     && bad "#469: a CLIENT kit must NOT be told to mirror skill roots (case 43)" "$w_client" \
     || ok "#469: a CLIENT kit is NOT told to mirror skill roots (case 43)"
 
+  # (4b) THE ROOTS RULE IS SCOPED TO THE KIT'S OWN SKILLS (#647). The check used to enumerate
+  #      `.claude/skills/*/` off the FILESYSTEM, so it policed skills the kit does not own and does not
+  #      sync: 33 repo-local skills flagged in FS.GG.Rendering, 28 in FS.GG.SDD, both on GREEN `main`s,
+  #      while it stayed silent about the four it actually governs (which were fine). ADR-0014 §4 scopes
+  #      the rule to the kit; §1 requires a manifest, never a directory scan. The lock IS that manifest —
+  #      `kit_digest_stale` next door already read it — so a repo-local skill cannot reach the check.
+  #
+  #      THE FIXTURE'S OWN BLIND SPOT IS WHY THIS SHIPPED: KITROOT only ever held the kit's `pnext-item`,
+  #      so every root under the glob WAS a kit skill and the two were indistinguishable. Give the
+  #      receiver skills of its own — which is the normal state of every repo downstream — and they part.
+  kit_seed
+  mkdir -p "$KITROOT/.claude/skills/fs-gg-product-layout" "$KITROOT/.agents/skills/fs-gg-product-layout" \
+           "$KITROOT/.claude/skills/speckit-analyze"
+  # BOTH roots, legitimately differing: the per-agent wrapper line is the POINT of having two roots
+  # (specs/227-layout-product-skill/data-model.md pins the Codex-active/Claude-active pair), and
+  # `skill-parity` validates them by PAIRING, never by byte-identity.
+  printf 'This is the Claude-active wrapper.\n' >"$KITROOT/.claude/skills/fs-gg-product-layout/SKILL.md"
+  printf 'This is the Codex-active wrapper.\n'  >"$KITROOT/.agents/skills/fs-gg-product-layout/SKILL.md"
+  # `.claude` ONLY — a repo-local skill with no `.agents` twin. ABSENT IS NOT DIVERGED (#610).
+  printf 'local only\n' >"$KITROOT/.claude/skills/speckit-analyze/SKILL.md"
+
+  w_local="$(kd 'FS.GG.SDD#74' 'scripts/fsgg-coord')"
+  printf '%s' "$w_local" | grep -q 'SKILL ROOTS' \
+    && bad "#647: repo-local skills are NOT the kit's business — no roots warning on a green tree (case 43)" "$w_local" \
+    || ok "#647: repo-local skills are NOT the kit's business — no roots warning on a green tree (case 43)"
+  # The named-and-shamed half, stated separately so a future regression says WHICH arm broke.
+  printf '%s' "$w_local" | grep -q 'fs-gg-product-layout' \
+    && bad "#647: a repo-local skill differing across BOTH roots must not be named (case 43)" "$w_local" \
+    || ok "#647: a repo-local skill differing across BOTH roots is not named (case 43)"
+  printf '%s' "$w_local" | grep -q 'speckit-analyze' \
+    && bad "#610: a repo-local skill absent from .agents must not be named — absent is not diverged (case 43)" "$w_local" \
+    || ok "#610: a repo-local skill absent from .agents is not named — absent is not diverged (case 43)"
+
+  # ...and the scoping must not COST the real signal: a genuinely diverged KIT skill, in that same tree,
+  # is still named. A check scoped to nothing would pass every assertion above (#266).
+  printf 'skill body v2 — one root only\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  w_kit="$(kd 'FS.GG.SDD#74' '.claude/skills/pnext-item/**')"
+  printf '%s' "$w_kit" | grep -q 'cp .claude/skills/pnext-item/SKILL.md .agents/skills/pnext-item/SKILL.md' \
+    && ok "#647: ...while a genuinely diverged KIT skill IS still named, beside them (case 43)" \
+    || bad "#647: a diverged KIT skill must still be named" "$w_kit"
+
+  # (4b-ii) A ROOT THIS TREE HAS NOT GOT IS THIS TREE'S DECISION, NOT DRIFT (#647). `AGENT_SKILL_ROOTS` is
+  #      configurable — `coordination-sync`'s two roots are its DEFAULT, not a law — so a receiver may hold
+  #      the kit in ONE root. Telling it to `cp` a skill into a root it deliberately does not keep would be
+  #      this very issue's bug in a narrower coat: a warning, on a green tree, about nobody's mistake. The
+  #      scan being replaced got this RIGHT (`Directory.Exists agentsDir || return []`) and the scoping
+  #      rewrite is what put it at risk — so it is asserted here rather than left to survive by luck.
+  ONEROOT="$(mktemp -d)/oneroot"
+  mkdir -p "$ONEROOT/.claude/skills/pnext-item" "$ONEROOT/registry"   # NO .agents root at all
+  printf 'skill body\n' >"$ONEROOT/.claude/skills/pnext-item/SKILL.md"
+  printf '%s  .claude/skills/pnext-item\n' \
+    "$(sha256sum "$ONEROOT/.claude/skills/pnext-item/SKILL.md" | cut -d' ' -f1)" >"$ONEROOT/registry/repos.lock"
+  w_one="$(FSGG_KIT_ROOT="$ONEROOT" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" GITHUB_TOKEN=t \
+             FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+             FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" widen 'FS.GG.SDD#74' --worker kite-469 --paths 'x' 2>&1)"
+  printf '%s' "$w_one" | grep -q 'SKILL ROOTS' \
+    && bad "#647: a receiver holding the kit in ONE root must not be told to create the other (case 43)" "$w_one" \
+    || ok "#647: a receiver holding the kit in ONE root is not told to create the other (case 43)"
+
+  # ...but an absent FILE inside a root the tree DOES keep is real drift, and must still be named. The two
+  # differ by one `mkdir`, which is the whole distinction — assert it, or the rule above swallows both.
+  mkdir -p "$ONEROOT/.agents/skills"
+  w_two="$(FSGG_KIT_ROOT="$ONEROOT" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" GITHUB_TOKEN=t \
+             FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+             FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" widen 'FS.GG.SDD#74' --worker kite-469 --paths 'x' 2>&1)"
+  printf '%s' "$w_two" | grep -q 'cp .claude/skills/pnext-item/SKILL.md .agents/skills/pnext-item/SKILL.md' \
+    && ok "#647: ...while a mirror MISSING from a root the tree does keep is still named (case 43)" \
+    || bad "#647: an absent mirror inside an existing root is drift and must be named" "$w_two"
+
+  # (4c) THE REMEDY RUNS THE MIRROR FROM THE DECLARED SOURCE — never backwards over it (#647/#555).
+  #      The emitted `cp` used to be hardcoded `.claude` → `.agents`, so in every repo whose source root
+  #      is `.agents/` (`materialize-skill-roots.fsx` fans `.agents/` → `.claude/`/`.codex/`) the advice
+  #      DESTROYED the source of truth. Direction is now read off the registry's declared `source`, so
+  #      declare `.agents/` and the copy must reverse. #555's test ask was never satisfied because
+  #      `assert_contains ".agents/skills/pnext-item"` passes for the BROKEN string too — a substring
+  #      cannot tell a source from a destination. Assert the ORDERED PAIR.
+  BACKROOT="$(mktemp -d)/backroot"
+  mkdir -p "$BACKROOT/.claude/skills/pnext-item" "$BACKROOT/.agents/skills/pnext-item" "$BACKROOT/registry"
+  printf 'SOURCE OF TRUTH — Codex-active\n' >"$BACKROOT/.agents/skills/pnext-item/SKILL.md"
+  printf 'stale mirror\n'                   >"$BACKROOT/.claude/skills/pnext-item/SKILL.md"
+  printf '%s  .agents/skills/pnext-item\n' \
+    "$(sha256sum "$BACKROOT/.agents/skills/pnext-item/SKILL.md" | cut -d' ' -f1)" >"$BACKROOT/registry/repos.lock"
+  w_back="$(FSGG_KIT_ROOT="$BACKROOT" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" GITHUB_TOKEN=t \
+              FSGG_COORD_OWNER=FS-GG FSGG_COORD_PROJECT=Coordination FSGG_COORD_SCAN_TTL_SEC=0 \
+              FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" widen 'FS.GG.SDD#74' --worker kite-469 --paths 'x' 2>&1)"
+  printf '%s' "$w_back" | grep -q 'cp .agents/skills/pnext-item/SKILL.md .claude/skills/pnext-item/SKILL.md' \
+    && ok "#647: the remedy copies FROM the declared source root, reversing with it (case 43)" \
+    || bad "#647: the remedy must mirror FROM the declared source" "$w_back"
+  printf '%s' "$w_back" | grep -q 'cp .claude/skills/pnext-item/SKILL.md .agents/skills/pnext-item/SKILL.md' \
+    && bad "#647: the remedy must NEVER copy the mirror back over the declared source (case 43)" "$w_back" \
+    || ok "#647: ...and NEVER copies the mirror back over the declared source (case 43)"
+
   # (5) No lock to read — a RECEIVER repo mirrors the kit but not the registry. Stay silent rather than
   #     nagging every worker in every downstream repo about a file they do not have.
   w469r="$(FSGG_KIT_ROOT="$(dirname "$KITROOT")/no-such-root" FSGG_GITHUB_API_BASE="http://127.0.0.1:$KIT_PORT" \
