@@ -1146,6 +1146,20 @@ coherence:
   - id: governance-handoff-emitted-version
     coherent: true
     owner: sdd
+    resolved_by: >
+      FS.GG.SDD#427 (closed 2026-07-14T11:01:07Z), measured on FS.GG.SDD @ 7c6c78a: the emitter reads the
+      constant — `GovernanceHandoff.fs:261` and `ReleaseContract.fs:590-592` both take
+      `Fsgg.Schemas.governanceHandoffContractVersion` (`src/FS.GG.Contracts/Schemas.fs:185` = "1.1.0",
+      anchored by `SchemaVersionConstantTests.fs:55-58`). The emitted artifact self-declares 1.1.0 and
+      the `governance-handoff` contract entry declares 1.1.0.
+      .
+      NOT resolved by a bump: #427 deleted the hand-kept MIRROR, leaving ONE literal where there were
+      two. That is why gate (a) under `enforcement` is retired rather than owed — there is nothing left
+      that can drift. The gate (b) this row also named is NOT resolved and is NOT SDD's: see
+      `enforcement` and .github#1085.
+      .
+      Field added by .github#1082 alongside the flip, per this table's convention that a flipped row
+      records what paid it in `resolved_by` rather than only in prose.
     summary: >
       (2026-07-14) RESOLVED by FS.GG.SDD#427, on this row's own stated flip criterion: the EMITTED
       ARTIFACT's `contractVersion` reads 1.1.0 and the `governance-handoff` CONTRACT entry above
@@ -1188,6 +1202,13 @@ coherence:
       than an incoherence — which is why this row is `true` and #1085 is an issue, instead of this row
       being held red over a state that is in fact coherent. Holding it red to keep the gate visible would
       re-create the exact defect .github#1082 repaired.
+      .
+      AND THIS DOCUMENT'S OWN SCHEMA SETTLES IT, which is why the flip is not a judgement call: the
+      `coherence` schema comment above defines `coherent:false` as "a standing cross-repo REQUEST". This
+      row's `owner` is sdd, so `false` here is a standing request TO SDD — for work SDD has already done.
+      The gate that IS owed is .github's own, and a repo cannot stand a cross-repo request against
+      itself; that is an issue (#1085), not a row. Leaving it `false` would have kept asking the wrong
+      repo for the wrong thing.
     enforcement: >
       FLIPPED coherent:true 2026-07-17 (.github#1082) on the criterion this field already stated: the
       EMITTED handoff's `contractVersion` reads 1.1.0. TWO gates were named here, in DIFFERENT repos:
