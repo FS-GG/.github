@@ -183,6 +183,14 @@ read_roots_decl() {
 # root set: a tree that bothered to check the file in meant to say something. Falling through to the
 # default there would silently substitute a root set the tree explicitly declined — the fail-open
 # shape (#266) arriving through a config file that looks authoritative. So: die.
+#
+# shellcheck disable=SC2034  # ROOTS_SRC / ROOTS_FROM_DEFAULT are this function's OUTPUT, read by the
+# caller that sources this fragment — skill-union-assert.sh reads both (its "configured root is absent
+# (roots from $ROOTS_SRC)" die, and its banner). A sourced library assigning a variable its consumer
+# reads is invisible to a linter pointed at the library alone: shellcheck sees the write and no read,
+# and cannot see across the source boundary in that direction. Exporting them to satisfy it would put
+# them in the environment of every child process to silence a linter, which is a worse contract than
+# the one documented above. #648.
 resolve_roots() {
   local tree="$1" default="$2" default_label="$3" explicit="${4:-}"
   local decl="$tree/.agent-skill-roots"

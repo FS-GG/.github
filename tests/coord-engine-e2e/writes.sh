@@ -129,7 +129,7 @@ wu="$("$ENGINE" widen FS.GG.SDD#43 --worker vole-418 --paths '**/never.fs' 2>&1)
   || bad "#273: an unmatchable token is refused" "rc=$wurc: $wu"
 
 # ---- done stamps a completed item ------------------------------------------------------------------
-dn="$(run done FS.GG.SDD#42 2>&1)"; dnrc=$?
+dn="$(run "done" FS.GG.SDD#42 2>&1)"; dnrc=$?   # quoted: the coord VERB, not the loop keyword (SC1010, #648)
 [ "$dnrc" -eq 0 ] && printf '%s' "$dn" | grep -q 'FSGG-DONE' \
   && ok "done stamps an item closed by a merged PR" \
   || bad "done stamps a completed item" "rc=$dnrc: $dn"

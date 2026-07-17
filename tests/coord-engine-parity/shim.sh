@@ -144,7 +144,7 @@ fi
 
 # STALE + a BOARD WRITE: REFUSE. A stale write corrupts state the whole fleet shares (#929's two live
 # incidents), so the engine must NOT run — asserted on the output, not merely the exit code.
-for verb in release set-field done claim; do
+for verb in release set-field "done" claim; do   # "done" quoted: a coord VERB in a list, not this loop's keyword (SC1010, #648)
   out="$(cd "$FIX" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" "$verb" .github#1 2>&1)"; rc=$?
   if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | grep -q 'ENGINE RAN' \
      && printf '%s' "$out" | grep -qi 'refused'; then

@@ -571,7 +571,10 @@ printf '%s' "$out" | grep -q "FIXTURE MODE" \
   && ok "fixture mode prints a banner" \
   || bad "fixture mode prints a banner" "$out"
 
-out="$(FSGG_PIN_FIXTURE_OK= python3 "$GATE" --root "$BASE" --fixture "$FEED" 2>&1)" && rc=0 || rc=$?
+# `=''`, not `= ` — identical (the var is still set, still empty, still only for this command), but
+# `FOO= cmd` is also exactly how a typo'd `FOO=$BAR cmd` looks once the value goes missing, so a
+# linter cannot tell this deliberate empty from that accident (SC1007). Say it explicitly. #648
+out="$(FSGG_PIN_FIXTURE_OK='' python3 "$GATE" --root "$BASE" --fixture "$FEED" 2>&1)" && rc=0 || rc=$?
 if [ "${rc:-0}" -ne 0 ] && printf '%s' "$out" | grep -q "Refusing to run"; then
   ok "--fixture refuses to run without FSGG_PIN_FIXTURE_OK"
 else

@@ -49,9 +49,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
 REG="$SRC_ROOT/registry/repos.yml"
 DEFAULT_ROOTS=".claude/skills .agents/skills"   # the kit lane: what a receiver holds. NOT ADR-0011's three.
+# `resolve_roots` (lib/roots.sh) also sets ROOTS_SRC and ROOTS_FROM_DEFAULT. This lane reads neither —
+# it materializes the kit rather than reporting on which rule chose the roots — so they are not
+# pre-declared here. skill-union-assert.sh, which does read both, declares both. (#648)
 ROOTS=""
-ROOTS_SRC=""
-ROOTS_FROM_DEFAULT=""
 
 die()   { echo "coordination-sync: $*" >&2; exit 2; }
 # need_val (a flag with no value is a misconfiguration, not the exit-1 "kit has drifted" verdict) is

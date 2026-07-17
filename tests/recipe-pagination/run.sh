@@ -30,11 +30,16 @@ echo "recipe-pagination fixture — work='$WORK'"
 # Build a throwaway recipe tree and run the gate over it.
 # usage: gate_on <case-name> <markdown-body>   -> sets $RC and $OUT
 gate_on() {
-  local name="$1" body="$2" dir="$WORK/$1/recipes/kit"
+  # TWO `local`s, and that is not style: a single `local name="$1" dir="$WORK/$name/..."` expands
+  # `$name` BEFORE `local` assigns it, so `dir` would silently become `$WORK//recipes/kit` — the
+  # fixture would then write every case into ONE directory and still report PASS. shellcheck SC2318
+  # caught exactly that, in this file, in this PR. #648
+  local name="$1" body="$2"
+  local dir="$WORK/$name/recipes/kit"
   mkdir -p "$dir"
   printf '%s\n' "$body" > "$dir/SKILL.md"
   set +e
-  OUT="$(cd "$WORK/$1" && python3 "$GATE" --root . --recipes recipes 2>&1)"
+  OUT="$(cd "$WORK/$name" && python3 "$GATE" --root . --recipes recipes 2>&1)"
   RC=$?
   set -e
 }
