@@ -338,7 +338,7 @@ module Scan =
     /// `None` is `BlockerUnparseable`, and it BLOCKS. Prose in a dependency field is not a cleared
     /// dependency: *"Blocked by RESOLVED: shipped last week"* has no owner, no repo and no number, and the
     /// bash client used to drop such blockers entirely — so an item it called BLOCKED arrived at the engine
-    /// UNBLOCKED, which under `--engine=fs` is a worker being handed blocked work.
+    /// UNBLOCKED, and the engine's answer is the one that reaches a worker: blocked work, handed out.
     let private parseBlockerRef (defaultOwner: string) (defaultRepo: string) (token: string) : Ref option =
         let t = token.Trim()
 

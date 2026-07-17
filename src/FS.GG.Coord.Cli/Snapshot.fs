@@ -88,7 +88,8 @@ module Snapshot =
     /// — so demanding owner/repo/number here would refuse the very case the state exists to name. The
     /// client used to sidestep that by dropping such blockers entirely (its `jq capture` matched nothing,
     /// produced no object, and the whole array collapsed to `[]`), so an item the client called BLOCKED
-    /// arrived here UNBLOCKED. Under `--engine=fs` that is a worker being handed blocked work.
+    /// arrived here UNBLOCKED — and the engine's answer is the one a worker acts on, so that is a worker
+    /// being handed blocked work.
     ///
     /// So: take the ref if it is there, keep the raw text always, and let the STATE carry the meaning.
     let private blocker (path: string) (el: JsonElement) : Result<Blocker, Error list> =
@@ -635,7 +636,7 @@ module Snapshot =
                     w.WriteEndArray()
                 | None -> ()
 
-                // The HOLDER-AWARE rendering (see Batch.explainDecision). This string is what `--engine=fs`
+                // The HOLDER-AWARE rendering (see Batch.explainDecision). This string is what the client
                 // relays to the worker verbatim, so it is the one place the reason is worded — bash may
                 // not restate it, and a holder-blind version of it is a regression on #428.
                 w.WriteString("explain", Batch.explainDecision leaseMinutes d)
