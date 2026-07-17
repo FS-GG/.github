@@ -9,8 +9,9 @@
 ///   2. update fsgg-sdd          (self-update to the newest build — DEFAULT; --pinned skips)  [non-fatal]
 ///   3. fsgg-sdd scaffold        (SDD lifecycle skeleton + runnable Rendering app)            [fatal]
 ///   4. governance overlay       (dotnet new fs-gg-governance — default on)                   [non-fatal]
-///   5. fsgg-sdd doctor          (read-only coherence check)                                  [non-fatal]
-///   6. fsgg-sdd upgrade         (optional --upgrade — reconcile an existing project)         [fatal]
+///   5. coordination wiring      (vendor the kit + write FSGG_COORD_* env — default on)       [non-fatal]
+///   6. fsgg-sdd doctor          (read-only coherence check)                                  [non-fatal]
+///   7. fsgg-sdd upgrade         (optional --upgrade — reconcile an existing project)         [fatal]
 ///
 /// Currency is the DEFAULT (ADR-0030, the creation-time carve-out to ADR-0009): the CLI
 /// self-updates to the newest coherent set BEFORE scaffolding, so a fresh workspace is always
@@ -24,6 +25,8 @@ open System.IO
 open System.Diagnostics
 open System.Net.Http
 open System.Runtime.InteropServices
+open System.Text.Json
+open System.Text.Json.Nodes
 open Spectre.Console
 
 // ── Model ────────────────────────────────────────────────────────────────────
@@ -52,7 +55,18 @@ type Options =
       /// The `fs-gg-ui` render profile (game/app/headless-scene/governed/sample-pack).
       /// None = pass no `--param profile`, deferring to the scaffold-provider default (game) —
       /// keeps the bare-CLI invocation byte-identical to before this flag existed.
-      Profile: string option }
+      Profile: string option
+      /// Wire the workspace to a coordination board (default ON): vendor the coordination kit and
+      /// write the `FSGG_COORD_*` env so `/pnext-item` and `/check-board` work out of the box.
+      /// `--no-coordination` skips the whole step. (Opens ADR-0019's deferred product-mirror slice.)
+      Coordinate: bool
+      /// The board this workspace coordinates against — `FSGG_COORD_OWNER` / `FSGG_COORD_PROJECT`.
+      /// Default `FS-GG` / `Coordination` (the org board); `--board <owner>/<title>` overrides.
+      BoardOwner: string
+      BoardTitle: string
+      /// The per-repo chore-lock roster for a NON-FS-GG board (`FSGG_COORD_CHORE_LOCKS`). None for the
+      /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
+      ChoreLocks: string option }
 
 // ── Effects ──────────────────────────────────────────────────────────────────
 
@@ -252,6 +266,142 @@ let private fetchDescriptor (gitRef: string) (dest: string) : Result<string opti
     with ex ->
         Error ex.Message
 
+// ── Coordination wiring (the kit + board env into the workspace) ──────────────
+
+/// The four coordination skills (the `coordination-kit` rows of `registry/repos.yml`). Each lands in
+/// BOTH agent-skill roots byte-identical (ADR-0011/0014); the shim and the engine tool manifest
+/// complete the kit. Fetched from FS-GG/.github at scaffold time — the packaged tool has no checkout,
+/// so it pulls the bytes over HTTP exactly as it fetches the rendering descriptor (no `coordination-sync`).
+let private coordinationSkills =
+    [ "cross-repo-coordination"; "intra-repo-parallel-work"; "check-board"; "pnext-item" ]
+
+/// `owner/title` → (owner, title). No `/` ⇒ that owner's default `Coordination` board.
+let private parseBoard (value: string) : string * string =
+    match value.IndexOf '/' with
+    | -1 -> value, "Coordination"
+    | i -> value.Substring(0, i), value.Substring(i + 1)
+
+/// Fetch one text file from a raw URL. `Error` on any non-2xx or transport failure — the coordination
+/// step is best-effort, so the caller downgrades a miss to a warning rather than failing the scaffold.
+let private fetchText (url: string) : Result<string, string> =
+    try
+        use client = new HttpClient()
+        client.Timeout <- TimeSpan.FromSeconds 30.0
+        use resp = client.GetAsync(url).GetAwaiter().GetResult()
+        if resp.IsSuccessStatusCode then
+            Ok(resp.Content.ReadAsStringAsync().GetAwaiter().GetResult())
+        else
+            Error(sprintf "HTTP %d fetching %s" (int resp.StatusCode) url)
+    with ex ->
+        Error ex.Message
+
+let private writeUnder (target: string) (relPath: string) (content: string) =
+    let dest = Path.Combine(target, relPath)
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+    File.WriteAllText(dest, content)
+
+/// Merge the `fs.gg.coord.cli` tool into the workspace's `.config/dotnet-tools.json`, preserving any
+/// tools already there (the SDD scaffold may have written one). `manifestJson` is the fetched
+/// `dist/dotnet/.config/dotnet-tools.json` — we lift only the coord entry out of it.
+let private mergeToolManifest (target: string) (manifestJson: string) =
+    let dest = Path.Combine(target, ".config", "dotnet-tools.json")
+    let coord = JsonNode.Parse(manifestJson).AsObject().["tools"].AsObject().["fs.gg.coord.cli"]
+    let root =
+        if File.Exists dest then
+            JsonNode.Parse(File.ReadAllText dest).AsObject()
+        else
+            let o = JsonObject()
+            o.["version"] <- JsonValue.Create 1
+            o.["isRoot"] <- JsonValue.Create true
+            o.["tools"] <- JsonObject()
+            o
+    let tools =
+        match root.["tools"] with
+        | :? JsonObject as t -> t
+        | _ ->
+            let t = JsonObject()
+            root.["tools"] <- t
+            t
+    tools.["fs.gg.coord.cli"] <- coord.DeepClone()
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+    File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+/// Write/MERGE the coordination env into the workspace's `.claude/settings.json` — where Claude Code
+/// (and thus a skill-run `fsgg-coord`) reads env. Merge, never clobber: the SDD scaffold may already
+/// have written a settings.json (hooks, etc.), so we touch only the `env` keys we own.
+let private writeCoordinationEnv (target: string) (owner: string) (title: string) (choreLocks: string option) =
+    let dest = Path.Combine(target, ".claude", "settings.json")
+    let root =
+        if File.Exists dest then
+            match JsonNode.Parse(File.ReadAllText dest) with
+            | :? JsonObject as o -> o
+            | _ -> JsonObject()
+        else
+            JsonObject()
+    let env =
+        match root.["env"] with
+        | :? JsonObject as e -> e
+        | _ ->
+            let e = JsonObject()
+            root.["env"] <- e
+            e
+    env.["FSGG_COORD_OWNER"] <- JsonValue.Create owner
+    env.["FSGG_COORD_PROJECT"] <- JsonValue.Create title
+    match choreLocks with
+    | Some cl -> env.["FSGG_COORD_CHORE_LOCKS"] <- JsonValue.Create cl
+    | None -> ()
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+    File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
+
+/// Vendor the coordination kit from FS-GG/.github@<ref> into the workspace and write the board env.
+/// Best-effort (mirrors governance): a file that 404s becomes a Warning — the env still lands, and the
+/// rest is fetchable by hand — never a fatal that would strand a good scaffold.
+let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
+    let raw p = sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" kitRef p
+    let problems = ResizeArray<string>()
+    // 1 · the four skills → every agent-skill root, byte-identical. The SDD scaffold fans its own
+    //     union into .claude/.agents/.codex (ADR-0011), so the coordination kit joins all three —
+    //     a codex-driven agent in the workspace sees the same skills a Claude one does.
+    for s in coordinationSkills do
+        match fetchText (raw (sprintf ".claude/skills/%s/SKILL.md" s)) with
+        | Ok content ->
+            for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
+                writeUnder opts.Target (sprintf "%s/%s/SKILL.md" root s) content
+        | Error e -> problems.Add e
+    // 2 · the fsgg-coord shim (executable)
+    (match fetchText (raw "scripts/fsgg-coord") with
+     | Ok content ->
+         writeUnder opts.Target "scripts/fsgg-coord" content
+         try
+             let dest = Path.Combine(opts.Target, "scripts", "fsgg-coord")
+             File.SetUnixFileMode(
+                 dest,
+                 File.GetUnixFileMode dest
+                 ||| UnixFileMode.UserExecute
+                 ||| UnixFileMode.GroupExecute
+                 ||| UnixFileMode.OtherExecute
+             )
+         with _ -> ()
+     | Error e -> problems.Add e)
+    // 3 · the engine tool manifest (merge the coord tool)
+    (match fetchText (raw "dist/dotnet/.config/dotnet-tools.json") with
+     | Ok content ->
+         try mergeToolManifest opts.Target content
+         with ex -> problems.Add ex.Message
+     | Error e -> problems.Add e)
+    // 4 · the board env (no network — always writable)
+    (try writeCoordinationEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks
+     with ex -> problems.Add ex.Message)
+    if problems.Count = 0 then
+        Succeeded
+    else
+        Warned(
+            sprintf
+                "%d kit file(s) not vendored (env written) — add later from FS-GG/.github: %s"
+                problems.Count
+                (problems.[problems.Count - 1])
+        )
+
 // ── Rendering (presentation edge) ────────────────────────────────────────────
 
 let private step (n: int) (title: string) =
@@ -286,6 +436,14 @@ let private header (opts: Options) =
     grid.AddRow(
         "[grey]governance[/]",
         (if opts.Governance then "light / non-blocking" else "[dim]disabled (--no-governance)[/]")
+    )
+    |> ignore
+    grid.AddRow(
+        "[grey]coordination[/]",
+        (if opts.Coordinate then
+             sprintf "board [aqua]%s/%s[/]" (Markup.Escape opts.BoardOwner) (Markup.Escape opts.BoardTitle)
+         else
+             "[dim]disabled (--no-coordination)[/]")
     )
     |> ignore
     if opts.Upgrade then
@@ -352,6 +510,9 @@ let private usage () =
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   render profile (default: game = provider default)"
     AnsiConsole.MarkupLine(sprintf "                    [dim]%s[/]" (String.Join(", ", profiles |> List.map fst)))
     AnsiConsole.MarkupLine "  [green]--ref[/] <git-ref>    FS.GG.Templates ref for the descriptor (default: main = newest)"
+    AnsiConsole.MarkupLine "  [green]--board[/] <owner/title>  coordination board to wire the workspace to (default: FS-GG/Coordination)"
+    AnsiConsole.MarkupLine "  [green]--chore-locks[/] <refs>   FSGG_COORD_CHORE_LOCKS for a non-FS-GG board (owner/repo#n,… — comma-separated)"
+    AnsiConsole.MarkupLine "  [green]--no-coordination[/]  skip wiring the workspace to a coordination board (no kit, no env)"
     AnsiConsole.MarkupLine "  [green]--pinned[/]           skip the pre-scaffold fsgg-sdd self-update (scaffold with the installed CLI)"
     AnsiConsole.MarkupLine "                    [dim]default: self-update to the newest coherent set first; pair --pinned with --ref <tag> for a reproducible scaffold[/]"
     AnsiConsole.MarkupLine "  [green]--upgrade[/]          also run `fsgg-sdd upgrade` after scaffolding (reconcile an existing project)"
@@ -370,10 +531,24 @@ type private Draft =
       Governance: bool option
       Ref: string option
       Pinned: bool option
-      Upgrade: bool option }
+      Upgrade: bool option
+      Coordinate: bool option
+      BoardOwner: string option
+      BoardTitle: string option
+      ChoreLocks: string option }
 
 let private emptyDraft =
-    { Product = None; Target = None; Profile = None; Governance = None; Ref = None; Pinned = None; Upgrade = None }
+    { Product = None
+      Target = None
+      Profile = None
+      Governance = None
+      Ref = None
+      Pinned = None
+      Upgrade = None
+      Coordinate = None
+      BoardOwner = None
+      BoardTitle = None
+      ChoreLocks = None }
 
 /// Require a non-blank answer — the shared validator for the text prompts.
 let private required (label: string) (s: string) =
@@ -410,6 +585,14 @@ let private paramsPanel (d: Draft) =
         (match d.Upgrade with
          | Some true -> "[green]yes[/] [grey](reconcile)[/]"
          | Some false -> "[grey]no[/]"
+         | None -> pendingCell)
+    row "coordination"
+        (match d.Coordinate with
+         | Some true ->
+             sprintf "[aqua]%s/%s[/]"
+                 (Markup.Escape(d.BoardOwner |> Option.defaultValue "FS-GG"))
+                 (Markup.Escape(d.BoardTitle |> Option.defaultValue "Coordination"))
+         | Some false -> "[grey]none (skipped)[/]"
          | None -> pendingCell)
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]parameters[/]"
@@ -461,6 +644,19 @@ let private previewPanel (d: Draft) =
      | None -> tree.AddNode(sprintf "governance overlay  %s" pendingCell))
     |> ignore
 
+    (match d.Coordinate with
+     | Some true ->
+         let board =
+             sprintf "%s/%s"
+                 (d.BoardOwner |> Option.defaultValue "FS-GG")
+                 (d.BoardTitle |> Option.defaultValue "Coordination")
+         let node = tree.AddNode(sprintf "[green]coordination kit[/]  [grey](board [/][aqua]%s[/][grey])[/]" (Markup.Escape board))
+         node.AddNode "[grey37].claude+.agents/skills · scripts/fsgg-coord · .config/dotnet-tools.json · .claude/settings.json env[/]" |> ignore
+         node
+     | Some false -> tree.AddNode "[grey37]coordination — skipped[/]"
+     | None -> tree.AddNode(sprintf "coordination  %s" pendingCell))
+    |> ignore
+
     match d.Upgrade with
     | Some true -> tree.AddNode "[green]fsgg-sdd upgrade[/]  [grey](reconcile to the coherent set)[/]" |> ignore
     | _ -> ()
@@ -480,6 +676,14 @@ let private equivalentCommand (d: Draft) =
     parts.Add(d.Product |> Option.defaultValue "<product>")
     (match d.Profile with Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
     (match d.Ref with Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r) | _ -> ())
+    (match d.Coordinate with
+     | Some false -> parts.Add "--no-coordination"
+     | Some true ->
+         let owner = d.BoardOwner |> Option.defaultValue "FS-GG"
+         let title = d.BoardTitle |> Option.defaultValue "Coordination"
+         if owner <> "FS-GG" || title <> "Coordination" then parts.Add(sprintf "--board %s/%s" owner title)
+         (match d.ChoreLocks with Some cl -> parts.Add(sprintf "--chore-locks %s" cl) | None -> ())
+     | None -> ())
     (match d.Pinned with Some true -> parts.Add "--pinned" | _ -> ())
     (match d.Governance with Some false -> parts.Add "--no-governance" | _ -> ())
     (match d.Upgrade with Some true -> parts.Add "--upgrade" | _ -> ())
@@ -571,6 +775,38 @@ let private interactive () : Options option =
         AnsiConsole.Confirm("Also run [green]fsgg-sdd upgrade[/] after scaffolding (reconcile if behind)?", false)
     draft <- { draft with Upgrade = Some upgrade }
 
+    draftView draft
+    let coordinate, boardOwner, boardTitle, choreLocks =
+        let choice =
+            AnsiConsole.Prompt(
+                SelectionPrompt<string>()
+                    .Title("[green]Coordinate[/] against a board?")
+                    .AddChoices(
+                        [| "FS-GG / Coordination — the org board (default)"
+                           "a different board…"
+                           "none — skip coordination (--no-coordination)" |]))
+        if choice.StartsWith "none" then
+            false, "FS-GG", "Coordination", None
+        elif choice.StartsWith "FS-GG" then
+            true, "FS-GG", "Coordination", None
+        else
+            let owner, title =
+                AnsiConsole.Prompt(
+                    TextPrompt<string>("  Board [grey](owner/title)[/]?")
+                        .Validate(fun (s: string) -> required "board" s)).Trim()
+                |> parseBoard
+            let cl =
+                let raw =
+                    AnsiConsole.Prompt(TextPrompt<string>("  Chore-locks [grey](owner/repo#n,… — blank to skip)[/]?").AllowEmpty()).Trim()
+                if String.IsNullOrWhiteSpace raw then None else Some raw
+            true, owner, title, cl
+    draft <-
+        { draft with
+            Coordinate = Some coordinate
+            BoardOwner = Some boardOwner
+            BoardTitle = Some boardTitle
+            ChoreLocks = choreLocks }
+
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
@@ -581,7 +817,11 @@ let private interactive () : Options option =
               Upgrade = upgrade
               Governance = governance
               Pinned = pinned
-              Profile = Some profile }
+              Profile = Some profile
+              Coordinate = coordinate
+              BoardOwner = boardOwner
+              BoardTitle = boardTitle
+              ChoreLocks = choreLocks }
     else
         None
 
@@ -610,6 +850,17 @@ let private parse (argv: string list) : Result<Options, string> =
             Error(sprintf "--ref needs a value (got flag '%s')" value)
         | "--ref" :: value :: t -> flags { acc with Ref = value } t
         | [ "--ref" ] -> Error "--ref needs a value"
+        | "--board" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--board needs a value (got flag '%s')" value)
+        | "--board" :: value :: t ->
+            let owner, title = parseBoard value
+            flags { acc with BoardOwner = owner; BoardTitle = title } t
+        | [ "--board" ] -> Error "--board needs a value"
+        | "--chore-locks" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
+        | "--chore-locks" :: value :: t -> flags { acc with ChoreLocks = Some value } t
+        | [ "--chore-locks" ] -> Error "--chore-locks needs a value"
+        | "--no-coordination" :: t -> flags { acc with Coordinate = false } t
         | "--pinned" :: t -> flags { acc with Pinned = true } t
         | "--upgrade" :: t -> flags { acc with Upgrade = true } t
         | "--no-governance" :: t -> flags { acc with Governance = false } t
@@ -623,7 +874,11 @@ let private parse (argv: string list) : Result<Options, string> =
               Upgrade = false
               Governance = true
               Pinned = false
-              Profile = None }
+              Profile = None
+              Coordinate = true
+              BoardOwner = "FS-GG"
+              BoardTitle = "Coordination"
+              ChoreLocks = None }
             rest
     | _ -> Error "target dir and product name are required"
 
@@ -741,9 +996,40 @@ let private run (opts: Options) : int =
                 )
                 results.Add { Title = "governance overlay"; Outcome = Skipped "FS.GG.Templates template feed not reachable" }
 
-        // 5 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
+        // 5 · wire the workspace to its coordination board — vendor the kit + write the FSGG_COORD_*
+        //     env (default ON; --no-coordination skips). Best-effort like governance: a 404 on a kit file
+        //     warns and the env still lands. Opens ADR-0019's deferred product-mirror slice; unblocked by
+        //     the env-multi-tenant engine (#1140).
+        if not opts.Coordinate then
+            results.Add { Title = "coordination"; Outcome = Skipped "--no-coordination" }
+        elif not fatal then
+            step 5 "coordination"
+            let outcome =
+                AnsiConsole
+                    .Status()
+                    .Start(
+                        sprintf "vendoring the coordination kit for %s/%s…" opts.BoardOwner opts.BoardTitle,
+                        fun _ -> wireCoordination "main" opts
+                    )
+            (match outcome with
+             | Succeeded ->
+                 AnsiConsole.MarkupLine(
+                     sprintf
+                         "  [green]✓[/] kit vendored + env written — board [aqua]%s/%s[/]"
+                         (Markup.Escape opts.BoardOwner)
+                         (Markup.Escape opts.BoardTitle)
+                 )
+                 if opts.BoardOwner.ToLowerInvariant() <> "fs-gg" then
+                     AnsiConsole.MarkupLine
+                         "  [grey]note: offer/chores on a non-FS-GG board need an engine build with #1140 (post-0.4.0)[/]"
+             | Warned n -> AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape n))
+             | Skipped r -> AnsiConsole.MarkupLine(sprintf "  [yellow]⊘[/] %s" (Markup.Escape r))
+             | Failed n -> AnsiConsole.MarkupLine(sprintf "  [red]✗[/] %s" (Markup.Escape n)))
+            results.Add { Title = "coordination"; Outcome = outcome }
+
+        // 6 · fsgg-sdd doctor (read-only, non-fatal — matches the shell's `|| true`)
         if not fatal then
-            step 5 "fsgg-sdd doctor"
+            step 6 "fsgg-sdd doctor"
             let code, _ = runProcess true "fsgg-sdd" [ "doctor"; "--root"; opts.Target ]
             if code = 0 then
                 AnsiConsole.MarkupLine "  [green]✓[/] product is coherent with its set"
@@ -752,11 +1038,11 @@ let private run (opts: Options) : int =
                 AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] doctor reported issues (exit %d) — non-blocking" code)
                 results.Add { Title = "doctor"; Outcome = Warned(sprintf "reported issues (exit %d)" code) }
 
-        // 6 · fsgg-sdd upgrade (optional; fatal on failure, matching the shell's set -e). With the
+        // 7 · fsgg-sdd upgrade (optional; fatal on failure, matching the shell's set -e). With the
         //     default pre-scaffold self-update this is largely redundant on a fresh scaffold; it
         //     stays for the explicit "reconcile an existing project" invocation.
         if opts.Upgrade && not fatal then
-            step 6 "fsgg-sdd upgrade"
+            step 7 "fsgg-sdd upgrade"
             let code, _ = runProcess true "fsgg-sdd" [ "upgrade"; "--root"; opts.Target ]
             if code = 0 then
                 AnsiConsole.MarkupLine "  [green]✓[/] reconciled to the current coherent set"

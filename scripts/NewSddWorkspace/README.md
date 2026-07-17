@@ -27,7 +27,7 @@ new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>
 ```
 
 Run it with **no arguments** on an interactive terminal and it walks you through the same
-parameters with prompts (product → target → profile → governance → descriptor ref → currency → upgrade).
+parameters with prompts (product → target → profile → governance → descriptor ref → currency → upgrade → coordination).
 Beside the prompts a live preview fills in as you answer — a **parameters** card next to a
 **scaffold preview** tree of what the run will produce — and a final go/no-go confirmation
 guards the disk. When stdin is redirected (pipes, CI), it skips the wizard and keeps the
@@ -40,6 +40,25 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--pinned` | **skip** the pre-scaffold `fsgg-sdd` self-update and scaffold with the CLI you already have. The default is to update first (see below); pair `--pinned` with `--ref <tag>` for a fully reproducible, pinned scaffold. |
 | `--upgrade` | after scaffolding, also run `fsgg-sdd upgrade` to reconcile an existing project (self-update + re-pin + re-seed). Largely redundant on a fresh scaffold now that the CLI is updated *before* scaffolding — kept for the reconcile-an-existing-project case. |
 | `--no-governance` | skip the Governance overlay |
+| `--board <owner>/<title>` | the coordination board the workspace joins — sets `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (default: `FS-GG/Coordination`). An `owner` with no `/title` defaults the title to `Coordination`. |
+| `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
+| `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
+
+### Coordination by default (ADR-0019)
+
+By default, **step 5 wires the workspace to a coordination board** so `/pnext-item` and `/check-board`
+work out of the box: it vendors the coordination kit (the four coordination skills into `.claude`,
+`.agents` and `.codex` skill roots byte-identical, the `fsgg-coord` shim, and the `fs.gg.coord.cli`
+tool manifest — fetched from `FS-GG/.github` over HTTP, no checkout, like the descriptor) and writes
+`FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (and `FSGG_COORD_CHORE_LOCKS` when given) into the workspace's
+`.claude/settings.json` `env`. The board defaults to **FS-GG/Coordination**; `--board` retargets it and
+`--no-coordination` skips the step. This opens the product-mirror slice ADR-0019 §Consequences deferred
+(distribution had been framework-repos-only); the engine is env-multi-tenant, so any board works (#1140).
+
+Best-effort and non-blocking, like the governance overlay: a kit file that fails to fetch warns and the
+env still lands. **Note:** `offer`/chores on a **non-FS-GG** board need an engine build that includes
+#1140 (post-`0.4.0`); the default FS-GG board works on any engine (embedded lock table), so the
+scaffolder surfaces the caveat only when you retarget the board.
 
 ### Currency by default (ADR-0030)
 
@@ -69,8 +88,9 @@ It orchestrates the commands that already exist, and reports each step's outcome
 2. **update `fsgg-sdd`** — self-update the CLI to the newest build so the scaffold is current (default; `--pinned` skips) — *non-blocking; best-effort* (ADR-0030)
 3. **`fsgg-sdd scaffold`** — SDD skeleton + runnable Rendering app — *fatal on failure*
 4. **governance overlay** (`dotnet new fs-gg-governance`, profile `light`) — *non-blocking; best-effort*
-5. **`fsgg-sdd doctor`** — read-only coherence check — *non-blocking*
-6. **`fsgg-sdd upgrade`** (only with `--upgrade`) — *fatal on failure*
+5. **coordination wiring** — vendor the coordination kit + write the `FSGG_COORD_*` env (default on; `--no-coordination` skips) — *non-blocking; best-effort*
+6. **`fsgg-sdd doctor`** — read-only coherence check — *non-blocking*
+7. **`fsgg-sdd upgrade`** (only with `--upgrade`) — *fatal on failure*
 
 ### Governance overlay & feeds
 

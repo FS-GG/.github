@@ -88,3 +88,16 @@ participant-side analog of what `skills.yml` is for skills.
 - Open question deferred to slice 2: whether `cross-repo-coordination` should additionally be added
   to `skills.yml` so scaffolded products that *do* file into the board receive it via the product
   mirror. This ADR scopes distribution to the framework repos only.
+
+  **Resolved ([#1142](https://github.com/FS-GG/.github/issues/1142)), by the scaffolder rather than the
+  mirror.** `scripts/NewSddWorkspace` now wires a scaffolded workspace to a coordination board by
+  default (step 5): it vendors the coordination kit — the four skills into `.claude`/`.agents`/`.codex`
+  skill roots byte-identical, the `fsgg-coord` shim, and the `fs.gg.coord.cli` tool manifest — and writes
+  `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (+ `FSGG_COORD_CHORE_LOCKS` when given) into the workspace's
+  `.claude/settings.json`. The board defaults to `FS-GG/Coordination`; `--board <owner>/<title>` retargets
+  it and `--no-coordination` opts out. Chosen over adding the skills to `skills.yml`: the packaged
+  scaffolder has no `.github` checkout, so it fetches the kit from `FS-GG/.github` over HTTP (like the
+  rendering descriptor) rather than through `coordination-sync`, and `skills.yml` is generated from
+  producer manifests (an FS.GG.SDD-side change) whereas the scaffolder is `.github`-local. Unblocked by
+  the env-multi-tenant engine (ADR-0042 / #1140): a workspace can now point at any org's board by env,
+  so distribution to products no longer implies the FS-GG board.
