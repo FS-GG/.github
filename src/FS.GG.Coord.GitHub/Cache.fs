@@ -165,6 +165,15 @@ module Cache =
         else
             try
                 let text = File.ReadAllText file
+
+                // THE TTL IS MEASURED FROM THIS FILE'S MTIME (`getScan`), AND A PATCH IS NOT A READ. A patch
+                // folds a board write we just made into a cache whose FRESHNESS is otherwise unchanged — the
+                // board was last actually read at `putScan` time, not now. Rewriting the file stamps `now` and
+                // restarts the TTL clock, so a worker in the take → claim → …writes… → done loop keeps
+                // resetting its own cache to fresh and never sees another worker's board changes until it
+                // idles out the window or runs `--fresh` (#1152). Capture the pre-fold mtime and restore it
+                // after the rewrite: only a real read (`putScan`) may restart the clock.
+                let preFoldWriteTimeUtc = File.GetLastWriteTimeUtc file
                 let node = JsonNode.Parse text
 
                 match node with
@@ -192,6 +201,7 @@ module Cache =
                     let temp = file + ".tmp." + string (Environment.ProcessId)
                     File.WriteAllText(temp, items.ToJsonString())
                     File.Move(temp, file, overwrite = true)
+                    File.SetLastWriteTimeUtc(file, preFoldWriteTimeUtc)
 
                 | _ -> ()
 
