@@ -146,29 +146,43 @@ module Chore =
         /// The `/check-board` rule id — the anchor a report cites and a reader greps back to this code.
         member RuleId: string
 
-    /// **THE RESERVER OWNS THE SCHEDULING COLUMN**, and it is stated once here rather than re-decided by each
-    /// rule — because the rules that re-decided it disagreed with each other.
-    ///
-    /// While a claim marker reserves an item, its column belongs to whoever holds it. A worker who hits a
-    /// blocker and sets `Blocked` made a DECISION, and a column set deliberately during a lease still wins
-    /// (#331), so a chore that "reconciles" it overwrites somebody's judgement with a default. It is the
-    /// RESERVER, not the live winner (`Reads.reserver`, not `Reads.winner`): a lease is a clock but a lock is
-    /// broken only by `reap` (#461/#581), so a stale-but-uncollected marker still owns its column.
-    ///
-    /// Deferring costs nothing, which is why it is safe to make absolute: `STALE-CLAIM` collects an abandoned
-    /// marker and `release` restores the column it overwrote (#481), so the deferred rules fire on the next
-    /// pass. Deference DEFERS; it does not suppress.
-    ///
-    /// Two exceptions, and both are about a fact that is not a scheduling column at all: `STALE-CLAIM`, which
-    /// RESTORES a column rather than choosing one, and `CLOSED-ISSUE-NOT-DONE`, because a closed issue is
-    /// ground truth about the WORK — the issue IS the work and the column is the copy (#520) — and no lease
-    /// outranks it.
-    ///
-    /// Without this rule, an item that was `Ready`, claimed, and blocked derived BOTH `CLAIM-STATUS-LAG`
-    /// ("set In progress") and `STATUS-NOT-BLOCKED` ("set Blocked"): two chores writing opposite columns to
-    /// one item, with the winner decided by whichever caller drained the queue first. The invariant is now
-    /// asserted over every (status × claim × blocker × issue-state) combination in `ChoreTests`: **at most one
-    /// chore per item may want to write its column.**
+    // THE RESERVER OWNS THE SCHEDULING COLUMN.
+    //
+    // These are `//`, not `///`, and that is deliberate: this documents a RULE, not the declaration below it.
+    // As a `///` block separated by a blank line it was not orphaned the way it looked — F# attached it to the
+    // NEXT declaration, so the rule silently became the opening paragraph of the `Chore` TYPE's XML summary.
+    // It builds clean under TreatWarningsAsErrors, so nothing catches it, and the one rule it described is the
+    // one `CLOSED-ISSUE-NOT-DONE` got wrong.
+    //
+    // While a claim marker reserves an item, its column belongs to whoever holds it. A worker who hits a
+    // blocker and sets `Blocked` made a DECISION, and a column set deliberately during a lease still wins
+    // (#331), so a chore that "reconciles" it overwrites somebody's judgement with a default. It is the
+    // RESERVER, not the live winner (`Reads.reserver`, not `Reads.winner`): a lease is a clock but a lock is
+    // broken only by `reap` (#461/#581), so a stale-but-uncollected marker still owns its column.
+    //
+    // Deferring costs nothing, which is why it is safe to make absolute: `STALE-CLAIM` collects an abandoned
+    // marker and `reap` restores the column it overwrote (#481), so the deferred rules fire on the next pass.
+    // Deference DEFERS; it does not suppress.
+    //
+    // ONE exception: `STALE-CLAIM`, which is the rule that ENDS the reservation. It must fire on a reserved
+    // item — that is its whole purpose — and it cannot contradict the others, because `Chore.choresFor` derives
+    // it and them from opposite branches of one `match` on the claim.
+    //
+    // `CLOSED-ISSUE-NOT-DONE` was a second exception and is no longer one. Its justification — "a closed issue
+    // is ground truth about the WORK (#520) and no lease outranks it" — answers a LIVE lease and was never true
+    // of a STALE one, where `STALE-CLAIM`'s own remedy writes `PreviousStatus` straight back: 42 combinations
+    // derived that pair. It costs nothing to defer in either case. `rank` already orders `STALE-CLAIM` (0)
+    // ahead of it (3), so no observable order changed; and against a live lease the holder who just closed the
+    // issue is about to `done --flip` it, which is a race #331 already forbids.
+    //
+    // Without this rule, an item that was `Ready`, claimed, and blocked derived BOTH `CLAIM-STATUS-LAG` ("set
+    // In progress") and `STATUS-NOT-BLOCKED` ("set Blocked"): two chores writing opposite columns to one item,
+    // with the winner decided by whichever caller drained the queue first. The invariant is asserted over every
+    // (status × claim × blocker × issue-state) combination in `ChoreTests`, with NO kind excluded from the
+    // count: **an item derives at most ONE chore.** Every kind's remedy writes the column, so that is the same
+    // sentence as "at most one chore may want to write its column" — and it is the form that cannot be quietly
+    // narrowed. The longer one was: it excluded `STALE-CLAIM` as "a restore, not a write", and that exclusion
+    // is what hid the pair above.
 
     /// ONE UNIT OF DEFERRED MAINTENANCE.
     ///
@@ -240,10 +254,19 @@ module Chore =
     /// and a chore two workers both perform converges instead of duplicating. There is no queue file to
     /// go stale, no entry to leak, and no "mark it done" for an agent to lie about.
     ///
-    /// It cannot read anything, so it cannot mistake a failed read for a condition. Where the caller could
-    /// not learn a fact — `BlockerUnknown`, `LivenessUnknown`, `TouchSet.Unreadable` — no chore is produced:
-    /// every rule here fails CLOSED, because the cost of a missed chore is that the next caller does it, and
-    /// the cost of a wrong one is a board write nobody wanted.
+    /// It cannot read anything, so it cannot mistake a failed read for a condition. Every rule fails CLOSED
+    /// over the facts IT reads: the cost of a missed chore is that the next caller does it, and the cost of a
+    /// wrong one is a board write nobody wanted. So `BlockerUnknown` and `BlockerUnparseable` stop
+    /// `BLOCKER-CLEARED` (a blocker we could not resolve is not one we cleared, #266/#421), and
+    /// `LivenessUnknown` stops `STALE-CLAIM` (a liveness probe that failed is not an abandoned lease, #581).
+    ///
+    /// It is PER-RULE, and deliberately not the blanket "an unknown fact anywhere produces no chore" this
+    /// sentence used to claim. That was false and could not have been otherwise: a blocker we failed to
+    /// resolve does not make the ISSUE's closedness unknown, so `CLOSED-ISSUE-NOT-DONE` still fires next to a
+    /// `BlockerUnknown` — correctly. Suppressing a rule over a fact it never reads is not caution, it is a
+    /// second way to be wrong. `TouchSet` is the limit case: no rule reads it at all, so `Unreadable` cannot
+    /// suppress anything, and the chores an unreadable touch-set does not produce are ones nothing here
+    /// produces anyway (see `ChoreTests`, which pins that rather than implying it).
     val derive: items: Item list -> Chore list
 
     /// OFFER **AT MOST ONE** CHORE — condition 3's bound, and it is a hard one.

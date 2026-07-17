@@ -80,13 +80,28 @@ module ChoreTests =
 
     [<Fact>]
     let ``STALE-CLAIM fires on a CLOSED issue too — an abandoned lease reserves its touch-set either way (#601)`` () =
+        // `Status = Ready`, and the column is the point rather than a detail. This test used to say `Done` —
+        // the ONE value of seven that made `item.Status <> Done` false and so kept CLOSED-ISSUE-NOT-DONE
+        // from firing alongside. On every other column the pair derived together and wrote opposite things:
+        // STALE-CLAIM restores what the claim overwrote, CLOSED-ISSUE-NOT-DONE sets `Done`. The rule under
+        // test was right; the fixture had picked the one column that could not see the rule next to it.
         let i =
             { item 1 with
                 State = Closed
-                Status = Done
+                Status = Ready
                 Claim = Some(claim other, LeaseExpiredNoPr) }
 
         Assert.Equal<string list>([ "STALE-CLAIM" ], rules [ i ])
+
+    [<Fact>]
+    let ``a CLOSED issue's column waits for the reserver — CLOSED-ISSUE-NOT-DONE defers, it does not race`` () =
+        // The live-lease half of the same rule. The holder closed the issue and is about to `done --flip` it;
+        // handing anyone a chore to write `Done` underneath them is the race #331 forbids, and the column is
+        // theirs until they release. Deference DEFERS: once the marker is gone the rule fires (below).
+        let held = { item 1 with State = Closed; Status = InReview; Claim = Some(claim other, LeaseHeld) }
+        Assert.Empty(derive [ held ])
+
+        Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ { held with Claim = None } ])
 
     // ---- CLAIM-STATUS-LAG: the holder's own decisions still win (#331) -------------------------------
 
@@ -261,30 +276,54 @@ module ChoreTests =
         Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
 
     [<Fact>]
-    let ``no item ever derives two chores that both write Status — the remedies cannot contradict`` () =
-        // The invariant behind the two defects above, stated over every combination rather than by example:
-        // whatever is wrong with an item, at most one chore may want to write its column. STALE-CLAIM is the
-        // one that restores a column rather than setting one, so it is excluded from the count.
+    let ``an item derives AT MOST ONE chore — every kind writes the column, so two is a contradiction`` () =
+        // The invariant behind the two defects above, stated over every combination rather than by example.
+        //
+        // It is stated with NO exclusions and NO filter, and that is the test. Every one of the five kinds
+        // has a remedy that writes `Status`, so "at most one chore that writes the column" and "at most one
+        // chore" are the same sentence — and the shorter one cannot be quietly narrowed the way the longer
+        // one was.
+        //
+        // It used to exclude STALE-CLAIM, on the grounds that it "restores a column rather than setting
+        // one". Restoring IS writing — its remedy is `reap`, and `reap` restores `PreviousStatus` (#481) —
+        // and that exclusion is precisely what hid a real contradiction for as long as it stood: on a CLOSED
+        // issue carrying a STALE marker, STALE-CLAIM ("restore the column it overwrote") and
+        // CLOSED-ISSUE-NOT-DONE ("set Done") both fired, writing opposite columns to one item.
+        //
+        // The sweep is exhaustive over every field the rules read — every lease state, every blocker state,
+        // and the MULTI-blocker sets, because `List.forall` is what BLOCKER-CLEARED turns on and a
+        // single-element set cannot tell `forall` from `exists`.
         let statuses = [ NoStatus; Backlog; Ready; InProgress; Blocked; InReview; Done ]
-        let claims = [ None; Some(claim other, LeaseHeld); Some(claim other, LeaseExpiredNoPr); Some(claim other, LivenessUnknown) ]
-        let blockerSets = [ []; [ blocker 2 BlockerOpen ]; [ blocker 2 BlockerClosed ]; [ blocker 2 BlockerMerged ]; [ blocker 2 BlockerUnknown ] ]
+
+        let claims =
+            [ None
+              Some(claim other, LeaseHeld)
+              Some(claim other, LeaseExpiredNoPr)
+              Some(claim other, LeaseExpiredPrOpen 42)
+              Some(claim other, LivenessUnknown) ]
+
+        let blockerSets =
+            [ []
+              [ blocker 2 BlockerOpen ]
+              [ blocker 2 BlockerClosed ]
+              [ blocker 2 BlockerMerged ]
+              [ blocker 2 BlockerUnknown ]
+              [ blocker 2 BlockerUnparseable ]
+              [ blocker 2 BlockerClosed; blocker 3 BlockerOpen ]
+              [ blocker 2 BlockerClosed; blocker 3 BlockerMerged ]
+              [ blocker 2 BlockerClosed; blocker 3 BlockerUnknown ]
+              [ blocker 2 BlockerOpen; blocker 3 BlockerUnknown ] ]
 
         for st in statuses do
             for cl in claims do
                 for bs in blockerSets do
                     for state in [ Open; Closed ] do
                         let i = { item 1 with Status = st; State = state; Claim = cl; Blockers = bs }
-
-                        let writers =
-                            derive [ i ]
-                            |> List.filter (fun c ->
-                                match c.Kind with
-                                | StaleClaim _ -> false
-                                | _ -> true)
+                        let derived = derive [ i ]
 
                         Assert.True(
-                            writers.Length <= 1,
-                            $"status=%A{st} state=%A{state} claim=%b{cl.IsSome} blockers=%d{bs.Length} derived %d{writers.Length} column-writing chores: %A{writers |> List.map (fun c -> c.Kind.RuleId)}"
+                            derived.Length <= 1,
+                            $"status=%A{st} state=%A{state} claim=%A{cl |> Option.map snd} blockers=%A{bs |> List.map (fun b -> b.State)} derived %d{derived.Length} chores: %A{derived |> List.map (fun c -> c.Kind.RuleId)}"
                         )
 
     // ---- what is NOT a chore: fixes only ever write to the BOARD -------------------------------------
@@ -295,19 +334,29 @@ module ChoreTests =
         Assert.Empty(derive [ i ])
 
     [<Fact>]
-    let ``UNDECLARED-PATHS is never a chore — the fix is an ISSUE edit, and chores never write to issues`` () =
-        let i = { item 1 with TouchSet = Undeclared }
-        Assert.Empty(derive [ i ])
-
-    [<Fact>]
     let ``DONE-STATUS-OPEN-ISSUE is never a chore — was the flip premature? is a judgement call`` () =
         let i = { item 1 with State = Open; Status = Done }
         Assert.Empty(derive [ i ])
 
     [<Fact>]
-    let ``an unreadable touch-set is never a chore — we did not read the body, so we observed nothing`` () =
-        let i = { item 1 with TouchSet = Unreadable "rate limited" }
-        Assert.Empty(derive [ i ])
+    let ``NO rule reads the touch-set — so Undeclared, none, and unread alike are never a chore`` () =
+        // Stated as INVARIANCE over a DEFECTIVE item, not as emptiness over a healthy one. This replaces two
+        // tests (`UNDECLARED-PATHS is never a chore`, `an unreadable touch-set is never a chore`) that each
+        // set one touch-set on an item with nothing else wrong and asserted `Assert.Empty`. Both passed
+        // against `derive = fun _ -> []` — the empty list they asserted is the empty list a healthy item
+        // yields whatever the touch-set is, so neither could tell "the rules deliberately ignore this field"
+        // from "the rules did nothing at all". The claim in their names was never under test.
+        //
+        // Varying the touch-set across an item that DOES derive a chore is the same claim, made falsifiable:
+        // the derivation must be identical for every case, and it goes red the day a rule starts reading the
+        // field — which is exactly when somebody needs to be told, since the fix for a bad touch-set is an
+        // ISSUE edit and chores only ever write to the BOARD.
+        let defective = { item 1 with State = Closed; Status = Ready }
+
+        Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ defective ])
+
+        for ts in [ Undeclared; DeclaredNone; Declared [ Matchable "src/" ]; Unreadable "rate limited" ] do
+            Assert.Equal<string list>([ "CLOSED-ISSUE-NOT-DONE" ], rules [ { defective with TouchSet = ts } ])
 
     [<Fact>]
     let ``a healthy board yields no chores at all`` () =
