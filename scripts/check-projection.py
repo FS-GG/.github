@@ -213,18 +213,38 @@ def main() -> int:
                 f"contract id {cid!r} has no row in the '{proj_path}' Contract version literals table "
                 f"(the generated region is stale — run scripts/generate-projections).")
             continue
-        # `version` is always present; `package-version` only when the contract ships a package (its
-        # generated cell then reads `—`, which no version literal will match — and `val is None` skips it).
+        # `version` is MANDATORY; `package-version` only when the contract ships a package (its generated
+        # cell then reads `—`, which no version literal will match). Absence is treated per-field below,
+        # matching the sibling gates: a missing `version` is drift, but a package-less contract
+        # legitimately carries no `package-version`.
         for field, col in (("version", ver_col), ("package-version", pkg_col)):
             val = c.get(field)
             if val is None:
+                # A missing `version` is drift, exactly as check-source-coherence and
+                # check-emitted-contract-version treat it ("declares no `version`") — this gate was the
+                # one that silently skipped it. A missing `package-version` is legitimate.
+                if field == "version":
+                    errors.append(
+                        f"contract id {cid!r} declares no {field!r} in {reg_path} — every contract must "
+                        f"carry a version literal.")
+                continue
+            # The literal MUST be a quoted string. Unquoted, YAML coerces `1.10` to the float 1.1 before
+            # this gate ever sees it — and because the generated region is emitted from the SAME coerced
+            # value, both sides read `1.1` and the dropped quote passes GREEN. This is the guard every
+            # sibling version-literal gate carries (feed-coherence, source-coherence,
+            # emitted-contract-version); check-projection was the one missing it.
+            if not isinstance(val, str):
+                errors.append(
+                    f"contract id {cid!r}: {field} is {type(val).__name__} {val!r}, not a quoted string "
+                    f"in {reg_path}. YAML coerces an unquoted version (1.10 -> 1.1), so the literal the "
+                    f"gate compares would not be the one written. Quote it.")
                 continue
             if col is None:
                 continue  # column absent — already reported by _require_col; do not silently pass
             cell = _cell(row, col)
-            if not _token_present(str(val), cell):
+            if not _token_present(val, cell):
                 errors.append(
-                    f"contract id {cid!r}: {field} literal {str(val)!r} does not appear as a whole "
+                    f"contract id {cid!r}: {field} literal {val!r} does not appear as a whole "
                     f"version token in its {field!r} cell of the Contract version literals table "
                     f"(cell reads: {cell.strip()[:80]!r}) — the generated region is stale relative to "
                     f"the registry; run scripts/generate-projections.")

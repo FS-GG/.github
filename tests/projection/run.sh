@@ -45,9 +45,9 @@ contracts:
     surface: "four-segment version (ADR-0007)"
     consumers: []
   - id: bare
-    version: 1
+    version: "1"
     owner: governance
-    surface: "schema-integer version"
+    surface: "schema-integer version (quoted, as the real registry quotes every version)"
     consumers: []
 coherence:
   - { id: demo-coh, coherent: true,  owner: sdd }
@@ -213,6 +213,28 @@ expect_fail "Coherent? column absent"     "has no 'Coherent?' column" \
 # An emptied generated literal cell is not "checked, fine" — it reds as a stale region.
 expect_fail "empty version cell reds"     "does not appear as a whole version token" \
   "$(variant emptycell 's#| `demo` | SDD | 0.4.0 | 0.4.0 |#| `demo` | SDD |  | 0.4.0 |#')"
+
+# --- #1155: the version literal MUST be a quoted string, and `version` MUST be present -------
+# An UNQUOTED `version: 1.10` is YAML-coerced to the float 1.1 BEFORE the gate sees it, and the generated
+# region is emitted from the SAME coerced value — so BOTH sides read `1.1`, a token/substring check agrees
+# with itself, and the dropped quote (1.10 -> 1.1 is a DIFFERENT version) passes green. Both regressions
+# below model that: the registry carries the coerced value AND the projection cell carries `1.1`, so the
+# old gate is green and only the type guard reds it. Guard as the sibling version-literal gates do
+# (feed-coherence, source-coherence, emitted-contract-version). Registry mutation -> its own registry.
+REG_UNQUOTED="$WORK/registry-unquoted.yml"
+sed 's#    version: "0.4.0"#    version: 1.10#' "$REG" > "$REG_UNQUOTED"
+expect_regression "unquoted version 1.10 (YAML-coerced to float 1.1) reds as not-a-string" \
+  "not a quoted string" \
+  "$(variant unquotedproj 's#| `demo` | SDD | 0.4.0 | 0.4.0 |#| `demo` | SDD | 1.1 | 0.4.0 |#')" \
+  "$REG_UNQUOTED"
+
+# A contract that OMITS `version` entirely must red — the sibling gates treat absence as drift; this
+# gate used to skip it silently (`if val is None: continue`), passing green. `bare` is the only
+# `version: "1"`, so deleting that line drops bare's version.
+REG_NOVER="$WORK/registry-nover.yml"
+sed '/^    version: "1"$/d' "$REG" > "$REG_NOVER"
+expect_regression "contract missing a version literal reds"  "declares no 'version'" \
+  "$BASE" "$REG_NOVER"
 
 # --- the token boundary: punctuation ends a version, a segment does not ---------------------
 # A trailing period is punctuation, not a fourth segment: the literal is still there, so green.
