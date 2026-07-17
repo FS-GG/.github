@@ -66,6 +66,48 @@ module TouchSet =
     /// The tokens that can never match a file.
     val unmatchable: touchSet: TouchSet -> string list
 
+    /// Is a DECLARED touch-set usable at all?
+    type Usability =
+        /// Every token can match a file: the declaration reserves exactly what it names.
+        | Usable
+        /// At least one token can match no file. `tokens` is those tokens, and it is never empty.
+        | Unusable of tokens: string list
+
+    /// THE USABILITY RULE. It lives here, and `Schedulability` and `Lanes` ask it rather than deciding
+    /// it (#864).
+    ///
+    /// "ONCE" IS A GOAL HERE, NOT YET A FACT — and this module's own header is the reason to say so
+    /// rather than claim otherwise. `lint` (`Client.fs`, BAD-TOUCH-SET) still decides the same question
+    /// with its own `List.forall`. It happens to AGREE — #646 taught it that a partial declaration is
+    /// bad — but agreeing is not the same as asking, and a copy that agrees today is exactly what
+    /// `Schedulability` and `Lanes` were before they drifted. Migrating it needs the `every`/`some`
+    /// distinction this type deliberately does not carry (lint renders a different sentence for each),
+    /// so it is its own change.
+    ///
+    /// ANY unmatchable token disqualifies the whole touch-set. Not "every token" — ANY. A partly-dead
+    /// declaration is the WORSE case, not the lesser one: the item LOOKS declared, and the dead tokens
+    /// silently reserve nothing, so the files they name are invisible to every other worker's overlap
+    /// check. Scheduling it is entering the collision the protocol exists to prevent, voluntarily.
+    ///
+    /// THE THRESHOLD IS THE WHOLE POINT OF THIS FUNCTION EXISTING. `unmatchable` hands back a list, and
+    /// a list leaves every caller to decide how long it has to be — which is exactly how `Schedulability`
+    /// (refuse on ≥1) and `Lanes` (lane on ≥1 MATCHABLE) came to answer the same question with opposite
+    /// verdicts, each pinned by a green test asserting the negation of the other's (#864). That is #485's
+    /// shape — "is this item startable?" computed in five places, agreeing in none — reproduced inside
+    /// the typed core ADR-0034 built to end it. A caller that asks THIS cannot drift, because there is no
+    /// threshold left for it to get wrong.
+    ///
+    /// `Undeclared`, `DeclaredNone` and `Unreadable` have no tokens, so they have no unusable ones and
+    /// answer `Usable` — which is NOT a claim that they are schedulable or lanable. They are neither, for
+    /// their own reasons, and every caller decides those three shapes BEFORE it asks this (#496: an
+    /// omission, a decision, and an unread body are three different facts and must never be conflated).
+    val usability: touchSet: TouchSet -> Usability
+
+    /// The token with its trailing `/**` or `/*` taken off — the SUBTREE it actually names. This is the
+    /// form a collision is REPORTED in, not merely matched in: `src/Off/Sub/**` and `src/Off/Sub` are one
+    /// subtree, and printing the raw suffix beside a reservation that has none reads as two different things.
+    val stem: t: string -> string
+
     /// Do these two tokens overlap?
     ///
     /// Exact equality OR subtree containment, in EITHER direction — file-existence-independent, and
@@ -73,11 +115,6 @@ module TouchSet =
     /// `src/Scene/Types.fs`, so declaring the parent reserves the child exactly as effectively as
     /// naming it. (Which is the trap behind #309: declaring a generated artifact's PARENT directory
     /// reserves the artifact against the whole board.)
-    /// The token with its trailing `/**` or `/*` taken off — the SUBTREE it actually names. This is the
-    /// form a collision is REPORTED in, not merely matched in: `src/Off/Sub/**` and `src/Off/Sub` are one
-    /// subtree, and printing the raw suffix beside a reservation that has none reads as two different things.
-    val stem: t: string -> string
-
     val tokensOverlap: a: string -> b: string -> bool
 
     /// Is `file` covered by `token`? THE verify-paths containment rule, matching the bash client byte for

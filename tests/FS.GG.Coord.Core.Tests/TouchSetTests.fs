@@ -206,6 +206,57 @@ module TouchSetTests =
             Assert.Equal<string list>([ "**/bad.json" ], TouchSet.unmatchable (Declared tokens))
         | other -> failwith $"expected a declaration, got %A{other}"
 
+    // ---- usability: THE RULE, AND IT LIVES HERE ONCE (#864) ---------------------------------------
+
+    [<Fact>]
+    let ``ANY unmatchable token makes a touch-set unusable — not every one of them (#864)`` () =
+        // THE THRESHOLD, PINNED. It is the whole reason `usability` exists rather than every caller
+        // counting `unmatchable`'s list for itself: `Schedulability` refused on >=1 dead token while
+        // `Lanes` laned on >=1 LIVE token, so a partly-dead declaration was simultaneously "never
+        // startable" and "lanable, not a chore" — each pinned by a green test asserting the negation of
+        // the other's (#864). A partly-dead declaration is the WORSE case, not the lesser one: it looks
+        // declared, and its dead tokens reserve nothing.
+        Assert.Equal(TouchSet.Usable, TouchSet.usability (Declared [ Matchable "src/A/" ]))
+
+        Assert.Equal(
+            TouchSet.Unusable [ "**/x" ],
+            TouchSet.usability (Declared [ Unmatchable "**/x" ])
+        )
+
+        // The case the two modules disagreed about. ONE live token does NOT rescue it.
+        Assert.Equal(
+            TouchSet.Unusable [ "**/x" ],
+            TouchSet.usability (Declared [ Matchable "src/A/"; Unmatchable "**/x" ])
+        )
+
+    [<Fact>]
+    let ``usability names EVERY dead token, and only the dead ones`` () =
+        // The tokens are the remedy: they are what the worker passes back to `widen`. Naming a live one
+        // sends them to "fix" a declaration that is correct.
+        let ts =
+            Declared [ Matchable "src/A/"; Unmatchable "**/x"; Matchable "src/B/"; Unmatchable "a*b" ]
+
+        Assert.Equal(TouchSet.Unusable [ "**/x"; "a*b" ], TouchSet.usability ts)
+
+    [<Fact>]
+    let ``a touch-set with no tokens is `Usable` — which is NOT a claim that it is schedulable`` () =
+        // `Undeclared`, `DeclaredNone` and `Unreadable` have no tokens, so they have no unusable ones.
+        // None of the three is schedulable, and each is refused for its OWN reason before any caller
+        // asks this — an omission, a decision, and an unread body are three different facts (#496).
+        // Answering `Unusable []` here would be the conflation #496 exists to end, and would hand every
+        // caller an empty token list to render.
+        Assert.Equal(TouchSet.Usable, TouchSet.usability Undeclared)
+        Assert.Equal(TouchSet.Usable, TouchSet.usability DeclaredNone)
+        Assert.Equal(TouchSet.Usable, TouchSet.usability (Unreadable "boom"))
+
+    [<Fact>]
+    let ``the `none` sentinel BESIDE a real path is unusable — it is a contradiction (#863)`` () =
+        // `parse` answers `DeclaredNone` when every token is the sentinel, so a `none` that reaches
+        // `classify` stands next to real paths: "I touch nothing" and "I touch src/A" at once. It is
+        // `Unmatchable`, so the rule refuses the whole declaration rather than reserving a `none`
+        // directory that exists nowhere and therefore collides with no one.
+        Assert.Equal(TouchSet.Unusable [ "none" ], TouchSet.usability (TouchSet.parse "Paths: none src/A/**"))
+
     // ---- the leading dot: `./` is noise, `.github/` is a DIRECTORY ---------------------------------
 
     [<Fact>]

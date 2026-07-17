@@ -42,9 +42,15 @@ module Schedulability =
         /// bug. Telling this apart from the case above is the whole of #496.
         | DeliberatelyNoTouchSet
 
-        /// A touch-set was declared and EVERY token of it is unmatchable. Just as dead as declaring
-        /// nothing — a token that matches no file conflicts with nothing — but a different diagnosis,
-        /// and `lint` was green over it for as long as the two were conflated.
+        /// A touch-set was declared and AT LEAST ONE of its tokens is unmatchable — `tokens` names them.
+        /// A token that matches no file conflicts with nothing, and `lint` was green over that for as
+        /// long as it was conflated with declaring nothing at all.
+        ///
+        /// ANY unmatchable token, not every one of them: a PARTLY-dead declaration is the worse case, not
+        /// a lesser one. The item looks declared, and the dead tokens reserve nothing — so the files they
+        /// name are invisible to every other worker's overlap check. The rule is `TouchSet.usability`'s,
+        /// stated once and asked here (#864); this doc-comment used to say "EVERY token", which is a rule
+        /// the code has never implemented and which `Lanes` believed (#864).
         | UnusableTouchSet of tokens: string list
 
         /// Blockers still hold it. Resolved means CLOSED **or MERGED** (#476).

@@ -45,19 +45,6 @@ module Lanes =
         | DeclaredNone
         | Unreadable _ -> []
 
-    let private unmatchable (ts: TouchSet) =
-        match ts with
-        | Declared tokens ->
-            tokens
-            |> List.choose (
-                function
-                | Unmatchable t -> Some t
-                | Matchable _ -> None
-            )
-        | Undeclared
-        | DeclaredNone
-        | Unreadable _ -> []
-
     /// A live claim on the item, if the caller observed one. A lane holding one is OCCUPIED.
     let private holder (item: Item) =
         match item.Claim with
@@ -68,10 +55,19 @@ module Lanes =
 
         // THE THREE WAYS AN ITEM CANNOT BE LANED, KEPT APART (#496).
         //
-        // `Declared` with at least one MATCHABLE token is the only lanable shape. A declaration whose
-        // every token matches nothing is NOT a lane of one — it reserves nothing, so it would read as
-        // disjoint from every other worker, which is the lock succeeding under exactly the conditions
-        // it exists to prevent (#273). It is a broken declaration, and it is reported as one.
+        // A `Declared` touch-set is lanable only if `TouchSet.usability` says so — and ASKING is the
+        // whole point (#864). This used to test `matchable <> []` and lane anything with one live token,
+        // while `Schedulability` refused anything with one DEAD token. Same item, same question, opposite
+        // answers, a green test pinning each. ADR-0034's promise is one schedulability function; `free`
+        // and `explain` keep it by taking `startable` as a parameter, and then this fold quietly
+        // re-decided half of it before that parameter was ever consulted.
+        //
+        // The scheduler's rule wins because it is the safe one, and because a lane is a claim about work
+        // that CAN BE STARTED. An item the scheduler refuses forever cannot contend with anybody, so
+        // laning it is a lie twice over: its dead tokens can glue two real lanes into one (understating
+        // the ceiling on tokens that reserve NOTHING), and the chore list — the one surface whose job is
+        // board health — never names it. The worker then sees a full board and nothing to do, and reads a
+        // BROKEN DECLARATION as blocked work. That is #496's shape one layer up.
         let lanable, unlanable =
             items
             |> List.fold
@@ -81,9 +77,9 @@ module Lanes =
                     | Undeclared -> lanable, NoTouchSet item :: unlanable
                     | DeclaredNone -> lanable, DeliberatelyNone item :: unlanable
                     | Declared _ ->
-                        match matchable item.TouchSet with
-                        | [] -> lanable, UnusableTokens(item, unmatchable item.TouchSet) :: unlanable
-                        | _ -> item :: lanable, unlanable)
+                        match TouchSet.usability item.TouchSet with
+                        | TouchSet.Unusable bad -> lanable, UnusableTokens(item, bad) :: unlanable
+                        | TouchSet.Usable -> item :: lanable, unlanable)
                 ([], [])
 
         let lanable = lanable |> List.rev
@@ -296,10 +292,26 @@ module Lanes =
                   | UnusableTokens(item, tokens) ->
                       let named = String.concat ", " tokens
 
-                      yield
-                          $"  %s{item.Ref.Short}  declares %d{List.length tokens} token(s) that match NOTHING (%s{named})"
+                      // "declares N of M" — because SOME of them being dead is the case that reads as
+                      // fine and is not (#864). Saying "it reserves nothing" here was true only when
+                      // every token was dead; a partly-dead declaration reserves its live tokens and is
+                      // still refused by the scheduler, so the flat claim was a lie on exactly the item
+                      // this list exists to surface.
+                      let declared =
+                          match item.TouchSet with
+                          | Declared ts -> List.length ts
+                          | _ -> List.length tokens
 
-                      yield "      It reserves nothing, so it reads as disjoint from everybody. Worse than undeclared."
+                      yield
+                          $"  %s{item.Ref.Short}  declares %d{List.length tokens} of %d{declared} `Paths:` token(s) that match NOTHING (%s{named})"
+
+                      yield
+                          "      Those tokens reserve nothing, so the files they name are invisible to every other worker's"
+
+                      yield
+                          "      overlap check — and the scheduler refuses the item outright, so nobody can start it. Worse"
+
+                      yield "      than undeclared: it LOOKS declared."
                   | DeliberatelyNone _ -> ()
 
           let deliberate =

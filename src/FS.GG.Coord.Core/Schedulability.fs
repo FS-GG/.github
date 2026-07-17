@@ -79,19 +79,22 @@ module Schedulability =
         | DeclaredNone -> DeliberatelyNoTouchSet
         | Declared _ ->
 
-        match TouchSet.unmatchable item.TouchSet with
-        | _ :: _ as bad when List.length bad = (match item.TouchSet with
-                                                | Declared ts -> List.length ts
-                                                | _ -> 0) ->
-            // EVERY token is unmatchable: the declaration reserves nothing at all, so it is as dead as
-            // no declaration — but for a different reason, and the linter must say which (#496).
-            UnusableTouchSet bad
-        | _ :: _ as bad ->
-            // SOME tokens are unmatchable. This is worse than all of them being so: the item looks
-            // declared, and the unmatchable tokens silently reserve nothing — so the files they name
-            // are invisible to every other worker's overlap check. Refuse, do not partially schedule.
-            UnusableTouchSet bad
-        | [] ->
+        // ANY unmatchable token refuses the item — and the RULE is `TouchSet.usability`'s, not this
+        // function's (#864). It used to be decided here, and `Lanes.partition` decided it again and
+        // reached the OPPOSITE verdict on a partly-unmatchable touch-set: this refused the item forever
+        // while `Lanes` gave it a lane and left it off the chore list, so it read as blocked work rather
+        // than a broken declaration. ADR-0034's promise is ONE schedulability function; a predicate that
+        // shadows part of it is #485 rebuilt inside the remedy.
+        //
+        // The `every`/`some` split that stood here was a DEAD GUARD: two branches, one `when` clause
+        // counting the tokens, and both returned `UnusableTouchSet bad`. It promised the linter "must say
+        // which (#496)" and never told them apart, while `Schedulability.fsi` documented the case as
+        // "EVERY token is unmatchable" — a rule this code has never implemented. Both deaths name their
+        // offending tokens and both are fixed by widening those same tokens, so there is ONE verdict, and
+        // now there is one branch.
+        match TouchSet.usability item.TouchSet with
+        | TouchSet.Unusable bad -> UnusableTouchSet bad
+        | TouchSet.Usable ->
 
         // 5. THE LOCK — and what "held" actually means.
         match item.Claim with

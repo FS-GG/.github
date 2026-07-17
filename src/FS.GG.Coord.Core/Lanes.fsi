@@ -49,10 +49,19 @@ module Lanes =
         | DeliberatelyNone of Item
 
 
-        /// Declared, but every token is unmatchable — a leading `**/`, a `*` in the middle. It reserves
-        /// NOTHING, so it would read as disjoint from every other worker: a lock that succeeds under
-        /// exactly the conditions it exists to prevent (#273). **Also the chore**, and a more urgent one
-        /// than a missing declaration, because it looks like a declaration.
+        /// Declared, but AT LEAST ONE token is unmatchable — a leading `**/`, a `*` in the middle.
+        /// `tokens` names them. Those tokens reserve NOTHING, so the files they name read as disjoint
+        /// from every other worker: a lock that succeeds under exactly the conditions it exists to
+        /// prevent (#273). **Also the chore**, and a more urgent one than a missing declaration, because
+        /// it looks like a declaration.
+        ///
+        /// ANY unmatchable token, and this doc-comment used to say "every" — which is what the code did,
+        /// and it was the bug (#864). A PARTLY-dead declaration was laned on its live tokens and left off
+        /// the chore list, while `Schedulability` refused the very same item forever: one question, two
+        /// modules, opposite answers, a green test pinning each. The rule is `TouchSet.usability`'s now,
+        /// asked and not re-decided. Nothing is lost by refusing them: an item the scheduler will never
+        /// start cannot contend with anybody, so it was never a lane — it was dead tokens gluing real
+        /// lanes together and understating the ceiling.
         | UnusableTokens of item: Item * tokens: string list
         /// The body was never READ, so the touch-set is UNKNOWN — not absent. It is NOT a chore: nobody
         /// can fix it by declaring a touch-set, because the item may already have one and we never
