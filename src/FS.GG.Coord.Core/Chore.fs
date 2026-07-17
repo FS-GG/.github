@@ -108,103 +108,112 @@ module Chore =
         | BlockerUnknown
         | BlockerUnparseable -> false
 
-    /// IS A CLAIM MARKER RESERVING THIS ITEM? — and therefore: is its SCHEDULING COLUMN somebody else's?
-    ///
-    /// The rule this expresses, once, rather than per-rule: **while a marker reserves an item, the column
-    /// belongs to whoever holds it.** A worker who hits a blocker and sets `Blocked` made a DECISION, and a
-    /// column set deliberately during a lease still wins (#331) — so a chore that "reconciles" it overwrites
-    /// somebody's judgement with a default, which is this mechanism running backwards.
-    ///
-    /// It is the RESERVER, not the live winner (`Reads.reserver`, not `Reads.winner`): a lease is a clock
-    /// but a lock is broken only by `reap` (#461/#581), so a stale-but-uncollected marker still owns the
-    /// column. That costs nothing — STALE-CLAIM collects it and restores the column (#481), and the rules
-    /// below then fire on the next pass. It converges, and it never races the holder.
-    ///
-    /// Without this the rules disagree with each other: an item that is `Ready`, claimed, and blocked derived
-    /// BOTH `CLAIM-STATUS-LAG` ("set In progress") and `STATUS-NOT-BLOCKED` ("set Blocked") — two chores
-    /// writing opposite columns to one item, with the winner decided by whichever caller drained first.
-    let private reserved (item: Item) = item.Claim.IsSome
-
     /// The chores ONE item's observed state implies.
+    ///
+    /// **THE RESERVER OWNS THE SCHEDULING COLUMN, and this `match` is where that is decided — once, for
+    /// every rule, instead of by each rule.** While a marker reserves an item, its column belongs to whoever
+    /// holds it: a worker who hit a blocker and set `Blocked` made a DECISION, and a column set deliberately
+    /// during a lease still wins (#331), so a chore that "reconciles" it overwrites somebody's judgement with
+    /// a default — this mechanism running backwards. It is the RESERVER, not the live winner (`Reads.reserver`,
+    /// not `Reads.winner`): a lease is a clock but a lock is broken only by `reap` (#461/#581), so a
+    /// stale-but-uncollected marker still owns its column.
+    ///
+    /// The two branches are what makes that structural rather than remembered. A `reserved` PREDICATE is what
+    /// this used to be, and a predicate has to be CALLED: three of the four column rules called it, the fourth
+    /// (`CLOSED-ISSUE-NOT-DONE`) did not, and on a closed issue carrying a stale marker it derived `Done`
+    /// while `STALE-CLAIM` derived the restore of `PreviousStatus` — two chores writing opposite columns to
+    /// one item, the winner decided by whichever caller drained first. Here there is no guard to forget: a
+    /// rule placed in the `None` branch cannot fire on a reserved item, because the branch is the guard.
+    ///
+    /// Deferring costs nothing, which is why it is safe to make absolute: `STALE-CLAIM` collects an abandoned
+    /// marker, `reap` restores the column it overwrote (#481), and the deferred rules fire on the next pass.
+    /// Deference DEFERS; it does not suppress.
     ///
     /// Every rule fails CLOSED. The asymmetry is deliberate and it is what makes the whole mechanism safe to
     /// run unattended: a chore we decline to derive costs one round-trip — the next caller derives it from
     /// the next scan — while a chore we derive wrongly is a board write nobody asked for, on somebody else's
     /// item. So where a fact was not observed, no chore is produced.
     let private choresFor (item: Item) : Chore list =
-        [
-          // STALE-CLAIM. `LeaseExpiredNoPr` and nothing else — the lease lapsed AND we LOOKED for the item's
-          // own `item/<n>-*` PR and found none. `LeaseExpiredPrOpen` is a worker demonstrably still working
-          // (#581) and `LivenessUnknown` is a probe that failed; offering either would hand the reaper a
-          // chore `Writes.reapable` must then refuse, which is a queue that never drains. Fires on a CLOSED
-          // issue too: an abandoned lease reserves its touch-set either way (#601), and freeing it is the
-          // whole point.
-          match item.Claim with
-          | Some(claim, LeaseExpiredNoPr) -> Chore(item.Ref, StaleClaim claim.Worker, Involved)
-          | _ -> ()
+        match item.Claim with
 
-          // CLAIM-STATUS-LAG. Only a LIVE lease, and only over the columns a claim should have overwritten.
-          // `Blocked`/`In review` during a lease are the HOLDER's decisions and they still win (#331) —
-          // reconciling those would overwrite somebody's judgement with a default, which is this mechanism
-          // running backwards. A stale lease is left to STALE-CLAIM above rather than double-reported: its
-          // remedy restores the column anyway (#481).
-          match item.Claim with
-          | Some(_, LeaseHeld) when
-              item.State = Open
-              && (match item.Status with
-                  | Ready
-                  | Backlog
-                  | NoStatus -> true
-                  | _ -> false)
-              ->
-              Chore(item.Ref, ClaimStatusLag item.Status, Quick)
-          | _ -> ()
+        // RESERVED — only the rules that act on the MARKER itself. Neither writes a column the reserver did
+        // not already own: STALE-CLAIM ends the reservation and restores what the claim overwrote, and
+        // CLAIM-STATUS-LAG finishes the write the claim should have made. They are mutually exclusive on the
+        // lease state, which is what holds "at most one chore per item" up on this side.
+        | Some(claim, liveness) ->
+            [
+              // STALE-CLAIM. `LeaseExpiredNoPr` and nothing else — the lease lapsed AND we LOOKED for the
+              // item's own `item/<n>-*` PR and found none. `LeaseExpiredPrOpen` is a worker demonstrably
+              // still working (#581) and `LivenessUnknown` is a probe that failed; offering either would
+              // hand the reaper a chore `Writes.reapable` must then refuse, which is a queue that never
+              // drains. Fires on a CLOSED issue too: an abandoned lease reserves its touch-set either way
+              // (#601), and freeing it is the whole point.
+              match liveness with
+              | LeaseExpiredNoPr -> Chore(item.Ref, StaleClaim claim.Worker, Involved)
 
-          // CLOSED-ISSUE-NOT-DONE. The column is a projection of the work; the issue IS the work, and when
-          // they disagree the issue wins (#520). This is NOT the done-stamp — that is `done --flip`'s, it is
-          // earned against a merged PR, and faking it is how the board starts lying. This only stops a
-          // closed issue wearing a column that says it is still live.
-          if item.State = Closed && item.Status <> Done then
-              Chore(item.Ref, ClosedIssueNotDone item.Status, Quick)
+              // CLAIM-STATUS-LAG. Only a LIVE lease, and only over the columns a claim should have
+              // overwritten. `Blocked`/`In review` during a lease are the HOLDER's decisions and they still
+              // win (#331) — reconciling those would overwrite somebody's judgement with a default.
+              | LeaseHeld when
+                  item.State = Open
+                  && (match item.Status with
+                      | Ready
+                      | Backlog
+                      | NoStatus -> true
+                      | _ -> false)
+                  ->
+                  Chore(item.Ref, ClaimStatusLag item.Status, Quick)
 
-          // BLOCKER-CLEARED. EVERY blocker resolved — CLOSED **or MERGED** (#476) — and at least one to
-          // resolve. One `BlockerUnknown` or `BlockerUnparseable` and this does not fire: a blocker we could
-          // not resolve is not a blocker we cleared (#266, #421), and unblocking on a failed read is the
-          // fail-open this codebase exists to make unwritable.
-          //
-          // NOT while a marker reserves it: that `Blocked` is very likely the HOLDER's own — they hit the
-          // blocker, set the column, and have not released yet — and #331 says their column wins. They will
-          // release, `release` restores it, and this fires on the next pass.
-          if
-              item.State = Open
-              && not (reserved item)
-              && item.Status = Blocked
-              && not item.Blockers.IsEmpty
-              && item.Blockers |> List.forall resolved
-          then
-              Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)
+              | _ -> () ]
 
-          // STATUS-NOT-BLOCKED. A blocker observed OPEN while the board advertises the item as startable —
-          // the scheduler is handing out work that is not startable. `BlockerUnknown` blocks too, but
-          // writing `Blocked` off a read we FAILED to make would stamp a column from a failure, so it stays
-          // report-only in `lint`.
-          //
-          // NOT while a marker reserves it, and here that is not merely deference: a reserved item is not
-          // being ADVERTISED to anyone — the claim reserves its touch-set, so the scheduler will not hand it
-          // out whatever the column says. The premise of this rule is already false, and firing anyway would
-          // contradict CLAIM-STATUS-LAG on the very same item.
-          match item.Blockers |> List.filter (fun b -> b.State = BlockerOpen) with
-          | [] -> ()
-          | openOnes when
-              item.State = Open
-              && not (reserved item)
-              && (match item.Status with
-                  | Ready
-                  | Backlog -> true
-                  | _ -> false)
-              ->
-              Chore(item.Ref, StatusNotBlocked(openOnes |> List.map (fun b -> b.Display)), Quick)
-          | _ -> () ]
+        // UNRESERVED — the rules that write the column DIRECTLY. Nothing here needs to ask about a claim:
+        // there is not one. They are pairwise disjoint on facts the compiler can see — `CLOSED-ISSUE-NOT-DONE`
+        // needs `Closed` and the other two need `Open`; `BLOCKER-CLEARED` needs `Blocked` with every blocker
+        // resolved where `STATUS-NOT-BLOCKED` needs `Ready`/`Backlog` with one OPEN — so at most one fires.
+        | None ->
+            [
+              // CLOSED-ISSUE-NOT-DONE. The column is a projection of the work; the issue IS the work, and
+              // when they disagree the issue wins (#520). This is NOT the done-stamp — that is
+              // `done --flip`'s, it is earned against a merged PR, and faking it is how the board starts
+              // lying. This only stops a closed issue wearing a column that says it is still live.
+              //
+              // It used to be an EXCEPTION to the reserver rule, justified as "no lease outranks a closed
+              // issue". That answers a LIVE lease and was never true of a stale one, where STALE-CLAIM's own
+              // remedy writes the column straight back. It does not need to be an exception in either case:
+              // `rank` ALREADY puts STALE-CLAIM (0) ahead of this (3), so deferring changes no order that
+              // was ever observable — it only stops the pair being derived at once. And against a live
+              // lease, the holder who just closed the issue is about to `done --flip` it; racing them to
+              // write `Done` is exactly what #331 forbids.
+              if item.State = Closed && item.Status <> Done then
+                  Chore(item.Ref, ClosedIssueNotDone item.Status, Quick)
+
+              // BLOCKER-CLEARED. EVERY blocker resolved — CLOSED **or MERGED** (#476) — and at least one to
+              // resolve. One `BlockerUnknown` or `BlockerUnparseable` and this does not fire: a blocker we
+              // could not resolve is not a blocker we cleared (#266, #421), and unblocking on a failed read
+              // is the fail-open this codebase exists to make unwritable.
+              if
+                  item.State = Open
+                  && item.Status = Blocked
+                  && not item.Blockers.IsEmpty
+                  && item.Blockers |> List.forall resolved
+              then
+                  Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)
+
+              // STATUS-NOT-BLOCKED. A blocker observed OPEN while the board advertises the item as
+              // startable — the scheduler is handing out work that is not startable. `BlockerUnknown` blocks
+              // too, but writing `Blocked` off a read we FAILED to make would stamp a column from a failure,
+              // so it stays report-only in `lint`.
+              match item.Blockers |> List.filter (fun b -> b.State = BlockerOpen) with
+              | [] -> ()
+              | openOnes when
+                  item.State = Open
+                  && (match item.Status with
+                      | Ready
+                      | Backlog -> true
+                      | _ -> false)
+                  ->
+                  Chore(item.Ref, StatusNotBlocked(openOnes |> List.map (fun b -> b.Display)), Quick)
+              | _ -> () ]
 
     /// How much a chore unwedges the QUEUE. Lower sorts first.
     ///
