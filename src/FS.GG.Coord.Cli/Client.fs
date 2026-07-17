@@ -24,6 +24,35 @@ module Client =
     open FS.GG.Coord.GitHub.Transport
     open FS.GG.Coord.Cli.Options
 
+    /// lint's BAD-TOUCH-SET sentence for a declaration `TouchSet.usability` has judged, or `None` when
+    /// there is nothing to say. `status` is the already-rendered wire name.
+    ///
+    /// MODULE-LEVEL, AND THAT IS THE POINT (#945). lint's rule used to live inside the command handler,
+    /// deciding usability with its own `List.exists`/`List.choose`/`List.forall`. Nothing could reach it,
+    /// so "lint agrees with the core" was a claim no test could make — which is precisely how
+    /// `Schedulability` and `Lanes` agreed right up until they didn't (#864). The VERDICT is the core's
+    /// and arrives as an argument; only the WORDS are lint's. Taking `Usability` rather than a touch-set
+    /// is what makes that true by construction: there is no threshold left in here to get wrong, and the
+    /// test can drive every case the core can produce.
+    let badTouchSetDetail (status: string) (usability: TouchSet.Usability) : string option =
+        match usability with
+        | TouchSet.Usable -> None
+        | TouchSet.AllUnmatchable bad ->
+            let bad = bad |> String.concat ", "
+
+            Some
+                $"%s{status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+        | TouchSet.SomeUnmatchable bad ->
+            // #646 — the PARTIAL case, and it is worse than the whole being dead: the item looks declared
+            // and its matchable tokens reserve something, but each unmatchable token silently reserves
+            // NOTHING, so the files it names are invisible to every other worker's overlap check — two
+            // workers can be handed them at once. `batch` already refuses the item (#273); lint must catch
+            // it at filing time, not leave it to be discovered by a double-book.
+            let bad = bad |> String.concat ", "
+
+            Some
+                $"%s{status}, and at least one of its `Paths:` tokens is unmatchable: %s{bad}. This is WORSE than every token being so: the item looks declared and its other tokens reserve work, but an unmatchable token silently reserves NOTHING — the files it names are invisible to every other worker's overlap check, so two workers can be handed them at once. Spell the path(s) out — not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+
     [<Literal>]
     let ExitGreen = 0
 
@@ -3423,43 +3452,25 @@ module Client =
                                   "error"
                                   r
                                   $"%s{statusWireName r.Status} but declares no `Paths:` — `batch`/`take` cannot schedule it, so no worker can ever pick it up. Declare a touch-set, or `Paths: none` if it genuinely has none (an epic, a decision item)." ]
-                        | Declared tokens when
-                            // #646 — ANY unmatchable token, not just ALL of them. A PARTIAL declaration
-                            // (some matchable, some not) was worse than a wholly dead one and yet lint stayed
-                            // green over it: `exists`, not `forall`.
-                            tokens
-                            |> List.exists (function
-                                | Unmatchable _ -> true
-                                | Matchable _ -> false)
-                            ->
-                            // Name ONLY the offending subset — the matchable tokens are fine and pointing at
-                            // them would send the author to spell out a path that already works.
-                            let bad =
-                                tokens
-                                |> List.choose (function
-                                    | Unmatchable t -> Some t
-                                    | Matchable _ -> None)
-                                |> String.concat ", "
-
-                            let allUnmatchable =
-                                tokens
-                                |> List.forall (function
-                                    | Unmatchable _ -> true
-                                    | Matchable _ -> false)
-
-                            let detail =
-                                if allUnmatchable then
-                                    $"%s{statusWireName r.Status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
-                                else
-                                    // #646 — the PARTIAL case, and it is worse than the whole being dead: the
-                                    // item looks declared and its matchable tokens reserve something, but each
-                                    // unmatchable token silently reserves NOTHING, so the files it names are
-                                    // invisible to every other worker's overlap check — two workers can be
-                                    // handed them at once. `batch` already refuses the item (#273); lint must
-                                    // catch it at filing time, not leave it to be discovered by a double-book.
-                                    $"%s{statusWireName r.Status}, and at least one of its `Paths:` tokens is unmatchable: %s{bad}. This is WORSE than every token being so: the item looks declared and its other tokens reserve work, but an unmatchable token silently reserves NOTHING — the files it names are invisible to every other worker's overlap check, so two workers can be handed them at once. Spell the path(s) out — not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
-
-                            [ mk "BAD-TOUCH-SET" "error" r detail ]
+                        // ASK, do not decide (#945). This rule used to reach the verdict itself — its own
+                        // `List.exists` for the threshold, its own `List.choose` for the offending
+                        // tokens, its own `List.forall` for the every/some split. It AGREED with
+                        // `TouchSet.usability`, because #646 had taught it the partial case by hand. That
+                        // is exactly what `Schedulability` and `Lanes` looked like before they drifted
+                        // into opposite verdicts on the same item (#864): a copy that agrees is still a
+                        // copy, and `unmatchable` handing back a LIST left every caller free to pick its
+                        // own threshold.
+                        //
+                        // Only the two SENTENCES are lint's own — the rule, the threshold and the split
+                        // are the core's. That is the whole distinction this change is about: rendering a
+                        // verdict differently is not the same as computing a different verdict.
+                        // Name ONLY the offending subset — the matchable tokens are fine and pointing at
+                        // them would send the author to spell out a path that already works. Which subset
+                        // that is, and whether there is one at all, is `TouchSet.usability`'s answer.
+                        | Declared _ as ts ->
+                            match TouchSet.usability ts |> badTouchSetDetail (statusWireName r.Status) with
+                            | None -> []
+                            | Some detail -> [ mk "BAD-TOUCH-SET" "error" r detail ]
                         | _ -> []
                     else
                         []

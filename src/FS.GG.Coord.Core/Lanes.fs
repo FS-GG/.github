@@ -77,8 +77,11 @@ module Lanes =
                     | Undeclared -> lanable, NoTouchSet item :: unlanable
                     | DeclaredNone -> lanable, DeliberatelyNone item :: unlanable
                     | Declared _ ->
+                        // Collapsed, as in `Schedulability` and for its reason (#945): a lane is about
+                        // what a declaration RESERVES, and both shapes reserve less than they name.
                         match TouchSet.usability item.TouchSet with
-                        | TouchSet.Unusable bad -> lanable, UnusableTokens(item, bad) :: unlanable
+                        | TouchSet.AllUnmatchable bad
+                        | TouchSet.SomeUnmatchable bad -> lanable, UnusableTokens(item, bad) :: unlanable
                         | TouchSet.Usable -> item :: lanable, unlanable)
                 ([], [])
 
