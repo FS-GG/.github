@@ -236,10 +236,16 @@ module Options =
     /// resolved through the SAME map as `--repo` (so `sdd`, `FS-GG/FS.GG.SDD` and `FS.GG.SDD` agree).
     ///
     /// `None` is the FAIL-CLOSED answer and the caller must treat it as one: no lock ⇒ `offer` refuses, never
-    /// broadcasts (#266). An owner the map does not know is always `None` — the numbers are FS-GG's issues,
-    /// and the owner is configurable, so a foreign owner would otherwise be handed a real ref naming an
-    /// unrelated issue. Embedded rather than read from `registry/repos.yml`: ADR-0042 / .github#1026.
-    val choreLockRef: owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
+    /// broadcasts (#266). The embedded FS-GG table stays gated to owner `FS-GG` — the numbers are FS-GG's
+    /// issues, so a foreign owner is never handed a real-but-unrelated ref. Embedded rather than read from
+    /// `registry/repos.yml`: ADR-0042 / .github#1026.
+    ///
+    /// `extra` is the per-deployment roster a VENDORED tenant injects by env (`FSGG_COORD_CHORE_LOCKS`,
+    /// parsed in `Client.fs`): matched on (owner, repo) under ANY owner, consulted BEFORE the embedded table
+    /// so a deployment can bring its own locks (or repoint one) without a code change (.github#1140,
+    /// successor to #1087). Pass `[]` for the default FS-GG deployment — behaviour is then unchanged.
+    val choreLockRef:
+        extra: FS.GG.Coord.Types.Ref list -> owner: string -> repo: string -> FS.GG.Coord.Types.Ref option
 
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>

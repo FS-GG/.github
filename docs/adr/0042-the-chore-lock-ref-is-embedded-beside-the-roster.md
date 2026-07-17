@@ -79,6 +79,19 @@ map does not know is still `None` — the fail-closed default is unchanged, it j
   now conscripts a caller in every repo rather than only the one that happened to have a lock issue first.
 - **No new dependency.** ADR-0040 C4 says this port must not spend surface, and a YAML reader is surface.
 - **No REST spend.** The lock ref costs a `match`, not a search — see Alternatives.
+- **A vendored tenant on a non-FS-GG board injects its own roster by env ([#1140](https://github.com/FS-GG/.github/issues/1140), successor to #1087).**
+  This realises Alternative D below, which this record reserved (*"`FSGG_CHORE_LOCK` remains available as a
+  future override … nothing here forecloses it"*). `FSGG_COORD_CHORE_LOCKS` — a comma-separated `owner/repo#n`
+  roster, named into the `FSGG_COORD_*` family and pluralised because it is a roster — is parsed in `Client.fs`
+  and threaded into `choreLockRef` as `extra`: matched on (owner, repo) under ANY owner and consulted BEFORE
+  the embedded table, so a deployment can bring its own locks (or repoint one) without a code edit. It does
+  **not** reintroduce the rejected YAML reader (Alternative B): the objection there was that `repos.yml` is
+  absent exactly where a receiver runs, and **env is not** — env reaches the receiver, so a per-deployment
+  roster injected by env is precisely the seam a file reader could not be. The embedded FS-GG table is
+  untouched and stays gated to owner `FS-GG`, so #1087's invariant — a foreign owner is never handed FS-GG's
+  numbers — holds unchanged; the tenant brings its own refs instead of borrowing FS-GG's. This is the engine
+  half of vendoring `/pnext-item` and `/check-board` to product workspaces that keep their own `Coordination`
+  board.
 
 ## Alternatives considered
 

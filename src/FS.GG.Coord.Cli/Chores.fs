@@ -34,6 +34,7 @@ module Chores =
         (boundary: Chore.Boundary)
         (worker: WorkerId)
         (session: SessionId option)
+        (extra: Ref list)
         (owner: string)
         (repo: string)
         (observed: Chore.Board)
@@ -42,7 +43,7 @@ module Chores =
         //    because it is a pure string match that spends nothing. `None` is every repo without a lock
         //    issue (the six receivers today): ADR-0041 verbatim, a chore queue that cannot find its lock
         //    offers nothing.
-        match Options.choreLockRef owner repo with
+        match Options.choreLockRef extra owner repo with
         | None -> None
         | Some lockRef ->
             // 2. THE LOCK IS PER-REPO, SO THE BOARD IT IS SPENT ON MUST BE TOO.
