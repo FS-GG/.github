@@ -3837,6 +3837,150 @@ module Client =
         | i when i >= 0 -> ref.Substring(i + 1)
         | _ -> ref
 
+    /// One epic roll-up-graph finding, before `lint` wraps it with a row's presentation fields (Id, Url,
+    /// …). `epicVerdict` returns these; `lint`'s `mk` turns each into a `LintFinding`.
+    type EpicFinding =
+        { Code: string
+          Severity: string
+          Detail: string }
+
+    /// The epic ROLL-UP-graph rules, as a PURE verdict over already-read inputs — `state`, `status`, the
+    /// body, the sub-issue `graph`, and the resolved EPIC-UNLINKED-CHILD set — returning which findings
+    /// fire and which suppress `EPIC-ROLLUP-READY`.
+    ///
+    /// MODULE-LEVEL, AND THAT IS THE POINT (#1050, on #945's precedent). This lived as a closure inside
+    /// `let lint`, closing over `ctx.Transport` — not private-but-reachable, but unreachable at all, so
+    /// "lint composes its seven epic codes correctly" was a claim no unit test could make. That is exactly
+    /// what `badTouchSetDetail` fixed for the touch-set rule: the reads are the caller's, the VERDICT is a
+    /// pure function of their results, and the test drives every case without a transport or a fake.
+    ///
+    /// THE TWO VACUOUS TRUTHS this gate defends are the reason it is worth a seam (#266): `graph.Children
+    /// |> List.forall (not << .Open)` is `true` over an EMPTY child list, and over a TRUNCATED graph whose
+    /// visible children all happen to be closed. `EPIC-NO-CHILDREN` and `EPIC-CHILDREN-TRUNCATED` land in
+    /// `refusals`, and `EPIC-ROLLUP-READY` is gated on `List.isEmpty refusals` — so the suppression is the
+    /// only thing standing between a human and a "close this epic?" question about children nobody read
+    /// (`/check-board` §4). Nothing red-lit a reorder of that gate until it could be named in a test.
+    ///
+    /// EPIC-UNLINKED-CHILD is gated on the graph being WHOLE (`Total = visible`) here too, not only in the
+    /// caller: a truncated graph makes "this declared child is unlinked" a claim about a set already known
+    /// short (#266), so the verdict stays sound even if a caller passes a non-empty `unlinked` for a
+    /// truncated graph. The caller reads `bodyUnlinkedChildren` only when whole; this gate is the belt to
+    /// that suspenders.
+    let epicVerdict
+        (state: IssueState)
+        (status: BoardStatus)
+        (body: string)
+        (graph: Reads.SubIssueSet)
+        (unlinked: string list)
+        : EpicFinding list =
+        let mk code severity detail =
+            { Code = code
+              Severity = severity
+              Detail = detail }
+
+        let visible = List.length graph.Children
+
+        let noChildren =
+            if state = IssueState.Open && graph.Total = 0 then
+                [ mk "EPIC-NO-CHILDREN" "error" "open [epic] with zero sub-issues — nothing rolls up" ]
+            else
+                []
+
+        let truncated =
+            if graph.Total > visible then
+                [ mk "EPIC-CHILDREN-TRUNCATED" "error" $"%d{graph.Total} sub-issues, only %d{visible} visible — cannot verify rollup" ]
+            else
+                []
+
+        let doneOpenChild =
+            if status = BoardStatus.Done && graph.Children |> List.exists (fun c -> c.Open) then
+                let openRefs =
+                    graph.Children
+                    |> List.filter (fun c -> c.Open)
+                    |> List.map (fun c -> shortRef c.Ref)
+                    |> String.concat ", "
+
+                [ mk "EPIC-DONE-OPEN-CHILD" "error" $"board says Done, but open child: %s{openRefs}" ]
+            else
+                []
+
+        // EPIC-UNDELEGATED-ACCEPTANCE (#965). An acceptance line naming no child is a criterion nothing
+        // can ever discharge. It is a property of the BODY alone — not gated on the graph being whole —
+        // so a truncated read cannot make it unsound. Open epics only: a closed epic's un-delegated
+        // acceptance is history, not a defect a worker can act on.
+        let undelegated =
+            if state <> IssueState.Open then
+                []
+            else
+                match FS.GG.Coord.EpicBody.undelegatedAcceptance body with
+                | [] -> []
+                | lines ->
+                    let named =
+                        lines
+                        |> List.map (fun l ->
+                            if l.Length <= 90 then
+                                $"\"%s{l}\""
+                            else
+                                $"\"%s{l.Substring(0, 90)}…\"")
+                        |> String.concat "; "
+
+                    [ mk
+                          "EPIC-UNDELEGATED-ACCEPTANCE"
+                          "error"
+                          $"%d{List.length lines} acceptance line(s) delegate to no child, so no child can ever discharge them and the rollup would close them unread: %s{named}. An epic's acceptance IS its children (#965) — make each one a child, or drop it from the body." ]
+
+        // EPIC-NO-STATED-ACCEPTANCE (#1003). The half `EPIC-UNDELEGATED-ACCEPTANCE` cannot see: a body
+        // with NO task lines has nothing un-delegated, so the partition reports itself satisfied over
+        // prose nobody checked. MUTUALLY EXCLUSIVE with the rule above by construction — `statesAcceptance`
+        // is false only when there are no task lines, `undelegatedAcceptance` non-empty only when there
+        // are. Open epics only, for the same reason.
+        let noAcceptance =
+            if state = IssueState.Open && not (FS.GG.Coord.EpicBody.statesAcceptance body) then
+                [ mk
+                      "EPIC-NO-STATED-ACCEPTANCE"
+                      "error"
+                      "body states NO task-line acceptance, so nothing in it can be checked against the sub-issue graph and this epic can never roll up — closing it on the strength of that graph would close an unread body (#1003). State each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `child`." ]
+            else
+                []
+
+        // EPIC-UNLINKED-CHILD may only reason when the graph is WHOLE (Total == visible) — a truncated
+        // graph makes "this declared child is unlinked" a claim about a set already known to be short
+        // (#266); EPIC-CHILDREN-TRUNCATED covers that case instead. The caller resolves `unlinked` only
+        // when whole; this gate keeps the verdict sound regardless of what it is handed.
+        let unlinkedFinding =
+            match unlinked with
+            | _ when graph.Total <> visible -> []
+            | [] -> []
+            | kept ->
+                let named = kept |> List.map shortRef |> String.concat ", "
+
+                [ mk
+                      "EPIC-UNLINKED-CHILD"
+                      "error"
+                      $"body declares child(ren) absent from the sub-issue graph, so rollup cannot see them: %s{named}" ]
+
+        let refusals =
+            noChildren @ truncated @ doneOpenChild @ undelegated @ noAcceptance @ unlinkedFinding
+
+        // EPIC-ROLLUP-READY — a NOTE, not an error, and it closes nothing (#614): every MECHANICAL
+        // precondition holds, but whether the children DISCHARGE the parent is an argument only a human
+        // can make. GATED ON EVERY REFUSAL BEING EMPTY, reusing them rather than re-deriving — a second
+        // spelling of "can this roll up?" is the drift #485/#864 name, and it would drift toward optimism.
+        let rollupReady =
+            if
+                List.isEmpty refusals
+                && state = IssueState.Open
+                && graph.Children |> List.forall (fun c -> not c.Open)
+            then
+                [ mk
+                      "EPIC-ROLLUP-READY"
+                      "note"
+                      $"all %d{visible} child(ren) are resolved, the graph is whole, and the body's acceptance is fully delegated — every mechanical precondition to roll up holds, and this epic is still OPEN. Nothing has asked it to: the roll-up climbs only when a worker stamps a child. Whether those children DISCHARGE this epic is an argument only a human can make (#614) — decide it, do not infer it." ]
+            else
+                []
+
+        refusals @ rollupReady
+
     let lint (ctx: Context) (opts: Options) : int =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
@@ -3899,201 +4043,33 @@ module Client =
                     else
                         []
 
-                // The epic ROLL-UP-graph rules. Only epics pay the sub-issue read.
+                // The epic ROLL-UP-graph rules. Only epics pay the sub-issue read; the VERDICT over what
+                // it reads is the pure `epicVerdict` (#1050, on #945's `badTouchSetDetail` precedent).
                 let epicFindings (r: Scan.Row) (body: string) : Errors.IoResult<LintFinding list> =
                     match Reads.subIssues ctx.Transport r.Ref.Owner r.Ref.Repo r.Ref.Number with
                     | Error e -> Error e
                     | Ok graph ->
-                        let visible = List.length graph.Children
-
-                        let noChildren =
-                            if r.State = IssueState.Open && graph.Total = 0 then
-                                [ mk "EPIC-NO-CHILDREN" "error" r "open [epic] with zero sub-issues — nothing rolls up" ]
-                            else
-                                []
-
-                        let truncated =
-                            if graph.Total > visible then
-                                [ mk
-                                      "EPIC-CHILDREN-TRUNCATED"
-                                      "error"
-                                      r
-                                      $"%d{graph.Total} sub-issues, only %d{visible} visible — cannot verify rollup" ]
-                            else
-                                []
-
-                        let doneOpenChild =
-                            if r.Status = BoardStatus.Done && graph.Children |> List.exists (fun c -> c.Open) then
-                                let openRefs =
-                                    graph.Children
-                                    |> List.filter (fun c -> c.Open)
-                                    |> List.map (fun c -> shortRef c.Ref)
-                                    |> String.concat ", "
-
-                                [ mk "EPIC-DONE-OPEN-CHILD" "error" r $"board says Done, but open child: %s{openRefs}" ]
-                            else
-                                []
-
-                        // EPIC-UNDELEGATED-ACCEPTANCE (#965). An acceptance line naming no child is a
-                        // criterion nothing can ever discharge: the roll-up reasons over the sub-issue graph,
-                        // and this line is not in it. #561 was closed over exactly one of these.
-                        //
-                        // ON THE GRAPH: unlike every other rule here, this one is not gated on the graph
-                        // being whole. It asks nothing about the graph — it is a property of the body alone —
-                        // so a truncated read cannot make it unsound, and it stays true on the epics
-                        // `EPIC-UNLINKED-CHILD` has to stay quiet about.
-                        //
-                        // ON THE ISSUE STATE: open epics only, for the same reason `EPIC-NO-CHILDREN` is. A
-                        // CLOSED epic can never be rolled up again, so its un-delegated acceptance is history
-                        // rather than a defect, and the only "fix" is editing the body of a finished issue
-                        // nobody will read. Measured on this board: ungated it reds .github#213/#234/#235 —
-                        // epics from the era when acceptance was tracked as `- [x]` lines linking merged PRs
-                        // — for 13 of its 15 findings. A rule that fires mostly on work that is correct and
-                        // done teaches exactly one lesson, and it is the one #698 names: "the gate is noise,
-                        // merge anyway". Whether any of those three was closed over acceptance nobody
-                        // discharged is a real question — it is #561's disease — but it is an AUDIT of the
-                        // past, not a lint of what can still go wrong, and lint reports what a worker can act
-                        // on today.
-                        //
-                        // ON SCOPE, AND THIS IS THE ASYMMETRY WORTH KNOWING: `Done.rollUp` applies this rule
-                        // to EVERY parent, deliberately, because #561 is titled `[cross-repo]` and would be
-                        // invisible to a title-scoped rule. Lint cannot follow it there — "is this a parent?"
-                        // costs a sub-issue read per item, which is the read `isEpic` exists to avoid paying
-                        // board-wide. So lint warns about the epics it can see cheaply, and the roll-up is
-                        // what actually holds the line. A `[cross-repo]` parent with un-delegated acceptance
-                        // is caught at flip time rather than at filing time.
-                        let undelegated =
-                            if r.State <> IssueState.Open then
-                                []
-                            else
-                                match FS.GG.Coord.EpicBody.undelegatedAcceptance body with
-                                | [] -> []
-                                | lines ->
-                                    // TRUNCATED, because an acceptance line has no length limit and this
-                                    // finding is ONE line of terminal output. Measured before the state gate
-                                    // above: #234's six lines came to ~2,500 characters of wrapped markdown
-                                    // and URLs, which buries the very thing the finding is naming.
-                                    let named =
-                                        lines
-                                        |> List.map (fun l ->
-                                            if l.Length <= 90 then
-                                                $"\"%s{l}\""
-                                            else
-                                                $"\"%s{l.Substring(0, 90)}…\"")
-                                        |> String.concat "; "
-
-                                    [ mk
-                                          "EPIC-UNDELEGATED-ACCEPTANCE"
-                                          "error"
-                                          r
-                                          $"%d{List.length lines} acceptance line(s) delegate to no child, so no child can ever discharge them and the rollup would close them unread: %s{named}. An epic's acceptance IS its children (#965) — make each one a child, or drop it from the body." ]
-
-                        // EPIC-NO-STATED-ACCEPTANCE (#1003). The half `EPIC-UNDELEGATED-ACCEPTANCE` cannot see:
-                        // it partitions the task lines, so a body with NO task lines has nothing un-delegated and
-                        // the rule reports itself satisfied over prose nobody checked. "Every criterion is
-                        // delegated" and "no criterion is written down in a form anything can check" are opposite
-                        // facts, and to `undelegatedAcceptance` they are the same empty list.
-                        //
-                        // MUTUALLY EXCLUSIVE with the rule above, by construction: `statesAcceptance` is false only
-                        // when there are no task lines at all, and `undelegatedAcceptance` is non-empty only when
-                        // there are. An epic can never carry both findings, so this adds a case rather than noise.
-                        //
-                        // WHY LINT SAYS THIS AT ALL, when `Done.rollUp` already refuses on it: the roll-up's refusal
-                        // is EPHEMERAL — `ParentLeftOpen` renders to the stamping worker's terminal and is never
-                        // recorded on the issue. So the reason an epic is sitting open is unreadable to everyone who
-                        // did not run that command, and `/check-board` cannot ask the tool why. Worse, the roll-up
-                        // only runs when somebody stamps a child; an epic whose last child was closed by hand has
-                        // never been asked the question at all. Lint is the read that can be taken at any time, so
-                        // the guard that keeps #561 and #889 closed has to be sayable here too.
-                        //
-                        // OPEN EPICS ONLY, for the reason `EPIC-UNDELEGATED-ACCEPTANCE` is: a closed epic can never
-                        // roll up again, so its unstated acceptance is history, not a defect a worker can act on.
-                        let noAcceptance =
-                            if r.State = IssueState.Open && not (FS.GG.Coord.EpicBody.statesAcceptance body) then
-                                [ mk
-                                      "EPIC-NO-STATED-ACCEPTANCE"
-                                      "error"
-                                      r
-                                      "body states NO task-line acceptance, so nothing in it can be checked against the sub-issue graph and this epic can never roll up — closing it on the strength of that graph would close an unread body (#1003). State each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `child`." ]
-                            else
-                                []
-
-                        // EPIC-UNLINKED-CHILD may only reason when the graph is WHOLE (Total == visible) — a
-                        // truncated graph makes "this declared child is unlinked" a claim about a set already
-                        // known to be short (#266); EPIC-CHILDREN-TRUNCATED covers that case instead.
+                        // The EPIC-UNLINKED-CHILD set is read (and PR-pruned, #346/#266) ONLY when the
+                        // graph is whole — a truncated graph makes "declared child X is unlinked" a claim
+                        // about a set already known short (#266), which EPIC-CHILDREN-TRUNCATED covers
+                        // instead. This read is the caller's; the gate on it is mirrored in `epicVerdict`.
                         let unlinkedResult =
-                            if graph.Total = visible then
-                                // The shared EPIC-UNLINKED-CHILD set (#485: same definition the `done --flip`
-                                // rollup uses). Only reason when the graph is WHOLE (Total == visible).
-                                match
-                                    Done.bodyUnlinkedChildren
-                                        ctx.Transport
-                                        r.Ref.Owner
-                                        r.Ref.Repo
-                                        body
-                                        (graph.Children |> List.map (fun c -> c.Ref))
-                                with
-                                | Error e -> Error e
-                                | Ok [] -> Ok []
-                                | Ok kept ->
-                                    let named = kept |> List.map shortRef |> String.concat ", "
-
-                                    Ok
-                                        [ mk
-                                              "EPIC-UNLINKED-CHILD"
-                                              "error"
-                                              r
-                                              $"body declares child(ren) absent from the sub-issue graph, so rollup cannot see them: %s{named}" ]
+                            if graph.Total = List.length graph.Children then
+                                Done.bodyUnlinkedChildren
+                                    ctx.Transport
+                                    r.Ref.Owner
+                                    r.Ref.Repo
+                                    body
+                                    (graph.Children |> List.map (fun c -> c.Ref))
                             else
                                 Ok []
 
                         match unlinkedResult with
                         | Error e -> Error e
                         | Ok unlinked ->
-                            let refusals = noChildren @ truncated @ doneOpenChild @ undelegated @ noAcceptance @ unlinked
-
-                            // EPIC-ROLLUP-READY — the one epic rule that is not a defect, and the read
-                            // `/check-board` could not take from any verb (#1037-era gap).
-                            //
-                            // THE DRIFT IT NAMES. `Done.rollUp` climbs only when a worker stamps a child. An epic
-                            // whose last child was closed by hand, or whose stamping worker walked away, is never
-                            // asked the question at all — so it sits open with every child resolved, advertising
-                            // work that does not exist. Nothing re-asks it, exactly as nothing re-checks a
-                            // `Blocked by` when its blocker closes: same rot, one graph over.
-                            //
-                            // WHY IT IS A NOTE AND NOT AN ERROR, AND WHY IT DOES NOT CLOSE ANYTHING. This finding
-                            // reports that every MECHANICAL precondition holds — the graph is whole, every child is
-                            // resolved, the acceptance is stated and fully delegated, no declared child is missing
-                            // from the graph. It does NOT report that the epic is done. That question is
-                            // `Discharge` (#614), and it is an ARGUMENT only a human can make: FS.GG.SDD#398 said
-                            // IN BOLD that it did not complete its parent, and the roll-up closed the parent anyway
-                            // by inferring completion from "all children are done". Children do not partition their
-                            // parent. So this rule hands a human a candidate and the evidence for it, and stops —
-                            // an error would read as "this SHOULD close", which is the inference #614 is about.
-                            //
-                            // GATED ON EVERY REFUSAL BEING EMPTY, by reusing them rather than re-deriving them: a
-                            // second spelling of "can this roll up?" is the drift #485/#864 name, and this one would
-                            // drift toward optimism, which is the direction that closes things.
-                            //
-                            // TITLE-SCOPED, like every rule here, and that under-reports: `Done.rollUp` applies to
-                            // every PARENT, and #561 is titled `[cross-repo]`. Under-reporting candidates is the
-                            // safe direction — a missed candidate stays open, and an epic this cannot see is one no
-                            // human is asked to close.
-                            let rollupReady =
-                                if
-                                    List.isEmpty refusals
-                                    && r.State = IssueState.Open
-                                    && graph.Children |> List.forall (fun c -> not c.Open)
-                                then
-                                    [ mk
-                                          "EPIC-ROLLUP-READY"
-                                          "note"
-                                          r
-                                          $"all %d{visible} child(ren) are resolved, the graph is whole, and the body's acceptance is fully delegated — every mechanical precondition to roll up holds, and this epic is still OPEN. Nothing has asked it to: the roll-up climbs only when a worker stamps a child. Whether those children DISCHARGE this epic is an argument only a human can make (#614) — decide it, do not infer it." ]
-                                else
-                                    []
-
-                            Ok(refusals @ rollupReady)
+                            epicVerdict r.State r.Status body graph unlinked
+                            |> List.map (fun ef -> mk ef.Code ef.Severity r ef.Detail)
+                            |> Ok
 
                 // Per item, in rule order: touch-set rules, then a Done-but-open NOTE, then the epic rules
                 // (only epics read their graph/body-child-refs). FAIL CLOSED (#266): an unreadable body or
