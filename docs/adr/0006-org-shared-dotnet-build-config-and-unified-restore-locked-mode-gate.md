@@ -50,11 +50,33 @@ repo; CIB fails the second requirement wherever a repo forces it for determinism
    > canonical files — and, per
    > [ADR-0036](0036-the-build-config-drift-check-pins-its-source.md), each receiver additionally
    > carries **`.config/fsgg-build-config.sha`**, the provenance pin `--check` now compares against.
-   > Neither is in `sync-build-config.sh`'s `FILES` list, and both omissions are deliberate:
-   > `global.json` is held at "in `dist/dotnet/`, not yet checked" until the per-repo adoption items
-   > land (four of five consumers have none, so listing it today would freeze them), and the pin is
-   > excluded by design — `--check` treats a missing member of `FILES` as drift, so listing it would
-   > red-light every unpinned receiver on day one.
+   > Neither is in `sync-build-config.sh`'s `FILES` list, and both omissions are deliberate: the pin
+   > is excluded by design — `--check` treats a missing member of `FILES` as drift, so listing it
+   > would red-light every unpinned receiver on day one — and `global.json` is **unmanaged**, per the
+   > amendment below.
+   >
+   > **Amendment (2026-07-17) — `global.json` is UNMANAGED, and that is settled**
+   > ([#903](https://github.com/FS-GG/.github/issues/903)). This supersedes the "not yet checked,
+   > until the per-repo adoption items land" reading above, which described an intention the org has
+   > since dropped. **There is no pending step here.** `global.json` is distributed under
+   > `dist/dotnet/` and will not join `FILES`; per-repo SDK bands are legitimate.
+   >
+   > The rollout ([#561](https://github.com/FS-GG/.github/issues/561)) did complete its adoption
+   > phase — every consumer carries a `global.json`, adopted byte-identically at the canonical
+   > `10.0.301` of the day. Renovate then bumped the **canonical** to `10.0.302` out from under them
+   > (`bff95e4`, [#804](https://github.com/FS-GG/.github/issues/804)) and bumped only some receivers
+   > in their own repos. Because `--check` compares **content**, enforcing would have red-lit the
+   > receivers that had adopted exactly as instructed. Nothing fans a canonical bump out, so
+   > **divergence is the steady state of this file, not an accident** — it re-opens on every SDK
+   > patch, and coherence here is not a state you reach once. Add `rollForward: latestFeature`
+   > (which makes the pin a floor) and the incompatibility with Renovate's per-repo bumps
+   > ([#678](https://github.com/FS-GG/.github/issues/678)), and enforcement costs a standing tax
+   > forever to buy a floor.
+   >
+   > `tests/sync-build-config` asserts the name stays out of `FILES` — a regression test on a decided
+   > end state, not a tripwire awaiting a step. **#561 is closed and still carries the un-taken step;
+   > a reader who lands there and concludes the rollout stalled should read #903 instead.** To change
+   > any of this, re-open #903.
 
 2. **The unified gate is `GITHUB_ACTIONS`, not `ContinuousIntegrationBuild`:**
    ```xml
