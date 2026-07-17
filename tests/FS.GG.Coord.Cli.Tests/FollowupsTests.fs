@@ -29,6 +29,25 @@ module FollowupsTests =
         | Ok w -> w
         | Error e -> failwith $"the fixture's own worker id did not resolve: %s{e}"
 
+    /// A `Worker` carrying an id `Identity.resolve` would now REFUSE to produce (#1070) — built by hand,
+    /// deliberately, and the ONE fixture here that may be.
+    ///
+    /// `workerNamed` above is right for every other leg: an id that the resolver really mints. This one is
+    /// for the empty-id guard, and it cannot use the resolver, because the resolver is precisely what stops
+    /// producing this value. Routing it through `resolve` is what the guard's legs used to do — they read
+    /// their subject out of the defect (`Assert.Equal("", w.Id)` asserted `resolve`'s post-condition hole),
+    /// so repairing the resolver deleted the queue's own coverage as a side effect.
+    ///
+    /// THE GUARD IS NOT REDUNDANT NOW, AND THIS IS WHY IT MUST STILL BE PINNED. `Followups` may not trust
+    /// the resolver's post-condition: it is a different module, an empty id is unusable to it whatever
+    /// produced one, and a queue that keys on `""` collides every worker onto one file — the collision the
+    /// per-worker path exists to prevent. Defence in depth is only depth if the inner layer is tested
+    /// without the outer one.
+    let private workerWithRawId (id: string) : Identity.Worker =
+        { Id = id
+          Session = None
+          Provenance = Identity.FromFlag }
+
     /// Run `f` against a THROWAWAY cache root.
     ///
     /// `FSGG_COORD_CACHE` is process-global, so this is only safe because `AssemblyInfo.fs` disables
@@ -173,16 +192,22 @@ module FollowupsTests =
             Assert.Equal(Empty, apply a Pop)
             Assert.Equal(Empty, apply b Pop))
 
-    [<Theory>]
-    [<InlineData("///")>]
-    [<InlineData("!!!")>]
-    let ``an id that SLUGS TO NOTHING is refused rather than keyed on`` (id: string) =
+    [<Fact>]
+    let ``an EMPTY id is refused rather than keyed on`` () =
         withCache (fun _ ->
-            // `Identity.resolve` slugs its input and returns Ok for a slug that trims to empty, so every
-            // such caller would key onto ONE file — property 1 defeated by the id itself, which is #419's
-            // shape. The queue refuses; the underlying resolver defect is filed separately.
-            let w = workerNamed id
-            Assert.Equal("", w.Id)
+            // Every worker with an empty id would key onto ONE file — property 1 defeated by the id itself,
+            // which is #419's shape.
+            //
+            // THE SUBJECT IS NOW BUILT BY HAND, AND THAT IS THE POINT (#1070). This leg used to obtain its
+            // empty id from `Identity.resolve "///"` — the resolver guarded its ARGUMENT and returned the
+            // unchecked SLUG, so it answered Ok with an empty id, and this test read its subject out of that
+            // hole (its own comment said "the underlying resolver defect is filed separately"). The resolver
+            // now refuses, so `resolve` can no longer hand anyone an empty id — and this leg would have
+            // failed in its FIXTURE, which is a coverage deletion wearing the costume of a broken test.
+            //
+            // The guard still matters, and is still reachable: `Followups` is a different module and may not
+            // trust another's post-condition. An empty id is unusable to a queue whatever produced one.
+            let w = workerWithRawId ""
 
             match path w with
             | Error why -> Assert.Contains("EMPTY", why)
@@ -191,6 +216,17 @@ module FollowupsTests =
             match apply w (Add "FS.GG.Game#1") with
             | Refused why -> Assert.Contains("EMPTY", why)
             | other -> failwith $"expected a refusal, got %A{other}")
+
+    [<Theory>]
+    [<InlineData("///")>]
+    [<InlineData("!!!")>]
+    let ``the ids that used to reach that guard are now stopped at the RESOLVER`` (id: string) =
+        // The other half of the repair, pinned so the two layers stay honest about which one fires. These
+        // inputs are exactly what the leg above used to be parameterised on: they slug to nothing, and the
+        // resolver now refuses them outright rather than minting an id every such caller would share.
+        match Identity.resolve (Some id) with
+        | Error why -> Assert.Contains("mint", why)
+        | Ok w -> failwith $"the resolver must refuse an id that slugs to nothing — got '%s{w.Id}' (#1070)"
 
     // ---- property 4: a pop is atomic ---------------------------------------------------------------
 

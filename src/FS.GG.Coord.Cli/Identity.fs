@@ -73,22 +73,45 @@ module Identity =
         | "opencode" -> true
         | _ -> false
 
+    /// THE ID IS THE SLUG, SO THE SLUG IS WHAT MUST BE CHECKED (#1070).
+    ///
+    /// `slug` maps every character that is not a letter, digit, `-` or `_` to `-` and then trims `-`, so it
+    /// ANNIHILATES an all-punctuation input: `.`, `///`, `!!!`, `..`, `.-.` all slug to `""`. The guard used
+    /// to sit on the INPUT (`not (String.IsNullOrWhiteSpace w)`) and return the OUTPUT of a transformation
+    /// nothing re-read — and `.` is not whitespace, so it passed, and `resolve` answered `Ok` with an EMPTY
+    /// id.
+    ///
+    /// **An empty id is an id several workers SHARE** — every caller whose input annihilates lands on the
+    /// same one — which is #419's collapse reached from inside the resolver rather than from an agent
+    /// inventing an id. It is also this function contradicting its own documented rule 4 (*refuse rather
+    /// than invent an id that several workers would share*) on precisely the inputs that rule exists for.
+    ///
+    /// So the post-condition is checked where it is PRODUCED, once, for both branches: a `Worker` this
+    /// module returns has a non-empty id, by construction rather than by the caller remembering to look.
+    ///
+    /// REFUSE — never fall through to the session-derived id. On Claude Code every subagent shares one
+    /// session id, so a fallback would swap one shared id for another and `whoami` still would not warn.
+    /// And the message names the OFFENDING INPUT (#611): "could not derive a worker id" alone would send a
+    /// worker to check a variable they did set.
+    let private resolved (raw: string) (source: string) (session: string option) (provenance: Provenance) =
+        match slug raw with
+        | "" ->
+            Error
+                $"the worker id from %s{source} ('%s{raw}') has no letter or digit in it, so it slugs to NOTHING — and an EMPTY id is one that EVERY worker whose id does this would share, which is the double-claim ADR-0027 exists to prevent (#419). Give this worker a real id (do NOT invent one): eval \"$(scripts/fsgg-coord whoami --mint)\""
+        | id ->
+            Ok
+                { Id = id
+                  Session = session
+                  Provenance = provenance }
+
     let resolve (worker: string option) : Result<Worker, string> =
         let session = harnessSession () |> Option.map snd
 
         match worker with
-        | Some w when not (String.IsNullOrWhiteSpace w) ->
-            Ok
-                { Id = slug w
-                  Session = session
-                  Provenance = FromFlag }
+        | Some w when not (String.IsNullOrWhiteSpace w) -> resolved w "--worker" session FromFlag
         | _ ->
             match env "FSGG_WORKER" with
-            | Some w ->
-                Ok
-                    { Id = slug w
-                      Session = session
-                      Provenance = FromEnv "FSGG_WORKER" }
+            | Some w -> resolved w "$FSGG_WORKER" session (FromEnv "FSGG_WORKER")
             | None ->
                 match harnessSession () with
                 | Some(harness, sid) ->

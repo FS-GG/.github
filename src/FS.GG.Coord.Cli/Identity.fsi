@@ -45,6 +45,19 @@ module Identity =
     /// to pass `--worker` or `eval "$(scripts/fsgg-coord whoami --mint)"`. The remedy names the RESOLVER
     /// (`scripts/fsgg-coord`), never this engine's own binary: `fsgg-coord-engine` is not on PATH, so a
     /// worker who pastes it gets `command not found` (#569).
+    ///
+    /// **POST-CONDITION: a returned `Worker` has a NON-EMPTY `Id`** — and rule 4 is why it has to be stated
+    /// here rather than left to the caller. The id is the `slug` of the input, and `slug` annihilates any
+    /// all-punctuation string (`.`, `///`, `..` → `""`), so a guard on the INPUT could not see it: `.` is
+    /// not whitespace, so it passed, and this function answered `Ok` with an empty id (#1070). An empty id
+    /// is one that EVERY caller whose input annihilates shares — rule 4's shared id, manufactured by the
+    /// resolver instead of invented by an agent, and #419's collapse either way.
+    ///
+    /// The refusal names the OFFENDING INPUT, because a diagnostic that names the wrong cause sends the
+    /// reader somewhere there is nothing to find (#611): `$FSGG_WORKER='.'` is a variable that IS set, so
+    /// "could not derive a worker id" would be true and useless. It does NOT fall back to the session id —
+    /// on a harness that shares one across subagents that trades one shared id for another, and `whoami`
+    /// would still report success over an identity that cannot hold a lock (#266).
     val resolve: worker: string option -> Result<Worker, string>
 
     /// Mint a fresh, genuinely-random id (`whoami --mint`). One `word-hhhh` line, so
