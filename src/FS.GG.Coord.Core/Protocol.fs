@@ -73,6 +73,18 @@ module Protocol =
           /// What the column asserts, and why a scheduler does or does not offer it.
           Meaning: string }
 
+    /// One TOP-LEVEL key of the snapshot document, as a reader of `scan --json` meets it. See Protocol.fsi.
+    type SnapshotKeyDoc =
+        { /// The key as it appears on the wire — `Scan.snapshot` writes this string.
+          Key: string
+          /// Whether a RECONCILER acts on this key, or merely carries it. The one bit that decides
+          /// whether a `jq` filter has any business selecting on it, and the one a key NAME cannot
+          /// carry: `limit` and `leaseMinutes` are the scan's own parameters echoed back, not board
+          /// facts, so a pass that reconciles against them is reconciling against its own request.
+          Reconciled: bool
+          /// What the key carries, and why a reconciler does or does not act on it.
+          Meaning: string }
+
     // ---- the verdicts ------------------------------------------------------------------------------
     // ONE TOTAL FUNCTION, ONE UNION. Fourteen of the scheduler family's issues were a missing case in
     // it; #485 named the cause — startability was computed in five places and agreed in none. These are
@@ -528,12 +540,16 @@ module Protocol =
         | BlockerStates of key: string * BlockerStateDoc list
         | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
+        /// The snapshot document's SHAPE. The only case carrying a scalar beside its list, because the
+        /// shape IS a schema string plus its keys — and a schema emitted as a one-member `keys` entry
+        /// would be a lie about what it is. See `snapshotSchema` in Protocol.fsi for the ownership call.
+        | SnapshotShape of key: string * schema: string * keys: SnapshotKeyDoc list
 
     /// The facts document's schema version — a fact about the document's SHAPE, so it lives with the
     /// document rather than in the writer that renders it (#1027).
     ///
     /// /2 `takeExitCodes` (#889) · /3 `landableExitCodes` (#900) · /4 `filingRules` (#889) ·
-    /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889).
+    /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889) · /8 `snapshotDocument` (#889/#1058).
     ///
     /// Each bump is additive for a reader that ignores unknown members, and the number is bumped anyway:
     /// it says what the surface IS, not merely whether an old reader survives it.
@@ -547,7 +563,72 @@ module Protocol =
     /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
     /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
     /// attribute because it was `private` and had no signature entry to keep in step.
-    let factsSchema = "fsgg.coord.protocol/7"
+    let factsSchema = "fsgg.coord.protocol/8"
+
+    /// The snapshot document's schema string — the `schema` member `Scan.snapshot` writes and
+    /// `Snapshot.parse` refuses a document without.
+    ///
+    /// THIS IS A THIRD COPY, AND SAYING SO IS THE POINT (#865/#916 trap 1). `Scan.fs` writes the string,
+    /// `Snapshot.fs` reads it, and neither imports it from here — so this module states a fact it does
+    /// not itself render, which is exactly the cost #1058's ownership call accepted rather than hid. The
+    /// alternative — own it where it is rendered and project it from there — is the stricter reading and
+    /// was rejected on cost, not on principle.
+    ///
+    /// A DECISION LIKE THAT IS ONLY HONEST IF A TEST HOLDS IT. `ProtocolTests` pins this string against
+    /// `Scan`'s and `Snapshot`'s, so the drift the call accepts reds a test rather than rotting a doc.
+    /// Do not "tidy" the copies away without moving the ownership; the pin is what makes three copies
+    /// safe, and deleting it makes them three copies again.
+    let snapshotSchema = "fsgg.coord.snapshot/1"
+
+    /// THE SNAPSHOT DOCUMENT'S TOP-LEVEL KEYS, in the order `Scan.snapshot` writes them.
+    ///
+    /// ORDER IS THE WRITER'S, NOT THE PROSE'S — and the literal this replaced had it wrong TWICE. It
+    /// spelled `leaseMinutes` before `limit`, and `inFlight` before `items`; the writer emits `limit`
+    /// first and `items` first. Nothing caught either, because nothing compared them.
+    ///
+    /// The second one was inherited straight into the FIRST DRAFT OF THIS LIST, by an author reading the
+    /// literal — and `ScanRoundTripTests` caught it on the first run. That is the argument for this whole
+    /// change, made by the change itself: a shape stated once and pinned to its writer, or a shape
+    /// re-typed by whoever is looking at the old copy.
+    ///
+    /// `Reconciled` IS THE LOAD-BEARING COLUMN. A reader of this table is a `jq` filter in `check-board`,
+    /// and the question it needs answered is not "what keys exist" but "which of them may I select on".
+    /// `limit` and `leaseMinutes` are the SCAN'S OWN PARAMETERS echoed back — a pass that reconciles
+    /// against them reconciles against its own request, and would report drift that is its own flag.
+    let snapshotKeys: SnapshotKeyDoc list =
+        [ { Key = "schema"
+            Reconciled = false
+            Meaning =
+              "The document's contract, `fsgg.coord.snapshot/1`. `Snapshot.parse` REFUSES a document \
+               without it rather than defaulting — a malformed snapshot is an error, never a default." }
+          { Key = "allowBacklog"
+            Reconciled = false
+            Meaning =
+              "Whether the scan was asked to include `Backlog`. The scan's own parameter, echoed back: \
+               `lanes` reads it from HERE rather than taking its own flag (#991), which is why it is on \
+               the document at all." }
+          { Key = "limit"
+            Reconciled = false
+            Meaning = "The `-n` cap the scan was asked for, or `null` for uncapped. The scan's parameter, not a board fact." }
+          { Key = "leaseMinutes"
+            Reconciled = false
+            Meaning =
+              "The lease window the scan resolved staleness against (`FSGG_CLAIM_LEASE_MIN`, default \
+               120). The scan's parameter. The prose this replaced hardcoded `90`, which was neither \
+               the default nor a fact — the clearest evidence a reader cannot tell an example from a \
+               contract when both are hand-typed." }
+          { Key = "items"
+            Reconciled = true
+            Meaning =
+              "The board rows — THE reconcilable key, and the only one. Each carries `owner`, `repo`, \
+               `number`, `status`, `state`, `body` and `blockers`. Named `items` on the wire, not \
+               `candidates`: that is what the parser reads." }
+          { Key = "inFlight"
+            Reconciled = false
+            Meaning =
+              "What live claims already reserve, each naming its HOLDER. A scheduler's input, not a \
+               column to reconcile: `check-board` acts on the MARKER through `who`, which carries the \
+               lease state this does not." } ]
 
     /// THE INVENTORY — every fact the document states, under the key it states it, in document order.
     ///
@@ -576,4 +657,5 @@ module Protocol =
           BlockerStates("blockerStates", blockerStates)
           BoardStatuses("boardStatuses", boardStatuses)
           ExitCodes("takeExitCodes", takeExitCodes)
-          ExitCodes("landableExitCodes", landableExitCodes) ]
+          ExitCodes("landableExitCodes", landableExitCodes)
+          SnapshotShape("snapshotDocument", snapshotSchema, snapshotKeys) ]

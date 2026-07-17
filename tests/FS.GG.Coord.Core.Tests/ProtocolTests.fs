@@ -540,6 +540,7 @@ module ProtocolTests =
         | Protocol.BlockerStates(key, _) -> key
         | Protocol.BoardStatuses(key, _) -> key
         | Protocol.ExitCodes(key, _) -> key
+        | Protocol.SnapshotShape(key, _, _) -> key
 
     /// How many facts a section states. `0` is the interesting answer — see the emptiness gate below.
     let private countOf (section: Protocol.FactSection) =
@@ -549,6 +550,9 @@ module ProtocolTests =
         | Protocol.BlockerStates(_, bs) -> List.length bs
         | Protocol.BoardStatuses(_, ss) -> List.length ss
         | Protocol.ExitCodes(_, cs) -> List.length cs
+        // The KEYS, not the schema: a shape stating a schema and no keys is exactly the vacuity the
+        // emptiness gate below exists to catch, and counting the scalar would hide it behind a `1`.
+        | Protocol.SnapshotShape(_, _, keys) -> List.length keys
 
     /// THE PIN THAT FORCES THE BUMP (#1027) — the one thing `factsDocument` could not do for itself.
     ///
@@ -582,11 +586,12 @@ module ProtocolTests =
               "blockerStates"
               "boardStatuses"
               "takeExitCodes"
-              "landableExitCodes" ],
+              "landableExitCodes"
+              "snapshotDocument" ],
             keys
         )
 
-        Assert.Equal("fsgg.coord.protocol/7", Protocol.factsSchema)
+        Assert.Equal("fsgg.coord.protocol/8", Protocol.factsSchema)
 
     /// THE FLOOR (#266, #436), and the vacuity every gate in this file refuses: an inventory that stated
     /// nothing would make the fold emit `{"schema": …}` and nothing else, and every projection would

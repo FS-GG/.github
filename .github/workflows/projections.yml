@@ -92,7 +92,8 @@ jobs:
           # 10 → 12: `reconcile-rules` in both check-board roots (#889).
           # 12 → 14: `blocker-states` in both check-board roots (#889).
           # 14 → 16: `board-statuses` in both cross-repo-coordination roots (#889, #1057).
-          expected=16
+          # 16 → 18: `snapshot-shape` in both check-board roots (#889, #1058).
+          expected=18
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"
