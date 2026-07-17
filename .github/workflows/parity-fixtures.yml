@@ -1,0 +1,51 @@
+# A parity fixture's HTTP framing is load-bearing, and nothing type-checks it (.github#940).
+#
+# PR #939 repaired the corpus's long-running random red — 41 fixtures taught to serve HTTP/1.1 over
+# ThreadingHTTPServer, and two taught to stop answering a 204 with `{}`. That repair is
+# CONVENTION-ONLY: a worker who adds fixture #42 by copying a pre-#939 file out of git history, or
+# who drops `protocol_version` while editing, reintroduces either defect SILENTLY. The symptom is the
+# one that already cost three workers a session each (#761): a red on a DIFFERENT assertion each
+# time, on `main` as readily as on a PR, not reproducible on a fast box.
+#
+# What is at stake is the credibility of the cut-over gate (ADR-0038). A corpus that reds at random
+# teaches exactly one lesson — "parity red is noise, re-run it" — and the next red will be real.
+#
+# THE `paths:` FILTER IS PART OF THE GATE. Every entry below is an INPUT, and a gate that cannot fire
+# on its own subject is #508's mistake:
+#
+#   tests/coord-engine-parity/**        — THE SUBJECT, and the one that matters. A PR that adds or
+#                                         edits a fixture touches ONLY this directory; if that did not
+#                                         trigger this workflow the rule would be decorative — green on
+#                                         every PR that could possibly break it.
+#   scripts/check-parity-fixtures.py    — the rule itself.
+#   .github/workflows/parity-fixtures.yml — this file: a change to the trigger is a change to the gate.
+name: parity-fixtures
+
+on:
+  pull_request:
+    paths:
+      - "tests/coord-engine-parity/**"
+      - "scripts/check-parity-fixtures.py"
+      - ".github/workflows/parity-fixtures.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/coord-engine-parity/**"
+      - "scripts/check-parity-fixtures.py"
+      - ".github/workflows/parity-fixtures.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      # Pure stdlib `ast` — no pip install, and deliberately no build. The rule is a property of the
+      # fixture SOURCE, so it is answerable without restoring or compiling the engine, and stays
+      # answerable on a PR that cannot build.
+      - name: Assert every parity fixture holds the #939 framing properties
+        run: python3 scripts/check-parity-fixtures.py
