@@ -530,6 +530,29 @@ else
 fi
 ( cd "$D" && git worktree remove --force "$DWT" ) >/dev/null 2>&1
 
+# THE CALLER'S GIT CONFIG CANNOT BLIND THE GUARD (#1043). The fixture's own pin above makes the legs
+# measure the guard rather than the environment; this leg is the mirror of it, and the one that measures
+# the guard's IMMUNITY. It forces `status.showUntrackedFiles=no` — a normal setting, the usual remedy for
+# a slow `git status` on a big repo, inherited from ~/.gitconfig and therefore NOT something the shared
+# checkout controls — and asserts the warning still arrives.
+#
+# BEFORE #1043 THIS RETURNED NOTHING AT ALL: `--porcelain` is a formatting flag and does not override that
+# setting, so the probe came back empty on a tree full of WIP, "empty" read as "clean", and the guard went
+# silent exactly where it is the only thing looking. The repair forces the scope at the call site
+# (`-c status.showUntrackedFiles=normal`), so the answer no longer depends on who is asking.
+( cd "$D" && git config status.showUntrackedFiles no ) >/dev/null 2>&1
+printf '// uncommitted new module\n' >"$D/src/FS.GG.Coord.Core/Hostile.fs"
+touch -d '3 hours ago' "$D/src/FS.GG.Coord.Core/Hostile.fs"
+err="$(cd "$D" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$err" | grep -q 'UNCOMMITTED' \
+   && printf '%s' "$err" | grep -q '?? src/FS.GG.Coord.Core/Hostile.fs'; then
+  ok "dirtiness: 'status.showUntrackedFiles=no' cannot blind the guard — the probe forces its own scope (#1043)"
+else
+  bad "dirtiness: the caller's git config must not silence the guard" "rc=$rc err=$err"
+fi
+rm -f "$D/src/FS.GG.Coord.Core/Hostile.fs"
+( cd "$D" && git config --unset status.showUntrackedFiles ) >/dev/null 2>&1
+
 # NO HEAD, NO VERDICT. A checkout with no commit has no baseline to be dirty AGAINST, so there is nothing
 # to assert — the same shape as `stale_guard`'s "no IL to measure against" (§3), and as `release`'s "a
 # column we cannot read is not one we may overwrite" (#331). Everything here is untracked and the guard
