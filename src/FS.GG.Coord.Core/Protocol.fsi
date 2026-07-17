@@ -132,3 +132,40 @@ module Protocol =
     /// read which did not happen may never render as a confident answer (`fail-closed` — a reconciler's
     /// false clean is its worst output), and what a `Paths:` line actually IS (`touch-set-declaration`).
     val reconcileRules: Rule list
+
+    /// One section of the facts document: a key, and the facts stated under it.
+    ///
+    /// ONE CASE PER JSON SHAPE, NOT PER KEY — `rules`, `filingRules` and `reconcileRules` are three keys
+    /// of one shape, and the writer cannot tell them apart. So a new Core-owned fact KEY is an edit to
+    /// `factsDocument` alone, and only a new fact SHAPE reaches the Cli (#1027).
+    ///
+    /// Every case carries its key, including those with one member today: a case without one puts its
+    /// key string back in the writer, which is half the inventory back in the Cli.
+    type FactSection =
+        | Rules of key: string * Rule list
+        | Verdicts of key: string * VerdictDoc list
+        | BlockerStates of key: string * BlockerStateDoc list
+        | ExitCodes of key: string * ExitCodeDoc list
+
+    /// The facts document's schema version — a fact about the document's shape, so it lives with the
+    /// document and not with the writer that renders it (#1027).
+    ///
+    /// `ProtocolTests` pins it against `factsDocument`'s key list, so a key added without a bump reds a
+    /// test rather than relying on the adder to remember. The pin forces the decision; it does not make
+    /// it — a schema derived from its own content would bump on a rename and sit still on a semantic
+    /// change.
+    ///
+    /// NOT `[<Literal>]`, deliberately: F# requires a literal's VALUE in the signature (FS0034), so the
+    /// string would be spelled here as well as in `Protocol.fs` — a second copy, in the change whose
+    /// whole subject is second copies. The compiler does check the two match, so it could not drift
+    /// silently; it would simply make a schema bump a two-file edit for a constant nothing consumes at
+    /// compile time. That is the ceremony this item exists to delete, so it is not re-introduced for a
+    /// property nothing here uses.
+    val factsSchema: string
+
+    /// THE INVENTORY — every fact the document states, under its key, in document order.
+    ///
+    /// This was `Snapshot.renderFacts`'s positional parameter list: the inventory of facts, hand-kept in
+    /// the Cli across three files, for facts this module owns (#1027). The writer folds this list, so the
+    /// order here IS the JSON's key order and there is no second list to keep in step.
+    val factsDocument: FactSection list

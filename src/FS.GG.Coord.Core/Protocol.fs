@@ -434,3 +434,75 @@ module Protocol =
     /// report-only precisely because the fix is an ISSUE edit, and it never writes to an issue.
     let reconcileRules: Rule list =
         [ touchSetDeclaration; blockerResolution; failClosed ]
+
+    // ================================================================================================
+    // THE INVENTORY (#1027) — which facts the document states, and in what order.
+    // ================================================================================================
+
+    /// One section of the facts document: a key, and the facts it states under that key.
+    ///
+    /// THE CASES ARE SHAPES, NOT FACTS. There is one case per JSON shape the writer knows how to emit —
+    /// not one per key — which is the whole distinction this type exists to draw. `rules`, `filingRules`
+    /// and `reconcileRules` are three keys of ONE shape, and `Snapshot` cannot tell them apart: it is
+    /// handed a key and a list, and writes what it is given. So a new Core-owned fact key is an edit to
+    /// `factsDocument` and nothing else, and a new fact SHAPE — rare, and genuinely a writer's concern —
+    /// is the only thing that reaches the Cli.
+    ///
+    /// EVERY CASE CARRIES ITS KEY, including the two that have exactly one member today. The asymmetry
+    /// is tempting — `Verdicts of VerdictDoc list` needs no key to be unambiguous — and it would put the
+    /// STRING `"verdicts"` back in `Snapshot.fs`, which is to say: half the inventory in the Cli again,
+    /// and no way to read the document's key list off this file. The inventory is either here or it is
+    /// not.
+    type FactSection =
+        | Rules of key: string * Rule list
+        | Verdicts of key: string * VerdictDoc list
+        | BlockerStates of key: string * BlockerStateDoc list
+        | ExitCodes of key: string * ExitCodeDoc list
+
+    /// The facts document's schema version — a fact about the document's SHAPE, so it lives with the
+    /// document rather than in the writer that renders it (#1027).
+    ///
+    /// /2 `takeExitCodes` (#889) · /3 `landableExitCodes` (#900) · /4 `filingRules` (#889) ·
+    /// /5 `reconcileRules` (#889) · /6 `blockerStates` (#889).
+    ///
+    /// Each bump is additive for a reader that ignores unknown members, and the number is bumped anyway:
+    /// it says what the surface IS, not merely whether an old reader survives it.
+    ///
+    /// A NUMBER A HUMAN REMEMBERS TO INCREMENT IS A NUMBER THAT DRIFTS, so nothing here relies on the
+    /// remembering: `ProtocolTests` pins this string against `factsDocument`'s key list, and a key added
+    /// without a bump reds that test. The pin cannot DERIVE the number — what a version increment means
+    /// is a judgement, and a schema computed from its own content would bump on a key RENAME and stay put
+    /// on a semantic change. So the test forces the decision rather than making it.
+    ///
+    /// NOT `[<Literal>]`, though its predecessor was: a literal must state its VALUE in the signature
+    /// file too (FS0034), and nothing consumes this at compile time. The old one could afford the
+    /// attribute because it was `private` and had no signature entry to keep in step.
+    let factsSchema = "fsgg.coord.protocol/6"
+
+    /// THE INVENTORY — every fact the document states, under the key it states it, in document order.
+    ///
+    /// This list WAS `Snapshot.renderFacts`'s parameter list: one positional parameter per fact kind,
+    /// hand-maintained in the Cli, across three files, for facts this module owns outright. So the
+    /// inventory of facts was a second copy of this module's, hand-maintained, in the file whose whole
+    /// purpose is to end hand-maintained copies (#1027) — `rules` was emitted rather than authored, and
+    /// the LIST OF WHAT GETS EMITTED was authored. `render_filing_rules` in `scripts/generate-projections`
+    /// refuses to let the generator re-derive subset membership in a `jq` filter, for that reason exactly;
+    /// `Snapshot.fs` made the same argument, in the schema note this change replaced, and did not apply it
+    /// to itself.
+    ///
+    /// THE COST WAS A CHOKEPOINT, not an untidiness. Adding one Core-owned key took five edits across
+    /// four files, four of them pure ceremony — and one of them landed in `Snapshot.fs`, so every
+    /// remaining slice of #889 declared that file and serialised behind whoever held it. That is #428's
+    /// shape one file over, and #428 was not fixed by sequencing the items behind it.
+    ///
+    /// ORDER IS THE DOCUMENT'S ORDER. The writer folds this list in sequence, so the key order below IS
+    /// the JSON's key order — there is nowhere else it could be stated, and no second list to keep in
+    /// step with this one.
+    let factsDocument: FactSection list =
+        [ Rules("rules", rules)
+          Rules("filingRules", filingRules)
+          Rules("reconcileRules", reconcileRules)
+          Verdicts("verdicts", verdicts)
+          BlockerStates("blockerStates", blockerStates)
+          ExitCodes("takeExitCodes", takeExitCodes)
+          ExitCodes("landableExitCodes", landableExitCodes) ]

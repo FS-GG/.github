@@ -373,3 +373,91 @@ module ProtocolTests =
                 "a blocker state is documented under an empty wire name")
 
             Assert.False(System.String.IsNullOrWhiteSpace b.Meaning, $"blocker state '%s{b.Wire}' means nothing")
+
+    // ================================================================================================
+    // THE INVENTORY (#1027) — `factsDocument`, and the schema that describes its shape.
+    // ================================================================================================
+
+    /// The key each section states its facts under. A total match, so a new fact SHAPE cannot reach the
+    /// document without this file being asked what it is called.
+    let private keyOf (section: Protocol.FactSection) =
+        match section with
+        | Protocol.Rules(key, _) -> key
+        | Protocol.Verdicts(key, _) -> key
+        | Protocol.BlockerStates(key, _) -> key
+        | Protocol.ExitCodes(key, _) -> key
+
+    /// How many facts a section states. `0` is the interesting answer — see the emptiness gate below.
+    let private countOf (section: Protocol.FactSection) =
+        match section with
+        | Protocol.Rules(_, rs) -> List.length rs
+        | Protocol.Verdicts(_, vs) -> List.length vs
+        | Protocol.BlockerStates(_, bs) -> List.length bs
+        | Protocol.ExitCodes(_, cs) -> List.length cs
+
+    /// THE PIN THAT FORCES THE BUMP (#1027) — the one thing `factsDocument` could not do for itself.
+    ///
+    /// The inventory now lives in `Protocol.fs`, so adding a fact key is one edit. That is the point, and
+    /// it is also what makes this gate necessary: the edit is now SO cheap that nothing about it prompts
+    /// the author to reconsider the schema version. `fsgg.coord.protocol/6` was a number a human
+    /// remembered to increment, and a number a human remembers to increment is a number that drifts —
+    /// silently, because a payload that gained a key without a bump agrees with itself and every
+    /// projection regenerates green. #266's signature: the reader is told the surface is /6 while it is
+    /// looking at /7.
+    ///
+    /// SO THIS TEST DOES NOT DERIVE THE SCHEMA, IT REFUSES TO LET IT BE FORGOTTEN. A version computed
+    /// from the document's own content would bump on a RENAME that changes nothing a reader depends on,
+    /// and sit still on a semantic change to what a key MEANS — it would be a hash wearing a version's
+    /// clothes. What an increment means is a judgement. This pins both halves so that changing either
+    /// without confronting the other is a red test rather than a silent divergence: touch the keys, and
+    /// this line makes you say what the schema is now.
+    ///
+    /// THE LIST IS THE DOCUMENT ORDER, and asserting it as an ordered list rather than a set is
+    /// deliberate. `generate-projections` renders sections positionally into the canonical doc, and the
+    /// ORDER is part of what `/6` promises a reader.
+    [<Fact>]
+    let ``the facts document states exactly these keys, in this order, at this schema`` () =
+        let keys = Protocol.factsDocument |> List.map keyOf
+
+        Assert.Equal<string list>(
+            [ "rules"
+              "filingRules"
+              "reconcileRules"
+              "verdicts"
+              "blockerStates"
+              "takeExitCodes"
+              "landableExitCodes" ],
+            keys
+        )
+
+        Assert.Equal("fsgg.coord.protocol/6", Protocol.factsSchema)
+
+    /// THE FLOOR (#266, #436), and the vacuity every gate in this file refuses: an inventory that stated
+    /// nothing would make the fold emit `{"schema": …}` and nothing else, and every projection would
+    /// render its regions EMPTY and pass `--check` — each block faithful to the list it read.
+    [<Fact>]
+    let ``no fact section is empty, and the document states some`` () =
+        Assert.NotEmpty Protocol.factsDocument
+
+        for section in Protocol.factsDocument do
+            Assert.True(
+                countOf section > 0,
+                $"the facts document states '%s{keyOf section}' with no facts in it — its region renders empty and `--check` still passes"
+            )
+
+    /// One key, written twice, is a JSON object with a duplicate member: `Utf8JsonWriter` emits both
+    /// happily, and every reader takes whichever it meets last. The projection would then render a key
+    /// this file believes is stated once — a document arguing with itself, in the payload nobody authors.
+    [<Fact>]
+    let ``no two fact sections claim the same key`` () =
+        let keys = Protocol.factsDocument |> List.map keyOf
+        Assert.Equal<string list>(List.distinct keys, keys)
+
+    /// A KEY IS A GREP TARGET — `generate-projections` selects `.filingRules[]` by name, and a section
+    /// under an empty or blank key is one no `jq` filter can address and no reader can find.
+    [<Fact>]
+    let ``every fact section states its facts under a real key`` () =
+        for section in Protocol.factsDocument do
+            Assert.False(
+                System.String.IsNullOrWhiteSpace(keyOf section),
+                "the facts document states a section under an empty key — no projection can select it")

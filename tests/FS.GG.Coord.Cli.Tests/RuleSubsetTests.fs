@@ -114,15 +114,7 @@ module RuleSubsetTests =
         //
         // Keyed on the PROPERTY NAME, so a new subset must be emitted under its own name to pass. That is
         // the coupling that keeps a third kind from being wired up with a shell-side filter.
-        let json =
-            Snapshot.renderFacts
-                Protocol.rules
-                Protocol.filingRules
-                Protocol.reconcileRules
-                Protocol.verdicts
-                Protocol.takeExitCodes
-                Protocol.landableExitCodes
-                Protocol.blockerStates
+        let json = Snapshot.renderFacts Protocol.factsDocument
 
         use doc = JsonDocument.Parse json
 
