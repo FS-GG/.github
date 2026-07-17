@@ -61,6 +61,69 @@ let ``divergedRoots names a skill whose two roots differ, and one whose mirror i
 
     Assert.Equal<string list>([ "diverged"; "no-mirror" ], Kit.divergedRoots roots)
 
+// ---- skillMirror: the roots rule is scoped to what the REGISTRY declares (#647) --------------------
+//
+// The scan this replaces globbed `.claude/skills/*/` and byte-compared every directory it found, so it
+// policed skills the kit does not own — 33 in FS.GG.Rendering, 28 in FS.GG.SDD, on green `main`s — and
+// told the worker to `cp` away per-agent wrapper lines the specs REQUIRE. The lock is the roster; a
+// repo-local skill is not in it, and therefore cannot reach these functions at all.
+
+let private lane = [ ".claude/skills"; ".agents/skills" ]
+
+[<Fact>]
+let ``skillMirror pairs a declared skill source with its opposite root`` () =
+    Assert.Equal(Some(".claude/skills/pnext-item", ".agents/skills/pnext-item"), Kit.skillMirror lane ".claude/skills/pnext-item")
+
+[<Fact>]
+let ``skillMirror mirrors FROM whichever root the registry declared - never a hardcoded direction`` () =
+    // THE DESTRUCTIVE HALF OF #647. A repo whose source root is `.agents/` (materialize-skill-roots.fsx
+    // fans `.agents/` → `.claude/`/`.codex/`) got `cp .claude/… .agents/…` — the mirror run BACKWARDS,
+    // over the source. Direction follows the declaration, so the source is never the destination.
+    let src, mirror = Kit.skillMirror lane ".agents/skills/pnext-item" |> Option.get
+    Assert.Equal(".agents/skills/pnext-item", src)
+    Assert.Equal(".claude/skills/pnext-item", mirror)
+    Assert.NotEqual<string>(src, mirror)
+
+[<Fact>]
+let ``skillMirror ROUND-TRIPS - the emitted remedy reproduces the mirror, not the source`` () =
+    // #555's unmet test ask. `assert_contains ".agents/skills/pnext-item"` passed for the BROKEN string
+    // too, because a substring check cannot tell a source from a destination. Assert the PAIR, in order.
+    for declared in [ ".claude/skills/check-board"; ".agents/skills/check-board" ] do
+        let src, mirror = Kit.skillMirror lane declared |> Option.get
+        // the remedy copies the DECLARED source over the other root — `cp <src>/SKILL.md <mirror>/SKILL.md`
+        Assert.Equal(declared, src)
+        Assert.True(src.EndsWith "/check-board" && mirror.EndsWith "/check-board")
+        Assert.Equal(Some(mirror, src), Kit.skillMirror lane mirror) // and the mirror's mirror is the source
+
+[<Fact>]
+let ``skillMirror yields nothing for a CLIENT kit - a client has no roots to mirror`` () =
+    Assert.Equal(None, Kit.skillMirror lane "scripts/fsgg-coord")
+
+[<Fact>]
+let ``skillMirror yields nothing for a source outside the kit lane, or a root itself`` () =
+    Assert.Equal(None, Kit.skillMirror lane ".codex/skills/pnext-item") // not a root of this lane
+    Assert.Equal(None, Kit.skillMirror lane ".claude/skills") // the root itself, not a skill
+    Assert.Equal(None, Kit.skillMirror lane ".claude/skills/nested/deeper") // not a skill directory
+
+[<Fact>]
+let ``skillMirror over a LOCK reaches the kit's skills and NOTHING else`` () =
+    // The end of #647, stated as data: a lock carrying the kit's roster, in a tree that also holds the
+    // repo's own skills. The repo-local ones are absent from the lock, so no glob can drag them in.
+    let lockText =
+        "# GENERATED.\n\
+         aaaa  .claude/skills/pnext-item\n\
+         bbbb  .claude/skills/check-board\n\
+         cccc  scripts/fsgg-coord\n"
+
+    let governed =
+        Kit.parseLock lockText |> List.choose (fun (_w, src) -> Kit.skillMirror lane src)
+
+    Assert.Equal<(string * string) list>(
+        [ ".claude/skills/pnext-item", ".agents/skills/pnext-item"
+          ".claude/skills/check-board", ".agents/skills/check-board" ],
+        governed
+    )
+
 // ---- declaredSources: the obligation a worker is about to TAKE ON (#509) ---------------------------
 //
 // `staleSources` answers *is the lock stale?* off the tree. At CLAIM time nothing is edited yet, so it is
