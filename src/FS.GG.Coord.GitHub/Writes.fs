@@ -12,10 +12,18 @@ module Writes =
 
     [<Sealed>]
     type Held
-        internal (ref: Ref, worker: WorkerId, markerId: int64, previousStatus: BoardStatus option) =
+        internal
+        (
+            ref: Ref,
+            worker: WorkerId,
+            markerId: int64,
+            session: SessionId option,
+            previousStatus: BoardStatus option
+        ) =
         member _.Ref = ref
         member _.Worker = worker
         member _.MarkerId = markerId
+        member _.Session = session
         member _.PreviousStatus = previousStatus
 
     type ClaimOutcome =
@@ -273,7 +281,10 @@ module Writes =
                 // way. This is bash's own re-claim (its `heartbeat_comment` result is not checked), and it
                 // matches how the fresh-CAS `Won` path treats its follow-on board write (best-effort, #510).
                 patchComment transport ref m.Id renewed |> ignore
-                Ok(Renewed(Held(ref, worker, m.Id, m.PreviousStatus), collected))
+                // `session` (our own) is what `renewed` just wrote into the marker (line above), so that is
+                // what the `Held` carries forward — a re-claim UPGRADES a sessionless marker to bear our
+                // session, exactly as it refreshes the lease.
+                Ok(Renewed(Held(ref, worker, m.Id, session, m.PreviousStatus), collected))
 
         | None ->
 
@@ -321,7 +332,9 @@ module Writes =
             // WE WON. The lowest live marker id is ours, and every racer computing the same total order
             // reaches the same conclusion. Now collect the stale debris this win claimed over — including
             // our OWN just-superseded stale marker, so a renew ends with exactly one marker, not two.
-            Ok(Won(Held(ref, worker, myId, previousStatus), collectStale myId after))
+            // `session` is what we posted into the marker (`body`, above), so the `Held` re-emits it on
+            // every heartbeat and twin-detection survives the lease (#1149).
+            Ok(Won(Held(ref, worker, myId, session, previousStatus), collectStale myId after))
 
         | Some w ->
             // We lost the race — somebody's marker has a lower id. Back off CLEANLY.
@@ -355,7 +368,10 @@ module Writes =
                 // predicate — `claim`'s own — before opening the door to the capability.
                 match twinSession session m.Session with
                 | Some theirs -> Ok(TwinHolds theirs)
-                | None -> Ok(Holds(Held(ref, worker, m.Id, m.PreviousStatus)))
+                // `m.Session` is the session ALREADY in the live marker — carry it, unchanged, so a later
+                // `heartbeat` re-emits it rather than stripping it (#1149). verifyHeld does not write, so the
+                // marker's own value is the truth here.
+                | None -> Ok(Holds(Held(ref, worker, m.Id, m.Session, m.PreviousStatus)))
             | _ -> Ok DoesNotHold
 
     // ---- the touch-set -----------------------------------------------------------------------------
@@ -519,9 +535,13 @@ module Writes =
         //
         // A PATCH rewrites the WHOLE body, so every field must be re-emitted from the capability. A claim
         // that had been beating for two hours used to forget the column it overwrote, because the rewrite
-        // did not carry `prev=` forward and nothing had kept it.
+        // did not carry `prev=` forward and nothing had kept it (#550). It forgot `session=` the same way,
+        // and the same way was worse: a sessionless marker is indistinguishable from a human's, so after the
+        // first heartbeat `twinSession` could no longer catch a same-id twin, and two workers ended on one
+        // item — the double-hold the CAS exists to prevent (#1149). The capability now HOLDS the session, so
+        // the rewrite can re-emit it.
         let body =
-            markerBody held.Worker None leaseMinutes held.PreviousStatus
+            markerBody held.Worker held.Session leaseMinutes held.PreviousStatus
 
         match patchComment transport held.Ref held.MarkerId body with
         | Error e -> Error e
