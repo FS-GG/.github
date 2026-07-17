@@ -106,9 +106,21 @@ re-evaluation by the run's `event`. That is unnecessary *and* impossible:
   well as cancellations.
 - **A gate may keep failing on mutable metadata**, and the printed remedy now works: edit the body, the
   `edited` run passes, `landable` goes green. No force-push, no laundered SHA.
-- **A cost, named:** a failure genuinely fixed by nothing but time — a flake — is now dropped if any later
-  trigger re-ran its group on the same SHA. That is the same trade `cancel-in-progress` already makes, and it
-  is bounded by the group key: only a re-trigger of the *same* workflow on the *same* ref can do it.
+- **The `Status` leaves the test with the `Conclusion`.** A superseded run that is still **in progress** is
+  dropped too, where the old rule held the PR at `pending` until it finished. For a workflow with no
+  `concurrency` block — `architecture-map` declares none — nothing ever cancels that predecessor, so the wait
+  was for a run scoring an *older* read of the same SHA's metadata, which its successor has already answered.
+  Pinned by a test.
+- **Two costs, named rather than discovered later.**
+  1. **A flake is now laundered by any later trigger of its group on the same SHA** — including a label
+     toggle, since metadata gates trigger on `labeled`/`unlabeled`. So "toggle a label until it passes" is a
+     re-run-until-green door that A′ opens and the `cancelled`-only rule appeared to close.
+  2. **It only appeared to.** The old rule closed *no* door: re-running the failed run itself mutates that
+     row's conclusion to `success` (there is no second row), and **every** rule here — old and new — scores
+     that green. Laundering was always one click away; the clause only made the *honest* path (follow the
+     gate's printed remedy) the one that stayed red. And GitHub's branch protection, the authority that
+     actually gates the merge, scores the latest run per workflow and calls both cases green regardless.
+     A′ costs a flake's redness and buys agreement with the gate that decides.
 - **`Landable.fs`'s doctrine is corrected, not just its rule.** The comment asserting the re-run guarantee is
   replaced by the mechanic that falsifies it. Retiring a conclusion and leaving its premise to re-emit is
   [#968](https://github.com/FS-GG/.github/issues/968)'s defect.

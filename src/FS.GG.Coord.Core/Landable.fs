@@ -58,6 +58,17 @@ module Landable =
     /// hence a different group) supersedes nothing and cannot vacuously green a `pull_request` run it
     /// skipped its gate job in (#703). A cancelled or failed run NOBODY replaced is the latest in its group,
     /// stays live, and is still a finding (#698).
+    ///
+    /// THE `Status` LEAVES THE TEST TOO: a superseded run still IN PROGRESS is dropped, where the old rule
+    /// waited for it. Nothing cancels it when its workflow declares no `concurrency` block, and it is scoring
+    /// an OLDER read of the same SHA's metadata than the run that already replaced it.
+    ///
+    /// THE COST, NAMED: a FLAKE is now laundered by any later trigger of its group on the same SHA — a label
+    /// toggle included, since metadata gates trigger on `labeled`/`unlabeled`. The `cancelled`-only clause
+    /// only APPEARED to close that door: re-running the failed run mutates its own row to `success`, which
+    /// every rule here scores green, so laundering was always one click away and the clause merely kept the
+    /// HONEST path (follow the gate's printed remedy) red. Branch protection — the authority that actually
+    /// gates the merge — scores the latest run per workflow and greens both cases regardless (ADR-0043).
     let supersede (runs: RunRow list) : RunRow list * int64 list =
         // A run is REPLACED when a run of its own concurrency group carries a higher run number.
         let replaced (r: RunRow) =

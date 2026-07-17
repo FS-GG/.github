@@ -173,6 +173,19 @@ module LandableTests =
         Assert.Equal(PrRed, score (Some true) [ failed; dispatch ] [])
 
     [<Fact>]
+    let ``a superseded run STILL RUNNING is dropped too — a group's verdict is its LATEST run's`` () =
+        // The `Status` leaves the test along with the `Conclusion`. Under the cancelled-only rule an
+        // in-progress run was never `cancelled`, so it stayed live and held the PR at `pending` until it
+        // finished. A workflow with no `concurrency` block (architecture-map declares none) never cancels its
+        // predecessor, so that wait was for a run whose verdict was stale before it started: it is scoring an
+        // OLDER read of the same SHA's metadata. Its successor has already answered.
+        let g = ".github/workflows/architecture-map.yml", "pull_request", "item/x", [ 1 ]
+        let path, ev, br, prs = g
+        let stillGoing = run path ev br prs 938 "in_progress" None (Some 10L)
+        let later = run path ev br prs 940 "completed" (Some "success") (Some 11L)
+        Assert.Equal(PrGreen, score (Some true) [ stillGoing; later ] [])
+
+    [<Fact>]
     let ``supersession keys on the RUN NUMBER, not on list order — a later run listed FIRST still wins`` () =
         // The runs API returns newest-first, so the superseding run arrives BEFORE the one it replaces. A
         // rule that trusted position rather than RunNumber would score this backwards and red a green PR.
