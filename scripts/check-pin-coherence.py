@@ -487,18 +487,43 @@ SYNCED_SOURCE_PATHS = tuple(f"dist/dotnet/{f}" for f in SYNCED_RECEIVER_FILES)
 _DISABLE_RULE_KEYS = {"description", "matchFileNames", "enabled", "matchRepositories"}
 
 
+def _kit_config_dests(root: str) -> set:
+    """The receiver-side dest of every coordination-kit `kind: config` row (registry/repos.yml).
+
+    A `kind: config` file is byte-synced to every kit receiver by scripts/coordination-sync (#1077),
+    exactly as sync-build-config's FILES are — so a receiver's copy is authority-managed, not authored,
+    and belongs in the disabled set for the very same reason. `.config/dotnet-tools.json` moved onto
+    this fabric in #1077, so the synced set is now the UNION of two owners; this reads the second one
+    the same narrow way FILES is read from its owner (a regex over the owning file, not a new YAML dep).
+    """
+    path = os.path.join(root, "registry", "repos.yml")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            src = fh.read()
+    except OSError as e:
+        raise GateError(f"cannot read {path!r}, which owns the kit config-file set (#1077): {e}") from e
+    dests = set()
+    for row in re.finditer(r"^\s*-\s*\{[^}]*\bkind:\s*config\b[^}]*\}", src, re.MULTILINE):
+        d = re.search(r"\bdest:\s*([^,}\s]+)", row.group(0))
+        if d:
+            dests.add(d.group(1))
+    return dests
+
+
 def assert_synced_list_is_complete(root: str) -> None:
-    """SYNCED_RECEIVER_FILES must equal sync-build-config.sh's FILES — the list that DEFINES it.
+    """SYNCED_RECEIVER_FILES must equal the files authority-synced to receivers — its DEFINITION.
 
-    The set above is a roster, and scripts/sync-build-config.sh owns the real one. Add a fourth file
-    to its FILES and every receiver starts carrying a fourth synced copy that Renovate would happily
-    bump — the un-mergeable PR returns for that file, in every receiver, with the preset and this
-    gate both green, because neither knows the file exists. That is the census rot #902 fixed in
-    three copies at once: state the invariant, do not hand-maintain the roll-call.
+    That set has two owners now (#1077): scripts/sync-build-config.sh's FILES (the two `.props`), and
+    the coordination-kit's `kind: config` rows in registry/repos.yml (`.config/dotnet-tools.json`, moved
+    off build-config so it reaches all six kit receivers, not build-config's four). Both are authority-
+    synced to receivers, so both must be Renovate-disabled there; SYNCED_RECEIVER_FILES is the union.
 
-    Deriving the roster from the script instead would be better still, but parsing bash from here is
-    the fifth copy of a matcher problem (#724). Asserting equality keeps ONE source of truth and
-    names the drift the moment it appears, which is the property that matters.
+    Add a file to either owner and every receiver starts carrying a synced copy Renovate would happily
+    bump — the un-mergeable PR returns for that file, in every receiver, with the preset and this gate
+    both green, because neither knows the file exists. That is the census rot #902 fixed in three copies
+    at once: state the invariant, do not hand-maintain the roll-call. Deriving the roster from the owners
+    (rather than the hand-kept tuple above) keeps ONE source of truth per owner and names drift the
+    moment it appears — parsing each owner narrowly, which is the property that matters.
     """
     path = os.path.join(root, "scripts", "sync-build-config.sh")
     try:
@@ -513,21 +538,24 @@ def assert_synced_list_is_complete(root: str) -> None:
             f"{path} has no FILES=( ... ) array. It is the definition of the synced set, and a gate "
             f"that cannot find it must not report green over the list it is supposed to check."
         )
-    declared = set(re.findall(r'"([^"]+)"', m.group(1)))
-    if not declared:
+    props = set(re.findall(r'"([^"]+)"', m.group(1)))
+    if not props:
         raise GateError(f"{path} declares an EMPTY FILES=( ... ); refusing to report green.")
+    # The full authority-synced set: build-config's FILES ∪ the coordination-kit's config dests (#1077).
+    declared = props | _kit_config_dests(root)
 
     known = set(SYNCED_RECEIVER_FILES)
     if declared != known:
         missing = sorted(declared - known)
         extra = sorted(known - declared)
         raise GateError(
-            f"the synced set has drifted from {path}: "
-            + (f"sync-build-config.sh syncs {missing!r} that this gate does not disable — Renovate "
+            f"the synced set has drifted from its owners (sync-build-config.sh FILES ∪ the kit's "
+            f"kind:config rows, #1077): "
+            + (f"an owner syncs {missing!r} that this gate does not disable — Renovate "
                f"will propose the un-mergeable PR against it in every receiver, forever. " if missing else "")
-            + (f"this gate disables {extra!r} that sync-build-config.sh no longer syncs — a receiver "
+            + (f"this gate disables {extra!r} that no owner syncs any more — a receiver "
                f"authors that file now, and the preset is silently freezing it. " if extra else "")
-            + f"SYNCED_RECEIVER_FILES must equal FILES (.github#794)."
+            + f"SYNCED_RECEIVER_FILES must equal that union (.github#794, #1077)."
         )
 
 

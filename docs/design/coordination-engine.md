@@ -335,6 +335,12 @@ exec bit into six repos, byte-compared by `coordination-coherence`, and shelled 
 tool from `.config/dotnet-tools.json` and `exec`s it. That file **is already distributed to
 every repo by `sync-build-config.sh`**, and Renovate already watches it. Therefore:
 
+> **Update (#1077, 2026-07-17):** that manifest is no longer distributed by `sync-build-config.sh`. It
+> moved to the coordination kit (`registry/repos.yml` `kit:`, `kind: config`), so it now rides the SAME
+> fabric as the shim to all six kit receivers. Option D's reasoning stands unchanged — a `dotnet tool` +
+> thin shim — but the reused `build-config` channel only reached FOUR repos, so Templates and Audio got
+> the shim and not the manifest. Carrying the manifest on the kit closes that gap by construction.
+
 - The kit row, its digest, its exec bit, and the `scripts/fsgg-coord` path that every doc,
   workflow, and skill references are all **unchanged**. `coordination-coherence`,
   `repos-registry-selftest`, and `touch-set-drift` keep working with no edit.

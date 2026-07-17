@@ -57,6 +57,24 @@ for i in "${!SKILLS[@]}"; do
     && ok "apply: $s bytes match canonical" || bad "apply: $s bytes"
 done
 
+# The kit's `kind: config` files (the engine manifest, #1077) land at their declared DEST — not their
+# source path — bytes match, and being DATA rather than the client they are NOT made executable. Read
+# them the way apply does: from the registry, by (source, dest), never a path rebuilt from the id.
+mapfile -t CFG_SRC < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field source --kind config \
+                         --registry "$REPO_ROOT/registry/repos.yml")
+mapfile -t CFG_DST < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field dest --kind config \
+                         --registry "$REPO_ROOT/registry/repos.yml")
+for i in "${!CFG_SRC[@]}"; do
+  csrc="${CFG_SRC[$i]}"; cdst="${CFG_DST[$i]}"
+  [ -n "$csrc" ] || continue
+  [ -f "$RECV/$cdst" ] && ok "apply: config $cdst written (to its dest, not its source path)" \
+    || bad "apply: config $cdst" "declared 'kind: config' in repos.yml, not distributed"
+  diff -q "$REPO_ROOT/$csrc" "$RECV/$cdst" >/dev/null \
+    && ok "apply: config $cdst bytes match canonical" || bad "apply: config $cdst bytes"
+  [ ! -x "$RECV/$cdst" ] && ok "apply: config $cdst is data, left non-executable" \
+    || bad "apply: config $cdst exec bit" "a config file must not be marked executable"
+done
+
 # --- check passes when coherent ---
 expect_rc "check: coherent receiver passes (rc 0)" 0 bash "$SYNC" --check "$RECV"
 
@@ -386,6 +404,15 @@ cp "$REPO_ROOT/registry/repos.yml" "$EXROOT/registry/repos.yml"
 cp "$REPO_ROOT/scripts/fsgg-coord" "$EXROOT/scripts/fsgg-coord"
 for src in "${SKILL_SRCS[@]}"; do
   mkdir -p "$EXROOT/$src"; cp "$REPO_ROOT/$src/SKILL.md" "$EXROOT/$src/SKILL.md"
+done
+# The kit's `kind: config` sources (e.g. the engine manifest, #1077) must be present too, or the
+# source-existence guard dies at the missing manifest BEFORE it can reach the exec guard this leg is
+# about — "every kit source PRESENT" below has to include them.
+mapfile -t CONFIG_SRCS < <(bash "$REPO_ROOT/scripts/repos.sh" kit --field source --kind config \
+                            --registry "$REPO_ROOT/registry/repos.yml")
+for src in "${CONFIG_SRCS[@]}"; do
+  [ -n "$src" ] || continue
+  mkdir -p "$EXROOT/$(dirname "$src")"; cp "$REPO_ROOT/$src" "$EXROOT/$src"
 done
 chmod -x "$EXROOT/scripts/fsgg-coord"       # every kit source PRESENT; the client just isn't runnable
 expect_gate "exec: a canonical client that is NOT executable fails closed (rc 2), not a green certificate" 2 \

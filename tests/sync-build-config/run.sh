@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Fixture for scripts/sync-build-config.sh — the org-shared .NET build-config distributor (ADR-0006).
 #
-# The regression under guard is .github#387: apply/adopt used to run the refuse-and-adopt safety net
-# only for *.props, so a hand-authored .config/dotnet-tools.json fell through to an unconditional `cp`
-# and was silently clobbered — data loss. This fixture pins that the manifest is now fail-closed the
-# same way the .props files are, WITHOUT weakening the .props behaviour it was modelled on.
+# .github#1077 moved the engine tool manifest (.config/dotnet-tools.json) OUT of build-config and onto
+# the coordination-kit, so build-config now manages exactly the two `.props` files. This fixture guards
+# THAT: apply writes them, --check reddens on a hand-edit, --adopt rescues a hand-authored .props to
+# *.local.props (the #387 refuse-and-adopt safety net), and the #633/#592 drift machinery holds. The
+# manifest's own distribution moved with it — see tests/coordination-sync for its coverage now.
 #
 # It drives the REAL script against the REAL canonical source (dist/dotnet/) and a throwaway consumer
 # dir, so it can never pass on a source that stopped shipping one of the managed files — and it never
@@ -16,7 +17,6 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 SCRIPT="$REPO_ROOT/scripts/sync-build-config.sh"
 SRC="$REPO_ROOT/dist/dotnet"
-MANIFEST=".config/dotnet-tools.json"
 PROP="Directory.Build.props"
 
 pass=0; failcount=0; skipcount=0
@@ -29,8 +29,8 @@ skip() { echo "SKIP  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    |
 
 echo "sync-build-config fixture — script='$SCRIPT'"
 
-# The source of truth must actually carry the three managed files, or every assertion below is vacuous.
-for f in "$PROP" "Directory.Packages.props" "$MANIFEST"; do
+# The source of truth must actually carry the two managed files, or every assertion below is vacuous.
+for f in "$PROP" "Directory.Packages.props"; do
   [ -f "$SRC/$f" ] || { bad "canonical source ships $f" "missing $SRC/$f"; }
 done
 
@@ -50,78 +50,29 @@ run() {
   return "$rc"
 }
 
-HAND='{ "version": 1, "isRoot": true, "tools": { "my-repo-tool": { "version": "1.0.0", "commands": ["mine"] } } }'
 
 # --- apply on a clean repo writes every managed file --------------------------------------------
 t="$(fresh_target)"; rc=0; run "" "$t" || rc=$?
-if [ "$rc" -eq 0 ] && diff -q "$SRC/$MANIFEST" "$t/$MANIFEST" >/dev/null 2>&1 \
-   && diff -q "$SRC/$PROP" "$t/$PROP" >/dev/null 2>&1; then
-  ok "apply on an empty repo writes the canonical manifest and props"
+if [ "$rc" -eq 0 ] && diff -q "$SRC/$PROP" "$t/$PROP" >/dev/null 2>&1 \
+   && diff -q "$SRC/Directory.Packages.props" "$t/Directory.Packages.props" >/dev/null 2>&1; then
+  ok "apply on an empty repo writes the canonical props"
 else
   bad "apply on an empty repo" "rc=$rc"$'\n'"$OUT"
 fi
 
-# --- --check is green on a freshly synced repo, red once the manifest drifts ---------------------
+# --- --check is green on a freshly synced repo, red once a managed .props drifts ------------------
 rc=0; run "--check" "$t" || rc=$?
 [ "$rc" -eq 0 ] && ok "check is green right after a sync" || bad "check after sync" "rc=$rc"$'\n'"$OUT"
 
-printf '%s\n' "$HAND" > "$t/$MANIFEST"
+# Drift a managed file by hand-editing the synced (still-marked) Directory.Packages.props: a byte change
+# against canonical, which --check must catch. Before #1077 this leg drifted the tool manifest; the
+# manifest is no longer a build-config file, so the drift subject is a .props.
+printf '%s\n' '<!-- hand edit: drift -->' >> "$t/Directory.Packages.props"
 rc=0; run "--check" "$t" || rc=$?
-if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q "DRIFT (differs): $MANIFEST"; then
-  ok "check reports DRIFT once the manifest is hand-edited"
+if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q "DRIFT (differs): Directory.Packages.props"; then
+  ok "check reports DRIFT once a managed .props is hand-edited"
 else
-  bad "check on a drifted manifest" "want rc!=0 + DRIFT line; rc=$rc"$'\n'"$OUT"
-fi
-
-# --- THE BUG (#387): apply must not clobber a differing manifest SILENTLY -------------------------
-# The manifest is fully managed with no *.local override, so re-sync must still overwrite it (that is
-# the documented update path) — refusing would break re-sync. The fix is to make the overwrite LOUD:
-# apply overwrites (exit 0, so a bulk re-sync stays green) but WARNS, naming the file.
-t="$(fresh_target)"; mkdir -p "$t/.config"; printf '%s\n' "$HAND" > "$t/$MANIFEST"
-rc=0; run "" "$t" || rc=$?
-if [ "$rc" -eq 0 ] \
-   && printf '%s' "$OUT" | grep -qi "WARNING: overwriting $MANIFEST" \
-   && diff -q "$SRC/$MANIFEST" "$t/$MANIFEST" >/dev/null 2>&1; then
-  ok "apply warns (not silently) before overwriting a differing manifest, and still re-syncs it (#387)"
-else
-  bad "apply must warn — not silently clobber — a differing manifest (#387)" \
-      "rc=$rc (want 0)"$'\n'"manifest now: $(cat "$t/$MANIFEST")"$'\n'"--- output ---"$'\n'"$OUT"
-fi
-
-# --- apply on an already-canonical manifest is a QUIET no-op (no spurious warning) ----------------
-t="$(fresh_target)"; mkdir -p "$t/.config"; cp "$SRC/$MANIFEST" "$t/$MANIFEST"
-rc=0; run "" "$t" || rc=$?
-if [ "$rc" -eq 0 ] \
-   && diff -q "$SRC/$MANIFEST" "$t/$MANIFEST" >/dev/null 2>&1 \
-   && ! printf '%s' "$OUT" | grep -qi "WARNING: overwriting $MANIFEST"; then
-  ok "apply is a quiet no-op on an identical manifest (no spurious overwrite warning)"
-else
-  bad "apply on a canonical manifest should be a quiet no-op" "rc=$rc"$'\n'"$OUT"
-fi
-
-# --- adopt backs the hand-authored manifest up to *.local.json, then writes canonical ------------
-t="$(fresh_target)"; mkdir -p "$t/.config"; printf '%s\n' "$HAND" > "$t/$MANIFEST"
-rc=0; run "--adopt" "$t" || rc=$?
-if [ "$rc" -eq 0 ] \
-   && diff -q "$SRC/$MANIFEST" "$t/$MANIFEST" >/dev/null 2>&1 \
-   && diff -q <(printf '%s\n' "$HAND") "$t/.config/dotnet-tools.local.json" >/dev/null 2>&1; then
-  ok "adopt moves the hand-authored manifest to dotnet-tools.local.json and writes canonical"
-else
-  bad "adopt should preserve the manifest as *.local.json" \
-      "rc=$rc"$'\n'"local.json: $(cat "$t/.config/dotnet-tools.local.json" 2>&1)"$'\n'"$OUT"
-fi
-
-# --- adopt refuses when both a hand-authored manifest and its *.local.json already exist ---------
-t="$(fresh_target)"; mkdir -p "$t/.config"
-printf '%s\n' "$HAND" > "$t/$MANIFEST"
-printf '%s\n' '{ "version": 1, "isRoot": true, "tools": {} }' > "$t/.config/dotnet-tools.local.json"
-rc=0; run "--adopt" "$t" || rc=$?
-if [ "$rc" -ne 0 ] \
-   && printf '%s' "$OUT" | grep -qi "REFUSING to adopt $MANIFEST" \
-   && diff -q <(printf '%s\n' "$HAND") "$t/$MANIFEST" >/dev/null 2>&1; then
-  ok "adopt refuses (and preserves both) when the manifest and its *.local.json both exist"
-else
-  bad "adopt should fail-closed when *.local.json is already taken" "rc=$rc"$'\n'"$OUT"
+  bad "check on a drifted .props" "want rc!=0 + DRIFT line; rc=$rc"$'\n'"$OUT"
 fi
 
 # --- regression: the *.props protection this was modelled on still holds -------------------------
@@ -150,7 +101,7 @@ fi
 # require that it turns the gate green. A path that exists nowhere cannot pass that.
 t="$(fresh_target)"
 run "" "$t" || bad "#633 setup: apply must succeed before we can drift it" "$OUT"   # sync it clean...
-printf '%s\n' "$HAND" > "$t/$MANIFEST"                                              # ...then drift it
+printf '%s\n' '<!-- drift -->' >> "$t/Directory.Packages.props"                     # ...then drift it
 rc=0; run "--check" "$t" || rc=$?
 DRIFT_OUT="$OUT"
 
@@ -389,8 +340,7 @@ fi
 # every receiver keeps today's semantics. If this leg ever flips green, the migration has silently
 # stopped checking the repos that have not been pinned yet.
 t2="$(fresh_target)"
-cp "$SRC/Directory.Build.props" "$t2/"; cp "$SRC/Directory.Packages.props" "$t2/"
-mkdir -p "$t2/.config"; cp "$SRC/$MANIFEST" "$t2/$MANIFEST"      # synced content, but NO pin file
+cp "$SRC/Directory.Build.props" "$t2/"; cp "$SRC/Directory.Packages.props" "$t2/"   # synced content, but NO pin file
 rc=0; org_run "$ORG" "--check" "$t2" || rc=$?
 if [ "$rc" -ne 0 ] && printf '%s' "$OUT" | grep -q "DRIFT (differs): Directory.Build.props"; then
   ok "an UNPINNED receiver still compares against main — legacy behaviour preserved (#592 rollout)"
@@ -414,9 +364,9 @@ fi
 # So: pin a BEHIND receiver to a commit that never existed, and require GREEN.
 t3="$(fresh_target)"
 cp "$SRC/Directory.Build.props" "$t3/"; cp "$SRC/Directory.Packages.props" "$t3/"
-mkdir -p "$t3/.config"; cp "$SRC/$MANIFEST" "$t3/$MANIFEST"
 # ^ the REAL dist/dotnet, i.e. the org baseline BEFORE the fixture's upstream edit -> this receiver is
 #   coherent-but-behind relative to $ORG's HEAD (B), which carries the extra comment.
+mkdir -p "$t3/.config"
 printf '%s\n' "$(printf '0%.0s' $(seq 40))" > "$t3/$PIN_REL"   # a 40-hex SHA that is not a commit
 rc=0; org_run "$ORG" "--check" "$t3" || rc=$?
 if [ "$rc" -eq 0 ] && printf '%s' "$OUT" | grep -qi "could not be resolved"; then
