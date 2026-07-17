@@ -29,6 +29,13 @@ module Protocol =
 
     /// The verdict union, as prose. Emitted from the same cases the scheduler returns, so the list a
     /// worker reads cannot omit one — which is what fourteen of the scheduler family's issues were.
+    ///
+    /// The `Kind`s are `Schedulability.kind`'s, not a second spelling: the kinds match the wire
+    /// vocabulary the divergence log speaks, so a reader of that log can grep a verdict straight into
+    /// the doc that explains it. That sentence stood here while BOTH halves were false (#865) — this
+    /// list was hand-typed, `item-pr-open` was on the wire and in no doc, and `held` was documented for
+    /// a wire that says `held-by`. It is true now because one exhaustive match emits both, and the
+    /// compiler refuses a case that has no entry.
     val verdicts: VerdictDoc list
 
     /// One exit code, as the CALLER's contract — the fact a shell script reads without parsing prose.

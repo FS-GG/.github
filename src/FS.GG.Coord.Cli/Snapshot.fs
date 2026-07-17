@@ -439,24 +439,14 @@ module Snapshot =
     // WRITING. The verdict TOKEN is the contract — the prose is not.
     // ================================================================================================
     // `touch-set-drift.yml` greps this client's stdout for verdict tokens, and the org has already paid
-    // once for a consumer that pattern-matched on a human sentence. The `kind` strings below are the
+    // once for a consumer that pattern-matched on a human sentence. The `kind` strings are the
     // comparable surface: stable, lower-kebab, one per `Schedulability` case. The `explain` string
     // beside them is for a human and carries no contract at all.
-
-    let private verdictKind =
-        function
-        | Startable -> "startable"
-        | WrongStatus _ -> "wrong-status"
-        | IssueClosed -> "issue-closed"
-        | NoTouchSet -> "no-touch-set"
-        | DeliberatelyNoTouchSet -> "deliberately-no-touch-set"
-        | UnusableTouchSet _ -> "unusable-touch-set"
-        | BlockedBy _ -> "blocked-by"
-        | HeldBy _ -> "held-by"
-        | HeldByLiveWork _ -> "held-by-live-work"
-        | ItemPrOpen _ -> "item-pr-open"
-        | OverlapsInFlight _ -> "overlaps-in-flight"
-        | Undetermined _ -> "undetermined"
+    //
+    // THEY ARE NO LONGER SPELLED HERE. `Schedulability.kind` is the only place they exist (#865) — this
+    // module held a second hand-typed copy, `Protocol.verdicts` a third, and they disagreed: the wire
+    // shipped `item-pr-open` and `held-by` while the docs had no `item-pr-open` at all and explained a
+    // `held` nothing emits. A token is a contract, so it is emitted from the union, once.
 
     let private statusName =
         function
@@ -613,7 +603,11 @@ module Snapshot =
             for d in result.Decisions do
                 w.WriteStartObject()
                 writeRef w d.Item.Ref
-                w.WriteString("verdict", verdictKind d.Result)
+                // `Schedulability.kind`, not a spelling of our own: this field and `Protocol.verdicts`
+                // are two projections of ONE match, so the token a reader greps out of this log is the
+                // token the doc explains. They were two hand-typed lists, and `item-pr-open` shipped
+                // here while the doc had never heard of it (#865).
+                w.WriteString("verdict", Schedulability.kind d.Result)
 
                 w.WriteStartObject("detail")
                 writeDetail w d.Result

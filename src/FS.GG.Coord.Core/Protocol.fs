@@ -57,39 +57,81 @@ module Protocol =
     // ONE TOTAL FUNCTION, ONE UNION. Fourteen of the scheduler family's issues were a missing case in
     // it; #485 named the cause — startability was computed in five places and agreed in none. These are
     // those cases, and the projection cannot drift from them because it is emitted from them.
+    //
+    // IT SAID THAT, AND IT WAS A TWELFTH COPY (#865). `verdicts` was a hand-typed list of Kind/Meaning
+    // pairs that referenced the union NOWHERE, so "emitted from them" was an aspiration the code did not
+    // implement — and it had already drifted, in both directions at once:
+    //
+    //   * `ItemPrOpen` (#651) was returned by `schedulable`, emitted as `item-pr-open` on the wire, and
+    //     documented NOWHERE. A worker handed a verdict grepped it into the doc that explains it —
+    //     the promise `Protocol.fsi` opens by making — and found nothing.
+    //   * `held` was documented where the wire has always emitted `held-by`. Worse than a miss: `held`
+    //     IS a live token in `who`'s claim-state vocabulary, so the grep SUCCEEDS, in the wrong
+    //     vocabulary, and answers a question the reader did not ask.
+    //
+    // And the guard was green over both, because it counted entries and compared them to a THIRD
+    // hand-written set of the same strings (`ProtocolTests`), whose comment claimed a compiler property
+    // F# does not give a list literal. A generator whose source is hand-maintained just moves the drift
+    // upstream and makes it authoritative — which is precisely what ADR-0034 §4.5 was about to lean on.
+    //
+    // So the Kind is no longer WRITTEN here. It is `Schedulability.kind`, applied to each case: an
+    // exhaustive match the compiler checks. What is left here is the one thing the union genuinely does
+    // not carry — the MEANING — and it is a total match too, so a new case cannot reach the docs
+    // undocumented. The build fails; nobody has to notice.
+
+    /// One value of each `Schedulability` case, as the subject the two matches below are applied to.
+    ///
+    /// THE ONE PART THE COMPILER CANNOT CHECK, and it is named rather than hidden. F# gives no
+    /// exhaustiveness property for a list literal — that was #865's defect, asserted in a comment as
+    /// though it were a guarantee. The samples' FIELDS are irrelevant (`kind` and `meaning` both ignore
+    /// them); only the set of CASES matters, and `ProtocolTests` pins that against the union by
+    /// reflection, which does not depend on anybody remembering this list.
+    let private everyCase: Schedulability.Schedulability list =
+        [ Schedulability.Startable
+          Schedulability.IssueClosed
+          Schedulability.WrongStatus Backlog
+          Schedulability.BlockedBy []
+          Schedulability.NoTouchSet
+          Schedulability.DeliberatelyNoTouchSet
+          Schedulability.UnusableTouchSet []
+          Schedulability.HeldBy(WorkerId "")
+          Schedulability.HeldByLiveWork(WorkerId "", 0)
+          Schedulability.ItemPrOpen 0
+          Schedulability.OverlapsInFlight []
+          Schedulability.Undetermined "" ]
+
+    /// What the verdict MEANS to the worker who is handed it — the one fact the union does not carry.
+    /// A total match: a new case fails the build here rather than reaching a projection undocumented.
+    let private meaning =
+        function
+        | Schedulability.Startable -> "Nothing holds it. It can be claimed now."
+        | Schedulability.IssueClosed ->
+            "The issue is CLOSED while the board still shows it open. The issue's state is the WORK; the board column is a PROJECTION of it. When they disagree, the issue wins — run /check-board."
+        | Schedulability.WrongStatus _ ->
+            "Its board Status is not one a scheduler hands out (or it has none at all, which makes it invisible to every scheduler and is a bug, not a decision)."
+        | Schedulability.BlockedBy _ ->
+            "A `Blocked by` entry is unresolved. CLOSED and MERGED resolve; OPEN, unverifiable and unparseable all BLOCK."
+        | Schedulability.NoTouchSet ->
+            "No `Paths:` line at all — an OMISSION. The item is real work and it is invisible to every worker who asks for work. Declare one, or `Paths: none` if it truly has no touch-set."
+        | Schedulability.DeliberatelyNoTouchSet ->
+            "`Paths: none` — a decision somebody made. An epic, a decision item, an investigation whose scope IS the question. Unschedulable BY DESIGN, and correct."
+        | Schedulability.UnusableTouchSet _ ->
+            "The declaration contains token(s) that can match no file, so they reserve NOTHING — and files nobody reserved are invisible to every other worker's overlap check."
+        | Schedulability.HeldBy _ -> "A live claim marker holds it. Wait out the lease, or talk to the worker."
+        | Schedulability.HeldByLiveWork _ ->
+            "The lease EXPIRED but the work did not: an open `item/<n>-*` PR is the worktree protocol's own artifact, and it outranks a timer. Not offered; its touch-set stays reserved."
+        | Schedulability.ItemPrOpen _ ->
+            "No claim marker governs it, but an `item/<n>-*` PR is already OPEN on its branch — an implementation is in flight whether or not anyone claimed it. Not offered: claiming it would duplicate work that is already written (#651)."
+        | Schedulability.OverlapsInFlight _ ->
+            "Its files collide with work already in flight. The holder and its lease window are named, because \"nothing schedulable\" and \"queued behind a claim that frees in ~96m\" are the same fact and two completely different instructions."
+        | Schedulability.Undetermined _ ->
+            "WE COULD NOT DECIDE — and that is never a silent no. An unreachable answer is not a negative one. This is the case whose absence made every other case a lie waiting to happen."
 
     let verdicts: VerdictDoc list =
-        [ { Kind = "startable"
-            Meaning = "Nothing holds it. It can be claimed now." }
-          { Kind = "issue-closed"
-            Meaning =
-              "The issue is CLOSED while the board still shows it open. The issue's state is the WORK; the board column is a PROJECTION of it. When they disagree, the issue wins — run /check-board." }
-          { Kind = "wrong-status"
-            Meaning =
-              "Its board Status is not one a scheduler hands out (or it has none at all, which makes it invisible to every scheduler and is a bug, not a decision)." }
-          { Kind = "blocked-by"
-            Meaning =
-              "A `Blocked by` entry is unresolved. CLOSED and MERGED resolve; OPEN, unverifiable and unparseable all BLOCK." }
-          { Kind = "no-touch-set"
-            Meaning =
-              "No `Paths:` line at all — an OMISSION. The item is real work and it is invisible to every worker who asks for work. Declare one, or `Paths: none` if it truly has no touch-set." }
-          { Kind = "deliberately-no-touch-set"
-            Meaning =
-              "`Paths: none` — a decision somebody made. An epic, a decision item, an investigation whose scope IS the question. Unschedulable BY DESIGN, and correct." }
-          { Kind = "unusable-touch-set"
-            Meaning =
-              "The declaration contains token(s) that can match no file, so they reserve NOTHING — and files nobody reserved are invisible to every other worker's overlap check." }
-          { Kind = "held"
-            Meaning = "A live claim marker holds it. Wait out the lease, or talk to the worker." }
-          { Kind = "held-by-live-work"
-            Meaning =
-              "The lease EXPIRED but the work did not: an open `item/<n>-*` PR is the worktree protocol's own artifact, and it outranks a timer. Not offered; its touch-set stays reserved." }
-          { Kind = "overlaps-in-flight"
-            Meaning =
-              "Its files collide with work already in flight. The holder and its lease window are named, because \"nothing schedulable\" and \"queued behind a claim that frees in ~96m\" are the same fact and two completely different instructions." }
-          { Kind = "undetermined"
-            Meaning =
-              "WE COULD NOT DECIDE — and that is never a silent no. An unreachable answer is not a negative one. This is the case whose absence made every other case a lie waiting to happen." } ]
+        everyCase
+        |> List.map (fun c ->
+            { Kind = Schedulability.kind c
+              Meaning = meaning c })
 
     // ---- take's exit contract ----------------------------------------------------------------------
     // #585 gave `take` codes that tell "I claimed you an item" apart from the four ways it can claim
