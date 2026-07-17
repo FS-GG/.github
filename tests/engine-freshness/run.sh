@@ -41,8 +41,12 @@ bad() { echo "FAIL  $1"; [ -n "${2:-}" ] && printf '%s\n' "$2" | sed 's/^/    | 
 # author's machine while reddening on everyone else's). So identity, the initial branch, GPG signing
 # and the pager are all pinned here rather than assumed — a leg that depends on the runner's dotfiles
 # is a leg that proves nothing.
+# `core.hooksPath` is pinned for the same reason as the rest and is the one most likely to bite: a
+# global hooks path with a pre-commit hook would fail every `commit` below, reddening the suite for a
+# reason that is not its subject.
 git_() { git -c user.name=fixture -c user.email=fixture@example.com -c commit.gpgsign=false \
-             -c init.defaultBranch=main -c core.pager=cat -c tag.gpgsign=false "$@"; }
+             -c init.defaultBranch=main -c core.pager=cat -c tag.gpgsign=false \
+             -c core.hooksPath=/dev/null "$@"; }
 
 # Build a synthetic engine repo: the three source trees the gate measures, plus the wire-surface file.
 # `$1` = repo dir.
@@ -228,7 +232,9 @@ must_fail "a missing token is an ERROR, not a skip" "not skip it"
 mkdir -p "$WORK/notgit"
 F="$WORK/feed-notgit.json"; feed "$F" 0.3.0
 run "$WORK/notgit" "$F"
-must_fail "a non-repo is an ERROR" "failed"
+# The REASON, not merely a non-zero exit: "failed" would match a path typo in this harness just as
+# happily as the thing under test, which is the vacuous-failure defect this file's header cites.
+must_fail "a non-repo is an ERROR" "not a git repository"
 
 echo
 echo "engine-freshness fixture: $pass passed, $failcount failed"
