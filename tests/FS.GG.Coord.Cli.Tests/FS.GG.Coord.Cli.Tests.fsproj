@@ -13,6 +13,7 @@
     <Compile Include="ScanRoundTripTests.fs" />
     <Compile Include="OptionsTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
+    <Compile Include="DocumentedInvocationTests.fs" />
     <Compile Include="ExitContractTests.fs" />
     <Compile Include="IdentityTests.fs" />
     <Compile Include="RepoScopeTests.fs" />
