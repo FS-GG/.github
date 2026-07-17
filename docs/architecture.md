@@ -778,6 +778,31 @@ install is what keeps the composition honest. See the
   one tier and not the others, because there are no tiers — which is what **54 vendored copies** of
   the protocol used to guarantee it would.
 
+  **There is one tier left, and it is the fleet's own engine
+  ([#1075](https://github.com/FS-GG/.github/issues/1075)).** `projections` compares files *in this
+  repo*, so it makes the prose and `Protocol.fs` agree **here** and has nothing to say about the
+  engine the fleet actually runs — which is a **published package**, restored from the feed. So a
+  protocol rule lands in `Protocol.fs`, regenerates into every `SKILL.md`, and the fleet keeps
+  `exec`ing the release that predates it: main's own documents then describe a verb contract the
+  fleet's engine does not implement. That is not hypothetical — it is
+  [#846](https://github.com/FS-GG/.github/issues/846) verbatim (*"next/take/done/add are all unknown
+  command"*), and it has happened **four times** ([#844](https://github.com/FS-GG/.github/issues/844),
+  #846, [#964](https://github.com/FS-GG/.github/issues/964),
+  [#1067](https://github.com/FS-GG/.github/issues/1067)), each found by whoever happened to notice.
+
+  **No version comparison can see it, which is why it needed a gate of its own rather than a row in
+  §5.** Every other producer's source version moves with the *change*, so `version` drifting ahead of
+  `package-version` is their legible "merged, not yet published" signal. This engine's `<Version>`
+  moves only at **release** time — `release-coord-engine.yml` evaluates the fsproj property and
+  requires the `coord-engine/v<version>` tag to match it, so the bump **is** the release act. While
+  the source outruns the feed the two scalars are **equal**, and the registry row is green *because*
+  the defect is happening. [`scripts/check-engine-freshness.py`](../scripts/check-engine-freshness.py)
+  therefore counts **commits**, not scalars: it resolves the tag that produced the feed's newest
+  version (never the newest *tag* — a tag is not a publish) and reds when the **wire surface**,
+  `Protocol.fs` itself, has drifted unreleased. Drift behind the wire is reported and not red — at
+  this repo's velocity a `drift > 0` bar would be red by design between releases, and a gate that
+  cries wolf on the happy path teaches that FAILED is noise.
+
 - **Public distribution (dual-publish, [ADR-0012](adr/0012-dual-publish-to-nuget-org.md) +
   [ADR-0013](adr/0013-trusted-publishing-oidc-for-nuget-org.md)).** On release each producer
   additionally pushes the **byte-identical** `.nupkg` to **public nuget.org** (after the
