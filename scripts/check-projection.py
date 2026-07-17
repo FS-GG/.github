@@ -10,28 +10,38 @@ behind the registry scalars. This gate makes that drift a red check.
 It asserts, at minimum (H4):
   1. Every registry `coherence[].id` has a row in compatibility.md's "Coherence state" table.
   2. Every registry `contracts[].id`'s `version` and `package-version` literal appears, as a
-     WHOLE VERSION TOKEN, in that contract's `Version` CELL in the "Versioned contracts" table.
+     WHOLE VERSION TOKEN, in that contract's row of the GENERATED "Contract version literals"
+     table — `version` in the `version` column, `package-version` in the `package-version` column.
 
 It also cross-checks the coherent ✅/❌ flag per row against the registry `coherent:` boolean,
 since a projected-but-contradictory flag is the same self-contradiction class (review H3).
 
+WHY A GENERATED REGION, NOT THE PROSE CELL (#1081 option 2, DECIDED 2026-07-17 — ADR-0044 / #527).
+Assertion 2 used to read the literal from the hand-authored `Version` CELL of the "Versioned
+contracts" table. That cell also carries the JUDGEMENT about what a release means, which #748
+forbids `feed-autofix` to write — so a required gate demanding the literal there and a bot
+forbidden to author there were jointly unsatisfiable, and the bot's flips were structurally red.
+The literal is now the machine-owned half of the page: `scripts/generate-projections` emits it into
+the `## Contract version literals` region from `registry/dependencies.yml`, so a registry flip
+REGENERATES that region green rather than demanding a prose edit. This gate reads the literal from
+that region; the prose `Version` cell stays human-owned and is no longer a version-literal subject.
+
 Assertion 2 is deliberately narrow on BOTH axes (.github#268, epic #266 — fails-open gates):
 
   * WHOLE TOKEN, not substring. `str(val) in row` finds `0.4.0` inside `0.4.0-preview.1`, so a
-    row still describing the prerelease passed a check for the stable version. Observed: while
+    cell still describing the prerelease passed a check for the stable version. Observed: while
     reconciling the stable-channel train (#265) `fs-gg-ui-template` moved to `0.4.0` and the row
     still read `0.3.1-preview.1` over a held `0.3.0-preview.1` pin — green, because the row's
     prose happened to contain `0.4.0-preview.1`. A version literal must be bounded by something
     that cannot continue a version: not `[0-9A-Za-z_+-]`, and not a `.` that is itself followed
     by a segment (so `0.4.0.` at the end of a sentence matches, but `0.4.0.1` does not).
 
-  * The `Version` CELL, not the whole row. Rows carry kilobytes of `PRIOR …` release prose that
-    legitimately names superseded versions, so "does this string occur anywhere in the row" is
-    satisfied by history alone. Only the current-version cell is the projection of the registry
-    scalar.
+  * The literal's own COLUMN, not the whole row. Even the generated region names an owner and both
+    scalars per row, so `package-version 0.4.0` must not satisfy a check for `version`'s literal by
+    landing in the wrong column. Each field is read from its own cell.
 
-Both narrowings FAIL CLOSED: a table whose `Version`/`Coherent?` column cannot be located, or a
-contract whose version cell is empty, is an error — never a silently skipped row.
+Both narrowings FAIL CLOSED: a table whose `version`/`package-version`/`Coherent?` column cannot be
+located, or a contract with no row in the generated region, is an error — never a silently skipped row.
 
 Pure-stdlib (PyYAML only, already a coherence-gate dependency); no network. Exit 0 = coherent.
 
@@ -177,33 +187,47 @@ def main() -> int:
                 f"{'✅ yes' if got else '❌ no'}.")
 
     # --- 2. Contract version literals projected -------------------------------------------
-    con_cols, con_row_lines = _table(md, "Versioned contracts")
-    contract_rows = {cid: row for row in con_row_lines if (cid := _first_cell_id(row))}
-    version_col = _require_col(con_cols, "Version", "Versioned contracts", proj_path, errors)
+    # #1081 option 2 (DECIDED 2026-07-17, ADR-0044 / #527): the version literal is now the MACHINE-OWNED
+    # half of this page, split out of the hand-authored `Version` cell into the GENERATED `## Contract
+    # version literals` region (emitted by scripts/generate-projections, held byte-for-byte by the
+    # `projections` gate). This required gate reads the literal from THERE, not from the prose cell — so
+    # a registry flip REGENERATES the region green rather than demanding a prose edit `feed-autofix` is
+    # forbidden to make (#748). The prose `## Versioned contracts` `Version` cell stays human-owned and
+    # is no longer a version-literal gate subject; only the `## Coherence state` flag (check 1+3) and this
+    # generated region are gated against the registry.
+    #
+    # The literal now lives in its own `version` / `package-version` COLUMNS (one fact per cell) rather
+    # than fused into one prose cell, so each is read from its own column. Same two narrowings as before,
+    # both fail-closed: whole-token (not substring), and a MISSING column/row is an error, never a skip.
+    cv_cols, cv_row_lines = _table(md, "Contract version literals")
+    cv_rows = {cid: row for row in cv_row_lines if (cid := _first_cell_id(row))}
+    ver_col = _require_col(cv_cols, "version", "Contract version literals", proj_path, errors)
+    pkg_col = _require_col(cv_cols, "package-version", "Contract version literals", proj_path, errors)
     for c in doc.get("contracts") or []:
         cid = str(c.get("id", "")).strip()
         if not cid:
             continue
-        row = contract_rows.get(cid)
+        row = cv_rows.get(cid)
         if row is None:
             errors.append(
-                f"contract id {cid!r} has no row in the '{proj_path}' Versioned contracts table.")
+                f"contract id {cid!r} has no row in the '{proj_path}' Contract version literals table "
+                f"(the generated region is stale — run scripts/generate-projections).")
             continue
-        if version_col is None:
-            continue  # already reported above; do not silently pass the row
-        cell = _cell(row, version_col)
-        if not cell.strip():
-            errors.append(f"contract id {cid!r}: its projection row has an empty Version cell.")
-            continue
-        for field in ("version", "package-version"):
+        # `version` is always present; `package-version` only when the contract ships a package (its
+        # generated cell then reads `—`, which no version literal will match — and `val is None` skips it).
+        for field, col in (("version", ver_col), ("package-version", pkg_col)):
             val = c.get(field)
             if val is None:
                 continue
+            if col is None:
+                continue  # column absent — already reported by _require_col; do not silently pass
+            cell = _cell(row, col)
             if not _token_present(str(val), cell):
                 errors.append(
                     f"contract id {cid!r}: {field} literal {str(val)!r} does not appear as a whole "
-                    f"version token in its projection row's Version cell (cell reads: "
-                    f"{cell.strip()[:80]!r}) — the row is stale relative to the registry.")
+                    f"version token in its {field!r} cell of the Contract version literals table "
+                    f"(cell reads: {cell.strip()[:80]!r}) — the generated region is stale relative to "
+                    f"the registry; run scripts/generate-projections.")
 
     if errors:
         for e in errors:

@@ -24,6 +24,7 @@ on:
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"
+      - "docs/registry/compatibility.md"
       - "registry/dependencies.yml"
       - ".claude/skills/**"
       - ".agents/skills/**"
@@ -37,6 +38,7 @@ on:
       - "scripts/generate-projections"
       - "docs/coordination/parallel-work.md"
       - "docs/architecture.md"
+      - "docs/registry/compatibility.md"
       - "registry/dependencies.yml"
       - ".claude/skills/**"
       - ".agents/skills/**"
@@ -95,7 +97,8 @@ jobs:
           # 16 → 18: `snapshot-shape` in both check-board roots (#889, #1058).
           # 18 → 20: `driver-rules` in both pnext-item roots (#889, #1059).
           # 20 → 22: `release-columns` in both pnext-item roots (#889/#900, #1099).
-          expected=22
+          # 22 → 23: `contract-versions` in docs/registry/compatibility.md (#1081 option 2 slice A).
+          expected=23
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

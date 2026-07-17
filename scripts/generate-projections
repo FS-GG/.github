@@ -73,6 +73,7 @@ TARGETS=(
   "snapshot-shape:.claude/skills/check-board/SKILL.md"
   "snapshot-shape:.agents/skills/check-board/SKILL.md"
   "versions:docs/architecture.md"
+  "contract-versions:docs/registry/compatibility.md"
 )
 
 # The marker a kind uses. One function, so the BEGIN a target is searched for, the BEGIN written into
@@ -86,9 +87,10 @@ TARGETS=(
 # looks to find out where a number came from.
 marker() { # kind, BEGIN|END
   case "$1" in
-    rules)    echo "<!-- $2 GENERATED: fsgg-protocol -->" ;;
-    versions) echo "<!-- $2 GENERATED: fsgg-versions -->" ;;
-    *)        echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
+    rules)             echo "<!-- $2 GENERATED: fsgg-protocol -->" ;;
+    versions)          echo "<!-- $2 GENERATED: fsgg-versions -->" ;;
+    contract-versions) echo "<!-- $2 GENERATED: fsgg-contract-versions -->" ;;
+    *)                 echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
   esac
 }
 
@@ -98,8 +100,9 @@ marker() { # kind, BEGIN|END
 # move is to hand-edit the generated region, which is the one thing every marker here tells them not to do.
 source_of() { # kind
   case "$1" in
-    versions) echo "registry/dependencies.yml" ;;
-    *)        echo "src/FS.GG.Coord.Core/Protocol.fs" ;;
+    versions)          echo "registry/dependencies.yml" ;;
+    contract-versions) echo "registry/dependencies.yml" ;;
+    *)                 echo "src/FS.GG.Coord.Core/Protocol.fs" ;;
   esac
 }
 
@@ -570,6 +573,58 @@ render_versions() {
     .contracts[]
     | select(has("minimum-fsgg-sdd"))
     | "**The orchestrator axis.** `\(.id)` pins `minimum-fsgg-sdd` at **`\(.["minimum-fsgg-sdd"].version)`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below)."
+  ' "$REG"
+  echo ""
+}
+
+# `contract-versions` — the machine-owned half of docs/registry/compatibility.md, split from its
+# hand-authored prose (#1081 option 2, DECIDED 2026-07-17; the `repos.lock`/#527 move, ADR-0044).
+#
+# WHY THIS REGION EXISTS. The REQUIRED `projection` gate (scripts/check-projection.py) asserts that
+# every contract's `version` and `package-version` literal is projected into compatibility.md. It used
+# to read the literal from the hand-authored `Version` CELL of the "Versioned contracts" table — a cell
+# that also carries kilobytes of authored release prose. So a registry flip demanded editing a prose
+# cell, and #748 forbids `feed-autofix` to write prose: the gate and the bot were each correct and
+# jointly unsatisfiable, and the bot's flips were structurally red (#1081). Splitting the literal out
+# into this generated region gives it one owner — the generator — so a flip REGENERATES green, and the
+# prose cell stays human-owned. `check-projection.py` now reads the literal from HERE.
+#
+# EVERY CONTRACT, NOT JUST THE PACKAGE-BEARING ONES. `render_versions` (the architecture map) lists only
+# contracts carrying a `package-version`, because the map states what a consumer can restore. This region
+# is the subject of a gate that iterates ALL contracts and checks each `version`, so it must carry a row
+# for every contract or the gate reds "has no row" on the ones it omits (#916: an enumeration only beats a
+# catch-all if it is COMPLETE). A contract with no `package-version` states `—` for that column.
+render_contract_versions() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from registry/dependencies.yml by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  This is the MACHINE-OWNED half of this page (#1081 option 2 / ADR-0044 / #527). The REQUIRED"
+  echo "  \`projection\` gate (scripts/check-projection.py) reads each contract's version literal from"
+  echo "  THIS table, not from the authored prose \`Version\` cell in the Versioned contracts table"
+  echo "  above, so a registry flip regenerates this region green rather than demanding a prose edit the"
+  echo "  feed-autofix bot is forbidden to make (#748). Every number below is the registry's; if one is"
+  echo "  wrong, the registry is wrong, and fixing it HERE would only hide that."
+  echo "-->"
+  echo ""
+  echo "*Generated from \`registry/dependencies.yml\`. \`version\` is the contract SURFACE's SemVer;"
+  echo "\`package-version\` is what is LIVE on the org feed (\`—\` where the contract ships no package)."
+  echo "This table is the machine-owned literal; the judgement about what a release MEANS stays in the"
+  echo "authored \`Version\` cells of the Versioned contracts table (#748).*"
+  echo ""
+  # Plain column headers (not backticked) so the REQUIRED `projection` gate can locate the `version`
+  # and `package-version` columns by name without stripping markup — this table is a gate subject first
+  # and a human read second.
+  echo "| Contract | Owner | version | package-version |"
+  echo "|---|---|---|---|"
+  # `// error(...)`, not a bare lookup: an owner missing from `repos:` must red the gate, never
+  # interpolate the literal string "null" as a fact (same discipline as render_versions).
+  jq -r '
+    .repos as $repos
+    | .contracts[]
+    | . as $c
+    | ($repos[.owner].name // error("contract `\($c.id)` names owner `\($c.owner)`, which is not a key in repos:"))
+    | "| `\($c.id)` | \(.) | `\($c.version)` | \(if ($c | has("package-version")) then "`\($c["package-version"])`" else "—" end) |"
   ' "$REG"
   echo ""
 }
