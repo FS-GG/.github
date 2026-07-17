@@ -108,4 +108,5 @@ module Snapshot =
         verdicts: Protocol.VerdictDoc list ->
         takeExitCodes: Protocol.ExitCodeDoc list ->
         landableExitCodes: Protocol.ExitCodeDoc list ->
+        blockerStates: Protocol.BlockerStateDoc list ->
             string

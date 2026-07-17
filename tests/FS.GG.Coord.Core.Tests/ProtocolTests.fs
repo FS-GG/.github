@@ -280,3 +280,96 @@ module ProtocolTests =
     [<Fact>]
     let ``landable documents no rate-limit code`` () =
         Assert.DoesNotContain(75, Protocol.landableExitCodes |> List.map (fun c -> c.Code))
+
+    // ================================================================================================
+    // `blockerStates` — the wire vocabulary `check-board` §1 restated by hand (#889).
+    //
+    // The stakes are not a misprinted doc. `check-board` §3 selects on these strings in `jq`, so a
+    // drifted value matches NOTHING, every blocker reads as still-holding, `BLOCKER-CLEARED` never
+    // fires, and the pass reports a CLEAN BOARD over items rotting behind shipped work (#476). A false
+    // clean is that skill's worst output by its own account, and it is silent.
+    // ================================================================================================
+
+    /// REFLECTION CAN SEE THE UNION — so the guards below are not vacuous (#266).
+    ///
+    /// `Protocol.everyBlockerState` is built by reflection rather than typed out. That removes #865's
+    /// defect (a list that silently stops naming a case) but buys a new one: if reflection returned
+    /// EMPTY, every `for` below would pass by iterating nothing and this file would report green over a
+    /// vocabulary it never looked at. This is the test that refuses that, and it is why the count is
+    /// asserted against the UNION rather than against `5`.
+    [<Fact>]
+    let ``the documented blocker states are exactly the cases of BlockerState`` () =
+        let cases = FSharpType.GetUnionCases typeof<BlockerState>
+        let documented = Protocol.blockerStates |> List.map (fun b -> b.Wire)
+
+        Assert.NotEmpty documented
+        Assert.Equal<int>(cases.Length, List.length documented)
+
+        // Two states sharing a wire name would let one hide behind the other and still pass the count.
+        // It is also the bug directly: `jq` cannot tell them apart either.
+        Assert.Equal<string list>(List.distinct documented, documented)
+
+    /// THE DOC'S STRING IS THE WIRE'S STRING — the same function, not two spellings that agree today.
+    ///
+    /// This is the assertion that would have caught #1012's measured defect one level up: `merged` ->
+    /// `"MERGED"` in the renderer left 775 tests green. Here it reds, because the doc is not allowed to
+    /// have its own opinion about what `scan` writes.
+    [<Fact>]
+    let ``every documented blocker state renders the wire name the engine writes`` () =
+        for b in Protocol.blockerStates do
+            match blockerStateOfWireName b.Wire with
+            | None ->
+                Assert.Fail
+                    $"the docs publish '%s{b.Wire}' as a blocker state and the engine cannot parse it back — `check-board` selects on this string in jq, so it matches nothing and every blocker reads as still-holding (#476)"
+            | Some parsed ->
+                Assert.True(
+                    blockerStateWireName parsed = b.Wire,
+                    $"'%s{b.Wire}' does not round-trip through the engine's own vocabulary")
+
+    /// THE `holds?` COLUMN IS THE SCHEDULER'S ANSWER, NOT THE DOC'S.
+    ///
+    /// GENERATION MAKES COPIES AGREE; IT DOES NOT MAKE THEM TRUE (#916's trap 1). A hand-typed `Holds`
+    /// in `Protocol.fs` would be a copy of `Blockers.isResolvedState` with a generator's authority
+    /// behind it — strictly worse than the prose it replaced, because nobody proof-reads a generated
+    /// region. The first draft of `blockerStates` did exactly that, and its five answers were RIGHT,
+    /// which is precisely how #865 got in. So: pin the doc against the PREDICATE.
+    [<Fact>]
+    let ``a documented state holds iff the engine refuses to resolve it`` () =
+        for b in Protocol.blockerStates do
+            let state =
+                match blockerStateOfWireName b.Wire with
+                | Some s -> s
+                | None -> failwith $"'{b.Wire}' is not a blocker state"
+
+            let engineSaysHolds = not (Blockers.isResolvedState state)
+
+            Assert.True(
+                (b.Holds = engineSaysHolds),
+                $"'%s{b.Wire}': the generated table says holds=%b{b.Holds}, the engine says holds=%b{engineSaysHolds} — the row a reconciler acts on disagrees with the predicate that schedules")
+
+    /// THE FAIL-CLOSED CASES, NAMED. The two that read like non-answers and BLOCK (#266).
+    ///
+    /// The property above is relative — it would hold just as well if BOTH the predicate and the doc
+    /// were inverted. This one is absolute, and it is the one whose failure is a real incident: a reader
+    /// who treats `unknown` as "not blocking" has re-written the bug `fail-closed` exists to refuse.
+    [<Fact>]
+    let ``unknown and unparseable are documented as HOLDING`` () =
+        let holdsOf w =
+            Protocol.blockerStates |> List.tryFind (fun b -> b.Wire = w) |> Option.map (fun b -> b.Holds)
+
+        Assert.Equal(Some true, holdsOf "unknown")
+        Assert.Equal(Some true, holdsOf "unparseable")
+        Assert.Equal(Some false, holdsOf "closed")
+        Assert.Equal(Some false, holdsOf "merged")
+        Assert.Equal(Some true, holdsOf "open")
+
+    /// A STATE DOCUMENTED UNDER AN EMPTY STRING IS UNGREPPABLE BY CONSTRUCTION, and a state that means
+    /// nothing is a row a reader skips.
+    [<Fact>]
+    let ``every blocker state is documented with a meaning`` () =
+        for b in Protocol.blockerStates do
+            Assert.False(
+                System.String.IsNullOrWhiteSpace b.Wire,
+                "a blocker state is documented under an empty wire name")
+
+            Assert.False(System.String.IsNullOrWhiteSpace b.Meaning, $"blocker state '%s{b.Wire}' means nothing")

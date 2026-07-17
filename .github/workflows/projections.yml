@@ -90,7 +90,8 @@ jobs:
           set -euo pipefail
           # 8 → 10: `filing-rules` in both cross-repo-coordination roots (#889).
           # 10 → 12: `reconcile-rules` in both check-board roots (#889).
-          expected=12
+          # 12 → 14: `blocker-states` in both check-board roots (#889).
+          expected=14
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

@@ -27,6 +27,36 @@ module Protocol =
     /// A schedulability verdict, as the worker meets it.
     type VerdictDoc = { Kind: string; Meaning: string }
 
+    /// One `BlockerState`, as a reader of the scan's JSON meets it: the wire string, and what it says
+    /// about the blocker.
+    type BlockerStateDoc =
+        { /// The string `scan` emits — `Types.blockerStateWireName`'s answer, never a second spelling.
+          Wire: string
+
+          /// Whether the blocker HOLDS. The one bit a reconciler acts on, and the one the union's case
+          /// name does not carry: `unknown` and `unparseable` read like non-answers and BLOCK.
+          Holds: bool
+
+          /// What the state says about the blocker, and why it holds or does not.
+          Meaning: string }
+
+    /// The blocker wire vocabulary, as prose — the five cases of `Types.BlockerState`, each with the
+    /// string `scan` actually writes and what it means (#889).
+    ///
+    /// `check-board` §1 restated this list by hand: *"`open | closed | merged | unknown | unparseable`,
+    /// the five cases of the engine's `BlockerState`"*. That sentence names its own source and was still
+    /// a copy — the sharpest form of the problem, because a RECONCILER reads these strings with `jq` and
+    /// a `.state` selector that matches nothing reports a **clean board**. Its worst output, by its own
+    /// account (#476).
+    ///
+    /// Generatable only since #1012 gave the vocabulary an owner in `Core`. Before that it was two
+    /// `private` INVERSE copies outside `Core`, unreachable from here, and hand-typing the five cases
+    /// into this file would have been a THIRD — #865's defect, and #916's trap 1: a generator whose
+    /// source is hand-maintained just moves the drift upstream and makes it authoritative.
+    ///
+    /// `Wire` is `blockerStateWireName`; `Holds` is a total match. Neither is written twice.
+    val blockerStates: BlockerStateDoc list
+
     /// The verdict union, as prose. Emitted from the same cases the scheduler returns, so the list a
     /// worker reads cannot omit one — which is what fourteen of the scheduler family's issues were.
     ///
