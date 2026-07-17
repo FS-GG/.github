@@ -167,6 +167,30 @@ module Protocol =
           /// invents a remedy for.
           Action: string }
 
+    /// One row of `release`/`reap`'s column precedence — the mapping from an item's state at unclaim
+    /// time to the column it ends in. NOT an `ExitCodeDoc`: there is no exit code and no `EX_*` name.
+    /// The subject is `(explicit --status, live column, recorded column)` → end state, so the row
+    /// carries the CONDITION and the resulting column, plus the two things a worker actually reads back.
+    type ReleaseColumnDoc =
+        { /// The input, stated in PRECEDENCE ORDER — what is true of the explicit `--status`, the live
+          /// column, and the marker's recorded column. The first row whose condition holds wins, exactly
+          /// as `release` evaluates them.
+          Condition: string
+
+          /// The column the item ends in.
+          EndState: string
+
+          /// Whether `release` WRITES the column, or leaves it exactly as it is. The absence of a write
+          /// is not an optimisation: it IS the observable that says the column was nobody's to change
+          /// (#331), and "preserved" and "restored" are indistinguishable to the board's history without
+          /// it.
+          Writes: bool
+
+          /// The line stdout prints — the TELL. `release` exits 0 even when the column write does not
+          /// land, so the exit code cannot confirm a park; the stdout line can, and a worker keys on it
+          /// to tell a preserve from a set from a bare "no column was set" without re-reading the board.
+          Stdout: string }
+
     /// `take`'s exit contract (#585) — the one command in the worker loop, so the code that tells "you
     /// hold it" from the ways it can hand you nothing is the difference between a fan-out and a
     /// double-claim.
@@ -187,6 +211,20 @@ module Protocol =
     /// exhausted budget arrives as `unknown` (4). `Cli.Tests` pins every `Code` here against the
     /// literal the engine returns; `Core.Tests` pins what the rows SAY.
     val landableExitCodes: ExitCodeDoc list
+
+    /// `release`/`reap`'s column precedence (#1099) — the third table in the class #889/#900 proved:
+    /// `takeExitCodes` and `landableExitCodes` were the two facts that were GENERATED, and neither has
+    /// drifted since. This one is `release`'s column semantics, the single most-repaired behaviour in
+    /// the org — SEVEN issues (#331/#354/#531/#867/#911/#914/#921) corrected a hand copy while the
+    /// engine's `unclaimColumn` was, eventually, right — and it was the one restatement #1059 could not
+    /// move into a region, because it is a PRECEDENCE with an end state, not a one-paragraph `Rule`.
+    ///
+    /// Generated, so the `pnext-item` "Abandoning an item" prose that stated this precedence by hand
+    /// cannot drift from `Client.release`'s arms again. The rows are ordered as `release` EVALUATES
+    /// them: explicit `--status` first (it beats everything), then the read-failed fail-closed case,
+    /// then the `unclaimColumn` arms. `ProtocolTests` pins what the rows SAY — that the `--status` row
+    /// leads, and that a preserve writes nothing.
+    val releaseColumns: ReleaseColumnDoc list
 
     val touchSetGrammar: Rule
     val touchSetDeclaration: Rule
@@ -242,6 +280,7 @@ module Protocol =
         | BlockerStates of key: string * BlockerStateDoc list
         | BoardStatuses of key: string * BoardStatusDoc list
         | ExitCodes of key: string * ExitCodeDoc list
+        | ReleaseColumns of key: string * ReleaseColumnDoc list
         /// The snapshot document's SHAPE — a schema string and its top-level keys. The one case carrying
         /// a scalar beside its list: the shape IS schema-plus-keys, and folding the schema in as a
         /// one-member `keys` entry would misdescribe it to every reader of the emitted JSON.

@@ -175,6 +175,7 @@ module ProtocolTests =
         Assert.NotEmpty Protocol.verdicts
         Assert.NotEmpty Protocol.takeExitCodes
         Assert.NotEmpty Protocol.landableExitCodes
+        Assert.NotEmpty Protocol.releaseColumns
 
     /// EVERY `ExitCodeDoc list` the protocol declares, found by REFLECTION rather than by a list
     /// somebody remembers to update.
@@ -287,6 +288,55 @@ module ProtocolTests =
     [<Fact>]
     let ``landable documents no rate-limit code`` () =
         Assert.DoesNotContain(75, Protocol.landableExitCodes |> List.map (fun c -> c.Code))
+
+    // ================================================================================================
+    // `releaseColumns` — `release`/`reap`'s column precedence (#1099), the third table in the class
+    // #889/#900 proved. It is `Core`-side that these pins can live at all: the engine's `unclaimColumn`
+    // is `private` in `Client.fs`, unreachable from a test, and its end-to-end behaviour is exercised by
+    // `tests/coord-engine-parity` (the `release --status Blocked` legs). What CAN drift silently is the
+    // DOC — the rows a worker reads — so these pin what the rows SAY, the way the landable-red/pending
+    // test does. Generating the region only makes the copies AGREE; a test is what keeps them TRUE.
+    // ================================================================================================
+
+    /// Every row carries all four fields — a row with a blank `condition`, `endState` or `stdout` states
+    /// nothing a worker can act on, and a projection would render an empty cell.
+    [<Fact>]
+    let ``every release-column row states a condition, an end state and a stdout tell`` () =
+        for c in Protocol.releaseColumns do
+            Assert.False(System.String.IsNullOrWhiteSpace c.Condition, "a release-column row has no condition")
+            Assert.False(System.String.IsNullOrWhiteSpace c.EndState, $"release-column row '%s{c.Condition}' has no end state")
+            Assert.False(System.String.IsNullOrWhiteSpace c.Stdout, $"release-column row '%s{c.Condition}' has no stdout tell")
+
+    /// THE PRECEDENCE, AND IT IS THE WHOLE POINT (#867/#914). An explicit `--status` beats the recorded
+    /// restore and the `Ready` fallback alike, and the table is ordered as `release` EVALUATES it — so
+    /// the `--status` row must LEAD. #921 is the row getting this backwards: `/pnext-item` called
+    /// `--status` a no-op after #914 made it the highest-precedence input.
+    [<Fact>]
+    let ``the explicit --status row leads the precedence`` () =
+        let lead = List.head Protocol.releaseColumns
+        Assert.True(lead.Condition.Contains "--status", "the first release-column row is not the explicit --status case — the precedence #867/#914 restored is stated out of order")
+        Assert.True(lead.Writes, "the explicit --status row does not write the column it names")
+
+    /// THE #331 OBSERVABLE. A PRESERVE writes NOTHING — the absence of the write is what tells
+    /// "preserved" from "restored" in the board's history, and a row that says it preserves a column
+    /// while claiming to write it would document the very defect #911 fixed. So no row may both name a
+    /// bare `released <ref>`/`column left at`/`no column to reset` stdout AND set `writes = true`.
+    [<Fact>]
+    let ``a row whose stdout reports no column write is a preserve, not a write`` () =
+        for c in Protocol.releaseColumns do
+            let namesASetColumn = c.Stdout.Contains "→"
+            if not namesASetColumn then
+                Assert.False(
+                    c.Writes,
+                    $"release-column row '%s{c.Stdout}' claims to WRITE the board but its stdout names no column set (`→`) — a preserve/no-op writes nothing (#331/#911)")
+
+    /// AT LEAST ONE PRESERVE ROW, or the table has lost #331 entirely: the whole reason `release` reads
+    /// the LIVE column is to preserve one a worker chose during the lease rather than revert it.
+    [<Fact>]
+    let ``the precedence documents at least one preserve`` () =
+        Assert.True(
+            Protocol.releaseColumns |> List.exists (fun c -> not c.Writes),
+            "no release-column row preserves — the table has lost #331, the reason release reads the live column at all")
 
     // ================================================================================================
     // `blockerStates` — the wire vocabulary `check-board` §1 restated by hand (#889).
@@ -540,6 +590,7 @@ module ProtocolTests =
         | Protocol.BlockerStates(key, _) -> key
         | Protocol.BoardStatuses(key, _) -> key
         | Protocol.ExitCodes(key, _) -> key
+        | Protocol.ReleaseColumns(key, _) -> key
         | Protocol.SnapshotShape(key, _, _) -> key
 
     /// How many facts a section states. `0` is the interesting answer — see the emptiness gate below.
@@ -550,6 +601,7 @@ module ProtocolTests =
         | Protocol.BlockerStates(_, bs) -> List.length bs
         | Protocol.BoardStatuses(_, ss) -> List.length ss
         | Protocol.ExitCodes(_, cs) -> List.length cs
+        | Protocol.ReleaseColumns(_, cs) -> List.length cs
         // The KEYS, not the schema: a shape stating a schema and no keys is exactly the vacuity the
         // emptiness gate below exists to catch, and counting the scalar would hide it behind a `1`.
         | Protocol.SnapshotShape(_, _, keys) -> List.length keys
@@ -588,11 +640,12 @@ module ProtocolTests =
               "boardStatuses"
               "takeExitCodes"
               "landableExitCodes"
+              "releaseColumns"
               "snapshotDocument" ],
             keys
         )
 
-        Assert.Equal("fsgg.coord.protocol/9", Protocol.factsSchema)
+        Assert.Equal("fsgg.coord.protocol/10", Protocol.factsSchema)
 
     /// THE FLOOR (#266, #436), and the vacuity every gate in this file refuses: an inventory that stated
     /// nothing would make the fold emit `{"schema": …}` and nothing else, and every projection would
