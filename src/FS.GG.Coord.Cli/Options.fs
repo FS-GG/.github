@@ -177,7 +177,7 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              it (#636 — the flag has always worked here; only this line
                                              was missing, so the remedy for a Backlog-starved queue was
                                              undiscoverable from the tool that refused)
-  release <ref> [--worker W] [--force]       drop the lock, restoring the column it overwrote;
+  release <ref> [--worker W]                 drop the lock, restoring the column it overwrote;
           [--status S]                       --status lands it in S instead (#867: name the column you
                                              mean, e.g. `--status Blocked`, or it goes back to Ready)
   heartbeat <ref> [--worker W]               renew the lease
@@ -237,16 +237,195 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """
 
-    /// `--status` is parsed GLOBALLY — the parser is one flat pass, so every command accepts it — and only
-    /// `ready` and `release` read it. Nothing closed that gap, which is half of why `release --status
-    /// Blocked` could be accepted, ignored, and reported as success for the whole life of the port (#867):
-    /// `Options.fs`'s `unknown argument` refusal, the thing that would have caught it instantly, never fires
-    /// on a flag the parser knows.
+    /// THE FLAG SURFACE (#991) — every global flag, and the commands that READ it.
     ///
-    /// A flag ACCEPTED and IGNORED is worse than one refused: the caller is told, by a green exit, that a
-    /// thing happened which did not. So the accepting commands are named here, and every other command
-    /// refuses the flag rather than swallowing it.
-    let private statusCommands = [ Ready; Release ]
+    /// The parser is one flat pass, so EVERY command accepts EVERY flag, and `unknown argument` — the
+    /// refusal that catches a typo instantly — never fires on a flag the parser knows. A flag accepted and
+    /// ignored is worse than one refused: the caller is told, by a green exit, that a thing happened which
+    /// did not. `OptionsTests` calls that THE RESIDUE RULE and states it generally.
+    ///
+    /// Enforcement used to be one `match` arm on one field (`o.Status`, added by #867 for `release --status`).
+    /// The rule was general; its enforcement was a special case — so every OTHER flag stayed unguarded, and
+    /// every NEW flag was born unguarded. Measured when this replaced it: 38 flags, one of them checked.
+    /// `release --force` was documented in the usage block above and read by NOTHING — #867's exact defect,
+    /// in the very command #867 repaired.
+    ///
+    /// So the table is a TOTAL function over a closed `Flag`. That is the whole repair, and it is structural
+    /// rather than diligent: this project sets `TreatWarningsAsErrors`, so FS0025 (incomplete match) is a
+    /// BUILD ERROR — a new `Flag` case with no `scopeOf` row does not warn, it fails the build. Instance five
+    /// is unwritable rather than merely discouraged. `Global` is a real answer — a flag every command honours
+    /// — but it is an answer somebody gives, not the silence a missing row used to be.
+    type private Flag =
+        | FSnapshot
+        | FRepo
+        | FWorker
+        | FEvidence
+        | FPartial
+        | FTo
+        | FMessage
+        | FPaths
+        | FPr
+        | FWarn
+        | FIssue
+        | FStatus
+        | FAll
+        | FBatch
+        | FStrict
+        | FActive
+        | FApply
+        | FPeek
+        | FDryRun
+        | FWait
+        | FTries
+        | FInterval
+        | FRequire
+        | FSha
+        | FLabel
+        | FState
+        | FFresh
+        | FIncludeBacklog
+        | FForce
+        | FMint
+        | FFlip
+        | FLimit
+
+    type private FlagScope =
+        /// Every command honours it. Named deliberately — the flags here are the ones whose readers really
+        /// are the whole surface (`--repo`), or whose "was it given?" cannot be observed at all because the
+        /// field has a non-optional default (`--json`/`--text` land in `Render`, `--lease` in `LeaseMinutes`):
+        /// an unset flag is indistinguishable from its default, so there is nothing here to refuse.
+        | Global
+        /// Only these commands READ it. Every other command refuses it rather than swallowing it.
+        | Only of Command list
+
+    /// Which commands read each flag. Derived by tracing each `opts.<Field>` read to its handler, NOT from
+    /// the usage prose — the two disagreed, and where they disagreed the prose was wrong (`release --force`).
+    let private scopeOf (f: Flag) : FlagScope =
+        match f with
+        | FRepo -> Global
+        | FWorker -> Global
+        | FSnapshot -> Only [ Decide; LanesView ]
+
+        // `--status`: #867's original row, now one of many rather than the only one.
+        | FStatus -> Only [ Ready; Release ]
+
+        | FMint -> Only [ WhoAmI ]
+        | FAll -> Only [ Ready ]
+        | FActive -> Only [ Overlap ]
+        | FApply -> Only [ Reap ]
+        | FPeek -> Only [ Inbox ]
+        | FDryRun -> Only [ Flush ]
+        | FStrict -> Only [ LintCmd ]
+        | FBatch -> Only [ SetField ]
+        | FPaths -> Only [ Widen ]
+        | FTo -> Only [ Say ]
+        | FMessage -> Only [ Say ]
+        | FEvidence -> Only [ DoneCmd ]
+        | FFlip -> Only [ DoneCmd ]
+        | FPartial -> Only [ DoneCmd ]
+        | FPr -> Only [ DoneCmd; VerifyPaths ]
+        | FIssue -> Only [ VerifyPaths ]
+        | FWarn -> Only [ VerifyPaths ]
+        | FWait -> Only [ Landable ]
+        | FTries -> Only [ Landable ]
+        | FInterval -> Only [ Landable ]
+        | FRequire -> Only [ Landable ]
+        | FSha -> Only [ Landable ]
+        | FLabel -> Only [ Issues ]
+        | FState -> Only [ Issues ]
+
+        // `--force` bypasses the #516 one-item-per-worker check, and `claim` is the ONLY reader. The usage
+        // block advertised `release [--force]` for the whole life of the port and `release` never read it —
+        // a documented no-op, found by building this table (#991). The usage line lost it; refusing it here
+        // breaks no working behaviour, because there was none to break.
+        | FForce -> Only [ Claim ]
+
+        // Scheduling reads take their freshness from a `Cache.ReadIntent`, not from this flag, so
+        // `batch --fresh` / `next --fresh` / `take --fresh` never did anything. Only these three read it.
+        | FFresh -> Only [ Scan; Bootstrap; Issues ]
+
+        // `next` and `take` OVERRIDE the cap to 1 (they are `batch` capped at one), so `-n` is dead on both.
+        | FLimit -> Only [ Scan; BatchCmd ]
+
+        | FIncludeBacklog -> Only [ Scan; Next; BatchCmd; Take ]
+
+    /// The flags actually GIVEN, with the spelling to name in a refusal. A flag whose field has a
+    /// non-optional default (`Render`, `LeaseMinutes`) cannot appear: "given" and "defaulted" are the same
+    /// state, so it is `Global` above and there is nothing to detect.
+    let private flagsGiven (o: Options) : (Flag * string) list =
+        [ if o.SnapshotFile.IsSome then FSnapshot, "--snapshot"
+          if o.Repo.IsSome then FRepo, "--repo"
+          if o.Worker.IsSome then FWorker, "--worker"
+          if o.Evidence.IsSome then FEvidence, "--evidence"
+          if o.Partial.IsSome then FPartial, "--partial"
+          if o.ToWorker.IsSome then FTo, "--to"
+          if o.Message.IsSome then FMessage, "--message"
+          if not (List.isEmpty o.Paths) then FPaths, "--paths"
+          if o.Pr.IsSome then FPr, "--pr"
+          if o.Warn then FWarn, "--warn"
+          if o.Issue.IsSome then FIssue, "--issue"
+          if o.Status.IsSome then FStatus, "--status"
+          if o.All then FAll, "--all"
+          if o.Batch then FBatch, "--batch"
+          if o.Strict then FStrict, "--strict"
+          if o.Active then FActive, "--active"
+          if o.Apply then FApply, "--apply"
+          if o.Peek then FPeek, "--peek"
+          if o.DryRun then FDryRun, "--dry-run"
+          if o.Wait then FWait, "--wait"
+          if o.Tries.IsSome then FTries, "--tries"
+          if o.Interval.IsSome then FInterval, "--interval"
+          if not (List.isEmpty o.Require) then FRequire, "--require"
+          if o.Sha.IsSome then FSha, "--sha"
+          if o.Label.IsSome then FLabel, "--label"
+          if o.IssueState.IsSome then FState, "--state"
+          if o.Fresh then FFresh, "--fresh"
+          if o.AllowBacklog then FIncludeBacklog, "--include-backlog"
+          if o.Force then FForce, "--force"
+          if o.Mint then FMint, "--mint"
+          if o.Flip then FFlip, "--flip"
+          if o.Limit.IsSome then FLimit, "-n" ]
+
+    /// The argv spelling of a command — the word a refusal must name, because it is the word the caller
+    /// typed. Total over `Command`, so a new verb cannot be named `%A` by accident.
+    let private commandName (c: Command) : string =
+        match c with
+        | Decide -> "decide"
+        | Scan -> "scan"
+        | LanesView -> "lanes"
+        | Facts -> "facts"
+        | WhoAmI -> "whoami"
+        | Budget -> "budget"
+        | Next -> "next"
+        | BatchCmd -> "batch"
+        | Ready -> "ready"
+        | Who -> "who"
+        | Reap -> "reap"
+        | Claim -> "claim"
+        | Adopt -> "adopt"
+        | Landable -> "landable"
+        | Take -> "take"
+        | Release -> "release"
+        | Heartbeat -> "heartbeat"
+        | SetField -> "set-field"
+        | Child -> "child"
+        | Widen -> "widen"
+        | Overlap -> "overlap"
+        | Say -> "say"
+        | Inbox -> "inbox"
+        | DoneCmd -> "done"
+        | VerifyPaths -> "verify-paths"
+        | Bootstrap -> "bootstrap"
+        | BoardCmd -> "board"
+        | FieldId -> "field-id"
+        | OptionId -> "option-id"
+        | ItemId -> "item-id"
+        | Add -> "add"
+        | Flush -> "flush"
+        | LintCmd -> "lint"
+        | Issues -> "issues"
+        | Help -> "--help"
+        | Version -> "--version"
 
     /// A `--repo` token → the repo NAME board rows carry. A registry short-id maps, an `owner/repo` keeps its
     /// repo part, a literal name passes through — so `--repo sdd`, `--repo FS-GG/FS.GG.SDD` and
@@ -330,11 +509,24 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         /// command cannot quietly re-open the swallow. (`--help`/`--version` short-circuit before `flags`
         /// and carry no flags to check.)
         let validate (o: Options) : Result<Options, string> =
-            match o.Status with
-            | Some _ when not (List.contains o.Command statusCommands) ->
+            let residue =
+                flagsGiven o
+                |> List.tryPick (fun (f, spelling) ->
+                    match scopeOf f with
+                    | Global -> None
+                    | Only readers when List.contains o.Command readers -> None
+                    | Only readers -> Some(spelling, readers))
+
+            match residue with
+            | Some(spelling, readers) ->
+                // NAME THE READERS, not just the refusal. The caller reached for this flag because they
+                // wanted something; the useful answer is where that something lives, which is why #867's
+                // original message named `ready` and `release` rather than only saying no.
+                let who = readers |> List.map (fun c -> $"`%s{commandName c}`") |> String.concat ", "
+
                 Error
-                    "--status is not a flag of this command — only `ready` (filter to a column) and `release` (name the column to land in) read it"
-            | _ -> normalizeSay o
+                    $"%s{spelling} is not a flag of `%s{commandName o.Command}` — only %s{who} read it. It would have been ACCEPTED and IGNORED before #991; this refusal is the flag telling you the truth, not a new restriction."
+            | None -> normalizeSay o
 
         let rec flags acc rest =
             match rest with
