@@ -516,6 +516,57 @@ let ``rewrite APPENDS when the body declared nothing - #496's omission is repair
     Assert.Contains("An issue nobody gave a touch-set.", result.Body)
     Assert.Contains("Paths: src/new/**", result.Body)
 
+// ---- #972: what `widen` WRITES, `take` must be able to READ -----------------------------------------
+
+/// The declaration `rewrite` produced, as the SCHEDULER sees it — `TouchSet.parse` of the written body.
+///
+/// THIS IS THE ASSERTION THE SUITE WAS MISSING, and its absence is why three fence trackers drifted for
+/// three months. Every test above asserts `Contains("Paths: …")` on the rewritten string, and a substring
+/// is present whether or not it is inside a code block — so a declaration written INTO a fence passes them
+/// all. `rewrite` and `TouchSet.parse` are the write and the read of one fact, and the only honest question
+/// about them is whether they agree (#972, #485).
+let private asScheduled (body: string) (tokens: string list) =
+    let v = validate tokens |> Result.defaultWith failwith
+    FS.GG.Coord.TouchSet.parse (rewrite body v).Body
+
+[<Fact>]
+let ``#972 a declaration appended below an UNTERMINATED fence is one the scheduler can see`` () =
+    // MEASURED, before the fix: `widen` returned success and `TouchSet.parse` returned `Undeclared`. The
+    // append landed inside the code block and the closer was written UNDERNEATH it — the close was there,
+    // with a comment naming this exact hazard ("including, on the next pass, the declaration we just
+    // wrote"), and it ran in the wrong order. The item then sat `Ready`, apparently declared, and never
+    // scheduled; nothing anywhere reported a failure.
+    match asScheduled "Some prose\n\n```\nunterminated code" [ "src/new/**" ] with
+    | Declared tokens -> Assert.Equal<PathToken list>([ Matchable "src/new/**" ], tokens)
+    | other -> failwithf "the scheduler cannot see the declaration widen reported writing: %A" other
+
+[<Fact>]
+let ``#972 an unterminated TILDE fence is closed with a tilde marker, not a backtick one`` () =
+    // `rewrite` appended a literal "```" whatever the opener was, so a `~~~` fence stayed open and the
+    // appended declaration stayed inside it.
+    match asScheduled "Some prose\n\n~~~\nunterminated code" [ "src/new/**" ] with
+    | Declared tokens -> Assert.Equal<PathToken list>([ Matchable "src/new/**" ], tokens)
+    | other -> failwithf "a tilde fence was not repaired: %A" other
+
+[<Fact>]
+let ``#972 rewrite and TouchSet agree about a fence indented four spaces`` () =
+    // `rewrite` used `^\s*` and called this a fence; `TouchSet` used `^ {0,3}` and did not. One body, two
+    // rules, and `widen` wrote under one while `take` scheduled under the other. Four spaces is an indented
+    // code block, so the `Paths:` line below is ordinary text and is the one that gets replaced.
+    match asScheduled "    ```\nPaths: src/old/**" [ "src/new/**" ] with
+    | Declared tokens -> Assert.Equal<PathToken list>([ Matchable "src/new/**" ], tokens)
+    | other -> failwithf "rewrite and TouchSet still disagree: %A" other
+
+[<Fact>]
+let ``#972 a quoted declaration stays quoted, and the real one is what round-trips`` () =
+    // The #277 rule, asserted through the READER rather than by substring: the fenced example survives
+    // untouched AND the scheduler reads only the real declaration.
+    let body = "Example:\n\n```\nPaths: src/example/**\n```\n\nPaths: src/real/**\n"
+
+    match asScheduled body [ "src/new/**" ] with
+    | Declared tokens -> Assert.Equal<PathToken list>([ Matchable "src/new/**" ], tokens)
+    | other -> failwithf "expected the real declaration to round-trip: %A" other
+
 // ---- #706: widen cannot be called without the lock --------------------------------------------------
 
 [<Fact>]

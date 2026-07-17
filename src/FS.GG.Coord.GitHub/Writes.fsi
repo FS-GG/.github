@@ -206,6 +206,21 @@ module Writes =
 
     /// Rewrite an issue body's `Paths:` declaration. Fence-aware — a `Paths:` inside a fenced code block is
     /// PROSE, not a declaration, and rewriting it would corrupt an example into a reservation.
+    ///
+    /// WHERE THE FENCES ARE IS `Markdown`'s ANSWER, NOT THIS MODULE'S (#972). What `rewrite` WRITES,
+    /// `TouchSet.parse` must be able to READ; they are the write and the read of one fact, so they cannot
+    /// hold two fence rules between them. They did: this module used `^\s*` and `TouchSet` used `^ {0,3}`,
+    /// so `widen` wrote under one rule and `take` scheduled under the other.
+    ///
+    /// AN UNTERMINATED FENCE IN `body` IS CLOSED, BEFORE ANY APPEND. An unterminated fence runs to the end
+    /// of the body, so a declaration appended below one lands INSIDE the code block and declares nothing.
+    /// Measured before #972: `widen` returned success and `TouchSet.parse` of the body it wrote returned
+    /// `Undeclared` — the item sat `Ready`, apparently declared, and never scheduled. The closer matches the
+    /// opener's spelling and length, because a `~~~~` fence is not closed by "```".
+    ///
+    /// This repair is a WRITE-side normalisation layered on the shared read, and deliberately not a second
+    /// reading of it: a reader must leave an unterminated fence alone (the author is looking at a code
+    /// block), while a writer that is about to append below one has to make the body well-formed first.
     val rewrite: body: string -> paths: Validated -> Rewritten
 
     /// WIDEN A TOUCH-SET. Takes the `Held`, so #706 is unexpressible.

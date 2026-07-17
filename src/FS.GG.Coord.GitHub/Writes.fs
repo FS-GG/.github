@@ -401,27 +401,19 @@ module Writes =
     /// A `Paths:` line, at the start of a line, with up to three leading spaces (CommonMark's limit).
     let private pathsLine = Regex(@"^ {0,3}[Pp]aths:", RegexOptions.Compiled)
 
-    let private fenceLine = Regex(@"^\s*(```|~~~)", RegexOptions.Compiled)
-
     let rewrite (body: string) (paths: Validated) : Rewritten =
         let declaration = "Paths: " + String.Join(" ", paths.Tokens)
 
-        let lines =
-            body.Replace("\r\n", "\n").Split('\n') |> List.ofArray
-
-        // FENCE-AWARE. A `Paths:` inside a fenced code block is PROSE — an example, a quoted marker, a
-        // snippet of somebody else's issue — and rewriting it would corrupt documentation into a
-        // reservation. The bash client learned this the hard way, and it is why the fence state is tracked
-        // rather than the line simply grepped for.
-        let mutable inFence = false
+        // FENCE-AWARE, and the fence rule is ASKED, not decided (#972). A `Paths:` inside a fenced code
+        // block is PROSE — an example, a quoted marker, a snippet of somebody else's issue — and rewriting
+        // it would corrupt documentation into a reservation. This file used to carry its own `^\s*` toggle
+        // while `TouchSet.parse` — the reader that decides whether the declaration we write is SEEN — used
+        // `^ {0,3}`. Two rules over one body: `widen` wrote under one and `take` scheduled under the other.
         let mutable replaced = false
         let out = ResizeArray<string>()
 
-        for line in lines do
-            if fenceLine.IsMatch line then
-                inFence <- not inFence
-                out.Add line
-            elif not inFence && pathsLine.IsMatch line then
+        for line, kind in Markdown.classify body do
+            if kind = Markdown.Text && pathsLine.IsMatch line then
                 // THE FIRST DECLARATION IS REPLACED; THE REST ARE DROPPED. Two `Paths:` lines are an
                 // ambiguity, and an ambiguity in a reservation is two workers each reading the one that
                 // suits them.
@@ -431,6 +423,23 @@ module Writes =
             else
                 out.Add line
 
+        // AN UNTERMINATED FENCE IS CLOSED, AND IT IS CLOSED *BEFORE* ANYTHING IS APPENDED BELOW IT.
+        //
+        // The order is the whole repair, and getting it wrong is not a style point — it silently voided the
+        // write (#972). This close has always been here, with a comment naming the exact hazard: "a body
+        // whose fence we opened and never shut would swallow every heading below it — including, on the
+        // next pass, the declaration we just wrote." It ran AFTER the append, so the declaration landed
+        // INSIDE the code block and the closer went underneath it. Measured, on a body ending in an
+        // unterminated fence: `widen` returned success, and `TouchSet.parse` of the body it wrote returned
+        // `Undeclared`. The scheduler could not see the touch-set, the item never started, and nothing
+        // anywhere reported a failure. The comment described the bug it was standing next to.
+        //
+        // The closer is the OPENER's, too: a `~~~~` fence is closed by `~~~~`. Appending a literal "```"
+        // to a tilde fence — which is what this did — repairs nothing and adds a line of noise.
+        match Markdown.unterminatedFenceCloser body with
+        | Some closer -> out.Add closer
+        | None -> ()
+
         if not replaced then
             // No declaration to replace — append one. An issue that never declared a touch-set is exactly
             // the item `widen` exists to repair (#496: an OMISSION, not a decision).
@@ -438,11 +447,6 @@ module Writes =
                 out.Add ""
 
             out.Add declaration
-
-        // AN UNTERMINATED FENCE IS CLOSED. A body whose fence we opened and never shut would swallow every
-        // heading below it — including, on the next pass, the declaration we just wrote.
-        if inFence then
-            out.Add "```"
 
         Rewritten(String.Join("\n", out))
 

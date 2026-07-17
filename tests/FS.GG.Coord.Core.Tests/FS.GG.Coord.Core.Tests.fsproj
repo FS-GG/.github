@@ -18,6 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="MarkdownTests.fs" />
     <Compile Include="TouchSetTests.fs" />
     <Compile Include="EpicBodyTests.fs" />
     <Compile Include="CoversTests.fs" />
