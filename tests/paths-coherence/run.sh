@@ -659,6 +659,38 @@ wf "$RC6/.github/workflows/w.yml" '      - "scripts/check-x.py"' '      - "scrip
 expect "a PATHS_SUBJECT the reader cannot fold is NO VERDICT, never a guess" \
   3 "not a literal, a module-level constant" "$RC6"
 
+# ONE BINDING, AT MODULE LEVEL, OR NO VERDICT. Both shapes below were read WRONG by the first draft,
+# which scanned only `tree.body` and took the first hit — and each fails in the direction this reader
+# exists to prevent.
+#
+# Bound twice: the reader took the first and Python takes the last, so the gate would have checked a
+# surface the script does not walk — confidently, which is the one thing it may not do.
+RC6b="$(root "$WORK/subject-rebound")"
+gate "$RC6b" "scripts/check-x.py" '("docs",)' 'X = 1'
+printf 'PATHS_SUBJECT = ("src",)\n' >> "$RC6b/scripts/check-x.py"
+mkdir -p "$RC6b/docs" "$RC6b/src"
+wf "$RC6b/.github/workflows/w.yml" '      - "docs/**"
+      - "scripts/check-x.py"' '      - "docs/**"
+      - "scripts/check-x.py"'
+expect "PATHS_SUBJECT bound TWICE is refused — the first is not the value the script uses" \
+  3 "is bound 2 time(s)" "$RC6b"
+
+# Bound conditionally: invisible to a body-only scan, so it read as "declares nothing" and rule (c)
+# SILENTLY stopped applying. A skip is how a coherence gate fails open (#266).
+RC6c="$(root "$WORK/subject-conditional")"
+mkdir -p "$RC6c/scripts" "$RC6c/docs" "$RC6c/src"
+{ echo '#!/usr/bin/env python3'
+  echo 'import os'
+  echo 'if os.environ.get("X"):'
+  echo '    PATHS_SUBJECT = ("docs",)'
+  echo 'else:'
+  echo '    PATHS_SUBJECT = ("src",)'; } > "$RC6c/scripts/check-x.py"
+wf "$RC6c/.github/workflows/w.yml" '      - "docs/**"
+      - "scripts/check-x.py"' '      - "docs/**"
+      - "scripts/check-x.py"'
+expect "a CONDITIONAL PATHS_SUBJECT is refused, never read as 'declares nothing'" \
+  3 "0 of them at module level" "$RC6c"
+
 RC7="$(root "$WORK/subject-forward-ref")"
 gate "$RC7" "scripts/check-x.py" 'LATER'
 echo 'LATER = ("docs",)' >> "$RC7/scripts/check-x.py"   # defined BELOW the declaration

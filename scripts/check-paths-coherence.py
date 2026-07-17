@@ -498,27 +498,59 @@ def declared_subject(path: str, where: str) -> tuple[str, ...] | None:
     except (OSError, SyntaxError) as e:
         raise GateError(f"{where}: names {path!r}, which will not parse as Python — {e}") from e
 
-    # Module-level literal bindings, in source order: a name is only usable once bound, so a
-    # PATHS_SUBJECT referring to a constant defined below it is unresolvable and refused rather than
-    # silently read as empty.
+    def binds(node: ast.AST) -> bool:
+        return isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "PATHS_SUBJECT" for t in node.targets
+        )
+
+    # EVERY binding of the name, ANYWHERE in the file — `ast.walk`, not `tree.body`. Both of the
+    # shapes this refuses were measured against the first draft, which scanned only module level and
+    # took the first hit:
+    #
+    #   PATHS_SUBJECT = A ; PATHS_SUBJECT = B   -> the gate read A. Python uses B. The gate would
+    #                                              have checked a surface the script does not walk,
+    #                                              confidently, which is the one thing this reader
+    #                                              may not do.
+    #   if …: PATHS_SUBJECT = A else: … = B     -> invisible to a body-only scan, so it read as
+    #                                              "declares nothing" and rule (c) SILENTLY stopped
+    #                                              applying — a skip, and a skip is how a coherence
+    #                                              gate fails open (#266).
+    #
+    # One binding, at module level, or no verdict. There is no third answer worth having.
+    decls = [n for n in ast.walk(tree) if binds(n)]
+    if not decls:
+        return None
+    top = [n for n in tree.body if binds(n)]
+    if len(decls) != 1 or len(top) != 1:
+        raise GateError(
+            f"{path}: PATHS_SUBJECT is bound {len(decls)} time(s), {len(top)} of them at module "
+            f"level. This gate reads the declaration statically, so it must be assigned exactly "
+            f"once, at module level — anything else and the value it reads is not the value the "
+            f"script uses (#266)."
+        )
+    target: ast.expr = top[0].value
+
+    # Module-level literal bindings ABOVE the declaration, in source order: a name is only usable
+    # once bound, so a PATHS_SUBJECT referring to a constant defined below it is unresolvable and
+    # refused rather than silently read as empty.
     env: dict[str, object] = {}
-    target: ast.expr | None = None
     for node in tree.body:
+        if node is top[0]:
+            break
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
         name = node.targets[0]
         if not isinstance(name, ast.Name):
             continue
-        if name.id == "PATHS_SUBJECT":
-            target = node.value
-            break
         try:
+            # Broad on purpose: literal_eval raises ValueError for a non-literal, and TypeError or
+            # SyntaxError for shapes it cannot even attempt. None of them is interesting — this loop
+            # is asking "is this a literal?", and every no is the same no. Letting one escape would
+            # surface as `the gate crashed` against a script whose only sin is an ordinary
+            # `X = re.compile(…)`.
             env[name.id] = ast.literal_eval(node.value)
-        except ValueError:
-            continue  # not a literal; it cannot be part of a subject anyway
-
-    if target is None:
-        return None
+        except (ValueError, TypeError, SyntaxError):
+            continue
 
     def fold(node: ast.expr) -> object:
         if isinstance(node, ast.Name):
