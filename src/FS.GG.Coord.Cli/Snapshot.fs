@@ -53,7 +53,7 @@ module Snapshot =
         | other ->
             err
                 path
-                $"unknown board Status '%s{other}'. The engine refuses a column it was never taught, rather than coercing it to NoStatus and quietly reporting the item unschedulable — a board-schema change must be LOUD (run: fsgg-coord bootstrap --refresh)"
+                $"unknown board Status '%s{other}'. The engine refuses a column it was never taught, rather than coercing it to NoStatus and quietly reporting the item unschedulable — a board-schema change must be LOUD (run: scripts/fsgg-coord bootstrap --refresh)"
 
     let private issueState (path: string) (s: string) : Result<IssueState, Error list> =
         match s.Trim().ToUpperInvariant() with

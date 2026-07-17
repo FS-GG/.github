@@ -726,7 +726,7 @@ module Done =
                         current,
                         [ $"the body states %d{List.length undelegated} acceptance line(s) that delegate to NO child, so nothing in the sub-issue graph can ever discharge them and closing this parent would close them unread (#965):"
                           yield! undelegated
-                          "a parent's acceptance IS its children: make each line a child (`fsgg-coord child <parent> <child>`), or drop it from the body if it is not acceptance." ]
+                          "a parent's acceptance IS its children: make each line a child (`scripts/fsgg-coord child <parent> <child>`), or drop it from the body if it is not acceptance." ]
                     )
                 )
 
@@ -756,7 +756,7 @@ module Done =
                         current,
                         [ "this parent's body states NO task-line acceptance, so there is nothing in it to check against the sub-issue graph — and closing it on the strength of that graph would close an unread body (#1003)."
                           "a criterion delegated to NOBODY is what closed #561: its four children were closed, its graph was whole, and its step 3 was a sentence nobody was given (#965)."
-                          "an epic's acceptance IS its children: state each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `fsgg-coord child <parent> <child>`." ]
+                          "an epic's acceptance IS its children: state each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `scripts/fsgg-coord child <parent> <child>`." ]
                     )
                 )
 
@@ -782,7 +782,7 @@ module Done =
                 results.Add(
                     ParentLeftOpen(
                         current,
-                        [ $"the epic body declares %d{List.length unlinked} child(ren) the sub-issue graph does not contain: %s{named}. Link them with `fsgg-coord child`, or drop them from the body, before it can roll up (#325)." ]
+                        [ $"the epic body declares %d{List.length unlinked} child(ren) the sub-issue graph does not contain: %s{named}. Link them with `scripts/fsgg-coord child`, or drop them from the body, before it can roll up (#325)." ]
                     )
                 )
 

@@ -7,10 +7,10 @@ namespace FS.GG.Coord.GitHub
 /// > `FS.GG.Coord.GitHub` … is required only for the Phase 3 flip, **when the engine must fetch its own
 /// > state**.
 ///
-/// Until now it could not. `fsgg-coord-engine decide` reads a snapshot on stdin and the bash client is the
+/// Until now it could not. `scripts/fsgg-coord decide` reads a snapshot on stdin and the bash client is the
 /// only thing that can produce one — so the typed engine has been a decision procedure with no way to
 /// observe the thing it decides about. `scan` closes that loop: the engine reads the board itself and emits
-/// the very document `decide` consumes, so `fsgg-coord-engine scan | fsgg-coord-engine decide` is a
+/// the very document `decide` consumes, so `scripts/fsgg-coord scan | scripts/fsgg-coord decide` is a
 /// complete, self-sufficient scheduling pass with no bash anywhere in it.
 ///
 /// **THE COST MODEL IS THE DESIGN.** Projects v2 has no server-side item filter, so "list the board" is

@@ -391,7 +391,7 @@ module BatchTests =
         Assert.True(anyLine "soonest: lease EXPIRED — reapable" banner, $"expected the EXPIRED soonest line, got %A{banner}")
 
         Assert.True(
-            anyLine "1 of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo FS.GG.SDD --apply" banner,
+            anyLine "1 of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo FS.GG.SDD --apply" banner,
             $"expected the reap advice for the one expired lease, got %A{banner}"
         )
 

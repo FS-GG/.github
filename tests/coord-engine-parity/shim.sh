@@ -262,6 +262,102 @@ fi
 rm -rf "$RCV" "$GLOBALDIR"
 rm -rf "$FIX"
 
+# ---- 5. TIER 2b — THE SHARED CHECKOUT'S BUILD, FROM AN ITEM WORKTREE (#931) -----------------------
+# `/pnext-item` §2 MANDATES an item worktree, and a fresh worktree has no `bin/`. So for EVERY worker
+# following the recipe, tier 2a missed, tier 3 found no global tool, tier 4 found no manifest, and the
+# shim died 69 — while the tool printed 25 commands into exactly that. Both spellings were broken:
+# `fsgg-coord-engine <verb>` is 127, `scripts/fsgg-coord <verb>` was 69. These legs pin the repair.
+#
+# THE FIXTURE IS A REAL WORKTREE, not a directory that resembles one. `--git-dir` vs `--git-common-dir`
+# is the shim's own question, and only `git worktree add` makes them diverge — a hand-built lookalike
+# would answer it wrong and pass for the wrong reason.
+wtfixture() {  # $1 = dir, $2 = marker. A COMMITTED source-build checkout, engine NEWER than source.
+  mkdir -p "$1/src/FS.GG.Coord.Cli/bin/Release/net10.0" "$1/src/FS.GG.Coord.Core"
+  printf '// source\n' >"$1/$FIXSRC"
+  # `bin/` is IGNORED, exactly as the real repo ignores it — and it is what makes this fixture test the
+  # right thing. A committed `bin/` would be checked out INTO the worktree, so tier 2a would resolve
+  # there and tier 2b would never be reached: the leg would pass while asserting nothing.
+  printf 'bin/\nobj/\n' >"$1/.gitignore"
+  ( cd "$1" && git init -q . \
+      && git add -A && git -c user.email=t@t -c user.name=t commit -qm init ) >/dev/null 2>&1
+  local bin="$1/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+  printf '#!/usr/bin/env bash\necho "%s RAN: $*"\n' "$2" >"$bin"; chmod +x "$bin"
+  : >"$bin.dll"
+  touch -d '3 hours ago' "$1/$FIXSRC"
+  touch -d '2 hours ago' "$bin" "$bin.dll"
+}
+
+SH="$(mktemp -d)/shared"; wtfixture "$SH" "SHARED ENGINE"
+WT="$(mktemp -d)/wt"; ( cd "$SH" && git worktree add -q --detach "$WT" ) >/dev/null 2>&1
+
+# THE 69 IS GONE: a worktree with no build of its own resolves the SHARED checkout's engine.
+out="$(cd "$WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'SHARED ENGINE RAN'; then
+  ok "tier 2b: an item worktree with NO build resolves the SHARED checkout's engine — not exit 69 (#931)"
+else
+  bad "tier 2b: a worktree must fall back to the shared build" "rc=$rc out=$out"
+fi
+
+# NO FALSE STALE — THE LEG THAT MATTERS, and the one an obvious implementation fails. `git worktree add`
+# writes every file at checkout time, so the worktree's `.fs` mtimes are NEWER than any shared build BY
+# CONSTRUCTION. A guard comparing the CALLER's src/ against the SHARED build therefore reports STALE on
+# every fresh worktree — and `stale_guard` REFUSES board writes, so it would halt the whole fleet the
+# moment it started working: fail-closed, fleet-wide, hiding inside an obviously-correct-looking line.
+# The guards must measure the SHARED tree's own src/ ↔ build pair. Asserted with a BOARD WRITE, because
+# a read would warn where a write refuses, and the refusal is the damage.
+out="$(cd "$WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'SHARED ENGINE RAN' \
+   && ! printf '%s' "$out" | grep -qi 'stale'; then
+  ok "tier 2b: a FRESH worktree is not STALE — the guards measure the shared tree's own src/↔build, so board writes still land (#931)"
+else
+  bad "tier 2b: a fresh worktree must not false-STALE a board write — that halts the fleet" "rc=$rc out=$out"
+fi
+
+# ...AND THE SHARED TREE'S REAL STALENESS STILL BITES. The mirror of the leg above: measuring the shared
+# pair must not mean measuring nothing. Edit the SHARED source after its build, and a board write driven
+# from the worktree is refused — the engine the worktree is about to run really is behind its source.
+touch -d '1 hour ago' "$SH/$FIXSRC"
+out="$(cd "$WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" release "$FIXREF" 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -qi 'refused' \
+   && ! printf '%s' "$out" | grep -q 'SHARED ENGINE RAN'; then
+  ok "tier 2b: a genuinely STALE shared engine still REFUSES a board write driven from a worktree — the guard measures, it does not skip"
+else
+  bad "tier 2b: shared staleness must still refuse through the fallback" "rc=$rc out=$out"
+fi
+touch -d '3 hours ago' "$SH/$FIXSRC"
+
+# #709's WARNING NOW REACHES THE READER IT IS ABOUT. `dirty_guard` exempts a linked worktree because
+# nobody else resolves an engine through it — true, and it says nothing about the SHARED checkout whose
+# WIP this worktree is now running. That is precisely #709: one worker editing the kit in the shared
+# checkout silently decides every other worker's claims. Before tier 2b the worktree reader could not
+# even reach that engine; now they run it, so they are told.
+printf '// WIP\n' >>"$SH/$FIXSRC"
+touch -d '3 hours ago' "$SH/$FIXSRC"
+err="$(cd "$WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" next 2>&1 >/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$err" | grep -q 'UNCOMMITTED'; then
+  ok "tier 2b: a DIRTY shared checkout warns the worktree worker whose claims that WIP decides (#709)"
+else
+  bad "tier 2b: the shared checkout's dirt must reach the worktree reader running its engine" "rc=$rc err=$err"
+fi
+( cd "$SH" && git checkout -q -- "$FIXSRC" ) >/dev/null 2>&1
+
+# TIER 2a STILL WINS. A kit author who builds IN their worktree must get THEIR build — preempting it
+# with the shared engine would silently discard the very edits they are testing, which is the one
+# workflow this fallback must not break.
+OWN="$WT/src/FS.GG.Coord.Cli/bin/Release/net10.0"; mkdir -p "$OWN"
+printf '#!/usr/bin/env bash\necho "OWN ENGINE RAN: $*"\n' >"$OWN/fsgg-coord-engine"; chmod +x "$OWN/fsgg-coord-engine"
+: >"$OWN/fsgg-coord-engine.dll"
+touch -d '3 hours ago' "$WT/$FIXSRC"; touch -d '2 hours ago' "$OWN/fsgg-coord-engine" "$OWN/fsgg-coord-engine.dll"
+out="$(cd "$WT" && env -u FSGG_COORD_ENGINE_BIN "$SHIM" --version 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q 'OWN ENGINE RAN'; then
+  ok "tier 2b: a worktree that HAS its own build runs it — the fallback is after 2a, never before it (#931)"
+else
+  bad "tier 2b: the caller's own build must outrank the shared one" "rc=$rc out=$out"
+fi
+
+( cd "$SH" && git worktree remove --force "$WT" ) >/dev/null 2>&1
+rm -rf "$SH" "$WT"
+
 echo
 total=$((pass+failcount))
 if [ "$failcount" -eq 0 ]; then
