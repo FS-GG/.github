@@ -493,6 +493,17 @@ module Scan =
         | RClaim of worker: WorkerId * holder: Ref * ageSeconds: int * livePr: int option
         | RUnowned of holder: Ref
 
+    /// The surface a reservation holds, on its way to the wire. `RvNames` is the ordinary case — the
+    /// path tokens lifted off the body we read. `RvUnreadable` is #1150: a live-held item whose BODY
+    /// READ FAILED reserves an UNKNOWN surface, not an empty one. We cannot prove any candidate disjoint
+    /// from a touch-set we never saw, so we carry `Unreadable` (with the read's reason) to the wire; the
+    /// codec reads it back into `TouchSet.Unreadable`, which `Batch.schedule` reds the batch on. Dropping
+    /// it — the pre-#1150 `| _ -> ()` on a failed body — was the fail-open: the claim reserved nothing and
+    /// a candidate overlapping its real files was handed the tree its holder is standing in.
+    type private ReservedPaths =
+        | RvNames of string list
+        | RvUnreadable of reason: string
+
     let snapshot
         (transport: IGitHubTransport)
         (rows: Row list)
@@ -621,7 +632,7 @@ module Scan =
         // and "nothing schedulable" are the same fact and two completely different instructions (#428). The
         // first sends the worker to talk to W; the second sends them home. A markerless In-progress row has
         // no W to name (`RUnowned`), which is a different instruction again: there is no lease to wait out.
-        let inFlight = ResizeArray<string * string * string list * Reserved>()
+        let inFlight = ResizeArray<string * string * ReservedPaths * Reserved>()
 
         // THE ARRAY IS CALLED `items` ON THE WIRE. Not `candidates` — that is what the parser reads, and a
         // writer that invented its own name would produce a document that refuses to parse on every single
@@ -814,20 +825,29 @@ module Scan =
                     | None when row.Status = InProgress -> Some(RUnowned row.Ref)
                     | None -> None
 
-                match reserveAs, body with
-                | Some held, Ok text ->
-                    match TouchSet.parse text with
-                    | Declared tokens ->
-                        let names =
-                            tokens
-                            |> List.map (fun t ->
-                                match t with
-                                | Matchable s -> s
-                                | Unmatchable s -> s)
+                match reserveAs with
+                | None -> ()
+                | Some held ->
+                    match body with
+                    | Ok text ->
+                        match TouchSet.parse text with
+                        | Declared tokens ->
+                            let names =
+                                tokens
+                                |> List.map (fun t ->
+                                    match t with
+                                    | Matchable s -> s
+                                    | Unmatchable s -> s)
 
-                        inFlight.Add(row.Ref.Owner, row.Ref.Repo, names, held)
-                    | _ -> ()
-                | _ -> ()
+                            inFlight.Add(row.Ref.Owner, row.Ref.Repo, RvNames names, held)
+                        | _ -> ()
+                    // #1150: THE BODY READ FAILED on an item we hold a lock over. Core has a fail-closed
+                    // guard for exactly this (`Batch.unusableReservation`, the `Unreadable` branch) — but it
+                    // only fires if it RECEIVES an `Unreadable` reservation, and the old `| _ -> ()` dropped
+                    // the claim instead, so the guard was dead end-to-end (`BodiesUnreadable` only drove an
+                    // advisory warning). Reserve an UNKNOWN surface: we cannot prove any candidate disjoint
+                    // from files we never saw, so red the batch rather than hand a second worker its tree.
+                    | Error e -> inFlight.Add(row.Ref.Owner, row.Ref.Repo, RvUnreadable(explain e), held)
 
         w.WriteEndArray()
 
@@ -905,7 +925,7 @@ module Scan =
                                         inFlight.Add(
                                             o,
                                             r,
-                                            names,
+                                            RvNames names,
                                             RClaim(m.Worker, { Owner = o; Repo = r; Number = n }, m.AgeSeconds, livePr)
                                         )
                                     | _ -> ()
@@ -916,12 +936,20 @@ module Scan =
             w.WriteStartObject()
             w.WriteString("owner", owner)
             w.WriteString("repo", repoName)
-            w.WriteStartArray("paths")
 
-            for p in paths do
-                w.WriteStringValue p
+            // #1150: mirror the CANDIDATE convention (`body` vs `bodyUnreadable`, #496) — write EITHER a
+            // `paths` array OR a `pathsUnreadable` reason, never both. The reader keys on which is present:
+            // `pathsUnreadable` reconstructs `TouchSet.Unreadable`, which reds the batch.
+            match paths with
+            | RvNames names ->
+                w.WriteStartArray("paths")
 
-            w.WriteEndArray()
+                for p in names do
+                    w.WriteStringValue p
+
+                w.WriteEndArray()
+            | RvUnreadable reason -> w.WriteString("pathsUnreadable", reason)
+
             w.WriteStartObject "holder"
 
             match held with

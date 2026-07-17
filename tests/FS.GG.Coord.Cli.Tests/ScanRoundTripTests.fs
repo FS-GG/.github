@@ -599,6 +599,71 @@ let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of 
         | Error e -> failwith $"parse failed: %A{e}"
     | Error e -> failwith $"scan failed: %A{e}"
 
+[<Fact>]
+let ``#1150 a live-held item whose BODY READ FAILED reserves an UNREADABLE touch-set, and reds the batch`` () =
+    // The FAIL-OPEN this closes: `Scan` built a reservation only for a live-held item with a READABLE body;
+    // one whose body read FAILED fell to `| _ -> ()` and reserved NOTHING. Core has a fail-closed guard for
+    // exactly this (`Batch.unusableReservation`, the `Unreadable` branch) — but it never received the input,
+    // because Scan dropped the claim. So a readable candidate overlapping the held item's REAL files would be
+    // scheduled, and a documented Core safety guarantee was non-load-bearing end to end.
+    let now = System.DateTimeOffset.UtcNow.ToString("o")
+
+    // #42 is LIVE-HELD (a within-lease marker), but its BODY read will FAIL — the exact trigger.
+    let marker =
+        $"""[{{"id":901,"body":"<!-- fsgg:claim worker=vole-418 lease=120 prev=Ready -->","updated_at":"%s{now}"}}]"""
+
+    // #43 is a Ready candidate with a perfectly readable touch-set. It must NOT be scheduled: with #42's
+    // surface unknown, no candidate can be proven disjoint from the lock, so the WHOLE batch reds.
+    let candidate43 =
+        { aRow with
+            Ref = { aRow.Ref with Number = 43 }
+            Status = Ready }
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.EndsWith "/issues" then
+                ok "[]" // the off-board scan finds no claim here
+            elif req.Path.EndsWith "/42/comments" then
+                ok marker // #42 carries a LIVE claim marker — the lock is real
+            elif req.Path.EndsWith "/comments" then
+                ok "[]" // #43 carries no marker
+            elif req.Path.EndsWith "/issues/42" then
+                Error(Errors.Http(502, "bad gateway")) // #42's BODY read FAILS — its touch-set is now UNKNOWN
+            else
+                ok """{"number":43,"body":"Paths: src/Audio/Sub"}""") // #43 reads fine, and would be schedulable
+
+    match Scan.snapshot transport [ aRow; candidate43 ] None false None 120 with
+    | Ok(document, receipt) ->
+        Assert.Equal(1, receipt.BodiesUnreadable) // #42's body failed; #43's did not
+
+        match Snapshot.parse document with
+        | Ok request ->
+            // THE FIX, ARM 1: the held item still RESERVES — an UNREADABLE surface, not nothing.
+            match request.InFlight with
+            | [ r ] ->
+                match r.Paths with
+                | Unreadable _ -> ()
+                | other -> failwith $"a held claim with an unreadable body must reserve an Unreadable touch-set — got %A{other}"
+
+                match r.Holder with
+                | Batch.LiveClaim(WorkerId w, ref, _, _) ->
+                    Assert.Equal("vole-418", w)
+                    Assert.Equal(42, ref.Number)
+                | other -> failwith $"the reservation must name its live holder — got %A{other}"
+            | other -> failwith $"exactly one reservation expected (the held #42) — got %A{other}"
+
+            // THE FIX, ARM 2: the batch is RED. A reservation whose surface we never saw makes every later
+            // comparison a lie, so #43 is refused rather than handed files #42's holder may be standing in.
+            match
+                Batch.schedule request.AllowBacklog request.Limit request.InFlight (request.Candidates |> List.map (fun c -> c.Item))
+            with
+            | Red reasons -> Assert.True(reasons |> List.exists (fun (m: string) -> m.Contains "vole-418"))
+            | other ->
+                failwith
+                    $"an Unreadable reservation must RED the batch, not schedule a candidate against a hole it cannot see — got %A{other}"
+        | Error e -> failwith $"parse failed: %A{e}"
+    | Error e -> failwith $"the scan must survive one unreadable body while still reserving the lock — got %A{e}"
+
 // ====================================================================================================
 // THE OWNERSHIP PIN (#1058) — `Protocol` states a document it does not render.
 // ====================================================================================================
