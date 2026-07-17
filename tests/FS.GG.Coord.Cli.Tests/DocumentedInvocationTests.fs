@@ -279,13 +279,12 @@ module DocumentedInvocationTests =
     /// the issue to do it exists.
     let private knownGaps: (string list * string) list =
         [
-          // #959 — bash shipped `who --local` (40973a8: usage at line 177, the parse arm at 4215, the
-          // worktree join at 4087) and the port dropped the flag while keeping the verb. The docs are the
-          // survivors, so the fix is to IMPLEMENT it, which is #959's own story: it lands in `Client.fs`'s
-          // `who`, a chokepoint (#428) that was held while #919 was in flight. Found BY this gate on its
-          // first run against the corpus — instance 4 of a family whose first three were each found by
-          // hand, mid-protocol, by the worker it bit.
-          [ "who"; "--repo"; "1"; "--local" ], "#959 — `who --local` shipped in bash and was never ported" ]
+          // EMPTY, and that is the healthy state. An entry here is a documented invocation the engine
+          // REFUSES — a temporary exemption keyed to the issue that will close it. #959 (`who --local`) was
+          // the last one, ported and its exemption deleted by the same PR (the `must be deleted, not left to
+          // rot` test below reds if a fixed entry lingers). The family before it: #861 (`add`), #867
+          // (`release --status`), #919 (`say`). Add an entry ONLY with the issue that retires it.
+          ]
 
     [<Fact>]
     let ``every invocation the corpus prescribes is one the parser ACCEPTS`` () =
