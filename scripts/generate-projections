@@ -62,6 +62,8 @@ TARGETS=(
   "filing-rules:.agents/skills/cross-repo-coordination/SKILL.md"
   "reconcile-rules:.claude/skills/check-board/SKILL.md"
   "reconcile-rules:.agents/skills/check-board/SKILL.md"
+  "driver-rules:.claude/skills/pnext-item/SKILL.md"
+  "driver-rules:.agents/skills/pnext-item/SKILL.md"
   "blocker-states:.claude/skills/check-board/SKILL.md"
   "blocker-states:.agents/skills/check-board/SKILL.md"
   "board-statuses:.claude/skills/cross-repo-coordination/SKILL.md"
@@ -291,6 +293,42 @@ render_reconcile_rules() {
   echo "[intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).*"
   echo ""
   jq -r '.reconcileRules[] | "**\(.title)**\n\n\(.statement)\n"' "$FACTS"
+}
+
+# `driver-rules` — the rules a worker DRIVING an item must satisfy (#889/#1059), for `pnext-item`.
+#
+# THE SUBSET IS CHOSEN IN `Protocol.fs`, NOT HERE, for the reason `render_filing_rules` states.
+#
+# THIS IS THE FILE THE ORG HAS REPAIRED MOST, and the repairs are what argue for the region. Five times
+# these four sentences were wrong while the engine was right: `release --status` called a silent no-op
+# after #914 made it work (#921); every rate limit called GraphQL after #897 told three apart (#907);
+# `pendingBoardWrites` called a field that never existed, 42 minutes after it shipped (#1030). Two of the
+# five were closed by GENERATING the table, and neither has drifted since. This region is the third.
+#
+# IT REPLACES §0's PREMISE, NOT §0's RITUAL, and that line is the whole design of the kind. Why an id
+# must be distinct is `claim-lock`'s — the total order separates workers only while no two share an id
+# (#419). The MINT ITSELF is a command a worker pastes, and it stays authored: `worker-id-attractor.yml`
+# requires exactly one runnable mint idiom naming `scripts/fsgg-coord`, which is a fact about a shell,
+# not about the protocol. Emitting a second copy of that command here would be a second idiom to keep in
+# step — the very thing that gate exists to refuse (#569/#570).
+render_driver_rules() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from src/FS.GG.Coord.Core/Protocol.fs by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  This recipe restated these rules by hand for its whole life, and #1059 counted the cost: five"
+  echo "  repairs to four sentences, every one of them the PROSE moving to where the engine already was."
+  echo "  The two that were closed by generating a table have never drifted again. Two hand-written"
+  echo "  copies also disagreed OUT LOUD — §3 said an expired lease cannot be renewed and §6 said"
+  echo "  \`heartbeat\` renews it — and nothing could see it, because neither was the engine's answer."
+  echo "  Edit Protocol.fs and regenerate."
+  echo "-->"
+  echo ""
+  echo "*Generated from the typed core. The engine that takes your claim, holds your lease and refuses"
+  echo "your \`Paths:\` line is the engine that wrote this. The full rule set, with the incident behind"
+  echo "each one, is in [intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md).*"
+  echo ""
+  jq -r '.driverRules[] | "**\(.title)**\n\n\(.statement)\n"' "$FACTS"
 }
 
 # `blocker-states` — the blocker WIRE vocabulary (#889), for the skill that reads it with `jq`.

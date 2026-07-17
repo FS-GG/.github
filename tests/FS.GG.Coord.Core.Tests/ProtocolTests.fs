@@ -582,6 +582,7 @@ module ProtocolTests =
             [ "rules"
               "filingRules"
               "reconcileRules"
+              "driverRules"
               "verdicts"
               "blockerStates"
               "boardStatuses"
@@ -591,7 +592,7 @@ module ProtocolTests =
             keys
         )
 
-        Assert.Equal("fsgg.coord.protocol/8", Protocol.factsSchema)
+        Assert.Equal("fsgg.coord.protocol/9", Protocol.factsSchema)
 
     /// THE FLOOR (#266, #436), and the vacuity every gate in this file refuses: an inventory that stated
     /// nothing would make the fold emit `{"schema": …}` and nothing else, and every projection would
