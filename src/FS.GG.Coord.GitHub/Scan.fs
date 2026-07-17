@@ -411,6 +411,66 @@ module Scan =
                       Repo = repo
                       Number = int m.Groups.["num"].Value }
 
+    /// The board's `Blocked by` graph, for `Blockers.cycles` — resolved from the SCANNED ROWS ALONE, with
+    /// NO transport read (#1090).
+    ///
+    /// A ring can only run through ON-BOARD items, and a board item's OPEN/CLOSED state is already in
+    /// `rows` — so an on-board blocker's resolution is FREE, the same free case `resolveBlocker` takes when
+    /// the scan already saw the target. An OFF-BOARD blocker draws no ring edge whatever its state, because
+    /// `Blockers.cycles` keeps only edges whose target is a node in the graph. So this does not resolve one
+    /// — it marks it `BlockerUnknown` and spends no read. A lint that pays the REST lock budget (#418) to
+    /// distinguish a MERGED off-board blocker from a CLOSED one, for a blocker no ring can pass through,
+    /// would be resolving a fact its one consumer discards.
+    ///
+    /// **THE OFF-BOARD STATE IS A PLACEHOLDER, NOT A VERDICT** — this graph's resolution is accurate ONLY
+    /// for on-board refs, which is precisely what `Blockers.cycles` reads. It is not `snapshot`'s
+    /// fully-resolved blocker set, and no consumer that cares about an off-board blocker's real state may
+    /// use it. TOTAL and PURE: it reads nothing and terminates on any board.
+    let blockerGraph (rows: Row list) : (Ref * Blocker list) list =
+        let onBoard =
+            rows
+            |> List.map (fun r -> (r.Ref.Owner, r.Ref.Repo, r.Ref.Number), r.State)
+            |> Map.ofList
+
+        rows
+        |> List.map (fun row ->
+            let blockers =
+                if String.IsNullOrWhiteSpace row.BlockedByRaw then
+                    []
+                else
+                    row.BlockedByRaw.Split(',')
+                    |> Array.toList
+                    |> List.map (fun t -> t.Trim())
+                    |> List.filter (fun t -> t <> "")
+                    |> List.map (fun token ->
+                        match parseBlockerRef row.Ref.Owner row.Ref.Repo token with
+                        // Prose in a dependency field is not a ref: it draws no edge (no `Ref`), and it
+                        // BLOCKS every other reader — but a ring cannot run through a node it cannot name.
+                        | None ->
+                            { Ref = None
+                              Raw = token
+                              State = BlockerUnparseable }
+                        | Some r ->
+                            match Map.tryFind (r.Owner, r.Repo, r.Number) onBoard with
+                            // FREE — the scan saw the target. OPEN blocks (a live ring edge); CLOSED is
+                            // resolved and `Blockers.cycles` drops it, so a closed blocker breaks a ring.
+                            | Some Open ->
+                                { Ref = Some r
+                                  Raw = r.Short
+                                  State = BlockerOpen }
+                            | Some Closed ->
+                                { Ref = Some r
+                                  Raw = r.Short
+                                  State = BlockerClosed }
+                            // OFF THE BOARD — not a node, so no ring edge whatever its state. Placeholder
+                            // only; see the note above.
+                            | None ->
+                                { Ref = Some r
+                                  Raw = r.Short
+                                  State = BlockerUnknown })
+
+            row.Ref, blockers)
+
     // ---- the snapshot --------------------------------------------------------------------------------
 
     // ONE owner, in `Core`, beside `statusWireName` — this was a private copy of the vocabulary, and
