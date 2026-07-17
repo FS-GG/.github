@@ -619,11 +619,13 @@ let ``#882 flush SKIPS a write queued against ANOTHER board - it must not be dro
     // reported as "permanently un-writable". Every step is locally correct and the conclusion is false: the
     // write was perfectly writable, against the board nobody recorded.
     //
-    // A transport that ANSWERS is what makes this a real regression test. If `flush` resolves this entry at
-    // all, it drops it; the fix is that the entry never reaches a lookup, so `Fake.Recorder` failing on any
-    // call would also pin "no GraphQL was spent on another board's entry".
+    // THE SKIP IS DECIDED FROM THE ENTRY, BEFORE ANY LOOKUP, and this transport is what pins it: it refuses
+    // every call. Asking THIS board about another board's item cannot produce a useful answer — the only
+    // ones available are "not on board" (permanent, and FALSE) and a rate limit — so the question must not be
+    // asked at all. That makes the unfixed code fail here as a DROP rather than as an exception, and
+    // `GraphQlCalls` then pins the cheaper fact too: another board's entry costs nothing to skip.
     let wrongBoard =
-        scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+        Fake.Recorder(fun _ -> Error(NotFound "flush must not resolve an entry queued against another board"))
 
     match flush wrongBoard otherBoard with
     | Ok r ->
@@ -633,6 +635,7 @@ let ``#882 flush SKIPS a write queued against ANOTHER board - it must not be dro
         Assert.Equal(0, r.Dropped)
         Assert.Equal(0, r.Written)
         Assert.Equal(1, r.Queued)
+        Assert.Equal(0, wrongBoard.GraphQlCalls)
 
         // AND THE WRITE IS STILL THERE. This is the assertion the bug fails: the entry was silently
         // discarded, so the worker's board write was lost with a message saying it was unwritable.
@@ -652,7 +655,7 @@ let ``#882 the board that OWNS the queued write still replays it`` () =
     boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
 
     let wrongBoard =
-        scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+        Fake.Recorder(fun _ -> Error(NotFound "flush must not resolve an entry queued against another board"))
 
     flush wrongBoard otherBoard |> ignore
 
