@@ -85,15 +85,23 @@ fi
 # it is today, never subtract everything. That is the #266 shape aimed at this very command, so it is
 # the one condition this script refuses to get wrong.
 ask() {
-  local inv="$1" out rc=0
+  local inv="$1" out err rc=0
+  err="$(mktemp "${TMPDIR:-/tmp}/generated-paths.err.XXXXXX")"
   # Word-split deliberately: the roster holds argv, not a path.
   # shellcheck disable=SC2086
-  out="$(cd "$HERE" && $inv 2>/dev/null)" || rc=$?
+  out="$(cd "$HERE" && $inv 2>"$err")" || rc=$?
 
   if [ "$rc" -ne 0 ]; then
+    # The generator's OWN reason, not just its exit code. This used to be `2>/dev/null`, which threw
+    # away the one sentence that says why — leaving "exited 2" to stand in for "jq not found",
+    # "registry not found", and a typo in the roster alike. A warning nobody can act on is a warning
+    # nobody reads.
     echo "::warning::generated-paths: '$inv' exited $rc — its artifacts are NOT subtracted (drift on them stays reported)." >&2
+    sed 's/^/  | /' "$err" >&2
+    rm -f "$err"
     return 0
   fi
+  rm -f "$err"
   if [ -z "$out" ]; then
     echo "::warning::generated-paths: '$inv' listed nothing — its artifacts are NOT subtracted." >&2
     return 0
@@ -122,5 +130,21 @@ fi
 # `dist/skill-union-assert.sh`. That is #309's authorship test, and it is exactly the set that may be
 # subtracted. Both of #498's own motivating examples are this shape.
 #
-# `cut -f3` yields empty for a trailing-tab row, which is the wire form of "no marker".
-rows | awk -F'\t' 'NF >= 2 && $3 == "" && $2 != "" { print $2 }' | LC_ALL=C sort -u
+# A row must have EXACTLY three fields to be read at all, and that strictness is the point rather
+# than tidiness. `NF >= 2` was the first spelling and it is a fail-open: a two-field row has no
+# third field, so `$3 == ""` is vacuously true and the path is subtracted — which is precisely what
+# a REGION generator that dropped its marker column would emit. The permissive read turns "this
+# generator's output is malformed" into "this authored file may be silently un-reported", and it
+# does it in the runtime path, where `check-generator-list.py` is not there to object: the gate runs
+# in CI on changed paths, this command runs whenever `verify-paths` asks. The stricter reader is the
+# one that has to hold, because it is the one nothing is watching.
+#
+# So: three fields, or the row is not believed — warned about, and NOT subtracted.
+rows | awk -F'\t' '
+  NF != 3 {
+    printf "::warning::generated-paths: malformed row (%d field(s), want 3) — NOT subtracted: %s\n", NF, $0 > "/dev/stderr"
+    next
+  }
+  $2 == "" { next }
+  $3 == "" { print $2 }
+' | LC_ALL=C sort -u

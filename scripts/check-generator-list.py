@@ -133,8 +133,15 @@ def check_rows(root: Path, inv: str, errors: list[str]) -> list[tuple[str, str, 
 
 
 def check_roster_complete(root: Path, invocations: list[str], errors: list[str]) -> None:
-    """Every `scripts/generate-*` is rostered."""
-    rostered = " ".join(invocations)
+    """Every `scripts/generate-*` is rostered.
+
+    Matched on the invocation's PROGRAM, exactly — never as a substring of the joined roster. A
+    substring test reads `scripts/generate-proj` as rostered because `scripts/generate-projections`
+    is, so the net silently passes the one generator it exists to catch. That is this gate failing
+    open in the same shape as the ignore-file ADR-0044 declined, and a prefix pair is not exotic: it
+    is what you get the day someone adds a `-v2`.
+    """
+    rostered = {inv.split()[0] for inv in invocations if inv.split()}
     for script in sorted((root / "scripts").glob(f"{GENERATOR_PREFIX}*")):
         if not script.is_file():
             continue
@@ -169,7 +176,14 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     root = Path.cwd()
     if "--root" in argv:
-        root = Path(argv[argv.index("--root") + 1]).resolve()
+        i = argv.index("--root") + 1
+        if i >= len(argv):
+            # A bare trailing `--root` is a misconfigured invocation, and it must say so rather than
+            # die on an IndexError: a traceback and a verdict are different things, and only one of
+            # them tells the caller what to fix.
+            print("::error::generator-list: --root needs a value.", file=sys.stderr)
+            return 2
+        root = Path(argv[i]).resolve()
 
     try:
         invocations = roster(root)
