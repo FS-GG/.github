@@ -193,13 +193,30 @@ Staged, so the org is not stopped dead:
 | 1 | **Disclose** — `evidenceSelfAttested: N` (decision 4). Non-breaking. | ✅ **landed** — [FS.GG.SDD#398](https://github.com/FS-GG/FS.GG.SDD/issues/398) |
 | 2 | **Record** — the `observedRun` receipt; TRX/JUnit parsed, hashed, and checked. | ✅ **landed** — [FS.GG.SDD#415](https://github.com/FS-GG/FS.GG.SDD/issues/415) |
 | 3 | **Fail closed** — `unobserved` stops satisfying. | ⚙️ **mechanism landed, default OFF** — [FS.GG.SDD#422](https://github.com/FS-GG/FS.GG.SDD/pull/422) shipped it opt-in behind `--require-observed` (on **both** `verify` and `ship`), with the failure-leg proof #266 demands. |
-| 3b | **The flip** — `--require-observed` becomes the default. | ⏳ **owed.** A **breaking** change to the evidence contract, on a schema major. |
+| 3b | **The flip** — `--require-observed` becomes the default. | ✅ **landed 2026-07-17** — [FS.GG.SDD#526](https://github.com/FS-GG/FS.GG.SDD/pull/526) shipped it as the `0.14.0` breaking cut, on the human decision at [FS.GG.SDD#497](https://github.com/FS-GG/FS.GG.SDD/issues/497). Flipped **ahead of the fleet being green** — a deliberate override of the receipts-recorded precondition below; see the ⚠️ note. |
 
-**The flip is the only thing left, and it is deliberately not scheduled here.** It is gated on
+~~**The flip is the only thing left, and it is deliberately not scheduled here.** It is gated on
 *"once the fleet is green"* — and the fleet is not: no `evidence.yml` in the org yet carries a
 receipt, so flipping today would turn every ship-ready work item in every FS-GG repo not-ship-ready
 at once, with no remedy available. Accepting this ADR does **not** flip it. What accepting it settles
-is that the flip *is coming* and that work should be planned against it, not that it happens now.
+is that the flip *is coming* and that work should be planned against it, not that it happens now.~~
+
+> ⚠️ **The struck text above was true when written and is now FALSE — the flip landed 2026-07-17
+> ([FS.GG.SDD#526](https://github.com/FS-GG/FS.GG.SDD/pull/526)), and it landed *before* the
+> fleet-green precondition it names was met.** A human (@EHotwagner) accepted the schema major on
+> [FS.GG.SDD#497](https://github.com/FS-GG/FS.GG.SDD/issues/497) and directed the flip now,
+> **explicitly overriding** the "receipts are actually recorded" precondition — which is still
+> unmet at **0 of 25** `evidence.yml` ([FS.GG.SDD#511](https://github.com/FS-GG/FS.GG.SDD/issues/511)).
+> Corrected in place rather than deleted, for this ADR's usual reason: a reader who sees "deliberately
+> not scheduled" and stops would conclude the default is still off, which shipped code now contradicts.
+>
+> **What that means for consumers.** The break is real and now default: `verify`/`ship` block an
+> unobserved `result: pass`. It shipped with the `--no-require-observed` opt-out (a migration window)
+> and a mandatory migration note (`docs/release/migrations/0.14.0.md`), so a work item that has not yet
+> adopted receipts is not stopped dead — but the org SHOULD now record receipts rather than plan to.
+> The precondition being overridden rather than met makes recording the first real receipt
+> ([FS.GG.SDD#511](https://github.com/FS-GG/FS.GG.SDD/issues/511)) **remediation behind a shipped
+> default**, not a gate ahead of it.
 
 ~~**Two things must land before the flip**~~ — **ONE does**, and this list said two until
 [#1082](https://github.com/FS-GG/.github/issues/1082). The count is corrected in place rather than
