@@ -270,8 +270,16 @@ module Board =
           /// N of M", and counting a drop there reports a write that never happened (#266).
           Dropped: int
 
-          /// A fresh rate limit STOPPED the pass. The remainder — `Queued - Written - Dropped` — is still
-          /// queued, untouched and not re-appended, and the caller must back off (`EX_RATE`).
+          /// Queued against a DIFFERENT board, and therefore left alone (#882).
+          ///
+          /// THE OPPOSITE OF `Dropped`, and the distinction is the whole of #882: a dropped write will never
+          /// land, a skipped one is still owed and still landable — just not by this pass, against this
+          /// board. They are counted apart because "we discarded your write" and "your write is waiting for
+          /// its own board" are opposite things to tell a worker.
+          Skipped: int
+
+          /// A fresh rate limit STOPPED the pass. The remainder — `Queued - Written - Dropped - Skipped` —
+          /// is still queued, untouched and not re-appended, and the caller must back off (`EX_RATE`).
           Stopped: IoError option }
 
     /// Replay the deferred queue.
@@ -280,6 +288,11 @@ module Board =
     /// identically, and spending REST calls to confirm that is exactly the back-off `EX_RATE` exists to
     /// prevent. An entry that is permanently un-writable is dropped LOUDLY: it will never land, and
     /// carrying it forever would mean the queue never drains and nobody is ever told why.
+    ///
+    /// An entry queued against ANOTHER board is SKIPPED, never dropped (#882): this pass cannot resolve it —
+    /// asking THIS board about it yields `NotOnBoard`, which is permanent and false — so it stays queued for
+    /// the flush that can. An entry that recorded no board at all (queued before #882) is replayed here,
+    /// exactly as it always was.
     ///
     /// `Error` is reserved for a queue that could not be READ. A rate-limit that stops the pass is NOT an
     /// error here — it is `Stopped`, carried alongside the work that did land, because those are different

@@ -151,7 +151,8 @@ let private entry =
       Field = "Status"
       Value = "In progress"
       At = "2026-07-14T12:00:00Z"
-      Worker = "vole-418" }
+      Worker = "vole-418"
+      Board = Some("FS-GG", "Coordination") }
 
 [<Fact>]
 let ``#510 a board write may be deferred ONLY on an exhausted budget`` () =
@@ -405,6 +406,78 @@ let ``#881 defer REFUSES while another worker holds the queue, rather than racin
     match defer (RateLimited(UnknownBudget, None)) entry with
     | Error(Transport m) -> Assert.Contains("locked", m)
     | other -> failwith $"defer must refuse while the queue is held — got %A{other}"
+
+// ---- #882: the board is part of the entry, and of its identity ---------------------------------------
+
+[<Fact>]
+let ``#882 the board survives the queue round-trip`` () =
+    use _sandbox = new Sandbox()
+
+    // A FIELD THAT DOES NOT ROUND-TRIP IS A FIELD THAT IS NOT THERE. The queue is a JSONL file, so the board
+    // is only recorded if `renderDeferred` writes it AND `parseDeferred` reads it back.
+    defer (RateLimited(UnknownBudget, None)) entry |> ignore
+
+    match pending () with
+    | Ok [ one ] -> Assert.Equal(Some("FS-GG", "Coordination"), one.Board)
+    | other -> failwith $"the board must survive render -> parse — got %A{other}"
+
+[<Fact>]
+let ``#882 an entry with NO board parses as a legacy entry, rather than refusing the drain`` () =
+    use sandbox = new Sandbox()
+
+    // A QUEUE WRITTEN BY THE PREVIOUS BUILD. Making the board REQUIRED would fail `parseDeferred` on every
+    // one of these lines — and an unparseable line refuses the whole drain, by design (#510). So the upgrade
+    // that added this field would have bricked every non-empty queue in existence: the queued writes would
+    // be unreplayable by any verb, which is #878's stranding with an extra step.
+    File.WriteAllText(
+        Path.Combine(sandbox.Dir, "pending.jsonl"),
+        """{"ref":"FS.GG.SDD#810","field":"Status","value":"Ready","at":"2026-07-14T12:00:00Z","worker":"vole-418"}"""
+        + "\n"
+    )
+
+    match pending () with
+    | Ok [ one ] ->
+        Assert.Equal(None, one.Board)
+        Assert.Equal("FS.GG.SDD#810", one.Ref)
+    | other -> failwith $"a pre-#882 entry must still parse — got %A{other}"
+
+[<Fact>]
+let ``#882 HALF a board is a line we cannot read, and refuses the drain`` () =
+    use sandbox = new Sandbox()
+
+    // ABSENT IS A LEGACY ENTRY; HALF IS CORRUPTION. Reading a half-recorded board as "no board" would replay
+    // it against the current board on the strength of the half that is missing — a guess, dressed as the
+    // legacy case. This module's rule is that a line it cannot read refuses the drain rather than draining
+    // as if it had said something.
+    File.WriteAllText(
+        Path.Combine(sandbox.Dir, "pending.jsonl"),
+        """{"ref":"FS.GG.SDD#810","field":"Status","value":"Ready","at":"2026-07-14T12:00:00Z","worker":"vole-418","boardOwner":"FS-GG"}"""
+        + "\n"
+    )
+
+    match pending () with
+    | Error(Malformed("pending.jsonl", _)) -> ()
+    | other -> failwith $"half a board must refuse the drain — got %A{other}"
+
+[<Fact>]
+let ``#882 dropPending does not drop the SAME write queued against another board`` () =
+    use _sandbox = new Sandbox()
+
+    let mine = entry
+    let theirs = { entry with Board = Some("FS-GG", "Some Other Board") }
+
+    defer (RateLimited(UnknownBudget, None)) mine |> ignore
+    defer (RateLimited(UnknownBudget, None)) theirs |> ignore
+
+    // THE BOARD IS PART OF THE IDENTITY. Ref, field and value are identical here — the same item, the same
+    // write, owed to two different boards — so a filter that ignores the board treats them as one entry and
+    // drops both. That is #882's silent loss re-entering through the drop path, and it needs no repointing
+    // to reach: one flush, two boards' queues, one of them gone.
+    dropPending mine
+
+    match pending () with
+    | Ok [ one ] -> Assert.Equal(Some("FS-GG", "Some Other Board"), one.Board)
+    | other -> failwith $"another board's identical write must survive the drop — got %A{other}"
 
 [<Fact>]
 let ``#881 a queue we could not read is not an EMPTY queue`` () =

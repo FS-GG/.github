@@ -971,7 +971,10 @@ module Board =
                         | Set v -> v
                         | Clear -> ""
                       At = DateTimeOffset.UtcNow.ToString("o")
-                      Worker = worker }
+                      Worker = worker
+                      // THE BOARD WE WERE WRITING TO, recorded at QUEUE time — the only moment it is known
+                      // (#882). `flush` bootstraps from the environment, which may since have been repointed.
+                      Board = Some(board.Owner, board.Title) }
 
                 match Cache.defer e entry with
                 | Ok() -> Ok Deferred
@@ -1016,7 +1019,10 @@ module Board =
                             | Set v -> v
                             | Clear -> ""
                           At = DateTimeOffset.UtcNow.ToString("o")
-                          Worker = worker }
+                          Worker = worker
+                          // The same record the single write makes (#882): every pair of this batch was
+                          // refused against THIS board, so that is the board that can replay them.
+                          Board = Some(board.Owner, board.Title) }
 
                     match Cache.defer e entry with
                     | Ok() -> go rest
@@ -1050,6 +1056,9 @@ module Board =
         { Queued: int
           Written: int
           Dropped: int
+          /// Entries queued against a DIFFERENT board, left in the queue untouched (#882). Distinct from
+          /// `Dropped` in the one way that matters: these writes are still owed, and still landable.
+          Skipped: int
           Stopped: IoError option }
 
     let flush (transport: IGitHubTransport) (board: BoardMap) : IoResult<FlushOutcome> =
@@ -1060,6 +1069,7 @@ module Board =
                 { Queued = 0
                   Written = 0
                   Dropped = 0
+                  Skipped = 0
                   Stopped = None }
         | Ok entries ->
 
@@ -1067,7 +1077,32 @@ module Board =
         let mutable dropped = 0
         let mutable stopped = None
 
-        for entry in entries do
+        // ANOTHER BOARD'S ENTRY IS NOT OURS TO REPLAY, AND EMPHATICALLY NOT OURS TO DROP (#882).
+        //
+        // Resolving it against THIS board is what the bug was: `itemId` answers `Ok None` — a successful read
+        // that walked the whole board and found nothing — which is `NotOnBoard`, which is PERMANENT, so the
+        // entry dropped and the CLI called it "permanently un-writable". Every step is locally correct; the
+        // conclusion is false, because the question was asked of the wrong board.
+        //
+        // SKIP, NOT DROP, is the whole repair: the write is still owed and still landable, so it stays queued
+        // where `flush --dry-run` can show it and a flush against its own board can replay it.
+        //
+        // A LEGACY ENTRY (`Board = None`) IS REPLAYED, NOT SKIPPED. It predates this field, so its board is
+        // genuinely unknown — and "unknown" must not become "skip forever", which would strand it exactly as
+        // #878 stranded the queue that had no verb. Replaying it against the current board is the behaviour it
+        // was queued under: no worse than before, and correct in the single-board case that is every real one.
+        let isOtherBoard (entry: Cache.Deferred) =
+            match entry.Board with
+            | Some queuedAgainst -> not (Cache.sameBoard queuedAgainst (board.Owner, board.Title))
+            | None -> false
+
+        // PARTITIONED BEFORE THE PASS, so a skip is decided by the entry alone and cannot be confused with a
+        // stop: a rate limit halts the replay of OUR entries, and must not retroactively re-classify another
+        // board's — `Skipped` is a property of the queue, `Stopped` a property of the budget.
+        let replayable, otherBoards = entries |> List.partition (isOtherBoard >> not)
+        let skipped = List.length otherBoards
+
+        for entry in replayable do
             if stopped.IsNone then
                 let parts = entry.Ref.Split([| '/'; '#' |], StringSplitOptions.RemoveEmptyEntries)
 
@@ -1144,4 +1179,5 @@ module Board =
             { Queued = List.length entries
               Written = written
               Dropped = dropped
+              Skipped = skipped
               Stopped = stopped }
