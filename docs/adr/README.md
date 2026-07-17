@@ -66,6 +66,7 @@ registry like any other, and this org gates its registries.
 | [0040](0040-port-the-io-layer.md) | The **IO layer is ported to F# too** — an `IGitHub` seam (HTTP adapter + call-counting fake) driven by the shell corpus through a configurable API base; each write's precondition lives in its type | Accepted |
 | [0041](0041-the-chore-lock-is-the-item-cas-on-another-subject.md) | A **chore takes the item CAS, unchanged**, on a closed per-repo lock issue — `Writes.claim` is already substrate-general (comments only; the lease is a parameter; the board coupling is a callback), so the refactor #873 priced was never needed | Accepted |
 | [0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md) | The **chore-lock ref is embedded beside the roster**, keyed on owner and repo — `registry/repos.yml` is unreadable exactly where the queue has to work, because the shim ships to receivers without it | Accepted |
+| [0043](0043-a-superseded-run-is-the-one-its-group-replaced.md) | A **superseded run is the one its group replaced** — the conclusion leaves the test: a re-run creates no run, so the `cancelled`-only clause never guarded the re-run-until-green it was written for, and what it kept was a metadata gate's stale failure | Accepted |
 
 ## Supersession map
 
