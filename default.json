@@ -81,7 +81,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "fs-gg-ui template pin: the FsGgUiVersion MSBuild property → FS.GG.UI.Template (the published coherent-set version).",
+      "description": [
+        "fs-gg-ui template pin: the FsGgUiVersion MSBuild property → FS.GG.UI.Template (the published coherent-set version).",
+        "versioningTemplate is `loose`, NOT `nuget`, and the token is load-bearing (.github#1131, the #576 class). Under `nuget` versioning a bare literal is a RANGE — `0.10.0` parses as `>=0.10.0`, which the newest release always satisfies — so Renovate resolves currentVersion to newest, finds the constraint already met, and proposes NOTHING. That is the exact freeze that held the FS.GG.SDD.Cli pin for four rounds (#576, fixed by #1119's `versioning=loose`). This manager has no per-pin escape — the `<FsGgUiVersion>` property carries no `# renovate:` annotation — so the scheme MUST be single-version here, on the manager itself. Measured against renovate@latest --platform=local: `<FsGgUiVersion>0.10.0</FsGgUiVersion>` under `nuget` → 0 updates while FS.GG.UI.Template 0.12.0 is live; under `loose` → newVersion 0.12.0. `loose` also tolerates the 4-segment / preview grammar strict semver rejects. Do NOT drop this back to `nuget` without re-reading #576/#1131."
+      ],
       "managerFilePatterns": [
         "/\\.props$/",
         "/\\.targets$/",
@@ -93,7 +96,7 @@
       ],
       "depNameTemplate": "FS.GG.UI.Template",
       "datasourceTemplate": "nuget",
-      "versioningTemplate": "nuget"
+      "versioningTemplate": "loose"
     },
     {
       "customType": "regex",
