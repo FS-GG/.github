@@ -112,6 +112,24 @@ module Batch =
     let private leaseExpired (leaseMinutes: int) (q: QueuedClaim) =
         not q.KnownLiveWork && q.AgeSeconds >= 0 && q.AgeSeconds > leaseMinutes * 60
 
+    /// The candidates withheld AT THE COLUMN because the caller did not pass `--include-backlog` (#636).
+    ///
+    /// This is an OBSERVED fact, not an inference: `Schedulability.schedulable` yields `WrongStatus Backlog`
+    /// on one leg only — `Backlog when not allowBacklog`. WITH the flag a Backlog row falls straight through
+    /// to the blocker/touch-set/overlap checks like any Ready one, so this verdict cannot appear. Its presence
+    /// therefore means exactly "the flag was absent, and the scheduler stopped here".
+    ///
+    /// What it deliberately does NOT mean is "these are startable". The scheduler stopped at the column and
+    /// never asked whether they are blocked, declared, or disjoint — so the banner may not promise they would
+    /// be handed out. Asserting a cause we did not observe is the #440 defect, and this is the shape of queue
+    /// (starved, with a plausible story to tell) where it is most tempting.
+    let private withheldAtBacklog (result: BatchResult) : Item list =
+        result.Decisions
+        |> List.choose (fun d ->
+            match d.Result with
+            | WrongStatus Backlog -> Some d.Item
+            | _ -> None)
+
     /// THE STARVED-QUEUE BANNER (#428). A batch that hands out NOTHING over a queue full of items QUEUED
     /// BEHIND LIVE CLAIMS reads exactly like an empty backlog — and a worker who reads "nothing schedulable"
     /// goes home from a repo with work in it. So when that is what happened, say the queue is BUSY, name
@@ -119,16 +137,58 @@ module Batch =
     /// for a lease that has already EXPIRED — point at `reap`, because a dead lease is the one blocker a
     /// worker clears themselves, a collection rather than a wait.
     ///
+    /// THE UNTRIAGED HALF (#636). The banner above answers "who do I wait for". It could not answer the other
+    /// way a full queue hands out nothing: every candidate sits in `Backlog`, and the caller did not ask for
+    /// Backlog. That queue is not busy — it is UNTRIAGED, and the difference is the remedy. A claim is a wait;
+    /// an untriaged column is a decision somebody can make right now.
+    ///
+    /// It had to be its own line rather than a wider `queuedBehindClaims`, because "BUSY" over an untriaged
+    /// queue would be false in the direction that matters: it would tell a worker to wait out a lease that
+    /// does not exist. That is the judgement the #428 tests already fixed for blockers ("a BUSY banner over
+    /// it would be a lie"), and it holds here — what changes is that a Backlog column, unlike a blocker, has
+    /// a remedy the worker can act on ALONE, and nothing named it.
+    ///
+    /// Silent when nothing was withheld at the column, so a genuinely Ready-starved queue gains no noise.
+    let private backlogSection (result: BatchResult) : string list =
+        match withheldAtBacklog result with
+        | [] -> []
+        | withheld ->
+            // A BATCH IS NOT REPO-SCOPED — `--repo` is OPTIONAL, and without it `Scan.snapshot` keeps every
+            // row on the org board (`repo: string option`, `| None -> true`). So the remedy must name every
+            // repo it actually applies to: naming `List.head`'s would print ONE command under a count that
+            // spans several, and a worker who ran it would silently address a subset of the items just
+            // counted — a remedy that appears to cover a subject it does not (#266).
+            let repos = withheld |> List.map (fun i -> i.Ref.Repo) |> List.distinct |> List.sort
+
+            let count =
+                $"%d{List.length withheld} item(s) are in BACKLOG, and were passed over AT THE COLUMN — whether they are startable is UNASKED, not no."
+
+            match repos with
+            | [ one ] ->
+                [ count
+                  $"  triage them to Ready, or schedule from Backlog as-is: fsgg-coord take --repo %s{one} --include-backlog" ]
+            | many ->
+                (count :: "  triage them to Ready, or schedule from Backlog as-is — one repo at a time:" :: [
+                    for r in many -> $"    fsgg-coord take --repo %s{r} --include-backlog"
+                ])
+
     /// Returns [] whenever the queue is NOT starved: work WAS handed out (a `chosen` batch is not starved),
-    /// or nothing is queued behind a live claim (a queue starved by blockers or columns is #440's business,
-    /// and it is told per-item). A BUSY banner on a healthy queue is noise that trains workers to skip
-    /// stderr — the very habit #440 was closed to break.
+    /// or nothing is queued behind a live claim AND nothing was withheld at the column (a queue starved by
+    /// blockers is #440's business, and it is told per-item). A banner on a healthy queue is noise that
+    /// trains workers to skip stderr — the very habit #440 was closed to break.
     let starvedBanner (leaseMinutes: int) (result: BatchResult) : string list =
         if not (List.isEmpty result.Chosen) then
             []
         else
+            let backlog = backlogSection result
+
             match queuedBehindClaims result with
-            | [] -> []
+            // Nothing is held, but the column withheld candidates — UNTRIAGED, not busy, not empty either.
+            | [] ->
+                if List.isEmpty backlog then
+                    []
+                else
+                    "this queue is UNTRIAGED, not empty." :: backlog
             | queued ->
                 let holders =
                     queued
@@ -157,9 +217,13 @@ module Batch =
                         | [] -> "lease unknown"
                         | ages -> Schedulability.leaseWindow leaseMinutes (List.max ages)
 
-                // Repo-scoped by construction: every queued claim is in the batch's one repo, so its holder
-                // names the repo the `reap` remedy runs against.
-                let repo = (List.head queued).Holder.Repo
+                // The repos the expired leases are actually IN. This used to read "repo-scoped by
+                // construction: every queued claim is in the batch's one repo" and take `List.head`'s — but
+                // the batch is not repo-scoped (`--repo` is optional; see `backlogSection`), so on an
+                // org-wide batch that printed ONE `reap --repo X` under a count spanning several, and the
+                // leases in every other repo stayed uncollected while the line said they were collectable.
+                let reapRepos =
+                    expired |> List.map (fun q -> q.Holder.Repo) |> List.distinct |> List.sort
 
                 let banner =
                     [ "this queue is BUSY, not empty."
@@ -174,12 +238,19 @@ module Batch =
                     expired |> List.map (fun q -> q.Holder) |> List.distinct |> List.length
 
                 let reapAdvice =
-                    if expiredLeases > 0 then
-                        [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo %s{repo} --apply" ]
-                    else
-                        []
+                    match reapRepos with
+                    | [] -> []
+                    | [ one ] ->
+                        [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: fsgg-coord reap --repo %s{one} --apply" ]
+                    | many ->
+                        ($"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them, one repo at a time:"
+                         :: [ for r in many -> $"    fsgg-coord reap --repo %s{r} --apply" ])
 
-                banner @ reapAdvice
+                // #636 — BUSY and UNTRIAGED are independent facts about one queue, and the live board that
+                // prompted this had both: two items behind live claims (soonest ~120m) and seven withheld at
+                // the column. Reporting only the first told the worker to wait two hours over work that was
+                // one flag away. So the sections compose; neither suppresses the other.
+                banner @ reapAdvice @ backlog
 
     /// Reservations that name files in THIS repo. Tokens are repo-relative (#312, #353).
     let private inRepo (owner: string) (repo: string) (reservations: Reservation list) =
