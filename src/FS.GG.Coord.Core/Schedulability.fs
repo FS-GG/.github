@@ -197,6 +197,35 @@ module Schedulability =
         |> List.map (fun (a, b) -> $"%s{TouchSet.stem a}  ⇄  %s{TouchSet.stem b}")
         |> String.concat ", "
 
+    /// THE WIRE VOCABULARY, AND THE ONLY PLACE IT IS SPELLED (#865).
+    ///
+    /// A `function` match, so the COMPILER enforces what a list literal never could: add a case to the
+    /// union and this fails to build (FS0025, incomplete match — and this project is warnings-as-errors),
+    /// so a verdict cannot reach the wire without a name, nor the docs without an entry. That is not a
+    /// style preference. It is the property `ProtocolTests` claimed in a comment and did not have: the
+    /// kinds were typed a THIRD time in `Snapshot`, and `ItemPrOpen` shipped on the wire while
+    /// `Protocol.verdicts` never heard of it, with the guard green over both.
+    ///
+    /// The strings are the shipped ones. `held-by` is deliberately NOT `held`: `held` is `who`'s
+    /// CLAIM-STATE vocabulary (held/stale/unclaimed, `Client.whoStateName`), a different question with a
+    /// different answer set. `Protocol.verdicts` documented the verdict as `held` for exactly as long as
+    /// nothing derived it, which sent a reader grepping a schedulability verdict into the claim-state
+    /// vocabulary — a wrong hit reads as an answer, where a miss would at least read as a question.
+    let kind =
+        function
+        | Startable -> "startable"
+        | WrongStatus _ -> "wrong-status"
+        | IssueClosed -> "issue-closed"
+        | NoTouchSet -> "no-touch-set"
+        | DeliberatelyNoTouchSet -> "deliberately-no-touch-set"
+        | UnusableTouchSet _ -> "unusable-touch-set"
+        | BlockedBy _ -> "blocked-by"
+        | HeldBy _ -> "held-by"
+        | HeldByLiveWork _ -> "held-by-live-work"
+        | ItemPrOpen _ -> "item-pr-open"
+        | OverlapsInFlight _ -> "overlaps-in-flight"
+        | Undetermined _ -> "undetermined"
+
     let explain (leaseMinutes: int) (item: Item) (result: Schedulability) : string =
         let id = item.Ref.Short
 

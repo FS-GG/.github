@@ -1,6 +1,7 @@
 namespace FS.GG.Coord.Tests
 
 open System.Reflection
+open FSharp.Reflection
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -30,44 +31,114 @@ module ProtocolTests =
     /// verdict the docs never mention has no way to act on it; a doc listing a verdict the scheduler
     /// cannot return sends them looking for a state that does not exist. The union and its prose are one
     /// thing, and this asserts they stay one thing.
+    ///
+    /// THE SUBJECT IS THE UNION, FOUND BY REFLECTION — never a list of cases somebody maintains. That
+    /// list WAS this test, and it was vacuous (#865): it constructed eleven cases, asserted
+    /// `List.length everyCase = Set.count documented`, and carried a comment promising that "if a case
+    /// is ADDED to the union, this list fails to compile until somebody adds it — the compiler, not a
+    /// reviewer, notices."
+    ///
+    /// **F# gives no such property for a list literal.** Adding a case breaks nothing; the list simply
+    /// stops mentioning it. `ItemPrOpen` was added to the union, returned by `schedulable`, and emitted
+    /// as `item-pr-open` on the wire while `Protocol.verdicts` never heard of it — 11 = 11, green, for
+    /// as long as the doc stayed wrong too. The count could only fail if BOTH copies were edited, which
+    /// is the one case that needs no test.
+    ///
+    /// So the two halves are split by who can actually enforce them. The COMPILER owns coverage:
+    /// `Schedulability.kind` and `Protocol.meaning` are total matches, so a new case fails the BUILD.
+    /// Reflection owns the one thing it cannot see — that `Protocol.everyCase` still names every case —
+    /// and reflection cannot be forgotten.
     [<Fact>]
     let ``the documented verdicts are exactly the verdicts the scheduler can return`` () =
+        let cases = FSharpType.GetUnionCases typeof<Schedulability.Schedulability>
+        let documented = Protocol.verdicts |> List.map (fun v -> v.Kind)
+
+        // Two cases sharing a kind would let one hide behind the other and still pass the count below.
+        Assert.Equal<string list>(List.distinct documented, documented)
+
+        Assert.Equal<int>(cases.Length, List.length documented)
+
+        for v in Protocol.verdicts do
+            Assert.False(
+                System.String.IsNullOrWhiteSpace v.Kind,
+                "a verdict is documented under an empty kind — ungreppable by construction")
+
+            Assert.False(
+                System.String.IsNullOrWhiteSpace v.Meaning,
+                $"verdict '%s{v.Kind}' means nothing")
+
+    /// THE DOC'S KIND IS THE WIRE'S KIND — the same function, not two spellings that agree today.
+    ///
+    /// `Protocol.fsi` promises "a reader of that log can grep a verdict straight into the doc that
+    /// explains it". This is that promise, asserted rather than stated: every verdict the scheduler can
+    /// return renders a kind (`Schedulability.kind` — what `Snapshot` writes as the `verdict` field) that
+    /// appears verbatim in `Protocol.verdicts`.
+    [<Fact>]
+    let ``every kind the wire can emit is greppable into the docs`` () =
         let documented = Protocol.verdicts |> List.map (fun v -> v.Kind) |> Set.ofList
 
-        // Every case of `Schedulability`, constructed. If a case is ADDED to the union, this list fails
-        // to compile until somebody adds it — which is the point: the compiler, not a reviewer, notices.
-        let everyCase: Schedulability.Schedulability list =
-            [ Schedulability.Startable
-              Schedulability.IssueClosed
-              Schedulability.WrongStatus Backlog
-              Schedulability.NoTouchSet
-              Schedulability.DeliberatelyNoTouchSet
-              Schedulability.UnusableTouchSet [ "**/x" ]
-              Schedulability.BlockedBy []
-              Schedulability.HeldBy(WorkerId "w")
-              Schedulability.HeldByLiveWork(WorkerId "w", 1)
-              Schedulability.OverlapsInFlight []
-              Schedulability.Undetermined "r" ]
+        // Representative values, pinning the STRING each case renders — the one fact neither the compiler
+        // (which checks only that a case HAS a kind) nor reflection (which checks only that every case is
+        // documented) can see. A silent rename of `held-by` back to `held` passes both, and lands in three
+        // generated documents.
+        //
+        // THIS IS A HAND-MAINTAINED LIST, WHICH IS THE SHAPE THAT CAUSED #865 — so it is not trusted to
+        // be complete, it is FORCED to be, by the set assertion below. Its coverage rests on `documented`,
+        // which reflection has already pinned to the union.
+        let samples: (Schedulability.Schedulability * string) list =
+            [ Schedulability.Startable, "startable"
+              Schedulability.IssueClosed, "issue-closed"
+              Schedulability.WrongStatus Backlog, "wrong-status"
+              Schedulability.BlockedBy [], "blocked-by"
+              Schedulability.NoTouchSet, "no-touch-set"
+              Schedulability.DeliberatelyNoTouchSet, "deliberately-no-touch-set"
+              Schedulability.UnusableTouchSet [ "**/x" ], "unusable-touch-set"
+              Schedulability.HeldBy(WorkerId "w"), "held-by"
+              Schedulability.HeldByLiveWork(WorkerId "w", 1), "held-by-live-work"
+              Schedulability.ItemPrOpen 1, "item-pr-open"
+              Schedulability.OverlapsInFlight [], "overlaps-in-flight"
+              Schedulability.Undetermined "r", "undetermined" ]
 
-        Assert.Equal(List.length everyCase, Set.count documented)
+        for case, wire in samples do
+            Assert.Equal<string>(wire, Schedulability.kind case)
 
-        // And the kinds match the wire vocabulary the divergence log speaks, so a reader of that log can
-        // grep a verdict straight into the doc that explains it.
-        let expected =
-            Set.ofList
-                [ "startable"
-                  "issue-closed"
-                  "wrong-status"
-                  "no-touch-set"
-                  "deliberately-no-touch-set"
-                  "unusable-touch-set"
-                  "blocked-by"
-                  "held"
-                  "held-by-live-work"
-                  "overlaps-in-flight"
-                  "undetermined" ]
+            Assert.True(
+                documented.Contains wire,
+                $"the scheduler can emit '%s{wire}' and no documented verdict explains it — a worker greps it and finds nothing")
 
-        Assert.Equal<Set<string>>(expected, documented)
+        // EVERY documented kind is pinned above, and nothing else is. A new union case reaches `documented`
+        // by construction (the compiler forces a kind and a meaning; reflection forces the enumeration) —
+        // so it lands here as a set difference, and its wire string cannot ship unpinned.
+        Assert.Equal<Set<string>>(documented, samples |> List.map snd |> Set.ofList)
+
+    /// THE TWO DRIFTS #865 FOUND, PINNED INDIVIDUALLY — so a regression names itself rather than
+    /// arriving as an off-by-one in a count.
+    ///
+    /// `held` is not merely the wrong token, which is why it outlived review: it is a LIVE token in a
+    /// DIFFERENT vocabulary — `who`'s claim state (`held`/`stale`/`unclaimed`). So a worker grepping the
+    /// documented `held` got a HIT, in the wrong answer set, and a wrong hit reads as an answer where a
+    /// miss reads as a question.
+    [<Fact>]
+    let ``the verdict vocabulary says held-by, and leaves 'held' to who's claim states`` () =
+        let documented = Protocol.verdicts |> List.map (fun v -> v.Kind) |> Set.ofList
+
+        Assert.True(documented.Contains "held-by", "the wire emits 'held-by' and the docs do not explain it")
+
+        Assert.False(
+            documented.Contains "held",
+            "'held' is `who`'s CLAIM-STATE vocabulary, not a schedulability verdict — documenting it here sends a grep into the wrong answer set (#865)")
+
+    /// `ItemPrOpen` (#651) reached the wire and never reached the docs, behind a green test. It is the
+    /// case that proves the point, so it is asserted by name.
+    [<Fact>]
+    let ``item-pr-open is documented — the verdict that shipped undocumented`` () =
+        let doc = Protocol.verdicts |> List.tryFind (fun v -> v.Kind = "item-pr-open")
+
+        match doc with
+        | None ->
+            Assert.Fail
+                "item-pr-open is returned by `schedulable` and emitted by `Snapshot`, and no documented verdict explains it (#865)"
+        | Some d -> Assert.Contains("#651", d.Meaning)
 
     /// A RULE WITH NO `Because` IS A RULE THAT WILL BE DELETED BY SOMEBODY WHO DOES NOT KNOW WHY.
     ///

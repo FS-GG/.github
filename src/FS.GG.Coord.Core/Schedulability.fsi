@@ -88,6 +88,22 @@ module Schedulability =
     /// (#440).
     val schedulable: allowBacklog: bool -> inFlight: TouchSet list -> item: Item -> Schedulability
 
+    /// The verdict's WIRE KIND — the token the divergence log speaks and `facts` documents, spelled ONCE
+    /// (#865).
+    ///
+    /// Every projection of the vocabulary is emitted from this function: `Snapshot`'s `verdict` field and
+    /// `Protocol.verdicts` both call it, so the log a worker greps and the doc that explains it cannot
+    /// disagree BY CONSTRUCTION. They had, in both directions at once: `ItemPrOpen` was on the wire and
+    /// in no doc, and the doc said `held` where the wire says `held-by`.
+    ///
+    /// It is a total `function` match, which is the entire point — the compiler refuses a new union case
+    /// with no name here (FS0025 under warnings-as-errors). A list literal gives NO such property, and
+    /// the test that claimed it in a comment was counting entries instead.
+    ///
+    /// `held-by`, not `held`: `held` belongs to `who`'s claim-state vocabulary and is a different
+    /// question.
+    val kind: Schedulability -> string
+
     /// The touch-set grammar, stated once. A refusal that does not say what WOULD have been accepted
     /// only moves the worker's confusion one step later.
     val TouchSetGrammar: string
