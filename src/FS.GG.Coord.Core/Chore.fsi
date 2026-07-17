@@ -23,6 +23,17 @@ namespace FS.GG.Coord
 ///
 ///        Writes.claim transport choreLeaseMinutes worker session choreLockRef (fun () -> None)
 ///
+///    **`choreLockRef` COMES FROM `Options.choreLockRef owner repo` — NOT from `registry/repos.yml`**
+///    (ADR-0042, .github#1026). ADR-0041 recorded the number in the roster file, and this text cited it for
+///    its whole life; the engine has no YAML reader, deliberately (the shim ships as a `kind: client` kit
+///    item WITHOUT the roster — case 13 §6c / #381), so the source named here did not exist and #733 had no
+///    legal first step rather than merely a hard one. The ref is embedded beside the roster and pays the
+///    roster's price: adding a repo's lock is a code edit here, not a data change.
+///
+///    `None` ⇒ `offer` REFUSES — unchanged from ADR-0041, and the reason the reader returns an option at all.
+///    Today only `.github` has a lock (#1033); the six receivers are `None` until .github#733 creates theirs,
+///    so `offer` refuses there, which is the honest state and not a gap.
+///
 ///    This text used to say the substrate was an open DECISION, and that the item CAS was "145 lines of
 ///    claim-specific policy a chore lock wants none of" — so reusing it meant factoring the org's most
 ///    safety-critical function, and not reusing it meant a second CAS (#485). **That premise was wrong, and

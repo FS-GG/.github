@@ -65,6 +65,7 @@ registry like any other, and this org gates its registries.
 | [0039](0039-nuget-org-is-the-read-path.md) | **nuget.org is the read path; the org feed is the publish path** | Accepted |
 | [0040](0040-port-the-io-layer.md) | The **IO layer is ported to F# too** — an `IGitHub` seam (HTTP adapter + call-counting fake) driven by the shell corpus through a configurable API base; each write's precondition lives in its type | Accepted |
 | [0041](0041-the-chore-lock-is-the-item-cas-on-another-subject.md) | A **chore takes the item CAS, unchanged**, on a closed per-repo lock issue — `Writes.claim` is already substrate-general (comments only; the lease is a parameter; the board coupling is a callback), so the refactor #873 priced was never needed | Accepted |
+| [0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md) | The **chore-lock ref is embedded beside the roster**, keyed on owner and repo — `registry/repos.yml` is unreadable exactly where the queue has to work, because the shim ships to receivers without it | Accepted |
 
 ## Supersession map
 
@@ -92,3 +93,4 @@ Which record currently rules, and where a decision was amended. Every edge below
 | [0031](0031-republished-package-is-a-named-failure.md) | **all** | [0032](0032-the-lock-hash-must-not-depend-on-the-machine.md) | **Withdrawn — premise false.** §1 (cold restore) and §3 (never hand-write a `contentHash`) survive, in 0032 §5 and §4. |
 | [0034](0034-typed-coordination-engine.md) | §5 | [0038](0038-the-corpus-is-the-cut-over-gate.md) | The three-day shadow clock **could never tick**. The gate is the defect corpus; the shadow is telemetry. |
 | [0034](0034-typed-coordination-engine.md) | §5 exit / §4.4 | [0040](0040-port-the-io-layer.md) | "Delete the bash implementation" was **not reachable** — the IO layer is ported, each write's precondition in its type; the shim's preconditions are named. |
+| [0041](0041-the-chore-lock-is-the-item-cas-on-another-subject.md) | the config clause | [0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md) | The lock's number is **not** in `registry/repos.yml` — the engine has no YAML reader, and must not: the shim ships to receivers without the roster. Embedded beside the roster instead. The substrate decision, and `absent ⇒ offer refuses`, stand. |

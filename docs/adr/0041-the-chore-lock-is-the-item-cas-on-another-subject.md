@@ -1,8 +1,8 @@
 # ADR-0041: A chore takes the item CAS, unchanged, on a closed per-repo lock issue — the refactor it seemed to need was the reason it never shipped
 
-- **Status:** Accepted (2026-07-17)
+- **Status:** Accepted (2026-07-17) — **configuration clause amended by [ADR-0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md) (2026-07-17).** The substrate decision below stands unchanged; only *where the lock's number is recorded* moved, from `registry/repos.yml` to `Options.choreLockRef`. See the dated note at "The lock issue is CLOSED".
 - **Date:** 2026-07-17
-- **Affects:** `.github` (the chore queue: `Chore.fs`, `Writes.claim`, `registry/repos.yml`), and every repo where chores are offered — sdd, rendering, governance, templates, game, audio
+- **Affects:** `.github` (the chore queue: `Chore.fs`, `Writes.claim`, `Options.fs`), and every repo where chores are offered — sdd, rendering, governance, templates, game, audio
 - **Decides:** [#873](https://github.com/FS-GG/.github/issues/873) — Phase 4.3 condition 1. Unblocks [#733](https://github.com/FS-GG/.github/issues/733) (the wiring), which this record does **not** do.
 
 ## Context
@@ -76,6 +76,21 @@ disable the lock.
 **Its number is recorded per-repo in `registry/repos.yml`.** Absent ⇒ `offer` refuses. A chore queue that
 cannot find its lock must offer nothing, never broadcast: condition 1 fails **closed**, like every other
 "could not look" in this engine (#266, #421).
+
+> **AMENDED 2026-07-17 by [ADR-0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md)
+> ([#1026](https://github.com/FS-GG/.github/issues/1026)) — the number is NOT in `registry/repos.yml`, and
+> could never have been.** The engine has no YAML reader, deliberately: the shim ships as a `kind: client`
+> kit item *without* the roster (case 13 §6c / #381), so a `repos.yml` reader would be absent exactly where
+> receivers run and `offer` would refuse there forever — inverting the mechanism #733 is for. The ref is
+> **embedded beside the roster**, keyed on owner and repo:
+>
+> ```fsharp
+> Options.choreLockRef: owner: string -> repo: string -> Types.Ref option
+> ```
+>
+> **The rest of this paragraph is unchanged and load-bearing:** absent ⇒ `offer` refuses, fail closed. Only
+> the *source* moved. `.github`'s lock is [#1033](https://github.com/FS-GG/.github/issues/1033); the six
+> receivers have none yet and are `None` until #733 creates theirs.
 
 ### Why the marker prefix does not need parameterising
 

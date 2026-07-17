@@ -462,6 +462,46 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | -1 -> raw
             | i -> raw.Substring(i + 1)
 
+    /// An owner + repo → the CLOSED issue whose comments are that repo's CHORE-LOCK CAS subject (ADR-0041).
+    /// `None` ⇒ `offer` refuses, which is the whole contract: a chore queue that cannot find its lock must
+    /// offer nothing and never broadcast — condition 1 fails CLOSED, like every other "could not look" in
+    /// this engine (#266, #421).
+    ///
+    /// EMBEDDED, BESIDE THE ROSTER, FOR THE ROSTER'S OWN REASON (ADR-0042, .github#1026). ADR-0041 recorded
+    /// this number in `registry/repos.yml`, and the engine has no YAML reader — deliberately: the shim ships
+    /// as a `kind: client` kit item WITHOUT the roster (case 13 §6c / #381), so a `repos.yml` reader would be
+    /// absent exactly where receivers run and `offer` would refuse there forever. That inverts the mechanism
+    /// #733 is for — a queue that "amortises maintenance across a fleet already calling the tool constantly"
+    /// would amortise across the one repo that has the file. So the ref lives where the roster lives, and
+    /// pays the roster's price: growth is a code edit here rather than a data change (ADR-0019).
+    ///
+    /// KEYED ON OWNER AS WELL AS REPO, AND THAT IS THE FAIL-CLOSED PART. The owner is configurable
+    /// (`FSGG_COORD_OWNER`, default `FS-GG` — `Client.fs`/`Program.fs`), and these numbers are FS-GG's
+    /// issues. Keyed on the repo alone, a caller under another owner would be handed `<their-owner>/.github`
+    /// number 1033 — a real ref naming an unrelated issue, which is a lock that protects nothing while
+    /// reporting that it does. An owner this map does not know has no lock, so it gets `None` and `offer`
+    /// stays shut.
+    ///
+    /// ONLY `.github` HAS A LOCK TODAY (#1033). The six receivers are `None` on purpose: their lock issues do
+    /// not exist yet, and .github#733 creates them as it wires `offer` — until then `offer` refuses there,
+    /// which is the honest state rather than a gap. Adding one is this map plus the closed issue it names.
+    let choreLockRef (owner: string) (repo: string) : FS.GG.Coord.Types.Ref option =
+        match owner.ToLowerInvariant(), (resolveRepo repo).ToLowerInvariant() with
+        | "fs-gg", ".github" ->
+            // CANONICAL on the way out, case-insensitive on the way in — `resolveRepo`'s own contract
+            // (`Governance` → `FS.GG.Governance`), applied to the owner too. Echoing the caller's casing back
+            // would mint a Ref that is structurally UNEQUAL to the canonical one while `Short` renders both
+            // as `.github#1033` — two locks that compare different and print the same, which is the split the
+            // CAS cannot survive and no log would show.
+            // Annotated because the bare labels resolve to `Blocker`, which also carries an `Owner`.
+            let lock: FS.GG.Coord.Types.Ref =
+                { Owner = "FS-GG"
+                  Repo = ".github"
+                  Number = 1033 }
+
+            Some lock
+        | _ -> None
+
     /// `say`'s message is POSITIONAL, and `--to` is OPTIONAL — the shape bash shipped, the shape all seven
     /// prescribing sites document, and the shape the port dropped (#919).
     ///
