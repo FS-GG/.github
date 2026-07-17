@@ -91,6 +91,11 @@ make_repo() {
   # keep passing after someone edits default.json in a way that stops matching the pin.
   cp "$REPO_ROOT/default.json" "$root/default.json"
 
+  # The REAL sync script, for the same reason: it DEFINES the synced set the preset must disable
+  # (#794), so a stub here would let every leg pass after the two drifted apart.
+  mkdir -p "$root/scripts"
+  cp "$REPO_ROOT/scripts/sync-build-config.sh" "$root/scripts/sync-build-config.sh"
+
   cat > "$root/renovate.json" <<'JSON'
 {
   "extends": ["github>FS-GG/.github"],
@@ -575,8 +580,9 @@ must_fail "ignorePaths on a synced file is refused (it swallows dist/dotnet/ by 
 BROAD="$(make_repo broad-glob)"
 edit_json "$BROAD/default.json" '
 for r in d["packageRules"]:
-    if r.get("matchFileNames") == [".config/dotnet-tools.json"]:
-        r["matchFileNames"] = ["**/.config/dotnet-tools.json"]
+    p = r.get("matchFileNames") or []
+    if ".config/dotnet-tools.json" in p:
+        p[p.index(".config/dotnet-tools.json")] = "**/.config/dotnet-tools.json"
 '
 must_fail "a leading **/ on the synced-file rule is refused (it reaches dist/dotnet/)" \
   "$BROAD" "$FEED" "reaches beyond the receiver's copy"
@@ -585,7 +591,7 @@ must_fail "a leading **/ on the synced-file rule is refused (it reaches dist/dot
 NORULE="$(make_repo no-synced-rule)"
 edit_json "$NORULE/default.json" '
 d["packageRules"] = [r for r in d["packageRules"]
-                     if r.get("matchFileNames") != [".config/dotnet-tools.json"]]
+                     if ".config/dotnet-tools.json" not in (r.get("matchFileNames") or [])]
 '
 must_fail "deleting the synced-file rule is refused" \
   "$NORULE" "$FEED" "declares no \`matchFileNames:"
@@ -621,11 +627,106 @@ must_fail "a LATER rule re-enabling the synced file is refused (last rule wins)"
 NARROW="$(make_repo narrowed-rule)"
 edit_json "$NARROW/default.json" '
 for r in d["packageRules"]:
-    if r.get("matchFileNames") == [".config/dotnet-tools.json"]:
+    if ".config/dotnet-tools.json" in (r.get("matchFileNames") or []):
         r["matchUpdateTypes"] = ["major"]
 '
 must_fail "narrowing the disable with an extra matcher is refused" \
   "$NARROW" "$FEED" "Every additional key NARROWS the rule"
+
+echo
+echo "--- the .props half: disabled in receivers, MANAGED in the source of truth (#794) ---"
+# Directory.{Packages,Build}.props are the other two files sync-build-config.sh manages. #925 read
+# them as INEXPRESSIBLE here and routed them to a re-enable in this repo's own renovate.json,
+# because the SAME root path is a receiver's synced copy and this repo's own authored build config
+# — and .github dogfoods this preset. `matchRepositories: ["!FS-GG/.github"]` expresses it in one
+# place. Every leg below is valid config that renovate-config-validator passes, and silent.
+
+# The #794 trap, and the reason the exclusion is REQUIRED rather than optional: name the .props
+# unconditionally and Renovate stops proposing bumps for THIS repo's own pins (FSharp.Core,
+# Spectre.Console, xunit) and for the dist/dotnet/ baseline every receiver is synced from (#753).
+# That is #576 — a config sentence that silently stops a bot, with the gate green.
+NOEXCL="$(make_repo no-source-exclusion)"
+edit_json "$NOEXCL/default.json" '
+for r in d["packageRules"]:
+    if "Directory.Packages.props" in (r.get("matchFileNames") or []):
+        del r["matchRepositories"]
+'
+must_fail "dropping matchRepositories is refused (it would freeze this repo's own pins)" \
+  "$NOEXCL" "$FEED" "must exclude the source of truth"
+
+# Excluding a RECEIVER hands that receiver back the un-mergeable PR — the exact bug, for one repo,
+# spelled as if it were the sanctioned exclusion.
+EXTRA="$(make_repo extra-repo-excluded)"
+edit_json "$EXTRA/default.json" '
+for r in d["packageRules"]:
+    if "Directory.Packages.props" in (r.get("matchFileNames") or []):
+        r["matchRepositories"] = ["!FS-GG/.github", "!FS-GG/FS.GG.Game"]
+'
+must_fail "excluding a receiver as well is refused (Game gets the un-mergeable PR back)" \
+  "$EXTRA" "$FEED" "exclude nothing else"
+
+# A POSITIVE entry inverts the rule: matchRegexOrGlobList requires a positive pattern to match, so
+# this disables the files ONLY in .github — precisely backwards, and it reads like a fix.
+INV="$(make_repo inverted-repo-match)"
+edit_json "$INV/default.json" '
+for r in d["packageRules"]:
+    if "Directory.Packages.props" in (r.get("matchFileNames") or []):
+        r["matchRepositories"] = ["FS-GG/.github"]
+'
+must_fail "a positive matchRepositories is refused (it inverts the rule)" \
+  "$INV" "$FEED" "not ['!FS-GG/.github']"
+
+# Each .props dropped from the list — the un-mergeable receiver PR returns for that file. This is
+# the leg that keeps the list COMPLETE against sync-build-config.sh's FILES.
+for f in "Directory.Packages.props" "Directory.Build.props"; do
+  DROP="$(make_repo "drop-$(printf '%s' "$f" | tr -c '[:alnum:]' '-')")"
+  edit_json "$DROP/default.json" "
+for r in d['packageRules']:
+    p = r.get('matchFileNames') or []
+    if '$f' in p:
+        p.remove('$f')
+"
+  must_fail "dropping $f from the disable list is refused" \
+    "$DROP" "$FEED" "declares no \`matchFileNames:"
+done
+
+# The disable list is a ROSTER, and sync-build-config.sh owns the real one. A fourth synced file
+# would otherwise land a fourth un-mergeable PR in every receiver with both the preset and this gate
+# green, because neither knows it exists — the census rot #902 fixed in three copies at once.
+GROW="$(make_repo synced-set-grew)"
+python3 - "$GROW/scripts/sync-build-config.sh" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = '  ".config/dotnet-tools.json"\n)'
+assert old in s, "fixture no longer matches sync-build-config.sh's FILES block"
+open(p, "w", encoding="utf-8").write(s.replace(old, old[:-1] + '  "nuget.config"\n)', 1))
+PY
+must_fail "a file added to sync-build-config.sh but not to the preset is refused" \
+  "$GROW" "$FEED" "that this gate does not disable"
+
+# ...and the mirror: a file the script no longer syncs is one a receiver AUTHORS now, so leaving it
+# disabled silently freezes that receiver's own pin — the #576 direction of the same drift.
+SHRINK="$(make_repo synced-set-shrank)"
+python3 - "$SHRINK/scripts/sync-build-config.sh" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+old = '  "Directory.Build.props"\n'
+assert old in s, "fixture no longer matches sync-build-config.sh's FILES block"
+open(p, "w", encoding="utf-8").write(s.replace(old, "", 1))
+PY
+must_fail "a file the sync script dropped but the preset still disables is refused" \
+  "$SHRINK" "$FEED" "no longer syncs"
+
+# ignorePaths reaching the .props source of truth by substring — the #678 trap, now for the files
+# #794 adds. "Directory.Packages.props" occurs inside dist/dotnet/Directory.Packages.props.
+for e in "Directory.Packages.props" "Directory.Build.props"; do
+  PSUB="$(make_repo "psub-$(printf '%s' "$e" | tr -c '[:alnum:]' '-')")"
+  edit_json "$PSUB/default.json" "d[\"ignorePaths\"] = [\"$e\"]"
+  must_fail "ignorePaths ['$e'] is refused (it swallows dist/dotnet/ by substring)" \
+    "$PSUB" "$FEED" "is a SUBSTRING of dist/dotnet/$e"
+done
 
 echo
 echo "--- CI guard on the real repo (no network: structure only) ---"
@@ -653,17 +754,27 @@ assert pins, "no pins found in the real repo"
 # The REAL preset must disable every synced receiver file, anchored (#678).
 gate.assert_synced_files_unmanaged(f"{root}/default.json")
 
+# ...and the list must still equal the one sync-build-config.sh actually syncs (#794, #902). A
+# fourth FILES entry would otherwise land a fourth un-mergeable PR in every receiver, silently.
+gate.assert_synced_list_is_complete(root)
+
 # ...and the org source of truth must still be a pin this gate can SEE. The whole hazard of #678 is
 # a rule that un-manages dist/dotnet/ while looking like a fix, so assert the positive half against
 # the real tree rather than trusting the shape check alone: sync-build-config.sh's canonical copy
 # must exist and carry the tool pin Renovate bumps here (#660).
-tools = f"{root}/dist/dotnet/{gate.SYNCED_RECEIVER_FILES[0]}"
+# Named, not indexed. This leg json.loads the file and reads `.tools`, which is true of exactly ONE
+# member of SYNCED_RECEIVER_FILES — it rode on [0] back when the tuple had a single entry, and #794
+# grew it to three. Sorting that tuple would hand this line an XML .props file and a JSONDecodeError
+# dressed up as a repo-structure failure.
+_tools_rel = ".config/dotnet-tools.json"
+assert _tools_rel in gate.SYNCED_RECEIVER_FILES, f"{_tools_rel} is no longer a synced file"
+tools = f"{root}/dist/dotnet/{_tools_rel}"
 import json as _json, os as _os
 assert _os.path.exists(tools), f"the org source of truth is missing: {tools}"
 _pins = _json.load(open(tools, encoding="utf-8")).get("tools") or {}
 assert _pins, f"{tools} declares no tools — nothing for Renovate to keep fresh (#660)"
 print(f"ok: {len(pins)} pin(s); every REQUIRED_PINS entry present; FS.GG.* routed to {', '.join(hosts)}")
-print(f"ok: receiver {gate.SYNCED_RECEIVER_FILES[0]} disabled; dist/dotnet/ still declares "
+print(f"ok: receiver {', '.join(gate.SYNCED_RECEIVER_FILES)} disabled; dist/dotnet/ still declares "
       f"{len(_pins)} managed tool pin(s)")
 PY
 )" && rc=0 || rc=$?

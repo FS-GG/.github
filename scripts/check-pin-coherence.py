@@ -444,13 +444,28 @@ def assert_no_stray_secret_templates(cfg: dict, config_path: str) -> None:
 # dist/dotnet/. A receiver's copy is SYNCED, not authored (ADR-0006, sync-not-fork), and the
 # build-config drift gate — a REQUIRED check in adopting repos — fails any PR that changes one.
 #
-# Directory.Build.props and Directory.Packages.props are sync-build-config.sh's other two managed
-# files and are DELIBERATELY not listed here. They are inexpressible in the shared preset: .github
-# does not adopt the org baseline (its root Directory.Packages.props is hand-authored — the
-# baseline's FSharp.Core pin would collide, NU1506), so the same root path is a synced copy in a
-# receiver and this repo's own build config here, and .github dogfoods this preset. Disabling those
-# names org-wide would freeze this repo's own engine pins. That half is .github#794.
-SYNCED_RECEIVER_FILES = (".config/dotnet-tools.json",)
+# .config/dotnet-tools.json stays FIRST: _offence() reports the first source path an ignorePaths
+# entry is a substring of, and the #678 legs assert that message names dist/dotnet/.config/... .
+SYNCED_RECEIVER_FILES = (
+    ".config/dotnet-tools.json",
+    "Directory.Build.props",
+    "Directory.Packages.props",
+)
+
+# The repo the synced files are AUTHORED in. Every path above means the opposite thing here: in a
+# receiver it is a synced copy Renovate must not touch, and here it is this repo's own build config
+# — .github does NOT adopt the org baseline (its root Directory.Packages.props is hand-authored,
+# because the baseline's FSharp.Core pin would collide, NU1506). Since .github dogfoods this preset
+# (renovate.json extends github>FS-GG/.github), a rule that named those paths unconditionally would
+# freeze this repo's own engine pins — FSharp.Core, Spectre.Console, xunit, FsCheck.Xunit (#739 and
+# #753 are Renovate bumping the root file) — which is #576 exactly.
+#
+# #925 read that collision as proof the .props half was INEXPRESSIBLE in the shared preset, and
+# routed it to a re-enable in this repo's own renovate.json (.github#794). It is expressible:
+# Renovate's matchRegexOrGlobList reads a leading `!` as a negation, so ONE rule can apply to every
+# repo except the source of truth. Measured against renovate 43.265.3's own matcher, not the docs.
+SOURCE_OF_TRUTH_REPO = "FS-GG/.github"
+_SANCTIONED_MATCH_REPOSITORIES = [f"!{SOURCE_OF_TRUTH_REPO}"]
 
 # The org source of truth for each synced file: the copy that lives HERE and must stay MANAGED, so
 # that Renovate keeps bumping the baseline (#660, #677). Every check below is ultimately about
@@ -460,7 +475,56 @@ SYNCED_SOURCE_PATHS = tuple(f"dist/dotnet/{f}" for f in SYNCED_RECEIVER_FILES)
 # The only keys the disabling rule may carry. Any other key is a MATCHER, and a matcher narrows the
 # rule — `matchUpdateTypes: ["major"]` would leave every minor bump proposing the un-mergeable PR
 # again, with the gate still green.
-_DISABLE_RULE_KEYS = {"description", "matchFileNames", "enabled"}
+#
+# matchRepositories is the ONE sanctioned narrowing, and it is REQUIRED rather than merely allowed
+# (see SOURCE_OF_TRUTH_REPO): without it the rule freezes this repo's own pins, and with any value
+# other than the exact negation it silently un-disables a receiver. Its VALUE is asserted below —
+# membership here only gets it past the "no matchers" check.
+_DISABLE_RULE_KEYS = {"description", "matchFileNames", "enabled", "matchRepositories"}
+
+
+def assert_synced_list_is_complete(root: str) -> None:
+    """SYNCED_RECEIVER_FILES must equal sync-build-config.sh's FILES — the list that DEFINES it.
+
+    The set above is a roster, and scripts/sync-build-config.sh owns the real one. Add a fourth file
+    to its FILES and every receiver starts carrying a fourth synced copy that Renovate would happily
+    bump — the un-mergeable PR returns for that file, in every receiver, with the preset and this
+    gate both green, because neither knows the file exists. That is the census rot #902 fixed in
+    three copies at once: state the invariant, do not hand-maintain the roll-call.
+
+    Deriving the roster from the script instead would be better still, but parsing bash from here is
+    the fifth copy of a matcher problem (#724). Asserting equality keeps ONE source of truth and
+    names the drift the moment it appears, which is the property that matters.
+    """
+    path = os.path.join(root, "scripts", "sync-build-config.sh")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            src = fh.read()
+    except OSError as e:
+        raise GateError(f"cannot read {path!r}, which defines the synced set: {e}") from e
+
+    m = re.search(r"^FILES=\((.*?)^\)", src, re.MULTILINE | re.DOTALL)
+    if not m:
+        raise GateError(
+            f"{path} has no FILES=( ... ) array. It is the definition of the synced set, and a gate "
+            f"that cannot find it must not report green over the list it is supposed to check."
+        )
+    declared = set(re.findall(r'"([^"]+)"', m.group(1)))
+    if not declared:
+        raise GateError(f"{path} declares an EMPTY FILES=( ... ); refusing to report green.")
+
+    known = set(SYNCED_RECEIVER_FILES)
+    if declared != known:
+        missing = sorted(declared - known)
+        extra = sorted(known - declared)
+        raise GateError(
+            f"the synced set has drifted from {path}: "
+            + (f"sync-build-config.sh syncs {missing!r} that this gate does not disable — Renovate "
+               f"will propose the un-mergeable PR against it in every receiver, forever. " if missing else "")
+            + (f"this gate disables {extra!r} that sync-build-config.sh no longer syncs — a receiver "
+               f"authors that file now, and the preset is silently freezing it. " if extra else "")
+            + f"SYNCED_RECEIVER_FILES must equal FILES (.github#794)."
+        )
 
 
 def assert_synced_files_unmanaged(preset_path: str) -> None:
@@ -609,7 +673,28 @@ def assert_synced_files_unmanaged(preset_path: str) -> None:
                 f"additional key NARROWS the rule, and a narrowed rule leaves the un-mergeable "
                 f"receiver PR proposing again for whatever it no longer covers — "
                 f"`matchUpdateTypes: ['major']` would still propose every minor bump — while this "
-                f"gate stayed green. The disable must be unconditional (.github#678)."
+                f"gate stayed green. The only sanctioned narrowing is "
+                f"`matchRepositories: {_SANCTIONED_MATCH_REPOSITORIES!r}` (.github#678, #794)."
+            )
+
+        # The one sanctioned narrowing, asserted by VALUE. Both directions are silent failures that
+        # renovate-config-validator calls valid:
+        #   absent      -> the rule applies HERE too, freezing this repo's own authored pins and the
+        #                  org baseline that every receiver is synced from (#576, #753).
+        #   any other   -> "!FS-GG/.github, !FS-GG/FS.GG.Game" quietly hands Game back the
+        #                  un-mergeable PR; a POSITIVE entry inverts the rule to apply nowhere else.
+        got = rule.get("matchRepositories")
+        if got != _SANCTIONED_MATCH_REPOSITORIES:
+            raise GateError(
+                f"{preset_path} packageRules[{i}] disables {rel} with "
+                f"`matchRepositories = {got!r}`, not {_SANCTIONED_MATCH_REPOSITORIES!r}. That path "
+                f"is a SYNCED copy in a receiver and this repo's OWN authored build config in "
+                f"{SOURCE_OF_TRUTH_REPO}, which dogfoods this preset — so the rule must exclude the "
+                f"source of truth, and exclude nothing else. Omit it and Renovate stops proposing "
+                f"bumps for this repo's own pins (FSharp.Core, Spectre.Console, xunit) AND for the "
+                f"dist/dotnet/ baseline every receiver is synced from — the #576 freeze, silent and "
+                f"valid. Name any other repo and that receiver gets the un-mergeable PR back "
+                f"(.github#794)."
             )
 
 
@@ -1028,10 +1113,12 @@ def main(argv: list[str]) -> int:
     try:
         # Runs before the feed is read: it needs no network, and a preset that un-manages the org
         # source of truth is a finding whether or not the feed happens to be reachable today.
+        assert_synced_list_is_complete(root)
         assert_synced_files_unmanaged(preset)
         print(
-            f"ok: {', '.join(SYNCED_RECEIVER_FILES)} is disabled for receivers via matchFileNames, "
-            f"leaving dist/dotnet/ managed here (#678)."
+            f"ok: {', '.join(SYNCED_RECEIVER_FILES)} is disabled for receivers via matchFileNames "
+            f"+ matchRepositories {_SANCTIONED_MATCH_REPOSITORIES}, leaving dist/dotnet/ AND this "
+            f"repo's own authored copies managed here (#678, #794)."
         )
 
         config_path, hosts = check_bump_mechanism(root, preset)
