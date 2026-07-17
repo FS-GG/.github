@@ -85,7 +85,7 @@ module Snapshot =
     ///
     /// `candidates` is threaded through only to echo `BashPaths` back beside the engine's own parse.
     /// `leaseMinutes` is what turns "already claimed" into "wait ~96m, or reap it" — see
-    /// `Batch.explainDecision`, whose output the `--engine=fs` client relays to the worker verbatim.
+    /// `Batch.explainDecision`, whose output the client relays to the worker verbatim.
     val render:
         leaseMinutes: int -> candidates: Candidate list -> decision: Verdict<Batch.BatchResult> -> string
 

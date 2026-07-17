@@ -1,0 +1,143 @@
+# engine-flag-narrative — the retired `--engine` flag may survive only where it is HISTORY.
+#
+# .github#917, epic #266 (the rule nothing asserts).
+#
+# ADR-0040 finished the port: the engine BECAME the client, and `--engine` went with the choice it
+# existed to express. `Options.fs` does not parse it; `OptionsTests.fs` pins it as the specimen of an
+# unknown flag that must be NAMED and refused. Yet doc comments went on stating a present-tense
+# consequence "under `--engine=fs`", describing a mode no worker can select.
+#
+# THIS IS THE FOURTH HAND-REPAIR OF ONE CLASS — the narrative outlived the thing it described:
+#
+#   #836        kit skills, the design doc, the `Divergence` code   — missed the next tier: its Paths
+#   #866/#910   docs/architecture.md                                — missed the next tier: its Paths
+#   #912        .github/workflows/                                  — missed the next tier: its Paths
+#   #917        src/ + tests/ doc comments                          — this one
+#
+# Every pass was scoped by a `Paths:` touch-set that structurally could not see the next tier, so
+# every tier was found BY ACCIDENT, by whoever read the file months later. #912's own title is the
+# sentence this item would otherwise write about #912, forever. A rule enforced by whoever happens to
+# remember it is a rule that decays — and this one decayed three times before anybody gated it.
+#
+# NO `paths:` FILTER, AND THAT IS THE POINT. Every other gate here narrows its trigger to its inputs.
+# This gate's subject is THE WHOLE TREE — tier five is by definition the directory nobody thought to
+# list — so any `paths:` filter would omit a real input, which is exactly the live defect .github#930
+# describes: the filter omits a real input, both copies agree, set-equality is satisfied, and the gate
+# stays green while a PR reintroduces the regression it was written to catch. A filter here would make
+# this gate the fifth instance of the bug it closes. It is a Python walk of the tree and costs seconds;
+# running it on every PR is the cheap half of the trade. `coherence.yml` and `touch-set-drift.yml`
+# already run filter-less for the same reason: their subject is the tree, not a file list.
+#
+# No `schedule:` — the subject is committed files in this repo, so every change that could falsify it
+# arrives as a PR, and a nightly re-run would prove only that the tree did not change on its own.
+name: engine-flag-narrative
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-flag-narrative-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline, and first: prove the gate can still say NO before believing it when it says yes. The
+  # fixture replays the real #917 regression against a throwaway tree, plants the flag in a directory
+  # it invents on the spot (the TIER-FIVE leg — the one that proves the surface is the tree and not a
+  # touch-set), and asserts the fail-closed legs. Its last legs run the gate over the real tree, so a
+  # fixture that passed on synthetic strings while the shipped tree describes a dead flag as live is
+  # not a state this job can reach.
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Run the engine-flag-narrative fixture (no network)
+        run: bash tests/engine-flag-narrative/run.sh
+
+  no-live-flag:
+    runs-on: ubuntu-latest
+    needs: fixture
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Assert the retired flag appears only where it is history
+        id: check
+        run: |
+          rc=0
+          out="$(python scripts/check-engine-flag-narrative.py --root . 2>&1)" || rc=$?
+          [ -z "$out" ] || printf '%s\n' "$out"
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # One named step per exit code: "I could not check" must never be mistaken for "I checked, and
+      # it's fine" (#266), nor for "I checked, and it's broken" (#320). The exit code is the
+      # contract; nothing here greps the gate's prose.
+      #
+      # There is no exit-2 leg because this gate is PURE — working tree only, no API, no network — so
+      # it has no retryable failure to report. A leg for a verdict the gate can never mean would be a
+      # lie about the contract; the INCONCLUSIVE leg below catches a 2 if one ever appears.
+      - name: 'OK: the flag survives only as history'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '0' }}
+        run: |
+          echo "engine-flag-narrative: OK" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 'FINDING: a dead flag is being described as live'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '1' }}
+        run: |
+          {
+            echo "### engine-flag-narrative: the retired flag is being described as live"
+            echo
+            echo "A file names \`--engine\` as something a worker can select. **It cannot.**"
+            echo "ADR-0040 finished the port — the engine became the client — and the flag went with"
+            echo "the choice it expressed: \`Options.fs\` does not parse it, and \`OptionsTests.fs\`"
+            echo "pins it as the specimen of an unknown flag that must be refused."
+            echo
+            echo "**Reword it in the past tense**, naming the flag as removed — or drop the clause"
+            echo "entirely: since the engine **is** the client, the consequence is no longer"
+            echo "conditional on anything."
+            echo
+            echo "If the file is a genuine historical RECORD — an ADR, a dated disposition manifest —"
+            echo "then it is right to name the flag, and the fix is to add it to the allowlist in"
+            echo "\`scripts/check-engine-flag-narrative.py\` **with a line saying why**. Do not"
+            echo "reword a record: a record edited to remove what it recorded is falsified, which is"
+            echo "a worse defect than the one this gate closes."
+            echo
+            echo "This narrative has been retired **by hand four times** (#836, #866/#910, #912,"
+            echo "#917), each pass blind past its own \`Paths:\` touch-set, each tier found by"
+            echo "accident months later. That is what this gate is for."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=engine-flag-narrative: a retired flag described as live::See the job log for the file and line."
+          exit 1
+
+      - name: 'NO VERDICT (permanent): the gate could not audit its subject'
+        if: ${{ !cancelled() && steps.check.outputs.rc == '3' }}
+        run: |
+          {
+            echo "### engine-flag-narrative: no verdict"
+            echo
+            echo "The root was unreadable, or the audit found **no mention of \`--engine\` anywhere**"
+            echo "— which means the walker or the pattern is broken, not that the tree is clean. The"
+            echo "ADRs and the rejection test are built out of this flag."
+            echo
+            echo "Examining nothing is a failure to audit, not a clean audit. Retrying will not help."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=engine-flag-narrative: no verdict (permanent)::The gate could not run against a valid subject. See the job log."
+          exit 1
+
+      - name: 'INCONCLUSIVE: the gate produced no exit code this workflow understands'
+        if: ${{ !cancelled() && !contains(fromJSON('["0","1","3"]'), steps.check.outputs.rc) }}
+        run: |
+          echo "::error title=engine-flag-narrative: inconclusive::check-engine-flag-narrative.py exited ${{ steps.check.outputs.rc }}, which this workflow does not classify. Treating as a failure."
+          exit 1

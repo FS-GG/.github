@@ -274,8 +274,8 @@ let ``a blocker pointing at ANOTHER BOARD ITEM is resolved for FREE - zero extra
 [<Fact>]
 let ``PROSE in a Blocked-by field is UNPARSEABLE - and it BLOCKS`` () =
     // "Blocked by RESOLVED: shipped last week" has no owner, no repo and no number. The bash client silently
-    // DROPPED such blockers — so an item it called BLOCKED arrived at the engine UNBLOCKED, which under
-    // `--engine=fs` is a worker being handed blocked work.
+    // DROPPED such blockers — so an item it called BLOCKED arrived at the engine UNBLOCKED, and the engine's
+    // answer is the one a worker acts on: blocked work, handed out.
     let blocked =
         { aRow with
             Ref = { aRow.Ref with Number = 43 }

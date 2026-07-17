@@ -66,8 +66,8 @@ module BlockerTests =
     // is not a ref" — was the one state the type could not hold. This test could only be written by
     // fabricating `#0` and pretending. The client fabricated too, in its own way: its `jq capture`
     // matched nothing, produced NO object, and the whole blockers array collapsed to `[]`. So an item
-    // the client had just classified BLOCKED reached the engine UNBLOCKED, and under `--engine=fs` a
-    // worker would have been handed it.
+    // the client had just classified BLOCKED reached the engine UNBLOCKED — and the engine's answer is
+    // the one a worker acts on, so a worker would have been handed it.
     //
     // The corpus caught that (a `next --repo governance` where bash passed the item over and the engine
     // did not). The type now says what was always true: the ref is an OPTION, and the prose survives.

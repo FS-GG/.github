@@ -88,8 +88,8 @@ module Types =
     /// RESOLVED: shipped last week" blocks, and it has no owner, no repo and no number. The record used to
     /// demand a `Ref` anyway — so the one state the type was told to expect was the one it could not hold,
     /// and the client silently dropped every such blocker rather than fail to build one. An item bash
-    /// called BLOCKED then arrived here unblocked, which under `--engine=fs` is a worker being handed
-    /// blocked work.
+    /// called BLOCKED then arrived here unblocked — and the engine's answer is the one a worker acts on,
+    /// so that is a worker being handed blocked work.
     ///
     /// `Raw` is what the field actually SAID, and it is always present.
     type Blocker =
