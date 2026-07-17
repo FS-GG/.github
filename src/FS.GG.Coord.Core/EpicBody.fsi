@@ -20,3 +20,29 @@ module EpicBody =
     /// resolves against the epic's OWN repo, so all three land in the `owner/repo#n` form the sub-issue
     /// graph is compared in. Deduplicated and sorted, so the set is stable and directly diffable.
     val childRefs: selfOwner: string -> selfRepo: string -> body: string -> string list
+
+    /// The acceptance lines that delegate to NOBODY — task lines carrying no issue ref, in body order.
+    ///
+    /// **AN EPIC'S ACCEPTANCE IS ITS CHILDREN.** Every acceptance line must be a child ref; a line that is
+    /// not a child is not acceptance. That rule is what makes the roll-up sound BY CONSTRUCTION rather than
+    /// by checking — #609's "an import cannot drift by construction", applied to the epic graph — and this
+    /// function is the half that finds the lines breaking it.
+    ///
+    /// It exists because closure is transitive and verification is not (#965). `Done.rollUp` refuses a
+    /// parent for four good reasons, and had no way to notice that a closed child was closed FALSELY:
+    /// `AllResolved` is computed from child `state`, and a state is a record, not reality. So a parent
+    /// inherited the truth of its children's closures without ever testing one. #561 is what that cost — its
+    /// step 3 was the PARENT'S OWN work, delegated to no child, so no child could ever have covered it, and
+    /// it was closed on the strength of its children being closed. The alternative fix — re-verify a
+    /// parent's predicates at close — is unimplementable as stated: nothing can mechanically decide "the
+    /// tripwire is intact" from prose. Deleting the un-delegated prose is what makes the question answerable.
+    ///
+    /// A ref-less task line is KEPT and named, never dropped. `childRefs` used to drop it silently, which is
+    /// the opposite of the #266 answer `Done.bodyUnlinkedChildren`'s own `prune` gives eight lines away — it
+    /// KEEPS a ref it cannot resolve. One question ("what do I do with something I cannot verify?"), two
+    /// opposite answers, in one module. This is the other one, corrected.
+    ///
+    /// Fences apply here exactly as they do to `childRefs`: a quoted task list declares nothing and is
+    /// therefore un-delegated acceptance NOWHERE. Lines come back trimmed and in body order — a human has to
+    /// find each one to fix it, and sorting them would scramble the order they wrote them in.
+    val undelegatedAcceptance: body: string -> string list

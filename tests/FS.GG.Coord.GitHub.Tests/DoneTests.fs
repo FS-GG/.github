@@ -474,6 +474,80 @@ let ``#325 a parent whose BODY declares an unlinked child is left open, and name
     | other -> failwith $"a body-unlinked parent must be left open, naming the child — got %A{other}"
 
 [<Fact>]
+let ``#965 a parent whose body states UN-DELEGATED acceptance is left open, and names the lines`` () =
+    use _sandbox = new Sandbox()
+
+    // THE HOLE #561 FELL THROUGH. Every other guard reasons over the sub-issue GRAPH — and a criterion the
+    // parent kept for ITSELF is not in the graph to be reasoned about. #561's four children were all closed,
+    // its graph was whole, its body declared no unlinked child: every guard was satisfied. Its step 3 was
+    // never taken, and closing it laundered that into every ancestor's acceptance.
+    //
+    // The script carries the facts and the body, AND NOTHING ELSE — see the assertion below.
+    let transport =
+        scripted
+            [ ok parentAllDone // facts: graph {#398 closed}, AllResolved
+              ok """{"number":350,"body":"- [ ] #398 the delegated half\n- [ ] step 3: global.json into FILES, tripwire deleted"}""" ]
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen(p, reasons) ] ->
+        Assert.Equal(parentRef, p)
+        let joined = String.concat " " reasons
+
+        // The refusal must NAME the line. "This epic has un-delegated acceptance" sends the reader to find
+        // it themselves in a body that is routinely hundreds of lines long.
+        Assert.Contains("step 3: global.json into FILES, tripwire deleted", joined)
+        Assert.Contains("acceptance IS its children", joined)
+        // The DELEGATED line is not a finding — naming it would teach the reader the rule is noise.
+        Assert.DoesNotContain("the delegated half", joined)
+
+        // It must not have written the board or closed the issue.
+        Assert.False(transport.Logged "--single-select-option-id opt_done")
+        Assert.False(transport.Logged "issue-patch FS-GG/FS.GG.SDD 350")
+
+    | other -> failwith $"a parent with un-delegated acceptance must be left open, naming it — got %A{other}"
+
+[<Fact>]
+let ``#965 un-delegated acceptance is refused BEFORE the graph read is paid for`` () =
+    use _sandbox = new Sandbox()
+
+    // The check is a pure property of the body, so an epic that cannot legally close is refused without
+    // spending a request on proving the rest. `scripted` throws once the queue is empty, so a script holding
+    // ONLY the facts and the body is itself the assertion: reaching the graph read would fail this test.
+    let transport =
+        scripted
+            [ ok parentAllDone
+              ok """{"number":350,"body":"- [ ] an acceptance line delegated to nobody"}""" ]
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentLeftOpen _ ] ->
+        // EXACTLY the two reads scripted: the facts (GraphQL) and the body (REST). A third would be the
+        // graph, and counting is what makes this assertion real — `Logged "subIssues"` would pass whether or
+        // not the read happened, since the recorder never spells a query that way. A test that cannot see
+        // its own subject is the defect this whole item is about.
+        Assert.Equal(1, transport.GraphQlCalls)
+        Assert.Equal(1, transport.RestCalls)
+    | other -> failwith $"expected a refusal that pays for no graph read — got %A{other}"
+
+[<Fact>]
+let ``#965 an epic whose every acceptance line is a child ref still rolls up`` () =
+    use _sandbox = new Sandbox()
+
+    // THE RULE MUST NOT BREAK THE HAPPY PATH. An epic that already delegates everything is the state the
+    // rule drives toward, and it must close exactly as before — otherwise the guard is a wall, not a fence.
+    let transport =
+        scripted
+            [ ok parentAllDone
+              ok """{"number":350,"body":"- [ ] #398 the only criterion, and it IS a child"}"""
+              ok """{"data":{"repository":{"issue":{"subIssues":{"totalCount":1,"nodes":[{"number":398,"state":"CLOSED","repository":{"nameWithOwner":"FS-GG/FS.GG.SDD"}}]}}}}}"""
+              ok itemOnBoard
+              ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}"""
+              ok """{"number":350,"state":"closed"}""" ]
+
+    match rollUp transport board "godwit-24dc" parentRef Completes with
+    | Ok [ ParentClosed p ] -> Assert.Equal(parentRef, p)
+    | other -> failwith $"a fully-delegated epic must still roll up — got %A{other}"
+
+[<Fact>]
 let ``a parent with an OPEN sibling is left open, and says which`` () =
     let openSibling =
         """{"data":{"repository":{"issue":{

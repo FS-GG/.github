@@ -3509,6 +3509,37 @@ module Client =
                             else
                                 []
 
+                        // EPIC-UNDELEGATED-ACCEPTANCE (#965). An acceptance line naming no child is a
+                        // criterion nothing can ever discharge: the roll-up reasons over the sub-issue graph,
+                        // and this line is not in it. #561 was closed over exactly one of these.
+                        //
+                        // UNLIKE every other rule here, this one is NOT gated on the graph being whole. It
+                        // asks nothing about the graph — it is a property of the body alone — so a truncated
+                        // read cannot make it unsound, and it stays true on the epics `EPIC-UNLINKED-CHILD`
+                        // has to stay quiet about.
+                        // OPEN epics only, and for the same reason `EPIC-NO-CHILDREN` is: a CLOSED epic can
+                        // never be rolled up again, so its un-delegated acceptance is history rather than a
+                        // defect, and the only "fix" is editing the body of a finished issue nobody will read.
+                        // Measured on this board: ungated it reds .github#213/#234/#235 — closed epics from
+                        // the era when acceptance was tracked as `- [x]` lines linking merged PRs — for 13 of
+                        // its 15 findings. A rule that fires mostly on work that is correct and done teaches
+                        // exactly one lesson, and it is the lesson #698 names: "the gate is noise, merge
+                        // anyway". Whether any of those three was closed over acceptance nobody discharged is
+                        // a real question (it is #561's disease), but it is an AUDIT of the past, not a lint
+                        // of what can still go wrong — and lint reports what a worker can act on today.
+                        let undelegated =
+                            match FS.GG.Coord.EpicBody.undelegatedAcceptance body with
+                            | _ when r.State <> IssueState.Open -> []
+                            | [] -> []
+                            | lines ->
+                                let named = lines |> List.map (fun l -> $"\"%s{l}\"") |> String.concat "; "
+
+                                [ mk
+                                      "EPIC-UNDELEGATED-ACCEPTANCE"
+                                      "error"
+                                      r
+                                      $"%d{List.length lines} acceptance line(s) delegate to no child, so no child can ever discharge them and the rollup would close them unread: %s{named}. An epic's acceptance IS its children (#965) — make each one a child, or drop it from the body." ]
+
                         // EPIC-UNLINKED-CHILD may only reason when the graph is WHOLE (Total == visible) — a
                         // truncated graph makes "this declared child is unlinked" a claim about a set already
                         // known to be short (#266); EPIC-CHILDREN-TRUNCATED covers that case instead.
@@ -3540,7 +3571,7 @@ module Client =
 
                         match unlinkedResult with
                         | Error e -> Error e
-                        | Ok unlinked -> Ok(noChildren @ truncated @ doneOpenChild @ unlinked)
+                        | Ok unlinked -> Ok(noChildren @ truncated @ doneOpenChild @ undelegated @ unlinked)
 
                 // Per item, in rule order: touch-set rules, then a Done-but-open NOTE, then the epic rules
                 // (only epics read their graph/body-child-refs). FAIL CLOSED (#266): an unreadable body or

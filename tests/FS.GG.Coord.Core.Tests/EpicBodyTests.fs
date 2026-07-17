@@ -101,3 +101,58 @@ let ``a backtick run whose info string contains a backtick is NOT a fence - the 
 
     // The tilde spelling has no such rule: `~~~foo~bar` opens a block.
     Assert.Equal<string list>([], refs "~~~foo~bar\n- [ ] #1 quoted")
+
+// ---- un-delegated acceptance (#965) ---------------------------------------------------------------
+//
+// The other half of the same scan: the acceptance lines that name NO child. `childRefs` used to drop
+// these silently, so a criterion nobody was ever given became invisible to every guard the rollup has —
+// and #561 was closed over one.
+
+[<Fact>]
+let ``a task line naming no issue is KEPT as un-delegated acceptance, not dropped`` () =
+    let body =
+        "Umbrella epic.\n\n- [ ] #10 delegated to a child\n- [ ] All six repos' locks re-pinned as a coherent set.\n- [x] #11 also delegated"
+
+    // The two halves partition the same task lines: the ref-bearing ones are children...
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#10"; "FS-GG/FS.GG.SDD#11" ], refs body)
+    // ...and the ref-less one is acceptance nothing can discharge. It is NAMED, not silently gone.
+    Assert.Equal<string list>(
+        [ "- [ ] All six repos' locks re-pinned as a coherent set." ],
+        EpicBody.undelegatedAcceptance body
+    )
+
+[<Fact>]
+let ``an epic whose every acceptance line is a child ref has NO un-delegated acceptance`` () =
+    // The state the rule drives every epic toward: the graph IS the acceptance, so the rollup is sound by
+    // construction rather than by checking. This is the case that must stay silent, or the rule is noise.
+    let body = "- [ ] #10 the first\n- [x] #11 the second\n\nProse about the epic, mentioning #12."
+    Assert.Equal<string list>([], EpicBody.undelegatedAcceptance body)
+
+[<Fact>]
+let ``a checked-off ref-less line is STILL un-delegated - a self-report is not a discharge`` () =
+    // `- [x]` is the author saying "I did this", which is the exact claim #561 was closed on. A box a human
+    // ticked is a record, not reality (#266); nothing in the graph corroborates it.
+    Assert.Equal<string list>(
+        [ "- [x] step 3: global.json into FILES, tripwire deleted" ],
+        EpicBody.undelegatedAcceptance "- [x] step 3: global.json into FILES, tripwire deleted"
+    )
+
+[<Fact>]
+let ``a QUOTED ref-less task line declares nothing and is un-delegated acceptance NOWHERE`` () =
+    // The fence rule (#972) applies to both halves of the scan, or this rule would go red on every issue
+    // that quotes an epic's acceptance to talk about it — which is what this issue's own body does.
+    let body = "```\n- [ ] a quoted acceptance line with no ref\n```\n- [ ] #10 real"
+
+    Assert.Equal<string list>([], EpicBody.undelegatedAcceptance body)
+    Assert.Equal<string list>([ "FS-GG/FS.GG.SDD#10" ], refs body)
+
+[<Fact>]
+let ``un-delegated lines come back in BODY order, not sorted`` () =
+    // A human has to find each line to fix it. `childRefs` sorts because a ref set is diffed; these are
+    // prose, and re-ordering them would scramble the document the reader is about to edit.
+    let body = "- [ ] zebra last in the body\n- [ ] alpha second\n- [ ] #10 a real child"
+
+    Assert.Equal<string list>(
+        [ "- [ ] zebra last in the body"; "- [ ] alpha second" ],
+        EpicBody.undelegatedAcceptance body
+    )
