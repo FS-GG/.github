@@ -18,7 +18,8 @@
 # bump `schemaVersion` when the SHAPE changes, always set `updated:` to match the newest change,
 # and prepend one dated entry to registry/repos.CHANGELOG.md. Validated by scripts/repos.sh
 # (shell + jq; kept self-contained in .github, deliberately not the SDD-owned typed validator).
-# Human projection: docs/registry/repos.md.
+# This file is the authoritative form and is read directly — the former docs/registry/repos.md
+# projection was removed as an ungated hand-authored duplicate (D4 of #1158, #1163).
 #
 # `receives` VOCABULARY (the controlled set the validator admits). Every word here MUST have a
 # `capabilities:` row declaring how it is DETECTED at a receiver — a word that is legal to receive and

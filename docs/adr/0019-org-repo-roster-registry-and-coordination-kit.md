@@ -34,7 +34,9 @@ participant-side analog of what `skills.yml` is for skills.
 
 1. **`registry/repos.yml` is the single authoritative roster** of framework repos — a sibling of
    `registry/dependencies.yml` and `registry/skills.yml`, with the same governance (`schemaVersion`,
-   `updated:`, a changelog `registry/repos.CHANGELOG.md`, a `docs/registry/repos.md` projection).
+   `updated:`, a changelog `registry/repos.CHANGELOG.md`). It is read directly and has **no** human
+   projection — the former `docs/registry/repos.md` was removed as an ungated hand-authored duplicate
+   ([#1158](https://github.com/FS-GG/.github/issues/1158) D4 / [#1163](https://github.com/FS-GG/.github/issues/1163)).
    Each repo carries a `receives:` capability list from a controlled vocabulary (`labels`,
    `coordination-kit`, `build-config`, `lockfile-sync`, `contract-coherence`). `receives` is to a
    repo what `materializes-when` is to a skill: it gates PARTICIPATION per fabric.
