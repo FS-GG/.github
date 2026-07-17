@@ -2,11 +2,18 @@ namespace FS.GG.Coord
 
 /// The `Paths:` touch-set: parsing, matchability, and disjointness.
 ///
-/// ONE GRAMMAR, ONE PARSER. Today it has four — `paths_from_body`, `declares_no_touchset`, `lint`'s
-/// jq `touchset_decl`, and the `check-board` skill's `test("(?m)^Paths:")` grep — and they disagree,
-/// which is exactly the shape #485 named one level up ("is this item startable? computed in five
-/// places, agrees in none"). The loosest of the four is not fence-aware, is case-sensitive, and
-/// counts the `Paths: none` sentinel as a declaration; the strictest refuses tokens the others accept.
+/// ONE GRAMMAR, ONE PARSER — and as of ADR-0040 Phase D.4 that is a FACT, not a goal. This module is
+/// the only implementation left. The grammar once had four — `paths_from_body`, `declares_no_touchset`,
+/// `lint`'s jq `touchset_decl`, and the `check-board` skill's `test("(?m)^Paths:")` grep — and they
+/// disagreed, which is exactly the shape #485 named one level up ("is this item startable? computed in
+/// five places, agrees in none"). The loosest was not fence-aware, was case-sensitive, and counted the
+/// `Paths: none` sentinel as a declaration; the strictest refused tokens the others accepted. D.4 was
+/// the one-way door: the bash monolith and the differential gates that shadowed it are gone.
+///
+/// So there is no second implementation to be caught disagreeing with, and the safety net that USED to
+/// catch a parse error here went with it. That is not a reason for less rigour in this file; it is the
+/// reason for more. #863 is what the gap looks like — a repeated `Paths: none` parsed as a path called
+/// `none`, and nothing in the pipeline was left to notice.
 module TouchSet =
 
     open Types
@@ -22,6 +29,14 @@ module TouchSet =
     /// Also: up to three leading spaces (a list-indented line is still a line), either case, backticks
     /// stripped (#435 — a backticked declaration was refused as unmatchable and the item silently
     /// never scheduled), commas or spaces as separators, and multiple bare declarations UNIONED.
+    ///
+    /// The `Paths: none` sentinel is decided over the UNIONED TOKEN SET, not the raw text: every token
+    /// being the sentinel is `DeclaredNone`, whether it was declared once or five times. Testing the
+    /// concatenation instead is #863 — two bare `Paths: none` lines make `"none none"`, which is not
+    /// the sentinel, so `none` parsed as a PATH and the item became startable against a directory that
+    /// does not exist. A `none` mixed WITH real paths is a contradiction and is `Unmatchable`: it is
+    /// refused, never silently unioned in. This promise of a UNION is what made #863 reachable, so it
+    /// is the promise that has to state the rule.
     val parse: body: string -> TouchSet
 
     /// Is this token one the matcher can actually reserve?
@@ -30,6 +45,13 @@ module TouchSet =
     /// `**/` — or a `*` in the middle — matches nothing, and a token that matches nothing CONFLICTS
     /// WITH NOTHING: it would read as DISJOINT against every other worker, which is ADR-0021's own
     /// failure one level down (#273). So it is refused everywhere, never tolerated.
+    ///
+    /// The `none` SENTINEL is not a path either, and is `Unmatchable` here (#863). `parse` answers
+    /// `DeclaredNone` before it asks, so a `none` that reaches this function stands beside real paths —
+    /// a declaration that says both "I touch nothing" and "I touch src/A". It is path-shaped, so
+    /// calling it `Matchable` would reserve a `none` directory that exists nowhere and therefore
+    /// collides with no one: startable AND conflict-free with everything, which is #273's fail-open
+    /// arriving through the very parser built to end it.
     val classify: token: string -> PathToken
 
     /// The tokens that can never match a file.

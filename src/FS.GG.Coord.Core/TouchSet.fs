@@ -30,6 +30,17 @@ module TouchSet =
         List.ofSeq acc
 
     let classify (token: string) : PathToken =
+        // The sentinel is never a PATH. `parse` answers `DeclaredNone` before it gets here when every
+        // token is the sentinel, so a `none` reaching this point sits ALONGSIDE real paths — a
+        // contradiction ("I touch nothing" and "I touch src/A"), and a mistake in every reading of it.
+        // Refusing it here rather than letting it fall through to `Matchable` is what keeps it from
+        // reserving a `none` directory that does not exist: a path-shaped token that matches no file is
+        // disjoint from every other worker's touch-set, so the item would schedule AND read as
+        // conflict-free with everything (#863, and #273's fail-open through the parser built to end it).
+        if isNoneSentinel token then
+            Unmatchable token
+        else
+
         // Strip the ONE sanctioned wildcard — a TRAILING `/**`, `/*`, or a trailing `/` — then ask
         // whether any glob metacharacter survives. If one does, the token can match no file.
         let stem =
@@ -57,45 +68,57 @@ module TouchSet =
                 |> List.map (fun d -> d.Replace("`", "").Replace(",", " "))
                 |> String.concat " "
 
-            // A declaration whose only content is the sentinel is a DECISION, not an omission (#496).
-            if isNoneSentinel raw then
-                DeclaredNone
-            else
-                // A LEADING `./` — AND NOTHING MORE.
-                //
-                // This was `TrimStart('.', '/')`, which strips EVERY leading dot and slash. It was
-                // written to normalise `./src/foo` and it also ate the leading dot of every DOTFILE
-                // path: `.github/workflows/**` became `github/workflows/**`, `.agents/skills/` became
-                // `agents/skills/`. In this org that is most of the fabric — `.github/`, `.agents/`,
-                // `.claude/`, `.config/` — so most touch-sets the engine parsed named directories that
-                // do not exist.
-                //
-                // THE SHADOW CANNOT SEE THIS, AND THAT IS THE INTERESTING PART. It compares OUTCOMES,
-                // and a consistent renaming of every token preserves the overlap relation exactly: two
-                // items that conflicted still conflict, two that did not still do not. So both engines
-                // agree on every verdict, the divergence log stays clean, and the parse is wrong the
-                // whole time. A differential test is blind to an error its two sides make identically.
-                //
-                // It becomes a REAL fail-open at the flip, when the engine's tokens are the ones that
-                // meet actual file paths: `.github/workflows/x.yml` (the file) would not match
-                // `github/workflows/**` (the token), so the touch-set would reserve NOTHING — and a
-                // token that matches no file conflicts with nothing, which is #273's lock succeeding
-                // under exactly the conditions it exists to prevent.
-                //
-                // `sed -E 's#^\./##'` is what the bash client does. This is that, and only that.
-                let stripDotSlash (t: string) =
-                    if t.StartsWith "./" then t.Substring 2 else t
+            // A LEADING `./` — AND NOTHING MORE.
+            //
+            // This was `TrimStart('.', '/')`, which strips EVERY leading dot and slash. It was
+            // written to normalise `./src/foo` and it also ate the leading dot of every DOTFILE
+            // path: `.github/workflows/**` became `github/workflows/**`, `.agents/skills/` became
+            // `agents/skills/`. In this org that is most of the fabric — `.github/`, `.agents/`,
+            // `.claude/`, `.config/` — so most touch-sets the engine parsed named directories that
+            // do not exist.
+            //
+            // THE SHADOW CANNOT SEE THIS, AND THAT IS THE INTERESTING PART. It compares OUTCOMES,
+            // and a consistent renaming of every token preserves the overlap relation exactly: two
+            // items that conflicted still conflict, two that did not still do not. So both engines
+            // agree on every verdict, the divergence log stays clean, and the parse is wrong the
+            // whole time. A differential test is blind to an error its two sides make identically.
+            //
+            // It becomes a REAL fail-open at the flip, when the engine's tokens are the ones that
+            // meet actual file paths: `.github/workflows/x.yml` (the file) would not match
+            // `github/workflows/**` (the token), so the touch-set would reserve NOTHING — and a
+            // token that matches no file conflicts with nothing, which is #273's lock succeeding
+            // under exactly the conditions it exists to prevent.
+            //
+            // `sed -E 's#^\./##'` is what the bash client does. This is that, and only that.
+            let stripDotSlash (t: string) =
+                if t.StartsWith "./" then t.Substring 2 else t
 
-                let tokens =
-                    raw.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
-                    |> Array.toList
-                    |> List.map (fun t -> t.Trim() |> stripDotSlash)
-                    |> List.filter (fun t -> t <> "")
-                    |> List.distinct
+            let tokens =
+                raw.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
+                |> Array.toList
+                |> List.map (fun t -> t.Trim() |> stripDotSlash)
+                |> List.filter (fun t -> t <> "")
+                |> List.distinct
 
-                match tokens with
-                | [] -> Undeclared
-                | ts -> Declared(ts |> List.map classify)
+            match tokens with
+            // An EMPTY declaration (`Paths:` with nothing after it) is an OMISSION, and this case must
+            // come FIRST: `List.forall` is vacuously TRUE on `[]`, so folding it into the sentinel test
+            // below would answer `DeclaredNone` — reporting a bare `Paths:` as a DECISION nobody made.
+            // That is #496's conflation with the two sides swapped, and it would read as deliberate.
+            | [] -> Undeclared
+
+            // The sentinel is tested over the TOKEN SET, never over the concatenated string (#863).
+            // `isNoneSentinel raw` broke on the second declaration: two bare `Paths: none` lines
+            // concatenate to `"none none"`, which is not `"none"`, so the sentinel was LOST and `none`
+            // fell through to `classify` — which called it `Matchable`, because it is a perfectly
+            // path-shaped token. The epic then went Startable and reserved a `none` directory that does
+            // not exist, so it read as disjoint from every other worker. The `Unmatchable` gate could
+            // not catch it: `none` IS matchable; it just matches no file that exists, which is the one
+            // thing that gate does not test. Deciding over tokens makes the union in the `.fsi`'s
+            // "multiple bare declarations UNIONED" promise mean the same thing for one line or for ten.
+            | ts when ts |> List.forall isNoneSentinel -> DeclaredNone
+
+            | ts -> Declared(ts |> List.map classify)
 
     let unmatchable (touchSet: TouchSet) : string list =
         match touchSet with
