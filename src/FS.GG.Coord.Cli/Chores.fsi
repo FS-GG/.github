@@ -68,6 +68,18 @@ module Chores =
     /// `choreLockRef` call is a second chance to answer differently — and the caller would have to make it
     /// on the same `repo` string, which is the one input here that is not already canonical.
     ///
+    /// **`items` MAY SPAN REPOS, AND THE SCOPING IS THIS FUNCTION'S JOB — not the caller's.** The FS-GG
+    /// board is org-wide (1,170 rows across 7 repos when measured), and a bare `next` with no `--repo` asks
+    /// `Scan.scope None`, which returns every one of them. A lock is PER-REPO (ADR-0041), so a chore derived
+    /// from another repo's row and serialised on this repo's lock is not locked at all: two workers holding
+    /// two different repos' locks could be handed the SAME chore, which is condition 1 defeated by the
+    /// mechanism meant to enforce it. So `offer` keeps only the rows belonging to the LOCK's repo.
+    ///
+    /// **Idleness is still asked of the WHOLE board, and that asymmetry is deliberate.** Idleness is a fact
+    /// about the WORKER; a chore is a fact about the REPO. A worker holding a live claim in FS.GG.SDD is
+    /// mid-item with a live touch-set — precisely who condition 3 protects — and a scoped board cannot see
+    /// that claim, so scoping the idleness question would answer "idle" about a worker who is not.
+    ///
     /// The order is what makes condition 1 true, and it is not an optimisation:
     ///
     /// 1. **`Chore.safePoint`** — mint the idleness evidence, or stop. `None` when this worker holds a live

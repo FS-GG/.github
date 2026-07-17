@@ -139,6 +139,76 @@ let ``a repo with no chore lock offers nothing, and never asks the network`` () 
 
     Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" "FS.GG.Audio" audit)
 
+/// The same cleared-blocker condition, on a row belonging to a DIFFERENT repo. The org board is one board
+/// for seven repos, so this is what a bare `next` (no `--repo`, hence `Scan.scope None`) actually hands us.
+let private otherRepoBoard =
+    [ { item 733 Blocked Open [ blocker 979 BlockerClosed ] None with
+          Ref =
+            { Owner = "FS-GG"
+              Repo = "FS.GG.Rendering"
+              Number = 640 } } ]
+
+[<Fact>]
+let ``a chore is NEVER offered under another repo's lock — the subject and the lock must name one repo`` () =
+    // A lock is PER-REPO (ADR-0041). Deriving over the org-wide board and locking `.github#1033` would hand
+    // out an `FS.GG.Rendering` chore serialised on `.github`'s lock — so two workers holding two DIFFERENT
+    // repos' locks could each be handed the same chore, which is condition 1 defeated by the mechanism meant
+    // to enforce it. `unreachable`: the rows are dropped before the lock is ever reached, so this costs
+    // nothing on a board whose chores all belong to somebody else.
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" otherRepoBoard)
+
+[<Fact>]
+let ``a worker mid-item in ANOTHER repo is not idle — idleness is asked of the WHOLE board`` () =
+    // Condition 3, and the reason the scoping is asymmetric: idleness is a fact about the WORKER, a chore is
+    // a fact about the REPO. This worker holds a live claim in FS.GG.Rendering and there is a real `.github`
+    // chore going begging. Scoping the IDLENESS question to `.github` would not see the Rendering claim and
+    // would hand a side-quest to somebody mid-item with a live touch-set — the one thing condition 3 forbids.
+    let busyElsewhere =
+        { item 640 InProgress Open [] (Some(
+              { Worker = me
+                Session = None
+                AgeSeconds = 60
+                PreviousStatus = Some Ready },
+              LeaseHeld
+          )) with
+            Ref =
+              { Owner = "FS-GG"
+                Repo = "FS.GG.Rendering"
+                Number = 640 } }
+
+    let board = busyElsewhere :: blockerClearedBoard
+
+    Assert.Equal(None, Chores.offer unreachable Chore.AtNext me None "FS-GG" ".github" board)
+
+[<Fact>]
+let ``a cross-repo board still yields THIS repo's chore, under THIS repo's lock`` () =
+    // The other side of the scoping: dropping foreign rows must not drop OURS. An idle worker on the org-wide
+    // board gets the `.github` chore, locked on `.github#1033` — the Rendering row is simply not this lock's
+    // business.
+    let transport =
+        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
+
+    match Chores.offer transport Chore.AtNext me None "FS-GG" ".github" (otherRepoBoard @ blockerClearedBoard) with
+    | None -> failwith "expected the .github chore: a foreign row must not suppress this repo's own"
+    | Some(chore, got) ->
+        Assert.Equal(ref' 733, chore.Subject)
+        Assert.Equal(lockRef, got)
+
+[<Fact>]
+let ``a short-id repo still finds its lock — the scope is the LOCK's canonical repo, not the raw argument`` () =
+    // `choreLockRef` canonicalises on the way in, so `.GitHub` resolves to the same lock. The scope filter
+    // must compare against the LOCK's repo rather than the caller's spelling — comparing against the raw
+    // argument would drop every row for a caller who typed a short id, offering nothing on a board full of
+    // chores. That is a silent, total failure, so it is pinned rather than trusted.
+    let transport =
+        scripted [ ok "[]"; ok """{"id":901}"""; ok (comments [ marker 901 "vole-418" ]) ]
+
+    match Chores.offer transport Chore.AtNext me None "FS-GG" ".GitHub" blockerClearedBoard with
+    | None -> failwith "expected an offer: `.GitHub` is `.github`, and its rows are this lock's own"
+    | Some(chore, got) ->
+        Assert.Equal(ref' 733, chore.Subject)
+        Assert.Equal(lockRef, got)
+
 [<Fact>]
 let ``losing the lock race offers nothing — the rival is draining this repo, and we say so to nobody`` () =
     // CONDITION 1, end to end: claimed, not broadcast. This is the leg that makes the queue safe under the
