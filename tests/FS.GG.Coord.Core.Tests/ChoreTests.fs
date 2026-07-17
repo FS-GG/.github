@@ -48,7 +48,8 @@ module ChoreTests =
           TouchSet = Declared [ Matchable "src/" ]
           Blockers = []
           Claim = None
-          ItemPr = None }
+          ItemPr = None
+          HumanBlock = None }
 
     /// Every case of a union, by reflection — the sweep's axes are DERIVED, never typed out.
     ///

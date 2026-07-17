@@ -355,6 +355,8 @@ module Batch =
                     | Unmatchable _ -> false)
             | Undeclared
             | DeclaredNone
+            // A chore reserves nothing, so it holds no token either — same as the sentinels below.
+            | DeclaredChore
             // An unread reservation names no token, so it can never be the holder OF a token. It never
             // reaches here: `schedule` reds the batch on one before any candidate is compared.
             | Unreadable _ -> false)
@@ -496,6 +498,7 @@ module Batch =
             | DeliberatelyNoTouchSet
             | UnusableTouchSet _
             | BlockedBy _
+            | AwaitingHuman _
             | ItemPrOpen _
             | OverlapsInFlight _
             | Undetermined _ ->

@@ -39,13 +39,20 @@ module TouchSet =
     /// is the promise that has to state the rule.
     val parse: body: string -> TouchSet
 
-    /// Is this token the `none` SENTINEL — `Paths: none`, in any case, with any surrounding space?
+    /// WHICH reserved word this token is — `Some "none"`, `Some "any"`, or `None` for a real path
+    /// (in any case, with any surrounding space). There are two sentinels (#1103 leg 8): `none` reserves
+    /// nothing and is UNSCHEDULABLE (an epic/decision), `any` reserves nothing and IS schedulable (a
+    /// file-less chore). They are one bit apart, so a caller that must tell them apart — `Writes.validate`
+    /// canonicalising a declaration — needs the WORD, not just "is it a sentinel". The grammar is decided
+    /// HERE, once; a second implementation is a second place for it to rot (#485).
+    val sentinelToken: token: string -> string option
+
+    /// Is this token one of the reserved SENTINEL words (`none` or `any`), so it is never a real path?
     ///
-    /// The sentinel is part of the grammar, so it is decided HERE, once. `Writes.validate` must tell a
-    /// declaration that reserves nothing DELIBERATELY (the sentinel — an epic, a decision item) from one
-    /// that reserves nothing BY MISTAKE (an unmatchable token, #273). Those are opposite verdicts on
-    /// inputs one character apart, and a second implementation of the test is a second place for it to
-    /// rot — #485's shape inside its own remedy.
+    /// `Writes.validate` must tell a declaration that reserves nothing DELIBERATELY (a sentinel — an epic,
+    /// a decision item, a chore) from one that reserves nothing BY MISTAKE (an unmatchable token, #273).
+    /// Those are opposite verdicts on inputs one character apart. Use `sentinelToken` when it matters
+    /// WHICH sentinel; this is the bool for the "not a path to reserve" question `classify` asks.
     val isSentinel: token: string -> bool
 
     /// Is this token one the matcher can actually reserve?

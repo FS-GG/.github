@@ -135,6 +135,7 @@ module Protocol =
           Schedulability.IssueClosed
           Schedulability.WrongStatus Backlog
           Schedulability.BlockedBy []
+          Schedulability.AwaitingHuman AwaitingHumanDecision
           Schedulability.NoTouchSet
           Schedulability.DeliberatelyNoTouchSet
           Schedulability.UnusableTouchSet []
@@ -155,6 +156,8 @@ module Protocol =
             "Its board Status is not one a scheduler hands out (or it has none at all, which makes it invisible to every scheduler and is a bug, not a decision)."
         | Schedulability.BlockedBy _ ->
             "A `Blocked by` entry is unresolved. CLOSED and MERGED resolve; OPEN, unverifiable and unparseable all BLOCK."
+        | Schedulability.AwaitingHuman _ ->
+            "`Blocked on: human/...` — a HUMAN must act first, whatever the `Paths:` line records, so an agent cannot make the call the item exists to escalate (#918). `human/decision` is unschedulable until a human CHOOSES; `human/action` becomes startable the moment a human action (e.g. a scope grant) lands, but not before. Which one rides on the verdict's `humanBlock` detail."
         | Schedulability.NoTouchSet ->
             "No `Paths:` line at all — an OMISSION. The item is real work and it is invisible to every worker who asks for work. Declare one, or `Paths: none` if it truly has no touch-set."
         | Schedulability.DeliberatelyNoTouchSet ->

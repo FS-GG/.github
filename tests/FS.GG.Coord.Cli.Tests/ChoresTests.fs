@@ -69,7 +69,8 @@ let private item n status state blockers claim =
       TouchSet = Declared [ Matchable "src/" ]
       Blockers = blockers
       Claim = claim
-      ItemPr = None }
+      ItemPr = None
+      HumanBlock = None }
 
 let private blocker n state =
     { Ref = Some(ref' n)

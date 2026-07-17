@@ -31,6 +31,8 @@
     <Compile Include="Markdown.fs" />
     <Compile Include="TouchSet.fsi" />
     <Compile Include="TouchSet.fs" />
+    <Compile Include="HumanBlock.fsi" />
+    <Compile Include="HumanBlock.fs" />
     <Compile Include="EpicBody.fsi" />
     <Compile Include="EpicBody.fs" />
     <Compile Include="Blockers.fsi" />

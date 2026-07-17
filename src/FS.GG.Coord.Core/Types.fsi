@@ -126,6 +126,11 @@ module Types =
         /// `Paths: none` — a decision somebody made. An epic, a decision item, an investigation whose
         /// scope IS the question. Unschedulable BY DESIGN.
         | DeclaredNone
+        /// `Paths: any` — a file-less CHORE. Reserves nothing and conflicts with nothing, so it IS
+        /// schedulable and runs alongside any concurrent item. The counterpart to `DeclaredNone` that
+        /// #1103 leg 8 splits out: both reserve nothing, only this one is schedulable. A deliberate,
+        /// parser-verified empty reservation — not #273's fail-open. See ADR-0045.
+        | DeclaredChore
         /// A real declaration. May still contain unmatchable tokens — that is a third death, and the
         /// scheduler and the linter must agree about it.
         | Declared of PathToken list
@@ -183,6 +188,17 @@ module Types =
         /// We could not tell — an unreadable read, or `mergeable` still null. Fail closed: advise nothing.
         | PrUnknown
 
+    /// A `Blocked on: human/...` body-line sentinel (#1103 leg 2): the item is unschedulable because a
+    /// HUMAN must act first, whatever its `Paths:` line declares. `Blocked by` is ref-typed and cannot say
+    /// "blocked on a person", so the empty-`Blocked by` park collapsed action and decision into one
+    /// rendering; this carries the distinction that flattening lost. Decided by @EHotwagner on #1103.
+    type HumanBlock =
+        /// `Blocked on: human/decision` — unstartable until a human CHOOSES (a decision item).
+        | AwaitingHumanDecision
+        /// `Blocked on: human/action` — blocked on a human ACTION (e.g. a scope grant); startable once it
+        /// lands, not before.
+        | AwaitingHumanAction
+
     /// An item, as the scheduler must see it.
     type Item =
         { Ref: Ref
@@ -196,7 +212,10 @@ module Types =
           /// The open `item/<n>-*` PR when this item carries NO live-held claim marker — a duplicate
           /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
           /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
-          ItemPr: int option }
+          ItemPr: int option
+          /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
+          /// declares no such line. When present, it refuses scheduling regardless of `TouchSet`.
+          HumanBlock: HumanBlock option }
 
     /// A three-valued verdict. There is no `bool` in this domain.
     ///

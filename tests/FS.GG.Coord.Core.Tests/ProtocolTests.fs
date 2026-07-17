@@ -97,6 +97,7 @@ module ProtocolTests =
               Schedulability.IssueClosed, "issue-closed"
               Schedulability.WrongStatus Backlog, "wrong-status"
               Schedulability.BlockedBy [], "blocked-by"
+              Schedulability.AwaitingHuman AwaitingHumanDecision, "awaiting-human"
               Schedulability.NoTouchSet, "no-touch-set"
               Schedulability.DeliberatelyNoTouchSet, "deliberately-no-touch-set"
               Schedulability.UnusableTouchSet [ "**/x" ], "unusable-touch-set"
@@ -452,7 +453,8 @@ module ProtocolTests =
           TouchSet = Declared [ Matchable "src/Scene/**" ]
           Blockers = []
           Claim = None
-          ItemPr = None }
+          ItemPr = None
+          HumanBlock = None }
 
     /// REFLECTION CAN SEE THE UNION — so the guards below are not vacuous (#266), and the count is
     /// asserted against `BoardStatus` rather than against `6`.

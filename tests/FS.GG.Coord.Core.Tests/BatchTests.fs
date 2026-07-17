@@ -28,7 +28,8 @@ module BatchTests =
           TouchSet = Declared(paths |> List.map Matchable)
           Blockers = []
           Claim = None
-          ItemPr = None }
+          ItemPr = None
+          HumanBlock = None }
 
     let private held w ageSeconds it =
         { it with
