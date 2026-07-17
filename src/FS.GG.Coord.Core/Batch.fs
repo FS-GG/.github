@@ -172,85 +172,159 @@ module Batch =
                     for r in many -> $"    scripts/fsgg-coord take --repo %s{r} --include-backlog"
                 ])
 
+    /// THE DEADLOCK SECTION (#1092) — the one starved-queue cause that WAITING CANNOT FIX.
+    ///
+    /// Every other line this banner prints describes a queue that DRAINS: a lease frees, a column gets
+    /// triaged, a worker lands their PR. A `Blocked by` ring drains never — each item waits on the next
+    /// around a circle — and it used to print as `Status is Blocked`, per item, in the same five words
+    /// `Schedulability.explain` gives a block that clears in ten minutes. Three such items sat on this board
+    /// for two hours while `take` said `this queue is BUSY, not empty` over them, which was the most
+    /// confident wrong impression available: **BUSY implies it drains.**
+    ///
+    /// This is the AGGREGATE `explainDecision` cannot give, which is this banner's whole charter. The blocker
+    /// graph's four previous repairs (#343/#476/#602/#620) are every one of them per-item, and a ring passes
+    /// all four because each item on it is individually well-formed. `Blockers.cycles` owns the graph
+    /// question — including which edges are live — and this only puts its answer into English.
+    ///
+    /// It names each member WITH its in-ring blockers, because the remedy is to break ONE edge and a worker
+    /// has to pick which: the edges are the actionable part, not the membership. Blockers pointing OUT of the
+    /// ring are omitted — they are not what makes it a ring, and cutting one would free nothing.
+    let private cycleSection (result: BatchResult) : string list =
+        let items =
+            result.Decisions
+            |> List.map (fun d -> d.Item)
+            |> List.fold
+                (fun acc (i: Item) ->
+                    if List.exists (fun (x: Item) -> x.Ref = i.Ref) acc then
+                        acc
+                    else
+                        i :: acc)
+                []
+            |> List.rev
+
+        match Blockers.cycles (items |> List.map (fun i -> i.Ref, i.Blockers)) with
+        | [] -> []
+        | rings ->
+            let byRef = items |> List.map (fun i -> i.Ref, i) |> Map.ofList
+
+            [ for ring in rings do
+                  let inRing = Set.ofList ring
+
+                  $"DEADLOCKED: %d{List.length ring} item(s) form a `Blocked by` CYCLE — NONE of them can EVER be startable, and no lease frees them:"
+
+                  for r in ring do
+                      match Map.tryFind r byRef with
+                      | Some item ->
+                          let holds =
+                              item.Blockers
+                              |> List.filter (Blockers.isResolved >> not)
+                              |> List.choose (fun b -> b.Ref)
+                              |> List.filter inRing.Contains
+                              |> List.map (fun x -> x.Short)
+                              |> List.distinct
+                              |> String.concat ", "
+
+                          $"  %s{r.Short} — Blocked by %s{holds}"
+                      | None -> ()
+
+                  "  This is a BUG, not a wait. Break ONE edge: re-read each item's `Blocked by` premise — the"
+                  "  edge to cut is the one whose premise is spent (the overlap was retracted, the work merged)."
+                  "  scripts/fsgg-coord set-field <ref> 'Blocked by' ''" ]
+
     /// Returns [] whenever the queue is NOT starved: work WAS handed out (a `chosen` batch is not starved),
-    /// or nothing is queued behind a live claim AND nothing was withheld at the column (a queue starved by
-    /// blockers is #440's business, and it is told per-item). A banner on a healthy queue is noise that
-    /// trains workers to skip stderr — the very habit #440 was closed to break.
+    /// or nothing is queued behind a live claim AND nothing was withheld at the column AND no `Blocked by`
+    /// RING was found. A queue starved by ordinary blockers is still #440's business, told per-item — but a
+    /// ring is not ordinary: no per-item verdict can see it, and it never clears (#1092), so it leads the
+    /// banner rather than staying silent. A banner on a healthy queue is noise that trains workers to skip
+    /// stderr — the very habit #440 was closed to break.
     let starvedBanner (leaseMinutes: int) (result: BatchResult) : string list =
         if not (List.isEmpty result.Chosen) then
             []
         else
             let backlog = backlogSection result
+            // The ring leads, and nothing folds it into a line about waiting. It is the only cause here that
+            // no lease and no triage ever clears, and a worker who reads "BUSY — soonest lease frees in ~89m"
+            // stops reading. When a ring is the ONLY reason nothing is startable, this section is the whole
+            // banner: that queue is held by no claim and withheld at no column, so every line below is
+            // silent, and `take` printed "nothing schedulable right now." over a permanent deadlock with no
+            // banner at all. That is the worst case, and it is the one that happened (#1092).
+            let deadlock = cycleSection result
 
-            match queuedBehindClaims result with
-            // Nothing is held, but the column withheld candidates — UNTRIAGED, not busy, not empty either.
-            | [] ->
-                if List.isEmpty backlog then
-                    []
-                else
-                    "this queue is UNTRIAGED, not empty." :: backlog
-            | queued ->
-                let holders =
-                    queued
-                    |> List.map (fun q -> q.Worker.Value)
-                    |> List.distinct
-                    |> List.sort
-                    |> String.concat ", "
-
-                let expired = queued |> List.filter (leaseExpired leaseMinutes)
-
-                // The soonest lease to free. A reapable EXPIRED lease frees NOW, so it is the soonest of all.
-                // Otherwise the window that closes first is the one with the LARGEST age — but only among
-                // claims whose lease is still LIVE: a `HeldByLiveWork` claim is over its lease by the clock
-                // yet is NOT reapable (#581), so letting its age drive `leaseWindow` would print a phantom
-                // "lease EXPIRED — reapable" here with no reap advice beside it. If no live lease remains to
-                // wait on (every queued claim is a live-work over-run, or ageless), we cannot name a window.
-                let soonest =
-                    if not (List.isEmpty expired) then
-                        "lease EXPIRED — reapable"
+            let drainable =
+                match queuedBehindClaims result with
+                // Nothing is held, but the column withheld candidates — UNTRIAGED, not busy, not empty either.
+                | [] ->
+                    if List.isEmpty backlog then
+                        []
                     else
-                        match
-                            queued
-                            |> List.map (fun q -> q.AgeSeconds)
-                            |> List.filter (fun a -> a >= 0 && a <= leaseMinutes * 60)
-                        with
-                        | [] -> "lease unknown"
-                        | ages -> Schedulability.leaseWindow leaseMinutes (List.max ages)
+                        "this queue is UNTRIAGED, not empty." :: backlog
+                | queued ->
+                    let holders =
+                        queued
+                        |> List.map (fun q -> q.Worker.Value)
+                        |> List.distinct
+                        |> List.sort
+                        |> String.concat ", "
 
-                // The repos the expired leases are actually IN. This used to read "repo-scoped by
-                // construction: every queued claim is in the batch's one repo" and take `List.head`'s — but
-                // the batch is not repo-scoped (`--repo` is optional; see `backlogSection`), so on an
-                // org-wide batch that printed ONE `reap --repo X` under a count spanning several, and the
-                // leases in every other repo stayed uncollected while the line said they were collectable.
-                let reapRepos =
-                    expired |> List.map (fun q -> q.Holder.Repo) |> List.distinct |> List.sort
+                    let expired = queued |> List.filter (leaseExpired leaseMinutes)
 
-                let banner =
-                    [ "this queue is BUSY, not empty."
-                      $"%d{List.length queued} item(s) are QUEUED BEHIND LIVE CLAIMS held by: %s{holders}"
-                      $"  soonest: %s{soonest}" ]
+                    // The soonest lease to free. A reapable EXPIRED lease frees NOW, so it is the soonest of all.
+                    // Otherwise the window that closes first is the one with the LARGEST age — but only among
+                    // claims whose lease is still LIVE: a `HeldByLiveWork` claim is over its lease by the clock
+                    // yet is NOT reapable (#581), so letting its age drive `leaseWindow` would print a phantom
+                    // "lease EXPIRED — reapable" here with no reap advice beside it. If no live lease remains to
+                    // wait on (every queued claim is a live-work over-run, or ageless), we cannot name a window.
+                    let soonest =
+                        if not (List.isEmpty expired) then
+                            "lease EXPIRED — reapable"
+                        else
+                            match
+                                queued
+                                |> List.map (fun q -> q.AgeSeconds)
+                                |> List.filter (fun a -> a >= 0 && a <= leaseMinutes * 60)
+                            with
+                            | [] -> "lease unknown"
+                            | ages -> Schedulability.leaseWindow leaseMinutes (List.max ages)
 
-                // The one blocker a worker can clear ALONE is a dead lease — so if any has expired, do not
-                // let it read as a wait: name how many, and the exact `reap` that collects them. `reap`
-                // re-probes and refuses a claim whose PR is still open, so this advice can never break a
-                // lock over live work (#581).
-                let expiredLeases =
-                    expired |> List.map (fun q -> q.Holder) |> List.distinct |> List.length
+                    // The repos the expired leases are actually IN. This used to read "repo-scoped by
+                    // construction: every queued claim is in the batch's one repo" and take `List.head`'s — but
+                    // the batch is not repo-scoped (`--repo` is optional; see `backlogSection`), so on an
+                    // org-wide batch that printed ONE `reap --repo X` under a count spanning several, and the
+                    // leases in every other repo stayed uncollected while the line said they were collectable.
+                    let reapRepos =
+                        expired |> List.map (fun q -> q.Holder.Repo) |> List.distinct |> List.sort
 
-                let reapAdvice =
-                    match reapRepos with
-                    | [] -> []
-                    | [ one ] ->
-                        [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo %s{one} --apply" ]
-                    | many ->
-                        ($"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them, one repo at a time:"
-                         :: [ for r in many -> $"    scripts/fsgg-coord reap --repo %s{r} --apply" ])
+                    let banner =
+                        [ "this queue is BUSY, not empty."
+                          $"%d{List.length queued} item(s) are QUEUED BEHIND LIVE CLAIMS held by: %s{holders}"
+                          $"  soonest: %s{soonest}" ]
 
-                // #636 — BUSY and UNTRIAGED are independent facts about one queue, and the live board that
-                // prompted this had both: two items behind live claims (soonest ~120m) and seven withheld at
-                // the column. Reporting only the first told the worker to wait two hours over work that was
-                // one flag away. So the sections compose; neither suppresses the other.
-                banner @ reapAdvice @ backlog
+                    // The one blocker a worker can clear ALONE is a dead lease — so if any has expired, do not
+                    // let it read as a wait: name how many, and the exact `reap` that collects them. `reap`
+                    // re-probes and refuses a claim whose PR is still open, so this advice can never break a
+                    // lock over live work (#581).
+                    let expiredLeases =
+                        expired |> List.map (fun q -> q.Holder) |> List.distinct |> List.length
+
+                    let reapAdvice =
+                        match reapRepos with
+                        | [] -> []
+                        | [ one ] ->
+                            [ $"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them: scripts/fsgg-coord reap --repo %s{one} --apply" ]
+                        | many ->
+                            ($"  %d{expiredLeases} of those lease(s) have EXPIRED — collect them, one repo at a time:"
+                             :: [ for r in many -> $"    scripts/fsgg-coord reap --repo %s{r} --apply" ])
+
+                    // #636 — BUSY and UNTRIAGED are independent facts about one queue, and the live board that
+                    // prompted this had both: two items behind live claims (soonest ~120m) and seven withheld at
+                    // the column. Reporting only the first told the worker to wait two hours over work that was
+                    // one flag away. So the sections compose; neither suppresses the other.
+                    banner @ reapAdvice @ backlog
+
+            // #636's composition rule, extended to the ring — with the one asymmetry that matters. BUSY and
+            // UNTRIAGED are both true of a queue that DRAINS; a ring is true of one that does not. So it
+            // leads, and it is the entire banner when it is the only cause.
+            deadlock @ drainable
 
     /// Reservations that name files in THIS repo. Tokens are repo-relative (#312, #353).
     let private inRepo (owner: string) (repo: string) (reservations: Reservation list) =

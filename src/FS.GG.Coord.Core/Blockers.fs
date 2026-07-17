@@ -21,6 +21,92 @@ module Blockers =
     let unresolved (blockers: Blocker list) : Blocker list =
         blockers |> List.filter (isResolved >> not)
 
+    let cycles (nodes: (Ref * Blocker list) list) : Ref list list =
+        // First occurrence wins. A duplicated ref is a caller's accident, not a second node, and letting it
+        // through would let one item hold two different blocker lists in the same graph.
+        let deduped =
+            nodes
+            |> List.fold
+                (fun (seen, acc) (r, bs) ->
+                    if Set.contains r seen then
+                        (seen, acc)
+                    else
+                        (Set.add r seen, (r, bs) :: acc))
+                (Set.empty, [])
+            |> snd
+            |> List.rev
+
+        let known = deduped |> List.map fst |> Set.ofList
+
+        // The edges. `isResolved` decides resolution — asked, never re-answered (#520). A blocker we cannot
+        // place in this graph draws NO edge: it may sit on a ring we cannot see, and inventing the edge would
+        // manufacture a deadlock, while omitting it merely under-reports. Under-reporting is the safe
+        // direction for a claim this loud (#266).
+        let succs =
+            deduped
+            |> List.map (fun (r, bs) ->
+                r,
+                bs
+                |> List.filter (isResolved >> not)
+                |> List.choose (fun b -> b.Ref)
+                |> List.filter (fun t -> Set.contains t known)
+                |> List.distinct)
+            |> Map.ofList
+
+        // TARJAN. Linear, and it terminates on every graph — including one that is entirely a single ring,
+        // which is exactly the input a naive "walk until you repeat" loop never returns from.
+        let mutable counter = 0
+        let index = System.Collections.Generic.Dictionary<Ref, int>()
+        let low = System.Collections.Generic.Dictionary<Ref, int>()
+        let onStack = System.Collections.Generic.HashSet<Ref>()
+        let stack = System.Collections.Generic.Stack<Ref>()
+        let found = ResizeArray<Ref list>()
+        let sortKey (r: Ref) = (r.Owner, r.Repo, r.Number)
+
+        let rec strongconnect (v: Ref) =
+            index.[v] <- counter
+            low.[v] <- counter
+            counter <- counter + 1
+            stack.Push v
+            onStack.Add v |> ignore
+
+            for w in Map.find v succs do
+                if not (index.ContainsKey w) then
+                    strongconnect w
+                    low.[v] <- min low.[v] low.[w]
+                elif onStack.Contains w then
+                    low.[v] <- min low.[v] index.[w]
+
+            if low.[v] = index.[v] then
+                let comp = ResizeArray<Ref>()
+                let mutable popping = true
+
+                while popping do
+                    let w = stack.Pop()
+                    onStack.Remove w |> ignore
+                    comp.Add w
+                    if w = v then popping <- false
+
+                let members = List.ofSeq comp
+
+                // A COMPONENT IS A RING IFF it has more than one member, or its ONE member blocks ITSELF.
+                // Without the self-edge test every node on an acyclic board is its own component and would
+                // be reported as a deadlock — the false positive that would make this diagnosis worthless
+                // on precisely the boards that are fine.
+                let isRing =
+                    match members with
+                    | [ single ] -> Map.find single succs |> List.contains single
+                    | _ -> true
+
+                if isRing then
+                    found.Add(members |> List.sortBy sortKey)
+
+        for (v, _) in deduped do
+            if not (index.ContainsKey v) then
+                strongconnect v
+
+        found |> List.ofSeq |> List.sortBy (List.map sortKey)
+
     type BlockedByRefusal =
         | Placeholder
         | NotIssueRefs
