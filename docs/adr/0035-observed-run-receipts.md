@@ -141,13 +141,46 @@ receipt without the registry bump is incomplete**, not a follow-up.
 > "would instead change a persisted enum on the governance-handoff surface — a schema change this
 > stage deliberately does not make". This ADR was written at proposal; the code is what shipped.
 
-**Still outstanding, and it is what makes the bump real:** SDD stamps a hardcoded `contractVersion`
+~~**Still outstanding, and it is what makes the bump real:** SDD stamps a hardcoded `contractVersion`
 into every emitted handoff and it still reads `1.0.0`, so the registry declares `1.1.0` while the
 artifact self-declares `1.0.0` — and **no gate compares the two**. Tracked as
 [FS.GG.SDD#427](https://github.com/FS-GG/FS.GG.SDD/issues/427) and as coherence id
 `governance-handoff-emitted-version` (`coherent: false`). It is harmless only while the default stays
 off; **it must land before the stage-3 flip below**, or a consumer meets a value its declared contract
-never announced — the precise failure this obligation exists to prevent.
+never announced — the precise failure this obligation exists to prevent.~~
+
+**Paid on the SDD side; one clause of it survives, and it is ours.** The paragraph above is struck
+whole rather than edited clause-by-clause, because its *conclusion* — that this blocks the stage-3b
+flip — is what a reader acts on, and that conclusion is false even though one of its premises
+(*"no gate compares the two"*) is still true. Leaving the true clause unstruck inside a false
+paragraph is how the next reader re-derives the wrong answer.
+
+> ⚠️ **The struck text above was true when written and is now FALSE — the SDD-side half was paid on
+> 2026-07-14 by [FS.GG.SDD#427](https://github.com/FS-GG/FS.GG.SDD/issues/427), which closed the same
+> day [#715](https://github.com/FS-GG/.github/issues/715) reconciled this ADR's header. That edit fixed
+> the status line and left this claim behind, which is how the two came apart.** Corrected in place
+> rather than rewritten, for the same reason as the block above: a reader deciding the stage-3b flip
+> reads *"two things must land"*, checks this one, finds it unmet **on this ADR's word**, and stops —
+> when it is in fact paid ([#1082](https://github.com/FS-GG/.github/issues/1082)).
+>
+> **What was paid — the stamp.** Measured in FS.GG.SDD @ `7c6c78a`: nothing is hardcoded any more.
+> `GovernanceHandoff.fs:261` and `ReleaseContract.fs:590-592` both **read**
+> `Fsgg.Schemas.governanceHandoffContractVersion` (`src/FS.GG.Contracts/Schemas.fs:185` = `"1.1.0"`),
+> anchored by `SchemaVersionConstantTests.fs:55-58`. The artifact self-declares `1.1.0` and the registry
+> declares `1.1.0`. **They agree.** The hand-kept mirror the registry warned about is gone: emitter and
+> constant are now **one literal**, so they cannot drift — a structural fix, which is stronger than the
+> gate that was asked for.
+>
+> **What is still owed — the comparison, and it is not SDD's.** Nothing compares SDD's constant to the
+> `version` `registry/dependencies.yml` declares, so `governance-handoff` remains free to advance here
+> while SDD stamps something older. Both repos independently wrote that gap down and both named
+> **`.github`** as its owner; neither built it. It is now tracked at
+> [**#1085**](https://github.com/FS-GG/.github/issues/1085) — a live issue rather than a closed one.
+>
+> **#427 was two findings under one title** — *the stamp is wrong* (paid, SDD's) and *nothing compares
+> the two* (owed, ours). This ADR collapsed them into a single precondition and attributed the whole of
+> it to SDD. The precondition **on SDD** is discharged; the gate **on `.github`** is not, and it is the
+> flip's real remaining contract-version risk.
 
 ### Migration — this is a breaking change to the evidence contract
 
@@ -168,12 +201,29 @@ receipt, so flipping today would turn every ship-ready work item in every FS-GG 
 at once, with no remedy available. Accepting this ADR does **not** flip it. What accepting it settles
 is that the flip *is coming* and that work should be planned against it, not that it happens now.
 
-**Two things must land before the flip**, or it lands broken:
+~~**Two things must land before the flip**~~ — **ONE does**, and this list said two until
+[#1082](https://github.com/FS-GG/.github/issues/1082). The count is corrected in place rather than
+quietly edited down, because a reader who checks a phantom precondition, finds it unmet on this ADR's
+word, and stops is the exact harm the stale entry caused:
 
-- **Receipts must actually be recorded.** The gate is only fair once the fleet can pass it.
-- **[FS.GG.SDD#427](https://github.com/FS-GG/FS.GG.SDD/issues/427)** — the emitted `contractVersion`
+- **Receipts must actually be recorded.** The gate is only fair once the fleet can pass it. **This is
+  the precondition, and it is genuinely unmet** — measured at **0 of 25** `evidence.yml` in FS.GG.SDD
+  carrying a receipt ([FS.GG.SDD#511](https://github.com/FS-GG/FS.GG.SDD/issues/511)). It is the
+  binding constraint, and while the entry below sat beside it looking equally unmet, it got half the
+  attention it was owed.
+- ~~**[FS.GG.SDD#427](https://github.com/FS-GG/FS.GG.SDD/issues/427)** — the emitted `contractVersion`
   still says `1.0.0` (see the obligation section above). Flip before that, and Governance meets
-  `ship.unobservedEvidence` under a contract version that never declared it.
+  `ship.unobservedEvidence` under a contract version that never declared it.~~ **PAID 2026-07-14, and
+  no longer a precondition at all.** The emitter reads the constant; both sides declare `1.1.0`; the
+  consumer this bullet protected can no longer meet an undeclared value, because there is nothing
+  undeclared. See the ⚠️ correction in the obligation section above.
+
+  **What survives is a safeguard, not a gate on the flip, and it is `.github`'s not SDD's:** nothing
+  compares SDD's constant to the `version` this org's registry declares
+  ([**#1085**](https://github.com/FS-GG/.github/issues/1085)). The two agree **today** and are kept so
+  **by hand, across a repo boundary** — so the risk #1085 addresses is *drift before the flip*, not the
+  flip itself. Land it and the hand-kept step stops being load-bearing. Do not re-list it above as a
+  third precondition: that is how this table acquired a phantom in the first place.
 
 ### Rejected alternatives
 

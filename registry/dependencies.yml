@@ -183,18 +183,25 @@ contracts:
     # GOVERNANCE OWNS THE VERDICT, NOT THE FACT (ADR-0035 §3): SDD reports `unobserved`; what it costs
     # at a merge boundary, and receipt freshness, are Governance's to decide.
     #
-    # NOT COHERENT WITH THE EMITTED ARTIFACT YET — see coherence id `governance-handoff-emitted-version`.
-    # SDD stamps a HARDCODED `"contractVersion"` into every handoff, and it is still "1.0.0", so the
-    # artifact self-declares 1.0.0 while this row declares 1.1.0. Nothing gates the two against each
-    # other, which is why it is written down here rather than left to be discovered.
+    # COHERENT WITH THE EMITTED ARTIFACT since 2026-07-14 (FS.GG.SDD#427); UNGATED — see coherence id
+    # `governance-handoff-emitted-version`, and .github#1085 for the gate that is still owed.
     #
-    # AND IF YOU ARE THE ONE FIXING IT: the value is hardcoded TWICE, independently. The literal that
-    # actually reaches the file is `GovernanceHandoff.fs:261` (`ContractVersion = "1.0.0"`, written at
-    # :282) — that module does not even `open` FS.GG.Contracts. `Schemas.governanceHandoffContractVersion`
-    # (`src/FS.GG.Contracts/Schemas.fs:174`) is a SEPARATE, hand-kept MIRROR that the emit path never
-    # reads; its `// SOURCE:` comment names GovernanceHandoff.fs as the truth it is copying. Moving the
-    # Schemas constant alone turns its test green and changes NOTHING about the emitted artifact. Move
-    # BOTH.
+    # THIS COMMENT SAID THE OPPOSITE UNTIL .github#1082, and it was WRONG for three days: it read "SDD
+    # stamps a HARDCODED contractVersion and it is still 1.0.0 ... the value is hardcoded TWICE,
+    # independently ... Move BOTH." Every clause of that was true when written and none of it survived
+    # #427. Measured in FS.GG.SDD @ 7c6c78a: `GovernanceHandoff.fs:261` and `ReleaseContract.fs:590-592`
+    # both READ `Fsgg.Schemas.governanceHandoffContractVersion` (`src/FS.GG.Contracts/Schemas.fs:185` =
+    # "1.1.0", anchored by `SchemaVersionConstantTests.fs:55-58`). There is now ONE literal, not two, so
+    # the emitter and the constant CANNOT drift — the hand-kept mirror this comment warned about is gone,
+    # and the durable fix it asked for was achieved structurally rather than by a check.
+    #
+    # WHAT IS STILL TRUE, AND IS OURS: nothing compares SDD's constant to the `version:` on the next
+    # line. Nothing in SDD can see this document, so SDD's own gate cannot catch it — this row is free to
+    # advance here while SDD stamps something older, which is the same silent drift one level up. SDD's
+    # source says so from its side too (`Schemas.fs:180-183` names this repo as the owner and asks that
+    # the value change "only alongside the registry"). BOTH repos wrote the gap down; NEITHER built the
+    # gate. Until .github#1085 lands, the two are kept in step BY HAND — so change this value only
+    # alongside SDD's constant.
     version: "1.1.0"
     range: "1.x"
     owner: sdd
@@ -1137,53 +1144,76 @@ coherence:
     impact: "FS.GG.Templates#25 composition stage asserts the full matrix (strict blocks / strict passes / light relaxes) against the installed fsgg-governance — green-by-omission eliminated end-to-end through the composed product."
     tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/29"
   - id: governance-handoff-emitted-version
-    coherent: false
+    coherent: true
     owner: sdd
     summary: >
-      (2026-07-14) The `governance-handoff` CONTRACT entry above declares 1.1.0 (ADR-0035 stage 3,
-      additive — the `ship.unobservedEvidence` blocking diagnostic id became reachable in
-      `readiness.blockingDiagnosticIds[]`). The EMITTED ARTIFACT still self-declares 1.0.0: SDD stamps
-      a hardcoded `"contractVersion"` into every `readiness/<id>/governance-handoff.json`, and
-      FS.GG.SDD#422 did not move it. So the registry says 1.1.0 and the file on disk says 1.0.0.
-    note: >
-      THE VALUE IS HARDCODED TWICE, INDEPENDENTLY — and only one of the two reaches the file. Anyone
-      repairing this must move BOTH, so the distinction is recorded here rather than rediscovered:
-      `src/FS.GG.SDD.Artifacts/GovernanceHandoff.fs:261` holds `ContractVersion = "1.0.0"` and writes
-      it at :282 — that is the EMITTER, and it does not even `open` FS.GG.Contracts.
-      `Schemas.governanceHandoffContractVersion` (`src/FS.GG.Contracts/Schemas.fs:174`) is a SEPARATE,
-      hand-kept MIRROR the emit path never reads; its own `// SOURCE:` comment names GovernanceHandoff.fs
-      as the truth it copies, and the test that "pins" it (`SchemaVersionConstantTests.fs:53`) asserts
-      the constant against a string literal it ALSO hardcodes — so it cannot fail when the two files
-      drift apart. Bumping the Schemas constant alone turns that test green and changes nothing about
-      the artifact.
+      (2026-07-14) RESOLVED by FS.GG.SDD#427, on this row's own stated flip criterion: the EMITTED
+      ARTIFACT's `contractVersion` reads 1.1.0 and the `governance-handoff` CONTRACT entry above
+      declares 1.1.0. THEY AGREE. The divergence this row was opened for — registry 1.1.0 vs artifact
+      1.0.0, left behind by FS.GG.SDD#422 — no longer exists.
       .
-      NOTHING GATES THESE AGAINST EACH OTHER, which is why this row exists rather than a red check. The
-      contract-coherence workflow asserts the declared `fsgg-contracts` version against the
-      FS.GG.Contracts PACKAGE version; no gate compares a contract's declared `version` against the
-      `contractVersion` its own emitter stamps. The drift is therefore SILENT — instance (j) of epic
-      .github#266's own signature: a green tick over a divergence nobody declared. Recorded, not
-      discovered later.
+      HELD FALSE FOR THREE DAYS AFTER IT WAS PAID, and flipped by .github#1082, which is the finding
+      worth keeping: #427 closed 2026-07-14T11:01:07Z and nothing re-read this row, so the registry went
+      on asserting a mismatch that had been repaired. ADR-0035's migration table cited that phantom as a
+      hard precondition on the stage-3b flip, so a reader checking the ADR's "two things must land" found
+      one of them unmet ON THIS ROW'S WORD and stopped — while the precondition that IS unmet (receipts
+      recorded: 0 of 25, FS.GG.SDD#511) sat beside it getting half the attention. A coherence row that is
+      red over a resolved subject is not a safe default: it is #266's own signature inverted — not a
+      green tick over a real divergence, but a red one over a divergence that is gone, and it costs the
+      same currency, which is whether anyone believes the table.
+    note: >
+      HOW IT WAS PAID, because the repair is stronger than the gate this row asked for and that distinction
+      should not be lost. The value used to be hardcoded TWICE, independently — `GovernanceHandoff.fs:261`
+      (the EMITTER, which did not even `open` FS.GG.Contracts) and `Schemas.governanceHandoffContractVersion`
+      (a hand-kept MIRROR the emit path never read, whose test pinned the constant against a string literal
+      it ALSO hardcoded, so it could not fail when the two drifted). #427 did not merely move both literals:
+      it DELETED the mirror. Measured in FS.GG.SDD @ 7c6c78a, `GovernanceHandoff.fs:261` and
+      `ReleaseContract.fs:590-592` both READ `Fsgg.Schemas.governanceHandoffContractVersion`
+      (`src/FS.GG.Contracts/Schemas.fs:185` = "1.1.0", anchored by `SchemaVersionConstantTests.fs:55-58`).
+      There is now ONE literal. Emitter and constant CANNOT drift, so gate (a) below is satisfied
+      STRUCTURALLY rather than by a check — the durable fix, not a reset clock.
+      .
+      #427 WAS TWO FINDINGS UNDER ONE TITLE, and collapsing them is how the attribution went wrong: "the
+      stamp is wrong" (SDD's, paid) and "nothing compares the two" (.github's, OWED — see enforcement (b)
+      and .github#1085). This row's `owner: sdd` records who owed the divergence and paid it; it is NOT
+      the owner of the gate that is still missing.
     impact: >
-      Bounded today, and unbounded at the flip. A Governance consumer that pins on the artifact's
-      self-declared `contractVersion` reads 1.0.0 and cannot know the new id is reachable — but the id
-      is unreachable in practice while `--require-observed` stays default-off (FS.GG.SDD#422), so no
-      consumer can currently meet an undeclared value. That protection ENDS when the default flips (the
-      schema major ADR-0035 gates on "once the fleet is green"): at that point an unbumped emitter
-      hands Governance a `ship.unobservedEvidence` under a `contractVersion` that never declared it,
-      which is precisely the failure the ADR ordered this bump to prevent.
+      None today: the registry and the emitted artifact agree, so a Governance consumer pinning on the
+      artifact's self-declared `contractVersion` reads 1.1.0 and learns that `ship.unobservedEvidence` is
+      reachable. The unbounded-at-the-flip risk this row carried is DISCHARGED — ADR-0035 stage 3b can no
+      longer hand Governance a diagnostic id under a version that never declared it.
+      .
+      The RESIDUAL risk is drift, not divergence: the two values agree by hand, across a repo boundary,
+      with nothing asserting it. That is what .github#1085 closes, and it is a missing SAFEGUARD rather
+      than an incoherence — which is why this row is `true` and #1085 is an issue, instead of this row
+      being held red over a state that is in fact coherent. Holding it red to keep the gate visible would
+      re-create the exact defect .github#1082 repaired.
     enforcement: >
-      Flips coherent:true when the EMITTED handoff's `contractVersion` reads 1.1.0 — which takes both
-      literals above, not just the Schemas mirror. TWO gates are owed, and they belong in DIFFERENT
-      repos; collapsing them is how this recurs.
-      (a) EMITTER == CONSTANT, inside SDD. It catches the break in the PR that causes it rather than in
-      a downstream repo's CI — the lesson the `fsgg-contracts` entry already records from SDD#387, and
-      the reason it is SDD's gate and not ours.
-      (b) SDD's constant == the `version` THIS registry declares. That one is .github's: nothing in SDD
-      can see this document, so (a) alone would leave `governance-handoff` free to advance here while
-      SDD stamps something older — the same silent drift, one level up. `contract-coherence.yml` already
-      checks out FS.GG.SDD to read its source for exactly this shape of assertion, so it is the natural
-      home. Both are carried on the tracking issue.
-    tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/427"
+      FLIPPED coherent:true 2026-07-17 (.github#1082) on the criterion this field already stated: the
+      EMITTED handoff's `contractVersion` reads 1.1.0. TWO gates were named here, in DIFFERENT repos:
+      (a) EMITTER == CONSTANT, inside SDD — SATISFIED STRUCTURALLY by FS.GG.SDD#427, which left one
+      literal for both sites to read rather than two to keep in step. No check is owed: there is nothing
+      left that can drift.
+      (b) SDD's constant == the `version` THIS registry declares — STILL OWED, and it is .github's:
+      nothing in SDD can see this document, so (a) alone leaves `governance-handoff` free to advance here
+      while SDD stamps something older. Tracked at .github#1085 — a LIVE issue, because the closed one
+      below cannot carry an obligation nobody will reopen it to do.
+      .
+      AND NOT IN `contract-coherence.yml`, WHICH THIS FIELD USED TO NAME AS "the natural home" ON THE
+      GROUND THAT IT "already checks out FS.GG.SDD". BOTH HALVES ARE NOW FALSE, and the advice was
+      actively dangerous — corrected by .github#1082. That workflow is `workflow_call` and ALL SIX repos
+      call it, so a cross-repo assertion inside it makes a disagreement between .github@main and
+      FS.GG.SDD@main a REQUIRED-check failure in every repo AT ONCE, which no landing order avoids
+      because no PR spans both repos. .github#741 (closed 2026-07-16) moved exactly this class of
+      assertion OUT for exactly that reason, and removed the FS.GG.SDD checkout along with it — this
+      field was written 2026-07-14 and did not survive that change.
+      .
+      THE HOME IS `source-coherence.yml` (.github-only blast radius, added by #741), and the gate is
+      nearly free there: it ALREADY sparse-checks-out FS-GG/FS.GG.SDD `src/FS.GG.Contracts`, which is the
+      very directory holding `Schemas.fs`. A red there reds .github — the repo that owns this document
+      and the only one that can fix it — while the other five keep merging. Same trade
+      `check-feed-coherence.py` and `check-source-coherence.py` already make, deliberately.
+    tracking: "https://github.com/FS-GG/FS.GG.SDD/issues/427 (closed 2026-07-14 — paid the divergence; the owed gate (b) is .github#1085)"
   - id: agent-skill-mirror
     coherent: true
     owner: sdd
