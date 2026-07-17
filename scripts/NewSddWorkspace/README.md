@@ -27,7 +27,8 @@ new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>
 ```
 
 Run it with **no arguments** on an interactive terminal and it walks you through the same
-parameters with prompts (product → target → profile → governance → descriptor ref → currency → upgrade → coordination).
+parameters with prompts (product → target → profile → governance → descriptor ref → currency → upgrade →
+coordination — an explicit org / board / this-workspace's-repo / chore-locks sequence, defaulting to FS-GG).
 Beside the prompts a live preview fills in as you answer — a **parameters** card next to a
 **scaffold preview** tree of what the run will produce — and a final go/no-go confirmation
 guards the disk. When stdin is redirected (pipes, CI), it skips the wizard and keeps the
@@ -41,6 +42,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 | `--upgrade` | after scaffolding, also run `fsgg-sdd upgrade` to reconcile an existing project (self-update + re-pin + re-seed). Largely redundant on a fresh scaffold now that the CLI is updated *before* scaffolding — kept for the reconcile-an-existing-project case. |
 | `--no-governance` | skip the Governance overlay |
 | `--board <owner>/<title>` | the coordination board the workspace joins — sets `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (default: `FS-GG/Coordination`). An `owner` with no `/title` defaults the title to `Coordination`. |
+| `--repo <owner>/<repo>` | this workspace's own repo — its identity on the board and the basis for its chore-lock ref. In the wizard its owner defaults the board org; on the CLI it drives the non-FS-GG chore-lock next-step hint. Not consumed as env (the engine resolves the repo from the git remote). |
 | `--chore-locks <refs>` | `FSGG_COORD_CHORE_LOCKS` for a **non-FS-GG** board's chore queue: comma-separated `owner/repo#n`. Unneeded for the FS-GG board (the engine carries its lock table). |
 | `--no-coordination` | skip wiring the workspace to a coordination board entirely (no kit, no env). |
 
@@ -52,7 +54,9 @@ work out of the box: it vendors the coordination kit (the four coordination skil
 tool manifest — fetched from `FS-GG/.github` over HTTP, no checkout, like the descriptor) and writes
 `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (and `FSGG_COORD_CHORE_LOCKS` when given) into the workspace's
 `.claude/settings.json` `env`. The board defaults to **FS-GG/Coordination**; `--board` retargets it and
-`--no-coordination` skips the step. This opens the product-mirror slice ADR-0019 §Consequences deferred
+`--no-coordination` skips the step. In the **no-arg wizard** this is an explicit input sequence — org,
+board title, this workspace's repo, and chore-locks are each their own prompt (Enter-through gives
+FS-GG/Coordination), and the repo's owner defaults the board-org prompt. This opens the product-mirror slice ADR-0019 §Consequences deferred
 (distribution had been framework-repos-only); the engine is env-multi-tenant, so any board works (#1140).
 
 Best-effort and non-blocking, like the governance overlay: a kit file that fails to fetch warns and the
