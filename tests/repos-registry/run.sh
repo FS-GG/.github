@@ -24,6 +24,9 @@ ROOT="$WORK/root"
 mkdir -p "$ROOT/.claude/skills/demo-skill" "$ROOT/scripts" "$ROOT/.github/workflows"
 printf '# demo skill\n' > "$ROOT/.claude/skills/demo-skill/SKILL.md"
 printf '#!/usr/bin/env bash\necho hi\n' > "$ROOT/scripts/democlient"
+# A stand-in for the real fsgg-coord shim, so the #1077 invariant leg below (a client that delivers
+# scripts/fsgg-coord) has an existing source and fails on the INVARIANT, not on "source missing".
+printf '#!/usr/bin/env bash\necho shim\n' > "$ROOT/scripts/fsgg-coord"
 printf 'on:\n  workflow_call:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
   > "$ROOT/.github/workflows/coordination-coherence.yml"
 printf 'on:\n  workflow_call:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
@@ -126,6 +129,15 @@ expect_fail "not exactly one authority"       1 "exactly one"        "$(variant 
 expect_fail "authority receives the kit"      1 "must not RECEIVE"   "$(variant authkit     's/full: FS-GG\/.github,   role: authority, receives: \[labels\]/full: FS-GG\/.github,   role: authority, receives: [labels, coordination-kit]/')"
 expect_fail "kit source missing"              1 "source missing"     "$(variant nosource    's/source: scripts\/democlient/source: scripts\/nope/')"
 expect_fail "kit id is not kebab/dotted"      1 "kit id"             "$(variant badkitid    's/id: demo-skill,/id: Demo Skill,/')"
+
+# --- kit `kind: config` rows (#1077): a config names its own dest, and ONLY a config may ---
+expect_fail "config kit row without a dest"   1 "no 'dest'"          "$(variant cfgnodest   's/kind: client, source: scripts\/democlient/kind: config, source: scripts\/democlient/')"
+expect_fail "config dest is absolute"         1 "receiver-RELATIVE"  "$(variant cfgabsdest  's/kind: client, source: scripts\/democlient }/kind: config, source: scripts\/democlient, dest: \/etc\/x }/')"
+expect_fail "config dest escapes the root"    1 "escape"             "$(variant cfgdotdot   's/kind: client, source: scripts\/democlient }/kind: config, source: scripts\/democlient, dest: ..\/x }/')"
+expect_fail "non-config row carrying a dest"  1 "only 'config'"      "$(variant clientdest  's/kind: client, source: scripts\/democlient }/kind: client, source: scripts\/democlient, dest: foo }/')"
+# THE #1077 INVARIANT: a kit delivering the fsgg-coord shim MUST deliver the engine manifest too.
+expect_fail "shim delivered without its engine manifest" 1 "engine manifest" \
+  "$(variant shimnomanifest 's/source: scripts\/democlient/source: scripts\/fsgg-coord/')"
 expect_fail "malformed repo full name"        1 "FS-GG"              "$(variant badfull     's/full: FS-GG\/FS.GG.SDD/full: GH\/FS.GG.SDD/')"
 # --- the kit lock: the digests moved OUT of the roster into a generated artifact (#527) -----------
 # This section replaces the old single "kit digest drift" assertion, and must be at LEAST as strong:

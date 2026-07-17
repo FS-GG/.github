@@ -35,6 +35,7 @@ on:
       - ".agents/skills/check-board/**"
       - ".claude/skills/pnext-item/**"
       - ".agents/skills/pnext-item/**"
+      - "dist/dotnet/.config/dotnet-tools.json"   # the engine tool manifest — a `kind: config` kit source (#1077)
   workflow_dispatch:
 
 permissions:

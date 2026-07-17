@@ -24,7 +24,7 @@
 # `capabilities:` row declaring how it is DETECTED at a receiver — a word that is legal to receive and
 # impossible to check is a green nobody earned (#628):
 #   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [push:     authority-pushed]
-#   coordination-kit   — the four coordination skills + the fsgg-coord client        [workflow: coordination-coherence.yml]
+#   coordination-kit   — coordination skills, the fsgg-coord client + the engine manifest [workflow: coordination-coherence.yml]
 #   build-config       — the org-shared .NET build config (scripts/sync-build-config.sh)  [script: sync-build-config.sh]
 #   lockfile-sync      — the reusable lockfile-sync workflow                          [workflow: lockfile-sync.yml]
 #   contract-coherence — the reusable contract-coherence gate                         [workflow: contract-coherence.yml]
@@ -36,8 +36,8 @@
 # repo that is not rostered is drift — so this list can no longer rot without a red check. Do not
 # hand-maintain it against intent; maintain it against what the callers actually do.
 
-schemaVersion: 5
-updated: 2026-07-13
+schemaVersion: 6
+updated: 2026-07-17
 authority: FS-GG/.github
 
 repos:
@@ -72,6 +72,15 @@ repos:
 #     exists precisely so a re-sync REFUSES to overwrite that. Onboarding it means running
 #     `sync-build-config.sh --adopt`, which moves the existing file to an imported `*.local.props`. That
 #     is a deliberate call about somebody else's build, and it is not a propagate bot's to make.
+#
+# THE COORDINATION ENGINE IS NO LONGER COUPLED TO THIS DECISION (#1077). The `.config/dotnet-tools.json`
+# that lets a repo restore `fs.gg.coord.cli` (the engine `scripts/fsgg-coord` execs) used to ride
+# build-config — so templates and audio, kept off build-config for the reasons above (all about how they
+# BUILD), held the `fsgg-coord` shim (a `coordination-kit` row → 6 receivers) with NO engine to exec.
+# That manifest is now a `coordination-kit` row too (see `kit:` below), so it reaches every kit receiver
+# regardless of build-config adoption, and `repos.sh validate` refuses to let the shim and the manifest
+# ride different fabrics again. The engine question was asked and answered HERE, not silently inherited
+# from the build decision above.
 #
 # So the claim this roster makes is falsifiable and exactly as strong as reality: **a repo receives
 # build-config iff it enforces build-config.** As of #628 that symmetry IS verified: the capability now
@@ -186,3 +195,11 @@ kit:
   - { id: check-board,             kind: skill,  source: .claude/skills/check-board }
   - { id: pnext-item,              kind: skill,  source: .claude/skills/pnext-item }
   - { id: fsgg-coord,              kind: client, source: scripts/fsgg-coord }
+  # The engine tool manifest (#1077). `scripts/fsgg-coord` execs `fs.gg.coord.cli` — the typed engine —
+  # and THIS `.config/dotnet-tools.json` is what lets a receiver `dotnet tool restore` it. It rode
+  # `build-config` (4 receivers) while the shim above rode this kit (6), so templates and audio held a
+  # shim they could not run. Carrying it here makes "receives the tool ⇒ can run the tool" STRUCTURAL,
+  # and `validate` asserts the shim row and this row never separate onto different fabrics again.
+  # A `kind: config` row names its own `dest`: the client's destination IS its source path, a config's
+  # is not (canonical under dist/dotnet/ so pin-coherence still finds it; delivered to .config/).
+  - { id: coord-engine-manifest,   kind: config, source: dist/dotnet/.config/dotnet-tools.json, dest: .config/dotnet-tools.json }

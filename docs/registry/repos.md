@@ -106,7 +106,7 @@ forked repos are **not** auto-exempt — archiving must never be a way out of th
 | Capability | What the repo participates in | Consumer | Status |
 |---|---|---|---|
 | `labels` | the shared cross-repo labels | `scripts/apply-labels.sh` | **migrated** (ADR-0019 slice 1) |
-| `coordination-kit` | the four coordination skills + the `fsgg-coord` client | `scripts/coordination-sync` + `coordination-coherence.yml` gate | **built** (ADR-0019 slice 2) · **audited**, 6 receivers |
+| `coordination-kit` | the four coordination skills, the `fsgg-coord` client + the engine tool manifest | `scripts/coordination-sync` + `coordination-coherence.yml` gate | **built** (ADR-0019 slice 2) · **audited**, 6 receivers |
 | `lockfile-sync` | the reusable lockfile-sync workflow | `.github/workflows/lockfile-sync.yml` | **adopted**, 6 receivers · **audited** (rostered by #503) |
 | `contract-coherence` | the reusable contract-coherence gate | `.github/workflows/contract-coherence.yml` | **audited**, `receivers: none` — built to be receiver-wired, never adopted ([#519](https://github.com/FS-GG/.github/issues/519)) |
 | `build-config` | the org-shared .NET build config | `scripts/sync-build-config.sh` | reserved; not audited (no reusable workflow) |
@@ -152,6 +152,14 @@ forced every kit edit to reserve the whole authored roster and serialised them a
 | `check-board` | skill | `.claude/skills/check-board` |
 | `pnext-item` | skill | `.claude/skills/pnext-item` |
 | `fsgg-coord` | client | `scripts/fsgg-coord` |
+| `coord-engine-manifest` | config | `dist/dotnet/.config/dotnet-tools.json` |
+
+The `coord-engine-manifest` config row is `.config/dotnet-tools.json`, the tool manifest that lets a
+receiver `dotnet tool restore` the `fs.gg.coord.cli` engine the `fsgg-coord` shim execs. A `kind: config`
+row names its own **`dest`** (here `.config/dotnet-tools.json`) — a client's destination is its source
+path, a skill's is derived from its basename, but a config's is not. It rode `build-config` (four
+receivers) until [#1077](https://github.com/FS-GG/.github/issues/1077) moved it here so it reaches the
+same six receivers as the shim; `repos.sh validate` now keeps the shim and the manifest on one fabric.
 
 The first two skills define the **protocol**; `check-board` and `pnext-item` are **command skills**
 that drive it — respectively, reconciling the board against issue state, and taking a repo's next

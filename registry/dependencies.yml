@@ -402,9 +402,12 @@ contracts:
     # minor bumps rather than riding along silently.
     # ADR-0006 / .github#19 (H3, Pillar 5): the canonical org-shared .NET build config —
     # Directory.Build.props (determinism, CPM + transitive pinning, lockfile-restore-enforcement
-    # gate, NU1603/NU1608->error), Directory.Packages.props (CPM + org FSharp.Core 10.1.301 pin),
-    # and .config/dotnet-tools.json (fake-cli 6.1.4). Distributed verbatim via
-    # scripts/sync-build-config.sh; repo-specific settings live in the imported *.local.props.
+    # gate, NU1603/NU1608->error) and Directory.Packages.props (CPM + org FSharp.Core 10.1.301 pin).
+    # Distributed verbatim via scripts/sync-build-config.sh; repo-specific settings live in the imported
+    # *.local.props. (.config/dotnet-tools.json LEFT this surface in #1077: the engine tool manifest — the
+    # thing that lets a repo restore fs.gg.coord.cli — now rides the coordination-kit, so it reaches all
+    # six kit receivers instead of build-config's four. Surface reduction only; receivers still get the
+    # file, via the kit, so no consumer breaks and no version bump.)
     # The script's --check mode is the drift gate consumed by the reusable coherence workflow
     # (#18, LANDED): consumer repos call contract-coherence.yml with check-build-config: true.
     # #29: --check compares byte-for-byte (not XML-aware), so a malformed-but-verbatim source could
@@ -425,7 +428,7 @@ contracts:
     # change to Directory.Build.props → adopters re-sync via the --check drift gate; surface unchanged,
     # no version bump. Also documents the M7 F# no-op (PublicApiAnalyzers is C#/VB-only) in the props
     # header, catching the props guidance up to the mechanism already recorded on apicompat-publicapi-gate.
-    surface: "dist/dotnet/{Directory.Build.props,Directory.Packages.props,.config/dotnet-tools.json} + scripts/sync-build-config.sh"
+    surface: "dist/dotnet/{Directory.Build.props,Directory.Packages.props} + scripts/sync-build-config.sh"
     consumers: [rendering, sdd, governance, templates]
     docs: "docs/build/README.md"
   - id: registry-schema

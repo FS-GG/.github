@@ -140,16 +140,49 @@ KIT_SKILL_SRCS="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field source --kind sk
 [ -n "$KIT_SKILL_SRCS" ] \
   || die "no 'kind: skill' kit item declared in $REG — the coordination kit requires at least one."
 
+# The kit's `kind: config` files: plain files delivered to a receiver path that is NOT their source —
+# .config/dotnet-tools.json, the manifest that lets a receiver `dotnet tool restore` the engine the
+# fsgg-coord client execs (#1077). Read source AND dest from the registry (a config NAMES its dest, so
+# rebuilding it here would be the invented-location bug the skills block warns about, one row over).
+# Capture each into a variable so a repos.sh that DIES propagates its exit code — a `paste <(...)` would
+# swallow it — same fail-closed discipline as the skills read: "I could not ask the registry" is not
+# "the kit has no config files". Config is OPTIONAL (a kit may declare none), unlike skills.
+cfg_src_rc=0
+KIT_CONFIG_SRCS="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field source --kind config --registry "$REG")" \
+  || cfg_src_rc=$?
+[ "$cfg_src_rc" -eq 0 ] || die "could not read the kit config sources from $REG (repos.sh exited $cfg_src_rc)."
+cfg_dst_rc=0
+KIT_CONFIG_DSTS="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field dest --kind config --registry "$REG")" \
+  || cfg_dst_rc=$?
+[ "$cfg_dst_rc" -eq 0 ] || die "could not read the kit config dests from $REG (repos.sh exited $cfg_dst_rc)."
+# Zip into source<TAB>dest lines; jq emits both fields in .kit order, so paste aligns them row-for-row.
+# The printf process substitutions cannot fail, so the fail-closed check above stands.
+KIT_CONFIG_PAIRS=""
+[ -z "$KIT_CONFIG_SRCS" ] \
+  || KIT_CONFIG_PAIRS="$(paste <(printf '%s\n' "$KIT_CONFIG_SRCS") <(printf '%s\n' "$KIT_CONFIG_DSTS"))"
+# Fail CLOSED on a config row with no usable dest. `repos.sh validate` enforces the dest, but this
+# script does not run it, and `repos.sh kit --field dest` renders a MISSING dest as the literal "null"
+# (jq -r) — so on an unvalidated registry a dest-less row would otherwise be distributed to `$target/null`
+# (or, if empty, the target root). "I read a malformed row" must not become a silent mis-write.
+[ -z "$KIT_CONFIG_PAIRS" ] || while IFS=$'\t' read -r _s _d; do
+  [ -n "$_s" ] || continue
+  case "$_d" in ""|null) die "kit config source '$_s' has no usable dest (got '$_d') — a 'kind: config' row must declare a receiver-relative 'dest' (run: scripts/repos.sh validate)." ;; esac
+done <<< "$KIT_CONFIG_PAIRS"
+
 # Build the managed source::dest list (dest is relative to the receiver root).
 managed() {
   printf '%s::%s\n' "scripts/fsgg-coord" "scripts/fsgg-coord"
-  local r src name
+  local r src name s d
   for src in $KIT_SKILL_SRCS; do
     name="${src##*/}"                    # the receiver materializes it at <root>/<name>/SKILL.md
     for r in $ROOTS; do
       printf '%s::%s\n' "$src/SKILL.md" "$r/$name/SKILL.md"
     done
   done
+  [ -z "$KIT_CONFIG_PAIRS" ] || while IFS=$'\t' read -r s d; do
+    [ -n "$s" ] || continue
+    printf '%s::%s\n' "$s" "$d"          # config: canonical source -> its own receiver dest
+  done <<< "$KIT_CONFIG_PAIRS"
 }
 
 # Every canonical source must exist before we compare or copy ANYTHING. Hoisted out of the loops below
@@ -159,6 +192,23 @@ while IFS= read -r entry; do
   [ -n "$entry" ] || continue
   rel_src="${entry%%::*}"
   [ -f "$SRC_ROOT/$rel_src" ] || die "canonical kit source missing: $rel_src (is this a .github checkout?)"
+  # A byte-copied `.json` source that is MALFORMED passes --check (the receiver's bytes match canonical)
+  # yet breaks `dotnet tool restore` in every receiver — the manifest's #29 hazard, which sync-build-config
+  # guarded until #1077 moved the manifest here. Assert JSON well-formedness at the SOURCE before we
+  # distribute or certify it: jq, else python3, else warn (don't block) if neither is present.
+  case "$rel_src" in
+    *.json)
+      if command -v jq >/dev/null 2>&1; then
+        jq -e . "$SRC_ROOT/$rel_src" >/dev/null 2>&1 \
+          || die "canonical kit source is not valid JSON: $rel_src — fix the source of truth before distributing."
+      elif command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import sys,json; json.load(open(sys.argv[1]))' "$SRC_ROOT/$rel_src" 2>/dev/null \
+          || die "canonical kit source is not valid JSON: $rel_src — fix the source of truth before distributing."
+      else
+        echo "WARN: no jq or python3 found; skipping JSON well-formedness check of $rel_src" >&2
+      fi
+      ;;
+  esac
 done < <(managed)
 
 # Which managed files must be EXECUTABLE in the receiver — keyed on the canonical source's OWN mode, and

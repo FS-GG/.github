@@ -114,6 +114,12 @@ make_repo() {
   mkdir -p "$root/scripts"
   cp "$REPO_ROOT/scripts/sync-build-config.sh" "$root/scripts/sync-build-config.sh"
 
+  # The REAL roster, for the same reason again: registry/repos.yml owns the kit's `kind: config` rows —
+  # the SECOND owner of the synced set since #1077 moved .config/dotnet-tools.json here from build-config.
+  # A stub would let the #794 union check pass after the roster and the preset drifted apart.
+  mkdir -p "$root/registry"
+  cp "$REPO_ROOT/registry/repos.yml" "$root/registry/repos.yml"
+
   cat > "$root/renovate.json" <<'JSON'
 {
   "extends": ["github>FS-GG/.github"],
@@ -729,7 +735,9 @@ python3 - "$GROW/scripts/sync-build-config.sh" <<'PY'
 import sys
 p = sys.argv[1]
 s = open(p, encoding="utf-8").read()
-old = '  ".config/dotnet-tools.json"\n)'
+# The FILES array's last entry since #1077 moved the manifest onto the kit — the two remaining
+# managed files are both .props.
+old = '  "Directory.Packages.props"\n)'
 assert old in s, "fixture no longer matches sync-build-config.sh's FILES block"
 open(p, "w", encoding="utf-8").write(s.replace(old, old[:-1] + '  "nuget.config"\n)', 1))
 PY
@@ -748,7 +756,7 @@ assert old in s, "fixture no longer matches sync-build-config.sh's FILES block"
 open(p, "w", encoding="utf-8").write(s.replace(old, "", 1))
 PY
 must_fail "a file the sync script dropped but the preset still disables is refused" \
-  "$SHRINK" "$FEED" "no longer syncs"
+  "$SHRINK" "$FEED" "no owner syncs any more"
 
 # ignorePaths reaching the .props source of truth by substring — the #678 trap, now for the files
 # #794 adds. "Directory.Packages.props" occurs inside dist/dotnet/Directory.Packages.props.
