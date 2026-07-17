@@ -650,12 +650,17 @@ module Snapshot =
     // SAME values `rules` holds — the payload states the subset rather than making the generator re-derive
     // it by id, because a `jq` filter listing ids in the shell would be a second copy of the membership,
     // hand-maintained, in the file whose whole purpose is to end hand-maintained copies.
+    // /5 — and `reconcileRules` (#889): the subset `check-board` projects, on the same reasoning as
+    // `filingRules`. A SECOND subset is the point at which "the generator selects nothing" stops being a
+    // preference and starts being load-bearing: two `jq` id-filters in the shell would be two copies of
+    // two memberships, and the only thing distinguishing them would be a list nothing tests.
     [<Literal>]
-    let private FactsSchema = "fsgg.coord.protocol/4"
+    let private FactsSchema = "fsgg.coord.protocol/5"
 
     let renderFacts
         (rules: Protocol.Rule list)
         (filingRules: Protocol.Rule list)
+        (reconcileRules: Protocol.Rule list)
         (verdicts: Protocol.VerdictDoc list)
         (takeExitCodes: Protocol.ExitCodeDoc list)
         (landableExitCodes: Protocol.ExitCodeDoc list)
@@ -684,6 +689,7 @@ module Snapshot =
 
         writeRules "rules" rules
         writeRules "filingRules" filingRules
+        writeRules "reconcileRules" reconcileRules
 
         w.WriteStartArray("verdicts")
 

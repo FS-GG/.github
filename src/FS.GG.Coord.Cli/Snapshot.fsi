@@ -104,6 +104,7 @@ module Snapshot =
     val renderFacts:
         rules: Protocol.Rule list ->
         filingRules: Protocol.Rule list ->
+        reconcileRules: Protocol.Rule list ->
         verdicts: Protocol.VerdictDoc list ->
         takeExitCodes: Protocol.ExitCodeDoc list ->
         landableExitCodes: Protocol.ExitCodeDoc list ->

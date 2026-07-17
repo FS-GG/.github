@@ -93,3 +93,12 @@ module Protocol =
     /// lease — they link to `intra-repo-parallel-work` for that. A region carries what its document is
     /// FOR (#916).
     val filingRules: Rule list
+
+    /// The rules a RECONCILER must satisfy — the subset `check-board` restates (#889). A SUBSET of
+    /// `rules` on the same terms as `filingRules`, and pinned by the same containment invariant.
+    ///
+    /// `check-board`'s own finding codes are PROCEDURE and stay authored; what it may not restate is the
+    /// protocol they read — that a blocker clears on CLOSED **or MERGED** (`blocker-resolution`), that a
+    /// read which did not happen may never render as a confident answer (`fail-closed` — a reconciler's
+    /// false clean is its worst output), and what a `Paths:` line actually IS (`touch-set-declaration`).
+    val reconcileRules: Rule list
