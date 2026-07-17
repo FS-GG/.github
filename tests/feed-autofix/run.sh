@@ -25,15 +25,17 @@ pass=0; fail=0
 ok()   { printf '  ok   %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf '  FAIL %s\n     %s\n' "$1" "$2"; fail=$((fail+1)); }
 
-# The 17 coherent-set members, mirroring the bot's FRAMEWORK_MEMBERS. Written out HERE rather than
-# imported from the bot, deliberately: a fixture that derived its expectations from the code under
-# test would ratify any edit to that list, including a wrong one. This is the independent copy that
-# makes such an edit show up as a failure.
+# The 17 coherent-set members. The bot no longer carries this list — it DERIVES the set from the
+# FS.GG.UI BOM's nuspec (.github#933) — so this is no longer a mirror of a literal in the code. It is
+# now the independent EXPECTATION the derivation is pinned against, which is a stronger thing to be:
+# a fixture that derived its expectations from the code under test would ratify any change to that
+# set, including a wrong one.
 #
-# So it must actually BE the fixture's source of truth. It is passed to build_feed below; there is
-# no second copy. (There WAS, in review: this list sat unused beside a hardcoded duplicate inside
-# build_feed's heredoc, so the comment above described a protection that did not exist — a lying
-# comment in the fixture for a bot whose entire thesis is that prose rots silently.)
+# It is the fixture's source of truth twice over, and there is no second copy of it:
+#   - build_feed serves a feed built from it, and nuspecs_for derives the BOM's declared deps from
+#     it, so every case below exercises the real derivation against this set;
+#   - the recorded-nuspec case asserts the REAL FS.GG.UI@0.11.0 package declares exactly this set,
+#     which is what stops this list and reality drifting apart in silence.
 MEMBERS='FS.GG.UI FS.GG.UI.Build FS.GG.UI.Canvas FS.GG.UI.Controls FS.GG.UI.Controls.Elmish
 FS.GG.UI.DesignSystem FS.GG.UI.Diagnostics FS.GG.UI.Elmish FS.GG.UI.KeyboardInput FS.GG.UI.Layout
 FS.GG.UI.Scene FS.GG.UI.SkiaViewer FS.GG.UI.Symbology FS.GG.UI.Symbology.Render FS.GG.UI.Testing
@@ -51,23 +53,39 @@ print(json.dumps(feed))
 PY
 }
 
-# The fixture's own guard: if the bot's list and this one ever diverge, every case below would be
-# testing a feed that does not match the code, and would do it QUIETLY — the bot would just report
-# whichever members the fixture happened to serve. Assert they are the same set, and name the delta.
-python3 - "$MEMBERS" "$ROOT/scripts/feed-autofix" <<'PY' || exit 1
-import re, sys
-mine = set(sys.argv[1].split())
-src = open(sys.argv[2], encoding="utf-8").read()
-block = re.search(r"FRAMEWORK_MEMBERS: list\[str\] = \[(.*?)\]", src, re.S)
-if not block:
-    sys.exit("fixture: cannot find FRAMEWORK_MEMBERS in the bot — it was renamed.")
-theirs = set(re.findall(r'"([^"]+)"', block.group(1)))
-if mine != theirs:
+# THE RECORDED-NUSPEC PIN (.github#933). fixtures/FS.GG.UI.0.11.0.nuspec is the real package's real
+# nuspec, fetched byte-for-byte off the org feed. Drive the bot's OWN derivation over it and assert
+# it reproduces exactly the 17 above.
+#
+# This replaces a guard that grepped FRAMEWORK_MEMBERS out of the bot, which the derivation deleted.
+# It is a better guard than the one it replaces, because it pins the derivation to REALITY rather
+# than to another literal: the old one could only catch this file and the bot disagreeing, and would
+# have reported a contented green while both drifted away from what the feed actually serves.
+#
+# It runs `nuspec_dependency_ids` — the shipped parser — not a re-implementation of it, so a parser
+# that silently drops a dependency is a red here rather than a quietly shrunken coherent set.
+python3 - "$MEMBERS" "$ROOT/scripts" "$HERE/fixtures/FS.GG.UI.0.11.0.nuspec" <<'PY' || exit 1
+import sys
+expected = set(sys.argv[1].split())
+sys.path.insert(0, sys.argv[2])
+from fsgg_feed import nuspec_dependency_ids
+
+xml = open(sys.argv[3], encoding="utf-8-sig").read()
+derived = set(nuspec_dependency_ids(xml)) | {"FS.GG.UI"}
+if derived != expected:
     sys.exit(
-        "fixture: the member list has DRIFTED from the bot's FRAMEWORK_MEMBERS.\n"
-        f"  only in the fixture: {sorted(mine - theirs) or '-'}\n"
-        f"  only in the bot:     {sorted(theirs - mine) or '-'}\n"
-        "Reconcile them: every case below serves a feed built from the fixture's list."
+        "fixture: the set derived from the RECORDED FS.GG.UI@0.11.0 nuspec no longer matches this\n"
+        "fixture's expected members.\n"
+        f"  only in the recorded nuspec: {sorted(derived - expected) or '-'}\n"
+        f"  only in the fixture's list:  {sorted(expected - derived) or '-'}\n"
+        "If FS.GG.Rendering really did change the coherent set, re-record the fixture and update\n"
+        "MEMBERS. If it did not, the parser or the derivation has regressed."
+    )
+if "FS.GG.UI.Template" in derived:
+    sys.exit(
+        "fixture: the BOM now declares FS.GG.UI.Template as a member. The template is the SUBJECT "
+        "the bot classifies, so counting it as evidence would let a template-only cut confirm "
+        "itself as a framework release."
     )
 PY
 
@@ -89,7 +107,41 @@ contracts:
 YAML
 }
 
-fixture() { printf '{"feed": %s, "tags": %s}' "$1" "$2" > "$3"; }
+# fixture <feed-json> <tags-json> <path>
+#
+# Serves a nuspec for EVERY FS.GG.UI version the feed carries, synthesised from MEMBERS — so the
+# canned BOM always declares the same set the canned feed serves, and the cases below keep testing
+# what they were written to test rather than a BOM/feed mismatch of the fixture's own making.
+#
+# It serves nuspec XML, not a ready-made id list, because the bot parses it with the shipped
+# `nuspec_dependency_ids`. A fixture that handed back a parsed set would route every case around the
+# parser and leave it exercised only by the recorded-nuspec pin above.
+#
+# Deriving these from the feed rather than taking them as a 4th argument is deliberate: a feed
+# without an FS.GG.UI entry then serves no BOM nuspec either, which is exactly what the live feed
+# does when the BOM is missing — so the "unreadable member" case still gets the failure it asserts.
+fixture() {
+  python3 - "$1" "$2" "$MEMBERS" "$3" <<'PY'
+import json, sys
+feed, tags, members, out = json.loads(sys.argv[1]), json.loads(sys.argv[2]), sys.argv[3].split(), sys.argv[4]
+deps = [m for m in members if m != "FS.GG.UI"]
+nuspec = {}
+for version in feed.get("FS.GG.UI", []):
+    body = "\n".join(f'      <dependency id="{d}" version="[{version}]" />' for d in deps)
+    nuspec[f"FS.GG.UI@{version}"] = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">\n'
+        "  <metadata>\n"
+        "    <id>FS.GG.UI</id>\n"
+        f"    <version>{version}</version>\n"
+        "    <dependencies>\n" + body + "\n    </dependencies>\n"
+        "  </metadata>\n"
+        "</package>\n"
+    )
+with open(out, "w", encoding="utf-8") as fh:
+    json.dump({"feed": feed, "tags": tags, "nuspec": nuspec}, fh)
+PY
+}
 
 TRIPLE_11='{"fs-gg-ui/v0.11.0":"dddddddd11","fs-gg-ui-template/v0.11.0":"dddddddd11","v0.11.0":"dddddddd11"}'
 
@@ -165,6 +217,156 @@ if [ "$before" = "$(cat "$WORK/r3.yml")" ]; then
   ok "partial publish: registry left BYTE-IDENTICAL"
 else
   bad "partial publish: registry left BYTE-IDENTICAL" "the bot wrote on a refusal"
+fi
+
+# --------------------------------------------------------------------------------------------
+# 3b. THE 18TH MEMBER — the bound this whole derivation exists to remove (.github#933).
+#
+# FS.GG.Rendering publishes a NEW member, and a partial publish leaves ONLY that new member behind.
+# Against the old hand-maintained 17-id literal this was a SILENT false framework release: the 17
+# ids it knew about were all at the candidate, so it classified "framework" and flipped the pin to a
+# version the 18th member cannot serve. Nothing went red. It is the one shape the bot could not see,
+# and every other partial shape was already caught, which is what made it a blind spot rather than a
+# fail-open default.
+#
+# The BOM declares 18 members here, so the bot must now SEE the straggler and refuse. This case
+# fails on the pre-#933 bot — that is the point of it.
+# --------------------------------------------------------------------------------------------
+registry "$WORK/r3b.yml" "0.10.0" "0.9.2 -> 0.10.0" "0.10.0" "0.9.2 -> 0.10.0" "fs-gg-ui-template/v0.10.0"
+python3 - "$MEMBERS" "$TRIPLE_11" "$WORK/f3b.json" <<'PY'
+import json, sys
+members, tags, out = sys.argv[1].split(), json.loads(sys.argv[2]), sys.argv[3]
+NEW = "FS.GG.UI.Holograms"
+
+# Every known member moved to 0.11.0. The NEW member did NOT — it is still at 0.10.0.
+feed = {m: ["0.11.0"] for m in members}
+feed[NEW] = ["0.10.0"]
+feed["FS.GG.UI.Template"] = ["0.11.0"]
+
+# ...and the BOM at 0.11.0 declares it, because the upstream parity test locks the BOM's membership
+# to the packable set. That declaration is the whole reason the bot can now see the straggler.
+deps = [m for m in members if m != "FS.GG.UI"] + [NEW]
+body = "\n".join(f'      <dependency id="{d}" version="[0.11.0]" />' for d in deps)
+nuspec = {
+    "FS.GG.UI@0.11.0": (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">\n'
+        "  <metadata>\n    <id>FS.GG.UI</id>\n    <version>0.11.0</version>\n"
+        "    <dependencies>\n" + body + "\n    </dependencies>\n  </metadata>\n</package>\n"
+    )
+}
+with open(out, "w", encoding="utf-8") as fh:
+    json.dump({"feed": feed, "tags": tags, "nuspec": nuspec}, fh)
+PY
+before="$(cat "$WORK/r3b.yml")"
+out="$(python3 "$BOT" "$WORK/r3b.yml" --fixture "$WORK/f3b.json" --write 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && echo "$out" | grep -q "PARTIAL PUBLISH"; then
+  ok "18th member left behind: SEEN and refused (the .github#933 blind spot)"
+else
+  bad "18th member left behind: SEEN and refused (the .github#933 blind spot)" "rc=$rc: $out"
+fi
+if echo "$out" | grep -q "FS.GG.UI.Holograms=0.10.0"; then
+  ok "18th member left behind: the straggler is NAMED in the finding"
+else
+  bad "18th member left behind: the straggler is NAMED in the finding" "$out"
+fi
+if [ "$before" = "$(cat "$WORK/r3b.yml")" ]; then
+  ok "18th member left behind: registry left BYTE-IDENTICAL"
+else
+  bad "18th member left behind: registry left BYTE-IDENTICAL" "the bot flipped the pin to a version the new member cannot serve"
+fi
+
+# The mirror: the same NEW member published WITH everything else is a clean framework release. A
+# derivation that only ever refused would be useless — it must still say yes to the good shape.
+registry "$WORK/r3c.yml" "0.10.0" "0.9.2 -> 0.10.0" "0.10.0" "0.9.2 -> 0.10.0" "fs-gg-ui-template/v0.10.0"
+python3 - "$MEMBERS" "$TRIPLE_11" "$WORK/f3c.json" <<'PY'
+import json, sys
+members, tags, out = sys.argv[1].split(), json.loads(sys.argv[2]), sys.argv[3]
+NEW = "FS.GG.UI.Holograms"
+feed = {m: ["0.11.0"] for m in members}
+feed[NEW] = ["0.11.0"]          # this time it DID publish
+feed["FS.GG.UI.Template"] = ["0.11.0"]
+deps = [m for m in members if m != "FS.GG.UI"] + [NEW]
+body = "\n".join(f'      <dependency id="{d}" version="[0.11.0]" />' for d in deps)
+nuspec = {
+    "FS.GG.UI@0.11.0": (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">\n'
+        "  <metadata>\n    <id>FS.GG.UI</id>\n    <version>0.11.0</version>\n"
+        "    <dependencies>\n" + body + "\n    </dependencies>\n  </metadata>\n</package>\n"
+    )
+}
+with open(out, "w", encoding="utf-8") as fh:
+    json.dump({"feed": feed, "tags": tags, "nuspec": nuspec}, fh)
+PY
+out="$(python3 "$BOT" "$WORK/r3c.yml" --fixture "$WORK/f3c.json" --write --json 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q '"kind": "framework"'; then
+  ok "18th member published too: still a clean framework release"
+else
+  bad "18th member published too: still a clean framework release" "rc=$rc: $out"
+fi
+if echo "$out" | grep -q "all 18 FS.GG.UI"; then
+  ok "18th member published too: the derived set GREW to 18 with no code edit"
+else
+  bad "18th member published too: the derived set GREW to 18 with no code edit" "$out"
+fi
+
+# --------------------------------------------------------------------------------------------
+# 3d. THE BOM ITSELF IS THE THING THAT CAN LIE — so its failures must never become a guess.
+# --------------------------------------------------------------------------------------------
+# The BOM cannot be read (absent from the feed). The set is NOT assumed from a baked-in list: a
+# stale hardcoded set is the bound this derivation removes, so reinstating it on failure would
+# restore that bound at exactly the moment the derivation stopped working.
+registry "$WORK/r3d.yml" "0.10.0" "0.9.2 -> 0.10.0" "0.10.0" "0.9.2 -> 0.10.0" "fs-gg-ui-template/v0.10.0"
+noBom="$(build_feed 0.11.0 0.10.0 0.11.0 | python3 -c \
+  'import json,sys; f=json.load(sys.stdin); del f["FS.GG.UI"]; print(json.dumps(f))')"
+fixture "$noBom" "$TRIPLE_11" "$WORK/f3d.json"
+before="$(cat "$WORK/r3d.yml")"
+out="$(python3 "$BOT" "$WORK/r3d.yml" --fixture "$WORK/f3d.json" --write 2>&1)"; rc=$?
+# Assert on the SUBJECT, not merely on non-zero: "it failed" would be satisfied by any unrelated
+# breakage, which is how a test ends up green about a thing it never exercised.
+if [ "$rc" -ne 0 ] && echo "$out" | grep -q "FS.GG.UI"; then
+  ok "BOM unreadable: refuses, naming the BOM it could not read"
+else
+  bad "BOM unreadable: refuses, naming the BOM it could not read" "rc=$rc: $out"
+fi
+if [ "$before" = "$(cat "$WORK/r3d.yml")" ]; then
+  ok "BOM unreadable: registry untouched — the set is never guessed from a baked-in list"
+else
+  bad "BOM unreadable: registry untouched — the set is never guessed from a baked-in list" "the bot wrote without knowing the set"
+fi
+
+# A BOM that declares NO dependencies. An empty coherent set would make `len(at_candidate) ==
+# len(members)` vacuously TRUE and classify EVERY publish as a clean framework release — the
+# emptiest possible fail-open, and the reason nuspec_dependency_ids' [] is a caller's problem.
+registry "$WORK/r3e.yml" "0.10.0" "0.9.2 -> 0.10.0" "0.10.0" "0.9.2 -> 0.10.0" "fs-gg-ui-template/v0.10.0"
+python3 - "$MEMBERS" "$TRIPLE_11" "$WORK/f3e.json" <<'PY'
+import json, sys
+members, tags, out = sys.argv[1].split(), json.loads(sys.argv[2]), sys.argv[3]
+feed = {m: ["0.11.0"] for m in members}
+feed["FS.GG.UI.Template"] = ["0.11.0"]
+nuspec = {
+    "FS.GG.UI@0.11.0": (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">\n'
+        "  <metadata>\n    <id>FS.GG.UI</id>\n    <version>0.11.0</version>\n"
+        "  </metadata>\n</package>\n"
+    )
+}
+with open(out, "w", encoding="utf-8") as fh:
+    json.dump({"feed": feed, "tags": tags, "nuspec": nuspec}, fh)
+PY
+before="$(cat "$WORK/r3e.yml")"
+out="$(python3 "$BOT" "$WORK/r3e.yml" --fixture "$WORK/f3e.json" --write 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && echo "$out" | grep -q "declares NO dependencies"; then
+  ok "BOM with an empty dependency set: refused, not read as 'everything published'"
+else
+  bad "BOM with an empty dependency set: refused, not read as 'everything published'" "rc=$rc: $out"
+fi
+if [ "$before" = "$(cat "$WORK/r3e.yml")" ]; then
+  ok "BOM with an empty dependency set: registry untouched"
+else
+  bad "BOM with an empty dependency set: registry untouched" "the bot wrote on a refusal"
 fi
 
 # --------------------------------------------------------------------------------------------

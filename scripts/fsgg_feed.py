@@ -17,10 +17,14 @@ skip in the open, in its own code.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
+import zipfile
 
 ORG = "FS-GG"
 
@@ -125,6 +129,148 @@ def feed_versions(package: str, token: str) -> list[str]:
     if not versions:
         raise GateError(f"the feed served zero versions for {package!r}")
     return [str(v) for v in versions]
+
+
+def nuspec_dependency_ids(xml: str) -> list[str]:
+    """Every `<dependency id=…>` in a .nuspec, deduplicated, in document order. Raises on junk.
+
+    PURE — no network — so a recorded nuspec pins this parse offline. The network half is
+    `package_nuspec` below; keeping them apart is what lets a test assert the derived set against a
+    real recorded package rather than against a mock of our own parsing.
+
+    The nuspec is namespaced (`xmlns=…/nuspec.xsd`), and the namespace URI is VERSIONED — packages
+    in this feed carry the 2013/05 one, but older/newer ones differ. Matching on a hardcoded URI
+    would make a namespace bump read as "zero dependencies", i.e. an empty coherent set, so tags are
+    matched on their LOCAL name and the namespace is ignored.
+
+    A nuspec with no `<dependencies>` is NOT an error here (a leaf package legitimately has none) —
+    it returns []. That is the one place this module returns an empty list, and it is a real answer
+    rather than a "could not tell": the caller that needs a non-empty set must say so itself, which
+    feed-autofix's `derive_members` does.
+    """
+    try:
+        root = ET.fromstring(xml.lstrip("﻿"))
+    except ET.ParseError as e:
+        raise GateError(f"the .nuspec is not parsable XML: {e}") from e
+
+    ids: list[str] = []
+    for dep in root.iter():
+        if dep.tag.rsplit("}", 1)[-1] != "dependency":
+            continue
+        pkg = dep.get("id")
+        if not pkg:
+            raise GateError(
+                "the .nuspec has a <dependency> with no `id` attribute — an unreadable dependency "
+                "must not silently shrink the set derived from it."
+            )
+        if pkg not in ids:
+            ids.append(pkg)
+    return ids
+
+
+class _StripAuthOnRedirect(urllib.request.HTTPRedirectHandler):
+    """Drop `Authorization` when a redirect crosses to another host.
+
+    GitHub Packages answers a .nupkg download with a 302 to Azure Blob Storage, and the blob URL
+    carries its OWN pre-signed SAS credential in the query string. urllib re-attaches our original
+    `Authorization` header to the redirect target by default, and Azure rejects a request that
+    presents two credentials with:
+
+        HTTP 403 — Server failed to authenticate the request. Make sure the value of Authorization
+                   header is formed correctly including the signature.
+
+    That message names Authorization, so it reads exactly like a bad token — which is presumably why
+    reading a nuspec from this feed looked closed off (.github#933). The token is fine; the header is
+    simply not ours to send to Azure. `feed_versions` never hit this because `index.json` is served
+    directly, without a redirect.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        if urllib.parse.urlparse(newurl).netloc != urllib.parse.urlparse(req.full_url).netloc:
+            for header in [h for h in new.headers if h.lower() == "authorization"]:
+                del new.headers[header]
+        return new
+
+
+def package_nuspec(package: str, version: str, token: str) -> str:
+    """The .nuspec XML inside `package`@`version` on the org feed. Any failure raises — never "".
+
+    Reads the flat-container .nupkg and unzips the nuspec out of it. The feed does NOT serve the
+    nuspec at its own path (`/download/<id>/<v>/<id>.nuspec` 404s); the package is the only way to
+    it, and it is reachable with the run-scoped GITHUB_TOKEN the callers already hold — no classic
+    PAT, no `read:packages` enumeration, because this fetches ONE package whose id we already know
+    rather than enumerating the feed (.github#933, .github#267).
+    """
+    ident = f"{package.lower()}.{version.lower()}"
+    url = f"{FEED}/download/{package.lower()}/{version.lower()}/{ident}.nupkg"
+    auth = base64.b64encode(f"x:{token}".encode()).decode()
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Basic {auth}",
+            "Accept": "application/octet-stream",
+            "User-Agent": "fsgg-feed-autofix",
+        },
+    )
+    opener = urllib.request.build_opener(_StripAuthOnRedirect)
+    try:
+        with opener.open(req, timeout=60) as resp:
+            payload = resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            raise GateError(
+                f"the feed rejected the token reading the {package}@{version} package "
+                f"(HTTP {e.code}). The read needs `packages: read`. Refusing to derive a coherent "
+                f"set from a package it could not read."
+            ) from e
+        if e.code == 404:
+            raise GateError(
+                f"{package}@{version} is not on the org feed (HTTP 404) — the version exists in the "
+                f"feed index but its package cannot be downloaded, or the id mapping is wrong."
+            ) from e
+        raise GateError(
+            f"package read for {package}@{version} failed: HTTP {e.code} {e.reason}"
+        ) from e
+    except urllib.error.URLError as e:
+        raise GateError(
+            f"feed unreachable while reading the {package}@{version} package: {e.reason}"
+        ) from e
+
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(payload))
+    except (zipfile.BadZipFile, zipfile.LargeZipFile) as e:
+        raise GateError(
+            f"the feed served {len(payload)} bytes for {package}@{version} that are not a readable "
+            f".nupkg (zip): {e}. An unreadable package must not read as an empty coherent set."
+        ) from e
+
+    # The nuspec is at the archive ROOT, named for the package. Match on that rather than on any
+    # *.nuspec anywhere: a package can legitimately carry a fixture .nuspec under content/ or
+    # tools/, and picking one of those would derive the coherent set from an unrelated file.
+    names = [
+        n for n in archive.namelist()
+        if "/" not in n and n.lower().endswith(".nuspec")
+    ]
+    if len(names) != 1:
+        raise GateError(
+            f"the {package}@{version} package holds {len(names)} root .nuspec entries "
+            f"({sorted(names) or 'none'}) — expected exactly 1. A package whose shape is "
+            f"unrecognised must not read as an empty coherent set."
+        )
+    # BadZipFile is raised by read() as well as by the constructor — a package can have an intact
+    # central directory and a corrupt member, so a nuspec that LISTS cleanly can still fail to
+    # decompress. RuntimeError is what an encrypted entry raises. Neither may escape as a traceback:
+    # this module's contract is that every failure is a GateError, so that a caller cannot mistake
+    # "could not read it" for "it declared nothing".
+    try:
+        return archive.read(names[0]).decode("utf-8-sig")
+    except (KeyError, zipfile.BadZipFile, RuntimeError, EOFError, UnicodeDecodeError) as e:
+        raise GateError(
+            f"cannot read {names[0]} out of {package}@{version}: {type(e).__name__}: {e}"
+        ) from e
 
 
 # The public registry the org preset routes FS.GG.* to (default.json). Needs no credential.

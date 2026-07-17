@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>FS.GG.UI</id>
+    <version>0.11.0</version>
+    <authors>FS.GG Contributors</authors>
+    <owners>FS.GG Contributors</owners>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <projectUrl>https://github.com/FS-GG/FS.GG.Rendering</projectUrl>
+    <description>Optional BOM / metapackage for the FS.GG.UI framework. Reference this single package at one version to pin the entire coherent FS.GG.UI.* set to that version; any attempt to mix a member at a different version fails loudly at restore/build. Ships no assembly — dependencies only.</description>
+    <tags>fsharp skia ui bom metapackage coherent-set</tags>
+    <repository type="git" url="https://github.com/FS-GG/FS.GG.Rendering.git" />
+    <dependencies>
+      <dependency id="FS.GG.UI.Build" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Canvas" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Controls" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Controls.Elmish" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.DesignSystem" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Diagnostics" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Elmish" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.KeyboardInput" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Layout" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Scene" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.SkiaViewer" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Symbology" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Symbology.Render" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Testing" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Themes.AntDesign" version="[0.11.0]" />
+      <dependency id="FS.GG.UI.Themes.Default" version="[0.11.0]" />
+    </dependencies>
+  </metadata>
+</package>
