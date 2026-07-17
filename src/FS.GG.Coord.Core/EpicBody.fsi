@@ -16,9 +16,11 @@ module EpicBody =
     /// mention is not a declaration. A task line inside a fenced code block (``` or ~~~) is one of those
     /// mentions: an issue that QUOTES a task list to talk about one declares nothing by doing so, which is
     /// what a body's reader already assumes, because it is what GitHub renders (#965). A ref may be `#n`,
-    /// `owner/repo#n`, or a full issue URL; a bare `#n`
-    /// resolves against the epic's OWN repo, so all three land in the `owner/repo#n` form the sub-issue
-    /// graph is compared in. Deduplicated and sorted, so the set is stable and directly diffable.
+    /// `repo#n`, `owner/repo#n`, or a full issue URL. A bare `#n` resolves against the epic's OWN
+    /// owner and repo; a `repo#n` carries the repo but defaults the owner to the epic's own — the same
+    /// reduction `Blockers.canonToken` gives these forms (#1153). So all four land in the `owner/repo#n`
+    /// form the sub-issue graph is compared in. Deduplicated and sorted, so the set is stable and directly
+    /// diffable.
     val childRefs: selfOwner: string -> selfRepo: string -> body: string -> string list
 
     /// The acceptance lines that delegate to NOBODY — task lines carrying no issue ref, in body order.
