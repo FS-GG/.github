@@ -1,5 +1,6 @@
 namespace FS.GG.Coord.Tests
 
+open FSharp.Reflection
 open Xunit
 open FS.GG.Coord
 open FS.GG.Coord.Types
@@ -48,6 +49,34 @@ module ChoreTests =
           Blockers = []
           Claim = None
           ItemPr = None }
+
+    /// Every case of a union, by reflection — the sweep's axes are DERIVED, never typed out.
+    ///
+    /// `TypesTests` says why in as many words, about the vocabulary this file's sweep quantifies over: *"a
+    /// hand-written list is the fifth copy of the vocabulary wearing a different hat — correct on the day it
+    /// was typed and silently short by one the day a case is added."* An exhaustive sweep is exactly where
+    /// that bites hardest, because a missing axis value does not fail: it narrows the state space in silence
+    /// and the test still reports green over the combination it stopped generating. This sweep was written
+    /// hand-listed and was already short by two (`LeaseExpiredPrOpen`, `BlockerUnparseable`) on the day it
+    /// merged, which is the whole demonstration.
+    ///
+    /// `fill` supplies a value for the one case that carries a field (`LeaseExpiredPrOpen of pr: int`) and
+    /// THROWS on a field type it does not know. That is deliberate and it fails CLOSED: a new case with an
+    /// unfamiliar field stops this suite rather than quietly dropping itself from the sweep.
+    let private everyCaseOf<'T> (fill: System.Type -> obj) : 'T list =
+        FSharpType.GetUnionCases typeof<'T>
+        |> Array.map (fun c -> FSharpValue.MakeUnion(c, c.GetFields() |> Array.map (fun f -> fill f.PropertyType)) :?> 'T)
+        |> Array.toList
+
+    let private noFields (t: System.Type) : obj =
+        failwith $"a new union case carries a %s{t.Name} field — teach the sweep to build it, do not let it drop out"
+
+    let private everyStatus: BoardStatus list = everyCaseOf<BoardStatus> noFields
+
+    let private everyBlockerState: BlockerState list = everyCaseOf<BlockerState> noFields
+
+    let private everyLiveness: Liveness list =
+        everyCaseOf<Liveness> (fun t -> if t = typeof<int> then box 42 else noFields t)
 
     let private ids (items: Item list) = derive items |> List.map (fun c -> c.Id)
 
@@ -276,6 +305,15 @@ module ChoreTests =
         Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
 
     [<Fact>]
+    let ``reflection can actually see the unions — the sweep below is not vacuous`` () =
+        // If any of these came back empty, the `for` loops in the sweep would pass by iterating nothing and
+        // this module would report green over a state space it never generated. `TypesTests` carries the
+        // identical guard for the identical reason.
+        Assert.Equal(7, List.length everyStatus)
+        Assert.Equal(5, List.length everyBlockerState)
+        Assert.Equal(4, List.length everyLiveness)
+
+    [<Fact>]
     let ``an item derives AT MOST ONE chore — every kind writes the column, so two is a contradiction`` () =
         // The invariant behind the two defects above, stated over every combination rather than by example.
         //
@@ -290,41 +328,39 @@ module ChoreTests =
         // issue carrying a STALE marker, STALE-CLAIM ("restore the column it overwrote") and
         // CLOSED-ISSUE-NOT-DONE ("set Done") both fired, writing opposite columns to one item.
         //
-        // The sweep is exhaustive over every field the rules read — every lease state, every blocker state,
-        // and the MULTI-blocker sets, because `List.forall` is what BLOCKER-CLEARED turns on and a
-        // single-element set cannot tell `forall` from `exists`.
-        let statuses = [ NoStatus; Backlog; Ready; InProgress; Blocked; InReview; Done ]
-
-        let claims =
-            [ None
-              Some(claim other, LeaseHeld)
-              Some(claim other, LeaseExpiredNoPr)
-              Some(claim other, LeaseExpiredPrOpen 42)
-              Some(claim other, LivenessUnknown) ]
+        // Every axis is DERIVED from its union (see `everyCaseOf`), so a case added tomorrow widens this
+        // sweep instead of silently escaping it. Blocker sets go to every ORDERED PAIR, not a hand-picked
+        // few: `List.forall` is what BLOCKER-CLEARED turns on, and a single-element set cannot tell `forall`
+        // from `exists`.
+        let claims = None :: (everyLiveness |> List.map (fun l -> Some(claim other, l)))
 
         let blockerSets =
-            [ []
-              [ blocker 2 BlockerOpen ]
-              [ blocker 2 BlockerClosed ]
-              [ blocker 2 BlockerMerged ]
-              [ blocker 2 BlockerUnknown ]
-              [ blocker 2 BlockerUnparseable ]
-              [ blocker 2 BlockerClosed; blocker 3 BlockerOpen ]
-              [ blocker 2 BlockerClosed; blocker 3 BlockerMerged ]
-              [ blocker 2 BlockerClosed; blocker 3 BlockerUnknown ]
-              [ blocker 2 BlockerOpen; blocker 3 BlockerUnknown ] ]
+            [ yield []
+              for a in everyBlockerState do
+                  yield [ blocker 2 a ]
+                  for b in everyBlockerState do
+                      yield [ blocker 2 a; blocker 3 b ] ]
 
-        for st in statuses do
+        let mutable derivedSomething = 0
+
+        for st in everyStatus do
             for cl in claims do
                 for bs in blockerSets do
                     for state in [ Open; Closed ] do
                         let i = { item 1 with Status = st; State = state; Claim = cl; Blockers = bs }
                         let derived = derive [ i ]
+                        derivedSomething <- derivedSomething + derived.Length
 
                         Assert.True(
                             derived.Length <= 1,
                             $"status=%A{st} state=%A{state} claim=%A{cl |> Option.map snd} blockers=%A{bs |> List.map (fun b -> b.State)} derived %d{derived.Length} chores: %A{derived |> List.map (fun c -> c.Kind.RuleId)}"
                         )
+
+        // NON-VACUITY, and it is not a formality: everything above is an UPPER bound, so `derive = fun _ -> []`
+        // satisfies every assertion in this test. That is the same shape as the two touch-set tests below —
+        // an emptiness this suite would have read as proof — and #266 is the epic about a check reporting
+        // green over a subject it never saw. A sweep that asserts "never two" must also show it ever saw one.
+        Assert.True(derivedSomething > 0, "the sweep derived NO chores at all — `at most one` proved nothing")
 
     // ---- what is NOT a chore: fixes only ever write to the BOARD -------------------------------------
 
