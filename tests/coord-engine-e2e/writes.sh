@@ -134,6 +134,27 @@ dn="$(run "done" FS.GG.SDD#42 2>&1)"; dnrc=$?   # quoted: the coord VERB, not th
   && ok "done stamps an item closed by a merged PR" \
   || bad "done stamps a completed item" "rc=$dnrc: $dn"
 
+# ---- #1086: a worker mid-item in ANOTHER repo is NOT idle, and is offered nothing --------------------
+# The whole of #1086, end to end. `vole-418` holds a live claim on FS.GG.SDD#43 (taken above and never
+# released), and is here stamping a `.github` item. Condition 3 says they must not be handed a side-quest:
+# they are mid-lease with a live touch-set — in a different repo, which is exactly what makes it invisible.
+#
+# It was invisible. The offer asked "are you idle?" of a board scoped to `.github`, in which that SDD claim
+# does not appear, so the honest guard answered "idle" and handed over the chore. The board is read
+# UNFILTERED now and the scope rides in the type, so the claim is seen and the offer is withheld.
+#
+# IT RUNS FIRST, BEFORE ANY LEG TAKES THE CHORE LOCK, and that ordering is the whole assertion. Written
+# after the snipe-733 legs it PASSED WITH THE BUG SIMULATED: snipe-733 holds `.github#1033` by then, so
+# vole-418's offer lost the LOCK and returned None for a reason having nothing to do with idleness. A leg
+# that cannot fail is not evidence — it is the "shaped to pass" defect this issue's own review history
+# (plover-a4cf, #733) caught one level up. So: lock free, chore real, worker busy — one variable.
+#
+# The chore is REAL and offerable on exactly this board: snipe-733 is handed it by the very next leg.
+vb="$("$ENGINE" "done" FS-GG/.github#51 --flip --worker vole-418 2>&1)"; vbrc=$?
+[ "$vbrc" -eq 0 ] && printf '%s' "$vb" | grep -q 'FSGG-DONE' && ! printf '%s' "$vb" | grep -qi 'chore' \
+  && ok "#1086: a worker holding a claim in ANOTHER repo is not idle — no chore, though one is on offer" \
+  || bad "#1086: cross-repo claim makes us busy" "rc=$vbrc: $vb"
+
 # ---- #733/§4.6: `done` is a SAFE POINT, and it is the one a working fleet reaches --------------------
 # Condition 3 names two boundaries — after `done`, or at `next`. #1056 wired `next`; `Chore.AfterDone` was
 # a case Core declared and NOTHING minted. That matters because of WHERE the two sit in the recipe:

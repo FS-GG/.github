@@ -36,7 +36,7 @@ module Chores =
         (session: SessionId option)
         (owner: string)
         (repo: string)
-        (items: Item list)
+        (observed: Chore.Board)
         : (Chore.Chore * Ref) option =
         // 1. WHOSE LOCK? — FIRST, because it is what defines the SCOPE everything below reasons over, and
         //    because it is a pure string match that spends nothing. `None` is every repo without a lock
@@ -59,6 +59,11 @@ module Chores =
             //    (`governance` → `FS.GG.Governance`), so the lock's own ref is the only spelling that is
             //    certainly canonical. Comparing against the raw argument would drop every row on a caller
             //    who typed a short id — offering nothing, silently, on a board full of chores.
+            let items =
+                match observed with
+                | Chore.Whole xs
+                | Chore.Filtered xs -> xs
+
             let ours =
                 items
                 |> List.filter (fun i ->
@@ -72,44 +77,42 @@ module Chores =
                     // out of, and it already ran there.
                     String.Equals(i.Ref.Repo, lockRef.Repo, StringComparison.OrdinalIgnoreCase))
 
-            // 3. IDLE? — over the WHOLE board, not `ours`, and the difference is condition 3 itself.
+            // 3. IDLE? — over the WHOLE board (`observed`), deriving over `ours`. ONE mint, two arguments.
             //
             //    Idleness is a fact about the WORKER; a chore is a fact about the REPO. A worker holding a
             //    live claim in FS.GG.SDD is mid-item with a live touch-set, and is exactly who must not be
-            //    handed a side-quest — asking `ours` would not SEE that claim and would call them idle. So
-            //    the question is put to every row we were given.
-            match Chore.safePoint boundary worker items with
+            //    handed a side-quest — asking `ours` would not SEE that claim and would call them idle.
+            //
+            //    THIS USED TO MINT TWICE and say so: once over `items` for idleness, once over `ours` to
+            //    spend, reasoning that the second could not refuse because `ours` is a subset of the first.
+            //    The reasoning was sound and the PREMISE was not — `items` was only ever "every row we were
+            //    GIVEN", and `next --repo <r>` gives a board `Scan.scope` already filtered, so the honest
+            //    question was put to a board that could not answer it (#1086). The scope now rides in the
+            //    type: `observed` is `Chore.Whole` or `Chore.Filtered`, `safePoint` refuses the latter, and
+            //    the subject is a second argument rather than a subset argument to get right.
+            match Chore.safePoint boundary worker observed ours with
             | None -> None
-            | Some _ ->
-                // The `SafePoint` the offer is actually spent on carries `ours`, because `offer` reads the
-                // board FROM it — that coupling is the whole point of the type (the evidence and the
-                // subject are one value), so scoping the board means minting the capability over the scoped
-                // board. This cannot be `None` when the line above was `Some`: `ours` is a SUBSET of
-                // `items`, so it holds no claim `items` did not. It is matched rather than asserted because
-                // a total match is cheaper than being right about that forever.
-                match Chore.safePoint boundary worker ours with
+            | Some at ->
+                // 4. IS THERE ANYTHING TO DO? — pure and free, and asked BEFORE spending a REST
+                //    request: on a healthy board "nothing" is the common case, and the lock lives on
+                //    the budget the item CAS itself lives on (ADR-0034 §3).
+                match Chore.offer at with
                 | None -> None
-                | Some at ->
-                    // 4. IS THERE ANYTHING TO DO? — pure and free, and asked BEFORE spending a REST
-                    //    request: on a healthy board "nothing" is the common case, and the lock lives on
-                    //    the budget the item CAS itself lives on (ADR-0034 §3).
-                    match Chore.offer at with
-                    | None -> None
-                    | Some chore ->
-                        // 5. `Writes.claim`, unchanged, on another subject (ADR-0041). The board callback
-                        //    is `None` because the lock issue is not ON the board and must never be:
-                        //    `claim` reads a previous column only to restore it on release, and there is no
-                        //    column here to restore. That stub IS the chore-lock configuration — and
-                        //    `WriteTests` has driven `claim` this way, against an arbitrary ref, for the
-                        //    whole of its life.
-                        match Writes.claim transport LeaseMinutes worker session lockRef (fun () -> None) with
-                        | Ok(Writes.Won _)
-                        | Ok(Writes.Renewed _) -> Some(chore, lockRef)
+                | Some chore ->
+                    // 5. `Writes.claim`, unchanged, on another subject (ADR-0041). The board callback
+                    //    is `None` because the lock issue is not ON the board and must never be:
+                    //    `claim` reads a previous column only to restore it on release, and there is no
+                    //    column here to restore. That stub IS the chore-lock configuration — and
+                    //    `WriteTests` has driven `claim` this way, against an arbitrary ref, for the
+                    //    whole of its life.
+                    match Writes.claim transport LeaseMinutes worker session lockRef (fun () -> None) with
+                    | Ok(Writes.Won _)
+                    | Ok(Writes.Renewed _) -> Some(chore, lockRef)
 
-                        // EVERY OTHER OUTCOME IS "NOT OURS", and they are one branch on purpose. `Lost` is
-                        // the lock WORKING — somebody else is draining this repo. `Twin` is #419, and a
-                        // lock that cannot tell two workers apart is not one. `Undecided` and an
-                        // unparseable marker are "I could not tell", which is never a yes (#266). None of
-                        // them is an error the caller asked about: it asked for `next`.
-                        | Ok _
-                        | Error _ -> None
+                    // EVERY OTHER OUTCOME IS "NOT OURS", and they are one branch on purpose. `Lost` is
+                    // the lock WORKING — somebody else is draining this repo. `Twin` is #419, and a
+                    // lock that cannot tell two workers apart is not one. `Undecided` and an
+                    // unparseable marker are "I could not tell", which is never a yes (#266). None of
+                    // them is an error the caller asked about: it asked for `next`.
+                    | Ok _
+                    | Error _ -> None

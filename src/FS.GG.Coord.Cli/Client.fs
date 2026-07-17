@@ -391,37 +391,74 @@ module Client =
     /// alternative changes that function's shape for `batch` and `take` as well — to avoid a pure re-parse
     /// of a document already in hand. It is the SAME `Snapshot.parse` either way, so there is no second
     /// spelling to drift (#485).
-    let private offerChoreAt (ctx: Context) (opts: Options) (boundary: Chore.Boundary) (repo: string) (doc: string) : unit =
+    /// THE UNFILTERED BOARD, read for the idleness question and nothing else — the ONLY place `Chore.Whole`
+    /// is constructed, so the label is produced by the read that earns it rather than asserted by a caller.
+    ///
+    /// `Repo = None` is the whole of it: `Scan.scope None` is a pass-through, so the snapshot carries every
+    /// repo's rows and a live claim of ours anywhere is visible. `None` on any failure — an unreadable board
+    /// cannot report anybody idle (#266), and the offer is a courtesy that may do nothing.
+    ///
+    /// WHAT IT COSTS, MEASURED RATHER THAN FEARED (#1086, 2026-07-17). The obvious objection is that an
+    /// unscoped scan reads the whole org board — 1,192 rows. It does not: `Scan.snapshot` SWEEPS a closed
+    /// row without reading it (#520), and 1,156 of those rows are closed. Only the 36 OPEN ones cost the two
+    /// REST reads apiece, and 31 of the 36 are in `.github` already — so scoping saves about 22 requests of
+    /// 5,000/hr. The scoped read was never buying what its cost estimate claimed, and that estimate was what
+    /// made a fail-open guard look like a reasonable trade.
+    /// A parsed snapshot's rows as a `Chore.Whole` — the ONE construction of that case, so the label is
+    /// never spelled twice (#485) and never asserted by a caller who only believes the board is whole. The
+    /// argument is a `Request` the caller must have parsed from an UNFILTERED read; that obligation is the
+    /// reason both call sites below funnel through here rather than building `Chore.Whole` themselves.
+    let private wholeOf (request: Snapshot.Request) : Chore.Board =
+        Chore.Whole(request.Candidates |> List.map (fun c -> c.Item))
+
+    let private wholeBoard (ctx: Context) (opts: Options) : Chore.Board option =
+        match scanAndDecide ctx { opts with Repo = None } Cache.Scheduling with
+        | Error _ -> None
+        | Ok(_, doc, _) -> Snapshot.parse doc |> Result.toOption |> Option.map wholeOf
+
+    let private offerChoreAt (ctx: Context) (opts: Options) (boundary: Chore.Boundary) (repo: string) (observed: Chore.Board) : unit =
         // No worker id resolves ⇒ no lock is possible ⇒ no offer. `next` itself needs no worker, and that
         // asymmetry is deliberate: the ANSWER does not touch a lock, the OFFER is nothing but one. Note this
         // uses `Identity.resolve` directly rather than `worker`, which PRINTS a #419 warning and would make
         // an idle `next` scold every worker on a shared session for a lock it is not going to take.
-        match Identity.resolve opts.Worker, Snapshot.parse doc with
-        | Error _, _
-        | _, Error _ -> ()
-        | Ok w, Ok request ->
+        match Identity.resolve opts.Worker with
+        | Error _ -> ()
+        | Ok w ->
             let session = w.Session |> Option.map SessionId
 
-            // The snapshot's candidates are the UNFILTERED in-scope set — `Scan.snapshot` drops only PRs and
-            // out-of-scope repos, never a board column. That is what makes the chore rules reachable at all:
-            // `BLOCKER-CLEARED` needs a `Blocked` row and `CLOSED-ISSUE-NOT-DONE` needs a closed one, and
-            // bash filtered on `Status ∈ {Ready, Backlog}` BEFORE the engine was asked, so under it neither
-            // rule could ever have fired. `.github#669` leg 5 asked for exactly this snapshot and the port
-            // already carries it — this is the first caller to spend it.
-            let items = request.Candidates |> List.map (fun c -> c.Item)
-
-            Chores.offer ctx.Transport boundary (WorkerId w.Id) session ctx.Owner repo items
+            // The board reaches `offer` as a `Chore.Board`, so what it is scoped to travels WITH it and the
+            // idleness question can refuse a board that cannot answer (#1086). `offer` derives `ours` from
+            // its rows: the candidates are unfiltered by COLUMN — `Scan.snapshot` drops only PRs and
+            // out-of-scope repos — which is what makes the rules reachable at all. `BLOCKER-CLEARED` needs a
+            // `Blocked` row and `CLOSED-ISSUE-NOT-DONE` a closed one, and bash filtered on
+            // `Status ∈ {Ready, Backlog}` before the engine was asked, so under it neither could ever fire.
+            Chores.offer ctx.Transport boundary (WorkerId w.Id) session ctx.Owner repo observed
             |> Option.iter (fun (chore, lockRef) -> eprint (Chores.render chore lockRef))
 
     /// `next`'s call site. The repo the offer is FOR: `--repo` when given, else the checkout we are standing
     /// in — the same default `parseRef` uses for a bare ref. `choreLockRef` canonicalises it (`Governance` →
     /// `FS.GG.Governance`) and answers `None` for anything it does not know, so a typo cannot lock the wrong
     /// repo: it offers nothing, which is #979's lesson applied where a WRITE is at stake.
-    let private offerChoreAtNext (ctx: Context) (opts: Options) (doc: string) : unit =
+    ///
+    /// WHICH BOARD THE IDLENESS QUESTION GETS. Idleness is a fact about the whole board, so `wholeBoard`
+    /// reads it UNFILTERED regardless of `--repo` (#1086). With no `--repo` that is the same board `next`
+    /// just decided from, so this re-reads it — a second scan on the DIAGNOSTIC command (`/pnext-item` calls
+    /// `next` only when `take` found nothing), and only once a lock is known to exist.
+    ///
+    /// IT DOES NOT REUSE `next`'s `doc`, deliberately, and that is the #1086 fix keeping its own rule. The
+    /// reuse would build a `Chore.Whole` from a board proven whole only by "`next` with no `--repo` scans
+    /// unscoped" — caller reasoning, exactly the forgeable label the type exists to abolish. If `next` ever
+    /// default-scoped, that reuse would silently relabel a slice `Whole` and the fail-open returns with no
+    /// compile error. `wholeBoard` is the only door, so the re-read buys the guarantee back.
+    let private offerChoreAtNext (ctx: Context) (opts: Options) : unit =
         let repo =
             opts.Repo |> Option.orElse ctx.DefaultRepo |> Option.defaultValue ""
 
-        offerChoreAt ctx opts Chore.AtNext repo doc
+        // The free question first, exactly as `Chores.offer` does it and for the same reason: six of the
+        // org's seven repos have no chore lock, and none of them should buy a board read to hear so.
+        match Options.choreLockRef ctx.Owner repo with
+        | None -> ()
+        | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AtNext repo)
 
     /// `done --flip`'s call site — condition 3's OTHER safe point, and the one a working fleet reaches.
     ///
@@ -437,14 +474,16 @@ module Client =
     /// a board with no work is a board with no fleet to conscript. `done --flip` runs on every completed item,
     /// which is the only moment a busy board is ever handed a thread.
     ///
-    /// SCOPED TO THE STAMPED ITEM'S REPO, which is also the repo whose lock the offer will take. Not free of
-    /// consequence, and named rather than buried: `Scan.snapshot` spends TWO REST reads per OPEN candidate
-    /// (body + markers, the markers deliberately uncached — a lock may not be read from a cache), so an
-    /// UNSCOPED scan here would spend hundreds of requests of the 5,000/hr budget THE CLAIM LOCK ITSELF LIVES
-    /// ON (ADR-0034 §3) — on every `done`, to decide whether to offer a courtesy. That is #418's shape, caused
-    /// by the feature meant to help. The cost of scoping is that idleness is asked only of this repo's rows,
-    /// so a live claim of ours in ANOTHER repo is not seen — the same gap `next --repo <r>` already has, and
-    /// bounded by §6's own rule that a worker holds one item at a time. Filed rather than papered over.
+    /// THE BOARD IS READ UNSCOPED, and the SUBJECT is still the stamped item's repo — #1086's decision.
+    ///
+    /// This shipped scoped to the item's repo, on a cost estimate that was WRONG BY AN ORDER OF MAGNITUDE and
+    /// was the entire argument for it: "an unscoped scan would spend hundreds of requests of the budget the
+    /// claim lock lives on". That number came from the board's ROW count (1,192). But `Scan.snapshot` sweeps
+    /// a closed row WITHOUT READING IT (#520), and 1,156 of those rows are closed — only the 36 OPEN ones
+    /// cost the two REST reads (body + markers, markers uncached: a lock may not be read from a cache).
+    /// Measured 2026-07-17: unscoped ~85 REST, scoped-to-`.github` ~63, because 31 of the 36 open rows are in
+    /// `.github` anyway. Scoping bought ~22 requests of 5,000/hr — and paid for them with a guard that failed
+    /// open. The estimate is what made that look like a trade instead of a mistake.
     ///
     /// SILENT ON EVERY FAILURE, and this is the one that matters most. The stamp is EARNED — the merge
     /// happened, the column is set, the claim is dropped. A board read that fails, a budget that is gone, an
@@ -463,10 +502,7 @@ module Client =
         // The cheapest question first is the module's own rule; this is the call site keeping it.
         match Options.choreLockRef ctx.Owner ref.Repo with
         | None -> ()
-        | Some _ ->
-            match scanAndDecide ctx { opts with Repo = Some ref.Repo } Cache.Scheduling with
-            | Error _ -> ()
-            | Ok(_, doc, _) -> offerChoreAt ctx opts Chore.AfterDone ref.Repo doc
+        | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AfterDone ref.Repo)
 
     let next (ctx: Context) (opts: Options) : int =
         // `next` is `batch` capped at one. The cap is the ONLY difference — the decision is identical, so
@@ -492,7 +528,7 @@ module Client =
                 // AFTER the answer, and outside every failure path above: a chore is offered to a worker who
                 // already has what it came for. This is the conscription point (#733/§4.6) — the tool has no
                 // thread, so the next caller is it.
-                offerChoreAtNext ctx opts doc
+                offerChoreAtNext ctx opts
 
                 ExitGreen
 

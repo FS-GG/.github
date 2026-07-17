@@ -403,35 +403,73 @@ module ChoreTests =
     [<Fact>]
     let ``a worker mid-lease is NOT at a safe point — never hand a live touch-set an unbounded side-quest`` () =
         let mine = { item 1 with Status = InProgress; Claim = Some(claim worker, LeaseHeld) }
-        Assert.True((safePoint AtNext worker [ mine ]).IsNone)
+        Assert.True((safePoint AtNext worker (Whole [ mine ]) [ mine ]).IsNone)
 
     [<Fact>]
     let ``an idle worker IS at a safe point`` () =
-        Assert.True((safePoint AtNext worker [ item 1 ]).IsSome)
+        Assert.True((safePoint AtNext worker (Whole [ item 1 ]) [ item 1 ]).IsSome)
 
     [<Fact>]
     let ``ANOTHER worker's live claim does not stop US being idle`` () =
         let theirs = { item 1 with Status = InProgress; Claim = Some(claim other, LeaseHeld) }
-        Assert.True((safePoint AtNext worker [ theirs ]).IsSome)
+        Assert.True((safePoint AtNext worker (Whole [ theirs ]) [ theirs ]).IsSome)
 
     [<Fact>]
     let ``our own STALE claim still holds us mid-item — the lock breaks on reap, not on the clock (#461, #581)`` () =
         // The lease is a clock; the lock is a marker. Until it is collected our touch-set is still reserved,
         // so we are not idle — however loudly the clock says otherwise.
         let mine = { item 1 with Claim = Some(claim worker, LeaseExpiredNoPr) }
-        Assert.True((safePoint AtNext worker [ mine ]).IsNone)
+        Assert.True((safePoint AtNext worker (Whole [ mine ]) [ mine ]).IsNone)
 
     [<Fact>]
     let ``our claim whose liveness we could not read still holds us — could-not-look is not idle (#266)`` () =
         let mine = { item 1 with Claim = Some(claim worker, LivenessUnknown) }
-        Assert.True((safePoint AtNext worker [ mine ]).IsNone)
+        Assert.True((safePoint AtNext worker (Whole [ mine ]) [ mine ]).IsNone)
 
     [<Fact>]
     let ``AfterDone is a safe point once the claim is dropped (#533)`` () =
         // `done --flip` drops the marker, so the worker is idle by the time it is offered anything.
-        Assert.True((safePoint AfterDone worker [ item 1 ]).IsSome)
+        Assert.True((safePoint AfterDone worker (Whole [ item 1 ]) [ item 1 ]).IsSome)
 
     // ---- condition 3: bounded, and condition 1's other half: agreement -------------------------------
+
+    // ---- #1086: a board that cannot SEE our claims cannot report us idle ---------------------------
+    //
+    // The guard was right and its EVIDENCE was forgeable. `safePoint` answered honestly about whatever list
+    // it was handed, and `next --repo <r>` handed it a list `Scan.scope` had already filtered — in which our
+    // claim in another repo does not appear. Invisible read as absent, and condition 3's own guard handed a
+    // mid-item worker the side-quest it exists to withhold. These legs pin the type that ended it.
+
+    [<Fact>]
+    let ``a FILTERED board never reports us idle — invisible is not absent (#1086/#266)`` () =
+        // The exact shape of the bug: our claim is live, and the slice cannot see it. Before the scope rode
+        // in the type this was `Some` — the honest question, put to a board that could not answer it.
+        let mine = { item 1 with Status = InProgress; Claim = Some(claim worker, LeaseHeld) }
+        let ours = [ item 2 ]
+        Assert.True((safePoint AtNext worker (Filtered ours) ours).IsNone)
+        // ...and it is the FILTERING that refuses, not the claim: the same slice, with no claim of ours
+        // anywhere in sight, is still refused. "I could not tell" cannot become "yes" by the subject
+        // happening to look clean.
+        Assert.True((safePoint AtNext worker (Filtered [ item 2 ]) [ item 2 ]).IsNone)
+        // The whole board, holding that same claim, refuses for the RIGHT reason — it can see it.
+        Assert.True((safePoint AtNext worker (Whole [ mine; item 2 ]) ours).IsNone)
+
+    [<Fact>]
+    let ``idleness is asked of the WHOLE board, the chore derived over the SUBJECT (#1086)`` () =
+        // Two sets, and they always were. A claim of ours in ANOTHER repo makes us busy even though the
+        // subject — the lock's own repo — is spotless. This is the case `next --repo <r>` got wrong.
+        let elsewhere =
+            { item 9 with Ref = { (item 9).Ref with Repo = "FS.GG.SDD" }
+                          Status = InProgress
+                          Claim = Some(claim worker, LeaseHeld) }
+
+        let subject = [ { item 2 with State = Closed } ]     // a real chore, in the lock's repo
+        Assert.True((safePoint AtNext worker (Whole (elsewhere :: subject)) subject).IsNone)
+
+        // With that claim gone we are idle, and the SafePoint carries the subject — so `offer` still derives
+        // over the lock's repo only, never over the board it took its evidence from.
+        let at = (safePoint AtNext worker (Whole subject) subject).Value
+        Assert.True((offer at).IsSome)
 
     [<Fact>]
     let ``offer hands back AT MOST ONE chore, however much is wrong`` () =
@@ -440,14 +478,14 @@ module ChoreTests =
               { item 2 with State = Closed }
               { item 3 with Status = Blocked; Blockers = [ blocker 9 BlockerClosed ] } ]
 
-        let at = (safePoint AtNext worker board).Value
+        let at = (safePoint AtNext worker (Whole board) board).Value
         Assert.Equal(3, (derive board).Length)
         Assert.True((offer at).IsSome)
 
     [<Fact>]
     let ``the unlucky caller does not pay for everybody's garbage collection — 40 findings, one offer`` () =
         let board = [ for n in 1..40 -> { item n with State = Closed } ]
-        let at = (safePoint AtNext worker board).Value
+        let at = (safePoint AtNext worker (Whole board) board).Value
         Assert.Equal(40, (derive board).Length)
         Assert.Equal<string list>([ ".github#1" ], [ (offer at).Value.Subject.Short ])
 
@@ -457,7 +495,7 @@ module ChoreTests =
         // another. If it could, a caller could prove it was idle on an empty board and then be handed chores
         // from a board it holds a live lease on — condition 3 defeated by an argument list.
         let board = [ { item 1 with State = Closed } ]
-        let at = (safePoint AtNext worker board).Value
+        let at = (safePoint AtNext worker (Whole board) board).Value
         Assert.Equal(".github#1", (offer at).Value.Subject.Short)
 
     [<Fact>]
@@ -466,7 +504,7 @@ module ChoreTests =
             [ { item 1 with State = Closed }
               { item 2 with Claim = Some(claim other, LeaseExpiredNoPr) } ]
 
-        let at = (safePoint AtNext worker board).Value
+        let at = (safePoint AtNext worker (Whole board) board).Value
         Assert.Equal("STALE-CLAIM", (offer at).Value.Kind.RuleId)
 
     [<Fact>]
@@ -474,9 +512,9 @@ module ChoreTests =
         // Not cosmetic. Under a fan-out the offer order IS the contention pattern: if two callers disagree
         // about what is next they take different locks and the queue drains in a different order every pass.
         let board = [ for n in [ 7; 3; 9; 1 ] -> { item n with State = Closed } ]
-        let at = (safePoint AtNext worker board).Value
+        let at = (safePoint AtNext worker (Whole board) board).Value
         let reversed = List.rev board
-        let atR = (safePoint AtNext worker reversed).Value
+        let atR = (safePoint AtNext worker (Whole reversed) reversed).Value
         Assert.Equal((offer at).Value.Id, (offer atR).Value.Id)
 
     // ---- condition 2: verifiable, not merely reported ------------------------------------------------
