@@ -96,10 +96,14 @@ module Done =
         /// This child is a PARTIAL fix. **The parent stays open even if this is its only child.**
         | Partial of why: string
 
-    /// A pull request GitHub associates with closing this issue (`closedByPullRequestsReferences`), with the
-    /// facts `verify` needs to tell a real closer from a mere mention (#342): its merge state and time (the
-    /// latest-merged among true closers wins), its merge-commit oid (named in the stamp), and whether its own
-    /// body names THIS issue (`ClosesThis` — the `Closes #N` a mention does not carry).
+    /// A candidate pull request — from EITHER of GitHub's two records (`closedByPullRequestsReferences` or the
+    /// issue's own CLOSED_EVENT) — with the facts `verify` needs to tell a real closer from a mere mention
+    /// (#342): its merge state and time (the latest-merged among true closers wins), its merge-commit oid
+    /// (named in the stamp), and whether its own body names THIS issue (`ClosesThis` — the `Closes #N` a
+    /// mention does not carry).
+    ///
+    /// The merge facts travel WITH the candidate, whichever record produced it: a closer named only by the
+    /// close event is still held to `Merged` (#928), so admitting it cannot launder an unmerged PR (#543).
     type ClosingPr =
         { Number: int
           Merged: bool
@@ -117,9 +121,13 @@ module Done =
           /// Every PR GitHub associates with closing this issue — a SUPERSET that also lists mere mentions.
           /// Which one closed it is decided by `ClosesThis` OR `CloserPrs`, latest-merged first (#342).
           ClosingPrs: ClosingPr list
-          /// The PR numbers the issue's own `CLOSED_EVENT` names as the closer — a PullRequest directly, or
-          /// the PR(s) associated with the closing Commit (#558, a commit-subject keyword). The record of the ACT.
-          CloserPrs: int list
+          /// The PRs the issue's own `CLOSED_EVENT` names as the closer — a PullRequest directly, or the PR(s)
+          /// associated with the closing Commit (#558, a commit-subject keyword). The record of the ACT.
+          ///
+          /// A SOURCE of candidates, not merely a filter over `ClosingPrs` (#928): neither record contains the
+          /// other, and a PR whose body never named the issue is absent from `ClosingPrs` entirely — which is
+          /// exactly the case this leg exists for.
+          CloserPrs: ClosingPr list
           Children: Children
           BoardStatus: BoardStatus
           Parent: Ref option }

@@ -36,13 +36,29 @@ def pr(number, merged=True, merged_at="", oid="", closes=None):
     return node
 
 
-def closer_pr(n):
-    return {"closer": {"__typename": "PullRequest", "number": n}}
+def event_pr(n, merged=True, merged_at="", oid=""):
+    """A PR node as the CLOSED_EVENT names it, WITH its merge facts (#928).
+
+    The event is an independent record: when the PR's body never named the issue it is absent from
+    `closedByPullRequestsReferences` entirely, so these are the ONLY merge facts there are. A closer is still
+    held to `merged` — `associatedPullRequests` returns the PRs that CONTAIN the commit, not merged ones.
+    """
+    node = {"number": n, "merged": merged}
+    if merged_at:
+        node["mergedAt"] = merged_at
+    if oid:
+        node["mergeCommit"] = {"abbreviatedOid": oid}
+    return node
+
+
+def closer_pr(n, **kw):
+    return {"closer": dict(event_pr(n, **kw), __typename="PullRequest")}
 
 
 def closer_commit(oid, prs):
+    nodes = [p if isinstance(p, dict) else event_pr(p) for p in prs]
     return {"closer": {"__typename": "Commit", "oid": oid,
-                       "associatedPullRequests": {"nodes": [{"number": p} for p in prs]}}}
+                       "associatedPullRequests": {"nodes": nodes}}}
 
 
 def issue(number, closing_nodes, closer_nodes):
@@ -76,6 +92,22 @@ FACTS = {
     # #96 — PR 97 is merged and listed, but its body names #70, not #96, and no close event names it. So
     #        `--pr 97` points at a PR that closed a DIFFERENT issue — a mention, refused (#543).
     96: issue(96, [pr(97, merged_at="2026-02-01T00:00:00Z", oid="9990097", closes=[70])], []),
+    # #167 — THE SHAPE GITHUB ACTUALLY RETURNS, and the one #558 was written for (#928).
+    #
+    #         #165 and #166 above both LIST the PR — and that premise is FALSE. GitHub builds
+    #         `closedByPullRequestsReferences` FROM the body linkage, so a PR whose body never named the
+    #         issue is absent from it ENTIRELY: the close event is the ONLY record. Measured on
+    #         .github#622 / PR #926, where the list is [] and the event names the squash commit.
+    #
+    #         So every fixture for #558's own case hand-built the one state in which the fix was reachable,
+    #         and the engine's leg (B) — a FILTER over that empty list — could never fire. This case is the
+    #         real one: empty list, commit closer, merged PR resolved through it.
+    167: issue(167, [], [closer_commit("4cf06e10", [event_pr(926, merged_at="2026-07-16T20:51:40Z",
+                                                             oid="4cf06e1")])]),
+    # #168 — ...and the union may not launder. `associatedPullRequests` returns the PRs that CONTAIN the
+    #         closing commit, which need NOT be merged ones — so an unmerged closer closes nothing, and the
+    #         refusal must still name it rather than claim the event named nobody (#928/#543 leg 2).
+    168: issue(168, [], [closer_commit("cafe123", [event_pr(927, merged=False)])]),
 }
 
 

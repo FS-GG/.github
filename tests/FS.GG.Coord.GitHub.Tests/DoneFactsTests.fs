@@ -97,44 +97,80 @@ let ``an UNMERGED PR that references the issue does NOT close it`` () =
     | Error e -> failwith $"parse failed — got %A{e}"
 
 [<Fact>]
-let ``the CLOSED_EVENT closer is read when the PR body never carried the keyword`` () =
+let ``the CLOSED_EVENT closer is read WITH its merge facts, and it is not listed (#928)`` () =
     // `gh pr create --fill` maps the commit SUBJECT to the PR TITLE, so a commit whose subject carries the
-    // keyword puts it where `closingIssuesReferences` never looks. The event's closer is the record of the
-    // ACT. The PR is still LISTED (a merge that closed the issue is) but is not a `ClosesThis` closer, so the
-    // CLOSED_EVENT is what rescues it — and `facts` has to pull it out of a differently-shaped node.
-    let transport =
-        serving (response "CLOSED" """{"number":399,"merged":true}""" """{"closer":{"__typename":"PullRequest","number":399}}""" noSubs "null")
-
-    match facts transport board ref with
-    | Ok f ->
-        Assert.Contains(f.ClosingPrs, fun (p: ClosingPr) -> p.Number = 399 && not p.ClosesThis)
-        Assert.Contains(399, f.CloserPrs)
-
-        match verify None None f with
-        | Green(ClosedByPullRequest(399, _, _)) -> ()
-        | other -> failwith $"the closing ACT must rescue the stamp — got %A{other}"
-    | Error e -> failwith $"parse failed — got %A{e}"
-
-[<Fact>]
-let ``a COMMIT closer resolves through to its associated PR (#558)`` () =
-    // The closer can be the COMMIT rather than the PR (a squash). GitHub names the commit and its associated
-    // pull request(s); `facts` resolves through to the PR, which is what the stamp names.
+    // keyword puts it where `closingIssuesReferences` never looks. The event's closer is the record of the ACT.
+    //
+    // AND THE REFERENCE LIST IS EMPTY — this fixture used to serve `{"number":399,"merged":true}` there, on
+    // the premise that "the PR is still LISTED (a merge that closed the issue is)". It is not: GitHub builds
+    // that list FROM the body linkage, so a PR whose body never named the issue is absent from it entirely
+    // (#928, measured on .github#622). `facts` must therefore read the closer's merge facts out of the EVENT,
+    // because there is no listed node to take them from.
     let transport =
         serving
             (response
                 "CLOSED"
-                """{"number":399,"merged":true}"""
-                """{"closer":{"__typename":"Commit","oid":"deadbeef","associatedPullRequests":{"nodes":[{"number":399}]}}}"""
+                ""
+                """{"closer":{"__typename":"PullRequest","number":399,"merged":true,"mergedAt":"2026-01-01T00:00:00Z","mergeCommit":{"abbreviatedOid":"c399"}}}"""
                 noSubs
                 "null")
 
     match facts transport board ref with
     | Ok f ->
-        Assert.Contains(399, f.CloserPrs)
+        Assert.Empty f.ClosingPrs
+        Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 399 && p.Merged && p.Oid = "c399")
 
         match verify None None f with
-        | Green(ClosedByPullRequest(399, _, _)) -> ()
+        | Green(ClosedByPullRequest(399, "c399", _)) -> ()
+        | other -> failwith $"the closing ACT must rescue the stamp — got %A{other}"
+    | Error e -> failwith $"parse failed — got %A{e}"
+
+[<Fact>]
+let ``a COMMIT closer resolves through to its associated PR (#558/#928)`` () =
+    // THE .github#622 SHAPE, MEASURED AND SERVED BACK VERBATIM: the reference list is [], the close event
+    // names the squash COMMIT, and the commit names the merged PR. This is what GitHub actually returns for
+    // every PR this org's own recipe produces, and it is the case #558 was written for — so it is the case
+    // the fixture must serve.
+    let transport =
+        serving
+            (response
+                "CLOSED"
+                ""
+                """{"closer":{"__typename":"Commit","oid":"4cf06e10","associatedPullRequests":{"nodes":[{"number":926,"merged":true,"mergedAt":"2026-07-16T20:51:40Z","mergeCommit":{"abbreviatedOid":"4cf06e1"}}]}}}"""
+                noSubs
+                "null")
+
+    match facts transport board ref with
+    | Ok f ->
+        Assert.Empty f.ClosingPrs
+        Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 926 && p.Merged)
+
+        match verify None None f with
+        | Green(ClosedByPullRequest(926, "4cf06e1", "2026-07-16")) -> ()
         | other -> failwith $"a commit closer must resolve through to its PR — got %A{other}"
+    | Error e -> failwith $"parse failed — got %A{e}"
+
+[<Fact>]
+let ``an UNMERGED PR associated with the closing commit is read, but does not stamp (#928)`` () =
+    // `associatedPullRequests` returns the PRs that CONTAIN the commit — which need not be merged ones. The
+    // node is READ (provenance stays whole, exactly as for the reference list), and `verify` refuses it.
+    // This is why the read resolves merge facts instead of letting `verify` assume them.
+    let transport =
+        serving
+            (response
+                "CLOSED"
+                ""
+                """{"closer":{"__typename":"Commit","oid":"deadbeef","associatedPullRequests":{"nodes":[{"number":399,"merged":false}]}}}"""
+                noSubs
+                "null")
+
+    match facts transport board ref with
+    | Ok f ->
+        Assert.Contains(f.CloserPrs, fun (p: ClosingPr) -> p.Number = 399 && not p.Merged)
+
+        match verify None None f with
+        | Red reasons -> Assert.Contains(reasons, fun r -> r.Contains "#399" && r.Contains "MERGED")
+        | other -> failwith $"an unmerged associated PR has closed nothing — got %A{other}"
     | Error e -> failwith $"parse failed — got %A{e}"
 
 // ---- the truncation check, at the read ----------------------------------------------------------------

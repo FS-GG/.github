@@ -2356,6 +2356,30 @@ if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
   printf '%s' "$p166" | grep -q 'FSGG-DONE   FS.GG.SDD#166' \
     && ok "case14: a COMMIT closer resolves through to its PR (#558)" || bad "case14: #166 commit closer" "$p166"
 
+  # #928 — THE SHAPE GITHUB ACTUALLY RETURNS. #165/#166 above both LIST the PR; GitHub does not, when the
+  # PR's body never named the issue. With the list EMPTY the close event is the only record — and leg (B)
+  # was a FILTER over that list, so it could never fire. This is #558's own case, and it stamped red for
+  # #558's whole life (measured on .github#622 / PR #926).
+  p167="$(dp 'FS.GG.SDD#167' --worker w-dp --flip)"; rc167=$?
+  { [ "$rc167" -eq 0 ] && printf '%s' "$p167" | grep -q 'FSGG-DONE   FS.GG.SDD#167'; } \
+    && ok "case14: a closer named ONLY by the close event still earns the stamp (#928)" \
+    || bad "case14: #167 should be DONE — the CLOSED_EVENT closer must ENTER the candidate set" "rc=$rc167: $p167"
+  printf '%s' "$p167" | grep -q 'merged PR #926 @ 4cf06e1' \
+    && ok "case14: ...naming the PR the event resolved through to — #926 @ 4cf06e1 (#928)" \
+    || bad "case14: #167 must name the closer the event named" "$p167"
+
+  # #928 — ...and the union may not launder an UNMERGED PR that merely contains the closing commit.
+  p168="$(dp 'FS.GG.SDD#168' --worker w-dp)"; rc168=$?
+  printf '%s' "$p168" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#168' \
+    && ok "case14: an UNMERGED closer named by the event closes nothing (#928/#543)" \
+    || bad "case14: #168 should refuse — an unmerged PR has landed no work" "rc=$rc168: $p168"
+  printf '%s' "$p168" | grep -q '#927' \
+    && ok "case14: ...and the refusal NAMES it, not 'names no PR or commit' (#928/#266)" \
+    || bad "case14: #168 refusal must describe the subject it read" "$p168"
+  printf '%s' "$p168" | grep -q 'names no PR or commit' \
+    && bad "case14: the refusal must not claim the event named nobody — it named #927 (#928)" "$p168" \
+    || ok "case14: ...and never claims the close event named nobody when it did (#928)"
+
   # #543 — `--pr` may not launder a mention: PR 97 closes #70, not #96.
   p96="$(dp 'FS.GG.SDD#96' --pr 97 --flip --worker w-dp)"; rc96=$?
   printf '%s' "$p96" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#96' \

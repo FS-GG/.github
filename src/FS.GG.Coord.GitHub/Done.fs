@@ -14,9 +14,14 @@ module Done =
         | ClosedByNobody
         | StillOpen
 
-    /// A pull request GitHub associates with closing this issue (`closedByPullRequestsReferences`). This
-    /// list is a SUPERSET: it also carries PRs that merely MENTION the issue in prose, so which one is the
-    /// closer is decided by `ClosesThis` (the `Closes #N` in the PR body) OR the issue's own CLOSED_EVENT.
+    /// A candidate pull request, with the merge facts the stamp needs and the provenance `verify` judges it
+    /// by. It reaches us from either of GitHub's two records — `closedByPullRequestsReferences` (a SUPERSET:
+    /// it also carries PRs that merely MENTION the issue in prose) or the issue's own CLOSED_EVENT — and
+    /// which of them CLOSED the issue is decided by `ClosesThis` OR membership of `Facts.CloserPrs`.
+    ///
+    /// The merge facts travel WITH the candidate, from whichever record produced it. They are not decoration:
+    /// a closer named by the CLOSED_EVENT is still held to `Merged`, so the union below cannot launder an
+    /// unmerged PR into a stamp (#543 leg 2).
     type ClosingPr =
         { Number: int
           Merged: bool
@@ -42,9 +47,14 @@ module Done =
           State: IssueState
           /// Every PR GitHub associates with closing this issue — a superset that also lists mentions.
           ClosingPrs: ClosingPr list
-          /// The PR numbers GitHub's own `CLOSED_EVENT` names as the closer: a PullRequest closer directly,
-          /// or the PR(s) associated with the Commit that closed it (#558 — a commit-subject keyword).
-          CloserPrs: int list
+          /// The PRs GitHub's own `CLOSED_EVENT` names as the closer: a PullRequest closer directly, or the
+          /// PR(s) associated with the Commit that closed it (#558 — a commit-subject keyword).
+          ///
+          /// This is a SOURCE of candidates, not merely a filter over `ClosingPrs` (#928). The two records
+          /// overlap but NEITHER contains the other: a PR whose body never named the issue is absent from
+          /// `ClosingPrs` entirely, because GitHub builds that connection FROM the body linkage — so the one
+          /// case leg (B) exists for is exactly the case where `ClosingPrs` is empty.
+          CloserPrs: ClosingPr list
           Children: Children
           BoardStatus: BoardStatus
           Parent: Ref option }
@@ -96,6 +106,9 @@ module Done =
         //       recipe's `gh pr create --fill` routes a closing keyword in the commit SUBJECT to the PR TITLE,
         //       where (A) cannot see it — so a correctly merged, correctly closing PR stamped RED forever.
         //
+        // (A) and (B) are two INDEPENDENT records, and neither is a subset of the other — which is why both
+        // are read, and why (B) is unioned in below rather than merely consulted (#928).
+        //
         // Among those, the LATEST-MERGED wins. `closedByPullRequestsReferences` lists mentions too, and GitHub
         // returns them lowest-number-first — so taking the first stamped an earlier prose mention, or a merge
         // that never touched the work (#342). It is provenance, not just outcome.
@@ -103,14 +116,33 @@ module Done =
         // `--pr` overrides WHICH pull request the stamp names — NEVER whether it closed the issue. Selecting by
         // number alone (#543 leg 2) was a soundness hole: point it at any merged PR that mentions the issue and
         // the stamp went green. Same predicate, both paths.
-        let closerSet = Set.ofList facts.CloserPrs
+        let closerSet = facts.CloserPrs |> List.map (fun p -> p.Number) |> Set.ofList
         let closes (p: ClosingPr) = p.ClosesThis || closerSet.Contains p.Number
+
+        // THE UNION, AND IT IS THE WHOLE OF #928. Leg (B) used to be applied only as a PREDICATE over leg
+        // (A)'s list, so it could only ever NARROW that list — it could never put a PR INTO it. When the list
+        // was empty leg (B) had nothing to filter, and the stamp went red no matter what the CLOSED_EVENT
+        // said.
+        //
+        // And the list IS empty in precisely the case leg (B) was written for: a PR whose body never carried
+        // the keyword is not in `closedByPullRequestsReferences` at all, because GitHub builds that
+        // connection FROM the body linkage. So #558's fix was inert for its own case — measured on
+        // .github#622 / PR #926, where the close event names the squash commit and the reference list is [].
+        //
+        // A candidate the CLOSED_EVENT names therefore ENTERS the set here. `closes` is unchanged, `Merged`
+        // is still required of it, and #342's latest-merged-wins still decides among true closers — the union
+        // adds a source, it does not soften a single test below it.
+        let listed = facts.ClosingPrs |> List.map (fun p -> p.Number) |> Set.ofList
+
+        let candidates =
+            facts.ClosingPrs
+            @ (facts.CloserPrs |> List.filter (fun p -> not (listed.Contains p.Number)))
 
         let chosen =
             match prOverride with
-            | Some n -> facts.ClosingPrs |> List.filter (fun p -> p.Number = n && p.Merged && closes p) |> List.tryHead
+            | Some n -> candidates |> List.filter (fun p -> p.Number = n && p.Merged && closes p) |> List.tryHead
             | None ->
-                facts.ClosingPrs
+                candidates
                 |> List.filter (fun p -> p.Merged && closes p)
                 |> List.sortBy (fun p -> p.MergedAt)
                 |> List.tryLast
@@ -148,8 +180,27 @@ module Done =
                         [ $"PR #%d{n} does not close this issue — it must be merged, and either name this issue in its body (Closes #%d{facts.Ref.Number}) or be what GitHub recorded as closing it. `--pr` overrides WHICH pull request the stamp names, never WHETHER it closed the issue (#543)." ]
 
                 | None ->
+                    // THE REFUSAL MUST DESCRIBE THE SUBJECT IT ACTUALLY READ (#928/#266). "its close event
+                    // names no PR or commit" was printed unconditionally — including on .github#622, whose
+                    // close event named commit 4cf06e10 and PR #926. A refusal that misreports its own
+                    // evidence sends the worker to read the source, and it hid this bug for #558's whole life.
+                    // The list itself is the subject, NOT `CloserPrs |> filter (not Merged)`: reaching here
+                    // means no closer was both merged and admissible, so anything the event named is unusable
+                    // by definition. Filtering by `not Merged` would fall back to the "names no PR or commit"
+                    // sentence for any OTHER reason a named closer failed — printing the false claim again, in
+                    // the one branch written to stop printing it.
+                    let why =
+                        match facts.CloserPrs with
+                        | [] ->
+                            "no merged PR closes this issue, and nothing records what closed it — no merged PR names it, and its close event names no PR or commit."
+                        | closers ->
+                            // The closer IS known — say THAT, and say what disqualified it.
+                            let names = closers |> List.map (fun p -> $"#%d{p.Number}") |> String.concat ", "
+
+                            $"its close event names %s{names}, but nothing there is a MERGED pull request, so nothing closed this issue that the stamp can name. A PR that is not merged has landed no work."
+
                     Red
-                        [ "no merged PR closes this issue, and nothing records what closed it — no merged PR names it, and its close event names no PR or commit."
+                        [ why
                           "If it was resolved WITHOUT a pull request (obsolete, a duplicate, resolved by other work, a decision recorded elsewhere), say so with evidence — that is a green path, not a workaround (#600)." ]
 
     let render (ref: Ref) (verdict: Verdict<Closure>) =
@@ -180,7 +231,7 @@ module Done =
            issue(number: $number) { \
              number state \
              closedByPullRequestsReferences(first: 10, includeClosedPrs: true) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } closingIssuesReferences(first: 10) { nodes { number repository { nameWithOwner } } } } } \
-             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number } ... on Commit { oid associatedPullRequests(first: 5) { nodes { number } } } } } } } \
+             timelineItems(last: 10, itemTypes: [CLOSED_EVENT]) { nodes { ... on ClosedEvent { closer { __typename ... on PullRequest { number merged mergedAt mergeCommit { abbreviatedOid } } ... on Commit { oid associatedPullRequests(first: 5) { nodes { number merged mergedAt mergeCommit { abbreviatedOid } } } } } } } } \
              subIssues(first: 100) { totalCount nodes { number state } } \
              projectItems(first: 20) { nodes { project { number } status: fieldValueByName(name: \"Status\") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } } \
              parent { number repository { name owner { login } } } \
@@ -264,6 +315,32 @@ module Done =
                 | true, v when v.ValueKind = JsonValueKind.String -> v.GetString()
                 | _ -> ""
 
+            let mergedOf (n: JsonElement) =
+                match n.TryGetProperty "merged" with
+                | true, m -> m.ValueKind = JsonValueKind.True
+                | _ -> false
+
+            let oidOf (n: JsonElement) =
+                match n.TryGetProperty "mergeCommit" with
+                | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "abbreviatedOid"
+                | _ -> ""
+
+            /// A PR node named by the CLOSED_EVENT, WITH its merge facts (#928). `ClosesThis` is false by
+            /// construction: this PR's claim on the issue is the close EVENT, not its own body — that is the
+            /// entire case leg (B) exists for — and `verify` reads that claim out of `CloserPrs`, not here.
+            ///
+            /// A Commit closer has no `number`, which is how it is told from a PullRequest closer.
+            let closerPrOf (n: JsonElement) =
+                match n.TryGetProperty "number" with
+                | true, num when num.ValueKind = JsonValueKind.Number ->
+                    Some
+                        { Number = num.GetInt32()
+                          Merged = mergedOf n
+                          MergedAt = strOf n "mergedAt"
+                          Oid = oidOf n
+                          ClosesThis = false }
+                | _ -> None
+
             let closingPrs =
                 match issue.TryGetProperty "closedByPullRequestsReferences" with
                 | true, refs ->
@@ -273,16 +350,6 @@ module Done =
                         |> Seq.choose (fun n ->
                             match n.TryGetProperty "number" with
                             | true, num when num.ValueKind = JsonValueKind.Number ->
-                                let merged =
-                                    match n.TryGetProperty "merged" with
-                                    | true, m -> m.ValueKind = JsonValueKind.True
-                                    | _ -> false
-
-                                let oid =
-                                    match n.TryGetProperty "mergeCommit" with
-                                    | true, mc when mc.ValueKind = JsonValueKind.Object -> strOf mc "abbreviatedOid"
-                                    | _ -> ""
-
                                 // `closesThis`: this PR's body names THIS issue in its own repo (#342/#543).
                                 let closesThis =
                                     match n.TryGetProperty "closingIssuesReferences" with
@@ -308,9 +375,9 @@ module Done =
 
                                 Some
                                     { Number = num.GetInt32()
-                                      Merged = merged
+                                      Merged = mergedOf n
                                       MergedAt = strOf n "mergedAt"
-                                      Oid = oid
+                                      Oid = oidOf n
                                       ClosesThis = closesThis }
                             | _ -> None)
                         |> List.ofSeq
@@ -320,6 +387,11 @@ module Done =
             // THE CLOSED_EVENT CLOSERS. A PullRequest closer names its own number; a Commit closer (a squash
             // whose subject carried the keyword) names the PR(s) associated with it (#558). Both are the PR that
             // actually closed the issue, per GitHub's own record.
+            //
+            // Their MERGE FACTS are read here, and that is what lets `verify` union them into the candidate set
+            // rather than merely filter with them (#928). Without them a closer could only be admitted by
+            // ASSUMING it merged — and that assumption is the #543 leg-2 hole: `associatedPullRequests` returns
+            // the PRs that CONTAIN the commit, which need not be merged ones.
             let closerPrs =
                 match issue.TryGetProperty "timelineItems" with
                 | true, tl ->
@@ -329,23 +401,20 @@ module Done =
                         |> Seq.collect (fun n ->
                             match n.TryGetProperty "closer" with
                             | true, c when c.ValueKind = JsonValueKind.Object ->
-                                match c.TryGetProperty "number" with
-                                | true, num when num.ValueKind = JsonValueKind.Number -> Seq.singleton (num.GetInt32())
-                                | _ ->
+                                match closerPrOf c with
+                                | Some pr -> Seq.singleton pr
+                                | None ->
+                                    // A Commit closer — resolve through to the PR(s) it is associated with.
                                     match c.TryGetProperty "associatedPullRequests" with
                                     | true, apr ->
                                         match apr.TryGetProperty "nodes" with
                                         | true, an when an.ValueKind = JsonValueKind.Array ->
-                                            an.EnumerateArray()
-                                            |> Seq.choose (fun a ->
-                                                match a.TryGetProperty "number" with
-                                                | true, v when v.ValueKind = JsonValueKind.Number -> Some(v.GetInt32())
-                                                | _ -> None)
+                                            an.EnumerateArray() |> Seq.choose closerPrOf
                                         | _ -> Seq.empty
                                     | _ -> Seq.empty
                             | _ -> Seq.empty)
                         |> List.ofSeq
-                        |> List.distinct
+                        |> List.distinctBy (fun p -> p.Number)
                     | _ -> []
                 | _ -> []
 
