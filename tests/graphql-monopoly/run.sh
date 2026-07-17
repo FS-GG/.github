@@ -53,7 +53,10 @@ expect_rc() {  # <case> <want-rc> <label>
 $OUT"; fi
 }
 
-# ---- 1. THE VIOLATIONS. A runnable line inside a fence, for each banned command. -----------------
+# ---- 1. THE VIOLATIONS. A runnable line inside a fence, for each budget-spending `gh` command. ----
+# The gate is an ALLOW-LIST (FS-GG/.github#1161, D3): anything not `gh api <rest>` / `gh auth` /
+# `gh run` is a finding. `gh issue comment` and `gh pr comment` are here because the old DENY-list
+# omitted them — the most common write a recipe makes, waved through by the checker meant to catch it.
 for cmd in \
   'gh api graphql -f query='"'"'{viewer{login}}'"'"'' \
   'gh project item-add 1 --owner FS-GG --url https://github.com/FS-GG/x/issues/1' \
@@ -61,8 +64,10 @@ for cmd in \
   'gh issue view 42 --repo FS-GG/x' \
   'gh issue list --repo FS-GG/x --label cross-repo' \
   'gh issue create --repo FS-GG/x --title t' \
+  'gh issue comment 42 --repo FS-GG/x --body "## Response"' \
   'gh pr create --fill --base main' \
   'gh pr checks 12 --watch' \
+  'gh pr comment 12 --repo FS-GG/x --body hi' \
   'gh pr merge 12 --squash'
 do
   gate_on "v" "# Recipe
@@ -74,6 +79,19 @@ $cmd
   short="$(printf '%s' "$cmd" | cut -c1-28)"
   expect_rc v 1 "FINDING: a fenced \`$short…\` is refused"
 done
+
+# ---- 1b. A BACKSLASH-CONTINUED command is ONE runnable line, joined before it is judged. ----------
+# The old one-line regex could not see a `gh api` whose `graphql` argument sat on the CONTINUATION
+# line: `gh api \` looks REST, and `graphql …` alone carries no `gh`. The allow-list joins the
+# continuation first, so the spender cannot hide across a line break (FS-GG/.github#1161).
+gate_on continuation '# Recipe
+
+```sh
+gh api \
+  graphql -f query=whatever
+```
+'
+expect_rc continuation 1 "CONTINUATION: \`gh api\` + \`graphql\` on the next line is joined, then refused"
 
 # ---- 2. PROSE IS NOT A PRESCRIPTION. The docs must be free to TEACH the rule. --------------------
 # This is the leg that makes a naive grep wrong, not merely noisy.

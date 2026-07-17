@@ -107,17 +107,42 @@ rc="$(run "$t")"
   || bad "an unexempted String.Equals on .Ref.Repo must be a finding" "exit $rc"
 rm -rf "$t"
 
-# 5. A BARE REF-TO-REF `=` NEEDS NO EXEMPTION. `Lanes.fs`'s `a.Ref.Repo = b.Ref.Repo` is excluded
-#    STRUCTURALLY — an RHS naming `.Repo` is comparing two refs by construction. A gate that made real
-#    code carry markers for a question it never asked would be taxing the innocent.
+# 5. A BARE REF-TO-REF `=` NOW NEEDS AN EXPLICIT MARKER (FS-GG/.github#1161, D3 of #1158). The gate no
+#    longer GUESSES that an RHS naming `.Repo` is innocent — that guess is the fail-open this item
+#    closes (leg 5c). Unmarked, `Lanes.fs`'s `a.Ref.Repo = b.Ref.Repo` is a subject like any other, RED.
 t="$(mktree)"
 cat >"$t/src/FS.GG.Coord.Core/Lanes.fs" <<'FS'
                 if a.Ref.Owner = b.Ref.Owner && a.Ref.Repo = b.Ref.Repo then
                     merge a b
 FS
 rc="$(run "$t")"
-[ "$rc" = "0" ] && ok "a bare ref-to-ref '=' is excluded structurally, with no marker needed" \
-  || bad "a ref-to-ref '=' must not be a finding" "exit $rc"
+[ "$rc" = "1" ] && ok "a bare ref-to-ref '=' WITHOUT a marker is red — the allow-list guesses nothing" \
+  || bad "an unmarked ref-to-ref '=' must now be a finding (#1161)" "exit $rc"
+rm -rf "$t"
+
+# 5b. ...and WITH the explicit marker it is green. The legitimate ref-to-ref question opts out exactly
+#     like the `String.Equals` arm does (leg 3) — explicit, never inferred.
+t="$(mktree)"
+cat >"$t/src/FS.GG.Coord.Core/Lanes.fs" <<'FS'
+                // repo-filter-monopoly: exempt — REF-to-REF, not a `--repo` filter.
+                if a.Ref.Owner = b.Ref.Owner && a.Ref.Repo = b.Ref.Repo then
+                    merge a b
+FS
+rc="$(run "$t")"
+[ "$rc" = "0" ] && ok "the same ref-to-ref '=' WITH an explicit marker is green" \
+  || bad "an explicitly exempt ref-to-ref '=' must not be a finding" "exit $rc"
+rm -rf "$t"
+
+# 5c. THE FAIL-OPEN THIS ITEM CLOSES. `r.Ref.Repo = opts.Repo` is a REAL `--repo` filter — `opts.Repo`
+#     is the OPTION, not another row — but its RHS names `.Repo`, so the old negative-lookahead arm
+#     auto-excluded it and waved the bug through. The allow-list flags it. This is #1161's acceptance.
+t="$(mktree)"
+cat >"$t/src/FS.GG.Coord.Cli/Client.fs" <<'FS'
+                let wanted = rows |> List.filter (fun r -> r.Ref.Repo = opts.Repo)
+FS
+rc="$(run "$t")"
+[ "$rc" = "1" ] && ok "a hand-rolled 'r.Ref.Repo = opts.Repo' is red — #1161's fail-open, now closed" \
+  || bad "the opts.Repo fail-open must now be a finding (#1161)" "exit $rc"
 rm -rf "$t"
 
 # 6. A BARE `=` AGAINST A NON-REF IS RED. The case-sensitive spelling of the same bug.
