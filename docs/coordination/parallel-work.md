@@ -512,7 +512,9 @@ scripts/repos.sh relock          # regenerates registry/repos.lock
 ```
 
 `repos.lock` is generated and CI-gated, so **the rule above applies to it: do not reserve it.**
-Regenerate it, commit it, and name it as **expected drift** in the PR.
+Regenerate it and commit it — `verify-paths` asks `repos.sh relock --list` what it emits and reports the
+lock under `regenerated (expected):`, apart from the drift you are being asked to act on, so there is
+nothing to explain in the PR (ADR-0044, FS-GG/.github#498).
 
 The digest used to be a `sha256:` field on each `kit:` row *inside the authored* `registry/repos.yml`.
 Because a kit source is content-addressed, every kit edit therefore had to reserve the authored roster

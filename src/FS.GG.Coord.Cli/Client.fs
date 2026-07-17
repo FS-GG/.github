@@ -2926,6 +2926,121 @@ module Client =
         with _ ->
             None
 
+    // ---- #498/ADR-0044: the generated artifacts drift is subtracted against -------------------------
+
+    /// The repo's GENERATED, CI-GATED artifacts, asked of `scripts/generated-paths` — the set a PR may
+    /// change without it being drift, because nobody AUTHORS them (#309's authorship test). §1 tells a
+    /// worker not to reserve these in their touch-set; `verifyPaths` then reported them as drift anyway,
+    /// forever. A signal that fires on the behaviour the protocol MANDATES is one workers learn to skip
+    /// past, and the one time it means a real overrun nobody reads it (#498).
+    ///
+    /// FAILS CLOSED, ALWAYS: an absent, unrunnable, failing, or silent `generated-paths` yields the EMPTY
+    /// set, which subtracts NOTHING and leaves drift reported exactly as it is today. Never the reverse —
+    /// "I could not ask what is generated" and "nothing is generated" are opposite facts, and only one of
+    /// them is safe to act on (#266). The script has its own fail-closed rule per generator; this is the
+    /// same rule one level up, for the script as a whole.
+    ///
+    /// ITS STDERR IS FORWARDED, NOT SWALLOWED, AND THAT IS THE HALF THAT MAKES FAILING CLOSED USABLE.
+    /// `generated-paths` says on stderr exactly WHICH generator broke and why — it goes out of its way to
+    /// ("a warning nobody can act on is a warning nobody reads"). Dropping that would leave the safe
+    /// behaviour and remove the only pointer to the cause: the artifact reappears under `undeclared`, the
+    /// worker is told to go look at the generator, and nothing says which one. A mute fail-closed is
+    /// #266's shape one level down — right verdict, unreadable reason.
+    let private generatedPaths (root: string) : Set<string> =
+        let script = Path.Combine(root, "scripts", "generated-paths")
+
+        if not (File.Exists script) then
+            Set.empty
+        else
+            try
+                let psi = ProcessStartInfo(script)
+                psi.WorkingDirectory <- root
+                psi.RedirectStandardOutput <- true
+                psi.RedirectStandardError <- true
+                psi.UseShellExecute <- false
+                use p = Process.Start psi
+
+                // BOTH pipes async, and the ordering here is the whole point rather than a style choice.
+                //
+                // A blocking `StandardOutput.ReadToEnd()` cannot be bounded by a later `WaitForExit t`: a
+                // stuck generator never closes stdout, so the read never returns and the timeout below is
+                // simply never reached. (Measured, on the first cut of this function: a `sleep 600`
+                // generator hung `verify-paths` for as long as it was allowed to run, and left the child
+                // alive — the timeout was decoration, and a comment promising a bound that does not exist
+                // is worse than no bound, because it invites the trust it cannot earn.)
+                //
+                // Async also removes the symmetric deadlock: draining one pipe while the child fills the
+                // other's buffer blocks them both.
+                let stdout = Text.StringBuilder()
+                let sync = obj ()
+
+                p.OutputDataReceived.Add(fun e ->
+                    if not (isNull e.Data) then
+                        lock sync (fun () -> stdout.AppendLine e.Data |> ignore))
+
+                // The generator's OWN reason, forwarded rather than swallowed — see the doc comment.
+                p.ErrorDataReceived.Add(fun e ->
+                    if not (isNull e.Data) then
+                        eprint $"  | %s{e.Data}")
+
+                p.BeginOutputReadLine()
+                p.BeginErrorReadLine()
+
+                // BOUNDED, because a HANG is the one failure this design otherwise had no answer for.
+                // Everything else fails closed — absent, broken, silent all subtract nothing and say so. A
+                // generator that blocks (waits on stdin, a hung git, a stalled network mount) instead hangs
+                // `verify-paths` itself, which IS the merge gate: no verdict, no diagnostic, a job burning
+                // to its workflow timeout. That is not fail-closed, it is fail-SILENT. Nothing else in the
+                // chain bounds it — `generated-paths` does not time its own generators out — so the bound
+                // goes at the edge that has a verdict to protect. 30s is three orders of magnitude past the
+                // measured cost of the whole roster (~40ms): only a genuinely stuck generator reaches it.
+                // `Kill true` takes the process TREE — killing the script and orphaning the generator it is
+                // blocked on would leak the actual hang.
+                //
+                // Tunable ONLY so the gate can prove the bound without costing CI 30 idle seconds — the same
+                // reason `FSGG_COORD_SCAN_TTL_SEC` exists, and the e2e suite already sets that. An untested
+                // safety net is one that rots quietly (#724); a knob nothing but the test turns is cheaper
+                // than not testing it. A malformed or non-positive value falls back to the default rather
+                // than disabling the bound: "0" must not silently mean "wait forever".
+                let timeoutMs =
+                    match Environment.GetEnvironmentVariable "FSGG_GENERATED_PATHS_TIMEOUT_MS" with
+                    | null
+                    | "" -> 30_000
+                    | v ->
+                        match Int32.TryParse v with
+                        | true, n when n > 0 -> n
+                        | _ -> 30_000
+
+                if not (p.WaitForExit timeoutMs) then
+                    (try p.Kill true with _ -> ())
+
+                    eprint
+                        $"fsgg-coord-engine: scripts/generated-paths did not finish within %d{timeoutMs}ms and was killed — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+
+                    Set.empty
+                else
+
+                // The child is gone; this second, unbounded wait is the documented way to let the async
+                // handlers flush what it wrote before exiting. It cannot hang — the process has exited.
+                p.WaitForExit()
+                let out = lock sync (fun () -> stdout.ToString())
+
+                if p.ExitCode <> 0 then
+                    eprint
+                        $"fsgg-coord-engine: scripts/generated-paths exited %d{p.ExitCode} — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+
+                    Set.empty
+                else
+                    out.Split('\n')
+                    |> Array.map (fun l -> l.Trim())
+                    |> Array.filter (fun l -> l <> "")
+                    |> Set.ofArray
+            with ex ->
+                eprint
+                    $"fsgg-coord-engine: could not run scripts/generated-paths (%s{ex.Message}) — NOTHING is subtracted, so a regenerated artifact will be reported as drift below."
+
+                Set.empty
+
     // ---- verify-paths ----------------------------------------------------------------------------------
 
     /// Check a PR's changed files against the touch-set declared by the issue it implements.
@@ -3098,6 +3213,45 @@ module Client =
                                 files
                                 |> List.filter (fun f -> not (tokens |> List.exists (fun t -> TouchSet.covers t f)))
 
+                            // #498/ADR-0044: the generated, CI-gated artifacts this PR REGENERATED are drift
+                            // by the letter of the touch-set and are not a finding — §1 forbids declaring
+                            // them, so reporting them is the gate firing on its own instruction.
+                            //
+                            // SUBTRACT ONLY WHEN THE CHECKOUT IS THE PR'S OWN REPO. `verify-paths --pr N
+                            // --repo <other>` is a legal call, and the local generators say NOTHING about
+                            // another repo's artifacts: subtracting this repo's set there would suppress real
+                            // drift in a repo we never asked. That is the fail-open this change exists to
+                            // avoid, reached from the one direction the roster cannot see. Owner included —
+                            // `otherorg/.github` is not `FS-GG/.github`, and only the slug knows that.
+                            // ASK ONLY WHEN THERE IS DRIFT TO SUBTRACT FROM. Not merely to save the three
+                            // generator forks on the commonest verdict — the reason is the DIAGNOSTIC. A
+                            // failing `generated-paths` reports that nothing was subtracted "so a regenerated
+                            // artifact will be reported as drift below"; on a PR with no drift, that sentence
+                            // is FALSE and it lands in the sticky comment of a GREEN PR (the workflow merges
+                            // our stderr into the file it publishes). A gate that cries wolf on the happy path
+                            // teaches one lesson — that its output is noise — and the next warning will be
+                            // real (#698). With no drift there is nothing to subtract and nothing to say.
+                            let regenerated, undeclared =
+                                if List.isEmpty drift then
+                                    [], []
+                                else
+
+                                let subtractable =
+                                    let checkoutIsSubject =
+                                        match gitRemoteRepo () with
+                                        | Some slug ->
+                                            String.Equals(slug, $"%s{owner}/%s{repo}", StringComparison.OrdinalIgnoreCase)
+                                        | None -> false
+
+                                    if not checkoutIsSubject then
+                                        Set.empty
+                                    else
+                                        match kitRoot () with
+                                        | Some root -> generatedPaths root
+                                        | None -> Set.empty
+
+                                drift |> List.partition (fun f -> Set.contains f subtractable)
+
                             // BEFORE THE VERDICT, SO IT FIRES ON `OK` TOO — and `OK` is the case that needs it.
                             // The kit obligation is about what the PR CHANGED, not what it declared: a PR that
                             // edits a kit source and never relocks reds `main` whether or not it drifted, so an
@@ -3110,15 +3264,30 @@ module Client =
                             // shape, which is why it is restored here rather than left to the merge.
                             kitDigestWarn ()
 
-                            if List.isEmpty drift then
+                            // The regenerated set is reported on BOTH verdicts and decides NEITHER — it is
+                            // context, not a finding. Printed after the verdict line so the first line of
+                            // output stays the answer, and named `regenerated (expected)` so a reader can
+                            // tell at a glance which list they are being asked to act on.
+                            let reportRegenerated () =
+                                if not (List.isEmpty regenerated) then
+                                    printfn "  regenerated (expected) — generated + CI-gated, so not declarable (ADR-0044):"
+
+                                    for f in regenerated do
+                                        printfn "    %s" f
+
+                            if List.isEmpty undeclared then
                                 printfn "FSGG-PATHS OK — PR #%d stays inside the touch-set declared by %s." pr issue.Short
+                                reportRegenerated ()
                                 ExitGreen
                             else
                                 printfn "FSGG-PATHS DRIFT — PR #%d changes files outside the touch-set declared by %s:" pr issue.Short
 
-                                for f in drift do
+                                printfn "  undeclared (review):"
+
+                                for f in undeclared do
                                     printfn "    %s" f
 
+                                reportRegenerated ()
                                 eprint "  Widen the touch-set (scripts/fsgg-coord widen), or split the PR."
                                 if opts.Warn then ExitGreen else ExitRed
 

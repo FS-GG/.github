@@ -152,6 +152,109 @@ vw="$("$ENGINE" verify-paths --pr 501 --repo FS.GG.SDD --warn 2>&1)"; vwrc=$?
   && ok "verify-paths --warn downgrades DRIFT to advisory (exit 0)" \
   || bad "verify-paths --warn is advisory" "rc=$vwrc: $vw"
 
+# ---- #498/ADR-0044: verify-paths subtracts the GENERATED, CI-GATED artifacts -----------------------
+# §1 forbids declaring a generated artifact, and `verify-paths` then reported it as DRIFT anyway — the
+# gate firing on the behaviour the protocol mandates. These legs pin the subtraction AND, more
+# importantly, the three ways it must FAIL CLOSED.
+#
+# HERMETIC ON PURPOSE, IN A WAY THE OTHER LEGS DO NOT HAVE TO BE. The subtraction is gated on "the
+# checkout IS the PR's repo", which the engine answers from `git config remote.origin.url` of its CWD.
+# Reading that from the ambient checkout would make these legs pass or fail on WHERE THEY WERE RUN — green
+# in CI, red in a fork or a worktree whose remote is a mirror, for a reason having nothing to do with the
+# engine. So the CWD is a throwaway git repo whose remote is set explicitly, and the answer is the same
+# everywhere. `-c` rather than global config: a fixture must not read the runner's ~/.gitconfig (#709).
+VP_CO="$(mktemp -d)"
+git -c init.defaultBranch=main init -q "$VP_CO"
+git -C "$VP_CO" remote add origin https://github.com/FS-GG/.github.git
+
+# The kit root the engine asks for `scripts/generated-paths` is the REAL repo — so this leg drives the
+# REAL roster, not a restatement of it. A stub would prove the plumbing and nothing about the contract.
+vg="$(cd "$VP_CO" && FSGG_KIT_ROOT="$REPO_ROOT" "$ENGINE" verify-paths --pr 502 --repo .github 2>/dev/null)"; vgrc=$?
+[ "$vgrc" -eq 0 ] && printf '%s' "$vg" | grep -q 'FSGG-PATHS OK' \
+  && printf '%s' "$vg" | grep -q 'regenerated (expected)' && printf '%s' "$vg" | grep -q 'registry/repos.lock' \
+  && ok "#498: a regenerated CI-gated artifact is subtracted from drift, and reported as expected" \
+  || bad "#498: regenerated artifact subtracted" "rc=$vgrc: $vg"
+
+# The split is the deliverable: a real overrun must stay a finding, and must not be buried beside a file
+# the reader is not being asked to act on.
+vs="$(cd "$VP_CO" && FSGG_KIT_ROOT="$REPO_ROOT" "$ENGINE" verify-paths --pr 503 --repo .github 2>/dev/null)"; vsrc=$?
+[ "$vsrc" -ne 0 ] && printf '%s' "$vs" | grep -q 'FSGG-PATHS DRIFT' \
+  && printf '%s' "$vs" | sed -n '/undeclared (review)/,/regenerated/p' | grep -q 'docs/x.md' \
+  && ! printf '%s' "$vs" | sed -n '/undeclared (review)/,/regenerated/p' | grep -q 'repos.lock' \
+  && ok "#498: real drift stays RED and is reported apart from the regenerated artifact" \
+  || bad "#498: drift/regenerated split" "rc=$vsrc: $vs"
+
+# FAIL CLOSED 1 — the checkout is NOT the PR's repo. The local generators say nothing about another repo's
+# artifacts, so subtracting this repo's set there would suppress REAL drift in a repo nobody asked. This is
+# the one fail-open direction the roster itself cannot see, because it is a fact about the CALL.
+vx="$(cd "$VP_CO" && FSGG_KIT_ROOT="$REPO_ROOT" "$ENGINE" verify-paths --pr 502 --repo FS.GG.SDD 2>/dev/null)"; vxrc=$?
+[ "$vxrc" -ne 0 ] && printf '%s' "$vx" | grep -q 'repos.lock' \
+  && ok "#498: subtracts NOTHING when the checkout is not the PR's repo (drift stays reported)" \
+  || bad "#498: cross-repo subtraction is refused" "rc=$vxrc: $vx"
+
+# FAIL CLOSED 2 and 3 — an ABSENT `generated-paths`, and one that FAILS. Both must subtract NOTHING and
+# leave drift exactly as it is today: "I could not ask what is generated" and "nothing is generated" are
+# opposite facts, and only one is safe to act on (#266).
+VP_EMPTY="$(mktemp -d)"
+va="$(cd "$VP_CO" && FSGG_KIT_ROOT="$VP_EMPTY" "$ENGINE" verify-paths --pr 502 --repo .github 2>/dev/null)"; varc=$?
+[ "$varc" -ne 0 ] && printf '%s' "$va" | grep -q 'repos.lock' \
+  && ok "#498: an ABSENT generated-paths subtracts nothing (fails closed)" \
+  || bad "#498: absent generated-paths fails closed" "rc=$varc: $va"
+
+VP_BAD="$(mktemp -d)"; mkdir -p "$VP_BAD/scripts"
+printf '#!/bin/sh\necho boom >&2\nexit 2\n' >"$VP_BAD/scripts/generated-paths"
+chmod +x "$VP_BAD/scripts/generated-paths"
+vf="$(cd "$VP_CO" && FSGG_KIT_ROOT="$VP_BAD" "$ENGINE" verify-paths --pr 502 --repo .github 2>/dev/null)"; vfrc=$?
+[ "$vfrc" -ne 0 ] && printf '%s' "$vf" | grep -q 'repos.lock' \
+  && ok "#498: a FAILING generated-paths subtracts nothing (fails closed)" \
+  || bad "#498: failing generated-paths fails closed" "rc=$vfrc: $vf"
+
+# ...and it SAYS SO, naming the generator's own reason. Failing closed silently is only half a remedy:
+# the artifact reappears under `undeclared (review):`, the recipe tells the worker to go look at the
+# generator, and without this nothing says WHICH one or why. `generated-paths` goes out of its way to
+# put that on stderr; the engine must not be the thing that throws it away (#266 — a right verdict with
+# an unreadable reason).
+vm="$(cd "$VP_CO" && FSGG_KIT_ROOT="$VP_BAD" "$ENGINE" verify-paths --pr 502 --repo .github 2>&1 >/dev/null)"
+printf '%s' "$vm" | grep -q 'generated-paths exited 2' && printf '%s' "$vm" | grep -q 'boom' \
+  && ok "#498: a failing generated-paths forwards its REASON — fails closed, and readably" \
+  || bad "#498: failing generated-paths names its reason" "$vm"
+
+# ...and one that SUCCEEDS while listing nothing. Distinct from the failing case: exit 0 is the code a
+# reader is most tempted to trust, and an empty answer from a healthy generator still is not a licence to
+# subtract everything.
+printf '#!/bin/sh\nexit 0\n' >"$VP_BAD/scripts/generated-paths"
+ve="$(cd "$VP_CO" && FSGG_KIT_ROOT="$VP_BAD" "$ENGINE" verify-paths --pr 502 --repo .github 2>/dev/null)"; verc=$?
+[ "$verc" -ne 0 ] && printf '%s' "$ve" | grep -q 'repos.lock' \
+  && ok "#498: an EMPTY generated-paths subtracts nothing (fails closed)" \
+  || bad "#498: empty generated-paths fails closed" "rc=$verc: $ve"
+
+# FAIL CLOSED 4 — a HANGING generator. The other three fail closed by returning; this one fails closed
+# only because the wait is BOUNDED. It is pinned because the first cut of the bound DID NOT WORK and
+# looked like it did: a blocking `ReadToEnd` on stdout ran before the timeout, a stuck child never closes
+# stdout, so the read never returned and the timeout was never reached. `verify-paths` — the merge gate —
+# hung for as long as it was allowed to. The bug was invisible to every other leg here, because a healthy
+# generator exercises none of it. Timeout tunable so this costs ~1s instead of 30.
+VP_HANG="$(mktemp -d)"; mkdir -p "$VP_HANG/scripts"
+printf '#!/bin/sh\nexec sleep 987654\n' >"$VP_HANG/scripts/generated-paths"
+chmod +x "$VP_HANG/scripts/generated-paths"
+vh_start="$(date +%s)"
+vh="$(cd "$VP_CO" && FSGG_KIT_ROOT="$VP_HANG" FSGG_GENERATED_PATHS_TIMEOUT_MS=1000 \
+       "$ENGINE" verify-paths --pr 502 --repo .github 2>&1)"; vhrc=$?
+vh_elapsed=$(( $(date +%s) - vh_start ))
+[ "$vhrc" -ne 0 ] && printf '%s' "$vh" | grep -q 'repos.lock' && printf '%s' "$vh" | grep -q 'was killed' \
+  && [ "$vh_elapsed" -lt 15 ] \
+  && ok "#498: a HANGING generated-paths is killed and subtracts nothing (bounded, ${vh_elapsed}s)" \
+  || bad "#498: hanging generated-paths is bounded" "rc=$vhrc elapsed=${vh_elapsed}s: $vh"
+
+# ...and the hang is REAPED, not orphaned. `Kill true` takes the process tree: killing the script while
+# leaving the generator it is blocked on alive would leak the actual hang, one process per PR.
+sleep 0.5
+[ "$(pgrep -f 'sleep 987654' | wc -l)" -eq 0 ] \
+  && ok "#498: the killed generator leaves no orphaned process behind" \
+  || bad "#498: hanging generator is reaped" "$(pgrep -af 'sleep 987654')"
+
+rm -rf "$VP_CO" "$VP_EMPTY" "$VP_BAD" "$VP_HANG"
+
 # ---- report ----------------------------------------------------------------------------------------
 echo
 echo "coord-engine writes: $((pass + failcount)) assertion(s), $pass passed, $failcount failed"
