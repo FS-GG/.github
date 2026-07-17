@@ -288,3 +288,138 @@ module BlockerTests =
         Assert.True(
             List.isEmpty offenders,
             $"""these decide a blocker's resolution outside Blockers.fs: {String.concat ", " offenders} — that is the rule, decided a second time, and `BLOCKER-CLEARED` turns on it. Ask `Blockers.isResolved`/`isResolvedState` (#889).""")
+
+    // ---- #1092: THE RING. The state four per-item repairs cannot see. ------------------------------
+    //
+    // #343 (a blocker naming an OPEN issue, handed out), #476 (a PR ref never clears), #602 (an EMPTY
+    // blocker list), #620 (blockers ALL CLOSED) — four repairs, every one of them asking about ONE
+    // item's blockers. A cycle passes all four, because every item on a ring is individually,
+    // locally, perfectly well-formed: non-empty blocker list, every blocker OPEN, every ref real,
+    // correctly never handed out. The defect exists only in the GRAPH.
+    //
+    // Live, and it cost two hours: .github#1059 → #1063 → #1073 → #1059 sat closed on the board while
+    // `take` reported "Status is Blocked" over each one — the same five words it gives a block that
+    // clears in ten minutes — and "this queue is BUSY, not empty" over all three. BUSY implies it
+    // drains. That one could not.
+
+    let private gh n =
+        { Owner = "FS-GG"
+          Repo = ".github"
+          Number = n }
+
+    /// An item as the graph sees it: its ref, and the refs it is blocked BY.
+    let private node n (blockedBy: int list) =
+        gh n,
+        blockedBy
+        |> List.map (fun b ->
+            { Ref = Some(gh b)
+              Raw = (gh b).Short
+              State = BlockerOpen })
+
+    let private ringOf (cycle: Ref list) = cycle |> List.map (fun r -> r.Number)
+
+    [<Fact>]
+    let ``#1092 the LIVE ring — 1059 -> 1063 -> 1073 -> 1059 is one deadlocked set of three`` () =
+        let found = Blockers.cycles [ node 1059 [ 1063 ]; node 1063 [ 1073 ]; node 1073 [ 1059 ] ]
+
+        Assert.Equal<int list list>([ [ 1059; 1063; 1073 ] ], found |> List.map ringOf)
+
+    [<Fact>]
+    let ``#1092 a two-item ring is a ring — the smallest deadlock two workers can build`` () =
+        let found = Blockers.cycles [ node 1 [ 2 ]; node 2 [ 1 ] ]
+        Assert.Equal<int list list>([ [ 1; 2 ] ], found |> List.map ringOf)
+
+    [<Fact>]
+    let ``#1092 an item blocked by ITSELF is a ring — a singleton is otherwise never one`` () =
+        let found = Blockers.cycles [ node 1 [ 1 ] ]
+        Assert.Equal<int list list>([ [ 1 ] ], found |> List.map ringOf)
+
+    [<Fact>]
+    let ``#1092 a DAG is not a ring — the false positive that would report every board as deadlocked`` () =
+        // The shape the live board has AFTER the repair: 1063 -> 1073 -> 1059, and 1059 blocks nothing.
+        let found = Blockers.cycles [ node 1063 [ 1073 ]; node 1073 [ 1059 ]; node 1059 [] ]
+        Assert.Empty(found)
+
+    [<Fact>]
+    let ``#1092 a DIAMOND is not a ring — a shared blocker is convergence, not a cycle`` () =
+        // 1 -> 2, 1 -> 3, 2 -> 4, 3 -> 4. Every node reachable from 1; none reachable BACK.
+        let found = Blockers.cycles [ node 1 [ 2; 3 ]; node 2 [ 4 ]; node 3 [ 4 ]; node 4 [] ]
+        Assert.Empty(found)
+
+    [<Fact>]
+    let ``#1092 two DISJOINT rings are both reported — stopping at the first hides the second`` () =
+        let found =
+            Blockers.cycles [ node 1 [ 2 ]; node 2 [ 1 ]; node 8 [ 9 ]; node 9 [ 8 ]; node 5 [] ]
+
+        Assert.Equal<int list list>([ [ 1; 2 ]; [ 8; 9 ] ], found |> List.map ringOf)
+
+    [<Fact>]
+    let ``#1092 a ring whose edges are RESOLVED is NOT live — isResolved decides, and it is asked`` () =
+        // The same three refs, but every blocker is CLOSED or MERGED. A resolved blocker no longer
+        // holds, so it is not an edge, so there is no ring — the item is startable and the graph is
+        // empty. Re-answering resolution here instead of asking `isResolved` is how a rule spelled
+        // twice agrees once (#520).
+        let closed n b =
+            gh n,
+            [ { Ref = Some(gh b)
+                Raw = (gh b).Short
+                State = BlockerClosed } ]
+
+        let merged n b =
+            gh n,
+            [ { Ref = Some(gh b)
+                Raw = (gh b).Short
+                State = BlockerMerged } ]
+
+        Assert.Empty(Blockers.cycles [ closed 1 2; merged 2 3; closed 3 1 ])
+
+    [<Fact>]
+    let ``#1092 an UNKNOWN blocker still draws its edge — it blocks, so it can deadlock`` () =
+        // `BlockerUnknown`/`BlockerUnparseable` BLOCK (#266: "I could not look" is not "it is fine").
+        // A blocker that holds the item is an edge, whatever we know about it — otherwise the ring
+        // with the least-understood edge is the one we stay silent about.
+        let unknown n b =
+            gh n,
+            [ { Ref = Some(gh b)
+                Raw = (gh b).Short
+                State = BlockerUnknown } ]
+
+        Assert.Equal<int list list>([ [ 1; 2 ] ], Blockers.cycles [ unknown 1 2; unknown 2 1 ] |> List.map ringOf)
+
+    [<Fact>]
+    let ``#1092 a blocker OUTSIDE the graph draws no edge — under-report, never invent a deadlock`` () =
+        // 1 -> 2 -> 99, and 99 is not a node we hold. We cannot see whether 99 closes a ring back to
+        // 1, and asserting one we did not observe is the #266 defect pointed the other way. No edge,
+        // no claimed cycle.
+        let found = Blockers.cycles [ node 1 [ 2 ]; node 2 [ 99 ] ]
+        Assert.Empty(found)
+
+    [<Fact>]
+    let ``#1092 prose blockers cannot close a ring — they have no ref to point at`` () =
+        let found = Blockers.cycles [ (gh 1, [ prose "blocked on a human" ]); (gh 2, [ prose "waiting" ]) ]
+        Assert.Empty(found)
+
+    [<Fact>]
+    let ``#1092 the empty graph and a lone unblocked item are acyclic — no noise on a healthy board`` () =
+        Assert.Empty(Blockers.cycles [])
+        Assert.Empty(Blockers.cycles [ node 1 [] ])
+
+    [<Fact>]
+    let ``#1092 a duplicated node collapses — one item cannot hold two blocker lists in one graph`` () =
+        // First occurrence wins. Without this, a caller's accidental duplicate could contribute a
+        // second, contradictory edge set for the same item.
+        let found = Blockers.cycles [ node 1 [ 2 ]; node 1 [ 3 ]; node 2 [ 1 ]; node 3 [] ]
+        Assert.Equal<int list list>([ [ 1; 2 ] ], found |> List.map ringOf)
+
+    [<Fact>]
+    let ``#1092 a long chain terminates and is acyclic — the input a naive walk never returns from`` () =
+        // 200 items in a line. Guards the recursion as much as the verdict.
+        let chain = [ for i in 1..199 -> node i [ i + 1 ] ] @ [ node 200 [] ]
+        Assert.Empty(Blockers.cycles chain)
+
+    [<Fact>]
+    let ``#1092 one ring containing EVERY item terminates — the pathological whole-board deadlock`` () =
+        let ring = [ for i in 1..199 -> node i [ i + 1 ] ] @ [ node 200 [ 1 ] ]
+        let found = Blockers.cycles ring
+        Assert.Equal(1, List.length found)
+        Assert.Equal(200, List.length (List.head found))

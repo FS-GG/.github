@@ -135,7 +135,14 @@ module Batch =
     /// holder (who to talk to), gives the soonest lease (whether waiting is worth it), and — for a lease
     /// already expired — points at `reap`, the one blocker a worker clears alone.
     ///
-    /// Returns [] whenever the queue is not STARVED-BY-CLAIMS: work was handed out, or the queue is empty /
-    /// starved by blockers or columns (that is #440's per-item business). A banner on a healthy queue is
-    /// noise, so there is deliberately none. Each string is one stderr line.
+    /// THE DEADLOCK SECTION (#1092). One starved-queue cause is not a wait at all: a `Blocked by` RING, where
+    /// each item waits on the next around a circle. It drains never, no lease frees it, and a human must
+    /// break an edge — so when `Blockers.cycles` finds one it LEADS, naming every member and its in-ring
+    /// blockers. "A queue starved by blockers is #440's per-item business" holds for a blocker that will
+    /// clear; it is false for a ring, which no per-item verdict can even see (every item on one is
+    /// individually well-formed). This is precisely the AGGREGATE this function exists to give.
+    ///
+    /// Returns [] whenever the queue is not STARVED: work was handed out, or the queue is empty / starved by
+    /// blockers that will clear / withheld at a column the caller did not ask for. A banner on a healthy
+    /// queue is noise, so there is deliberately none. Each string is one stderr line.
     val starvedBanner: leaseMinutes: int -> result: BatchResult -> string list

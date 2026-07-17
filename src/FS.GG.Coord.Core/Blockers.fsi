@@ -36,6 +36,43 @@ module Blockers =
     /// The blockers still holding this item. Empty = not blocked.
     val unresolved: blockers: Blocker list -> Blocker list
 
+    /// EVERY SET OF ITEMS MUTUALLY DEADLOCKED BY `Blocked by` — the question no per-item rule can ask.
+    ///
+    /// Each returned group is a set in which every member sits on a ring, so **no member can EVER become
+    /// startable**: each waits on the next around a circle, and no lease, no merge and no amount of waiting
+    /// will free any of them. A human must break an edge. `[]` when the graph is acyclic.
+    ///
+    /// THIS IS NOT A PER-ITEM FACT, AND THAT IS THE WHOLE POINT. The blocker graph has been repaired four
+    /// times — #343 (a blocker naming an OPEN issue, handed out anyway), #476 (a ref naming a PR never
+    /// clears), #602 (`Blocked` with an EMPTY blocker list), #620 (blockers ALL CLOSED, invisible to
+    /// everything) — and every one of those rules inspects ONE item's blockers in isolation. A cycle passes
+    /// all four, because **every item in a ring is individually, locally, perfectly well-formed**: non-empty
+    /// blocker list, every blocker OPEN, every ref a real issue, correctly never handed out. The defect
+    /// exists only in the GRAPH, and no per-item rule has a graph to look at. It is also why no WORKER can
+    /// see one: each edge is drawn by a different worker from locally correct information, and the ring is
+    /// visible only from above (#1092).
+    ///
+    /// The org already ratified the rule for the other graph: `Done.fs` refuses to climb a parent chain past
+    /// ten hops because "a cycle is a bug — this is a cycle, not a hierarchy". The graph the engine BUILDS is
+    /// guarded; the graph we ask humans to maintain BY HAND, and which gates scheduling, was not.
+    ///
+    /// AN EDGE IS AN UNRESOLVED BLOCKER POINTING AT A NODE IN `nodes`. Both halves fail CLOSED (#266):
+    ///
+    /// - **Resolution is `isResolved`'s call, never re-answered here** — a resolved blocker no longer holds,
+    ///   so it cannot be part of a LIVE ring. A rule spelled in two places agrees in one at best (#520).
+    /// - **A blocker naming an item OUTSIDE `nodes` draws no edge.** We cannot see whether that item is on a
+    ///   ring, and "I could not look" is not "I looked and it is fine". No edge, no claimed cycle — this
+    ///   under-reports rather than inventing a deadlock out of a board we only half hold.
+    ///
+    /// TOTAL and PURE: it reads nothing, terminates on any graph (including one that is entirely one ring),
+    /// and cannot mistake a failed read for an acyclic board. Duplicate nodes collapse (first wins); each
+    /// group is sorted, as is the result, so the output is deterministic and testable.
+    ///
+    /// A group may be larger than one simple ring — two rings sharing an item are ONE mutually-deadlocked
+    /// set, and reporting them together is the honest answer: every member is still stuck, and breaking one
+    /// edge may not free all of them. A group is never a singleton unless that item blocks ITSELF.
+    val cycles: nodes: (Ref * Blocker list) list -> Ref list list
+
     /// Why a `Blocked by` WRITE was refused. The field is a TYPED dependency edge (Projects v2 has no
     /// dependency field, so it is TEXT and nothing but this gate stops it drifting back into a resolution
     /// log), so `set-field <issue> 'Blocked by' <value>` accepts only issue refs — and the two ways to get

@@ -613,3 +613,73 @@ module BatchTests =
         Assert.False(anyLine "EXPIRED" banner, $"a live-work over-run is not reapable, so no EXPIRED line, got %A{banner}")
         Assert.False(anyLine "collect them: fsgg-coord reap" banner, $"no reap advice for live work, got %A{banner}")
         Assert.True(anyLine "soonest: lease unknown" banner, $"no live lease to wait on, so 'lease unknown', got %A{banner}")
+
+    // ================================================================================================
+    // #1092 — THE DEADLOCK BANNER. A ring is the one starved cause that waiting cannot fix.
+    // ================================================================================================
+    // Every other starved-queue line describes a queue that DRAINS: a lease frees, a column is triaged.
+    // A `Blocked by` ring drains never, and per-item it printed as "Status is Blocked" — the same words
+    // a ten-minute block gets — under "this queue is BUSY", which implies it drains. It does not. This
+    // is the aggregate the per-item explanation cannot give.
+
+    /// The live incident, on the board: .github#1059 -> #1063 -> #1073 -> #1059, every edge open.
+    let private ringItem n blockedBy =
+        { item n [ $"src/%d{n}.fs" ] with
+            Ref = refIn "FS-GG" ".github" n
+            Blockers =
+                blockedBy
+                |> List.map (fun b ->
+                    { Ref = Some(refIn "FS-GG" ".github" b)
+                      Raw = (refIn "FS-GG" ".github" b).Short
+                      State = BlockerOpen }) }
+
+    [<Fact>]
+    let ``#1092 a `Blocked by` ring is named as a DEADLOCK, not swallowed by 'BUSY'`` () =
+        let r = run [] [ ringItem 1059 [ 1063 ]; ringItem 1063 [ 1073 ]; ringItem 1073 [ 1059 ] ]
+        Assert.Empty(r.Chosen)
+
+        let banner = starvedBanner 120 r
+
+        Assert.True(
+            anyLine "DEADLOCKED: 3 item(s) form a `Blocked by` CYCLE" banner,
+            $"expected the deadlock line naming all three, got %A{banner}")
+
+        // Every member and its in-ring edge is named — the worker has to pick an edge to cut.
+        Assert.True(anyLine ".github#1059 — Blocked by .github#1063" banner, $"%A{banner}")
+        Assert.True(anyLine ".github#1063 — Blocked by .github#1073" banner, $"%A{banner}")
+        Assert.True(anyLine ".github#1073 — Blocked by .github#1059" banner, $"%A{banner}")
+
+        // A ring is NOT a wait: the word BUSY must not appear over a queue that never drains.
+        Assert.False(anyLine "this queue is BUSY" banner, $"a ring is not BUSY — it never drains, got %A{banner}")
+
+    [<Fact>]
+    let ``#1092 the deadlock banner LEADS, and composes with a BUSY section`` () =
+        // A board with BOTH a ring and an item queued behind a live claim: the ring leads (it is the
+        // cause nothing else clears), and the BUSY line still appears for the drainable part. #636's
+        // composition rule, extended.
+        let held' = item 900 [ "src/held.fs" ] |> held "otter-1" 0
+        let r =
+            run
+                [ resv "FS.GG.SDD" [ "src/held.fs" ] (LiveClaim(WorkerId "otter-1", ref 900, 0)) ]
+                [ ringItem 1 [ 2 ]; ringItem 2 [ 1 ]; held'; item 901 [ "src/held.fs" ] ]
+
+        let banner = starvedBanner 120 r
+        Assert.True(anyLine "DEADLOCKED: 2 item(s)" banner, $"expected the ring, got %A{banner}")
+        Assert.True(anyLine "this queue is BUSY, not empty" banner, $"expected the BUSY section too, got %A{banner}")
+        // The ring comes before the BUSY line.
+        let idxRing = banner |> List.findIndex (fun l -> l.Contains "DEADLOCKED")
+        let idxBusy = banner |> List.findIndex (fun l -> l.Contains "BUSY")
+        Assert.True(idxRing < idxBusy, $"the ring must lead, got %A{banner}")
+
+    [<Fact>]
+    let ``#1092 a queue blocked by OFF-BOARD issues is still no ring — #428's invariant holds`` () =
+        // The existing "#428 starved by BLOCKERS alone gets no banner" case must keep passing: those
+        // blockers name ref 999, not a candidate, so no edge is drawn and there is no ring. This asserts
+        // the deadlock section adds nothing there.
+        let blocked n =
+            { item n [ $"src/%d{n}.fs" ] with
+                Blockers = [ { Ref = Some(ref 999); Raw = (ref 999).Short; State = BlockerOpen } ] }
+
+        let banner = starvedBanner 120 (run [] [ blocked 1; blocked 2 ])
+        Assert.False(anyLine "DEADLOCKED" banner, $"off-board blockers draw no edge, so no ring, got %A{banner}")
+        Assert.Empty(banner)
