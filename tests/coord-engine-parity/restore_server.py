@@ -249,6 +249,10 @@ class H(BaseHTTPRequestHandler):
         # found", the ONLY state in which a lapsed lease is collectable — which is what these legs want.
         if re.match(r"^/repos/[^/]+/[^/]+/pulls$", p):
             return self._send(200, [])
+        # `reap`'s #1055 branch probe: no pushed `item/<n>-*` branch modeled here, so an empty list keeps
+        # these lapsed leases at LeaseExpiredNoPr (collectable) rather than LivenessUnknown (refused).
+        if re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/", p):
+            return self._send(200, [])
         if p.rstrip("/") == "/rate_limit":
             return self._send(200, {"resources": {"graphql": {"remaining": 4980, "limit": 5000}}})
         self._send(500, {"message": f"unhandled GET {p}"})

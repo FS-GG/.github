@@ -99,6 +99,14 @@ module ChoreTests =
         Assert.Empty(derive [ i ])
 
     [<Fact>]
+    let ``a lapsed lease with a pushed BRANCH but no PR is NOT a chore — work in progress (#1055)`` () =
+        // A pushed `item/<n>-*` branch is proof of life before §5 opens the PR. Offering it would hand the
+        // reaper a chore `Writes.reapable` must then refuse (WorkAliveBranch) — the same never-drains queue
+        // as the open-PR case above.
+        let i = { item 1 with Claim = Some(claim other, LeaseExpiredBranchPushed) }
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
     let ``a lapsed lease we could NOT probe is NOT a chore — could-not-look is not no-PR (#266, #581)`` () =
         let i = { item 1 with Claim = Some(claim other, LivenessUnknown) }
         Assert.Empty(derive [ i ])
@@ -312,7 +320,7 @@ module ChoreTests =
         // identical guard for the identical reason.
         Assert.Equal(7, List.length everyStatus)
         Assert.Equal(5, List.length everyBlockerState)
-        Assert.Equal(4, List.length everyLiveness)
+        Assert.Equal(5, List.length everyLiveness)
 
     [<Fact>]
     let ``an item derives AT MOST ONE chore — every kind writes the column, so two is a contradiction`` () =

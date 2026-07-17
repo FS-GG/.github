@@ -208,6 +208,10 @@ class H(BaseHTTPRequestHandler):
         if re.match(r"^/repos/[^/]+/[^/]+/issues/?$", p):
             return self._send(200, open_issues())
 
+        if re.match(r"^/repos/[^/]+/[^/]+/git/matching-refs/heads/item/", p):
+            # #1055: no pushed item/<n>-* branch modeled → prAlive's branch probe finds none. The #974 no-PR
+            # leg stays LeaseExpiredNoPr (a dead claim adopt refuses as "no finished work"), not Unknown.
+            return self._send(200, [])
         if re.match(r"^/repos/[^/]+/[^/]+/pulls/?$", p):
             return self._send(200, open_pulls())
 

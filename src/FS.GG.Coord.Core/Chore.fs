@@ -150,10 +150,11 @@ module Chore =
             [
               // STALE-CLAIM. `LeaseExpiredNoPr` and nothing else — the lease lapsed AND we LOOKED for the
               // item's own `item/<n>-*` PR and found none. `LeaseExpiredPrOpen` is a worker demonstrably
-              // still working (#581) and `LivenessUnknown` is a probe that failed; offering either would
-              // hand the reaper a chore `Writes.reapable` must then refuse, which is a queue that never
-              // drains. Fires on a CLOSED issue too: an abandoned lease reserves its touch-set either way
-              // (#601), and freeing it is the whole point.
+              // still working (#581), `LeaseExpiredBranchPushed` is a pushed branch that proves work in
+              // progress before its PR is opened (#1055), and `LivenessUnknown` is a probe that failed;
+              // offering any of the three would hand the reaper a chore `Writes.reapable` must then refuse,
+              // which is a queue that never drains. Fires on a CLOSED issue too: an abandoned lease reserves
+              // its touch-set either way (#601), and freeing it is the whole point.
               match liveness with
               | LeaseExpiredNoPr -> Chore(item.Ref, StaleClaim claim.Worker, Involved)
 

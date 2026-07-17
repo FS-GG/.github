@@ -19,6 +19,34 @@ let private serving (body: string) =
 /// A transport that fails every request.
 let private failing (error: IoError) = Fake.Recorder(fun _ -> Error error)
 
+/// A transport for `prAlive`'s TWO reads (#1055): the open-PR list, then — when no PR matches — the
+/// `git/matching-refs/heads/item/<n>-` branch probe. `pulls` answers the first, `refs` the second.
+let private prAndRefs (pulls: string) (refs: string) =
+    Fake.Recorder(fun (req: Request) ->
+        let body =
+            if req.Path.Contains "matching-refs" then refs
+            elif req.Path.EndsWith "/pulls" then pulls
+            else "[]"
+
+        Ok
+            { Status = 200
+              Body = body
+              ETag = None
+              NextLink = None })
+
+/// `prAlive` finds no PR, then the branch probe itself FAILS — the #1055 fail-closed case. The open-PR
+/// read succeeds (empty), the `matching-refs` read errors.
+let private prNoneRefsFail (error: IoError) =
+    Fake.Recorder(fun (req: Request) ->
+        if req.Path.Contains "matching-refs" then
+            Error error
+        else
+            Ok
+                { Status = 200
+                  Body = "[]"
+                  ETag = None
+                  NextLink = None })
+
 // ---- #461: the lock is never guessed at ------------------------------------------------------------
 
 [<Fact>]
@@ -253,12 +281,55 @@ let ``#581 an OPEN item PR is proof of life - the lease lapsed, the WORK did not
 
 [<Fact>]
 let ``#581 a PR on ANOTHER item's branch is not proof of life for this one`` () =
+    // No PR matches item 42, and no `item/42-*` branch is pushed either (#1055) — so this is a genuinely
+    // dead claim, `LeaseExpiredNoPr`.
     let recorder =
-        serving """[{"number":77,"head":{"ref":"item/99-something-else"}}]"""
+        prAndRefs """[{"number":77,"head":{"ref":"item/99-something-else"}}]""" "[]"
 
     match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
     | Ok LeaseExpiredNoPr -> ()
-    | other -> failwith $"another item's PR says nothing about this one — got %A{other}"
+    | other -> failwith $"another item's PR AND no branch says nothing about this one — got %A{other}"
+
+[<Fact>]
+let ``#1055 a pushed item branch with NO PR is proof of life - LeaseExpiredBranchPushed`` () =
+    // §5 opens the PR only AFTER the work, so a worker in §3 has a pushed `item/42-*` branch and no PR yet.
+    // A REST outage can expire the lease in that window (heartbeat is REST too), and reap must NOT collect a
+    // worker who is visibly still there. The branch is the proof.
+    let recorder =
+        prAndRefs "[]" """[{"ref":"refs/heads/item/42-wip","object":{"sha":"abc123"}}]"""
+
+    match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok LeaseExpiredBranchPushed -> ()
+    | other -> failwith $"a pushed item branch with no PR is proof of life — got %A{other}"
+
+[<Fact>]
+let ``#1055 no PR and NO branch is a genuinely dead claim - LeaseExpiredNoPr`` () =
+    let recorder = prAndRefs "[]" "[]"
+
+    match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok LeaseExpiredNoPr -> ()
+    | other -> failwith $"no PR and no branch is a dead claim — got %A{other}"
+
+[<Fact>]
+let ``#1055 the branch probe FAILS CLOSED - an unreadable probe is Unknown, never 'no branch'`` () =
+    // The whole point of #1055 is that the REST outage that expired the lease is the LIKELY reason the branch
+    // probe also fails — so a failed probe must be `LivenessUnknown` (reap refuses), never `LeaseExpiredNoPr`
+    // (reap collects). Same #266/#581 rule the open-PR read already obeys, one read over.
+    let recorder = prNoneRefsFail (Http(502, "bad gateway"))
+
+    match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Ok LivenessUnknown -> ()
+    | other -> failwith $"an unreadable branch probe must not read as 'no branch' — got %A{other}"
+
+[<Fact>]
+let ``#1055 the branch probe propagates a RATE LIMIT - not swallowed as Unknown`` () =
+    // A rate limit is a fact about the CLIENT (EX_RATE), not this item — the caller must back off, not go on
+    // deciding liveness from a read it cannot make. The open-PR read propagates it; so must the branch probe.
+    let recorder = prNoneRefsFail (RateLimited(RestBudget, None))
+
+    match Reads.prAlive recorder "FS-GG" "FS.GG.SDD" 42 with
+    | Error(RateLimited _) -> ()
+    | other -> failwith $"an exhausted budget on the branch probe must propagate — got %A{other}"
 
 [<Fact>]
 let ``#581 a FAILED pr read is Unknown, NOT 'no PR' - this is what reaped live work`` () =

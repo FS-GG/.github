@@ -324,6 +324,11 @@ module Writes =
         /// server-side proof the work is alive. Carries the PR number so the refusal is checkable.
         | WorkAlive of pr: int
 
+        /// #1055: the lease lapsed, no PR is open, but a pushed `item/<n>-*` BRANCH exists — proof of life
+        /// during §3, before §5 opens the PR. DISTINCT from `Undetermined`: we could tell, and the answer is
+        /// "a branch is pushed", not "we could not read". No PR number to carry — there is no PR to land.
+        | WorkAliveBranch
+
         /// WE COULD NOT TELL. The liveness read failed, and a lock we cannot rule dead we may not break —
         /// a transient 5xx must not become a reaped claim (the fail-closed direction on a lock).
         | Undetermined of reason: string

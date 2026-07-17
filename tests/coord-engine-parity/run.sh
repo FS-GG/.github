@@ -4191,6 +4191,18 @@ if [ -z "$RR_PORT" ]; then bad "reap-race fixture bound a port"; else
     && ok "case24(m): ...and does NOT tell the worker it was released (no fsgg:msg to=ghost-555)" \
     || bad "case24(m): a failed reap must not notify the worker" "messages to ghost-555 present"
 
+  # (n) #1055: #97 is STALE with NO PR but a pushed `item/97-*` branch — proof of life before §5 opens the
+  #     PR. reap must REFUSE it (a branch is not a landable PR — no adopt advice) and DELETE nothing.
+  printf '%s' "$rr_out" | grep -q 'item/97-\* branch has NO PR yet' \
+    && ok "case24(n): reap REFUSES a stale claim whose item/97-* branch is pushed but has no PR (#1055)" \
+    || bad "case24(n): a pushed branch with no PR must block the reap" "$rr_out"
+  [ "$(rr_workers_on 97)" = "swan-b7c" ] \
+    && ok "case24(n): ...and the branch-pushed claim's marker SURVIVES (swan-b7c still holds #97)" \
+    || bad "case24(n): a branch-pushed claim's marker must survive" "workers on #97: $(rr_workers_on 97)"
+  [ "$(curl -s "$RR_BASE/_deletes" | jq 'index(822)')" = "null" ] \
+    && ok "case24(n): ...and reap DELETED nothing on the branch-pushed claim (no 822 in /_deletes)" \
+    || bad "case24(n): a refused reap must delete nothing" "deletes: $(curl -s "$RR_BASE/_deletes")"
+
   kill "$RR_SRV" 2>/dev/null
 fi
 

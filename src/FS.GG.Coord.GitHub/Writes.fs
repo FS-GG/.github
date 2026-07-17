@@ -41,6 +41,7 @@ module Writes =
 
     type ReapRefusal =
         | WorkAlive of pr: int
+        | WorkAliveBranch
         | Undetermined of reason: string
 
     [<Sealed>]
@@ -551,6 +552,11 @@ module Writes =
         match liveness with
         | LeaseExpiredNoPr -> Ok(Reapable(ref, marker.Worker, marker.Id, marker.PreviousStatus))
         | LeaseExpiredPrOpen pr -> Error(WorkAlive pr)
+        // A pushed `item/<n>-*` branch with no PR is proof of life BEFORE §5 opens the PR (#1055). Refuse —
+        // and refuse with its OWN reason, not `Undetermined`: `Undetermined` means "we could not tell", and
+        // collapsing "the work is alive" into "could not tell" is the exact #581 mistake this whole gate
+        // exists to prevent. We DID tell: a branch is pushed.
+        | LeaseExpiredBranchPushed -> Error WorkAliveBranch
         // "We could not ask" is NOT "there is no PR" — the distinction that stops a transient failure from
         // reaping live work. A lease that is not even expired should never have reached here; treat it, too,
         // as a refusal rather than manufacturing a capability, because a `reap` from that state is a bug.

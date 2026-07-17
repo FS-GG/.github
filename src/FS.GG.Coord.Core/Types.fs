@@ -104,6 +104,7 @@ module Types =
         | LeaseHeld
         | LeaseExpiredNoPr
         | LeaseExpiredPrOpen of pr: int
+        | LeaseExpiredBranchPushed
         | LivenessUnknown
 
     type PrState =

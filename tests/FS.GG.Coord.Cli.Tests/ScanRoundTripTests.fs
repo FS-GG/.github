@@ -516,6 +516,37 @@ let ``#712 a STALE BOARD claim held open by a PR carries livePr, from the one li
     | Error e -> failwith $"scan failed: %A{e}"
 
 [<Fact>]
+let ``#1055 a STALE claim with a pushed branch and NO PR round-trips as lease-expired-branch-pushed`` () =
+    // §3, before §5 opens the PR: the lease lapsed and there is no open PR, but a pushed `item/42-*` branch
+    // exists. The claim must render `lease-expired-branch-pushed` on the wire and parse back to the same
+    // case — proof of life the scheduler and reap both read off the snapshot.
+    let stale =
+        """[{"id":902,"body":"<!-- fsgg:claim worker=curlew-ab lease=120 prev=Ready -->","updated_at":"2020-01-01T00:00:00Z"}]"""
+
+    let transport =
+        Fake.Recorder(fun req ->
+            if req.Path.Contains "matching-refs" then
+                ok """[{"ref":"refs/heads/item/42-wip","object":{"sha":"abc"}}]"""
+            elif req.Path.EndsWith "/pulls" then
+                ok "[]" // no open PR — the branch probe decides
+            elif req.Path.EndsWith "/issues" then
+                ok "[]"
+            elif req.Path.EndsWith "/comments" then
+                ok stale
+            else
+                ok (issueBody "Paths: src/Audio/**"))
+
+    match Scan.snapshot transport [ aRow ] None false None 120 with
+    | Ok(document, _) ->
+        match Snapshot.parse document with
+        | Ok request ->
+            match request.Candidates.[0].Item.Claim with
+            | Some(claim, LeaseExpiredBranchPushed) -> Assert.Equal(WorkerId "curlew-ab", claim.Worker)
+            | other -> failwith $"the claim block must render branch-pushed liveness — got %A{other}"
+        | Error e -> failwith $"parse failed: %A{e}"
+    | Error e -> failwith $"scan failed: %A{e}"
+
+[<Fact>]
 let ``a MARKERLESS In-progress row RESERVES its touch-set as Unowned - arm A of active_claims`` () =
     // Case 25 (starved). The board's In-progress column is a claim signal in its own right: something is
     // evidently editing those files, so the row reserves — but there is no marker, hence no worker to name

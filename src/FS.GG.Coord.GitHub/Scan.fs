@@ -761,6 +761,7 @@ module Scan =
                         w.WriteString("kind", "lease-expired-pr-open")
                         w.WriteNumber("pr", pr)
                     | Some LeaseExpiredNoPr -> w.WriteString("kind", "lease-expired-no-pr")
+                    | Some LeaseExpiredBranchPushed -> w.WriteString("kind", "lease-expired-branch-pushed")
                     | Some LeaseHeld -> w.WriteString("kind", "lease-held")
                     | Some LivenessUnknown -> w.WriteString("kind", "unknown")
                     // Unreachable: this block is entered only under `Some m`, where `liveness` is `Some _`.
