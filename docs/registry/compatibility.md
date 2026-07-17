@@ -51,6 +51,50 @@ FS.GG.Rendering ──(depends on no FS-GG component; never depends on Governanc
 | `coord-engine` | **0.4.0 (source) / 0.4.0 (published)** — ⚠️ EQUAL AGAIN, AND THE GREEN MEANS NO MORE THAN IT DID AT `0.3.0`: this row was ADDED over 30 engine commits sitting unreleased on `main` (measured 2026-07-17, `git log coord-engine/v0.3.0..main -- src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub`), with `<Version>` unchanged since that tag; `0.4.0` (2026-07-17, [#1068](https://github.com/FS-GG/.github/issues/1068)) released 36 of them — a MINOR on the 0.x line, and not a pure patch: [#1056](https://github.com/FS-GG/.github/issues/1056) wires the chore queue at `next` and [#1063](https://github.com/FS-GG/.github/issues/1063) adds the `followup` verb — which reset the counter to zero and retired nothing. Every other producer bumps its source version with the CHANGE, so `version` running ahead of `package-version` is their legible "merged, not yet published" signal; this engine's `<Version>` moves only at RELEASE time, by hand, so source-outran-feed holds the two scalars EQUAL and no version comparison can see it. This row therefore buys the **published-but-registry-stale** direction only (real — the [#250](https://github.com/FS-GG/.github/issues/250) class has hit other rows 7+ times), and NOT the direction the engine actually fails in ([#1067](https://github.com/FS-GG/.github/issues/1067); the detector is [#1075](https://github.com/FS-GG/.github/issues/1075), which measures commits since the release tag). Do not read green here as "the fleet runs current code" — different facts ([epic #266](https://github.com/FS-GG/.github/issues/266)). | .github | the `fsgg-coord-engine` CLI verb surface + its exit-code contract (emitted from `src/FS.GG.Coord.Core/Protocol.fs`), shipped as the `FS.GG.Coord.Cli` dotnet tool. `.github` **is** a producer ([ADR-0039](../adr/0039-nuget-org-is-the-read-path.md) §5) and this package had no registry row at all until #1067, so `check-feed-coherence.py` — whose subject IS the registry — had no subject for the one package whose staleness degrades every worker in the fleet. | SDD, Rendering, Governance, Templates, Game, Audio |
 | `new-sdd-workspace` | **0.3.0 (source) / 0.3.0 (published)** — `<Version>` in `scripts/NewSddWorkspace/NewSddWorkspace.fsproj`; feed newest `0.3.0` live on the org feed **and** nuget.org (verified 2026-07-17); `package-version == version` (no source-outran-feed gap today). | .github | The `new-sdd-workspace` scaffolder CLI (package `FS.GG.NewSddWorkspace`) — one-command full-stack SDD workspace creation, wrapping the FS.GG.Templates `rendering` provider ([ADR-0016](../adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md)); a `dotnet new`-style tool humans install, dual-published (org feed + nuget.org). **Row landed by [.github#1114](https://github.com/FS-GG/.github/issues/1114) (SDD#508 step 3), completing [.github#1067](https://github.com/FS-GG/.github/issues/1067):** `.github`'s **second** producer package had no registry row, so `check-feed-coherence.py` had no subject for it — now mapped in `CONTRACT_PACKAGES`. **`consumers: []` is the honest, deliberate value:** nothing in the graph restores this tool (a human installs it), so it has no consumer edge. The human ruled ([SDD#508](https://github.com/FS-GG/FS.GG.SDD/issues/508)) that this registry is the org's package **inventory**, where a consumerless-but-published package must appear — not a pure contract graph, where it would not; `schemaVersion 2` gives `consumers` a three-state grammar so "deliberately none" (`[]`) is distinct from "forgot one" (absent). Do **not** invent a consumer to satisfy a gate — `fsgg-surface-impact` would enforce a fictional edge. | *(none — `[]`, deliberate; see note)* |
 
+## Contract version literals
+
+<!-- BEGIN GENERATED: fsgg-contract-versions -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from registry/dependencies.yml by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
+
+  This is the MACHINE-OWNED half of this page (#1081 option 2 / ADR-0044 / #527). The REQUIRED
+  `projection` gate (scripts/check-projection.py) reads each contract's version literal from
+  THIS table, not from the authored prose `Version` cell in the Versioned contracts table
+  above, so a registry flip regenerates this region green rather than demanding a prose edit the
+  feed-autofix bot is forbidden to make (#748). Every number below is the registry's; if one is
+  wrong, the registry is wrong, and fixing it HERE would only hide that.
+-->
+
+*Generated from `registry/dependencies.yml`. `version` is the contract SURFACE's SemVer;
+`package-version` is what is LIVE on the org feed (`—` where the contract ships no package).
+This table is the machine-owned literal; the judgement about what a release MEANS stays in the
+authored `Version` cells of the Versioned contracts table (#748).*
+
+| Contract | Owner | version | package-version |
+|---|---|---|---|
+| `scaffold-provider` | FS.GG.SDD | `1.1.0` | — |
+| `fsgg-contracts` | FS.GG.SDD | `3.0.0` | `3.0.0` |
+| `scaffold-provenance` | FS.GG.SDD | `1.1.0` | — |
+| `governance-handoff` | FS.GG.SDD | `1.1.0` | — |
+| `governance-policy` | FS.GG.Governance | `1` | — |
+| `governance-capabilities` | FS.GG.Governance | `2` | — |
+| `governance-tooling` | FS.GG.Governance | `1` | — |
+| `governance-descriptor` | FS.GG.Governance | `1` | — |
+| `governance-reference-gate-set` | FS.GG.Governance | `1.2.1.1` | `1.2.1.1` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.12.0` | `0.12.0` |
+| `shared-build-config` | FS-GG/.github | `1.1.0` | — |
+| `registry-schema` | FS.GG.SDD | `2` | — |
+| `skill-registry` | FS-GG/.github | `1` | — |
+| `game-sim-core` | FS.GG.Game | `0.5.0` | `0.5.0` |
+| `game-scene-adapter` | FS.GG.Game | `0.5.0` | `0.5.0` |
+| `fs-gg-audio` | FS.GG.Audio | `0.3.0` | `0.3.0` |
+| `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
+| `coord-engine` | FS-GG/.github | `0.4.0` | `0.4.0` |
+| `new-sdd-workspace` | FS-GG/.github | `0.3.0` | `0.3.0` |
+
+<!-- END GENERATED: fsgg-contract-versions -->
+
 ## `.fsgg/` slot ownership
 
 `.fsgg/` is a **shared namespace**; a scaffolded workspace carries both SDD and Governance
