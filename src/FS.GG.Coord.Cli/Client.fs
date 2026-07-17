@@ -656,11 +656,12 @@ module Client =
         try
             let psi = ProcessStartInfo("git", "worktree list --porcelain")
             psi.RedirectStandardOutput <- true
-            psi.RedirectStandardError <- true
+            // stderr is NOT redirected: the output is a few bounded lines, so there is nothing to drain, and
+            // draining one pipe while the other fills is the deadlock #498 just removed one command over.
+            // git's own stderr on the inherited channel is fine — this is a read that may fail silently.
             psi.UseShellExecute <- false
             use p = Process.Start psi
             let out = p.StandardOutput.ReadToEnd()
-            p.StandardError.ReadToEnd() |> ignore
             p.WaitForExit()
 
             if p.ExitCode <> 0 then
@@ -952,7 +953,10 @@ module Client =
                     // held item with no worktree here is normal (its holder is elsewhere), so it stays `None`.
                     let localByItem =
                         if opts.Local then
-                            localWorktrees () |> List.map (fun (n, p) -> n, p) |> Map.ofList
+                            // KEEP-FIRST on a duplicate item number, matching bash's `| first`. `Map.ofList`
+                            // keeps LAST, so it is built over the reversed list — two worktrees on one item is
+                            // rare (a leftover retry tree), but the two engines must name the same one.
+                            localWorktrees () |> List.rev |> Map.ofList
                         else
                             Map.empty
 
