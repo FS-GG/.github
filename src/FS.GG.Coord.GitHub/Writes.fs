@@ -378,20 +378,29 @@ module Writes =
         let sentinels, realPaths = tokens |> List.partition TouchSet.isSentinel
 
         if not (List.isEmpty sentinels) then
-            if List.isEmpty realPaths then
-                // ALL sentinel. CANONICALISE to a single `none`: `rewrite` joins the tokens verbatim, so
-                // passing `["none"; "none"]` through would emit `Paths: none none` — which is #863's own
-                // input, written by the tool that exists to repair it.
-                Ok(Validated [ "none" ])
-            else
-                // A CONTRADICTION: "I touch nothing" and "I touch src/A" cannot both hold. Refuse it here
-                // rather than write it, and say which of the two the worker has to pick — the unmatchable
-                // message below would report `none` as a typo'd path and send them looking for the wrong
-                // mistake.
+            if not (List.isEmpty realPaths) then
+                // A CONTRADICTION: "I touch nothing/anything" and "I touch src/A" cannot both hold. Refuse
+                // it here rather than write it, and say which of the two the worker has to pick — the
+                // unmatchable message below would report the sentinel as a typo'd path and send them
+                // looking for the wrong mistake.
                 let named = String.Join(", ", realPaths)
 
                 Error
-                    $"`none` is the sentinel for 'this item touches nothing, deliberately' — it cannot be declared alongside real paths (%s{named}). Declare the paths, or declare `none`, not both."
+                    $"a `Paths:` sentinel ('none' or 'any') declares that this item reserves no files — it cannot be declared alongside real paths (%s{named}). Declare the paths, or declare the sentinel, not both."
+            else
+                // ALL sentinel — but WHICH one? There are two (#1103 leg 8), they mean OPPOSITE things
+                // (`none` unschedulable, `any` a schedulable chore), and canonicalising both to `none` —
+                // as this did while there was only one — would silently turn a chore into an epic. So
+                // decide over the distinct sentinel WORDS, exactly as `TouchSet.parse` does, and refuse a
+                // mix (`none any` is as contradictory as `none src/A`). Canonicalise to a SINGLE token:
+                // `rewrite` joins verbatim, so `["none"; "none"]` would emit `Paths: none none`, #863's
+                // own input.
+                match sentinels |> List.choose TouchSet.sentinelToken |> List.distinct with
+                | [ "none" ] -> Ok(Validated [ "none" ])
+                | [ "any" ] -> Ok(Validated [ "any" ])
+                | _ ->
+                    Error
+                        "the touch-set sentinels 'none' (unschedulable — an epic/decision) and 'any' (a schedulable file-less chore) mean opposite things and cannot be declared together. Pick one."
         else
 
         // THE GRAMMAR LIVES IN THE CORE, AND THERE IS ONE OF IT. Re-implementing `classify` here would be a

@@ -23,7 +23,8 @@ module SchedulabilityTests =
           TouchSet = Declared [ Matchable "src/Scene/**" ]
           Blockers = []
           Claim = None
-          ItemPr = None }
+          ItemPr = None
+          HumanBlock = None }
 
     let private claim w =
         { Worker = WorkerId w
@@ -294,8 +295,66 @@ module SchedulabilityTests =
               ask { item 26 with Claim = Some(claim "w", LeaseHeld) }
               ask { item 27 with Claim = Some(claim "w", LeaseExpiredPrOpen 1) }
               ask { item 28 with Claim = Some(claim "w", LivenessUnknown) }
-              schedulable false [ Declared [ Matchable "src/Scene/**" ] ] (item 29) ]
+              ask { item 29 with HumanBlock = Some AwaitingHumanDecision }
+              ask { item 30 with HumanBlock = Some AwaitingHumanAction }
+              schedulable false [ Declared [ Matchable "src/Scene/**" ] ] (item 31) ]
 
         for v in verdicts do
             let reason = explain 120 (item 1) v
             Assert.False(System.String.IsNullOrWhiteSpace reason, $"%A{v} produced no reason")
+
+    // ================================================================================================
+    // #1103 leg 2 — the `Blocked on: human/...` sentinel refuses REGARDLESS of the touch-set.
+    // ================================================================================================
+
+    [<Fact>]
+    let ``a human/decision sentinel refuses even a Ready item that carries a real touch-set (#918)`` () =
+        // #918's exact shape: a decision item declaring a real, wide touch-set (the fix-scope). The
+        // column cannot withhold it and neither can `Paths:` — only the sentinel can.
+        Assert.Equal(
+            AwaitingHuman AwaitingHumanDecision,
+            ask { item 918 with HumanBlock = Some AwaitingHumanDecision })
+
+    [<Fact>]
+    let ``a human/decision sentinel refuses a Backlog item even with --include-backlog (the #1081 door)`` () =
+        // `take --include-backlog` walked through the closed door on #918/#1081 because `Backlog` is a
+        // "not yet", not a "not for you". The sentinel is checked AFTER the column, so opting the column
+        // in does not defeat it.
+        Assert.Equal(
+            AwaitingHuman AwaitingHumanDecision,
+            schedulable true [] { item 918 with Status = Backlog; HumanBlock = Some AwaitingHumanDecision })
+
+    [<Fact>]
+    let ``a human/action sentinel refuses too, carrying its own case`` () =
+        Assert.Equal(
+            AwaitingHuman AwaitingHumanAction,
+            ask { item 574 with HumanBlock = Some AwaitingHumanAction })
+
+    [<Fact>]
+    let ``a concrete open blocker outranks the human-block sentinel — it is more actionable`` () =
+        // Both hold the item; `Blocked by #99` is the sentence a worker can act on, so it wins. The
+        // sentinel is checked only once the concrete blockers are clear.
+        let b = { Ref = Some(ref 99); Raw = (ref 99).Short; State = BlockerOpen }
+
+        match ask { item 8 with Blockers = [ b ]; HumanBlock = Some AwaitingHumanDecision } with
+        | BlockedBy _ -> ()
+        | other -> failwith $"expected BlockedBy to outrank the sentinel, got %A{other}"
+
+    // ================================================================================================
+    // #1103 leg 8 — `Paths: any` is a schedulable file-less chore, the counterpart to `Paths: none`.
+    // ================================================================================================
+
+    [<Fact>]
+    let ``Paths any is Startable — a chore reserves nothing and is schedulable`` () =
+        Assert.Equal(Startable, ask { item 40 with TouchSet = DeclaredChore })
+
+    [<Fact>]
+    let ``Paths none and Paths any are NOT the same verdict — that is the whole of leg 8`` () =
+        Assert.Equal(DeliberatelyNoTouchSet, ask { item 41 with TouchSet = DeclaredNone })
+        Assert.Equal(Startable, ask { item 42 with TouchSet = DeclaredChore })
+
+    [<Fact>]
+    let ``a chore conflicts with nothing — startable even beside in-flight work on any files`` () =
+        Assert.Equal(
+            Startable,
+            schedulable false [ Declared [ Matchable "src/Scene/**" ] ] { item 43 with TouchSet = DeclaredChore })

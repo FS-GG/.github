@@ -239,6 +239,17 @@ module Snapshot =
                     Ok(TouchSet.parse "")
                 | _ -> stringField path "body" el |> Result.map TouchSet.parse
 
+        // #1103 leg 2 — the `Blocked on: human/...` sentinel, parsed off the same body the touch-set is.
+        // Absent when the body was unreadable (we cannot know the sentinel we did not read) or swept off a
+        // closed item (`Schedulability` answers `IssueClosed` first, so it is never consulted).
+        let humanBlock =
+            match optProp "bodyUnreadable" el with
+            | Some _ -> Ok None
+            | None ->
+                match optProp "body" el, state with
+                | None, Ok Closed -> Ok None
+                | _ -> stringField path "body" el |> Result.map HumanBlock.parse
+
         let blockers =
             match optProp "blockers" el with
             | None -> Ok []
@@ -272,8 +283,8 @@ module Snapshot =
             | None -> Ok None
             | Some _ -> intField path "itemPr" el |> Result.map Some
 
-        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr with
-        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip ->
+        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, humanBlock with
+        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok hb ->
             Ok
                 { Item =
                     { Ref = r
@@ -282,9 +293,10 @@ module Snapshot =
                       TouchSet = ts
                       Blockers = bl
                       Claim = cl
-                      ItemPr = ip }
+                      ItemPr = ip
+                      HumanBlock = hb }
                   BashPaths = bp }
-        | a, b, c, d, e, f, g, h ->
+        | a, b, c, d, e, f, g, h, i ->
             [ a |> Result.map ignore
               b |> Result.map ignore
               c |> Result.map ignore
@@ -292,7 +304,8 @@ module Snapshot =
               e |> Result.map ignore
               f |> Result.map ignore
               g |> Result.map ignore
-              h |> Result.map ignore ]
+              h |> Result.map ignore
+              i |> Result.map ignore ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Candidate>)
 
@@ -538,6 +551,12 @@ module Snapshot =
 
             w.WriteEndArray()
         | Undetermined reason -> w.WriteString("reason", reason)
+        // The single `awaiting-human` kind carries WHICH sentinel as detail — the same edge `wrong-status`
+        // uses for its column. `human/decision` and `human/action` are opposite instructions to a worker
+        // (one never becomes startable without a human choice; the other becomes startable the moment an
+        // action lands), and a reader of the divergence log must be able to tell them apart.
+        | AwaitingHuman AwaitingHumanDecision -> w.WriteString("humanBlock", "decision")
+        | AwaitingHuman AwaitingHumanAction -> w.WriteString("humanBlock", "action")
         | Startable
         | IssueClosed
         | NoTouchSet
@@ -552,6 +571,8 @@ module Snapshot =
                 | Unmatchable t -> t)
         | Undeclared
         | DeclaredNone
+        // A chore reserves nothing, so it names no token.
+        | DeclaredChore
         // No tokens are KNOWN. Not the same as none existing — see `touchSetKind`, which says so out loud
         // in the divergence log, because "the engines disagree" and "one of them never saw the body" are
         // the first two questions a reader of that log has to be able to tell apart.
@@ -561,6 +582,7 @@ module Snapshot =
         match ts with
         | Undeclared -> "undeclared"
         | DeclaredNone -> "none"
+        | DeclaredChore -> "any"
         | Declared _ -> "declared"
         | Unreadable _ -> "unreadable"
 

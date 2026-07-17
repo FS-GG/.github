@@ -207,6 +207,38 @@ module SnapshotTests =
         Assert.Equal(DeclaredNone, (List.head r.Candidates).Item.TouchSet)
 
     [<Fact>]
+    let ``#1103 leg 8 'Paths: any' parses to the CHORE sentinel, distinct from none`` () =
+        let r =
+            snapshot """{ "owner":"o","repo":"r","number":1,"status":"Ready","state":"OPEN","body":"Paths: any" }"""
+            |> Snapshot.parse
+            |> ok
+
+        Assert.Equal(DeclaredChore, (List.head r.Candidates).Item.TouchSet)
+
+    [<Fact>]
+    let ``#1103 leg 2 'Blocked on: human/decision' parses onto Item.HumanBlock, keeping the touch-set`` () =
+        // #918's shape end-to-end: the sentinel and a REAL touch-set coexist on one item.
+        let r =
+            snapshot
+                """{ "owner":"o","repo":"r","number":1,"status":"Ready","state":"OPEN",
+                     "body":"Blocked on: human/decision\n\nPaths: src/A" }"""
+            |> Snapshot.parse
+            |> ok
+
+        let item = (List.head r.Candidates).Item
+        Assert.Equal(Some AwaitingHumanDecision, item.HumanBlock)
+        Assert.Equal(Declared [ Matchable "src/A" ], item.TouchSet)
+
+    [<Fact>]
+    let ``an item with no sentinel has HumanBlock None`` () =
+        let r =
+            snapshot """{ "owner":"o","repo":"r","number":1,"status":"Ready","state":"OPEN","body":"Paths: src/A" }"""
+            |> Snapshot.parse
+            |> ok
+
+        Assert.Equal(None, (List.head r.Candidates).Item.HumanBlock)
+
+    [<Fact>]
     let ``bashPaths is carried through untouched — the engine decides from its OWN parse`` () =
         // The field exists so a divergence can show both parses side by side. It must never feed the
         // decision, or the shadow would be comparing bash against itself.

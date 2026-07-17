@@ -68,6 +68,7 @@ registry like any other, and this org gates its registries.
 | [0042](0042-the-chore-lock-ref-is-embedded-beside-the-roster.md) | The **chore-lock ref is embedded beside the roster**, keyed on owner and repo — `registry/repos.yml` is unreadable exactly where the queue has to work, because the shim ships to receivers without it | Accepted |
 | [0043](0043-a-superseded-run-is-the-one-its-group-replaced.md) | A **superseded run is the one its group replaced** — the conclusion leaves the test: a re-run creates no run, so the `cancelled`-only clause never guarded the re-run-until-green it was written for, and what it kept was a metadata gate's stale failure | Accepted |
 | [0044](0044-generated-artifacts-are-derived-from-their-generators.md) | **Generated artifacts are derived from their generators, not declared** — every generator answers `--list`, and `verify-paths` subtracts the whole-file ones, so the advisory stops firing on the behaviour #309 mandates; there is still only ONE declaration surface | Accepted |
+| [0045](0045-machine-readable-sentinels-for-human-block-and-chore.md) | **A body-line sentinel says what an empty field cannot** — `Blocked on: human/decision\|action` refuses scheduling regardless of `Paths:` (so a decision item keeps its fix-scope and is still un-takeable, #918/#1081), and `Paths: any` splits a schedulable file-less chore from an unschedulable `Paths: none` epic; `lint` reds an unmarked `Blocked` park | Accepted |
 
 ## Supersession map
 

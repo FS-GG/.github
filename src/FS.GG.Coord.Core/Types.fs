@@ -72,9 +72,27 @@ module Types =
     type TouchSet =
         | Undeclared
         | DeclaredNone
+        /// `Paths: any` — a file-less CHORE. It reserves nothing and conflicts with nothing, so it is
+        /// SCHEDULABLE and runs alongside any concurrent item — the opposite of `DeclaredNone`, which is
+        /// deliberately unschedulable. Both "reserve nothing"; they differ only in schedulability, which
+        /// is the collapse #1103 leg 8 exists to break. This is a DELIBERATE empty reservation (a sentinel
+        /// the parser verified), NOT #273's fail-open — a path-shaped token that reserves nothing by
+        /// mistake. See Types.fsi and ADR-0045.
+        | DeclaredChore
         | Declared of PathToken list
         /// The body was never read, so the touch-set is UNKNOWN — not absent. See Types.fsi.
         | Unreadable of reason: string
+
+    /// A `Blocked on: human/...` body-line sentinel: the item cannot be scheduled because a HUMAN must
+    /// act first, whatever its `Paths:` line says. The action-vs-decision distinction is load-bearing —
+    /// `Blocked by` is ref-typed and structurally cannot say "blocked on a person" (#1103 leg 2), so this
+    /// carries the WHY a bare empty `Blocked by` flattened. Decided by @EHotwagner on #1103; see ADR-0045.
+    type HumanBlock =
+        /// `Blocked on: human/decision` — unstartable until a human CHOOSES (a decision item, e.g. #918/#498).
+        | AwaitingHumanDecision
+        /// `Blocked on: human/action` — blocked on a human ACTION such as a scope/credential grant; it
+        /// becomes startable the moment the action lands (e.g. #574), but not before.
+        | AwaitingHumanAction
 
     type Claim =
         { Worker: WorkerId
@@ -105,7 +123,10 @@ module Types =
           /// The open `item/<n>-*` PR when this item carries NO live-held claim marker — a duplicate
           /// implementation already in flight (#651). `None` when there is no such PR, or when a claim
           /// marker already governs liveness (there the open PR is the claim's `LeaseExpiredPrOpen`).
-          ItemPr: int option }
+          ItemPr: int option
+          /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
+          /// declares no such line. When present it refuses scheduling regardless of `TouchSet`.
+          HumanBlock: HumanBlock option }
 
     type Verdict<'a> =
         | Green of 'a

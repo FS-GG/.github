@@ -9,14 +9,24 @@ module TouchSet =
     /// A `Paths:` line: up to three leading spaces, either case.
     let private declRe = Regex(@"^ {0,3}[Pp]aths:\s*(?<rest>.*)$", RegexOptions.Compiled)
 
-    /// The sentinel, after normalisation.
+    /// The two reserved touch-set words, NORMALISED — or `None` for a real path token. There are two
+    /// (#1103 leg 8): `none` reserves nothing and is UNSCHEDULABLE (an epic/decision), `any` reserves
+    /// nothing and IS schedulable (a file-less chore). They are one word apart and one bit apart, and a
+    /// caller that treats them as one — `Writes.validate` canonicalising both to `none` — turns a chore
+    /// into an epic. So the discriminator is typed, not a bool.
     ///
-    /// PUBLIC because the sentinel is part of the GRAMMAR, and the grammar lives here — in one place.
-    /// `Writes.validate` has to tell "this declares nothing, deliberately" from "this reserves nothing,
-    /// by mistake", and the two are one character apart. Re-deciding that there would be a second place
-    /// for the rule to rot, which is #485's shape (one question, five implementations, agreeing in none)
+    /// PUBLIC because the sentinels are part of the GRAMMAR, and the grammar lives here — in one place.
+    /// Re-deciding it elsewhere is #485's shape (one question, five implementations, agreeing in none)
     /// reproduced inside its own remedy — the exact thing that file's own comment forbids.
-    let isSentinel (token: string) = token.Trim().ToLowerInvariant() = "none"
+    let sentinelToken (token: string) : string option =
+        match token.Trim().ToLowerInvariant() with
+        | "none"
+        | "any" as s -> Some s
+        | _ -> None
+
+    /// A reserved word (either sentinel), so it is NEVER a real path. `Writes.validate` and `classify`
+    /// both need "this is not a file to reserve"; `sentinelToken` says WHICH sentinel when that matters.
+    let isSentinel (token: string) = (sentinelToken token).IsSome
 
     /// Lines OUTSIDE any fenced code block. A `Paths:` line inside a fence is a QUOTATION of the
     /// grammar, not a use of it (#277) — and the protocol docs quote it constantly.
@@ -114,7 +124,15 @@ module TouchSet =
             // not catch it: `none` IS matchable; it just matches no file that exists, which is the one
             // thing that gate does not test. Deciding over tokens makes the union in the `.fsi`'s
             // "multiple bare declarations UNIONED" promise mean the same thing for one line or for ten.
-            | ts when ts |> List.forall isSentinel -> DeclaredNone
+            //
+            // TWO sentinels now (#1103 leg 8), and they must be UNANIMOUS: every token `none` → epic,
+            // every token `any` → chore. A MIX (`none any`, or `none src/A`) is a contradiction — the
+            // item cannot both reserve nothing and reserve something, nor be both unschedulable and
+            // schedulable — so it falls through to `Declared`, where `classify` marks the reserved word
+            // `Unmatchable` and the item reports the contradiction as an unusable token, exactly as #863
+            // catches `none src/A` today.
+            | ts when ts |> List.forall (fun t -> sentinelToken t = Some "none") -> DeclaredNone
+            | ts when ts |> List.forall (fun t -> sentinelToken t = Some "any") -> DeclaredChore
 
             | ts -> Declared(ts |> List.map classify)
 
@@ -122,6 +140,9 @@ module TouchSet =
         match touchSet with
         | Undeclared
         | DeclaredNone
+        // A chore reserves nothing DELIBERATELY, so it names no unmatchable token — the same clean bill
+        // `DeclaredNone` gets, and for the same reason: there are no tokens to be unusable.
+        | DeclaredChore
         // We never read the body, so we know of NO unmatchable tokens — which is emphatically not the
         // claim that it has none. The scheduler rejects `Unreadable` before it ever asks this (it is
         // `Undetermined`), and the linter must not report a clean bill of health on an unread item.
@@ -190,6 +211,9 @@ module TouchSet =
             function
             | Undeclared
             | DeclaredNone
+            // A chore reserves nothing, so it conflicts with nothing — it is compatible with ANY
+            // concurrent touch-set, which is the whole meaning of `Paths: any` (#1103 leg 8).
+            | DeclaredChore
             | Unreadable _ -> []
             | Declared ts ->
                 ts

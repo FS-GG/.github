@@ -575,6 +575,28 @@ let ``#863 a validated sentinel round-trips through rewrite to DeclaredNone`` ()
     Assert.Equal(DeclaredNone, FS.GG.Coord.TouchSet.parse body)
 
 [<Fact>]
+let ``#1103 the 'any' sentinel validates and canonicalises, distinct from 'none'`` () =
+    match validate [ "any"; "ANY" ] with
+    | Ok v -> Assert.Equal<string list>([ "any" ], v.Tokens)
+    | Error e -> failwith $"`widen --paths any` declares a schedulable chore — got %s{e}"
+
+[<Fact>]
+let ``#1103 a validated 'any' round-trips through rewrite to DeclaredChore, NOT DeclaredNone`` () =
+    // The whole of leg 8: what `widen --paths any` WRITES, `parse` must READ as the chore, never the
+    // epic sentinel. Canonicalising 'any' to 'none' (as the pre-#1103 code did for every sentinel)
+    // would silently turn a schedulable chore into an unschedulable epic.
+    let v = validate [ "any" ] |> Result.defaultWith failwith
+    let body = (rewrite "A file-less chore." v).Body
+    Assert.Contains("Paths: any", body)
+    Assert.Equal(DeclaredChore, FS.GG.Coord.TouchSet.parse body)
+
+[<Fact>]
+let ``#1103 mixing 'none' and 'any' is refused — they mean opposite things`` () =
+    match validate [ "none"; "any" ] with
+    | Error message -> Assert.Contains("opposite", message)
+    | Ok _ -> failwith "'none' (unschedulable) and 'any' (schedulable) cannot both hold; must be refused"
+
+[<Fact>]
 let ``#863 'none' beside real paths is refused as a CONTRADICTION, naming the choice`` () =
     match validate [ "none"; "src/A/**" ] with
     | Error message ->

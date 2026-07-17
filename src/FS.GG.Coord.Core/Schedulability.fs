@@ -17,6 +17,8 @@ module Schedulability =
         | DeliberatelyNoTouchSet
         | UnusableTouchSet of tokens: string list
         | BlockedBy of Blocker list
+        /// A `Blocked on: human/...` sentinel refuses the item regardless of its touch-set (#1103 leg 2).
+        | AwaitingHuman of HumanBlock
         | HeldBy of WorkerId
         | HeldByLiveWork of WorkerId * pr: int
         | ItemPrOpen of pr: int
@@ -99,6 +101,21 @@ module Schedulability =
         | _ :: _ as holding -> BlockedBy holding
         | [] ->
 
+        // 3b. THE HUMAN-BLOCK SENTINEL, BEFORE THE TOUCH-SET (#1103 leg 2). A `Blocked on: human/...`
+        //     item is unstartable because a HUMAN must act first, and that governs whatever the `Paths:`
+        //     line says — a decision item may legitimately carry a real touch-set recording where its fix
+        //     will land (#918). So this is checked here, not folded into the touch-set: reporting
+        //     "unmatchable token" or "nobody has claimed this" about an item awaiting a human sends the
+        //     reader to fix the wrong thing.
+        //
+        //     AFTER the concrete blockers (step 3): a `Blocked by #999` is a more actionable sentence
+        //     than "a human must decide", and an item can carry both. AFTER the column (step 2): the
+        //     sentinel must refuse even a `Backlog` item that `--include-backlog` opts in — which is the
+        //     door `take --include-backlog` walked through on #918/#1081, and the column cannot close.
+        match item.HumanBlock with
+        | Some hb -> AwaitingHuman hb
+        | None ->
+
         // 4. THE TOUCH-SET, BEFORE THE LOCK. "Nobody can claim this item" is a stronger and cheaper
         //    statement than "somebody already has", and a worker told the second when the first is
         //    also true fixes the wrong thing.
@@ -113,6 +130,11 @@ module Schedulability =
             Undetermined $"the issue body could not be read, so its touch-set is UNKNOWN — not absent (%s{reason})"
         | Undeclared -> NoTouchSet
         | DeclaredNone -> DeliberatelyNoTouchSet
+        // `Paths: any` — a file-less chore (#1103 leg 8). It reserves nothing, so it has no unmatchable
+        // token to refuse and (step 6) conflicts with nothing: it flows straight through to the lock and
+        // is Startable. This is the whole point of splitting it from `DeclaredNone`, which stops here.
+        // `TouchSet.usability` answers `Usable` for it (no tokens), so it shares the `Declared` arm below.
+        | DeclaredChore
         | Declared _ ->
 
         // ANY unmatchable token refuses the item — and the RULE is `TouchSet.usability`'s, not this
@@ -262,6 +284,12 @@ module Schedulability =
         | DeliberatelyNoTouchSet -> "deliberately-no-touch-set"
         | UnusableTouchSet _ -> "unusable-touch-set"
         | BlockedBy _ -> "blocked-by"
+        // ONE kind, exactly as `WrongStatus` carries its column and `BlockedBy` its refs: the union has
+        // ONE `AwaitingHuman` case, and `Protocol.verdicts` is pinned 1:1 to the cases by reflection. The
+        // action-vs-decision distinction is the whole point (#1103) and it is NOT lost — it rides on the
+        // wire as DETAIL (`Snapshot.writeDetail` emits `humanBlock: decision|action`), the same edge
+        // `wrong-status` uses for its column.
+        | AwaitingHuman _ -> "awaiting-human"
         | HeldBy _ -> "held-by"
         | HeldByLiveWork _ -> "held-by-live-work"
         | ItemPrOpen _ -> "item-pr-open"
@@ -296,6 +324,10 @@ module Schedulability =
                 |> String.concat ", "
 
             $"%s{id} — blocked by %s{names}"
+        | AwaitingHuman AwaitingHumanDecision ->
+            $"%s{id} — 'Blocked on: human/decision': a human must DECIDE before this can start; not schedulable by design, whatever its `Paths:` line records (#1103)"
+        | AwaitingHuman AwaitingHumanAction ->
+            $"%s{id} — 'Blocked on: human/action': blocked on a human ACTION (e.g. a scope grant); startable the moment it lands, not before (#1103)"
         | HeldBy(WorkerId w) -> $"%s{id} — already claimed by worker %s{w} (%s{leaseWindow leaseMinutes age})"
         | HeldByLiveWork(WorkerId w, pr) ->
             $"%s{id} — lease EXPIRED, but PR #%d{pr} is open: worker %s{w} is demonstrably still working it (#581). Not offering it; its touch-set stays reserved."

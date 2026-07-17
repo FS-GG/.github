@@ -334,3 +334,38 @@ module TouchSetTests =
         let b = TouchSet.parse "y\n\nPaths: github/workflows/"
 
         Assert.Empty(TouchSet.conflicts a b)
+
+    // ---- #1103 leg 8: `Paths: any` — the schedulable file-less chore -------------------------------
+    // The counterpart to `Paths: none`. Both reserve nothing; only `any` is schedulable. They must
+    // parse to DIFFERENT touch-sets, or the collapse leg 8 exists to break survives in the parser.
+
+    [<Fact>]
+    let ``Paths: any parses to the DeclaredChore sentinel, distinct from none`` () =
+        Assert.Equal(DeclaredChore, TouchSet.parse "x\n\nPaths: any")
+        Assert.Equal(DeclaredNone, TouchSet.parse "x\n\nPaths: none")
+        Assert.NotEqual<TouchSet>(DeclaredNone, DeclaredChore)
+
+    [<Fact>]
+    let ``Paths: any is case- and space-insensitive, like the none sentinel`` () =
+        Assert.Equal(DeclaredChore, TouchSet.parse "x\n\nPaths:   ANY  ")
+
+    [<Fact>]
+    let ``a chore reserves nothing, so it CONFLICTS with nothing`` () =
+        let chore = TouchSet.parse "x\n\nPaths: any"
+        let real = TouchSet.parse "y\n\nPaths: src/Anything/**"
+        Assert.Empty(TouchSet.conflicts chore real)
+
+    [<Fact>]
+    let ``mixing the two sentinels is a contradiction — it does NOT parse to either`` () =
+        // `none any` cannot be both unschedulable and a schedulable chore; it falls through to
+        // Declared, where both reserved words are Unmatchable — caught as an unusable declaration.
+        match TouchSet.parse "x\n\nPaths: none any" with
+        | Declared tokens ->
+            Assert.All(tokens, (fun t -> Assert.True((match t with Unmatchable _ -> true | _ -> false))))
+        | other -> failwith $"expected a Declared-with-unmatchable contradiction, got %A{other}"
+
+    [<Fact>]
+    let ``any alongside a real path is a contradiction, like none is (#863)`` () =
+        match TouchSet.parse "x\n\nPaths: any src/A" with
+        | Declared tokens -> Assert.Contains(Unmatchable "any", tokens)
+        | other -> failwith $"expected a Declared contradiction, got %A{other}"

@@ -641,6 +641,8 @@ module Client =
                 | Unmatchable s -> s)
         | Undeclared
         | DeclaredNone
+        // A chore reserves nothing, so `who` reports no reserved paths for it.
+        | DeclaredChore
         | Unreadable _ -> []
 
     /// LOCAL GIT WORKTREES, as (item-number, path) — the join `who --local` needs (#959). Every worker runs
@@ -1615,9 +1617,11 @@ module Client =
                             |> List.choose (function
                                 | Matchable t -> Some t
                                 | Unmatchable _ -> None)
-                        // Undeclared / `Paths: none` — no declaration to read an obligation off.
+                        // Undeclared / `Paths: none` / `Paths: any` — no path declaration to read an
+                        // obligation off (a chore reserves nothing, so it names no kit source either).
                         | Undeclared
-                        | DeclaredNone -> []
+                        | DeclaredNone
+                        | DeclaredChore -> []
                         // WE DID NOT READ THE BODY — unknown, not absent, and the two are not one fact
                         // (#266). Here that distinction costs nothing to honour and is still worth honouring:
                         // this is ADVICE, and advice can only ever ADD. An unread body yields no obligation to
@@ -3395,7 +3399,10 @@ module Client =
                 | Ok body ->
                     match TouchSet.parse body with
                     | Undeclared
-                    | DeclaredNone ->
+                    | DeclaredNone
+                    // `Paths: any` reserves nothing and permits any file, so there is no boundary a PR
+                    // could stray outside of — nothing to verify against (#1103 leg 8).
+                    | DeclaredChore ->
                         printfn "FSGG-PATHS SKIP — %s declares no 'Paths:' touch-set; nothing to verify against." issue.Short
                         ExitGreen
                     | Unreadable reason ->
@@ -4150,6 +4157,29 @@ module Client =
                     else
                         []
 
+                // BLOCKED-NO-REASON (#1103 leg 2). A `Blocked` item with an EMPTY `Blocked by` records
+                // nothing about WHAT holds it — and `Blocked by` is ref-typed, so it structurally cannot
+                // say "blocked on a human". That empty field reads identically whether the park was
+                // deliberate (blocked on a person's decision or action) or a filing mistake, which is
+                // exactly the collapse #1103 breaks. The sentinel is the deliberate out: `Blocked on:
+                // human/decision` or `human/action`. So this reds ONLY when NEITHER is present — an author
+                // who had a machine-readable way to say what they meant and used neither. An item with a
+                // real `Blocked by` ref, or one carrying the sentinel, is silent here.
+                let humanBlockFindings (r: Scan.Row) (body: string) : LintFinding list =
+                    if
+                        r.State = IssueState.Open
+                        && r.Status = BoardStatus.Blocked
+                        && System.String.IsNullOrWhiteSpace r.BlockedByRaw
+                        && (HumanBlock.parse body).IsNone
+                    then
+                        [ mk
+                              "BLOCKED-NO-REASON"
+                              "error"
+                              r
+                              "Status is Blocked with an EMPTY `Blocked by` and no `Blocked on: human/...` sentinel — nothing records what holds it, so a deliberate human park reads identically to a filing error (#1103). Name the blocker (`set-field <issue> 'Blocked by' <ref>`), or declare the human-block sentinel in the body: `Blocked on: human/decision` (unstartable until a human chooses) or `Blocked on: human/action` (startable once a human action lands)." ]
+                    else
+                        []
+
                 // The epic ROLL-UP-graph rules. Only epics pay the sub-issue read; the VERDICT over what
                 // it reads is the pure `epicVerdict` (#1050, on #945's `badTouchSetDetail` precedent).
                 let epicFindings (r: Scan.Row) (body: string) : Errors.IoResult<LintFinding list> =
@@ -4191,14 +4221,22 @@ module Client =
                         let isTouchSetCandidate =
                             r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
 
+                        // A Blocked item with an empty `Blocked by` needs its body read too — the sentinel
+                        // that would make the park deliberate lives there (#1103 leg 2).
+                        let isHumanBlockCandidate =
+                            r.State = IssueState.Open
+                            && r.Status = BoardStatus.Blocked
+                            && System.String.IsNullOrWhiteSpace r.BlockedByRaw
+
                         let doneOpenNote =
                             if r.Status = BoardStatus.Done && r.State = IssueState.Open then
                                 [ mk "DONE-STATUS-OPEN-ISSUE" "note" r "board Status is Done but the issue is still open" ]
                             else
                                 []
 
-                        // One body read serves BOTH the touch-set rules and the epic body-child-refs.
-                        let bodyNeeded = isTouchSetCandidate || isEpic
+                        // One body read serves the touch-set rules, the human-block rule, and the epic
+                        // body-child-refs.
+                        let bodyNeeded = isTouchSetCandidate || isEpic || isHumanBlockCandidate
 
                         let bodyResult =
                             if bodyNeeded then
@@ -4211,12 +4249,14 @@ module Client =
                         | Ok body ->
                             let tsFindings = touchSetFindings r body
 
+                            let hbFindings = humanBlockFindings r body
+
                             let epicResult =
                                 if isEpic then epicFindings r body else Ok []
 
                             match epicResult with
                             | Error e -> Error e
-                            | Ok epic -> classify (acc @ tsFindings @ doneOpenNote @ epic) rest
+                            | Ok epic -> classify (acc @ tsFindings @ hbFindings @ doneOpenNote @ epic) rest
 
                 // The BLOCKER-CYCLE rule (#1090) — the one lint rule that is NOT per-item, and could not be.
                 // A `Blocked by` ring passes every per-item blocker check (#343/#476/#602/#620), because

@@ -21,6 +21,7 @@
     <Compile Include="TypesTests.fs" />
     <Compile Include="MarkdownTests.fs" />
     <Compile Include="TouchSetTests.fs" />
+    <Compile Include="HumanBlockTests.fs" />
     <Compile Include="EpicBodyTests.fs" />
     <Compile Include="CoversTests.fs" />
     <Compile Include="BlockerTests.fs" />

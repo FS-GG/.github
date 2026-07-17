@@ -43,6 +43,9 @@ module Lanes =
             )
         | Undeclared
         | DeclaredNone
+        // A chore reserves no files, so it names no matchable token — it lanes as a degenerate singleton
+        // that conflicts with nothing (#1103 leg 8).
+        | DeclaredChore
         | Unreadable _ -> []
 
     /// A live claim on the item, if the caller observed one. A lane holding one is OCCUPIED.
@@ -76,6 +79,10 @@ module Lanes =
                     | Unreadable reason -> lanable, Unread(item, reason) :: unlanable
                     | Undeclared -> lanable, NoTouchSet item :: unlanable
                     | DeclaredNone -> lanable, DeliberatelyNone item :: unlanable
+                    // A chore IS startable (#1103 leg 8) — it lanes, as a degenerate singleton that
+                    // reserves nothing and so conflicts with nobody. It is real absorbable work, unlike
+                    // the three unlanable shapes above, so it belongs on the lanable side.
+                    | DeclaredChore -> item :: lanable, unlanable
                     | Declared _ ->
                         // Collapsed, as in `Schedulability` and for its reason (#945): a lane is about
                         // what a declaration RESERVES, and both shapes reserve less than they name.
