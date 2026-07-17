@@ -986,3 +986,142 @@ let ``the false arm reconciles on ONE read budget — the guard costs no extra P
 
     // A definite `false` is not re-read (only `Computing` is), so the budget spends exactly one.
     Assert.Equal(1, server.PrReads)
+
+/// A PR that is `mergeable: false` at `headSha`, whose BRANCH tip is `tipSha` — the two facts #989 turns into
+/// a verdict. Counts the ref reads, because WHEN the extra REST read is spent is half of what #989 decides:
+/// it is the whole cost of the fix, and it lands on the budget the claim lock lives on (ADR-0034 §3).
+type private ConflictedPrWithBranch(headSha: string, tipSha: string) =
+    let mutable refReads = 0
+
+    member _.RefReads = refReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.Contains "git/ref/heads/" then
+                    refReads <- refReads + 1
+                    $"""{{"ref":"refs/heads/item/42-x","object":{{"sha":"%s{tipSha}","type":"commit"}}}}"""
+                elif req.Path.EndsWith "pulls/801" then
+                    $"""{{"number":801,"state":"open","mergeable":false,"head":{{"ref":"item/42-x","sha":"%s{headSha}"}}}}"""
+                else
+                    """{"total_count":0,"workflow_runs":[]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+[<Fact>]
+let ``a conflicted whose PR head LAGS the branch tip is pending — no --sha, and none needed`` () =
+    // #989. #955 made the head-SHA guard reachable for a `false`, but only a caller passing `--sha` can reach
+    // it — and §5 prescribes `landable <pr> --wait`, which passes none. So the repair could not fire on the
+    // one path every worker runs.
+    //
+    // Asking the RECIPE to pass `--sha "$(git rev-parse HEAD)"` was #955's own recommendation and has a race
+    // it did not see: a bot pushes to your item branch (lockfile-sync is a `workflow_call` reusable ending in
+    // a bare push; feed-autofix triggers `on: pull_request` and force-pushes), and your worktree HEAD is then
+    // not the PR's head — turning a TRANSIENT false `conflicted` into a PERMANENT false `pending`.
+    //
+    // So ask git. The push updated the ref synchronously; the PR object is re-pointed by a background job.
+    // A tip that disagrees with `head.sha` is GitHub disagreeing with ITSELF — "has not caught up" measured,
+    // not asserted, and immune to what any bot does to the branch.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ConflictedPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW")
+
+    let state, n, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrPending, state)
+    Assert.Equal(0, n)
+
+    // The half that fixes the bug: a verdict that settled would return exit 3 just as promptly.
+    Assert.False(
+        Landable.settled state n 0,
+        "a conflicted whose PR head lags the branch tip must NEVER settle — --wait must poll it"
+    )
+
+[<Fact>]
+let ``a conflicted whose PR head IS the branch tip stays terminal — a real conflict, still exit 3`` () =
+    // THE COUNTERWEIGHT. Demoting every `false` to `pending` would satisfy the test above and destroy the
+    // verdict: a genuinely conflicted PR never gets CI at all (GitHub cannot build `refs/pull/N/merge`), so
+    // `--wait` would poll to its cap and report `pending` on a PR that needs a rebase — replacing an
+    // immediately-actionable verdict with a timeout. An AGREEING tip means the PR names the branch's real
+    // head, so its `false` is about the code that would actually be merged.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ConflictedPrWithBranch(headSha = "sha-SAME", tipSha = "sha-SAME")
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrConflicted, state)
+    Assert.True(Landable.settled state 0 0, "a conflict about the branch's real head is real — it must settle")
+
+[<Fact>]
+let ``a branch tip we cannot READ leaves the conflict standing — fail-closed, not fail-pending`` () =
+    // #266's rule, on the new read. An unreadable ref proves NOTHING, and "I could not look" must not become
+    // "GitHub has not caught up" any more than it may become a green. The conflict stands, `--wait` stops,
+    // and the worker is told to rebase — which is what they would have been told before #989 existed.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            if req.Path.Contains "git/ref/heads/" then
+                // The ref read fails. It must not manufacture a verdict in either direction.
+                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None }
+            elif req.Path.EndsWith "pulls/801" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"number":801,"state":"open","mergeable":false,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                      ETag = None
+                      NextLink = None }
+            else
+                Ok { Status = 200; Body = """{"total_count":0,"workflow_runs":[]}"""; ETag = None; NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrConflicted, state)
+
+[<Fact>]
+let ``--sha ANSWERS the question, so the branch tip is never read — the caller does not pay twice`` () =
+    // The cost half of #989, and the reason the ref read is bound past the `--sha` early return rather than
+    // inside the match arm. A caller that passed `--sha` has already been answered — here it AGREES with the
+    // PR head, so the conflict is about the commit they named and is terminal. Reading the branch tip to
+    // second-guess an assertion the caller already made would spend a REST request, on the budget the claim
+    // lock lives on, to re-answer a settled question.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = ConflictedPrWithBranch(headSha = "sha-SAME", tipSha = "sha-MOVED-ON")
+
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-SAME")
+
+    Assert.Equal(PrConflicted, state)
+    Assert.Equal(0, server.RefReads)
+
+[<Fact>]
+let ``the ref read is spent ONLY on a conflicted with no --sha — never on the green hot path`` () =
+    // The other half of the cost. `landable` runs on EVERY merge, and the green path is the common one — so
+    // an extra REST read there would be paid by every worker on every item, forever, on the budget that
+    // carries the claim lock. A `true` is answered from the PR object alone and must never reach the ref.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let mutable refReads = 0
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.Contains "git/ref/heads/" then
+                    refReads <- refReads + 1
+                    """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-x","type":"commit"}}"""
+                elif req.Path.EndsWith "pulls/801" then
+                    """{"number":801,"state":"open","mergeable":true,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                else
+                    """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+    Assert.Equal(0, refReads)
