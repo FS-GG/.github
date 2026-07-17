@@ -92,8 +92,14 @@ module Schedulability =
         // "EVERY token is unmatchable" — a rule this code has never implemented. Both deaths name their
         // offending tokens and both are fixed by widening those same tokens, so there is ONE verdict, and
         // now there is one branch.
+        // The every/some distinction is COLLAPSED here, deliberately and in the open (#945): both mean
+        // the same thing to a scheduler — the declaration reserves less than it names, so handing the
+        // item out is entering a collision voluntarily — and both are fixed by widening the same
+        // tokens. Collapsing is not re-deriving: the rule stayed in `TouchSet.usability`, and a new
+        // case would break this match rather than slip past a threshold spelled out again here.
         match TouchSet.usability item.TouchSet with
-        | TouchSet.Unusable bad -> UnusableTouchSet bad
+        | TouchSet.AllUnmatchable bad
+        | TouchSet.SomeUnmatchable bad -> UnusableTouchSet bad
         | TouchSet.Usable ->
 
         // 5. THE LOCK — and what "held" actually means.

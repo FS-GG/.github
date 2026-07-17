@@ -67,22 +67,37 @@ module TouchSet =
     val unmatchable: touchSet: TouchSet -> string list
 
     /// Is a DECLARED touch-set usable at all?
+    ///
+    /// THE `every`/`some` DISTINCTION IS PART OF THE RULE, NOT OF ITS RENDERING (#945). This type
+    /// carried one `Unusable` case until `lint` — the third copy — was migrated onto it. `lint` needs
+    /// the distinction (it renders a different sentence for each, and #646 exists because the PARTIAL
+    /// case is the more urgent one), so a two-case type forced `lint` to keep its own `List.forall`
+    /// beside the ask. That is the shape the whole exercise is about: a caller that has to re-derive
+    /// half the answer has not stopped deciding, and its half is free to drift.
+    ///
+    /// So the type carries the distinction and callers COLLAPSE it where their verdict honestly does
+    /// not differ. Collapsing at the call site is not the same as re-deriving at the call site: an
+    /// added case breaks the match, where a missing threshold just goes quietly wrong.
     type Usability =
         /// Every token can match a file: the declaration reserves exactly what it names.
         | Usable
-        /// At least one token can match no file. `tokens` is those tokens, and it is never empty.
-        | Unusable of tokens: string list
+        /// NO token can match a file. `tokens` is those tokens, and it is never empty. The item is as
+        /// dead as one with no touch-set at all — and it is the LESSER of the two failures, because
+        /// nothing about it looks declared.
+        | AllUnmatchable of tokens: string list
+        /// SOME token can match a file and at least one cannot. `tokens` is only the unmatchable ones,
+        /// and it is never empty. This is the WORSE case (#646): the item looks declared and its
+        /// matchable tokens reserve work, while each unmatchable one silently reserves NOTHING — so the
+        /// files it names are invisible to every other worker's overlap check.
+        | SomeUnmatchable of tokens: string list
 
-    /// THE USABILITY RULE. It lives here, and `Schedulability` and `Lanes` ask it rather than deciding
-    /// it (#864).
+    /// THE USABILITY RULE. It lives here, and `Schedulability`, `Lanes` and `lint` ask it rather than
+    /// deciding it (#864, #945).
     ///
-    /// "ONCE" IS A GOAL HERE, NOT YET A FACT — and this module's own header is the reason to say so
-    /// rather than claim otherwise. `lint` (`Client.fs`, BAD-TOUCH-SET) still decides the same question
-    /// with its own `List.forall`. It happens to AGREE — #646 taught it that a partial declaration is
-    /// bad — but agreeing is not the same as asking, and a copy that agrees today is exactly what
-    /// `Schedulability` and `Lanes` were before they drifted. Migrating it needs the `every`/`some`
-    /// distinction this type deliberately does not carry (lint renders a different sentence for each),
-    /// so it is its own change.
+    /// "ONCE" IS NOW A FACT, and it was a goal for exactly as long as `lint` kept its own copy. That
+    /// copy AGREED — #646 had taught it the partial case — and agreeing is not asking: it is what
+    /// `Schedulability` and `Lanes` were doing right up until they drifted into opposite verdicts on
+    /// the same item, each pinned by a green test asserting the negation of the other's (#864).
     ///
     /// ANY unmatchable token disqualifies the whole touch-set. Not "every token" — ANY. A partly-dead
     /// declaration is the WORSE case, not the lesser one: the item LOOKS declared, and the dead tokens

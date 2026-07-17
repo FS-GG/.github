@@ -251,6 +251,24 @@ module LanesTests =
             let laned = p.Lanes |> List.collect (fun l -> l.Items) |> List.isEmpty |> not
             let startable = Schedulability.schedulable false [] it = Schedulability.Startable
 
+            // THE RULE ITSELF is the third party to the agreement (#945). `lint` was a THIRD copy of
+            // this question for as long as `Usability` lacked the every/some distinction it renders —
+            // it agreed, by hand, which is what these two did until they didn't. Pinning both consumers
+            // to `usability` here means a future caller cannot quietly pick a different threshold: the
+            // only thing left to get wrong is which CASE, and that is a match the compiler checks.
+            //
+            // Note what this asserts and what it does not: `Usable` is not "startable". The three
+            // no-token shapes below are `Usable` and correctly unlanable, for reasons decided BEFORE
+            // usability is asked (#496). So the agreement is one-directional, and stating it that way
+            // is the honest form — an `=` here would be a green test asserting something false.
+            let usable = TouchSet.usability ts = TouchSet.Usable
+
+            if not usable then
+                Assert.True(
+                    (not laned && not startable),
+                    $"%s{name}: TouchSet.usability says UNUSABLE, but Lanes said lanable=%b{laned} and Schedulability said startable=%b{startable} — a caller is deciding usability for itself again (#864, #945)"
+                )
+
             Assert.True(
                 (laned = expectedLanable),
                 $"%s{name}: expected lanable=%b{expectedLanable}, partition said %b{laned}"

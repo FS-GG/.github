@@ -219,14 +219,42 @@ module TouchSetTests =
         Assert.Equal(TouchSet.Usable, TouchSet.usability (Declared [ Matchable "src/A/" ]))
 
         Assert.Equal(
-            TouchSet.Unusable [ "**/x" ],
+            TouchSet.AllUnmatchable [ "**/x" ],
             TouchSet.usability (Declared [ Unmatchable "**/x" ])
         )
 
         // The case the two modules disagreed about. ONE live token does NOT rescue it.
         Assert.Equal(
-            TouchSet.Unusable [ "**/x" ],
+            TouchSet.SomeUnmatchable [ "**/x" ],
             TouchSet.usability (Declared [ Matchable "src/A/"; Unmatchable "**/x" ])
+        )
+
+    [<Fact>]
+    let ``usability tells EVERY-dead from SOME-dead — the distinction lint renders (#945, #646)`` () =
+        // THE DISTINCTION LIVES IN THE RULE, not in the caller that renders it. It used to be absent
+        // here: `Usability` carried one `Unusable` case, because the two callers #864 migrated reach the
+        // same verdict either way. That forced the THIRD caller — `lint` — to keep deciding the question
+        // itself with its own `List.forall`, since it renders a different sentence for each and #646
+        // exists because the partial case is the more urgent one. A caller that must re-derive half the
+        // answer has not stopped deciding, and its half is exactly what drifts (#864).
+        //
+        // Both cases are UNUSABLE. The split is about which sentence is true, never about the verdict —
+        // which is why `Schedulability` and `Lanes` collapse it at their own call sites.
+        Assert.Equal(
+            TouchSet.AllUnmatchable [ "**/x"; "**/y" ],
+            TouchSet.usability (Declared [ Unmatchable "**/x"; Unmatchable "**/y" ])
+        )
+
+        // ONE live token is the whole difference between the two cases.
+        Assert.Equal(
+            TouchSet.SomeUnmatchable [ "**/y" ],
+            TouchSet.usability (Declared [ Matchable "src/A/"; Unmatchable "**/y" ])
+        )
+
+        // ...and it is the LIVE token that decides it, wherever it sits in the declaration.
+        Assert.Equal(
+            TouchSet.SomeUnmatchable [ "**/y" ],
+            TouchSet.usability (Declared [ Unmatchable "**/y"; Matchable "src/A/" ])
         )
 
     [<Fact>]
@@ -236,7 +264,7 @@ module TouchSetTests =
         let ts =
             Declared [ Matchable "src/A/"; Unmatchable "**/x"; Matchable "src/B/"; Unmatchable "a*b" ]
 
-        Assert.Equal(TouchSet.Unusable [ "**/x"; "a*b" ], TouchSet.usability ts)
+        Assert.Equal(TouchSet.SomeUnmatchable [ "**/x"; "a*b" ], TouchSet.usability ts)
 
     [<Fact>]
     let ``a touch-set with no tokens is `Usable` — which is NOT a claim that it is schedulable`` () =
@@ -255,7 +283,7 @@ module TouchSetTests =
         // `classify` stands next to real paths: "I touch nothing" and "I touch src/A" at once. It is
         // `Unmatchable`, so the rule refuses the whole declaration rather than reserving a `none`
         // directory that exists nowhere and therefore collides with no one.
-        Assert.Equal(TouchSet.Unusable [ "none" ], TouchSet.usability (TouchSet.parse "Paths: none src/A/**"))
+        Assert.Equal(TouchSet.SomeUnmatchable [ "none" ], TouchSet.usability (TouchSet.parse "Paths: none src/A/**"))
 
     // ---- the leading dot: `./` is noise, `.github/` is a DIRECTORY ---------------------------------
 

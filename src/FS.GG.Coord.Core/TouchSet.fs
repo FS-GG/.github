@@ -134,14 +134,22 @@ module TouchSet =
 
     type Usability =
         | Usable
-        | Unusable of tokens: string list
+        | AllUnmatchable of tokens: string list
+        | SomeUnmatchable of tokens: string list
 
-    /// THE USABILITY RULE (#864). See the .fsi for the threshold, and for the one copy that still
-    /// decides it independently.
+    /// THE USABILITY RULE (#864, #945). See the .fsi for the threshold and for why the every/some
+    /// distinction lives HERE rather than in the one caller that renders it.
     let usability (touchSet: TouchSet) : Usability =
-        match unmatchable touchSet with
-        | [] -> Usable
-        | bad -> Unusable bad
+        match unmatchable touchSet, touchSet with
+        | [], _ -> Usable
+        | bad, Declared tokens when
+            tokens
+            |> List.exists (function
+                | Matchable _ -> true
+                | Unmatchable _ -> false)
+            ->
+            SomeUnmatchable bad
+        | bad, _ -> AllUnmatchable bad
 
     /// The token with its trailing `/**` or `/*` taken off — the SUBTREE it actually names.
     ///
