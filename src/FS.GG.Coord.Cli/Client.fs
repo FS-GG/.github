@@ -96,34 +96,83 @@ module Client =
           /// The board's default repo scope, for a bare `repo#n` ref and the candidate filter.
           DefaultRepo: string option }
 
-    /// Parse a `<ref>` — a URL, `owner/repo#n`, or `repo#n` (owner defaulting to the board owner).
-    let private parseRef (ctx: Context) (raw: string) : Result<Ref, string> =
+    /// Parse a `<ref>` — a URL, `owner/repo#n`, `repo#n` (owner defaulting to the board owner), or a bare
+    /// `n`/`#n` (repo defaulting to `defaultRepo`, the checkout you are standing in).
+    ///
+    /// PUBLIC PURELY TO BE TESTED — `parseRef` below is the real entry point, and it takes a `Context`
+    /// carrying a live transport, which no unit test can build. Same idiom as `parseGitHubSlug` (#480).
+    ///
+    /// #548: the bare form is the one EVERY recipe hands a worker — `claim <issue>`, `widen <issue>`,
+    /// `heartbeat <issue>`, `done <issue> --flip` — immediately after `take` has printed the item and the
+    /// worker has been thinking in bare numbers all session. Rejecting it was not a papercut. On
+    /// `heartbeat` the refusal runs unattended, so it ends 120 minutes later as an expired lease and TWO
+    /// WORKERS ON ONE ITEM — the exact failure the protocol exists to prevent. On `done --flip` it fires
+    /// after the merge, stranding green, merged work with the board un-flipped and the touch-set still
+    /// reserved. On `widen` it is worse still: the recipe teaches a worker to read a non-zero exit as a
+    /// COLLISION, so a usage error is indistinguishable from one, and the documented response to a
+    /// collision is to stop editing — or to route around the tool with `gh issue edit`, which is the
+    /// silent last-write-wins body clobber `widen` exists to prevent.
+    ///
+    /// `defaultRepo` is `None` when there is NO FS-GG repo to infer from — outside a checkout, or in one
+    /// whose owner is not the board's — and a bare number then stays a hard error. That is the ask's one
+    /// ambiguity criterion: `506` must never silently address another org's issue #506.
+    ///
+    /// The bare form matches `Blockers.canonToken`, which has always accepted `#n` by adopting the item's
+    /// own owner/repo. `#?` here so `548` and `#548` both parse and the two ref readers in this codebase
+    /// stop disagreeing about what a ref is.
+    let parseRefIn (owner: string) (defaultRepo: string option) (raw: string) : Result<Ref, string> =
+        let forms = "use a URL, owner/repo#n, repo#n, or a bare n inside the repo's checkout"
+
+        // A ref's digits → an issue number, or a REFUSAL naming the range. The regexes below already
+        // guarantee digits, so the only way this fails is a run too long for an Int32 — where bare `int`
+        // THROWS, and an unhandled throw here is the defect boundary: `heartbeat 99999999999999999999`,
+        // an ordinary typo, exited 2, whose contract reads "the ENGINE broke — report it, do not retry."
+        // A number out of range is a bad ARGUMENT and must be told as one. #611's rule again: a
+        // diagnostic that names the wrong culprit sends the reader somewhere there is nothing to find.
+        let numbered ownr repo (digits: string) =
+            match Int32.TryParse(digits, Globalization.NumberStyles.None, Globalization.CultureInfo.InvariantCulture) with
+            | true, n ->
+                Ok
+                    { Owner = ownr
+                      Repo = repo
+                      Number = n }
+            | _ -> Error $"issue number '%s{digits}' is out of range (the largest is %d{Int32.MaxValue})."
+
         let url =
             Text.RegularExpressions.Regex.Match(raw, @"github\.com/([\w.-]+)/([\w.-]+)/issues/(\d+)")
 
         if url.Success then
-            Ok
-                { Owner = url.Groups.[1].Value
-                  Repo = url.Groups.[2].Value
-                  Number = int url.Groups.[3].Value }
+            numbered url.Groups.[1].Value url.Groups.[2].Value url.Groups.[3].Value
         else
             let full = Text.RegularExpressions.Regex.Match(raw, @"^([\w.-]+)/([\w.-]+)#(\d+)$")
 
             if full.Success then
-                Ok
-                    { Owner = full.Groups.[1].Value
-                      Repo = full.Groups.[2].Value
-                      Number = int full.Groups.[3].Value }
+                numbered full.Groups.[1].Value full.Groups.[2].Value full.Groups.[3].Value
             else
                 let short = Text.RegularExpressions.Regex.Match(raw, @"^([\w.-]+)#(\d+)$")
 
                 if short.Success then
-                    Ok
-                        { Owner = ctx.Owner
-                          Repo = short.Groups.[1].Value
-                          Number = int short.Groups.[2].Value }
+                    numbered owner short.Groups.[1].Value short.Groups.[2].Value
                 else
-                    Error $"unrecognised issue ref '%s{raw}' (use a URL, owner/repo#n, or repo#n)."
+                    let bare = Text.RegularExpressions.Regex.Match(raw, @"^#?(\d+)$")
+
+                    if bare.Success then
+                        match defaultRepo with
+                        | Some repo -> numbered owner repo bare.Groups.[1].Value
+                        | None ->
+                            // NAME THE REAL CAUSE. The ref parsed fine — there is simply no repo to resolve
+                            // it against, and that is a different remedy from a misspelling (#611's lesson:
+                            // a diagnostic that points at the wrong thing costs more than no diagnostic).
+                            // The remedy names only the QUALIFIED forms: offering "a bare n" back to
+                            // someone whose bare n just failed is advice they have already taken.
+                            Error
+                                $"cannot resolve the bare issue number '%s{raw}' — no %s{owner} repo to infer it from (no --repo, and this is not a %s{owner} checkout). Name the repo: use a URL, owner/repo#n, or repo#n."
+                    else
+                        Error $"unrecognised issue ref '%s{raw}' (%s{forms})."
+
+    /// Parse a `<ref>` against the ambient context. See `parseRefIn` — this only supplies the defaults.
+    let private parseRef (ctx: Context) (raw: string) : Result<Ref, string> =
+        parseRefIn ctx.Owner ctx.DefaultRepo raw
 
     /// Resolve the worker, printing the shared-session warning to stderr but proceeding — the id is still
     /// this worker's in the common single-worker case; the warning is for the fan-out that needs to know.
@@ -2874,6 +2923,29 @@ module Client =
         | Some r -> Some(resolveRepo r)
         | None -> gitRemoteRepo () |> Option.map resolveRepo
 
+    /// #548: the repo a BARE `<n>` ref resolves against — `Context.DefaultRepo`. An explicit `--repo` wins
+    /// (resolved through the same short-id map, so `--repo rendering` names one queue in both argument
+    /// positions); otherwise the checkout you are standing in, exactly as `take`/`batch` default.
+    ///
+    /// THE OWNER CHECK IS THE WHOLE AMBIGUITY CRITERION, and it is why this is not just `scopedRepo`.
+    /// `resolveRepo` throws the owner away, so in a NON-FS-GG checkout `scopedRepo` happily yields
+    /// `acme/thing` → `thing`, and a bare `506` would then silently address `FS-GG/thing#506` — an issue in
+    /// a repo the caller is not standing in and may not have meant to exist. Comparing the remote's owner
+    /// against the board's and yielding `None` on a mismatch is what keeps a bare number a hard error
+    /// outside the org, which the issue names as the one thing to get right.
+    /// The checkout's `owner/repo` → the repo a bare `<n>` resolves against, or `None` when that slug's
+    /// owner is not the board's. PUBLIC PURELY TO BE TESTED — `defaultRepoScope` below wraps it with the
+    /// process call that reads the remote, which a unit test cannot drive. Same idiom as `parseGitHubSlug`.
+    let defaultRepoForOwner (owner: string) (slug: string) : string option =
+        match slug.Split('/') with
+        | [| o; r |] when String.Equals(o, owner, StringComparison.OrdinalIgnoreCase) -> Some(resolveRepo r)
+        | _ -> None
+
+    let private defaultRepoScope (owner: string) (opts: Options) : string option =
+        match opts.Repo with
+        | Some r -> Some(resolveRepo r)
+        | None -> gitRemoteRepo () |> Option.bind (defaultRepoForOwner owner)
+
     /// Run an IO command. Every one goes through here so the token check, the transport lifetime, and the
     /// defect boundary are in one place.
     // ---- the plumbing commands (#418 board/item cache, case 10) ---------------------------------------
@@ -3392,6 +3464,13 @@ module Client =
             | Error e -> fail e
 
     let run (opts: Options) : int =
+        // #548: the bare-`<n>` default is resolved from what the CALLER actually passed, so it must be read
+        // BEFORE the #480 rewrite below replaces `Repo` with the git-remote scope. That rewrite goes through
+        // `scopedRepo`, which drops the owner — so reading `opts.Repo` after it would launder a non-FS-GG
+        // remote into an "explicit --repo" and defeat the owner check that keeps a bare number a hard error
+        // outside the org.
+        let callerOpts = opts
+
         // #480: a WORKER command scopes to the repo you are standing in when no `--repo` spells it out; a
         // reconciler stays org-wide. `take` ACTS — it claims an item and prints a worktree command against
         // THIS checkout's origin — so an undetectable scope is a hard error, not a quiet fall-back to the
@@ -3420,6 +3499,12 @@ module Client =
         | Error code -> code
         | Ok(ctx, disposable) ->
             use _ = disposable
+
+            // #548: populate the ONE field every `<ref>` parse defaults against, here, so accepting a bare
+            // `<n>` reaches all 15 `parseRef` call sites through a single edit rather than 15.
+            let ctx =
+                { ctx with
+                    DefaultRepo = defaultRepoScope ctx.Owner callerOpts }
 
             match opts.Command with
             | Next -> next ctx opts
