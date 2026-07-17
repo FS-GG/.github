@@ -53,3 +53,9 @@ module EpicBody =
         acceptanceLines body
         |> List.filter (fun line -> not (refRe.IsMatch line))
         |> List.map (fun line -> line.Trim())
+
+    // THE THIRD ANSWER. `childRefs` and `undelegatedAcceptance` partition the task lines between them, so
+    // an empty result from BOTH is ambiguous: it means "every criterion is a child" and "nothing is written
+    // down" alike. #965's guard read the first from the second and closed #561's shape anyway (#1003).
+    let statesAcceptance (body: string) : bool =
+        acceptanceLines body |> List.isEmpty |> not

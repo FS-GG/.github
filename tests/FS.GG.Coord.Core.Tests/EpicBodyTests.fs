@@ -156,3 +156,50 @@ let ``un-delegated lines come back in BODY order, not sorted`` () =
         [ "- [ ] zebra last in the body"; "- [ ] alpha second" ],
         EpicBody.undelegatedAcceptance body
     )
+
+// ---- "no acceptance stated" is not "all delegated" (#1003) -----------------------------------------
+//
+// The hole #965 shipped with. `childRefs` and `undelegatedAcceptance` partition the task lines, so when
+// there are none BOTH return [] — and the rollup read that as "every criterion is a child".
+
+[<Fact>]
+let ``a body of PROSE bullets states NO acceptance - #889's real shape`` () =
+    // Verbatim the shape that closed .github#889 ~10 minutes after #965's guard landed: `-` bullets with
+    // no checkbox. `taskLine` requires `[ ]`, so none of this is acceptance to the parser, and the #965
+    // guard saw nothing to object to.
+    let body =
+        "## The work\n\nFold the remaining restatements into generated regions:\n\n- `pnext-item` — §0's mint ritual, §1's exit-code table\n- `cross-repo-coordination`\n- `check-board`"
+
+    Assert.Equal<string list>([], EpicBody.undelegatedAcceptance body) // ...what #965 asked, and why it passed
+    Assert.Equal<string list>([], refs body)
+    Assert.False(EpicBody.statesAcceptance body) // ...and the fact that tells the two apart
+
+[<Fact>]
+let ``#561's shape - prose steps, four closed children, and NOTHING the guard could read`` () =
+    // The false closure #965 was WRITTEN ABOUT, and the one its own fix could not see. Step 3 was a
+    // sentence. A fix that does not catch this has not addressed #965.
+    let body =
+        "Roll the org SDK pin out to the four unpinned repos, THEN enforce.\n\nStep 1 lands the receivers. Step 2 flips the tripwire.\nStep 3: add `global.json` to `FILES` and delete the tripwire."
+
+    Assert.False(EpicBody.statesAcceptance body)
+
+[<Fact>]
+let ``a body with even ONE task line states acceptance - the guard is not a blanket refusal`` () =
+    // The line between #1003's refusal and #965's: once a task line exists, #965's rules govern it and
+    // this fact is satisfied. A checked-off, ref-less line still counts as STATED — it is un-delegated,
+    // which is #965's finding, not this one's. The two must not both fire on it.
+    Assert.True(EpicBody.statesAcceptance "- [ ] #10 delegated")
+    Assert.True(EpicBody.statesAcceptance "- [x] step 3: the tripwire")
+    Assert.True(EpicBody.statesAcceptance "Prose about it.\n\n- [ ] #10 a child\n\nMore prose.")
+
+[<Fact>]
+let ``a QUOTED task list states no acceptance - it is a mention, and fences are #972's rule`` () =
+    // An issue that quotes an epic's acceptance to talk about it has stated none of its own. If this
+    // returned true, quoting a task list would be enough to let a parent close.
+    Assert.False(EpicBody.statesAcceptance "```\n- [ ] #10 quoted, not mine\n```\nprose")
+    Assert.True(EpicBody.statesAcceptance "```\n- [ ] #10 quoted\n```\n- [ ] #11 mine")
+
+[<Fact>]
+let ``an EMPTY body states no acceptance, and does not throw`` () =
+    Assert.False(EpicBody.statesAcceptance "")
+    Assert.False(EpicBody.statesAcceptance null)
