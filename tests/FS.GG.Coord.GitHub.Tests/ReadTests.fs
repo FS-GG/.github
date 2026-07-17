@@ -884,3 +884,105 @@ let ``a mergeable that lands WITHIN the budget is still scored on the spot, not 
 
     Assert.Equal(PrGreen, state)
     Assert.Equal(2, server.PrReads)
+
+/// A PR whose `mergeable` token AND head SHA are both the caller's to choose — the two facts #955 is about.
+/// `MergeablePrServer` above fixes the SHA at `sha-x`, which is exactly the degree of freedom these tests
+/// need: the bug is a verdict computed for a commit that is NOT the one the caller pushed.
+type private MergeablePrAtSha(token: string, headSha: string) =
+    let mutable prReads = 0
+
+    member _.PrReads = prReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.EndsWith "pulls/801" then
+                    prReads <- prReads + 1
+
+                    $"""{{"number":801,"state":"open","mergeable":%s{token},"head":{{"ref":"item/42-x","sha":"%s{headSha}"}}}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                else
+                    """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+[<Fact>]
+let ``a CONFLICTED about the commit you replaced is pending, not a verdict — the false arm reaches --sha`` () =
+    // #955, and the arm the head-SHA guard could not reach. `mergeable` is a fact about the commit GitHub
+    // LAST EVALUATED; after a force-push `pulls/{n}` names the PREVIOUS commit for a window, and its `false`
+    // is about code the caller has already replaced. The `false` arm was ordered first and bound the SHA to
+    // `_`, so `--sha` — the flag that exists to say "gate on THIS commit" — could not reach it, and the
+    // stale `false` was returned as TERMINAL.
+    //
+    // Live on PR #951: `landable --wait` said `conflicted`/3 while the API said `mergeable=true`, and the PR
+    // merged cleanly minutes later. §5 defines 3 as "a conflicted PR needs a rebase", so the recipe's own
+    // prescription against a stale `false` is to rebase the commit that caused it — a loop with no exit.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeablePrAtSha("false", "sha-OLD")
+
+    let state, n, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-NEW")
+
+    Assert.Equal(PrPending, state)
+    Assert.Equal(0, n)
+
+    // The half that actually fixes the bug: a verdict that settled would return just as promptly as the
+    // exit 3 it replaces. `--wait` must poll until GitHub re-points the PR at the pushed commit.
+    Assert.False(
+        Landable.settled state n 0,
+        "a conflicted computed for a commit the caller did not push must NEVER settle — --wait must poll it"
+    )
+
+    // `--sha` is an assertion the CALLER added, so — unlike the #950 arm — it earns a reason on the unmet
+    // channel. A `pending` that never resolves is otherwise one honest word and no thread to pull.
+    Assert.Contains(unmet, fun (r: string) -> r.Contains "sha-OLD" && r.Contains "sha-NEW")
+
+[<Fact>]
+let ``a CONFLICTED about the commit you ASKED to gate is still terminal — the guard widens reach, not claim`` () =
+    // THE COUNTERWEIGHT, and the one that stops the fix passing for the wrong reason. Demoting every `false`
+    // to `pending` would satisfy the test above and destroy the verdict: a genuinely conflicted PR never gets
+    // CI at all (GitHub cannot build `refs/pull/N/merge`), so `--wait` would poll to its cap and report
+    // `pending` on a PR that needs a rebase — turning the one immediately-actionable verdict into a timeout.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeablePrAtSha("false", "sha-NEW")
+
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-NEW")
+
+    Assert.Equal(PrConflicted, state)
+    Assert.True(Landable.settled state 0 0, "a conflict about the gated commit is real — it must settle")
+
+[<Fact>]
+let ``without --sha a conflicted stays terminal — an ASSERTION nobody made demotes nothing`` () =
+    // The second counterweight, and the contract line. §5 prescribes `landable <pr> --wait`, which passes
+    // `expected = None` and therefore asserts NOTHING about which commit it means. There is nothing to
+    // reconcile against, so today's behaviour stands unchanged: this fix widens the guard's REACH (it now
+    // governs `false` as well as `true`), never its CLAIM.
+    //
+    // That is the deliberate limit of the narrow repair. A caller that has just pushed KNOWS the SHA it
+    // pushed and can say so; one that has not made the assertion is not second-guessed here.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeablePrAtSha("false", "sha-OLD")
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrConflicted, state)
+
+[<Fact>]
+let ``the false arm reconciles on ONE read budget — the guard costs no extra PR read`` () =
+    // The reconciliation is hoisted ahead of the arms, so it is asked once over one bound read. Asking
+    // `readMerge` again per-arm would be invisible to every verdict assertion above and would silently double
+    // the PR reads of every caller — on the budget that carries the claim lock (ADR-0034 §3).
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeablePrAtSha("false", "sha-OLD")
+
+    Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-NEW")
+    |> ignore
+
+    // A definite `false` is not re-read (only `Computing` is), so the budget spends exactly one.
+    Assert.Equal(1, server.PrReads)
