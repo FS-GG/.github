@@ -1198,11 +1198,15 @@ module Reads =
         (expected: string option)
         : PrState * int * string list =
 
-        // THE LAZY RE-READ (#697). A null `mergeable` is UNKNOWN, not "mergeable" and not "conflicted" — and
-        // it is the NORMAL first answer for a PR GitHub has not yet tested. So a present `null` is re-read a
-        // bounded number of times (3, ~1s apart, bash's budget); a `false` seen on the SECOND look is the
-        // conflict the first read could not yet see, and adopting on the first `null` would land it. `Absent`
-        // is not re-read — the field is not there to change — and a read that FAILED is `PrUnknown`.
+        // THE LAZY RE-READ (#697). A null `mergeable` is neither "mergeable" nor "conflicted" — and it is the
+        // NORMAL first answer for a PR GitHub has not yet tested. So a present `null` is re-read a bounded
+        // number of times (3, ~1s apart, bash's budget); a `false` seen on the SECOND look is the conflict the
+        // first read could not yet see, and adopting on the first `null` would land it. `Absent` is not
+        // re-read — the field is not there to change — and a read that FAILED is `PrUnknown`.
+        //
+        // A `null` that OUTLIVES the budget is `PrPending`, not `PrUnknown` (#950): the budget is ~2s and a
+        // background job is not, so exhausting it says "not yet", never "unreadable". The verdict below draws
+        // that line; this re-read only decides how long to hold the question open before deferring it there.
         let rec readMerge (triesLeft: int) : MergeState * string option =
             match prMergeAndSha transport owner repo pr with
             | None -> Absent, None
@@ -1217,7 +1221,20 @@ module Reads =
 
         match readMerge 3 with
         | Mergeable false, _ -> PrConflicted, 0, []
-        | Computing, _
+        // `Computing` and `Absent` MUST NOT share a body (#950). Both mean "no mergeability here", but only
+        // one of them can change: a `null` outliving the bounded re-read above is a background job that has
+        // not landed yet — GUARANTEED transient — while an absent field will never appear. Collapsing them
+        // made the transient one terminal, and `Landable.settled` settles `PrUnknown` at once, so `--wait`
+        // returned exit 4 on a seconds-old PR without waiting at all — the one form §5 tells workers to run.
+        // `PrPending` never settles, so `--wait` polls until GitHub answers; the 3-try budget is unchanged
+        // for single-shot callers, who now get a retryable 7 instead of a fail-closed 4.
+        //
+        // No unmet REASON, deliberately, though there is an obvious one to give. That list is the channel for
+        // assertions the CALLER added (`--require`, `--sha`) — its two producers are exactly those, and the
+        // stderr it feeds says so in as many words ("These are assertions you asked for"). Nobody asked for
+        // this one, so a reason here would print a true sentence under a false one. `PrConflicted`/`PrUnknown`
+        // give none for the same reason.
+        | Computing, _ -> PrPending, 0, []
         | Absent, _ -> PrUnknown, 0, []
         | Mergeable true, None -> PrUnknown, 0, []
         // THE PR STILL NAMES A DIFFERENT COMMIT than the caller pushed, so its checks are the OLD commit's.
