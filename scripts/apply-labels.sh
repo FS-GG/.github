@@ -20,6 +20,7 @@ LABELS=(
   "contract-change|d93f0b|Changes a versioned cross-repo contract (update the registry)"
   "architecture-map:unaffected|c5def5|Opt out of the architecture-map reconcile gate (change does not alter the system shape)"
   "roadmap|5319e7|On the org Coordination roadmap board (Projects v2 #1)"
+  "board:unlisted|ededed|Opt out of check-board's OFF-BOARD-ISSUE net (deliberately not on the Coordination board)"
 )
 
 for repo in "${REPOS[@]}"; do
