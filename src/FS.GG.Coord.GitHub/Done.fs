@@ -691,6 +691,49 @@ module Done =
             | Error e -> Error e
             | Ok parentBody ->
 
+            // AN EPIC'S ACCEPTANCE IS ITS CHILDREN (#965), AND THIS IS WHERE THAT IS ENFORCED.
+            //
+            // Every guard below this one asks a question ABOUT THE GRAPH — are the children all closed, is
+            // the graph whole, does the body cite one the graph lacks. Not one of them can see the criterion
+            // that was never delegated to anybody, because it is not in the graph to be seen. `AllResolved`
+            // is computed from child `state`, and a state is a record, not reality: a parent inherits the
+            // truth of its children's closures without ever testing one, so a criterion the parent kept for
+            // ITSELF is closed over silently. #561 is the measured cost — its step 3 (`global.json` into
+            // FILES, tripwire deleted) was the parent's own work, delegated to no child, never taken, and it
+            // was closed because its four children were closed. Three repos still drift from canonical.
+            //
+            // It runs FIRST, before the graph read and before the PR probes underneath `bodyUnlinkedChildren`
+            // — it is a pure property of the body, so an epic that cannot legally close is refused without
+            // spending a single request on proving the rest.
+            //
+            // The rule is deliberately blunt, and it is blunt because the faithful alternative does not
+            // exist: nothing can mechanically decide "the tripwire is intact" from prose. Deleting the
+            // un-delegated prose is what makes the question answerable — which is why the fix is a REFUSAL
+            // to close rather than an attempt to verify.
+            //
+            // IT APPLIES TO EVERY PARENT, AND IT MUST NOT BE NARROWED TO `[epic]`-TITLED ONES. That looks
+            // like the obvious tidy-up — `lint` scopes its twin rule exactly that way, from the title — and
+            // it would sail straight past the case this guard exists for: **#561 is titled `[cross-repo]`,
+            // not `[epic]`**, and it has four children of its own. "Epic" here is a fact about the GRAPH, not
+            // about the title: an issue with children is a parent, a parent's acceptance is discharged by its
+            // children, and one that kept a criterion for itself is the whole defect. A leaf's ref-less
+            // acceptance is ordinary prose and is never examined — the climb only ever reaches parents — so
+            // the breadth costs nothing and buys the motivating case.
+            match FS.GG.Coord.EpicBody.undelegatedAcceptance parentBody with
+            | undelegated when not (List.isEmpty undelegated) ->
+                results.Add(
+                    ParentLeftOpen(
+                        current,
+                        [ $"the body states %d{List.length undelegated} acceptance line(s) that delegate to NO child, so nothing in the sub-issue graph can ever discharge them and closing this parent would close them unread (#965):"
+                          yield! undelegated
+                          "a parent's acceptance IS its children: make each line a child (`fsgg-coord child <parent> <child>`), or drop it from the body if it is not acceptance." ]
+                    )
+                )
+
+                Ok()
+
+            | _ ->
+
             match Reads.subIssues transport current.Owner current.Repo current.Number with
             | Error e -> Error e
             | Ok graph ->
