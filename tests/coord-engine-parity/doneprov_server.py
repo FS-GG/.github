@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Case 14's `done` PR-PROVENANCE legs (#342/#558/#543), served over HTTP for the compiled engine.
+"""`done`'s VERDICT legs — PR-provenance (#342/#558/#543) and the no-PR green path (#600) — served over
+HTTP for the compiled engine.
 
 The corpus (`14-no-touch-set-and-done.sh`) certifies that `done` names the PR that ACTUALLY closed the
 issue, never the first prose mention, and that `--pr` cannot launder a mention into a stamp:
@@ -14,6 +15,40 @@ issue, never the first prose mention, and that `--pr` cannot launder a mention i
 `closedByPullRequestsReferences` is a SUPERSET: it lists mentions too, lowest-number-first. A node is a
 CLOSER iff its own body names this issue (`closingIssuesReferences` -> ClosesThis) OR GitHub's own
 CLOSED_EVENT names it (`timelineItems.closer`, a PullRequest directly or the PR associated with a Commit).
+
+#1028 adds the legs with NO closer at all — `done --evidence`, the ONE green path that stamps an item
+Done with no merged PR to anchor it (#600, `Done.fs` `ResolvedWithoutPr`):
+
+    done #170 --evidence E  -> DONE, "resolved without a PR: E" — the #600 green path
+    done #170 --evidence ''  -> NOT-DONE, the evidence is blank — a green path that took no argument would
+                                not be a stamp, it would be a way of switching the stamp OFF
+    done #170                -> NOT-DONE — the pre-existing refusal, which is what makes #170 a fixture for
+                                the no-closer branch rather than an assumption that it reaches one
+    done #171 --evidence E  -> DONE — #171 is closed as NOT_PLANNED, and that is STILL green (see below)
+
+Every other green path is anchored to a merged PR — a fact GitHub records, where a bug in the check is
+caught by the merge not existing. `--evidence` is the only one anchored to a free-text string, which makes
+its REFUSAL legs the ones most worth pinning.
+
+`state_reason` IS SERVED HERE AND THE ENGINE IGNORES IT — DELIBERATELY (#1028 decided #600's open
+question). `Done.fs:529` treats `completed` vs `not_planned` as load-bearing when it WRITES a close, and
+the read path (`Done.fs:232`) queries `number state` and never `stateReason`. That asymmetry is correct,
+and it is two questions wearing one word:
+
+  * The WRITE is an ASSERTION. `done --flip` closing an issue asserts the work completed, so it records
+    `completed`.
+  * The READ asks "is this item RESOLVED?" — and `completed` and `not_planned` are both resolutions.
+
+Requiring `completed` on the read would red exactly the population `--evidence` was built to green. #600's
+own enumeration — obsolete, resolved by other work, a duplicate transplanted into the survivor (which
+`pnext-item` §4 instructs), a decision recorded as an ADR elsewhere — is a list of things GitHub closes as
+`not_planned`. So the check would re-break #600 in the one place it exists to fix, and the distinction a
+human actually needs is already carried by the REQUIRED evidence string, which is strictly richer than a
+two-valued enum.
+
+#171 therefore serves `stateReason: NOT_PLANNED` even though nothing reads it: it PINS the decision. Add a
+`stateReason` check to the read path and #171 goes red, which forces the next worker to confront this
+paragraph instead of silently reverting #600 for a third time.
 """
 
 import json
@@ -61,9 +96,16 @@ def closer_commit(oid, prs):
                        "associatedPullRequests": {"nodes": nodes}}}
 
 
-def issue(number, closing_nodes, closer_nodes):
+def issue(number, closing_nodes, closer_nodes, state_reason="COMPLETED"):
+    """A `Done.facts` response.
+
+    `stateReason` is served but NOT queried by the engine (`Done.fs:232` asks for `number state`). It is
+    here to PIN the #1028 decision that the read path is state_reason-blind on purpose — see the module
+    docstring. An extra field in a JSON response is ignored by a client that does not ask for it, so
+    serving it costs nothing today and goes red the day someone reads it.
+    """
     return {"data": {"repository": {"issue": {
-        "number": number, "state": "CLOSED",
+        "number": number, "state": "CLOSED", "stateReason": state_reason,
         "closedByPullRequestsReferences": {"nodes": closing_nodes},
         "timelineItems": {"nodes": closer_nodes},
         "subIssues": {"totalCount": 0, "nodes": []},
@@ -108,6 +150,15 @@ FACTS = {
     #         closing commit, which need NOT be merged ones — so an unmerged closer closes nothing, and the
     #         refusal must still name it rather than claim the event named nobody (#928/#543 leg 2).
     168: issue(168, [], [closer_commit("cafe123", [event_pr(927, merged=False)])]),
+    # #170 — NO closer, of either kind: the reference list is empty and the close event names nobody. This is
+    #         the state `--evidence` exists for (#600) — an item legitimately closed with no code change in
+    #         this repo at all. It is ONE fixture serving three verdicts, which is the point: the same board
+    #         greens with evidence, reds on blank evidence, and reds with no evidence at all, so the three
+    #         legs differ ONLY by the flag under test.
+    170: issue(170, [], []),
+    # #171 — the same no-closer state, closed as NOT_PLANNED. Serves `stateReason` that nothing reads, to
+    #         pin #1028's decision that the read path ignores it deliberately (module docstring).
+    171: issue(171, [], [], state_reason="NOT_PLANNED"),
 }
 
 

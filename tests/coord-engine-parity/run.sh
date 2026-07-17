@@ -2541,6 +2541,60 @@ if [ -z "$DP_PORT" ]; then bad "done-provenance fixture bound a port"; else
   [ "$rc96" -ne 0 ] \
     && ok "case14: ...and exits NON-ZERO (engine ExitRed=3; bash's literal 1 disposed on the record)" || bad "case14: #96 non-zero exit" "rc=$rc96"
 
+  # ---- #600's NO-PR GREEN PATH (#1028) ---------------------------------------------------------------
+  #
+  # `done --evidence` is the ONE green path that stamps an item Done with no merged PR to anchor it, and it
+  # had no parity case (#839 residual 3 of 4). Every other green verdict is anchored to a fact GitHub
+  # records — a bug in the check is caught by the merge not existing. This one is anchored to a free-text
+  # string, so it is the only place `done` can be TALKED INTO a stamp, which is exactly why its refusal
+  # legs need pinning.
+  #
+  # #170 has no closer of either kind, so all three legs below reach the same branch and differ only by the
+  # flag under test.
+
+  # #600 — closed, no PR, non-blank evidence => GREEN, naming the evidence.
+  p170="$(dp 'FS.GG.SDD#170' --evidence 'obsolete: the scaffold it gated was deleted in #838' --worker w-dp)"; rc170=$?
+  { [ "$rc170" -eq 0 ] && printf '%s' "$p170" | grep -q 'FSGG-DONE   FS.GG.SDD#170'; } \
+    && ok "#1028: done --evidence stamps work resolved WITHOUT a PR — green (#600)" \
+    || bad "#1028: #170 should be DONE on evidence" "rc=$rc170: $p170"
+  printf '%s' "$p170" | grep -q 'resolved without a PR: obsolete: the scaffold it gated was deleted in #838' \
+    && ok "#1028: ...and the stamp NAMES the evidence it was talked into (#600)" \
+    || bad "#1028: #170 must render the evidence" "$p170"
+
+  # #600 — ...and BLANK evidence is refused. A green path that took no argument would not be a stamp; it
+  # would be a way of switching the stamp off, reached for by exactly the people it was not meant for.
+  p170b="$(dp 'FS.GG.SDD#170' --evidence '' --worker w-dp)"; rc170b=$?
+  printf '%s' "$p170b" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#170' \
+    && ok "#1028: BLANK evidence is REFUSED — red NOT-DONE (#600, Done.fs:172)" \
+    || bad "#1028: #170 blank evidence should refuse" "rc=$rc170b: $p170b"
+  printf '%s' "$p170b" | grep -q 'the evidence offered for resolving it without one is blank' \
+    && ok "#1028: ...saying the evidence is blank, not that no PR closes it (#266)" \
+    || bad "#1028: #170 blank-evidence reason" "$p170b"
+  [ "$rc170b" -ne 0 ] \
+    && ok "#1028: ...and exits NON-ZERO (engine ExitRed=3)" || bad "#1028: #170 blank non-zero exit" "rc=$rc170b"
+
+  # The DISCRIMINATOR: with no --evidence at all, #170 takes the pre-existing refusal. Without this leg the
+  # two above merely assert that a flag changes the output — this is what establishes that #170 genuinely
+  # has no closer, so the green above is #600's path and not a closer being found.
+  p170c="$(dp 'FS.GG.SDD#170' --worker w-dp)"; rc170c=$?
+  { [ "$rc170c" -ne 0 ] && printf '%s' "$p170c" | grep -qE 'FSGG-NOT-DONE +FS.GG.SDD#170'; } \
+    && ok "#1028: ...and with NO evidence, #170 still reds — the no-closer branch is the one under test" \
+    || bad "#1028: #170 bare should refuse" "rc=$rc170c: $p170c"
+  printf '%s' "$p170c" | grep -q 'resolved WITHOUT a pull request' \
+    && ok "#1028: ...and the refusal POINTS AT the green path rather than dead-ending (#600)" \
+    || bad "#1028: #170 bare must name the --evidence remedy" "$p170c"
+
+  # #1028 DECIDES #600's open question: the read path ignores `state_reason`, deliberately. #171 is closed
+  # as NOT_PLANNED — the state of an obsolete item or a transplanted duplicate, i.e. exactly the population
+  # `--evidence` was built to green. Requiring `completed` here would re-break #600 in the one place it
+  # exists to fix. The engine WRITES `state_reason: completed` (Done.fs:529) because that is an ASSERTION
+  # that work completed; the read asks whether the item is RESOLVED, and not_planned is a resolution. Two
+  # questions, one word. This leg goes red the day someone reads stateReason — which is the point.
+  p171="$(dp 'FS.GG.SDD#171' --evidence 'duplicate: detail transplanted into #838' --worker w-dp)"; rc171=$?
+  { [ "$rc171" -eq 0 ] && printf '%s' "$p171" | grep -q 'FSGG-DONE   FS.GG.SDD#171'; } \
+    && ok "#1028: an issue closed NOT_PLANNED still greens on evidence — state_reason is not read, BY DECISION (#600)" \
+    || bad "#1028: #171 not_planned+evidence should be DONE — see doneprov_server.py's docstring before 'fixing' this" "rc=$rc171: $p171"
+
   kill "$DP_SRV" 2>/dev/null
 fi
 
