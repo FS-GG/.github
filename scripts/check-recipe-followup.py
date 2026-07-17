@@ -76,7 +76,10 @@ WORKFLOW_ROOT = ".github/workflows"
 # declared anyway — a rule only ever exercised on violators is one nobody can trust.
 PATHS_SUBJECT = ROOTS + (WORKFLOW_ROOT,)
 
-FENCE = re.compile(r"^```(\w*)\s*$")
+# The fence may be INDENTED — a ```sh fence nested under a list item carries leading whitespace, and
+# anchoring at column 0 left every list-nested fence unscanned. `\s*` allows the indent; a blockquoted
+# `> ```sh` still does not match, because a `>` is prose (where the docs describe the retired idiom).
+FENCE = re.compile(r"^\s*```(\w*)\s*$")
 
 # The escape hatch, in the comment syntax of the thing being scanned — HTML comment for markdown, `#`
 # for a shell `run:` block, where `<!--` is a syntax error rather than a comment.

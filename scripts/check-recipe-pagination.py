@@ -94,6 +94,14 @@ from pathlib import Path
 ROOTS_DECL = ".agent-skill-roots"
 FALLBACK_ROOTS = (".claude/skills", ".agents/skills")
 
+# The coordination docs are a recipe surface too — `docs/coordination/*.md` carry `gh api` list reads in
+# `sh` fences, and the sibling gates (check-recipe-landable, check-recipe-followup) already scan them in
+# their ROOTS. They are NOT a skill-union root, so they are deliberately absent from `.agent-skill-roots`
+# (that file is the byte-identical skill union, #517) — which is exactly why they were unaudited here.
+# Scanned when present and NOT required to exist, because this gate is copied into product repos that
+# carry no coordination docs of their own (the sibling gates tolerate the absence the same way).
+DOCS_ROOT = "docs/coordination"
+
 # WHAT THIS GATE READS, FOR THE WORKFLOW THAT RUNS IT (#996, epic #266).
 #
 # `check-paths-coherence.py` reads this BY AST and reds `recipe-pagination.yml` if its `paths:` does
@@ -108,8 +116,9 @@ FALLBACK_ROOTS = (".claude/skills", ".agents/skills")
 # put ROOTS_DECL in the script is the same reasoning that puts it here.
 #
 # The roots are read at RUN time and a workflow filter is static, so the SUBJECT is the declaration
-# file plus the fallbacks — never the roots this tree happens to declare today.
-PATHS_SUBJECT = (ROOTS_DECL,) + FALLBACK_ROOTS
+# file plus the fallbacks — never the roots this tree happens to declare today. `DOCS_ROOT` is a fixed
+# additional surface (see its definition), so it is part of the subject and the workflow must select it.
+PATHS_SUBJECT = (ROOTS_DECL,) + FALLBACK_ROOTS + (DOCS_ROOT,)
 
 FENCE_LANGS = {"sh", "bash", "shell", "console"}
 
@@ -186,15 +195,20 @@ def logical_commands(block: str) -> list[tuple[int, str]]:
     drops (blank ones), and every finding after the first blank line in a fence is then reported at
     the wrong line. A lint that points at the wrong line is one workers stop believing.
 
-    Two things continue a command across a newline, and BOTH occur in these recipes:
+    Three things continue a command across a newline, and ALL occur in these recipes:
       - a trailing backslash;
+      - a trailing pipe — `gh api … |` on one line and the `jq` it feeds on the next is ONE pipeline.
+        A line-at-a-time reader splits it in two, audits `gh api … |` alone (its `.[]` is on the next,
+        now-severed line), sees no array iteration and no collection endpoint, and passes the very
+        unpaginated list read this gate exists to catch. `||` (logical-or) continues the same way, and
+        `endswith("|")` covers both.
       - an unclosed quote — a jq script is routinely written across several lines inside one pair
         of single quotes, with no backslash anywhere. A line-at-a-time reader sees `| jq -r '[...]`
         and the aggregate on the next line as two commands, and would miss the `--paginate` sitting
         on the first of them.
 
-    Neither is continued by anything a COMMENT contains: an apostrophe in one is not a quote, and a
-    trailing backslash in one is not a continuation. See `scan_line`.
+    None is continued by anything a COMMENT contains: an apostrophe, a trailing backslash, or a
+    trailing pipe in one is prose, not code. See `scan_line`, which hands us the comment-stripped code.
     """
     out: list[tuple[int, str]] = []
     buf: list[str] = []
@@ -211,6 +225,8 @@ def logical_commands(block: str) -> list[tuple[int, str]]:
             continue  # unclosed quote: the command continues on the next line
         if code.rstrip().endswith("\\"):
             continue  # explicit continuation — in the CODE, not in a trailing comment
+        if code.rstrip().endswith("|"):
+            continue  # a trailing pipe (`|` or `||`) continues the pipeline onto the next line
 
         cmd = "\n".join(buf)
         buf = []
@@ -442,6 +458,16 @@ def main() -> int:
             return 3
         for p in sorted(base.rglob("*.md")):
             files.append((p, str(p.relative_to(root))))
+
+    # The coordination docs are a fixed additional surface (see DOCS_ROOT), scanned only in the default
+    # mode — an explicit `--recipes` names exactly what to audit and must not have this bolted on. Unlike
+    # a declared root, its absence is not a no-verdict: this gate is copied into product repos with no
+    # coordination docs, and reding there would teach people to ignore it.
+    if not args.recipes:
+        docs = root / DOCS_ROOT
+        if docs.is_dir():
+            for p in sorted(docs.rglob("*.md")):
+                files.append((p, str(p.relative_to(root))))
 
     if not files:
         print("check-recipe-pagination: no verdict: found NO recipe files to audit. Examining "

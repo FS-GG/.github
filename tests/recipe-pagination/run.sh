@@ -271,6 +271,44 @@ else
   bad "the gate must read .agent-skill-roots; a declared root went unaudited (got rc=$RC)" "$OUT"
 fi
 
+# 7k. #1162: a TRAILING PIPE continues the command onto the next line — `gh api … |` and the `jq` it
+#     feeds are ONE pipeline. A line-at-a-time splitter cut them apart, audited `gh api … |` alone,
+#     and — because the endpoint here is NOT a known collection (`…/rules/branches/main`) — the only
+#     list signal is the `.[]` in the SEVERED jq, so the read passed unflagged. The endpoint is chosen
+#     deliberately: a collection endpoint (`sub_issues`) would fire the backstop even when split, so it
+#     would not discriminate this fix.
+gate_on trailing-pipe '# kit
+
+```sh
+gh api repos/FS-GG/<repo>/rules/branches/main |
+  jq -r '"'"'.[].type'"'"'
+```'
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'SKILL.md:4:'; then
+  ok "#1162: a trailing-pipe pipeline is ONE command; its unpaginated list read is flagged at the gh api line"
+else
+  bad "#1162: a trailing pipe must continue the command; expected a finding at SKILL.md:4 (got rc=$RC)" "$OUT"
+fi
+
+# 7m. #1162: docs/coordination is part of the recipe surface. Its *.md carry `gh api` list reads and
+#     the sibling gates already scan it, but it is NOT a skill-union root (absent from
+#     `.agent-skill-roots`) — which is exactly why it was unaudited here. A tree whose ONLY unpaginated
+#     read is under docs/coordination must red, or the surface is decorative. Scanned only in the
+#     default mode (no `--recipes`), so this leg drives the gate that way.
+surf="$WORK/docs-surface"
+mkdir -p "$surf/.claude/skills/x" "$surf/docs/coordination"
+printf '.claude/skills\n' > "$surf/.agent-skill-roots"
+printf '# clean\n\n```sh\nscripts/fsgg-coord landable <pr> --wait\n```\n' > "$surf/.claude/skills/x/SKILL.md"
+printf '# coord doc\n\n```sh\ngh api repos/FS-GG/<r>/issues/<p>/sub_issues --jq %s.[]%s\n```\n' "'" "'" \
+  > "$surf/docs/coordination/y.md"
+set +e
+OUT="$(cd "$surf" && python3 "$GATE" --root . 2>&1)"; RC=$?
+set -e
+if [ "$RC" = 1 ] && printf '%s' "$OUT" | grep -q 'docs/coordination/y.md'; then
+  ok "#1162: docs/coordination is scanned — an unpaginated read there is a FINDING"
+else
+  bad "#1162: docs/coordination must be part of the audited surface (got rc=$RC)" "$OUT"
+fi
+
 # ---------------------------------------------------------------------------------------------
 # NO-VERDICT LEGS — "I could not check" must never be mistaken for "I checked, and it's fine" (#266).
 # ---------------------------------------------------------------------------------------------
