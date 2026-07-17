@@ -123,6 +123,7 @@ module OptionsTests =
           [ "--active" ], "overlap", "who"
           [ "--apply" ], "reap", "batch"
           [ "--peek" ], "inbox", "who"
+          [ "--local" ], "who", "next"
           [ "--dry-run" ], "flush", "reap"
           [ "--strict" ], "lint", "ready"
           [ "--batch" ], "set-field", "widen"
@@ -314,6 +315,21 @@ module OptionsTests =
     [<Fact>]
     let ``--active is off by default`` () =
         Assert.False((parse [ "overlap"; "FS.GG.SDD#401"; "FS.GG.SDD#403" ] |> ok).Active)
+
+    // ---- who --local (#959: the flag bash shipped and the port dropped) ---------------------------
+    [<Fact>]
+    let ``who --local parses and sets Local`` () =
+        Assert.True((parse [ "who"; "--repo"; ".github"; "--local" ] |> ok).Local)
+
+    [<Fact>]
+    let ``--local is off by default`` () =
+        Assert.False((parse [ "who"; "--repo"; ".github" ] |> ok).Local)
+
+    [<Fact>]
+    let ``who --local composes with --json`` () =
+        let o = parse [ "who"; "--local"; "--json" ] |> ok
+        Assert.True(o.Local)
+        Assert.Equal(Json, o.Render)
 
     // ---- adopt (the #697 land-the-orphan command) -------------------------------------------------
 

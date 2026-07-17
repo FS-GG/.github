@@ -130,7 +130,14 @@ module Options =
           /// `issues --label L` — restrict the REST listing to issues carrying this label (absent ⇒ all).
           Label: string option
           /// `issues --state open|closed|all` — which issue state to list. Default `open` (bash's default).
-          IssueState: string option }
+          IssueState: string option
+
+          /// `who --local` — join the live claims to the LOCAL git worktrees, so "what is that worktree
+          /// doing?" needs no forensics (#959). bash shipped and documented it; the port dropped it. Every
+          /// worker runs in a per-item worktree (pnext-item §2), so a fan-out IS a pile of `../<repo>-<n>`
+          /// directories, and this is the verb that names which is which — the remedy #419's own warning
+          /// points at when N agents collide on one id. `who` is the only reader.
+          Local: bool }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -156,7 +163,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
                                              by default — a TRUTH read, so it shows items the scheduler
                                              will refuse; --status/--all widen past the default)
-  who    [--repo NAME] [--json]              who holds what, right now (held/stale/unclaimed;
+  who    [--repo NAME] [--local] [--json]    who holds what, right now (held/stale/unclaimed;
+                                             --local joins claims to local git worktrees;
                                              --json for the machine contract, else a human table)
   reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
                                              an open item/<n>-* PR (#581); a DRY RUN without --apply
@@ -298,6 +306,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FMint
         | FFlip
         | FLimit
+        | FLocal
 
     type private FlagScope =
         /// Every command honours it. Named deliberately — the flags here are the ones whose readers really
@@ -320,6 +329,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FStatus -> Only [ Ready; Release ]
 
         | FMint -> Only [ WhoAmI ]
+        | FLocal -> Only [ Who ]
         | FAll -> Only [ Ready ]
         | FActive -> Only [ Overlap ]
         | FApply -> Only [ Reap ]
@@ -381,6 +391,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Active then FActive, "--active"
           if o.Apply then FApply, "--apply"
           if o.Peek then FPeek, "--peek"
+          if o.Local then FLocal, "--local"
           if o.DryRun then FDryRun, "--dry-run"
           if o.Wait then FWait, "--wait"
           if o.Tries.IsSome then FTries, "--tries"
@@ -661,6 +672,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--active" :: t -> flags { acc with Active = true } t
             | "--apply" :: t -> flags { acc with Apply = true } t
             | "--peek" :: t -> flags { acc with Peek = true } t
+            | "--local" :: t -> flags { acc with Local = true } t
             | "--dry-run" :: t -> flags { acc with DryRun = true } t
 
             | "--wait" :: t -> flags { acc with Wait = true } t
@@ -768,7 +780,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Require = []
               Sha = None
               Label = None
-              IssueState = None }
+              IssueState = None
+              Local = false }
 
         match args with
         | []

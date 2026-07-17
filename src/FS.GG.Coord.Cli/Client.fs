@@ -643,6 +643,51 @@ module Client =
         | DeclaredNone
         | Unreadable _ -> []
 
+    /// LOCAL GIT WORKTREES, as (item-number, path) — the join `who --local` needs (#959). Every worker runs
+    /// in a per-item worktree branched `item/<n>-<slug>` (pnext-item §2), so the item number in the branch
+    /// name is the key that ties a `../<repo>-<n>` directory back to its claim. Read straight off
+    /// `git worktree list --porcelain`; nothing here reaches the network.
+    ///
+    /// bash joined on this same key (`item/<n>` → `.number`), NOT on the `fsgg.worker` git-config value it
+    /// also read — a worktree's identity is which item it is for, and that survives even when the id stamp is
+    /// missing or stale. Outside a checkout `git worktree list` fails; that is an empty join, never an error
+    /// (`who --local` outside a repo is a `who` with no local column, not a failure).
+    let private localWorktrees () : (int * string) list =
+        try
+            let psi = ProcessStartInfo("git", "worktree list --porcelain")
+            psi.RedirectStandardOutput <- true
+            psi.RedirectStandardError <- true
+            psi.UseShellExecute <- false
+            use p = Process.Start psi
+            let out = p.StandardOutput.ReadToEnd()
+            p.StandardError.ReadToEnd() |> ignore
+            p.WaitForExit()
+
+            if p.ExitCode <> 0 then
+                []
+            else
+                // Porcelain blocks are `worktree <path>` … `branch refs/heads/<b>`, blank-line separated. Pair
+                // a path with the item number of its branch when that branch is an `item/<n>-…`; a worktree on
+                // any other branch (a shared checkout on `main`) has no item and is dropped from the join.
+                let mutable currentPath = ""
+                let acc = ResizeArray<int * string>()
+
+                for line in out.Split('\n') do
+                    let line = line.TrimEnd('\r')
+
+                    if line.StartsWith "worktree " then
+                        currentPath <- line.Substring 9
+                    elif line.StartsWith "branch " then
+                        let branch = line.Substring(7).Replace("refs/heads/", "")
+                        let m = Text.RegularExpressions.Regex.Match(branch, @"^item/(\d+)-")
+
+                        if m.Success && currentPath <> "" then
+                            acc.Add(int m.Groups.[1].Value, currentPath)
+
+                List.ofSeq acc
+        with _ ->
+            []
+
     /// A classified in-flight row: the item, its lock state, the touch-set it reserves, and — on a STALE
     /// row only — the #581 proof of life that turns a bare `STALE` into `STALE (#NNN OPEN)`.
     type private WhoRow =
@@ -657,7 +702,11 @@ module Client =
           /// `LivePr` is `Some`; `None` otherwise. It turns `STALE (#NNN OPEN)` into `STALE (#NNN OPEN —
           /// GREEN: LAND IT)` and points a human at `adopt` instead of `reap`. A held/unclaimed row has no
           /// PR to read, so it carries none.
-          PrState: PrState option }
+          PrState: PrState option
+          /// `who --local` — the local git worktree this item is checked out in, if any (#959). `None` when
+          /// `--local` was not asked, or when no local worktree is on this item's `item/<n>-*` branch. It is
+          /// informational: a claim with no local worktree is normal (another worker holds it, elsewhere).
+          Worktree: string option }
 
     /// `who --json` — the machine contract cases 20/25 certify: a JSON array of the in-flight items, each
     /// carrying its `number`, `repo`, `state` (held/stale/unclaimed), the `worker` holding it (`null` when
@@ -665,7 +714,10 @@ module Client =
     /// carries `livePr` (#581): `null` when the lease lapsed and NO open PR was found (a bare stale a reaper
     /// may collect), the `#NNN item/<n>-*` ref where the work is demonstrably still alive. A real JSON
     /// writer, so a worker id, path, or branch name carrying a quote cannot forge the array.
-    let private renderWhoJson (rows: WhoRow list) : string =
+    /// `includeWorktree` is `who --local` (#959): the `worktree` field is emitted ONLY when it was asked for,
+    /// so the machine contract cases 20/25 certify is byte-identical without `--local`. When asked, every row
+    /// carries it — a string path, or `null` where no local worktree is on this item's branch.
+    let private renderWhoJson (includeWorktree: bool) (rows: WhoRow list) : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
 
@@ -705,6 +757,11 @@ module Client =
                 | None -> w.WriteNull("prState")
             | Held _
             | Unclaimed -> ()
+
+            if includeWorktree then
+                match row.Worktree with
+                | Some path -> w.WriteString("worktree", path)
+                | None -> w.WriteNull("worktree")
 
             w.WriteEndObject()
 
@@ -880,28 +937,60 @@ module Client =
                                       State = st
                                       Paths = paths
                                       LivePr = livePr
-                                      PrState = prState }
+                                      PrState = prState
+                                      // Filled in below, once the worktree read has run once for the whole
+                                      // set rather than per row — a claim's worktree is a local fact, not one
+                                      // of the network reads this loop is spending.
+                                      Worktree = None }
                                 )
 
                 match failure with
                 | Some e -> fail e
                 | None ->
-                    let inFlight = List.ofSeq results
+                    // #959: `--local` joins each claim to its local worktree by ITEM NUMBER — the key the
+                    // branch name carries (`item/<n>-…`). Read ONCE for the whole set, off the local git; a
+                    // held item with no worktree here is normal (its holder is elsewhere), so it stays `None`.
+                    let localByItem =
+                        if opts.Local then
+                            localWorktrees () |> List.map (fun (n, p) -> n, p) |> Map.ofList
+                        else
+                            Map.empty
+
+                    let inFlight =
+                        results
+                        |> List.ofSeq
+                        |> List.map (fun row ->
+                            match Map.tryFind row.Ref.Number localByItem with
+                            | Some path -> { row with Worktree = Some path }
+                            | None -> row)
 
                     match opts.Render with
-                    | Json -> printfn "%s" (renderWhoJson inFlight)
+                    | Json -> printfn "%s" (renderWhoJson opts.Local inFlight)
                     | Text ->
                         if List.isEmpty inFlight then
                             printfn "nothing is in flight."
                         else
                             for row in inFlight do
+                                // #959: under `--local`, each row names the worktree it is checked out in — the
+                                // whole point of the flag. A row with no local worktree says so explicitly
+                                // (`no local worktree`), because "held elsewhere" and "the join silently found
+                                // nothing" are different facts to a human deciding whose tree to look in.
+                                let wt =
+                                    if opts.Local then
+                                        match row.Worktree with
+                                        | Some path -> $"  [worktree: %s{path}]"
+                                        | None -> "  [no local worktree]"
+                                    else
+                                        ""
+
                                 match row.State with
                                 | Held m ->
                                     printfn
-                                        "  %-16s held by %s  (%s)"
+                                        "  %-16s held by %s  (%s)%s"
                                         row.Ref.Short
                                         m.Worker.Value
                                         (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
+                                        wt
                                 | Stale m ->
                                     // #581/#697: `STALE (#NNN OPEN — <what the PR says>)` when the work is
                                     // demonstrably alive, a bare `STALE` (which a reaper may collect)
@@ -919,15 +1008,17 @@ module Client =
                                         | None -> "STALE"
 
                                     printfn
-                                        "  %-16s held by %s  %s (%s)"
+                                        "  %-16s held by %s  %s (%s)%s"
                                         row.Ref.Short
                                         m.Worker.Value
                                         flag
                                         (Schedulability.leaseWindow opts.LeaseMinutes m.AgeSeconds)
+                                        wt
                                 | Unclaimed ->
                                     printfn
-                                        "  %-16s UNCLAIMED — In progress with NO claim marker"
+                                        "  %-16s UNCLAIMED — In progress with NO claim marker%s"
                                         row.Ref.Short
+                                        wt
 
                     // #697: FINISHED work behind a dead worker gets its OWN stderr lines, and they come
                     // FIRST — folding a green, mergeable PR into the generic "reap these" hint is how the

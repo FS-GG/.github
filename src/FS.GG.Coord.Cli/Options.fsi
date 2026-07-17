@@ -215,7 +215,10 @@ module Options =
           Label: string option
           /// `--state open|closed|all` (`issues`) — which issue state to list. Default `open`, exactly as
           /// bash's `issues`.
-          IssueState: string option }
+          IssueState: string option
+          /// `--local` (`who`) — join the live claims to the local git worktrees (#959). `who` is the only
+          /// reader.
+          Local: bool }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]
