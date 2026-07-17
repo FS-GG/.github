@@ -155,7 +155,23 @@ module Cache =
           Field: string
           Value: string
           At: string
-          Worker: string }
+          Worker: string
+          /// The board this write was queued against, as `(owner, project title)` (#882).
+          ///
+          /// `Ref` names an ISSUE, and an issue can sit on several boards — so without this, `flush` resolved
+          /// every entry against whatever board the environment happened to point at, found the item missing,
+          /// and dropped the write as "permanently un-writable". It was writable; the board was simply not
+          /// the one it was queued for.
+          ///
+          /// `None` is a pre-#882 entry that recorded no board — replayed against the current board, which is
+          /// the behaviour it was queued under. It is not an invitation to guess.
+          Board: (string * string) option }
+
+    /// Do two board identities name the same board?
+    ///
+    /// The equivalence the cache FILENAMES use: every other cache file is keyed on a slug of owner/title, so
+    /// two identities that slug alike already share a scan cache and a board map.
+    val sameBoard: string * string -> string * string -> bool
 
     /// Queue a board write. The error is taken, not a bool, so that a caller CANNOT queue a write without
     /// having in hand the failure that licenses it.

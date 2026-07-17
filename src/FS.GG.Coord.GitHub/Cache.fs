@@ -425,7 +425,29 @@ module Cache =
           Field: string
           Value: string
           At: string
-          Worker: string }
+          Worker: string
+          /// The board this write was queued against, as `(owner, project title)`.
+          ///
+          /// THE FIELD #882 IS ABOUT. `Ref` is `owner/repo#n` — an ISSUE, which can sit on several boards —
+          /// while the board itself came from `$FSGG_COORD_OWNER`/`$FSGG_COORD_PROJECT` at queue time and was
+          /// recorded nowhere. `flush` then resolved every entry against whatever board it happened to
+          /// bootstrap: repoint the config, and the entry's item is `NotOnBoard`, which is PERMANENT, so the
+          /// write was dropped and reported as "permanently un-writable" — of a write that was perfectly
+          /// writable, against the board nobody wrote down.
+          ///
+          /// `None` means the entry was queued by a build that predates #882 and recorded no board. It is not
+          /// a licence to guess: see `flush`, which replays it against the current board exactly as it always
+          /// did, because that is the behaviour it was queued under.
+          Board: (string * string) option }
+
+    /// Do two board identities name the same board?
+    ///
+    /// THE SAME EQUIVALENCE THE CACHE FILENAMES USE, and it lives here because `slug` does. Every other cache
+    /// file is keyed on `slug owner`/`slug title`, so two identities that slug alike already share a scan
+    /// cache and a board map — a comparison that disagreed with the filenames would let `flush` skip an entry
+    /// whose board it is demonstrably already serving from cache.
+    let sameBoard ((ao, at): string * string) ((bo, bt): string * string) =
+        slug ao = slug bo && slug at = slug bt
 
     let private pendingFile () = Path.Combine(ensureRoot (), "pending.jsonl")
 
@@ -507,6 +529,16 @@ module Cache =
         o.["value"] <- JsonValue.Create e.Value
         o.["at"] <- JsonValue.Create e.At
         o.["worker"] <- JsonValue.Create e.Worker
+
+        // OMITTED, NOT NULLED, WHEN THERE IS NO BOARD. A `None` here is only ever reachable by re-rendering a
+        // legacy entry during `dropPending`'s rewrite, and "the key is absent" is exactly how that entry
+        // arrived. Writing `null` would invent a third state for `parseDeferred` to tell apart.
+        match e.Board with
+        | Some(owner, title) ->
+            o.["boardOwner"] <- JsonValue.Create owner
+            o.["boardTitle"] <- JsonValue.Create title
+        | None -> ()
+
         o.ToJsonString()
 
     let defer (error: IoError) (entry: Deferred) : IoResult<unit> =
@@ -547,14 +579,25 @@ module Cache =
                 | true, v when v.ValueKind = JsonValueKind.String -> Some(v.GetString())
                 | _ -> None
 
-            match get "ref", get "field", get "value", get "at", get "worker" with
-            | Some rf, Some f, Some v, Some a, Some w ->
+            // BOTH KEYS OR NEITHER (#882). Absent is a legacy entry, queued before the board was recorded —
+            // real, and `flush` knows what to do with it. HALF a board is neither: it is a line we cannot
+            // read, and this module's rule is that such a line refuses the drain rather than draining as if
+            // the missing half had said something.
+            let board =
+                match get "boardOwner", get "boardTitle" with
+                | Some owner, Some title -> Ok(Some(owner, title))
+                | None, None -> Ok None
+                | _ -> Error()
+
+            match get "ref", get "field", get "value", get "at", get "worker", board with
+            | Some rf, Some f, Some v, Some a, Some w, Ok b ->
                 Some
                     { Ref = rf
                       Field = f
                       Value = v
                       At = a
-                      Worker = w }
+                      Worker = w
+                      Board = b }
             | _ -> None
         with :? JsonException ->
             None
@@ -626,10 +669,19 @@ module Cache =
             match pendingUnlocked () with
             | Error _ -> ()
             | Ok entries ->
+                // THE BOARD IS PART OF THE IDENTITY (#882). Without it, "set #882 Status = Done" queued
+                // against board A and the same write queued against board B are the SAME entry to this
+                // filter — so flushing B would drop A's write, unreplayed and unreported. That is the very
+                // silent loss this field was added to end, re-entering through the drop path.
                 let remaining =
                     entries
                     |> List.filter (fun e ->
-                        not (e.Ref = entry.Ref && e.Field = entry.Field && e.Value = entry.Value))
+                        not (
+                            e.Ref = entry.Ref
+                            && e.Field = entry.Field
+                            && e.Value = entry.Value
+                            && e.Board = entry.Board
+                        ))
 
                 if List.isEmpty remaining then
                     clearPendingUnlocked ()

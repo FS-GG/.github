@@ -582,6 +582,115 @@ let ``#862 flush DROPS an entry whose item left the board - but does NOT count i
     | Ok r -> failwith $"a dropped entry must not be COUNTED as written — flush reported %d{r.Written}"
     | other -> failwith $"expected a clean flush that wrote nothing — got %A{other}"
 
+// ---- #882: a queued write records the board it was queued against -----------------------------------
+
+/// The same board, repointed: `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` name a DIFFERENT board, which the
+/// engine bootstraps just as legitimately. Same fields, same shape — only the identity differs.
+let private otherBoard =
+    { board with
+        Number = 13
+        Id = "PVT_other"
+        Title = "Some Other Board" }
+
+[<Fact>]
+let ``#882 a queued write RECORDS the board it was queued against`` () =
+    use _sandbox = new Sandbox()
+
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    // THE BOARD IS KNOWN AT QUEUE TIME AND NOWHERE ELSE. `flush` bootstraps from an environment that may
+    // since have been repointed, so an entry that does not carry its own board cannot be resolved — only
+    // guessed at, which is what #882 was.
+    match Cache.pending () with
+    | Ok [ one ] -> Assert.Equal(Some("FS-GG", "Coordination"), one.Board)
+    | other -> failwith $"the queued write must record its board — got %A{other}"
+
+[<Fact>]
+let ``#882 flush SKIPS a write queued against ANOTHER board - it must not be dropped`` () =
+    use _sandbox = new Sandbox()
+
+    // Queue against the Coordination board...
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    // ...then flush against a DIFFERENT one. THE WHOLE BUG IS THAT THIS LOOKS LEGITIMATE: the lookup on the
+    // other board succeeds and finds nothing, which is `NotOnBoard` — permanent, and therefore dropped and
+    // reported as "permanently un-writable". Every step is locally correct and the conclusion is false: the
+    // write was perfectly writable, against the board nobody recorded.
+    //
+    // A transport that ANSWERS is what makes this a real regression test. If `flush` resolves this entry at
+    // all, it drops it; the fix is that the entry never reaches a lookup, so `Fake.Recorder` failing on any
+    // call would also pin "no GraphQL was spent on another board's entry".
+    let wrongBoard =
+        scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+
+    match flush wrongBoard otherBoard with
+    | Ok r ->
+        // SKIPPED, NOT DROPPED. These are opposite facts: dropped means "this will never land", skipped
+        // means "not by this pass, against this board".
+        Assert.Equal(1, r.Skipped)
+        Assert.Equal(0, r.Dropped)
+        Assert.Equal(0, r.Written)
+        Assert.Equal(1, r.Queued)
+
+        // AND THE WRITE IS STILL THERE. This is the assertion the bug fails: the entry was silently
+        // discarded, so the worker's board write was lost with a message saying it was unwritable.
+        match Cache.pending () with
+        | Ok [ one ] -> Assert.Equal(Some("FS-GG", "Coordination"), one.Board)
+        | other -> failwith $"another board's write must REMAIN QUEUED — got %A{other}"
+    | other -> failwith $"expected a clean flush that skipped the entry — got %A{other}"
+
+[<Fact>]
+let ``#882 the board that OWNS the queued write still replays it`` () =
+    use _sandbox = new Sandbox()
+
+    // THE OTHER HALF OF THE SKIP, and the one that makes it a deferral rather than a leak: an entry skipped
+    // by the wrong board must still land when its own board flushes. A "fix" that merely stopped dropping
+    // would strand it — real, on disk, and reachable by no verb, which is exactly what #878 repaired.
+    let deferring = scripted [ ok itemOnBoard; Error(RateLimited(UnknownBudget, None)) ]
+    boardWrite deferring board "FS-GG" "FS.GG.SDD" 810 "Status" (Set "Ready") "vole-418" |> ignore
+
+    let wrongBoard =
+        scripted [ ok """{"data":{"repository":{"issue":{"projectItems":{"nodes":[]}}}}}""" ]
+
+    flush wrongBoard otherBoard |> ignore
+
+    let replaying =
+        scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
+
+    match flush replaying board with
+    | Ok r when r.Written = 1 && r.Skipped = 0 ->
+        match Cache.pending () with
+        | Ok [] -> ()
+        | other -> failwith $"the replayed entry must be gone — got %A{other}"
+    | other -> failwith $"the owning board must replay what the other board skipped — got %A{other}"
+
+[<Fact>]
+let ``#882 an entry that recorded NO board is replayed, not skipped forever`` () =
+    use _sandbox = new Sandbox()
+
+    // A PRE-#882 ENTRY, sitting in a queue written by the previous build. Its board is genuinely unknown, and
+    // "unknown" must not become "skip forever" — that would strand it exactly as #878's queue was stranded.
+    // Replaying it against the current board is the behaviour it was queued under: no worse than before, and
+    // right in the single-board case that is every real one.
+    let legacy: Cache.Deferred =
+        { Ref = "FS-GG/FS.GG.SDD#810"
+          Field = "Status"
+          Value = "Ready"
+          At = "2026-07-14T12:00:00Z"
+          Worker = "vole-418"
+          Board = None }
+
+    Cache.defer (RateLimited(UnknownBudget, None)) legacy |> ignore
+
+    let replaying =
+        scripted [ ok itemOnBoard; ok """{"data":{"updateProjectV2ItemFieldValue":{"clientMutationId":null}}}""" ]
+
+    match flush replaying board with
+    | Ok r when r.Written = 1 && r.Skipped = 0 && r.Dropped = 0 -> ()
+    | other -> failwith $"a board-less legacy entry must still replay — got %A{other}"
+
 [<Fact>]
 let ``an exhausted budget STOPS the flush - the rest would fail identically`` () =
     use _sandbox = new Sandbox()
