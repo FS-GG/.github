@@ -650,6 +650,35 @@ if [ -n "$RDYPORT" ]; then
     && bad "ready --repo FS.GG.SDD must not reach into another repo (#202 Rendering)" "$rdyj" \
     || ok "ready --repo scopes — a cross-repo namesake column is not shown"
 
+  # #962 — EVERY DOCUMENTED `--repo` SPELLING NAMES ONE QUEUE. `--repo` takes a registry short-id, an
+  # `owner/repo`, or a bare repo name (the skill's Setup section says so in as many words), so all three
+  # must agree. `ready` resolved NONE of them: it compared the raw token against the row's repo verbatim,
+  # so `--repo sdd` matched nothing and printed `[]` with exit 0 over a full board.
+  #
+  # NOTE WHAT MADE THIS CORPUS BLIND TO IT, because it is the reason the leg is written this way: every
+  # `ready` leg above says `--repo FS.GG.SDD` — the BARE NAME, the one spelling a verbatim compare gets
+  # right. `--repo .github` passes too, and is a COINCIDENCE, not a control: `.github` is the one repo
+  # whose short-id and repo name are the same string. A corpus can be thorough about a flag's semantics
+  # and never once ask whether its ARGUMENT is resolved. So these compare spellings against each other
+  # rather than against a literal: the assertion is that they AGREE, which is the actual contract.
+  rdy_bare="$(rdy --repo FS.GG.SDD --json 2>/dev/null | jq -c '[.[].number]|sort')"
+  for spelling in sdd SDD FS-GG/FS.GG.SDD; do
+    got="$(rdy --repo "$spelling" --json 2>/dev/null | jq -c '[.[].number]|sort')"
+    [ "$got" = "$rdy_bare" ] \
+      && ok "#962: ready --repo $spelling names the same queue as the bare repo name ($rdy_bare)" \
+      || bad "#962: ready --repo $spelling must resolve to FS.GG.SDD" "expected $rdy_bare, got: $got"
+  done
+
+  # #962 — AND THE RECONCILER DEFAULT SURVIVES THE FIX. This is the half a careless repair breaks: the
+  # obvious way to resolve `ready`'s `--repo` is to add `Ready` to the #480 scoping list, which ALSO hands
+  # it the git-remote default — silently shrinking `/check-board`'s org-wide `ready --all` to whatever
+  # checkout it runs in, i.e. trading this bug for a strictly worse one in the tool that exists to catch
+  # it. A bare `ready` must still span every repo on the board.
+  bare_repos="$(rdy --all --json 2>/dev/null | jq -c '[.[].repo] | unique | length')"
+  [ "${bare_repos:-0}" -gt 1 ] \
+    && ok "#962: a bare 'ready --all' stays ORG-WIDE ($bare_repos repos) — resolution did not import the #480 checkout default" \
+    || bad "#962: a bare ready must reconcile the WHOLE board, not one repo" "distinct repos: ${bare_repos:-unknown}"
+
   # The human projection is still reachable (--text), and it is a TABLE, not JSON — the same row set.
   rdyt="$(rdy --repo FS.GG.SDD --text 2>/dev/null)"
   if printf '%s' "$rdyt" | grep -q 'Ready .*FS.GG.SDD#99' && ! printf '%s' "$rdyt" | grep -q '^\['; then

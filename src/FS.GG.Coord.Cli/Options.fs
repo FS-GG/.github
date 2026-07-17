@@ -244,6 +244,41 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
     /// refuses the flag rather than swallowing it.
     let private statusCommands = [ Ready; Release ]
 
+    /// A `--repo` token → the repo NAME board rows carry. A registry short-id maps, an `owner/repo` keeps its
+    /// repo part, a literal name passes through — so `--repo sdd`, `--repo FS-GG/FS.GG.SDD` and
+    /// `--repo FS.GG.SDD` all name one queue, which is `--repo`'s documented contract in the skill's Setup
+    /// section. The roster map is EMBEDDED rather than read from `registry/repos.yml` because the shim ships
+    /// as a `kind: client` kit item WITHOUT the roster (case 13 §6c / #381).
+    ///
+    /// IT LIVES IN THE PARSER BECAUSE THAT IS THE ONLY PLACE EVERY VERB REACHES (#962). It used to live in
+    /// `Client`, applied per-verb at a dispatch site, and being left out of that list is a silent fail-open:
+    /// the raw token reaches a verbatim `String.Equals` against the row's repo, matches nothing, and reports
+    /// an EMPTY QUEUE with exit 0 over a full board. That has now happened three times — #381 (`resolve_repo`
+    /// hard-coded 4 short-ids, so `--repo game` matched nothing), #446 (`issues`, the one verb that never
+    /// called it), #962 (`ready`, the same, in the F# port) — and each repair added the missing verb, which
+    /// fixes the instance and not the thing that makes instances.
+    ///
+    /// `Client.run` is NOT that funnel and cannot be: `scan` is dispatched straight from `Program` and reads
+    /// `opts.Repo` itself, so a resolution living in `run` leaves `scan --repo sdd` reporting `0 candidate(s)`
+    /// over a full board — the same bug, in the fix for the same bug. `parse` is the one gate with no way
+    /// around it, which is the argument `normalizeSay` below already makes: argument shape is the parser's job.
+    ///
+    /// Idempotent, so a caller that resolves again for its own reasons gets the same answer: a resolved name
+    /// has no slash and is not a short-id, so it maps to itself.
+    let resolveRepo (raw: string) : string =
+        match raw.ToLowerInvariant() with
+        | "sdd" -> "FS.GG.SDD"
+        | "rendering" -> "FS.GG.Rendering"
+        | "governance" -> "FS.GG.Governance"
+        | "templates" -> "FS.GG.Templates"
+        | "game" -> "FS.GG.Game"
+        | "audio" -> "FS.GG.Audio"
+        | _ ->
+            // owner/repo -> the repo part (bash's `${1#*/}`); a literal name -> itself.
+            match raw.IndexOf('/') with
+            | -1 -> raw
+            | i -> raw.Substring(i + 1)
+
     /// `say`'s message is POSITIONAL, and `--to` is OPTIONAL — the shape bash shipped, the shape all seven
     /// prescribing sites document, and the shape the port dropped (#919).
     ///
@@ -307,7 +342,14 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | [ "--snapshot" ] -> Error "--snapshot needs a value"
 
             | "--repo" :: value :: _ when value.StartsWith "-" -> Error $"--repo needs a value (got flag '%s{value}')"
-            | "--repo" :: value :: t -> flags { acc with Repo = Some value } t
+            // RESOLVED HERE (#962) — see `resolveRepo`. Every verb that takes `--repo` reaches this arm, and
+            // there is no list to be left out of, which is the whole repair: the three instances of this bug
+            // were each a verb that never got resolution, not a resolution that was wrong.
+            | "--repo" :: value :: t ->
+                flags
+                    { acc with
+                        Repo = Some(resolveRepo value) }
+                    t
             | [ "--repo" ] -> Error "--repo needs a value"
 
             | "--worker" :: value :: _ when value.StartsWith "-" -> Error $"--worker needs a value (got flag '%s{value}')"

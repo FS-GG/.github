@@ -217,6 +217,14 @@ module Options =
     [<Literal>]
     val DefaultLeaseMinutes: int = 120
 
+    /// A `--repo` token → the repo NAME board rows carry: a registry short-id maps (`sdd` → `FS.GG.SDD`), an
+    /// `owner/repo` keeps its repo part, a literal name passes through. `parse` applies this to `--repo`, so
+    /// `Options.Repo` is ALWAYS resolved and no verb can be left out of it (#962).
+    ///
+    /// PUBLIC so the git-remote scope can resolve through the SAME map (`Client.scopedRepo` reads a remote,
+    /// not an argument, so the parser never sees it), and to be tested directly.
+    val resolveRepo: raw: string -> string
+
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>
 
