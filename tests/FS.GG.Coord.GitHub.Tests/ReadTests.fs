@@ -1098,10 +1098,18 @@ let ``--sha ANSWERS the question, so the branch tip is never read — the caller
     Assert.Equal(0, server.RefReads)
 
 [<Fact>]
-let ``the ref read is spent ONLY on a conflicted with no --sha — never on the green hot path`` () =
-    // The other half of the cost. `landable` runs on EVERY merge, and the green path is the common one — so
-    // an extra REST read there would be paid by every worker on every item, forever, on the budget that
-    // carries the claim lock. A `true` is answered from the PR object alone and must never reach the ref.
+let ``the green path reconciles ONCE — #989's bound, as #995 revised it`` () =
+    // THE COST BOUND ON THE HOT PATH, and it MOVED — deliberately, so this test moved with it.
+    //
+    // #989 asserted 0 here: the ref read was for the `false` arm, and a `true` was answered from the PR
+    // object alone. #995 found that #989's own evidence condemned the `true` arm too — inside the force-push
+    // window `pulls/{n}` names the REPLACED commit and its checks are green, so scoring them merges untested
+    // code. That fails OPEN, which #955's `false` did not, so the guard had to reach here as well.
+    //
+    // The bound is now ONE, not zero, and one is what makes it affordable: `--wait` stops at the first
+    // settling verdict, so the green arm is reached once per invocation — one REST request per merge, never
+    // one per poll. If this ever reads twice, the guard has migrated onto the polling path and every worker
+    // pays it on every item, on the budget the claim lock lives on (ADR-0034 §3).
     use _cache = new IssuesCache()
     use _fast = new NoMergeableRetryDelay()
     let mutable refReads = 0
@@ -1123,5 +1131,141 @@ let ``the ref read is spent ONLY on a conflicted with no --sha — never on the 
 
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
+    // The fixture's ref tip AGREES with the PR head, so the green stands — reconciled, not doubted.
     Assert.Equal(PrGreen, state)
-    Assert.Equal(0, refReads)
+    Assert.Equal(1, refReads)
+
+/// A GREEN, mergeable PR at `headSha` whose BRANCH tip is `tipSha` — the force-push window, on the arm that
+/// merges. Counts ref reads: WHEN this read is spent is the whole cost of #995, and it lands on the budget
+/// the claim lock lives on (ADR-0034 §3).
+type private GreenPrWithBranch(headSha: string, tipSha: string, conclusion: string) =
+    let mutable refReads = 0
+
+    member _.RefReads = refReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            let body =
+                if req.Path.Contains "git/ref/heads/" then
+                    refReads <- refReads + 1
+                    $"""{{"ref":"refs/heads/item/42-x","object":{{"sha":"%s{tipSha}","type":"commit"}}}}"""
+                elif req.Path.EndsWith "pulls/801" then
+                    $"""{{"number":801,"state":"open","mergeable":true,"head":{{"ref":"item/42-x","sha":"%s{headSha}"}}}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    $"""{{"total_count":1,"workflow_runs":[{{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"%s{conclusion}","check_suite_id":1,"pull_requests":[{{"number":801}}]}}]}}"""
+                else
+                    $"""{{"total_count":1,"check_runs":[{{"name":"build","check_suite":{{"id":1}},"status":"completed","conclusion":"%s{conclusion}"}}]}}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+[<Fact>]
+let ``a GREEN scored over the commit you REPLACED is pending, not green — the fail-OPEN twin of #955`` () =
+    // #995, epic #266. #955/#989 repaired this stale head on the `false` arm, where it failed CLOSED. Here it
+    // fails OPEN: `pulls/{n}` names the pre-rebase commit for a beat after a force-push, its runs are
+    // COMPLETE and GREEN, and they are not about the code that would be merged. Score them and `--wait`
+    // settles green on its FIRST read; §5 merges, and the merge takes the PR's head at merge time — which by
+    // then is the NEW commit. New code, merged on the dead commit's checks.
+    //
+    // Measured on PR #993: `ref-tip=NEW  pr.head=OLD  mergeable=true` the instant the push returned.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = GreenPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW", conclusion = "success")
+
+    let state, n, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrPending, state)
+
+    Assert.False(
+        Landable.settled state n 0,
+        "a green scored over a replaced commit must NEVER settle — merging it is the bug"
+    )
+
+[<Fact>]
+let ``a GREEN whose PR head IS the branch tip still settles green — the gate must still let work land`` () =
+    // THE COUNTERWEIGHT, and the one that matters most: this arm is how EVERY item merges. Demoting greens
+    // would satisfy the test above and break the entire protocol — `--wait` would poll finished work to its
+    // cap and §5's `|| exit 1` would walk every worker away from every item.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = GreenPrWithBranch(headSha = "sha-SAME", tipSha = "sha-SAME", conclusion = "success")
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+
+    // `settled` for a green is `n > 0 && n = prev` — the run set must have STOPPED GROWING (#724), so the
+    // steady-state poll is the one that lands. Passing prev=0 here would assert the FIRST poll settles, which
+    // it must not.
+    Assert.True(Landable.settled state 1 1, "a green about the branch's real head is finished work — land it")
+
+    // Exactly ONE ref read: the green arm is reached once per `--wait` invocation (it stops at the first
+    // settling verdict), so the guard costs one REST request per merge, not one per poll.
+    Assert.Equal(1, server.RefReads)
+
+[<Fact>]
+let ``a RED never reads the ref — a PR that is not merging need not prove which commit it is`` () =
+    // The cost bound, downward. The guard exists to stop a GREEN being believed about the wrong commit; a red
+    // is already not merging, so reconciling it buys nothing and would spend a request on every failing poll.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = GreenPrWithBranch(headSha = "sha-OLD", tipSha = "sha-NEW", conclusion = "failure")
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+    Assert.Equal(0, server.RefReads)
+
+[<Fact>]
+let ``--sha suppresses the green guard too — the caller asserted the commit and was answered for free`` () =
+    // Consistent with #989's `false` arm. A caller passing `--sha` is reconciled ABOVE at no cost: a mismatch
+    // is already `pending`, so reaching here means their SHA agrees with the PR head and they have had their
+    // answer. Reading the ref to second-guess an assertion they made themselves would spend a request on the
+    // budget the claim lock lives on, to re-answer a settled question.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = GreenPrWithBranch(headSha = "sha-SAME", tipSha = "sha-MOVED-ON", conclusion = "success")
+
+    let state, _, _ =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] (Some "sha-SAME")
+
+    Assert.Equal(PrGreen, state)
+    Assert.Equal(0, server.RefReads)
+
+[<Fact>]
+let ``a ref we cannot read leaves the GREEN standing — fail-closed must not strand every merge`` () =
+    // #266's rule, pointed the other way. On the `false` arm an unreadable ref leaves the conflict standing;
+    // here it must leave the GREEN standing. A `pending` manufactured from a read we could not make would
+    // strand every worker whose ref read 404s — the guard failing open in the opposite direction, and a gate
+    // that blocks all correct work is not safer than one that blocks none.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            if req.Path.Contains "git/ref/heads/" then
+                Ok { Status = 404; Body = """{"message":"Not Found"}"""; ETag = None; NextLink = None }
+            elif req.Path.EndsWith "pulls/801" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"number":801,"state":"open","mergeable":true,"head":{"ref":"item/42-x","sha":"sha-x"}}"""
+                      ETag = None
+                      NextLink = None }
+            elif req.Path.EndsWith "actions/runs" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"workflow_runs":[{"path":".github/workflows/b.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                      ETag = None
+                      NextLink = None }
+            else
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                      ETag = None
+                      NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)

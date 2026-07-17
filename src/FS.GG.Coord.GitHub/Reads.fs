@@ -1369,9 +1369,10 @@ module Reads =
         | Computing, _, _ -> PrPending, 0, []
         | Absent, _, _ -> PrUnknown, 0, []
         | Mergeable true, None, _ -> PrUnknown, 0, []
-        // The head SHA is reconciled above, for `true` and `false` alike, so by here it is either the commit
-        // the caller asked to gate or one they made no assertion about. Scoring is safe on both.
-        | Mergeable true, Some sha, _ ->
+        // The head SHA is reconciled above for a caller that PASSED `--sha`. One that did not has asserted
+        // nothing, so `sha` here is whatever the PR names — which, inside the force-push window, is the
+        // commit they REPLACED. See the green guard below (#995).
+        | Mergeable true, Some sha, headRef ->
             match workflowRuns transport owner repo sha, checkRuns transport owner repo sha with
             | Some runs, Some checks ->
                 let state, n = Landable.scoreRequired required (Some true) runs checks
@@ -1380,7 +1381,39 @@ module Reads =
                     Landable.missing required runs checks
                     |> List.map (fun name -> $"required check `%s{name}` has not reported")
 
-                state, n, unmet
+                // DO NOT CALL THE REPLACED COMMIT'S GREEN OURS (#995, epic #266).
+                //
+                // #955 and #989 repaired this same stale head on the `false` arm, where it failed CLOSED —
+                // a false `conflicted` that cost the worker an hour. HERE IT FAILS OPEN, and the cost is
+                // untested code on `main`: `pulls/{n}` names the pre-rebase commit for a beat after a
+                // force-push, its runs are COMPLETE and GREEN, and they are not about the code that would be
+                // merged. This function's contract has said exactly that since `--sha` was built (#737) —
+                // "whose checks are green and are not about the code that would be merged" — and named
+                // `--sha` as the guard. §5 runs `landable <pr> --wait` and passes none, so the guard was
+                // unreachable on the one path every worker runs. That is #989's gap, on the arm where being
+                // wrong merges rather than stalls.
+                //
+                // Measured on PR #993 (#989's own evidence, re-read for what it says about `true`): the
+                // instant the push returned, `ref-tip=NEW  pr.head=OLD  mergeable=true`. Score that and
+                // `--wait` settles GREEN on its FIRST read, over the dead commit's checks.
+                //
+                // ONLY WHEN THE SCORE IS GREEN, and that is what makes this affordable rather than a tax on
+                // every poll. `--wait` polls many times and stops at the first settling verdict, so the green
+                // arm is reached ONCE per invocation — one REST request to know the checks we scored belong
+                // to the commit that will merge. A red or pending never reads the ref: it is already not
+                // merging. `expected = Some` never reaches it either — that caller was answered above, for
+                // free, and asserted the SHA itself.
+                //
+                // FAIL-CLOSED (#266): a tip we cannot READ leaves the green alone. An unreadable ref proves
+                // nothing, and manufacturing a `pending` from it would strand every caller whose ref read
+                // 404s — the fix, failing open in the other direction.
+                match state, headRef with
+                | PrGreen, Some r when
+                    expected.IsNone
+                    && branchTip transport owner repo r |> Option.exists (fun tip -> tip <> sha)
+                    ->
+                    PrPending, 0, []
+                | _ -> state, n, unmet
             | _ -> PrUnknown, 0, []
 
     let prLandableN
