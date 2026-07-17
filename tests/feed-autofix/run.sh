@@ -647,5 +647,60 @@ else
   printf '  SKIP closure GREEN half — no engine at %s (the CI fixture job builds it)\n' "$ENGINE"
 fi
 
+# --- #1081 ACCEPTANCE 4: the CLOSURE GUARD — the NEXT #913 must not be able to silently break the
+# writer. #913 added a generated consumer of registry/dependencies.yml (the architecture-map versions
+# region) and nothing told the WRITER; the bot's flip left it stale and reddened a required gate
+# (#1081). Slice B closed the KNOWN instance by running the WHOLE of generate-projections on a flip, so
+# any region that generator owns is covered. This guard closes the NEXT one: a registry generator the
+# bot's flip does NOT run.
+#
+# "Generates from the registry" is decided by EXECUTION, never grep — the check-generator-list docstring
+# and #683 are explicit that scanning source/`run:` text for a path cannot tell a MENTION from a USE. A
+# generator is registry-sourced iff flipping the registry MOVES what it emits. So flip the registry, run
+# every rostered generator, and collect the ones whose output changes. That set MUST equal the bot's
+# flip-closure — the generators feed-autofix.yml's regenerate step runs. One outside it is the #913
+# shape, and it reds HERE, in the bot's own suite.
+#
+# BOT_CLOSURE_GENERATORS is the generators feed-autofix.yml's "Regenerate the projections ..." step
+# runs. Hand-kept and coupled to that step ON PURPOSE, exactly like projections.yml's region census:
+# adding a registry generator to the bot must cost this line too, or the sets diverge and this reds.
+BOT_CLOSURE_GENERATORS="scripts/generate-projections"
+
+if [ -x "$ENGINE" ]; then
+  GTREE="$WORK/accept4-tree"
+  mkdir -p "$GTREE"
+  git -C "$ROOT" archive HEAD | tar -x -C "$GTREE"
+  cp "$FLIPPED" "$GTREE/registry/dependencies.yml"   # the twice-moved flip from the closure case above
+
+  reacted=""
+  # `generated-paths --roster` names each generator's `--list` invocation; strip `--list` to get the
+  # REGENERATE invocation, run it in the flipped tree, and see whether it moved any file.
+  while IFS= read -r inv; do
+    [ -n "$inv" ] || continue
+    regen="${inv% --list}"
+    gen="${regen%% *}"
+    before="$(cd "$GTREE" && find . -type f -exec sha256sum {} + | sort)"
+    FSGG_COORD_ENGINE_BIN="$ENGINE" bash -c "cd '$GTREE' && $regen" >/dev/null 2>&1 || true
+    after="$(cd "$GTREE" && find . -type f -exec sha256sum {} + | sort)"
+    [ "$before" != "$after" ] && reacted="$reacted $gen"
+  done < <(bash "$ROOT/scripts/generated-paths" --roster)
+
+  reacted="$(printf '%s' "$reacted" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+  expected="$(printf '%s' "$BOT_CLOSURE_GENERATORS" | tr ' ' '\n' | sed '/^$/d' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+  if [ "$reacted" = "$expected" ]; then
+    ok "closure guard: exactly the bot's flip-closure regenerates on a registry flip [$reacted]"
+  else
+    bad "closure guard: the generators that react to a registry flip are not the bot's flip-closure" \
+        "reacted on a registry flip: [$reacted]
+bot flip-closure (BOT_CLOSURE_GENERATORS): [$expected]
+A generator generates from the registry that the bot's flip does not run (the #913 shape), or the
+closure list names one that does not. If you added a registry-sourced projection, teach
+feed-autofix.yml's regenerate step to run its generator AND add it to BOT_CLOSURE_GENERATORS here —
+otherwise the bot's flips leave it stale and red the required gate (#1081/#913)."
+  fi
+else
+  printf '  SKIP closure guard — no engine at %s (the CI fixture job builds it)\n' "$ENGINE"
+fi
+
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
