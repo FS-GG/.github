@@ -191,7 +191,7 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 183a888810b2ad0da7e20b32d2fefe958ea33d3444c356851c9fa5fe4d84c62f, mirrored: true, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 91eaeb4ae6c2e62cf9d36bdc3d185ce6b37f2e0281fd7650ab28a65ddc3741e5, mirrored: true, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-audio's predicate is DELIBERATELY WIDER than its three block-mates: it carries `app`, which
   # game-core/persistence/model-swap do not. Audio rides the APP family too — FS.GG.Game compiled the
   # app-family launcher (Game#232, and #240 which found the silent launchers were table-only), so the
