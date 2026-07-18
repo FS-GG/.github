@@ -168,7 +168,7 @@ jobs:
           # unrelated; a red pin gate absent a schema bump is still a #576 report, not a hand-advance.
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
           # `versioning=loose`, NOT the manager default `nuget`, and this token is load-bearing (#576).
-          # Under nuget versioning a BARE literal is a RANGE, not a peg: `0.13.0` parses as `>=0.13.0`,
+          # Under nuget versioning a BARE literal is a RANGE, not a peg: `0.14.0` parses as `>=0.14.0`,
           # which the newest release ALWAYS satisfies. So Renovate resolved currentVersion to the newest,
           # found the constraint already met, and proposed NOTHING — measured against renovate@latest
           # --platform=local: currentValue 0.10.0 -> currentVersion 0.13.0, updates: []. That, not the
