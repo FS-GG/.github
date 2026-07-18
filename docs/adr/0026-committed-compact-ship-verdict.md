@@ -1,7 +1,15 @@
 # ADR-0026: Committed compact ship verdict — the merge-boundary answer survives in git history (extends 0018)
 
-- **Status:** Proposed
-- **Date:** 2026-07-08
+- **Status:** Accepted (ratified 2026-07-18) — ratified retroactively; it **shipped**, and was still
+  marked `Proposed` while the org depended on it. FS.GG.SDD landed the decision in
+  [#186](https://github.com/FS-GG/FS.GG.SDD/pull/186) (`feat(092): fsgg-sdd ship — committed compact
+  ship verdict`, merged 2026-07-08, closing [#177](https://github.com/FS-GG/FS.GG.SDD/issues/177)) and
+  published it in **v0.9.0**; four later PRs build on it (#199 `refresh`, #399 evidence, **#422** the
+  ADR-0035 fail-closed verify leg). The **Depends on** hazard below is discharged: ADR-0035 is Accepted
+  and its unobserved-pass-fails-closed leg landed (#422, 2026-07-14). The `readiness/*/` → `readiness/*/*`
+  pattern fix this ADR records is live in SDD's `init` seed and every repo's adoption path — so ADR-0018's
+  amendment banner describes released code, not an unratified claim ([#1157](https://github.com/FS-GG/.github/issues/1157)).
+- **Date:** 2026-07-08 (proposed) · 2026-07-18 (accepted)
 - **Affects:** **FS.GG.SDD** (owner — emit `ship-verdict.json`; amend the `init` `.gitignore` seed + its drift guard; extend the catalog-derived taxonomy doc), **Rendering / Governance / Templates / Game / Audio** (adopt the amended fragment; no cleanup, the change is additive), **.github** (this ADR)
 - **Depends on:** [ADR-0035](0035-observed-run-receipts.md) (Accepted 2026-07-14) — **this ADR MUST NOT
   LAND ALONE.** ADR-0035 §"Interaction with ADR-0026" states the hazard directly: *"A verdict that
