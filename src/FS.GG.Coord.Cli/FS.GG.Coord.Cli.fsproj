@@ -87,6 +87,8 @@
     <Compile Include="Chores.fs" />
     <Compile Include="KitDigest.fsi" />
     <Compile Include="KitDigest.fs" />
+    <Compile Include="Render.fsi" />
+    <Compile Include="Render.fs" />
     <Compile Include="Client.fs" />
     <!-- AFTER `Client.fs`, deliberately: the follow-up queue reuses `parseRefIn` and the exit constants
          rather than growing a second answer to "what is a ref?" or "what does an empty look exit?" (#485).
