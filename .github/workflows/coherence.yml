@@ -85,11 +85,24 @@ jobs:
       - name: Run the roster-closure fixture
         run: bash tests/roster-closure/run.sh
 
-      # Then the real thing, against the live org. The org's repos are public, so the run-scoped
-      # GITHUB_TOKEN is sufficient and a fork PR (which gets a read-only token) still resolves the
-      # listing. If the token could NOT see the whole org, the gate notices — a rostered repo missing
-      # from the listing fails rather than reporting a vacuously-closed world.
+      # Then the real thing, against the live org. The run-scoped GITHUB_TOKEN resolves the PUBLIC
+      # listing (a fork PR's read-only token does too), which proves the public world closed — but it
+      # CANNOT read the org's private-repo count, so it cannot rule out an unrostered PRIVATE repo. The
+      # gate says so: exit 3 = NO VERDICT (couldn't look), which the epic's whole premise forbids
+      # collapsing into a vacuous exit 0. We treat it here as an advisory WARNING rather than a block —
+      # a "couldn't look" should not red the fleet's required check — while a real open-world finding
+      # (exit 1, e.g. a rostered repo missing, or a visible unrostered repo) still fails hard. Give
+      # this step a token with organization read to turn the no-verdict into a real verdict (#1154).
       - name: Assert the org roster is closed (dependencies.yml + live org)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/check-roster-closure.py --org FS-GG
+        run: |
+          set +e
+          python scripts/check-roster-closure.py --org FS-GG
+          rc=$?
+          set -e
+          if [ "$rc" -eq 3 ]; then
+            echo "::warning::roster-closure: NO VERDICT — the run-scoped token cannot enumerate the whole org (it cannot read the org's private-repo count), so org closure was neither confirmed nor refuted (#1154). A real open-world finding (exit 1) still fails this step."
+            exit 0
+          fi
+          exit "$rc"

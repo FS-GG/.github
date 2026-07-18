@@ -1,0 +1,48 @@
+# Selftest for the shared gate harness, scripts/lib/gate.py (.github#1159, decisions in #1158).
+#
+# scripts/lib/gate.py is the one place the check-*.py gates get their ExitCode contract, their
+# GateError, the cli() broad-except wrapper, and the on:->True PyYAML normaliser — hoisted so those
+# four things cannot drift across ~25 copies (#485). It has no gate consumers yet; they migrate onto it
+# in #1160 and its followups. Until then this fixture is the only thing that keeps the harness honest,
+# so it must run on any change to the harness OR its selftest.
+#
+# THE `paths:` FILTER IS PART OF THE GATE. The two lists are IDENTICAL on purpose — a push copy that
+# omits a pattern the PR copy has is the drift check-paths-coherence exists to catch.
+name: gate-harness
+
+on:
+  pull_request:
+    paths:
+      - "scripts/lib/gate.py"
+      - "tests/gate-harness/**"
+      - ".github/workflows/gate-harness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/lib/gate.py"
+      - "tests/gate-harness/**"
+      - ".github/workflows/gate-harness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gate-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      # One leg drives gate.load_yaml, which lazily imports PyYAML — the same dependency every YAML
+      # gate that will consume this harness already installs.
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Run the gate-harness selftest
+        run: bash tests/gate-harness/run.sh

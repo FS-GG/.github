@@ -123,6 +123,30 @@ let ``a scan older than the TTL is a MISS`` () =
     Assert.True((getScan Scheduling "FS-GG" "Coordination").IsNone)
 
 [<Fact>]
+let ``#1152 a patchScan fold does not restart the TTL clock - only a real read does`` () =
+    use sandbox = new Sandbox()
+    Assert.True(putScan "FS-GG" "Coordination" aScan)
+
+    // The board was actually READ at T0. Backdate the cache file's mtime to stand in for "putScan ran
+    // 95s ago" without sleeping through the window.
+    let file = Directory.GetFiles(sandbox.Dir, "scan-*.json") |> Array.exactlyOne
+    let t0 = DateTime.UtcNow.AddSeconds(-95.0)
+    File.SetLastWriteTimeUtc(file, t0)
+
+    // A board write the worker made along the way folds into the cache. It is NOT a read, so it must not
+    // make the cache look fresh again — otherwise a worker's own writes keep its cache eternally young and
+    // it never sees another worker's board changes (#1152).
+    patchScan "FS-GG" "Coordination" "FS.GG.SDD" 42 "Status" "Done"
+
+    // The fold really happened — guards against a vacuous pass where patchScan no-op'd...
+    Assert.Contains("Done", File.ReadAllText file)
+
+    // ...and yet the TTL is still measured from T0, so at 95s > 90s the cache is a MISS. On the pre-fix
+    // code the patch's rewrite stamped `now`, and this read served the stale scan as fresh.
+    Environment.SetEnvironmentVariable("FSGG_COORD_SCAN_TTL_SEC", "90")
+    Assert.True((getScan Scheduling "FS-GG" "Coordination").IsNone)
+
+[<Fact>]
 let ``a ZERO-BYTE cache file is a miss, not an empty board`` () =
     use sandbox = new Sandbox()
     Assert.True(putScan "FS-GG" "Coordination" aScan)

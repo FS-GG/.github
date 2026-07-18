@@ -85,11 +85,11 @@ Before you rename one, find out who requires it — **from BOTH places GitHub ke
 ```sh
 # Which repos require a context whose right-hand half is this job?
 # CLASSIC branch protection (needs `administration: read`):
-gh api repos/FS-GG/<repo>/branches/main/protection \
+gh api repos/FS-GG/<repo>/branches/main/protection --paginate \
   --jq '.required_status_checks.checks[].context'
 
 # RULESETS — a SEPARATE store the line above does not report (needs only `metadata: read`):
-gh api repos/FS-GG/<repo>/rules/branches/main \
+gh api repos/FS-GG/<repo>/rules/branches/main --paginate \
   --jq '.[] | select(.type == "required_status_checks")
             | .parameters.required_status_checks[].context'
 ```

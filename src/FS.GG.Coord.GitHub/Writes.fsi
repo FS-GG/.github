@@ -71,6 +71,14 @@ module Writes =
         /// The comment id of OUR marker. The lock IS this number.
         member MarkerId: int64
 
+        /// The session recorded in the marker, so `heartbeat` re-emits `session=` rather than dropping it
+        /// (#1149). A PATCH rewrites the whole body, and a field the capability does not hold is a field the
+        /// rewrite forgets — the way `heartbeat` used to forget `prev=` (#550). Without it, the first
+        /// heartbeat left a SESSIONLESS marker, which `twinSession` cannot tell from a human's, so a same-id
+        /// twin's `claim` read `Renewed` instead of `Twin` and both workers held the item. `None` is a marker
+        /// that genuinely carries no session (a human, a pre-#419 marker, a harness that exports none).
+        member Session: SessionId option
+
         /// The board column this claim overwrote, so `release` can put it back rather than guessing
         /// `Ready` (#481). `None` means the claim recorded none — and a column nobody recorded cannot be
         /// restored, so `release` says so instead of inventing one.

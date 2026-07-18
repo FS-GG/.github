@@ -28,6 +28,9 @@ on:
     paths:
       - ".claude/skills/**"
       - ".agents/skills/**"
+      # docs/coordination is a fixed recipe surface too (its *.md carry gh api list reads); the gate
+      # scans it and declares it in PATHS_SUBJECT, so this filter must select it (#996).
+      - "docs/coordination/**"
       # The gate READS this to decide which roots to scan (#517), so a root added here
       # changes its subject. Omitting it meant a new root's recipes went unaudited and the
       # gate stayed green by never being asked — the #266 fail-open its own docstring says
@@ -41,6 +44,9 @@ on:
     paths:
       - ".claude/skills/**"
       - ".agents/skills/**"
+      # docs/coordination is a fixed recipe surface too (its *.md carry gh api list reads); the gate
+      # scans it and declares it in PATHS_SUBJECT, so this filter must select it (#996).
+      - "docs/coordination/**"
       # The gate READS this to decide which roots to scan (#517), so a root added here
       # changes its subject. Omitting it meant a new root's recipes went unaudited and the
       # gate stayed green by never being asked — the #266 fail-open its own docstring says
