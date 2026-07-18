@@ -1,0 +1,68 @@
+namespace FS.GG.Coord.Cli
+
+/// THE WIRE-JSON RENDERERS — the four `--json` machine contracts (`ready`, `who`, `inbox`, `lint`),
+/// extracted out of `Client` as ADR-0047's second Client.fs decomposition seam. Each hand-writes its
+/// array with a real `Utf8JsonWriter`, so a worker id, path, branch, or title carrying a quote cannot
+/// forge the shape a consumer parses. The `who`/`lint` presentation DTOs travel WITH their renderers —
+/// they are the renderers' input shape and nothing else's — so the wire contract and the type it
+/// serialises live behind one `.fsi`. `Client`'s handlers gather the data; these render it.
+module Render =
+
+    open FS.GG.Coord
+    open FS.GG.Coord.Types
+    open FS.GG.Coord.GitHub
+
+    /// A `who` row's lock state. "In flight" is a LOCK fact, not a column fact: an item is in flight when
+    /// a marker holds it — LIVE (`Held`) or past its lease (`Stale`, still a lock only `reap` may break) —
+    /// or when the board column says In progress with NO marker (`Unclaimed`). The JSON `.state` a
+    /// consumer keys on (held/stale/unclaimed) is derived from this.
+    type WhoState =
+        | Held of Reads.Marker
+        | Stale of Reads.Marker
+        | Unclaimed
+
+    /// A classified in-flight row: the item, its lock state, the paths it reserves, and — on a STALE row
+    /// only — the proof-of-life a human needs before reaping (#581/#697/#1055).
+    type WhoRow =
+        { Ref: Ref
+          State: WhoState
+          Paths: string list
+          /// The item's own OPEN `item/<n>-*` PR as (number, headRef), when the lease lapsed but the WORK
+          /// did not (#581). `Some` only on a Stale row.
+          LivePr: (int * string) option
+          /// #1055: the lease lapsed, there is NO open PR, but a pushed `item/<n>-*` branch exists — proof
+          /// of life during §3. `true` only on a Stale row. Mutually exclusive with `LivePr`.
+          BranchPushed: bool
+          /// What that PR says (#697), when there is one — is the finished work landable? `Some` exactly
+          /// when `LivePr` is `Some`.
+          PrState: PrState option
+          /// `who --local` — the local git worktree this item is checked out in, if any (#959). Emitted
+          /// only when `--local` was asked.
+          Worktree: string option }
+
+    /// A single `lint` finding, in the shape `lint --json` emits.
+    type LintFinding =
+        { Code: string
+          Severity: string
+          Id: string
+          Short: string
+          Status: string
+          Url: string
+          Detail: string }
+
+    /// `ready --json` — the machine contract a reconciler reads: a JSON array of the startable rows. A
+    /// real JSON writer, so a title or path carrying a quote cannot forge the array.
+    val renderReadyJson: rows: Scan.Row list -> string
+
+    /// `who --json` — the machine contract cases 20/25 certify: a JSON array of the in-flight items, each
+    /// with `number`, `repo`, `state`, the `worker` (`null` when unclaimed), and the `paths` it reserves;
+    /// a STALE row also carries `livePr`/`prState`/`branchPushed`. `includeWorktree` is `who --local`
+    /// (#959): the `worktree` field is emitted ONLY when asked, so the no-`--local` shape is byte-identical.
+    val renderWhoJson: includeWorktree: bool -> rows: WhoRow list -> string
+
+    /// `inbox --json` — a JSON array of the messages addressed to this worker.
+    val renderInboxJson: msgs: (string * Reads.Message) list -> string
+
+    /// `lint --json` — a JSON array of the findings, each carrying its code, severity, and the item it is
+    /// about. A real JSON writer, so a finding detail carrying a quote cannot forge the array.
+    val renderLintJson: findings: LintFinding list -> string
