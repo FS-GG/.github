@@ -49,7 +49,7 @@ registry like any other, and this org gates its registries.
 | [0023](0023-onboard-fs-gg-audio-as-an-sdd-driven-component.md) | Onboard **FS.GG.Audio** as the seventh component — render-independent, depends on no FS-GG component | Accepted |
 | [0024](0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) | Wire FS.GG.Audio into the `game`/`sample-pack` profile on its own `$(FsGgAudioVersion)` axis; complete the extraction | Accepted |
 | [0025](0025-first-class-shipped-surface-mutation-event.md) | First-class **shipped-surface mutation** — a changed `.fsi` baseline of a *published* surface is a governed event | Accepted |
-| [0026](0026-committed-compact-ship-verdict.md) | **Committed compact ship verdict** — the merge-boundary answer survives in git history | Proposed |
+| [0026](0026-committed-compact-ship-verdict.md) | **Committed compact ship verdict** — the merge-boundary answer survives in git history | Accepted |
 | [0027](0027-worker-keyed-claim-lock-and-worker-channel.md) | The parallel-work lock is keyed on the **worker**, not the account — comment-order CAS, leases, a worker channel | Accepted |
 | [0028](0028-keyboard-input-config-mechanism-policy-boundary.md) | Keyboard input-config boundary — **mechanism** (Rendering) vs **policy** (Game); the command id is an opaque token | Accepted |
 | [0029](0029-game-owns-the-testspec-corpus.md) | The game TestSpec corpus is FS.GG.Game-owned; `.github` keeps pointer stubs | Accepted |
