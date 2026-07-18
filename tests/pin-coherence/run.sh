@@ -260,6 +260,25 @@ must_fail() {
   fi
 }
 
+# The #1160 distinction, made testable: a FINDING (a real stale/ahead pin, exit 1) and a NO-VERDICT
+# (the gate could not look — an unreadable feed/config/preset, exit 3) must NOT share an exit code, or
+# a transient outage reads as a stale pin and a human hand-advances a pin that was fine. `must_fail`
+# above only checks "non-zero", which cannot tell 1 from 3; these assert the exact code.
+# expect_code <code> <label> <repo> <feed> <required-pattern>
+expect_code() {
+  local want="$1" out rc
+  out="$(gate "$3" "$4")" && rc=0 || rc=$?
+  if [ "$rc" -ne "$want" ]; then
+    bad "$2 (expected exit $want, got $rc)" "$out"
+  elif printf '%s' "$out" | grep -qF -- "$5"; then
+    ok "$2"
+  else
+    bad "$2 (exit $want, but not for the stated reason: no match for '$5')" "$out"
+  fi
+}
+must_finding()   { expect_code 1 "$@"; }   # a real, actionable problem with the subject
+must_noverdict() { expect_code 3 "$@"; }   # the gate could not complete its check (#1160)
+
 echo "--- the green baseline: the pin equals feed-newest ---"
 BASE="$(make_repo base 0.9.0)"
 must_pass "a pin at feed-newest passes" "$BASE"
@@ -563,10 +582,23 @@ BADJSON="$(make_repo badjson)"; printf '{ not json' > "$BADJSON/default.json"; g
 must_fail "an unparsable preset fails" "$BADJSON" "$FEED" "is not valid JSON"
 
 echo
-echo "--- an unreadable or unresolvable feed fails closed ---"
-must_fail "a package absent from the feed fails (404)" "$BASE" "$(feed_with empty404 '[]')" "zero versions"
+echo "--- an unreadable or unresolvable feed is a NO-VERDICT, not a finding (#1160) ---"
+# The heart of #1160: a feed that could not be read is exit 3 (no verdict), NOT exit 1 (a stale pin).
+# Before the harness migration both came back as 1, so a transient nuget.org outage was indistinguishable
+# from a frozen pin and a human would hand-advance a pin that was fine.
+must_noverdict "a feed serving zero versions is a NO-VERDICT (exit 3), not a stale-pin finding" \
+  "$BASE" "$(feed_with empty404 '[]')" "zero versions"
 NOPKG="$WORK/feed-nopkg.json"; printf '{}' > "$NOPKG"
-must_fail "a feed that does not serve the package fails" "$BASE" "$NOPKG" "not on the registry"
+must_noverdict "a feed that does not serve the package is a NO-VERDICT (exit 3)" \
+  "$BASE" "$NOPKG" "not on the registry"
+# ...and the message says out loud that this is not a stale pin, so nobody bumps one on the strength of it.
+must_noverdict "the no-verdict says it is NOT a stale pin" \
+  "$BASE" "$(feed_with empty404b '[]')" "NOT a stale pin"
+# The other side of the distinction: a genuinely frozen pin, read against a HEALTHY feed, stays a
+# FINDING (exit 1). The two codes are what a caller keys on to tell "fix this pin" from "look again".
+FROZEN1160="$(make_repo frozen1160 0.9.0)"; repin "$FROZEN1160" 0.5.0
+must_finding "a frozen pin against a healthy feed stays a FINDING (exit 1), not a no-verdict" \
+  "$FROZEN1160" "$FEED" "is pinned at '0.5.0'"
 
 echo
 echo "--- a pin this gate cannot resolve is an error, never a skip ---"
