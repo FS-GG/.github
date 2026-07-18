@@ -82,12 +82,12 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.2.1.1` | `1.2.1.1` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.12.0` | `0.12.0` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.13.0` | `0.13.0` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `1` | — |
-| `game-sim-core` | FS.GG.Game | `0.5.0` | `0.5.0` |
-| `game-scene-adapter` | FS.GG.Game | `0.5.0` | `0.5.0` |
+| `game-sim-core` | FS.GG.Game | `0.5.1` | `0.5.1` |
+| `game-scene-adapter` | FS.GG.Game | `0.5.1` | `0.5.1` |
 | `fs-gg-audio` | FS.GG.Audio | `0.3.0` | `0.3.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
 | `coord-engine` | FS-GG/.github | `0.6.0` | `0.6.0` |
