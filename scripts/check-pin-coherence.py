@@ -135,6 +135,14 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     range_admits,
 )
 
+# The shared gate harness (#1159, #1158 D2). `run()` guarantees the process exit code is a VERDICT and
+# never an accident: an uncaught exception exits Python 1, which is this gate's FINDING code, so a bug
+# in the gate would otherwise surface to CI as a confident wrong finding about its subject. `ExitCode`
+# is the one exit-code contract. `fsgg_feed.GateError` is a DISTINCT class from `lib.gate.GateError`
+# (they predate the harness and are shared with check-feed-coherence.py); this gate keeps raising the
+# feed one and maps it to a no-verdict code in `main`, so `run()` only has to backstop a genuine crash.
+from lib.gate import ExitCode, run  # noqa: E402  (path shim above must run first)
+
 # Hosts a Renovate `registryUrls` may route FS.GG.* to, and what each one COSTS to read.
 #
 # This used to be a single constant, FEED_HOST = "nuget.pkg.github.com", carrying the comment "the
@@ -1489,6 +1497,25 @@ def check_pin(pin: Pin, resolve, evidence) -> str | None:
     )
 
 
+def _no_verdict(reason: str) -> int:
+    """Print a could-not-look framed as a NO-VERDICT, and return the no-verdict exit code (#1160).
+
+    This gate used to return its FINDING code (1) for every unreadable feed, config, or preset, so a
+    transient nuget.org / GitHub outage was indistinguishable from a stale pin — and a human, reading a
+    red, would "fix" a pin that was fine by hand-advancing it. A no-verdict says the opposite: the gate
+    could not complete its check, so nobody should act as if it did. Both codes are non-green, so CI
+    still fails; the EXIT CODE (3 here vs 1 for a real finding) is what carries the distinction (#1158
+    D2). `fsgg_feed`'s feed/GitHub reads raise a single `GateError` that conflates a permanent 404 with
+    a retryable 5xx, so this uses the conservative permanent code rather than over-claiming retryable.
+    """
+    print(
+        f"::error::check-pin-coherence: NO VERDICT — {reason} This is NOT a stale pin: the gate could "
+        f"not complete its check, so do not hand-advance any pin on the strength of this red (#1160).",
+        file=sys.stderr,
+    )
+    return int(ExitCode.NO_VERDICT_PERMANENT)
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -1516,14 +1543,13 @@ def main(argv: list[str]) -> int:
                 "FSGG_PIN_FIXTURE_OK=1. Refusing to run.",
                 file=sys.stderr,
             )
-            return 1
+            return int(ExitCode.NO_VERDICT_PERMANENT)
         print(f"FIXTURE MODE — reading {args.fixture}, NOT the live feed. Not a coherence signal.")
         try:
             with open(args.fixture, encoding="utf-8") as fh:
                 table = json.load(fh)
         except (OSError, ValueError) as e:
-            print(f"::error::check-pin-coherence: cannot read fixture: {e}", file=sys.stderr)
-            return 1
+            return _no_verdict(f"cannot read fixture: {e}.")
 
         # A fixture feed may carry a canned `_renovate` block so the harness can exercise the
         # bot-evidence legs (blind / benign / manager-broke) with no network. Absent it, the gate is
@@ -1601,23 +1627,17 @@ def main(argv: list[str]) -> int:
     else:
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
         if not token:
-            print(
-                "::error::check-pin-coherence: no GITHUB_TOKEN/GH_TOKEN in the environment. The org "
-                "feed cannot be read without one, and an unreadable feed must fail the gate, not "
-                "skip it.",
-                file=sys.stderr,
+            return _no_verdict(
+                "no GITHUB_TOKEN/GH_TOKEN in the environment, so the feed and the bot's dashboard "
+                "cannot be read at all."
             )
-            return 1
 
         repo = args.repo or os.environ.get("GITHUB_REPOSITORY") or ""
         if not repo:
-            print(
-                "::error::check-pin-coherence: no --repo and no GITHUB_REPOSITORY. The gate needs to "
-                "know which repo's Renovate dashboard and PRs to read in order to tell a BLIND bot "
-                "from a merely-late one (#566). It will not guess, and it will not skip the check.",
-                file=sys.stderr,
+            return _no_verdict(
+                "no --repo and no GITHUB_REPOSITORY, so the gate cannot read the Renovate dashboard "
+                "and PRs it needs to tell a BLIND bot from a merely-late one (#566)."
             )
-            return 1
 
         # Read the registry RENOVATE reads (nuget.org, anonymous), not the org feed. Comparing a pin
         # against a registry the bot cannot see is how a gate demands a bump that can never open —
@@ -1678,8 +1698,7 @@ def main(argv: list[str]) -> int:
             )
         assert_required_pins(pins)
     except GateError as e:
-        print(f"::error::check-pin-coherence: {e}", file=sys.stderr)
-        return 1
+        return _no_verdict(str(e))
 
     problems: list[str] = []
 
@@ -1694,10 +1713,12 @@ def main(argv: list[str]) -> int:
         try:
             expired = check_cap(cap, resolve, dep_ranges)
         except GateError as e:
-            # No `cap.where` prefix here: every GateError check_cap raises already carries one, and
-            # re-prefixing printed the locator twice in the same sentence.
-            problems.append(str(e))
-            continue
+            # A GateError here is a could-not-look (a feed/nuspec read that failed, or an unreadable
+            # trigger), NOT a finding — so it is a no-verdict, and it ABORTS rather than joining the
+            # findings list: an unreliable feed cannot be trusted to have proven the OTHER caps/pins
+            # coherent either. This is the #1160 fix — the very confusion that let a human bump a good
+            # pin. (No `cap.where` prefix: every GateError check_cap raises already carries one.)
+            return _no_verdict(str(e))
         if expired:
             problems.append(expired)
         else:
@@ -1717,8 +1738,11 @@ def main(argv: list[str]) -> int:
             if problem is None:
                 problem = check_pin(pin, resolve, evidence)
         except GateError as e:
-            problems.append(f"{pin.file}:{pin.line}: {e}")
-            continue
+            # Could-not-look for this pin — a feed read that failed, or a literal/scheme that would
+            # not parse — is a no-verdict, not a finding, and it aborts: if the feed was unreadable
+            # for this pin it was unreadable for the run, and the pins already judged "ok" were judged
+            # against the same unreliable feed. Returning a FINDING here is exactly what #1160 fixes.
+            return _no_verdict(f"{pin.file}:{pin.line}: {e}")
         if problem:
             problems.append(problem)
         else:
@@ -1736,14 +1760,16 @@ def main(argv: list[str]) -> int:
                                                     .replace(chr(10), '%0A')}", file=sys.stderr)
             print(f"check-pin-coherence: {p}", file=sys.stderr)
         print(f"\ncheck-pin-coherence: {len(problems)} problem(s).", file=sys.stderr)
-        return 1
+        return int(ExitCode.FINDING)
 
     print(
         "\nok: every annotated pin equals the newest version on the registry Renovate reads, and "
         "every allowedVersions cap still has the reason it was written for."
     )
-    return 0
+    return int(ExitCode.OK)
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    # `run()` backstops a genuine CRASH into a no-verdict (never exit 1, this gate's finding code); the
+    # deliberate no-verdicts above are already mapped by `main` via `_no_verdict` (#1160/#1159).
+    sys.exit(run(main, sys.argv[1:], name="check-pin-coherence"))
