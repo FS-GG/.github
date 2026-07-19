@@ -91,6 +91,12 @@ module RegistryPredicateTests =
         Assert.Equal(Agrees, classify rows (Declares "false") (assert' "fs-gg-playtest" "mirrored" "  FALSE "))
 
     [<Fact>]
+    let ``a quote-typed request value does not read as a spurious contradiction`` () =
+        // A filer typing `"true"` (with quotes) in the form must still agree with the owner's `true`.
+        Assert.Equal(Agrees, classify rows (Declares "true") (assert' "fs-gg-game-core" "mirrored" "\"true\""))
+        Assert.Equal(Agrees, classify rows (Declares "false") (assert' "fs-gg-playtest" "mirrored" "'false'"))
+
+    [<Fact>]
     let ``an absent owner value (Silent) is Unknown, never a refutation (.github#658)`` () =
         match classify rows Silent (assert' "fs-gg-playtest" "mirrored" "true") with
         | Unknown _ -> ()

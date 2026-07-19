@@ -74,13 +74,38 @@ run 4 unknown     "manifest omits mirrored (Silent) -> unknown, never false"    
 run 4 unknown     "no registry row -> unknown"                                    -- predicate no-such-skill mirrored true
 run 4 unknown     "unsupported field -> unknown (abstain, not a guess)"          -- predicate fs-gg-playtest materializes-when x
 
+# A typed (capital/padded) field still finds the manifest's lower-kebab key — else a real #1194
+# refutation silently downgrades to unknown (the case-sensitive-lookup bug).
+run 3 contradicts "a capitalised field name still refutes (Mirrored -> mirrored)" -- predicate fs-gg-playtest Mirrored true
+
+# The env overrides below SAVE and RESTORE rather than run in a `( … )` subshell: a subshell's `ok`/
+# `bad` increments never reach the parent counters, so a FAILURE inside one would not fail the gate —
+# the #266 shape this whole feature exists to refuse, in its own test.
+
+# A MALFORMED owner value — a string `"false"`, not a JSON bool — is UNKNOWN, never believed as a
+# refutation (mirror_of / .github#658). Point a fresh fixture at a manifest that declares it that way.
+BADFIX="$(mktemp -d)"
+mkdir -p "$BADFIX/FS.GG.Game/template/skill-manifest"
+cat >"$BADFIX/FS.GG.Game/template/skill-manifest/skill-manifest.json" <<'JSON'
+{ "skills": [ { "id": "fs-gg-playtest", "mirrored": "false" } ] }
+JSON
+GOOD_REPOS="$FSGG_REPOS_ROOT"
+export FSGG_REPOS_ROOT="$BADFIX"
+run 4 unknown "a non-bool owner mirrored (string) is unknown, never a false agree" -- predicate fs-gg-playtest mirrored false
+run 4 unknown "a non-bool owner mirrored (string) is unknown, never a false refute" -- predicate fs-gg-playtest mirrored true
+export FSGG_REPOS_ROOT="$GOOD_REPOS"
+rm -rf "$BADFIX"
+
 # fail-closed when registry/ is absent (a receiver — ADR-0042 carve-out)
-( export FSGG_REGISTRY="$FIX/registry/DOES-NOT-EXIST.yml"
-  run 4 unknown "registry absent -> unknown (fail closed, ADR-0042)" -- predicate fs-gg-playtest mirrored true )
+GOOD_REG="$FSGG_REGISTRY"
+export FSGG_REGISTRY="$FIX/registry/DOES-NOT-EXIST.yml"
+run 4 unknown "registry absent -> unknown (fail closed, ADR-0042)" -- predicate fs-gg-playtest mirrored true
+export FSGG_REGISTRY="$GOOD_REG"
 
 # fail-closed when the producer checkout is absent
-( export FSGG_REPOS_ROOT="$FIX/.no-repos"
-  run 4 unknown "owner checkout absent -> unknown (fail closed)" -- predicate fs-gg-playtest mirrored true )
+export FSGG_REPOS_ROOT="$FIX/.no-repos"
+run 4 unknown "owner checkout absent -> unknown (fail closed)" -- predicate fs-gg-playtest mirrored true
+export FSGG_REPOS_ROOT="$GOOD_REPOS"
 
 # ---- the CONTRADICTS payload the workflow reads ----------------------------------------------------
 J="$("$ENGINE" predicate fs-gg-playtest mirrored true --json 2>/dev/null)"

@@ -143,9 +143,23 @@ module RegistryPredicate =
     let supportsField (field: string) : bool =
         field.Trim().ToLowerInvariant() = "mirrored"
 
-    /// Normalise a `mirrored` value for comparison: trimmed, lower-cased. The Cli hands the owner's
-    /// value in as `true`/`false` (a JSON bool rendered), and a request's value is free text.
-    let private normalizeMirrored (v: string) : string = v.Trim().ToLowerInvariant()
+    /// Normalise a `mirrored` value for comparison: trimmed, surrounding quotes stripped, lower-cased.
+    /// The Cli hands the owner's value in as `true`/`false` (a JSON bool rendered); a request's value is
+    /// FREE TEXT off the issue form, so a filer typing `"true"` (with quotes) or `True` must not read as
+    /// a spurious contradiction of the owner's `true` (another false-Contradicts avenue, #658's spirit).
+    let private normalizeMirrored (v: string) : string =
+        let t = v.Trim()
+
+        let unquoted =
+            if
+                t.Length >= 2
+                && ((t.StartsWith("\"") && t.EndsWith("\"")) || (t.StartsWith("'") && t.EndsWith("'")))
+            then
+                t.Substring(1, t.Length - 2).Trim()
+            else
+                t
+
+        unquoted.ToLowerInvariant()
 
     let private valuesAgree (field: string) (ownerValue: string) (requested: string) : bool =
         // supportsField has already restricted this to `mirrored`.

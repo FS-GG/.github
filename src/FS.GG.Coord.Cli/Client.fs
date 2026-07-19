@@ -3258,20 +3258,28 @@ module Client =
         | "" -> fallback
         | v -> v
 
-    /// The value of a manifest ENTRY's field, as a string, honoring `mirror_of`: a JSON bool renders
-    /// `true`/`false`; a string/number renders verbatim; a MALFORMED verdict (any other kind) is
-    /// `Silent` — UNKNOWN, never believed (.github#658). An absent field is `Silent` too.
+    /// The value of a manifest ENTRY's field, honoring `mirror_of` EXACTLY. `mirrored` is a BOOL, so a
+    /// JSON bool renders `true`/`false` and ANY other kind — a STRING `"true"`, a number, an array,
+    /// null, or an absent field — is `Silent`: an unparseable verdict is UNKNOWN, never believed
+    /// (.github#658; the Python `mirror_of` is `value if isinstance(value, bool) else None`,
+    /// `scripts/fsgg-skill-registry-check:333`). Believing a string `"true"` here was a fail-OPEN — a
+    /// bad merge or hand-edit would forge a false Agrees/Contradicts, the exact refutation the filing
+    /// check auto-comments. Only `mirrored` reaches here today (the Cli gates on `supportsField`); a
+    /// future string-typed field must add its OWN typed arm rather than fall through this bool rule.
+    ///
+    /// The lookup normalises the field FIRST (`supportsField` already accepted `Mirrored`/` mirrored `),
+    /// because `TryGetProperty` is case-SENSITIVE against the manifest's canonical lower-kebab key — an
+    /// un-normalised `Mirrored` would miss and downgrade a real #1194 refutation to `Unknown`.
     let private manifestFieldValue (entry: JsonElement) (field: string) : RegistryPredicate.OwnerDeclaration =
         let mutable el = Unchecked.defaultof<JsonElement>
+        let key = field.Trim().ToLowerInvariant()
 
-        if not (entry.TryGetProperty(field, &el)) then
+        if not (entry.TryGetProperty(key, &el)) then
             RegistryPredicate.Silent
         else
             match el.ValueKind with
             | JsonValueKind.True -> RegistryPredicate.Declares "true"
             | JsonValueKind.False -> RegistryPredicate.Declares "false"
-            | JsonValueKind.String -> RegistryPredicate.Declares(el.GetString())
-            | JsonValueKind.Number -> RegistryPredicate.Declares(el.GetRawText())
             | _ -> RegistryPredicate.Silent
 
     /// What the OWNING producer's manifest declares for `(row.Id, field)`, resolved off local producer
