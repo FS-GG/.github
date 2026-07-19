@@ -117,7 +117,7 @@
 # .github and its validator lives in FS.GG.SDD, and no PR spans two repos. Correcting the ADR is
 # .github#689.
 schemaVersion: 1
-updated: "2026-07-14"
+updated: "2026-07-19"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -156,7 +156,7 @@ skills:
   # ------------------------------------------------------------------------------------------------
   - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: 12b79ec6eb23ef6a0e2634fbdbcdc50bb7ff006a3ff9b96f97a276f366fac38b, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: ed12257f290a881c80cb07740773ce6d199edf11adfd0906b336a1b624ffc887, materializes-when: "profile in [app, sample-pack, game]" }
-  - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: 7683ad34bdda9c00cd51fac43ce5a4ef8085f671ee2b3ecc49043e1e416d1075, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: 2d48e721837c571cd13e073c54787350cb59c4bd5e3cf9cc928c3d2c96303a23, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: da2c5acf71da2873fcd375c01566ff777f895a39c9f998576964ab3f473130af, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-layout,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-layout/SKILL.md,    sha256: 85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: cb74e2a9b92b5393294bf990fe079c8c727c42844cd7261bb0e08d2b7060ea27, materializes-when: "profile in [app, game]" }
