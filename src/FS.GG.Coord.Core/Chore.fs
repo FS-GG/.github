@@ -47,6 +47,27 @@ module Chore =
     /// state the callers already exclude.
     let private nameList (xs: string list) = String.concat ", " xs
 
+    /// THE FLIP-TIME PREDICATE GATE — ADR-0050 call-site B (.github#1199, .github#1203).
+    ///
+    /// `BLOCKER-CLEARED` clears an item `Blocked → Ready` when its recorded blockers resolve. But a
+    /// blocker can be a PROXY for the item's real acceptance predicate — FS.GG.Rendering#923's "WI-2
+    /// (Game publishes the skill)" closing would flip it to `Ready` even though the semantic dependency
+    /// (the registry row exists AND the owning manifest agrees) is not satisfied. So an item that
+    /// DECLARES a machine-checkable registry predicate does not leave `Blocked` on blockers-cleared alone:
+    /// the resolved verdict must also `Agrees`.
+    ///
+    /// `true` — the flip may proceed — in exactly two cases: the item declares NO such predicate (`None`,
+    /// the common case, ungated by ADR-0050 boundary decision 5), or its predicate `Agrees`. A
+    /// `Contradicts` or an `Unknown` returns `false` and HOLDS the item — fail closed, on the same terms a
+    /// `BlockerUnknown` already holds `BLOCKER-CLEARED` (#266, #421): "could not evaluate the predicate" is
+    /// not "the predicate holds", and a proxy blocker closing can no longer fake readiness.
+    let private predicateAllowsFlip (item: Item) : bool =
+        match item.Predicate with
+        | None
+        | Some RegistryPredicate.Agrees -> true
+        | Some(RegistryPredicate.Contradicts _)
+        | Some(RegistryPredicate.Unknown _) -> false
+
     [<Sealed>]
     type Chore internal (subject: Ref, kind: ChoreKind, size: ChoreSize) =
         member _.Subject = subject
@@ -198,11 +219,19 @@ module Chore =
               // resolve. One `BlockerUnknown` or `BlockerUnparseable` and this does not fire: a blocker we
               // could not resolve is not a blocker we cleared (#266, #421), and unblocking on a failed read
               // is the fail-open this codebase exists to make unwritable.
+              //
+              // ...AND the item's declared registry predicate must agree — ADR-0050 call-site B. This is
+              // the SAME fail-closed shape one step further out: `predicateAllowsFlip` holds the item on a
+              // `Contradicts`/`Unknown` exactly as a `BlockerUnknown` above holds it, so a PROXY blocker
+              // closing can no longer fake readiness for an item whose real acceptance is a registry fact
+              // (FS.GG.Rendering#923). An item that declares no predicate (`None`) is ungated and flips as
+              // today (ADR-0050 decision 5).
               if
                   item.State = Open
                   && item.Status = Blocked
                   && not item.Blockers.IsEmpty
                   && item.Blockers |> List.forall Blockers.isResolved
+                  && predicateAllowsFlip item
               then
                   Chore(item.Ref, BlockerCleared(item.Blockers |> List.map (fun b -> b.Display)), Quick)
 

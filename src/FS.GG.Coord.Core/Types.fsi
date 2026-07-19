@@ -223,7 +223,23 @@ module Types =
           ItemPr: int option
           /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
           /// declares no such line. When present, it refuses scheduling regardless of `TouchSet`.
-          HumanBlock: HumanBlock option }
+          HumanBlock: HumanBlock option
+          /// The item's declared machine-checkable registry predicate, ALREADY RESOLVED against the owning
+          /// producer's manifest (ADR-0050 call-site B / .github#1203). This is a FACT on the item, the
+          /// way `Blocker.State` is — resolved at the impure edge (the Cli reads `registry/skills.yml` and
+          /// the owner checkout), never by `Chore.derive`, which stays pure and cannot mistake a failed
+          /// read for a verdict (#266).
+          ///
+          /// `None` is the common case: the item declares NO machine-checkable predicate (its body carries
+          /// no `RegistryPredicate` assertion), so the `BLOCKER-CLEARED` flip is not gated on one and fires
+          /// on blockers-cleared exactly as today (ADR-0050 boundary decision 5 — a general prose predicate
+          /// is not mechanically evaluable, and inventing one is out of scope).
+          ///
+          /// When `Some`, the resolved verdict gates the flip: `Agrees` lets it proceed; `Contradicts` and
+          /// `Unknown` HOLD the item `Blocked` — fail closed, exactly as one `BlockerUnknown` already keeps
+          /// `BLOCKER-CLEARED` from firing (#266, #421). "Could not evaluate the predicate" is not "the
+          /// predicate holds."
+          Predicate: RegistryPredicate.Verdict option }
 
     /// A three-valued verdict. There is no `bool` in this domain.
     ///

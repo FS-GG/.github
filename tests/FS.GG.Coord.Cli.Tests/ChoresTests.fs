@@ -70,7 +70,8 @@ let private item n status state blockers claim =
       Blockers = blockers
       Claim = claim
       ItemPr = None
-      HumanBlock = None }
+      HumanBlock = None
+      Predicate = None }
 
 let private blocker n state =
     { Ref = Some(ref' n)

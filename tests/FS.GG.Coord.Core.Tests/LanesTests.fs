@@ -34,7 +34,8 @@ module LanesTests =
           Blockers = []
           Claim = None
           ItemPr = None
-          HumanBlock = None }
+          HumanBlock = None
+          Predicate = None }
 
     let private item n paths = itemAt (ref n) paths
 

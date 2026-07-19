@@ -154,6 +154,14 @@ module Chore =
         /// this is not offered at all, because "I could not look" is not "I looked and it is fine" (#266,
         /// #421) and the safe direction on a block is to hold it. Carries what it saw resolve.
         ///
+        /// ...AND, for an item that DECLARES a machine-checkable registry predicate, that predicate's
+        /// resolved verdict must `Agrees` — ADR-0050 call-site B (.github#1203). A recorded blocker can be
+        /// a PROXY for the item's real acceptance (FS.GG.Rendering#923's "WI-2 (Game publishes the skill)"),
+        /// so blockers-cleared alone can fake readiness; the flip-time predicate re-verify closes that. A
+        /// `Contradicts` or an `Unknown` HOLDS the item on exactly the terms a `BlockerUnknown` does — fail
+        /// closed (#266). An item declaring no predicate (`Item.Predicate = None`) is ungated and flips as
+        /// today (ADR-0050 decision 5 — a general prose predicate is not mechanically evaluable).
+        ///
         /// Never on a RESERVED item: that `Blocked` is most likely the holder's own, and their column wins
         /// (#331). See "the reserver owns the column" below.
         | BlockerCleared of resolved: string list
@@ -322,8 +330,11 @@ module Chore =
     /// It cannot read anything, so it cannot mistake a failed read for a condition. Every rule fails CLOSED
     /// over the facts IT reads: the cost of a missed chore is that the next caller does it, and the cost of a
     /// wrong one is a board write nobody wanted. So `BlockerUnknown` and `BlockerUnparseable` stop
-    /// `BLOCKER-CLEARED` (a blocker we could not resolve is not one we cleared, #266/#421), and
-    /// `LivenessUnknown` stops `STALE-CLAIM` (a liveness probe that failed is not an abandoned lease, #581).
+    /// `BLOCKER-CLEARED` (a blocker we could not resolve is not one we cleared, #266/#421), a resolved
+    /// registry `Predicate` that `Contradicts` or is `Unknown` stops it too (ADR-0050 call-site B — the
+    /// verdict is resolved at the impure edge and read here as a fact, so `derive` stays pure while the flip
+    /// still fails closed on a predicate it could not verify, .github#1203), and `LivenessUnknown` stops
+    /// `STALE-CLAIM` (a liveness probe that failed is not an abandoned lease, #581).
     ///
     /// It is PER-RULE, and deliberately not the blanket "an unknown fact anywhere produces no chore" this
     /// sentence used to claim. That was false and could not have been otherwise: a blocker we failed to

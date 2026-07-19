@@ -29,7 +29,8 @@ module BatchTests =
           Blockers = []
           Claim = None
           ItemPr = None
-          HumanBlock = None }
+          HumanBlock = None
+          Predicate = None }
 
     let private held w ageSeconds it =
         { it with

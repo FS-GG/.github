@@ -127,7 +127,14 @@ module Types =
           ItemPr: int option
           /// A `Blocked on: human/...` sentinel parsed from the body (#1103 leg 2). `None` when the item
           /// declares no such line. When present it refuses scheduling regardless of `TouchSet`.
-          HumanBlock: HumanBlock option }
+          HumanBlock: HumanBlock option
+          /// The item's declared machine-checkable registry predicate, ALREADY RESOLVED against the owning
+          /// manifest (ADR-0050 call-site B / .github#1203). `None` means the item declares no such
+          /// predicate — the common case, and the one that flips on blockers-cleared exactly as today. A
+          /// resolved `Verdict` is the FACT the pure `BLOCKER-CLEARED` derivation reads, the way it reads
+          /// `Blocker.State`: `Agrees` lets the flip proceed, `Contradicts`/`Unknown` HOLD it (fail closed,
+          /// #266). Resolved at the impure edge, never in `Chore.derive` — see `RegistryPredicate`.
+          Predicate: RegistryPredicate.Verdict option }
 
     type Verdict<'a> =
         | Green of 'a
