@@ -237,6 +237,28 @@ class Pin(NamedTuple):
     dep_name: str
     current_value: str
     versioning: str | None  # the annotation's own `versioning=<v>` capture, or None (→ manager default)
+    value_line: int = 0     # the line the `currentValue` was CAPTURED on — the annotation line + the
+    #                         manager's small look-ahead window; equal to `line` only when the pin sits
+    #                         on the annotation line itself.
+    from_comment: bool = False  # True when that captured line is a COMMENT, not a pin literal — the
+    #                             annotation has drifted from its pin and the manager is reading a
+    #                             version-shaped string out of prose (#1236).
+
+
+# The comment marker per file type the annotation manager scans (its managerFilePatterns): `#` for
+# the line-comment families, `<!-- -->` for the XML families. JSON has no comments, so a capture
+# there is never prose. Kept conservative on purpose: a real pin literal is NEVER on a comment-only
+# line, so "the captured line is a comment" has no false positives — and a gate that cried wolf on a
+# good pin would teach exactly the "reds are noise" habit the #1236 class needs broken.
+def _capture_from_comment(rel: str, text: str, value_start: int) -> bool:
+    ext = os.path.splitext(rel)[1].lower()
+    line_start = text.rfind("\n", 0, value_start) + 1
+    if ext in (".yml", ".yaml", ".sh"):
+        return text[line_start:value_start].lstrip().startswith("#")
+    if ext in (".props", ".targets", ".fsproj"):
+        # inside an XML comment iff the nearest `<!--` before the capture is not yet closed by a `-->`
+        return text.rfind("<!--", 0, value_start) > text.rfind("-->", 0, value_start)
+    return False  # .json and anything else: no line-comment syntax to hide a phantom in
 
 
 def _to_python_regex(renovate_regex: str) -> re.Pattern:
@@ -360,6 +382,7 @@ def scan_pins(root: str, regexes: list[re.Pattern], matches_path) -> list[Pin]:
                 # legitimate None (→ manager default), NOT the empty string. Keep the two apart:
                 # `versioning=` written empty would be a different, broken, thing from omitting it.
                 versioning = g.get("versioning")
+                value_start = m.start("currentValue")
                 pins.append(
                     Pin(
                         file=rel,
@@ -368,6 +391,8 @@ def scan_pins(root: str, regexes: list[re.Pattern], matches_path) -> list[Pin]:
                         dep_name=(g.get("depName") or "").strip(),
                         current_value=(g.get("currentValue") or "").strip(),
                         versioning=versioning.strip() if versioning is not None else None,
+                        value_line=text.count("\n", 0, value_start) + 1,
+                        from_comment=_capture_from_comment(rel, text, value_start),
                     )
                 )
 
@@ -391,6 +416,33 @@ def assert_required_pins(pins: list[Pin]) -> None:
         f"Either they were removed (drop them from REQUIRED_PINS), or the annotation/manager regex "
         f"stopped matching them — in which case the bot has gone silent on them exactly as in "
         f".github#263, and the literals will freeze without anything noticing."
+    )
+
+
+def prose_capture_problem(pin: Pin) -> str | None:
+    """A FINDING if the pin's version was captured from a COMMENT rather than a pin literal.
+
+    The org preset's custom manager captures the version a line or two below the `# renovate:`
+    annotation. When the annotation drifts away from its pin — an explanatory comment slips in
+    between — the manager's look-ahead lands on that comment and reads a version-shaped string out
+    of the PROSE instead of the pin. Renovate and this gate then both track the phantom: a bump PR
+    would rewrite the comment while the real pin freezes silently. That is the exact mechanism of
+    #1236, and every symptom of the recurring freeze family (#263/#576/#1121) it belongs to.
+
+    This is a FINDING, not a no-verdict: the repo is misconfigured whether or not the feed is
+    reachable, and it is checked BEFORE the feed comparison so the phantom cannot masquerade as a
+    merely-stale pin with a "merge the bump PR" remedy — the bump PR here targets the comment.
+    """
+    if not pin.from_comment:
+        return None
+    return (
+        f"{pin.file}:{pin.line}: the `# renovate:` annotation for {pin.dep_name} captured its "
+        f"version from a COMMENT at line {pin.value_line} (`{pin.current_value}`), not from the pin "
+        f"literal it is meant to bump. The manager captures the version a line or two below the "
+        f"annotation, so a comment carrying a version-shaped string in that gap SHADOWS the real "
+        f"pin — Renovate and this gate both read the phantom, and a bump PR would rewrite the "
+        f"comment while the pin freezes (#1236). Move the annotation to sit immediately above the "
+        f"pin, with NO comment between the two."
     )
 
 
@@ -1701,6 +1753,23 @@ def main(argv: list[str]) -> int:
         return _no_verdict(str(e))
 
     problems: list[str] = []
+
+    # Structural, and FIRST — no feed needed. A `# renovate:` annotation whose captured version sits
+    # in a COMMENT rather than on its pin has drifted from that pin (#1236): the manager, and this
+    # gate, then track a phantom out of the prose. Caught here, before the feed comparison, so the
+    # phantom cannot wear the "stale pin — merge the bump PR" costume — that bump PR targets the
+    # comment. If any pin is in this state the run is a FINDING and stops here: the feed comparison
+    # below would be comparing the wrong literal anyway.
+    drifted = [prose_capture_problem(pin) for pin in sorted(pins)]
+    drifted = [p for p in drifted if p]
+    if drifted:
+        print()
+        for p in drifted:
+            print(f"::error::check-pin-coherence: {p.replace('%', '%25').replace(chr(13), '')
+                                                    .replace(chr(10), '%0A')}", file=sys.stderr)
+            print(f"check-pin-coherence: {p}", file=sys.stderr)
+        print(f"\ncheck-pin-coherence: {len(drifted)} problem(s).", file=sys.stderr)
+        return int(ExitCode.FINDING)
 
     # The caps, first: a cap that has outlived its reason is silently holding a whole repo back, and
     # unlike a stale pin nothing else in the org will ever notice (#943, #850).

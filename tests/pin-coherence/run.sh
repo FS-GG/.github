@@ -204,6 +204,45 @@ PY
   git -C "$root" add -A
 }
 
+# drift_annotation <repo> — reproduce the #1236 shape: slip a version-bearing COMMENT between the
+# `# renovate:` annotation and its pin, so the manager's look-ahead captures the phantom from prose
+# instead of the pin literal. The `0.14.0` here is exactly the class of version-shaped string that
+# shadowed the real SDD.Cli pin on origin/main until #1237 seated the annotation on the pin.
+drift_annotation() {
+  local root="$1"
+  python3 - "$root/$PIN_FILE" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+m = re.search(r"^(\s*)#\s*renovate:.*$", text, re.MULTILINE)
+if not m:
+    sys.exit("vacuous fixture: no `# renovate:` annotation to drift from its pin")
+indent = m.group(1)
+inject = f"\n{indent}# note: 0.14.0 parses as >=0.14.0 under nuget versioning, not a peg"
+open(path, "w", encoding="utf-8").write(text[:m.end()] + inject + text[m.end():])
+PY
+  git -C "$root" add -A
+}
+
+# precomment_annotation <repo> — put the same version-bearing comment ABOVE the annotation, the shape
+# #1237 moved to. The manager scans FORWARD from the annotation, so prose before it cannot shadow the
+# pin — this is the fixture that proves the fix's placement is safe, not merely that the drift reds.
+precomment_annotation() {
+  local root="$1"
+  python3 - "$root/$PIN_FILE" <<'PY'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+m = re.search(r"^(\s*)#\s*renovate:.*$", text, re.MULTILINE)
+if not m:
+    sys.exit("vacuous fixture: no `# renovate:` annotation to precede")
+indent = m.group(1)
+inject = f"{indent}# note: 0.14.0 parses as >=0.14.0 under nuget versioning, not a peg\n"
+open(path, "w", encoding="utf-8").write(text[:m.start()] + inject + text[m.start():])
+PY
+  git -C "$root" add -A
+}
+
 # edit_json <file> <python-expr-over-`d`> — mutate a JSON file in place. Refuses a no-op.
 edit_json() {
   local path="$1" expr="$2"
@@ -1019,6 +1058,33 @@ must_fail "DISAGREEING per-framework groups are refused, not guessed between" "$
   "$(feed_nuspec disagree 'n["YoloDev.Expecto.TestSdk"]["1.0.0"]["Expecto"] = ["[9.0.0, 10.0.0)", "[9.0.0, 12.0.0)"]')" \
   "DISAGREEING ranges"
 
+# --- the annotation must sit ON its pin, not be shadowed by a version in a comment (#1236) ---
+# When a comment carrying a version-shaped string slips between the `# renovate:` annotation and the
+# pin, the manager's look-ahead captures the PHANTOM out of the prose. Renovate and this gate both
+# track it; a bump PR rewrites the comment and the real pin freezes — the exact #263/#576/#1121
+# freeze family, caught here STRUCTURALLY (no feed) so a future drift reds instead of freezing.
+DRIFT="$(make_repo drift 0.9.0)"
+drift_annotation "$DRIFT"
+must_finding "an annotation shadowed by a version in a comment reds (#1236 drift)" \
+  "$DRIFT" "$FEED" "captured its version from a COMMENT"
+must_finding "...and it captured the phantom 0.14.0 from the comment, not the 0.9.0 pin" \
+  "$DRIFT" "$FEED" "0.14.0"
+must_finding "...and it names the fix: seat the annotation immediately above the pin" \
+  "$DRIFT" "$FEED" "Move the annotation to sit immediately above the pin"
+
+# The masquerade #1236 is really about: even when the feed's newest EQUALS the phantom — so the naive
+# "captured value == newest" comparison would report GREEN — the drift still reds, because it is
+# caught STRUCTURALLY, before the feed is read. Without that ordering the phantom passes as coherent.
+must_finding "a drift reds even when the feed's newest equals the phantom (caught before the compare)" \
+  "$DRIFT" "$(feed_with phantom '["0.14.0"]')" "captured its version from a COMMENT"
+
+# The SAME version-shaped comment ABOVE the annotation is harmless: the manager scans FORWARD, so
+# prose before the annotation cannot shadow the pin. This is exactly the shape #1237 moved the block
+# to — the fix must PASS, or the gate would forbid its own remedy.
+ABOVE="$(make_repo above 0.9.0)"
+precomment_annotation "$ABOVE"
+must_pass "a version-shaped comment ABOVE the annotation does not shadow the pin (#1236 fix shape)" "$ABOVE"
+
 echo
 echo "--- CI guard on the real repo (no network: structure only) ---"
 # Proves REQUIRED_PINS still names a pin that exists here, and that this repo's own routing is one
@@ -1048,6 +1114,10 @@ for _p in pins:
         f"{_p.dep_name} at {_p.current_value!r} is NOT a single version under versioning={_scheme!r} "
         f"— it can never bump (#576)"
     )
+    # ...and each annotation must actually sit on its pin, not read a phantom out of a nearby comment
+    # (#1236). is_single_version above passes a phantom like `0.14.0` happily — this is what catches
+    # the drift, and it is asserted against the real tree so a re-separated annotation reds a test.
+    assert gate.prose_capture_problem(_p) is None, gate.prose_capture_problem(_p)
 gate.assert_required_pins(pins)
 assert pins, "no pins found in the real repo"
 
