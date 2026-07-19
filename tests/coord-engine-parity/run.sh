@@ -891,6 +891,102 @@ if [ -z "$CHILD_PORT" ]; then bad "child missing-arg fixture bound a port"; else
   kill "$CHILD_SRV" 2>/dev/null
 fi
 
+# ---- `room open` (ADR-0051, #1215): CREATE the room issue + WRITE `Rooms:` back-refs -------------
+#
+# `room open --over N,M` opens a coordination room over a contended cluster. It is the engine's one
+# net-new WRITE pair — a POST that creates an issue (nothing else does) and a PATCH per member that adds
+# a `Rooms: #room` back-reference — so this holds both to their HTTP shape against `room_server.py`,
+# which records the POST body (/_posts) and every member PATCH (/_patches). Reuses the child section's
+# `posts_on`/`patches_on` readers. Each leg spawns a FRESH server, since the writes mutate the bodies.
+roomsrv() {  # roomsrv <env-kv...> --  ; sets globals ROOM_PORT and ROOM_SRV for the spawned fixture
+  local envs=() ; while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
+  local out; out="$(mktemp)"
+  env ${envs[@]+"${envs[@]}"} python3 "$HERE/room_server.py" >"$out" 2>/dev/null &
+  local srv=$! port=""
+  for _ in $(seq 1 50); do port="$(head -n1 "$out" 2>/dev/null)"; [ -n "$port" ] && break; sleep 0.1; done
+  rm -f "$out"
+  ROOM_PORT="$port"; ROOM_SRV="$srv"
+}
+
+# 1. OPEN A ROOM over two items: create the room issue (off-board, `Paths: none`) and back-ref BOTH.
+roomsrv -- room
+if [ -z "$ROOM_PORT" ]; then bad "room fixture bound a port"; else
+  renv() { FSGG_GITHUB_API_BASE="http://127.0.0.1:$ROOM_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" "$@"; }
+  r1="$(renv room open --over 302,303 --repo FS.GG.SDD --worker rook-99 2>&1)"; r1rc=$?
+  { [ "$r1rc" -eq 0 ] && printf '%s' "$r1" | grep -q 'opened room FS.GG.SDD#220'; } \
+    && ok "room open: creates the room and reports it (ADR-0051)" \
+    || bad "room open parity" "rc=$r1rc: $r1"
+  # The room issue is created OFF the board — its body declares `Paths: none`, so `take`/`batch` never
+  # offer it as work. (Recorded on /_posts.)
+  rp="$(posts_on "$ROOM_PORT")"
+  printf '%s' "$rp" | jq -e 'length == 1 and (.[0].title | length > 0) and (.[0].body | test("Paths: none"))' >/dev/null 2>&1 \
+    && ok "room open: the room issue is created ONCE, off-board (Paths: none)" \
+    || bad "room open: room create body must declare Paths: none" "posts: $rp"
+  # Each member gains a `Rooms: #220` line (bare `#220` — same repo as the room). (Recorded on /_patches.)
+  rpa="$(patches_on "$ROOM_PORT")"
+  printf '%s' "$rpa" | jq -e '[.[] | select(.body | test("Rooms: #220"))] | length == 2' >/dev/null 2>&1 \
+    && ok "room open: writes a Rooms: #220 back-ref onto BOTH members" \
+    || bad "room open: both members must get the back-ref" "patches: $rpa"
+  kill "$ROOM_SRV" 2>/dev/null
+fi
+
+# 2. IDEMPOTENT PER MEMBER. #302 already references #220: it is read and LEFT ALONE; #303 still gets it.
+roomsrv FSGG_PARITY_ROOM_PREEXISTING=302 -- room
+if [ -z "$ROOM_PORT" ]; then bad "room idempotent fixture bound a port"; else
+  FSGG_GITHUB_API_BASE="http://127.0.0.1:$ROOM_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" room open --over 302,303 --repo FS.GG.SDD --worker rook-99 >/dev/null 2>&1
+  rpa2="$(patches_on "$ROOM_PORT")"
+  printf '%s' "$rpa2" | jq -e '([.[] | select(.number == 302)] | length == 0) and ([.[] | select(.number == 303)] | length == 1)' >/dev/null 2>&1 \
+    && ok "room open: a member already in the room is NOT re-PATCHed (idempotent per member)" \
+    || bad "room open: only the un-referenced member should be PATCHed" "patches: $rpa2"
+  kill "$ROOM_SRV" 2>/dev/null
+fi
+
+# 2b. INTRA-REPO ONLY. A room whose members span repos is REFUSED — a cross-repo scan cannot verify the
+#     derived close, so tool-created rooms are kept single-repo. No issue is created (create is not reached).
+roomsrv -- room
+if [ -z "$ROOM_PORT" ]; then bad "room cross-repo fixture bound a port"; else
+  r2b="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$ROOM_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" room open --over 302,FS-GG/FS.GG.Rendering#99 --repo FS.GG.SDD --worker rook-99 2>&1)"; r2brc=$?
+  { [ "$r2brc" -ne 0 ] && printf '%s' "$r2b" | grep -q 'intra-repo'; } \
+    && ok "room open: refuses a cross-repo cluster (intra-repo only, ADR-0027 §5)" \
+    || bad "room open must refuse cross-repo members" "rc=$r2brc: $r2b"
+  [ "$(posts_on "$ROOM_PORT")" = '[]' ] \
+    && ok "room open: ...and creates NO room when the cluster is cross-repo" \
+    || bad "room open must not create a room for a cross-repo cluster" "posts: $(posts_on "$ROOM_PORT")"
+  kill "$ROOM_SRV" 2>/dev/null
+fi
+
+# 3. SURFACE THE API'S OWN ERROR. The room-create POST 422s: `room open` REFUSES (non-zero) and reports
+#    the API's diagnosis, never a guessed cause — and writes no back-refs, since there is no room to name.
+roomsrv FSGG_PARITY_CREATE_FAIL=1 -- room
+if [ -z "$ROOM_PORT" ]; then bad "room create-fail fixture bound a port"; else
+  r3="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$ROOM_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" room open --over 302,303 --repo FS.GG.SDD --worker rook-99 2>&1)"; r3rc=$?
+  [ "$r3rc" -ne 0 ] \
+    && ok "room open: a failed room-create refuses (non-zero), never a half-open room" \
+    || bad "room open must refuse when the room-create fails" "rc=$r3rc: $r3"
+  [ "$(patches_on "$ROOM_PORT")" = '[]' ] \
+    && ok "room open: ...and writes NO back-ref when there is no room to reference" \
+    || bad "room open must not PATCH members when create failed" "patches: $(patches_on "$ROOM_PORT")"
+  kill "$ROOM_SRV" 2>/dev/null
+fi
+
+# ---- inbox WIDENING (ADR-0051, #1215): a message on a REFERENCED room is delivered ----------------
+#
+# ADR-0051's one real code delta: `inbox`'s subject set widens to include the coordination rooms the
+# in-flight items reference. `roominbox_server.py` isolates the widening from the existing arms — the
+# room (#216) lives in FS.GG.SDD, a repo NOT on the board and NOT `--repo`, so arm B never lists it. The
+# ONLY path to its message is #215's `Rooms: FS-GG/FS.GG.SDD#216` line. Delivery therefore proves the
+# widening is load-bearing, not redundant with the open-issue scan.
+RI_OUT="$(mktemp)"; python3 "$HERE/roominbox_server.py" >"$RI_OUT" 2>/dev/null & RI_SRV=$!
+RI_PORT=""; for _ in $(seq 1 50); do RI_PORT="$(head -n1 "$RI_OUT" 2>/dev/null)"; [ -n "$RI_PORT" ] && break; sleep 0.1; done
+rm -f "$RI_OUT"
+if [ -z "$RI_PORT" ]; then bad "roominbox fixture bound a port"; else
+  ri="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$RI_PORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" inbox --repo FS.GG.Rendering --worker wren-inbox --json 2>&1)"; rirc=$?
+  printf '%s' "$ri" | jq -e 'any(.[]?; .item == "FS.GG.SDD#216" and (.text | test("split the Scene edge")))' >/dev/null 2>&1 \
+    && ok "inbox widening: a message on a REFERENCED room (in a repo arm B never scans) is delivered (ADR-0051)" \
+    || bad "inbox widening parity" "rc=$rirc: $ri"
+  kill "$RI_SRV" 2>/dev/null
+fi
+
 # ---- TAKE/NEXT NAME THE OBSERVED REASON, NOT A GUESSED LIST (case 41 §4): #440 --------------------
 #
 # The corpus (`tests/fsgg-coord/cases/41-residue-and-full-queue.sh` §4, #440) certifies that a full

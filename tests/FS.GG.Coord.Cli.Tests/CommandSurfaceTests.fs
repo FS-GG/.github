@@ -81,7 +81,11 @@ module CommandSurfaceTests =
 
           // The ADR-0050 registry-predicate oracle (#1202) — LOCAL: reads registry + producer manifests,
           // no board, no token.
-          "predicate", Predicate ]
+          "predicate", Predicate
+
+          // Coordination rooms (ADR-0051, #1215). The ONE two-word verb — a `room` namespace so
+          // `room close`/`room list` have a home; the dispatch check below splits on whitespace for it.
+          "room open", RoomOpen ]
 
     /// The two commands with no verb form — they are reached by flag (`--help`, `--version`), so the
     /// verb inventory cannot account for them and the DU cross-check must be told so explicitly.
@@ -116,7 +120,9 @@ module CommandSurfaceTests =
         let missing =
             surface
             |> List.choose (fun (verb, expected) ->
-                match parse [ verb ] with
+                // Split on whitespace: a multi-word verb (`room open`, ADR-0051) is dispatched by its
+                // token sequence, not by a single argv element. Single-word verbs are unaffected.
+                match parse (verb.Split(' ') |> Array.toList) with
                 | Ok o when o.Command = expected -> None
                 | Ok o -> Some $"%s{verb} → %A{o.Command} (expected %A{expected})"
                 | Error e -> Some $"%s{verb} → REFUSED: %s{e}")

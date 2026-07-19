@@ -512,3 +512,38 @@ module OptionsTests =
         )
         // an unset / empty env is an empty roster, not an error
         Assert.Equal<FS.GG.Coord.Types.Ref list>([], Client.parseChoreLocks "")
+
+    // ---- `room open` (ADR-0051, #1215) ----------------------------------------------------------------
+
+    [<Fact>]
+    let ``room open --over parses the two-word verb and its comma list`` () =
+        let o = parse [ "room"; "open"; "--over"; "12,13" ] |> ok
+        Assert.Equal(RoomOpen, o.Command)
+        Assert.Equal<string list>([ "12"; "13" ], o.Over)
+
+    [<Fact>]
+    let ``--over trims around commas and drops empties`` () =
+        // `--over 12, 13,` is one honest list of two, not three-with-a-blank.
+        let o = parse [ "room"; "open"; "--over"; "12, 13," ] |> ok
+        Assert.Equal<string list>([ "12"; "13" ], o.Over)
+
+    [<Fact>]
+    let ``an --over with no real ref is refused`` () =
+        let e = parse [ "room"; "open"; "--over"; "," ] |> rejected
+        Assert.Contains("--over", e)
+
+    [<Fact>]
+    let ``an unknown room subcommand is NAMED and refused`` () =
+        let e = parse [ "room"; "close" ] |> rejected
+        Assert.Contains("close", e)
+
+    [<Fact>]
+    let ``a bare room needs a subcommand`` () =
+        let e = parse [ "room" ] |> rejected
+        Assert.Contains("subcommand", e)
+
+    [<Fact>]
+    let ``--over is refused on a command that does not read it (the residue rule)`` () =
+        // `FOver -> Only [ RoomOpen ]`: any other verb accepting `--over` would swallow it silently.
+        let e = parse [ "claim"; "1"; "--over"; "2" ] |> rejected
+        Assert.Contains("--over", e)

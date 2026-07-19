@@ -103,6 +103,7 @@ module Options =
         /// the exit code (the `landable` shape). Assertion is positional or read from a filed
         /// `cross-repo-request` body on stdin. Call-site A of ADR-0050 (.github#1202).
         | Predicate
+        | RoomOpen
 
         | Help
         | Version
@@ -224,7 +225,11 @@ module Options =
           IssueState: string option
           /// `--local` (`who`) — join the live claims to the local git worktrees (#959). `who` is the only
           /// reader.
-          Local: bool }
+          Local: bool
+
+          /// `--over N,M` (`room open`) — the item refs the coordination room is opened over (ADR-0051),
+          /// comma-separated. `RoomOpen` is the only reader.
+          Over: string list }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`).
     [<Literal>]

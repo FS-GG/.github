@@ -359,6 +359,7 @@ let main argv =
             | Add
             | Flush
             | LintCmd
+            | RoomOpen
             | Issues -> Client.run opts
 
     with e ->
