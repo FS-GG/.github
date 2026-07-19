@@ -77,7 +77,11 @@ module CommandSurfaceTests =
           "issues", Issues
 
           // The follow-up queue (#1063) — LOCAL, like `whoami`: a file, no board, no token.
-          "followup", Followup ]
+          "followup", Followup
+
+          // The ADR-0050 registry-predicate oracle (#1202) — LOCAL: reads registry + producer manifests,
+          // no board, no token.
+          "predicate", Predicate ]
 
     /// The two commands with no verb form — they are reached by flag (`--help`, `--version`), so the
     /// verb inventory cannot account for them and the DU cross-check must be told so explicitly.

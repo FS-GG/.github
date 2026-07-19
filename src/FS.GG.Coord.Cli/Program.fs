@@ -325,6 +325,10 @@ let main argv =
             // breaks exactly when it is needed.
             | Followup -> Followups.run opts
 
+            // `predicate` reads LOCAL files (registry + producer manifests) — no board, no token — so it is
+            // inline here, not a `Client.run` target. The ADR-0050 oracle, call-site A (.github#1202).
+            | Predicate -> Client.predicate opts
+
             // The client command surface — the shim's targets. Each reads/writes GitHub through the typed
             // IO layer; `Client.run` owns the token check, the transport lifetime, and the exit contract.
             | Next

@@ -38,6 +38,7 @@ module Options =
         | LintCmd
         | Issues
         | Followup
+        | Predicate
         | Help
         | Version
 
@@ -241,6 +242,14 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   issues <repo> [--label L] [--state S]      list a repo's issues over REST, ETag-revalidated — a 304 costs
          [--refresh]                         nothing (#446/#418). <repo> is a short-id, owner/repo, or a
                                              repo name; emits the raw JSON array (project it with jq)
+  predicate <id> <field> <value>             the ADR-0050 registry oracle: does the row exist AND does the
+  predicate  (cross-repo-request on stdin)   OWNING producer's manifest agree? One word — agrees/contradicts/
+                                             unknown — decision in the exit code (0/3/4, the `landable` shape).
+                                             Owner is authoritative (`owner:`), an absent value is UNKNOWN
+                                             not false (.github#658), and a missing registry/manifest is
+                                             UNKNOWN — fail closed. Reads registry/skills.yml ($FSGG_REGISTRY)
+                                             and producer checkouts under $FSGG_REPOS_ROOT (default .repos).
+                                             Local: no board, no token. Only `mirrored` compared today.
 
   --help    --version
 
@@ -446,6 +455,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | LintCmd -> "lint"
         | Issues -> "issues"
         | Followup -> "followup"
+        | Predicate -> "predicate"
         | Help -> "--help"
         | Version -> "--version"
 
@@ -888,5 +898,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `followup` prints the REF on stdout and nothing else — a query whose caller is `widen`/`claim`,
         // not a reader. Text, for `whoami`'s reason: there is no board document here to be the contract.
         | "followup" :: rest -> flags { defaults with Command = Followup; Render = Text } rest
+        // `predicate` runs the ADR-0050 registry oracle over LOCAL files (no board, no token) and prints
+        // one verdict word — `agrees`/`contradicts`/`unknown` — with the decision in the exit code, the
+        // `landable` shape. Text by default; `--json` opts into the structured verdict. Assertion is
+        // POSITIONAL (`predicate <id> <field> <value>`) or read from a `cross-repo-request` body on stdin.
+        | "predicate" :: rest -> flags { defaults with Command = Predicate; Render = Text } rest
 
         | other :: _ -> Error $"unknown command: %s{other}"

@@ -98,6 +98,12 @@ module Options =
         /// promise survives the exhausted budget that strands the worker who made it.
         | Followup
 
+        /// The ADR-0050 registry-predicate oracle `P(id, field, value)`, run over LOCAL files (no board,
+        /// no token). Prints one verdict word — `agrees`/`contradicts`/`unknown` — with the decision in
+        /// the exit code (the `landable` shape). Assertion is positional or read from a filed
+        /// `cross-repo-request` body on stdin. Call-site A of ADR-0050 (.github#1202).
+        | Predicate
+
         | Help
         | Version
 

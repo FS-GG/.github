@@ -3243,6 +3243,187 @@ module Client =
 
                 ExitGreen
 
+    // ---- predicate: the ADR-0050 registry oracle (call-site A, local files, .github#1202) --------------
+
+    /// Producer skill-manifest locations, in the order the Python reconcile probes them
+    /// (`fsgg-skill-registry-check` MANIFEST_CANDIDATES) — the first hit wins. Kept in step by eye; a
+    /// producer that moves its manifest changes both.
+    let private manifestCandidates =
+        [ ".agents/skills/skill-manifest.json"
+          "template/skill-manifest/skill-manifest.json" ]
+
+    let private envOr (name: string) (fallback: string) : string =
+        match Environment.GetEnvironmentVariable name with
+        | null
+        | "" -> fallback
+        | v -> v
+
+    /// The value of a manifest ENTRY's field, honoring `mirror_of` EXACTLY. `mirrored` is a BOOL, so a
+    /// JSON bool renders `true`/`false` and ANY other kind — a STRING `"true"`, a number, an array,
+    /// null, or an absent field — is `Silent`: an unparseable verdict is UNKNOWN, never believed
+    /// (.github#658; the Python `mirror_of` is `value if isinstance(value, bool) else None`,
+    /// `scripts/fsgg-skill-registry-check:333`). Believing a string `"true"` here was a fail-OPEN — a
+    /// bad merge or hand-edit would forge a false Agrees/Contradicts, the exact refutation the filing
+    /// check auto-comments. Only `mirrored` reaches here today (the Cli gates on `supportsField`); a
+    /// future string-typed field must add its OWN typed arm rather than fall through this bool rule.
+    ///
+    /// The lookup normalises the field FIRST (`supportsField` already accepted `Mirrored`/` mirrored `),
+    /// because `TryGetProperty` is case-SENSITIVE against the manifest's canonical lower-kebab key — an
+    /// un-normalised `Mirrored` would miss and downgrade a real #1194 refutation to `Unknown`.
+    let private manifestFieldValue (entry: JsonElement) (field: string) : RegistryPredicate.OwnerDeclaration =
+        let mutable el = Unchecked.defaultof<JsonElement>
+        let key = field.Trim().ToLowerInvariant()
+
+        if not (entry.TryGetProperty(key, &el)) then
+            RegistryPredicate.Silent
+        else
+            match el.ValueKind with
+            | JsonValueKind.True -> RegistryPredicate.Declares "true"
+            | JsonValueKind.False -> RegistryPredicate.Declares "false"
+            | _ -> RegistryPredicate.Silent
+
+    /// What the OWNING producer's manifest declares for `(row.Id, field)`, resolved off local producer
+    /// checkouts under `reposRoot`. Fails closed to `Unreadable`/`Silent` — never throws — so a missing
+    /// checkout, a missing/unparseable manifest, or an absent field all become `Unknown` at the oracle,
+    /// never a refutation it could not prove (ADR-0050 / #266).
+    let private resolveOwnerDeclaration
+        (reposRoot: string)
+        (row: RegistryPredicate.Row)
+        (field: string)
+        : RegistryPredicate.OwnerDeclaration =
+        match row.Source with
+        | None ->
+            RegistryPredicate.Unreadable(
+                sprintf "row `%s` declares no `source:`, so its owning producer cannot be located" row.Id
+            )
+        | Some source ->
+            let repoDir = source.Split('/').[0]
+
+            let manifestPath =
+                manifestCandidates
+                |> List.map (fun c -> Path.Combine(reposRoot, repoDir, c))
+                |> List.tryFind File.Exists
+
+            match manifestPath with
+            | None ->
+                RegistryPredicate.Unreadable(
+                    sprintf
+                        "no producer manifest for `%s` under `%s` (looked for %s) — check the producer repos out, or the oracle fails closed"
+                        repoDir
+                        reposRoot
+                        (String.concat ", " manifestCandidates)
+                )
+            | Some path ->
+                try
+                    use doc = JsonDocument.Parse(File.ReadAllText path)
+                    let root = doc.RootElement
+                    let mutable skills = Unchecked.defaultof<JsonElement>
+
+                    if
+                        root.ValueKind <> JsonValueKind.Object
+                        || not (root.TryGetProperty("skills", &skills))
+                        || skills.ValueKind <> JsonValueKind.Array
+                    then
+                        RegistryPredicate.Unreadable(sprintf "manifest `%s` has no `skills` array" path)
+                    else
+                        let entry =
+                            skills.EnumerateArray()
+                            |> Seq.tryFind (fun e ->
+                                let mutable idEl = Unchecked.defaultof<JsonElement>
+
+                                e.ValueKind = JsonValueKind.Object
+                                && e.TryGetProperty("id", &idEl)
+                                && idEl.ValueKind = JsonValueKind.String
+                                && idEl.GetString() = row.Id)
+
+                        match entry with
+                        // The owning manifest does not declare this id at all — SILENT, not a refutation.
+                        | None -> RegistryPredicate.Silent
+                        | Some e -> manifestFieldValue e field
+                with e ->
+                    RegistryPredicate.Unreadable(sprintf "manifest `%s` could not be read: %s" path e.Message)
+
+    /// `predicate` — the oracle as a query: one verdict word on stdout, the decision in the exit code
+    /// (0 agrees / 3 contradicts / 4 unknown, the `landable` shape). `--json` emits the structured
+    /// verdict the filing-time workflow reads to build its auto-comment (`.ownerValue`, `.note`).
+    let predicate (opts: Options) : int =
+        let registryPath = envOr "FSGG_REGISTRY" "registry/skills.yml"
+        let reposRoot = envOr "FSGG_REPOS_ROOT" ".repos"
+
+        let assertion: Result<RegistryPredicate.Assertion option, string> =
+            match opts.Args with
+            | [ id; field; value ] -> Ok(Some { Id = id; Field = field; Value = value })
+            | [] ->
+                let body = Console.In.ReadToEnd()
+                if body.Trim() = "" then Ok None else Ok(RegistryPredicate.parseAssertion body)
+            | _ -> Error "predicate: give `<id> <field> <value>`, or a cross-repo-request body on stdin"
+
+        match assertion with
+        | Error msg ->
+            eprint $"fsgg-coord-engine: %s{msg}"
+            ExitError
+        | Ok None ->
+            // No structured assertion in the request — nothing to refute. A no-op, exit green.
+            match opts.Render with
+            | Json -> printfn "{\"verdict\":\"none\"}"
+            | Text -> eprint "fsgg-coord-engine: no registry assertion in this request — nothing to check."
+
+            ExitGreen
+        | Ok(Some a) ->
+            let verdict =
+                if not (File.Exists registryPath) then
+                    RegistryPredicate.Unknown(
+                        sprintf
+                            "no registry at `%s` — the oracle is authority-scoped and fails closed where `registry/` is absent (ADR-0042/ADR-0050)"
+                            registryPath
+                    )
+                else
+                    let rows = RegistryPredicate.parseRows(File.ReadAllText registryPath)
+
+                    // classify short-circuits on a missing row / unsupported field before it reads `owner`,
+                    // so resolve the manifest only when it will actually be consulted.
+                    let owner =
+                        match RegistryPredicate.findRow rows a.Id with
+                        | Some row when RegistryPredicate.supportsField a.Field ->
+                            resolveOwnerDeclaration reposRoot row a.Field
+                        | _ -> RegistryPredicate.Silent
+
+                    RegistryPredicate.classify rows owner a
+
+            match opts.Render with
+            | Json ->
+                let result: Render.PredicateResult =
+                    { Verdict = RegistryPredicate.name verdict
+                      Id = a.Id
+                      Field = a.Field
+                      Value = a.Value
+                      OwnerValue =
+                        match verdict with
+                        | RegistryPredicate.Contradicts(ov, _) -> Some ov
+                        | _ -> None
+                      Note =
+                        match verdict with
+                        | RegistryPredicate.Contradicts(_, n) -> Some n
+                        | _ -> None
+                      Reason =
+                        match verdict with
+                        | RegistryPredicate.Unknown r -> Some r
+                        | _ -> None }
+
+                printfn "%s" (Render.renderPredicateJson result)
+            | Text ->
+                printfn "%s" (RegistryPredicate.name verdict)
+
+                match verdict with
+                | RegistryPredicate.Agrees -> ()
+                | RegistryPredicate.Contradicts(ov, note) -> eprint (sprintf "  owner declares `%s: %s` — %s" a.Field ov note)
+                | RegistryPredicate.Unknown reason -> eprint (sprintf "  %s" reason)
+
+            match verdict with
+            | RegistryPredicate.Agrees -> ExitGreen
+            | RegistryPredicate.Contradicts _ -> ExitRed
+            | RegistryPredicate.Unknown _ -> ExitNoVerdict
+
     // ---- the dispatcher for the IO commands ------------------------------------------------------------
 
     /// `FSGG_COORD_CHORE_LOCKS` → the injected chore-lock roster a vendored tenant runs against a non-FS-GG

@@ -69,6 +69,19 @@ module Render =
           Url: string
           Detail: string }
 
+    /// A `predicate --json` result — the ADR-0050 oracle verdict, structured. `verdict` is the word
+    /// (`agrees`/`contradicts`/`unknown`); `ownerValue`/`note` are non-null on `contradicts` (the
+    /// owner-declared value and the governing note the filing-time check auto-comments), `reason` on
+    /// `unknown`. A real JSON writer, so a note carrying a quote cannot forge the object.
+    type PredicateResult =
+        { Verdict: string
+          Id: string
+          Field: string
+          Value: string
+          OwnerValue: string option
+          Note: string option
+          Reason: string option }
+
     /// `ready --json` — THE MACHINE CONTRACT a reconciler (`/check-board`) and `next` read, an array of
     /// board rows. The field set is bash's `board_items` projection, the fields a consumer keys on: the
     /// `number`/`repo` that name the item, the board `status` (null when the column is unset — a modelled
@@ -207,5 +220,26 @@ module Render =
             w.WriteEndObject()
 
         w.WriteEndArray()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    let renderPredicateJson (result: PredicateResult) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        let writeOpt (name: string) (v: string option) =
+            match v with
+            | Some s -> w.WriteString(name, s)
+            | None -> w.WriteNull(name)
+
+        w.WriteStartObject()
+        w.WriteString("verdict", result.Verdict)
+        w.WriteString("id", result.Id)
+        w.WriteString("field", result.Field)
+        w.WriteString("value", result.Value)
+        writeOpt "ownerValue" result.OwnerValue
+        writeOpt "note" result.Note
+        writeOpt "reason" result.Reason
+        w.WriteEndObject()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())

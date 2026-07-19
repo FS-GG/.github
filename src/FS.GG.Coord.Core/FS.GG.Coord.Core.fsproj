@@ -53,6 +53,8 @@
     <Compile Include="Chore.fs" />
     <Compile Include="Kit.fsi" />
     <Compile Include="Kit.fs" />
+    <Compile Include="RegistryPredicate.fsi" />
+    <Compile Include="RegistryPredicate.fs" />
   </ItemGroup>
 
   <ItemGroup>
