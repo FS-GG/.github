@@ -74,6 +74,7 @@ TARGETS=(
   "snapshot-shape:.agents/skills/check-board/SKILL.md"
   "versions:docs/architecture.md"
   "contract-versions:docs/registry/compatibility.md"
+  "skill-registry-counts:docs/registry/compatibility.md"
 )
 
 # The marker a kind uses. One function, so the BEGIN a target is searched for, the BEGIN written into
@@ -87,10 +88,11 @@ TARGETS=(
 # looks to find out where a number came from.
 marker() { # kind, BEGIN|END
   case "$1" in
-    rules)             echo "<!-- $2 GENERATED: fsgg-protocol -->" ;;
-    versions)          echo "<!-- $2 GENERATED: fsgg-versions -->" ;;
-    contract-versions) echo "<!-- $2 GENERATED: fsgg-contract-versions -->" ;;
-    *)                 echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
+    rules)                 echo "<!-- $2 GENERATED: fsgg-protocol -->" ;;
+    versions)              echo "<!-- $2 GENERATED: fsgg-versions -->" ;;
+    contract-versions)     echo "<!-- $2 GENERATED: fsgg-contract-versions -->" ;;
+    skill-registry-counts) echo "<!-- $2 GENERATED: fsgg-skill-registry-counts -->" ;;
+    *)                     echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
   esac
 }
 
@@ -100,9 +102,10 @@ marker() { # kind, BEGIN|END
 # move is to hand-edit the generated region, which is the one thing every marker here tells them not to do.
 source_of() { # kind
   case "$1" in
-    versions)          echo "registry/dependencies.yml" ;;
-    contract-versions) echo "registry/dependencies.yml" ;;
-    *)                 echo "src/FS.GG.Coord.Core/Protocol.fs" ;;
+    versions)              echo "registry/dependencies.yml" ;;
+    contract-versions)     echo "registry/dependencies.yml" ;;
+    skill-registry-counts) echo "registry/skills.yml" ;;
+    *)                     echo "src/FS.GG.Coord.Core/Protocol.fs" ;;
   esac
 }
 
@@ -129,7 +132,8 @@ fi
 
 FACTS="$(mktemp)"
 REG="$(mktemp)"
-trap 'rm -f "$FACTS" "$REG"' EXIT
+SKILLS="$(mktemp)"
+trap 'rm -f "$FACTS" "$REG" "$SKILLS"' EXIT
 "$ENGINE" facts --json >"$FACTS"
 
 # THE SECOND SOURCE. `versions` is emitted from the REGISTRY, not the engine — the two regions project
@@ -156,6 +160,18 @@ python3 -c '
 import json, sys, yaml
 json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)
 ' "$HERE/registry/dependencies.yml" >"$REG"
+
+# A SECOND registry source, on the same terms. `skill-registry-counts` is emitted from
+# `registry/skills.yml` — the org skill catalog — and the same "why is a registry allowed to be a
+# source" argument holds one level over: the counts are a pure projection of the catalog's ROW SET,
+# which is itself held to reality by `skill-registry-coherence` (`fsgg-skill-registry-check` reconciles
+# every row's `sha256`/`materializes-when` against the producer manifests). So counting the rows here
+# centralises no lie — it removes a hand-maintained count (#486 reconciled it by hand once; #1206 is
+# this) whose only failure mode was a human miscounting a set a gate already owns.
+python3 -c '
+import json, sys, yaml
+json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)
+' "$HERE/registry/skills.yml" >"$SKILLS"
 
 # ---- the projections -----------------------------------------------------------------------------
 # ONE rendering PER REGION KIND, and a document says which kind it carries. There is still exactly one
@@ -626,6 +642,50 @@ render_contract_versions() {
     | ($repos[.owner].name // error("contract `\($c.id)` names owner `\($c.owner)`, which is not a key in repos:"))
     | "| `\($c.id)` | \(.) | `\($c.version)` | \(if ($c | has("package-version")) then "`\($c["package-version"])`" else "—" end) |"
   ' "$REG"
+  echo ""
+}
+
+# The skill-registry ROW COUNTS. Emitted from registry/skills.yml (#1206). The counts were restated in
+# hand-authored prose in several places — the dependency graph, the `skill-registry` contract row, the
+# `skill-registry-published` coherence row — phrased differently each time, and drifted (a stale `25 =
+# 17+8` sat beside a current `27 = 18+9`). #486 reconciled them by hand once; this makes them a real
+# projection so a reconcile is `generate-projections`, not a recount. A pure count of a set a gate
+# already owns centralises no lie (see the transcode comment above).
+render_skill_registry_counts() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from registry/skills.yml by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  The skill-registry row counts were woven into hand-authored prose in several places, phrased"
+  echo "  differently each time, and drifted — #486 reconciled them by hand once, #1206 turned them into"
+  echo "  this projection. Each number is a pure count of registry/skills.yml's rows, whose SET is held"
+  echo "  to the producer manifests by skill-registry-coherence; if a number here is wrong, the catalog"
+  echo "  is wrong, and fixing it HERE would only hide that. Authored prose that still states a count"
+  echo "  should CITE this block, not restate it."
+  echo "-->"
+  echo ""
+  echo "*Generated from \`registry/skills.yml\` — the authoritative breakdown of the skill catalog by"
+  echo "\`scope\` and \`owner\`. This is the machine-owned count; the prose elsewhere on this page cites it.*"
+  echo ""
+  jq -r '
+    .skills as $s
+    | ($s | length) as $total
+    | ([$s[] | select(.scope=="process")] | length) as $proc
+    | ([$s[] | select(.scope=="product")]) as $prod
+    | ($prod | group_by(.owner) | map("\(length) `\(.[0].owner)`") | join(" + ")) as $prodBy
+    | "**\($total) rows** = **\($proc) process** + **\($prod | length) product** (\($prodBy))."
+  ' "$SKILLS"
+  echo ""
+  echo "| scope | owner | rows |"
+  echo "|---|---|---|"
+  jq -r '
+    .skills
+    | group_by([.scope, .owner])
+    | map({scope: .[0].scope, owner: .[0].owner, n: length})
+    | sort_by(.scope, .owner)[]
+    | "| \(.scope) | `\(.owner)` | \(.n) |"
+  ' "$SKILLS"
+  jq -r '.skills | "| **total** | | **\(length)** |"' "$SKILLS"
   echo ""
 }
 
