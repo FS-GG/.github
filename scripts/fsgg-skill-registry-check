@@ -122,7 +122,10 @@ KNOWN BOUND, stated rather than hidden: a producer is recognised by a manifest a
 MANIFEST_CANDIDATES, directly under its checkout. A repo that publishes its manifest somewhere else
 is not seen at all -- and, if the registry names no row from it, is not seen by check 4 either. CI
 checks the producers out at exactly these paths, so this is a shape the gate requires, not a hole it
-tolerates; a producer that moves its manifest must add the new location here.
+tolerates; a producer that moves its manifest must add the new location here. `.github` is itself a
+producer of its own authored DRIVER skills (ADR-0054); it emits its manifest at the third candidate
+(`registry/driver-skill-manifest.json`) and is reached not by a network clone but by its own
+checkout, which skill-registry-coherence.yml makes visible under `--repos-root` as `.github`.
 
 Two producers may declare the SAME id -- that is the frozen mirror (ADR-0022 §6), where the copy and
 the canonical body are byte-identical. When such an id is MISSING from the registry, which repo owns
@@ -213,11 +216,14 @@ FROZEN_MIRROR_REPO = "FS.GG.Rendering"
 FROZEN_MIRROR_PATH = "template/product-skills/{id}/SKILL.md"
 
 # Where a producer publishes its `skill-manifest` (schema v1). SDD EMITS its process manifest into
-# the agent-skill root; Rendering and Game publish theirs from the template tree. Probed in order;
-# the first hit wins. Locations, not repo names -- the producer SET is derived (see producers()).
+# the agent-skill root; Rendering and Game publish theirs from the template tree; `.github` emits its
+# DRIVER manifest into the registry dir it owns (ADR-0054 — `.github` authors its own product-
+# materialized `scope: driver` skills, e.g. workRoadmap). Probed in order; the first hit wins.
+# Locations, not repo names -- the producer SET is derived (see producers()).
 MANIFEST_CANDIDATES = (
     ".agents/skills/skill-manifest.json",
     "template/skill-manifest/skill-manifest.json",
+    "registry/driver-skill-manifest.json",
 )
 
 # ADR-0017: an entry with no `materializes-when` is unconditionally emitted.
@@ -243,7 +249,14 @@ def read_bytes(path: str) -> bytes | None:
 
 
 def owner_of(repo: str) -> str:
-    """The registry's `owner:` slug for a producer checkout: FS.GG.Rendering -> fs-gg-rendering."""
+    """The registry's `owner:` slug for a producer checkout: FS.GG.Rendering -> fs-gg-rendering.
+
+    `.github` is the sole producer whose slug is NOT the dot->dash of its repo name (ADR-0054): it
+    authors its own driver skills and its owner slug IS `.github`. Without this the dot->dash rule
+    yields `-github`, which matches no row's `owner:` (predicates() would fall through to "all
+    declarers") and would be synthesized onto a `--write`-appended row (completeness())."""
+    if repo == ".github":
+        return ".github"
     return repo.lower().replace(".", "-")
 
 

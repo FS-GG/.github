@@ -62,6 +62,7 @@ esac
 GENERATORS=(
   "scripts/generate-projections --list"
   "scripts/generate-skill-union-bundle --list"
+  "scripts/generate-driver-manifest --list"
   "scripts/repos.sh relock --list"
 )
 

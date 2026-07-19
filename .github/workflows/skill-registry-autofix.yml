@@ -250,6 +250,16 @@ jobs:
           echo "producers named by registry/skills.yml:"; echo "$producers"
           while IFS= read -r repo; do
             [ -n "$repo" ] || continue
+            # `.github` is a producer of its own driver skills (ADR-0054), but it is THIS checkout —
+            # link it, exactly as skill-registry-coherence.yml does, rather than self-cloning main
+            # (which would reconcile the workspace's skills.yml against main's driver manifest, not
+            # the tree this reconcile is about). Its `source:` prefix would otherwise resolve to a
+            # separate clone of this very repo.
+            if [ "$repo" = ".github" ]; then
+              ln -s "$GITHUB_WORKSPACE" .repos/.github
+              echo "linked .github (this checkout) @ $(git rev-parse --short HEAD)"
+              continue
+            fi
             git clone --filter=blob:none \
               "https://github.com/FS-GG/$repo.git" ".repos/$repo"
             echo "cloned $repo @ $(git -C ".repos/$repo" rev-parse --short HEAD)"
@@ -263,6 +273,9 @@ jobs:
       - name: Stamp the producer commits this reconcile is computed from
         run: |
           set -euo pipefail
+          # `.repos/*/` deliberately omits the `.github` symlink (a dotfile the glob skips): .github's
+          # driver bytes cannot move without a commit to THIS repo, so there is no independent producer
+          # drift to stamp — the reconcile still treats it as a producer (Python's os.listdir sees it).
           for d in .repos/*/; do
             repo="$(basename "$d")"
             printf '%s\t%s\n' "$repo" "$(git -C "$d" rev-parse HEAD)"

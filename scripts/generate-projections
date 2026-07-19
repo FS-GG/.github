@@ -672,8 +672,11 @@ render_skill_registry_counts() {
     | ($s | length) as $total
     | ([$s[] | select(.scope=="process")] | length) as $proc
     | ([$s[] | select(.scope=="product")]) as $prod
+    | ([$s[] | select(.scope=="driver")] | length) as $drv
     | ($prod | group_by(.owner) | map("\(length) `\(.[0].owner)`") | join(" + ")) as $prodBy
-    | "**\($total) rows** = **\($proc) process** + **\($prod | length) product** (\($prodBy))."
+    | "**\($total) rows** = **\($proc) process** + **\($prod | length) product**"
+      + (if $drv > 0 then " + **\($drv) driver**" else "" end)
+      + " (\($prodBy))."
   ' "$SKILLS"
   echo ""
   echo "| scope | owner | rows |"
