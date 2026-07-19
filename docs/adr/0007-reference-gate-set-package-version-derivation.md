@@ -1,6 +1,6 @@
 # ADR-0007: `FS.GG.Governance.ReferenceGateSet` version-derivation rule
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0055](0055-reference-gate-set-versioning-plain-semver-with-schema-manifest.md) (2026-07-19) — the 4-segment schema-derived rule below cannot represent a **content-only** change to the packed set ([#1228](https://github.com/FS-GG/.github/issues/1228)); replaced in full by a plain SemVer + an in-package schema manifest.
 - **Date:** 2026-06-28
 - **Affects:** governance (producer), templates (consumer)
 
@@ -23,6 +23,16 @@ single obvious numbering; this ADR fixes one so the rule is a registered contrac
 implementation detail that can silently drift.
 
 ## Decision
+
+> **Superseded by [ADR-0055](0055-reference-gate-set-versioning-plain-semver-with-schema-manifest.md)
+> (2026-07-19).** The 4-segment schema-derived rule below **cannot represent a content-only change**
+> to the packed `.fsgg` set: WI-8 added gate content that is valid under the existing schemas, so no
+> `schemaVersion` moved and the derivation still yielded `1.2.1.1` — leaving a byte-different but
+> version-identical, **unpublishable** package ([#1228](https://github.com/FS-GG/.github/issues/1228)).
+> The rule is replaced **in full**: the package is now a **plain SemVer** bumping on any change, with
+> the four `schemaVersion` values recorded in an **in-package manifest**. Read ADR-0055's Decision,
+> not this one. Everything else ADR-0007 records — the package's purpose, byte-identity, the G1–G7
+> gating, and exact-pinned consumption — still stands.
 
 The package version is the four contained `schemaVersion` values, composed as a **4-segment
 NuGet version in a fixed file order** (manifest root first):
