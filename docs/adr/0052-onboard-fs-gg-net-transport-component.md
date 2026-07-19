@@ -1,6 +1,6 @@
 # ADR-0052: Onboard FS.GG.Net as a transport component, and model wire contracts in the registry
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-19
 - **Affects:** FS-GG/.github (registry, roster, architecture), new repo FS-GG/FS.GG.Net; downstream consumers are app repos (SC2 client, BAR client), not FS-GG components.
 
@@ -107,7 +107,7 @@ Today `dependencies.yml` models F# `.fsi` **API surfaces** + package versions. N
 2. **Owned `.proto`** (possibly BAR) — FS-GG owns the wire contract; field-number/reserved rules are the compatibility surface.
 3. **Code-first protobuf-net surface** (possibly BAR) — *no `.proto` artifact*; the F# `[<ProtoContract>]` types **are** the wire contract.
 
-This is an **additive registry-schema growth** and therefore, per **ADR-0015** (its §3 same-change procedure superseded by **ADR-0037**: no PR spans two repos), bumps `schemaVersion` + `registry-schema.version` and advances the SDD CLI validator pin in two ordered PRs (SDD teaches `Fsgg.Registry` + ships a CLI first; `.github` bumps + pins after). The `FS.GG.Net` source/package rows themselves follow the ordinary `fs-gg-audio` template (owner `net`, `package-version` leads the flip — publish-before-flip, FR-007). Consumer edges (SC2/BAR → net) are app-repo edges, added when a consumer really pins.
+This is an **additive registry-schema growth** and therefore, per the schema-growth procedure **ADR-0037** established over **ADR-0015** §3 (no PR spans two repos), bumps `schemaVersion` + `registry-schema.version` and advances the SDD CLI validator pin in two ordered PRs (SDD teaches `Fsgg.Registry` + ships a CLI first; `.github` bumps + pins after). The `FS.GG.Net` source/package rows themselves follow the ordinary `fs-gg-audio` template (owner `net`, `package-version` leads the flip — publish-before-flip, FR-007). Consumer edges (SC2/BAR → net) are app-repo edges, added when a consumer really pins.
 
 ### 7. Skills: library eats the type-gotchas, skills carry the operational knowledge
 
