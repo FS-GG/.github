@@ -452,17 +452,20 @@ module ProtocolTests =
         Assert.Equal(Some false, holdsOf "merged")
         Assert.Equal(Some true, holdsOf "open")
 
-    /// TWO REF PARSERS, ONE GRAMMAR — they may never disagree about what a ref token means.
+    /// THREE REF PARSERS, ONE GRAMMAR — they may never disagree about what a ref token means.
     ///
-    /// `EpicBody.childRefs` (scanning an epic's task list) and `Blockers.canonicalizeBlockedBy` (parsing a
-    /// `Blocked by` field) both reduce a ref token to `owner/repo#n`. #1153 is what their DRIFT cost:
-    /// `EpicBody` accepted `owner/repo#n`, a URL, and bare `#n` but NOT the owner-less `repo#n`, so
-    /// `FS.GG.SDD#8` fell through to the bare `#n` it contains and resolved against the epic's OWN repo —
-    /// `.github#8` for a `.github` epic — while `Blockers` read the same token as `FS-GG/FS.GG.SDD#8`.
-    /// A rollup that diffs one parser's output against the other's could then check the wrong issue. This
-    /// pins the two against ONE token set, in all four spellings, so they cannot silently drift again.
+    /// `EpicBody.childRefs` (scanning an epic's task list), `Blockers.canonicalizeBlockedBy` (parsing a
+    /// `Blocked by` field) and `Rooms.parse` (scanning a `Rooms:` line, ADR-0051) all reduce a ref token
+    /// to `owner/repo#n`. #1153 is what DRIFT between the first two cost: `EpicBody` accepted
+    /// `owner/repo#n`, a URL, and bare `#n` but NOT the owner-less `repo#n`, so `FS.GG.SDD#8` fell through
+    /// to the bare `#n` it contains and resolved against the epic's OWN repo — `.github#8` for a `.github`
+    /// epic — while `Blockers` read the same token as `FS-GG/FS.GG.SDD#8`. A rollup that diffs one
+    /// parser's output against the other's could then check the wrong issue. `Rooms.parse` is the third
+    /// copy of that grammar (ADR-0051 reuses it deliberately), and the room's close computation diffs its
+    /// output the same way, so it is pinned here too. All three against ONE token set, in all four
+    /// spellings, so they cannot silently drift.
     [<Fact>]
-    let ``EpicBody and Blockers canonicalize a ref token identically`` () =
+    let ``EpicBody, Blockers and Rooms canonicalize a ref token identically`` () =
         let owner, repo = "FS-GG", ".github"
 
         let tokens =
@@ -480,9 +483,17 @@ module ProtocolTests =
                 | Ok None -> []
                 | Error _ -> [ "<refused>" ]
 
+            let viaRooms =
+                Rooms.parse owner repo $"Rooms: {tok}"
+                |> List.map (fun r -> $"%s{r.Owner}/%s{r.Repo}#%d{r.Number}")
+
             Assert.True(
                 (viaEpic = viaBlockers),
-                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Blockers to %A{viaBlockers} — two ref parsers, one grammar, drifted (#1153)")
+                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Blockers to %A{viaBlockers} — ref parsers drifted (#1153)")
+
+            Assert.True(
+                (viaEpic = viaRooms),
+                $"'%s{tok}': EpicBody canonicalizes to %A{viaEpic}, Rooms to %A{viaRooms} — ref parsers drifted (#1153, ADR-0051)")
 
     /// A STATE DOCUMENTED UNDER AN EMPTY STRING IS UNGREPPABLE BY CONSTRUCTION, and a state that means
     /// nothing is a row a reader skips.
