@@ -144,21 +144,33 @@ Usage:
 
 Exit: 0 = coherent (or --write left it coherent); 1 = findings / usage error.
 
-`--write` rewrites ONLY the `sha256:` and `materializes-when:` values of a stale row and APPENDS a
+`--write` rewrites ONLY the `sha256:` and `materializes-when:` values of a stale row and adds a
 row for a skill a manifest declares that the registry lacks, in place, leaving byte-for-byte
 everything else (the file is hand-formatted, aligned YAML flow maps -- a full yaml.dump would
 destroy it). Both rewrites take the value FROM the manifest -- the digest verbatim, the predicate in
 the whitespace-normalized form it is compared in -- which is what "reconciled from the producer
-manifests" means; neither invents one. An appended row is
+manifests" means; neither invents one. A NEW row is
 reconciled FROM the manifest entry: `scope`/`sha256`/`materializes-when` verbatim, `source` from the
 entry's `supplied-by`, `owner` from the producer repo. A manifest that omits `supplied-by` (SDD's
-process manifest does) gives no `source:` to derive, so the row is REPORTED and not appended --
+process manifest does) gives no `source:` to derive, so the row is REPORTED and not added --
 inventing a path would be hand-authoring the bytes the registry header forbids.
 
+A new row is HOMED, not tail-appended, whenever the file already holds its siblings -- an existing
+row of the SAME `owner:` and the SAME normalized `materializes-when:`. It is inserted immediately
+after the last such sibling, with a generated annotation, so it lands in the block it belongs to
+rather than in a tail the operator has to re-home by hand (the .github#1198 toil; .github#299/#1200).
+A row with NO such sibling cannot be confidently homed -- the tool does not GUESS a block -- so it
+falls back to the tail append under the existing "re-home and annotate these" note.
+
+With `--now DATE`, `--write` also does the bookkeeping the registry protocol used to leave to the
+operator: it bumps `updated:` to DATE and prepends one dated `registry/skills.CHANGELOG.md` entry
+naming what it reconciled. The date is INJECTED, never read from a clock, so a reconcile stays
+deterministic (the same seam `skill-registry-autofix-body --now` uses). Without `--now` the value
+bytes are still reconciled exactly as before and the two housekeeping steps are left to the operator,
+with the reminder printed -- so the flag is additive and every existing caller is unchanged.
+
 Whatever it wrote, `--write` then RE-CHECKS from disk and exits non-zero on anything left, so it can
-never report success over a registry that is still incoherent. It does NOT touch `updated:` or
-prepend a changelog entry: per the registry protocol those are the operator's, and a reconcile must
-be explained, not just applied.
+never report success over a registry that is still incoherent.
 """
 from __future__ import annotations
 
@@ -862,9 +874,103 @@ def format_row(row: dict) -> str:
     )
 
 
-def append_rows(registry_path: str, findings: list[dict]) -> int:
-    """Append a row for each manifest-declared skill the registry lacks, after the last row."""
-    rows = [f["row"] for f in findings if f["check"] == "declared-completeness" and "row" in f]
+def _parse_row_line(line: str) -> dict | None:
+    """The `- { id: ... }` flow map on a row line as a dict, or None if the line is not a row.
+
+    A homed row is placed beside the siblings it belongs with (`_home_index`), which means reading
+    the `owner:`/`materializes-when:` off the rows already in the file. Parsing the single flow map
+    with PyYAML — the same parser `_load_registry` uses, always available on the `--write` path —
+    is exact where a regex would have to re-implement the grammar.
+    """
+    stripped = line.lstrip()
+    if not stripped.startswith("- {"):
+        return None
+    import yaml
+
+    try:
+        parsed = yaml.safe_load(stripped[2:])  # drop the "- " list marker; the rest is a flow map
+    except yaml.YAMLError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _home_index(lines: list[str], owner: str, when: object) -> int | None:
+    """0-based index of the LAST row line sharing (owner, normalized `materializes-when`), or None.
+
+    This is the placement a human made by hand in .github#1194: fs-gg-symbol-design after the last
+    `fs-gg-rendering` row with `profile in [game, sample-pack]`, fs-gg-playtest after the last
+    `fs-gg-game` row with the same predicate. Keying on (owner, predicate) reproduces exactly that,
+    and a row whose siblings are not yet in the file returns None so the caller tail-appends rather
+    than GUESSING a block.
+    """
+    target = normalize_when(when)
+    found: int | None = None
+    for i, line in enumerate(lines):
+        row = _parse_row_line(line)
+        if row is None:
+            continue
+        if row.get("owner") == owner and normalize_when(row.get("materializes-when", DEFAULT_WHEN)) == target:
+            found = i
+    return found
+
+
+def _home_annotation(row: dict) -> list[str]:
+    """The generated comment block written above a homed row (.github#299/#1200).
+
+    Honest and minimal: it records that the POSITION and this comment are the tool's while the row's
+    bytes are the manifest's — it does NOT fabricate the cross-repo reasoning a human annotation
+    carries (which producer PR, which obligation call). That is a human's to add in place later; the
+    row is homed either way.
+    """
+    note = ""
+    if row.get("mirrored") is not None:
+        note = f" `mirrored: {yaml_bool(row['mirrored'])}` is the manifest's declared verdict."
+    return [
+        f"  # {row['id']} — homed beside its owner+predicate siblings and reconciled verbatim from\n",
+        f"  # {row['owner']}'s producer manifest by `--write` (.github#299/.github#1200). The position\n",
+        f"  # and this annotation are generated; the row's bytes are the manifest's.{note}\n",
+    ]
+
+
+def place_rows(registry_path: str, findings: list[dict]) -> tuple[int, int]:
+    """Home each addable row beside its siblings; tail-append the ones with none. Returns (homed, appended).
+
+    Homing is the housekeeping `--write` used to punt to the operator: a row whose (owner, predicate)
+    siblings are already in the file is inserted among them, so it never sits in the tail waiting for
+    a hand re-home (the .github#1198 toil this closes). A row with no sibling is still tail-appended
+    under the existing note — the tool homes what it can prove, and guesses nothing.
+    """
+    rows = sorted(
+        (f["row"] for f in findings if f["check"] == "declared-completeness" and "row" in f),
+        key=lambda r: r["id"],
+    )
+    if not rows:
+        return 0, 0
+
+    homed = 0
+    unhomed: list[dict] = []
+    for row in rows:
+        # Re-read per row: an earlier homed row can be the sibling the next one homes beside, and it
+        # keeps line bookkeeping trivial. The set added per run is a handful of rows, never a loop hot
+        # path.
+        with open(registry_path) as handle:
+            lines = handle.read().splitlines(keepends=True)
+        anchor = _home_index(lines, row["owner"], row.get("materializes-when", DEFAULT_WHEN))
+        if anchor is None:
+            unhomed.append(row)
+            continue
+        if not lines[anchor].endswith("\n"):
+            lines[anchor] += "\n"
+        lines[anchor + 1 : anchor + 1] = _home_annotation(row) + [format_row(row) + "\n"]
+        with open(registry_path, "w") as handle:
+            handle.write("".join(lines))
+        homed += 1
+
+    return homed, append_rows(registry_path, unhomed)
+
+
+def append_rows(registry_path: str, rows: list[dict]) -> int:
+    """Append each row that could not be homed, after the last row, under the re-home note."""
     if not rows:
         return 0
 
@@ -891,6 +997,52 @@ def append_rows(registry_path: str, findings: list[dict]) -> int:
     with open(registry_path, "w") as handle:
         handle.write("".join(lines))
     return len(rows)
+
+
+# `updated:` is a top-level scalar; anchored at line start so nothing inside a row's flow map matches.
+UPDATED_RE = re.compile(r'^(updated:[ \t]*)"[^"]*"', re.MULTILINE)
+
+
+def bump_updated(registry_path: str, date: str) -> bool:
+    """Set the registry's `updated:` scalar to DATE. Returns whether it changed (.github#299/#1200)."""
+    with open(registry_path) as handle:
+        text = handle.read()
+    new_text, count = UPDATED_RE.subn(rf'\g<1>"{date}"', text, count=1)
+    if not count or new_text == text:
+        return False
+    with open(registry_path, "w") as handle:
+        handle.write(new_text)
+    return True
+
+
+def prepend_changelog(changelog_path: str, date: str, summary: str) -> bool:
+    """Prepend one dated entry at the top of the changelog's Entries list (newest first).
+
+    Inserts AFTER the `## Entries` header and its `<!-- Prepend new entries here … -->` guidance
+    block, before the newest real entry — so the `- **YYYY-MM-DD** — HEADER` EXAMPLE inside that
+    comment is never mistaken for the insertion point. A changelog missing the header is left
+    untouched and reported as unchanged rather than guessed at.
+    """
+    try:
+        with open(changelog_path) as handle:
+            text = handle.read()
+    except OSError:
+        return False
+
+    marker = text.find("## Entries")
+    if marker == -1:
+        return False
+    # Skip past the guidance comment so its example bullet is not the anchor.
+    comment_close = text.find("-->", marker)
+    search_from = comment_close + len("-->") if comment_close != -1 else marker
+    first_bullet = text.find("\n- **", search_from)
+    if first_bullet == -1:
+        return False
+    insert_at = first_bullet + 1  # start of the newest existing entry line
+    entry = f"- **{date}** — {summary}\n\n"
+    with open(changelog_path, "w") as handle:
+        handle.write(text[:insert_at] + entry + text[insert_at:])
+    return True
 
 
 def reconcile(registry_path: str, findings: list[dict]) -> int:
@@ -1004,6 +1156,19 @@ def main() -> int:
         "--write", action="store_true", help="reconcile stale sha256 / materializes-when in place"
     )
     parser.add_argument(
+        "--now",
+        metavar="DATE",
+        help="today's date (YYYY-MM-DD). With --write, bump `updated:` to DATE and prepend a dated "
+        "registry/skills.CHANGELOG.md entry naming the reconcile — the housekeeping the protocol used "
+        "to leave to the operator (.github#299/#1200). INJECTED, never read from a clock, so the "
+        "reconcile stays deterministic. Without it those two steps are skipped and the reminder printed.",
+    )
+    parser.add_argument(
+        "--changelog",
+        default="registry/skills.CHANGELOG.md",
+        help="the changelog --write --now prepends its reconcile entry to",
+    )
+    parser.add_argument(
         "--normalize-when",
         metavar="PREDICATE",
         help="reference seam: print normalize_when(PREDICATE) and exit — the canonical comparable "
@@ -1042,28 +1207,66 @@ def main() -> int:
             "base. Honouring one would mean silently ignoring the other."
         )
 
+    # --now stamps a --write; on its own it would be an accepted-but-ignored argument, the very shape
+    # the --write/--baseline guard above refuses. Reject it rather than silently doing nothing with it.
+    if args.now is not None:
+        if not args.write:
+            sys.exit(
+                "fsgg-skill-registry-check: --now only applies with --write (it stamps a reconcile's "
+                "`updated:` and changelog). Pass --write, or drop --now."
+            )
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.now):
+            sys.exit(
+                f"fsgg-skill-registry-check: --now '{args.now}' is not an ISO date (YYYY-MM-DD)."
+            )
+
     findings = check(args.registry, args.repos_root)
 
     if args.write:
-        appended = append_rows(args.registry, findings)
+        homed, appended = place_rows(args.registry, findings)
         written = reconcile(args.registry, findings)
         repredicated = reconcile_predicates(args.registry, findings)
         remirrored = reconcile_mirrored(args.registry, findings)
-        print(
-            f"skill-registry: reconciled {written} sha256 row(s), {repredicated} "
-            f"materializes-when value(s) and {remirrored} mirrored verdict(s), appended "
-            f"{appended} missing row(s) in {args.registry}"
+
+        summary = (
+            f"reconciled {written} sha256 row(s), {repredicated} materializes-when value(s) and "
+            f"{remirrored} mirrored verdict(s); homed {homed} and appended {appended} row(s)"
         )
+        # The housekeeping the operator used to run by hand (.github#299/#1200), only when --write
+        # actually changed the file AND a date was injected — never stamp a no-op. Cosmetic to the
+        # coherence verdict, so it may run before the re-check below.
+        bumped = logged = False
+        if args.now and (homed or appended or written or repredicated or remirrored):
+            bumped = bump_updated(args.registry, args.now)
+            logged = prepend_changelog(
+                args.changelog,
+                args.now,
+                f"RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` {summary} "
+                "from the producer manifests. registry = manifest = bytes.",
+            )
+
+        print(f"skill-registry: {summary} in {args.registry}")
+
         # Re-check from disk. --write cannot invent a missing source, resolve a mirror divergence,
-        # classify a twin no producer declared, append a row the manifest gave no `supplied-by` for,
-        # or pick a side when two producers declare contradictory predicates — and an appended row
+        # classify a twin no producer declared, add a row the manifest gave no `supplied-by` for,
+        # or pick a side when two producers declare contradictory predicates — and an added row
         # whose manifest digest disagrees with the body surfaces here rather than on someone else's CI.
         blocked = check(args.registry, args.repos_root)
         if blocked:
             for finding in blocked:
                 print(f"  still unresolved [{finding['check']}] {finding['id']}: {finding['detail']}")
             return 1
-        print("  remember: set `updated:` and prepend a registry/skills.CHANGELOG.md entry")
+        if not args.now:
+            print("  remember: set `updated:` and prepend a registry/skills.CHANGELOG.md entry")
+        elif bumped or logged:
+            did = []
+            if bumped:
+                did.append(f"bumped `updated:` to {args.now}")
+            if logged:
+                did.append(f"prepended a {args.changelog} entry")
+            print("  " + " and ".join(did))
+        else:
+            print("  nothing to reconcile — `updated:` and the changelog left unchanged")
         return 0
 
     # ---- the PR verdict: "did THIS CHANGE break it?", not "is the world perfect?" (#422) ----------
