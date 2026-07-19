@@ -179,7 +179,6 @@ jobs:
           # ADR-0037 §3 the new validator still accepts skills.yml AS IT STOOD (schemaVersion 1 +
           # `mirrored`), verified before this flip. 0.17.0 is feed-newest (the combined SDD#595 release
           # also carrying Contracts 4.0.0), so pin == newest and pin-coherence stays green.
-          # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
           # `versioning=loose`, NOT the manager default `nuget`, and this token is load-bearing (#576).
           # Under nuget versioning a BARE literal is a RANGE, not a peg: `0.14.0` parses as `>=0.14.0`,
           # which the newest release ALWAYS satisfies. So Renovate resolved currentVersion to the newest,
@@ -190,6 +189,12 @@ jobs:
           # `loose` treats the literal as a single version (and tolerates SDD's 4-segment grammar, which
           # strict semver rejects), so 0.13.0 -> 0.14.0 is a real update the bot will open. Do NOT drop
           # this token back to the default without re-reading #576.
+          #
+          # KEEP the annotation below immediately above the pin, with NO comment between the two. The org
+          # preset's customManager captures the version within {0,1} lines of the annotation, so a comment
+          # in that gap shadows the pin with a version-shaped literal from the prose — the `0.14.0` above
+          # was captured in place of the real pin until this block was moved above the annotation (#1236).
+          # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
           dotnet tool install --global FS.GG.SDD.Cli --version 0.17.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
