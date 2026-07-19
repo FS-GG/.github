@@ -57,6 +57,9 @@ contracts:
   # ORPHAN-check reason as coord-engine above: a CONTRACT_PACKAGES mapping with no contract in the
   # registry under test is an error, so every real mapping appears in this synthetic registry too.
   - { id: new-sdd-workspace,             version: "0.3.0",           package-version: "0.3.0" }
+  # FS.GG.Net's six-package coherent set (ADR-0052). Same ORPHAN-check reason: every CONTRACT_PACKAGES
+  # mapping must have a contract in the registry under test.
+  - { id: fs-gg-net,                     version: "0.1.0",           package-version: "0.1.0" }
   - { id: shared-build-config,           version: "1.0.0" }
 YAML
 
@@ -75,7 +78,13 @@ cat > "$FEED" <<'JSON'
   "FS.GG.Audio.Engine":                ["0.1.0-preview.1"],
   "FS.GG.Audio.Elmish":                ["0.1.0-preview.1"],
   "FS.GG.Coord.Cli":                   ["0.3.0", "0.2.0", "0.1.1", "0.1.0"],
-  "FS.GG.NewSddWorkspace":             ["0.3.0", "0.3.0-preview.1"]
+  "FS.GG.NewSddWorkspace":             ["0.3.0", "0.3.0-preview.1"],
+  "FS.GG.Net.Core":                    ["0.1.0"],
+  "FS.GG.Net.WebSocket":               ["0.1.0"],
+  "FS.GG.Net.WebSocket.Server":        ["0.1.0"],
+  "FS.GG.Net.Protobuf":                ["0.1.0"],
+  "FS.GG.Net.Grpc":                    ["0.1.0"],
+  "FS.GG.Net.Elmish":                  ["0.1.0"]
 }
 JSON
 
