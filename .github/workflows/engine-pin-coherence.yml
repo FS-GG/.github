@@ -1,0 +1,94 @@
+# Does the fleet's engine PIN match the newest engine the org has published? (.github#1196, epic #266)
+#
+# `scripts/fsgg-coord` in a receiver restores the engine from dist/dotnet/.config/dotnet-tools.json —
+# the pin coordination-sync byte-copies into every kit repo. That pin is a scalar no other gate looked
+# at: source-coherence (registry vs source), feed-coherence (registry vs feed) and engine-freshness
+# (source vs feed) never touch it, and pin-coherence gates only `# renovate:` ANNOTATED pins — the dist
+# manifest pin is a native dotnet-tools.json pin, so it escaped all four. The result was .github#1196:
+# every coherence gate GREEN at 0.6.0 while the fleet restored a stale 0.3.0 and a synced recipe called
+# a verb the pinned engine lacked (`unknown command: followup`).
+#
+# THE COMPARISON POINT IS THE FEED, NOT THE REGISTRY — see the gate docstring. Keying on
+# registry.package-version would red the Renovate pin-bump PR during publish-before-flip (FR-007), when
+# the package is live but the row not yet flipped. The feed is what a receiver can actually restore.
+#
+# WHY THIS IS NOT A pull_request live gate (it mirrors engine-freshness). The pin's staleness is a
+# property of MAIN (the pin) plus the FEED, not of a PR's diff, and it is fixed by MERGING the Renovate
+# pin bump, not by editing some other PR. A CLI release that leaves the pin behind touches no file here,
+# so no path-filtered trigger can ever see it — only a periodic read of the feed can. So the live job
+# runs on main, on a schedule, and on demand; the `fixture` job runs on PRs, because THAT one's subject
+# IS the diff.
+#
+# The gate FAILS CLOSED (epic #266): an unreadable feed, a missing manifest, an absent pin are ERRORS,
+# never "in sync". So this workflow must never gain a `continue-on-error` or a conditional that lets the
+# live job be skipped into green — "nothing to check" and "checked, and it's fine" must not share an
+# exit code.
+name: engine-pin-coherence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-engine-pin.py"
+      - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
+      - "tests/engine-pin/**"
+      - ".github/workflows/engine-pin-coherence.yml"
+  push:
+    branches: [main]
+    # DELIBERATELY UNFILTERED, like engine-freshness. The verdict is a function of main's pin AND the
+    # feed, and both move without touching any one path: a Renovate pin bump changes the pin, and a
+    # release changes the feed while touching no file here at all. A paths filter would leave a red
+    # standing for up to a day after the merge that fixed it. main is busy enough that re-asking on
+    # every push keeps the answer within a merge of the truth.
+  schedule:
+    # Daily, offset from feed-coherence (06:17) and engine-freshness/pin-coherence (06:43) so the feed
+    # reads do not contend. This is the trigger that catches a release nobody re-pinned: it touches no
+    # file, so no push can see it, and the pin grows stale in silence until something periodic reads
+    # the feed.
+    - cron: "53 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: engine-pin-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate reds on every drift/fails-open condition before we trust its green.
+  fixture:
+    name: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Run the engine-pin fixture (no network)
+        run: bash tests/engine-pin/run.sh
+
+  # Online. The actual freshness signal: this repo's own pin against the live feed.
+  pin:
+    name: pin
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fixture
+    # The live read is about main's pin + the feed, not about a PR's diff (see the header). On a PR the
+    # fixture above is the whole subject.
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      packages: read   # read the org NuGet feed (HTTP Basic with the run-scoped GITHUB_TOKEN)
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Is the fleet's engine pin the newest published engine?
+        env:
+          # Env-passed, never interpolated into the run script — the org's uniform anti-injection
+          # pattern (cf. engine-freshness.yml, feed-coherence.yml). The run-scoped token carries
+          # `packages: read`, which is what the feed's HTTP Basic auth wants.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/check-engine-pin.py
