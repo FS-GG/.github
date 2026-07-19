@@ -15,6 +15,10 @@
     scanning*, not in the lock.
   - [ADR-0038](0038-the-corpus-is-the-cut-over-gate.md) §2 — **blockers are now checked BEFORE the
     touch-set**, which changes how §6's `batch`/`take` evaluate schedulability. See §6.
+  - [ADR-0051](0051-coordination-rooms-derive-from-referencing-items.md) — **the channel (§5) gains a
+    second, derived subject.** `inbox`'s subject set widens from "items I claim" to "items I claim ∪
+    rooms those items reference" (a `Rooms: #R` body line), for the deadlock/negotiation tail the
+    per-item channel does not serve. The per-item channel of §5 is unchanged. See §5.
 
 ## Context
 
@@ -154,6 +158,17 @@ read the lock rather than the board.
    Messages ride the item they concern, so the conversation sits next to the work and GitHub notifies
    for free — the same reason [ADR-0001](0001-cross-repo-coordination-via-issues.md) chose issues
    over a file mailbox.
+
+   > **Amendment (2026-07-19, [ADR-0051](0051-coordination-rooms-derive-from-referencing-items.md),
+   > [#1204](https://github.com/FS-GG/.github/issues/1204)). The channel gains a second, DERIVED
+   > subject.** Riding *one* claimed item is the right shape for a two-worker hand-off and the wrong one
+   > for the tail — a deadlocked pair blocked on each other's items shares no item, so it has no channel.
+   > A **room** is an issue a contended cluster references with a soft `Rooms: #R` body line (the
+   > `Paths:`/`Blocked by:` family, §7); membership and lifecycle derive from that link, not from a
+   > roster or a sub-issue parent. The **only code delta** is here: `inbox`'s subject set widens from
+   > "items I claim" to "items I claim ∪ rooms those items reference." `say`/`messages` are already
+   > subject-general, so pointing them at a room-issue is free. The per-item channel described above is
+   > unchanged and remains the default.
 
 6. **`batch` is the scheduler; `take` is the worker loop.** `batch` returns a **maximal set of items
    whose touch-sets are disjoint from each other and from every in-flight claim** — the question a
