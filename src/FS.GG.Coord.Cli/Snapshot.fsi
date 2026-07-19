@@ -47,7 +47,16 @@ module Snapshot =
           /// #496) and a shadow that re-used bash's parse would never exercise it. This field is
           /// carried ONLY so that a divergence can show both parses side by side instead of leaving a
           /// reader to guess which layer disagreed.
-          BashPaths: string list option }
+          BashPaths: string list option
+
+          /// The registry-predicate ASSERTION this item's body declares, or `None` when it declares none
+          /// (ADR-0050 call-site B, .github#1213). PARSED off the body here, on the same terms as the
+          /// touch-set and the `Blocked on:` sentinel — but only the PURE id/field/value triple, never the
+          /// owner VERDICT, which needs the owning producer's manifest off disk and so is resolved at the
+          /// offer path's impure edge (`Client.enrichPredicates`), where it becomes `Item.Predicate` and the
+          /// flip-time gate reads it. Absent on an unreadable or swept-closed body — a predicate we did not
+          /// read is one the gate holds on anyway (#266).
+          DeclaredPredicate: RegistryPredicate.Assertion option }
 
     /// The documented default (`FSGG_CLAIM_LEASE_MIN`), for a shim too old to send one.
     val DefaultLeaseMinutes: int
