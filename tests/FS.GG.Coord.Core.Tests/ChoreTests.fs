@@ -49,7 +49,8 @@ module ChoreTests =
           Blockers = []
           Claim = None
           ItemPr = None
-          HumanBlock = None }
+          HumanBlock = None
+          Predicate = None }
 
     /// Every case of a union, by reflection — the sweep's axes are DERIVED, never typed out.
     ///
@@ -239,6 +240,85 @@ module ChoreTests =
         // chore. That is the #266 shape — a verdict over a subject that does not exist.
         let i = { item 1 with Status = Blocked; Blockers = [] }
         Assert.Empty(derive [ i ])
+
+    // ---- BLOCKER-CLEARED is ALSO gated on the item's declared registry predicate (ADR-0050 call-site B) --
+    //
+    // A recorded blocker can be a PROXY for the item's real acceptance predicate — FS.GG.Rendering#923's
+    // "WI-2 (Game publishes the skill)" closing would flip it to `Ready` while the semantic dependency (the
+    // registry row exists AND the owning manifest agrees) is not satisfied. So an item that DECLARES a
+    // machine-checkable predicate does not flip on blockers-cleared alone: the resolved verdict must Agrees.
+    // The verdict is a FACT on the item (`Item.Predicate`), resolved at the impure edge, so `derive` reads
+    // it exactly as it reads `Blocker.State` and stays pure. `None` — no declared predicate — is ungated.
+
+    [<Fact>]
+    let ``BLOCKER-CLEARED still fires when the declared predicate AGREES — blockers cleared AND row agrees`` () =
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                Predicate = Some RegistryPredicate.Agrees }
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+
+    [<Fact>]
+    let ``a CONTRADICTS predicate HOLDS the item — a proxy blocker closing cannot fake readiness (ADR-0050)`` () =
+        // The motivating bug: every blocker resolves, but the owning manifest declares a DIFFERENT value, so
+        // the item is not actually ready. Flipping it to Ready would advertise unstartable work.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                Predicate = Some(RegistryPredicate.Contradicts("false", "owner declares false")) }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``an UNKNOWN predicate FAILS CLOSED — could-not-evaluate is not the-predicate-holds (#266, #421)`` () =
+        // The same fail-closed shape a `BlockerUnknown` already gives BLOCKER-CLEARED, one step out: a
+        // predicate we could not evaluate must hold the item, never advance it.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                Predicate = Some(RegistryPredicate.Unknown "owning manifest could not be read") }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``NO declared predicate is UNGATED — blockers-cleared flips it exactly as today (ADR-0050 decision 5)`` () =
+        // The common case, and the boundary the ADR draws: a general item has no machine-checkable predicate,
+        // and inventing one for it is out of scope. `None` must not be read as a failing verdict.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerClosed ]
+                Predicate = None }
+
+        Assert.Equal<string list>([ "BLOCKER-CLEARED" ], rules [ i ])
+
+    [<Fact>]
+    let ``the predicate gate does NOT reach an item whose blockers still HOLD — the blocker gate is first`` () =
+        // An Agrees predicate cannot manufacture a flip on its own: BLOCKER-CLEARED still requires every
+        // blocker resolved. The predicate is a NARROWING of the flip condition, never a second way to trigger.
+        let i =
+            { item 1 with
+                Status = Blocked
+                Blockers = [ blocker 2 BlockerOpen ]
+                Predicate = Some RegistryPredicate.Agrees }
+
+        Assert.Empty(derive [ i ])
+
+    [<Fact>]
+    let ``the predicate is read ONLY by BLOCKER-CLEARED — a Contradicts on a Ready item does not gate STATUS-NOT-BLOCKED`` () =
+        // The gate is scoped to the Blocked→Ready flip. A Ready item with an open blocker is STATUS-NOT-BLOCKED
+        // whatever its predicate says — ADR-0050 gates the flip, not the reverse.
+        let i =
+            { item 1 with
+                Status = Ready
+                Blockers = [ blocker 2 BlockerOpen ]
+                Predicate = Some(RegistryPredicate.Contradicts("false", "owner declares false")) }
+
+        Assert.Equal<string list>([ "STATUS-NOT-BLOCKED" ], rules [ i ])
 
     // ---- STATUS-NOT-BLOCKED: do not advertise work that cannot start ---------------------------------
 

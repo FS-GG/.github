@@ -27,6 +27,12 @@
   <ItemGroup>
     <Compile Include="ExitCode.fsi" />
     <Compile Include="ExitCode.fs" />
+    <!-- RegistryPredicate is dependency-free (it opens no sibling module) and is compiled FIRST among
+         the domain files so `Types.Item` can carry its `Verdict` — the ADR-0050 flip-time gate needs
+         the predicate verdict as a resolved FACT on the item, the way `Blocker.State` is a fact, and a
+         pure `Chore.derive` reads it (.github#1203). -->
+    <Compile Include="RegistryPredicate.fsi" />
+    <Compile Include="RegistryPredicate.fs" />
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
     <Compile Include="Markdown.fsi" />
@@ -53,8 +59,6 @@
     <Compile Include="Chore.fs" />
     <Compile Include="Kit.fsi" />
     <Compile Include="Kit.fs" />
-    <Compile Include="RegistryPredicate.fsi" />
-    <Compile Include="RegistryPredicate.fs" />
   </ItemGroup>
 
   <ItemGroup>

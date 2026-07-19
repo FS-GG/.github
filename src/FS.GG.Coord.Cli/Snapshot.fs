@@ -295,7 +295,15 @@ module Snapshot =
                       Blockers = bl
                       Claim = cl
                       ItemPr = ip
-                      HumanBlock = hb }
+                      HumanBlock = hb
+                      // The registry predicate is RESOLVED impurely — the verdict needs the owning
+                      // producer's manifest off disk — so it is never set here: `parse` is pure (ADR-0050
+                      // call-site B, .github#1203). `None` is the ungated common case, and a context that
+                      // never resolves one (a plain `parse`, a receiver) flips on blockers-cleared exactly
+                      // as today. Populating it for the blocked items that DECLARE a predicate is the offer
+                      // path's job and is wired in a follow-up (the impure `RegistryPredicate` readers live
+                      // in `Client.predicate` and want factoring to a shared edge first).
+                      Predicate = None }
                   BashPaths = bp }
         | a, b, c, d, e, f, g, h, i ->
             [ a |> Result.map ignore
