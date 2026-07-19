@@ -1339,4 +1339,100 @@ echo "== 56. supersession is the ENGINE's rule now (#737) =="
 #     `tests/coord-engine-parity/run.sh` case 31
 echo "   ok (the rules moved to the engine's corpus, where they hold the implementation)"
 
+# Cases 57-60 cover the FULL sweep (.github#299/#1200): `--write` no longer punts the housekeeping to
+# the operator. A new row whose (owner, predicate) siblings are already in the file is HOMED beside
+# them rather than left in the tail under a re-home note (the .github#1198 toil); and with `--now`,
+# `--write` bumps `updated:` and prepends a dated changelog entry — the two steps it used to only
+# print a reminder for.
+
+echo "== 57. --write HOMES a new row beside its (owner, predicate) sibling, not in the tail =="
+# `newkid` shares owner (producer-two, DERIVED from its producer repo) and predicate with `sib`, which
+# is already in the file — so it is inserted right after `sib`, between it and `tail`, never appended.
+mkdir -p "$ROOT/Producer.Two/skills/sib" "$ROOT/Producer.Two/skills/newkid" "$ROOT/Producer.One/skills/tail"
+printf 'sib body\n'    > "$ROOT/Producer.Two/skills/sib/SKILL.md"
+printf 'newkid body\n' > "$ROOT/Producer.Two/skills/newkid/SKILL.md"
+printf 'tail body\n'   > "$ROOT/Producer.One/skills/tail/SKILL.md"
+SIB="$(sha "$ROOT/Producer.Two/skills/sib/SKILL.md")"
+NEWKID="$(sha "$ROOT/Producer.Two/skills/newkid/SKILL.md")"
+TAIL="$(sha "$ROOT/Producer.One/skills/tail/SKILL.md")"
+cat > "$REG" <<YAML
+schemaVersion: 1
+updated: "2026-07-08"
+skills:
+  - { id: good, scope: process, owner: producer-one, source: Producer.One/skills/good/SKILL.md, sha256: $GOOD, materializes-when: always }
+  - { id: sib,  scope: product, owner: producer-two, source: Producer.Two/skills/sib/SKILL.md,  sha256: $SIB,  materializes-when: "profile in [game]" }
+  - { id: tail, scope: process, owner: producer-one, source: Producer.One/skills/tail/SKILL.md, sha256: $TAIL, materializes-when: always }
+YAML
+mkdir -p "$ROOT/Producer.One/.agents/skills" "$ROOT/Producer.Two/template/skill-manifest"
+cat > "$ROOT/Producer.One/.agents/skills/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "good", "scope": "process", "sha256": "$GOOD" },
+  { "id": "tail", "scope": "process", "sha256": "$TAIL" }
+] }
+JSON
+cat > "$ROOT/Producer.Two/template/skill-manifest/skill-manifest.json" <<JSON
+{ "schemaVersion": 1, "skills": [
+  { "id": "sib",    "scope": "product", "sha256": "$SIB",    "supplied-by": "skills/sib/",    "materializes-when": "profile in [game]" },
+  { "id": "newkid", "scope": "product", "sha256": "$NEWKID", "supplied-by": "skills/newkid/", "materializes-when": "profile in [game]" }
+] }
+JSON
+run --registry "$REG" --repos-root "$ROOT" --write >/dev/null || { echo "FAIL: --write should home newkid"; cat "$REG"; exit 1; }
+grep -q "id: newkid" "$REG" || { echo "FAIL: newkid not added"; cat "$REG"; exit 1; }
+# Homed, not appended: no re-home note is emitted, and the row lands BETWEEN sib and tail.
+grep -q "APPENDED by" "$REG" && { echo "FAIL: newkid was tail-appended, not homed"; cat "$REG"; exit 1; }
+python3 -c "
+import yaml,sys
+ids=[r['id'] for r in yaml.safe_load(open(sys.argv[1]))['skills']]
+assert ids==['good','sib','newkid','tail'], ids
+" "$REG" || { echo "FAIL: newkid not homed immediately after its sibling"; grep 'id:' "$REG"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" >/dev/null || { echo "FAIL: not coherent after homing"; exit 1; }
+echo "   ok"
+
+echo "== 58. --write --now bumps updated: and prepends a dated changelog entry =="
+# A row whose owner has NO sibling in the file (producer-one has no product row here) still falls back
+# to the tail append — the tool homes what it can prove and guesses nothing. Reuse the stale-digest
+# fixture so --write has a real change to stamp.
+write_registry
+write_manifests
+CL="$WORK/skills.CHANGELOG.md"
+cat > "$CL" <<'MD'
+# Skill registry changelog
+
+## Entries
+
+<!-- Prepend new entries here, newest first:
+- **YYYY-MM-DD** — HEADER (owner; refs): body
+-->
+
+- **2026-07-01** — SEED (owner; refs): the first entry.
+MD
+run --registry "$REG" --repos-root "$ROOT" --write --now 2026-07-19 --changelog "$CL" >/dev/null \
+  || { echo "FAIL: --write --now should reconcile the stale digest"; exit 1; }
+grep -q 'updated: "2026-07-19"' "$REG" || { echo "FAIL: updated: not bumped"; grep updated "$REG"; exit 1; }
+python3 -c "
+import sys
+t=open(sys.argv[1]).read()
+close=t.index('-->'); new=t.index('- **2026-07-19**'); old=t.index('- **2026-07-01**')
+assert close < new < old, (close,new,old)   # after the guidance comment, before the older entry
+assert 'RECONCILE (auto' in t, 'auto entry text missing'
+" "$CL" || { echo "FAIL: changelog entry not prepended in order"; cat "$CL"; exit 1; }
+echo "   ok"
+
+echo "== 59. --now is refused without --write, on a bad date, and stamps nothing on a no-op =="
+run --registry "$REG" --repos-root "$ROOT" --now 2026-07-19 >/dev/null 2>&1 \
+  && { echo "FAIL: --now must be refused without --write"; exit 1; }
+run --registry "$REG" --repos-root "$ROOT" --write --now 07-19-2026 >/dev/null 2>&1 \
+  && { echo "FAIL: --now must reject a non-ISO date"; exit 1; }
+# The registry is coherent after case 58's write, so a second --write --now changes nothing and must
+# NOT stamp a no-op reconcile.
+out="$(run --registry "$REG" --repos-root "$ROOT" --write --now 2026-07-25 --changelog "$CL")"
+grep -q 'nothing to reconcile' <<<"$out" || { echo "FAIL: a no-op --now did not say so"; echo "$out"; exit 1; }
+grep -q 'updated: "2026-07-25"' "$REG" && { echo "FAIL: a no-op --now bumped updated:"; grep updated "$REG"; exit 1; }
+grep -q '2026-07-25' "$CL" && { echo "FAIL: a no-op --now wrote a changelog entry"; exit 1; }
+# Restore the shared fixture for any case added after this one.
+write_registry
+write_manifests
+rm -rf "$ROOT/Producer.Two/skills/sib" "$ROOT/Producer.Two/skills/newkid" "$ROOT/Producer.One/skills/tail"
+echo "   ok"
+
 echo "skill-registry fixture: all checks passed"

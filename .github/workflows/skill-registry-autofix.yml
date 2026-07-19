@@ -18,13 +18,20 @@
 # 25 minutes later so a body merged overnight is both detected AND has a reconcile PR by morning.
 #
 # WHAT IT WILL AND WON'T RECONCILE. `--write` is self-limiting to the MECHANICAL cases — it rewrites
-# a stale `sha256:` / `materializes-when:` verbatim from the manifest, and appends a missing row
+# a stale `sha256:` / `materializes-when:` verbatim from the manifest, and adds a missing row
 # only when exactly one manifest derives its `source:`. It then RE-CHECKS and refuses to touch the
 # JUDGEMENT cases: a vanished source, a frozen-mirror divergence (#295 — two repos disagree on who
 # owns a body), contradictory predicates, or a row two manifests declare (#298 — needs an owner
 # call). Those it leaves as findings and exits non-zero. Auto-resolving either would re-introduce
 # the fail-open shape of #266 INSIDE the fix for it — so this workflow carries them into the PR body
 # as "still needs a human", never silently resolves them.
+#
+# A FULL SWEEP, NOT A HALF ONE (.github#299/#1200). `--write --now` (the invocation below) FINISHES the
+# reconcile it used to leave half-done for a human: a new row is HOMED beside its (owner, predicate)
+# siblings instead of dropped in the tail under a "re-home and annotate these" note — the manual step
+# that produced #1198 — and `updated:` + a dated `skills.CHANGELOG.md` entry are written in the same
+# pass. It still homes only what it can PROVE (a row with no sibling falls back to the tail append), so
+# the judgement-case discipline above is unchanged; the housekeeping is what stops being the operator's.
 #
 # THE PR's OWN CHECKS RUN, SO A STALE SNAPSHOT GOES RED BY ITSELF (#514, completing #425). The branch
 # is pushed with the org `fs-gg-cross-repo-dispatch` App token, exactly as `lockfile-sync.yml` does
@@ -170,6 +177,7 @@ jobs:
     env:
       BRANCH: bot/skill-registry-autofix
       REGISTRY: registry/skills.yml
+      CHANGELOG: registry/skills.CHANGELOG.md
     steps:
       # Minted BEFORE the checkout, because the checkout is what persists it as the git credential —
       # which is what makes the reconcile push below an App-token push, and therefore what makes the
@@ -263,7 +271,13 @@ jobs:
         # `--write` exits non-zero when JUDGEMENT cases remain (see header) — expected, and it must
         # NOT fail the job, because the mechanical reconcile is still worth a PR. `|| true` swallows
         # that exit; the decision to act is made on the git diff in the next step, not this code.
-        run: python scripts/fsgg-skill-registry-check --write --repos-root .repos || true
+        #
+        # `--now` makes `--write` FINISH the reconcile (.github#299/#1200): it HOMES each new row beside
+        # its siblings instead of leaving it in the tail for a hand re-home (the #1198 toil), bumps
+        # `updated:`, and prepends a dated `$CHANGELOG` entry — the two steps this bot used to only print
+        # a reminder for. The date is injected here (not read by the tool) so the reconcile is
+        # deterministic; both steps are no-ops when nothing was reconciled.
+        run: python scripts/fsgg-skill-registry-check --write --repos-root .repos --now "$(date -u +%Y-%m-%d)" || true
 
       - name: Decide whether anything changed
         id: diff
@@ -351,7 +365,9 @@ jobs:
           git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
           git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
-          git add -- "$REGISTRY"
+          # $CHANGELOG (and the `updated:` bump inside $REGISTRY) is written by `--write --now` above;
+          # stage it too, so the reconcile PR carries its own changelog entry rather than owing one.
+          git add -- "$REGISTRY" "$CHANGELOG"
           git commit -m "registry: auto-reconcile skill-registry against producer manifests (.github#299)"
           # Plain --force: this branch is bot-owned and nobody else writes it, and the `concurrency`
           # group already serializes runs — so there is no lost-update to guard against, while
