@@ -13,6 +13,7 @@ repos:
   github:     { name: FS-GG/.github,    role: "cross-repo contract registry, org-shared build config, coordination + decision docs" }   # .github#135: now a first-class consumer/edge node (registry-schema) — not just a contract owner (shared-build-config).
   game:       { name: FS.GG.Game,       role: "render-independent game-simulation component + new BCL-only bottom layer (FS.GG.Game.Core / .Render); ADR-0022" }   # the platform's sixth repo (P2 stand-up, .github#216); registered here at P5 as a contract owner + edge node.
   audio:      { name: FS.GG.Audio,      role: "render-independent game-audio component — Core vocabulary / Host backend seam / Engine (buses/fades/ducking/3D) / Elmish Cmd bridge; ADR-0023" }   # the platform's seventh repo; standalone SDD-driven component, transferred into the org + first release 0.1.0-preview.1.
+  net:        { name: FS.GG.Net,        role: "render-independent transport component — protobuf over WebSocket (client + Kestrel server) / gRPC; ITransport / IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho; ADR-0052" }   # the platform's eighth repo; standalone component, rostered at creation (.github#1223), first release 0.1.0 (v0.1.0, 2026-07-19).
 
 # Versioned contracts and where they are owned/consumed.
 #
@@ -593,6 +594,22 @@ contracts:
     # AudioEffect from the retired FS.GG.UI.Canvas surface) with the real playback realization.
     surface: "FS.GG.Audio.Core/.Host/.Engine/.Elmish public .fsi surfaces — AudioEffect vocabulary + IAudioBackend/IMixingBackend seam + mixing Engine + Audio.Cmd Elmish bridge"
     consumers: [audio, rendering]   # audio: WITHIN the component (sample app + test suites). rendering: the template game/sample-pack profiles (ADR-0024 step 3, .github#238, FS.GG.Rendering#156 wired / #162 released). A scaffolded product receives the packages through the template, so Templates consumes them TRANSITIVELY via fs-gg-ui-template — no direct templates→audio edge.
+
+  - id: fs-gg-net
+    version: "0.1.0"          # → 0.1.0 first release of the transport component (ADR-0052, tag v0.1.0, 2026-07-19). The six-package coherent set (Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish) shares one version (<FsGgNetVersion>) and moves together.
+    package-version: "0.1.0"  # → 0.1.0 PUBLISHED all six on both feeds (2026-07-19, FR-007, tag v0.1.0): org GitHub Packages feed ("Your package was pushed" ×6) then nuget.org via ADR-0012/0013 OIDC Trusted Publishing (policy fs-gg-net-publishing) — all six returned Created. package-version == version == feed(newest) == 0.1.0 (publish-before-flip FR-007: live on the feed before this row landed). NU5104 does not bite — Net is a bottom layer with no FS-GG dependency.
+    owner: net
+    # ADR-0052: a render-independent, domain-neutral transport component. A pure Core seam (ITransport
+    # byte-message duplex + IMessageChannel typed protobuf request/response + Sequential/Multiplexed
+    # correlation + serve/ServerEcho server side, BCL-only); a client + Kestrel-server WebSocket
+    # transport (.WebSocket / .WebSocket.Server); protobuf codecs (.Protobuf — Google.Protobuf raw +
+    # protobuf-net code-first); a thin gRPC lifecycle bridge (.Grpc); and an Elmish Cmd/Sub bridge
+    # (.Elmish). Depends on no FS-GG component (public packages only) — a BOTTOM layer, sibling to
+    # FS.GG.Game.Core and FS.GG.Audio. Verified end-to-end against a real SC2 4.10 server (full game
+    # handshake) and an in-process code-first gRPC service. The wire-contract registry dimension it will
+    # eventually carry (3 provenances) is SDD-first schema growth tracked by SDD#589.
+    surface: "FS.GG.Net.Core/.WebSocket/.WebSocket.Server/.Protobuf/.Grpc/.Elmish public .fsi surfaces — ITransport/IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho + WebSocket client/server transport + Google.Protobuf/protobuf-net codecs + gRPC lifecycle bridge + Elmish Cmd/Sub"
+    consumers: []   # no FS-GG consumers: the SC2 and BAR clients are app repos, not FS-GG components (ADR-0052). Legal empty under schemaVersion 2.
   - id: keyboard-input
     version: "0.5.0"          # Rendering-owned keyboard input-config SURFACE — the FS.GG.UI.KeyboardInput Keymap value type + rebind operations (FS.GG.Rendering#331), public Keymap.resolve + conflict diagnostics (FS.GG.Rendering#332), and the input-config-screen surface. FIRST available at the fs-gg-ui coherent-set version 0.5.0 (FS.GG.UI.KeyboardInput 0.5.0; every prior published version predated the Keymap merge). Registered per .github#365 (ADR-0028: the keyboard input-config mechanism/policy boundary). NO separate `package-version` here: the package (FS.GG.UI.KeyboardInput) is a member of the fs-gg-ui coherent set already tracked by the `fs-gg-ui-template` contract (pin == 0.5.0) — this row versions the consumed SURFACE, not a second package delivery. check-feed-coherence therefore leaves it out of the package-bearing set (correct — no double-count).
     owner: rendering

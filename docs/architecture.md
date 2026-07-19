@@ -18,21 +18,24 @@ SkiaSharp/OpenGL UI framework, a spec-driven development (SDD) lifecycle CLI, an
 optional governance tooling, that compose into one runnable workspace. It began as the
 split of the archived [`FS-Skia-UI`](https://github.com/EHotwagner/FS-Skia-UI)
 monolith into four focused, independently shippable components plus an
-organization-level coordination repository. It has since grown two more: **FS.GG.Game**,
+organization-level coordination repository. It has since grown three more: **FS.GG.Game**,
 the render-independent simulation core extracted from Rendering under
-[ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md), and **FS.GG.Audio**,
+[ADR-0022](adr/0022-extract-fs-gg-game-as-an-sdd-driven-component.md); **FS.GG.Audio**,
 onboarded as a standalone component under
-[ADR-0023](adr/0023-onboard-fs-gg-audio-as-an-sdd-driven-component.md). Both are **published**
+[ADR-0023](adr/0023-onboard-fs-gg-audio-as-an-sdd-driven-component.md); and **FS.GG.Net**, the
+render-independent transport component (protobuf over WebSocket / gRPC) onboarded under
+[ADR-0052](adr/0052-onboard-fs-gg-net-transport-component.md). All three are **published**
 to the org feed and nuget.org — [§5](#5-the-contract-registry--the-single-source-of-truth) carries
-the versions, generated from the registry. **Six framework components**, plus `.github`.
+the versions, generated from the registry. **Seven framework components**, plus `.github`.
 
 This page is a map. Authoritative detail lives in each component repository and in
 the decision records linked throughout.
 
-> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the seven
-> repositories below (six framework components + `.github`; the sixth,
+> **Terms (ADR-0020).** The **platform** is FS-GG as a whole — the eight
+> repositories below (seven framework components + `.github`; the sixth,
 > **FS.GG.Game**, was extracted under ADR-0022 and published at P5; the seventh,
-> **FS.GG.Audio**, was onboarded as a standalone component under ADR-0023). Each repository is a
+> **FS.GG.Audio**, was onboarded as a standalone component under ADR-0023; the eighth,
+> **FS.GG.Net**, the transport component, under ADR-0052). Each repository is a
 > **component**. What a consumer *scaffolds* with the platform is a **workspace** —
 > the generated repo with a runnable **app**, the `.fsgg/` lifecycle, skills, and
 > optional governance. This page uses those words precisely; see
@@ -72,18 +75,21 @@ the decision records linked throughout.
 │ Game.Core (BCL sim)  │
 │ + Game.Render        │   Game.Core → nothing (BCL-only BOTTOM layer, sibling to Rendering).
 └──────────────────────┘   FS.GG.Audio.* → nothing either (the second such bottom layer, ADR-0023).
-                           Rendering's template reaches UP to both bottom layers (game-sim-core,
-                           fs-gg-audio) and to nothing else; neither reaches back. One-way preserved.
+                           FS.GG.Net.* → nothing either (a third bottom layer, ADR-0052; consumed by
+                           apps — SC2/BAR clients — not by the template).
+                           Rendering's template reaches UP to the game + audio bottom layers
+                           (game-sim-core, fs-gg-audio) and to nothing else; none reaches back. One-way preserved.
 ```
 
-Seven repositories under [github.com/FS-GG](https://github.com/FS-GG) (six framework
+Eight repositories under [github.com/FS-GG](https://github.com/FS-GG) (seven framework
 components + `.github`; **FS.GG.Game** was extracted under ADR-0022 — its packages
 `FS.GG.Game.Core` + `.Render` are **published** to the org feed + nuget.org;
-`game-extraction` **`coherent: true`** since P5, 2026-07-06; and **FS.GG.Audio** was onboarded
+`game-extraction` **`coherent: true`** since P5, 2026-07-06; **FS.GG.Audio** was onboarded
 as a standalone render-independent component under ADR-0023, its `FS.GG.Audio.*` set
 **published** — promoted off the `-preview` channel on 2026-07-09 (FS.GG.Audio#4), which made it
-the **last `FS.GG.*` producer to go stable**, so every producer in the org now ships on a stable
-channel). [§5](#5-the-contract-registry--the-single-source-of-truth) carries what each is
+the **last `FS.GG.*` producer to go stable**; and **FS.GG.Net** was onboarded under ADR-0052, its
+six-package `FS.GG.Net.*` set **published** at `0.1.0` (v0.1.0, 2026-07-19) on both feeds — every
+producer in the org ships on a stable channel). [§5](#5-the-contract-registry--the-single-source-of-truth) carries what each is
 published *at*:
 
 | Repository | Role | Ships |
@@ -94,6 +100,7 @@ published *at*:
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition — wires SDD + Rendering + Governance into one workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) *(extracted, ADR-0022; published P5)* | The render-independent simulation core + a thin Scene adapter — the new BCL-only bottom layer, extracted from Rendering. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter), on the org feed + nuget.org |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) *(onboarded, ADR-0023)* | The render-independent game-audio component — pure `AudioEffect` vocabulary, an `IAudioBackend` device seam, a mixing Engine (buses / fades / ducking / 3D), and an Elmish `Cmd` bridge. Depends on no FS-GG component — a BCL-only bottom layer, sibling to Rendering and `FS.GG.Game.Core`. First consumed cross-repo by Rendering's template `game`/`sample-pack` profiles ([ADR-0024](adr/0024-wire-fs-gg-audio-into-the-game-scaffold-profile.md) step 3, [.github#238](https://github.com/FS-GG/.github/issues/238)), shipped in `fs-gg-ui-template` 0.3.1-preview.1. Developed with `fsgg-sdd` as its lifecycle. | `FS.GG.Audio.Core` / `.Host` / `.Engine` / `.Elmish`, on the org feed + nuget.org |
+| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) *(onboarded, ADR-0052; published 0.1.0)* | The render-independent, domain-neutral transport component — an `ITransport` / `IMessageChannel` seam with `Sequential` / `Multiplexed` client correlation and `serve` / `ServerEcho` on the server side, a client + Kestrel-server WebSocket transport, Google.Protobuf + protobuf-net codecs, a thin gRPC lifecycle bridge, and an Elmish `Cmd` / `Sub` bridge. Depends on no FS-GG component — a BCL-first bottom layer, sibling to `FS.GG.Game.Core` and `FS.GG.Audio`. Consumers are app repos (SC2 / BAR clients), not FS-GG components. Verified against a real SC2 server + an in-process gRPC service. | `FS.GG.Net.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`, on the org feed + nuget.org |
 | [**FS-GG/.github**](https://github.com/FS-GG/.github) (this repo) | Cross-repo contract registry, the org repo roster + coordination-kit authority (ADR-0019), org-shared build config, consumer + decision docs. **Also a producer** — it owns the two org-level CLIs, and their release workflows live here because the tools do ([ADR-0016](adr/0016-retire-templates-local-new-fullstack-single-scaffolder.md), [ADR-0034](adr/0034-typed-coordination-engine.md)). | `FS.GG.NewSddWorkspace` (`new-sdd-workspace`) + `FS.GG.Coord.Cli` (the ADR-0034 engine) — **both published**, org feed + nuget.org |
 
 ---
@@ -525,6 +532,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `game-sim-core` | FS.GG.Game | `0.5.1` | `0.5.1` |
 | `game-scene-adapter` | FS.GG.Game | `0.5.1` | `0.5.1` |
 | `fs-gg-audio` | FS.GG.Audio | `0.3.0` | `0.3.0` |
+| `fs-gg-net` | FS.GG.Net | `0.1.0` | `0.1.0` |
 | `coord-engine` | FS-GG/.github | `0.6.0` | `0.6.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.4.0` | `0.4.0` |
 
