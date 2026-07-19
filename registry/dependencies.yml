@@ -3,7 +3,7 @@
 # versions are coherent. A `contract-change` issue MUST update this file as part of
 # its resolution. Human projection: docs/registry/compatibility.md.
 schemaVersion: 2   # → 2 (.github#1114, SDD#508 step 3): `consumers` becomes "required, may be EMPTY" — a present-but-empty `consumers: []` is now a legal, honest value for a package-bearing contract that nothing restores (the `new-sdd-workspace` scaffolder). Schema growth under #686 / ADR-0015; the FS.GG.SDD.Cli validator pin in contract-coherence.yml advances to 0.13.0 with this bump (publish-before-flip, ADR-0037: SDD published the three-state validator FIRST, in SDD#512/#516).
-updated: "2026-07-18"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
+updated: "2026-07-19"   # Changelog moved to registry/CHANGELOG.md (.github#129 / review M4): prepend one dated entry there per change and set this date to match. Kept short deliberately — the typed validator does not read this comment.
 
 repos:
   sdd:        { name: FS.GG.SDD,        role: "spec-driven lifecycle CLI + contracts" }
@@ -1662,3 +1662,71 @@ coherence:
       in this repo.
     resolved_by: FS-GG/.github#263 (gate + fixture + workflow + the renovate.json hostRules fix; this registry PR registers the coherence id)
     tracking: "https://github.com/FS-GG/.github/issues/263 (child of the fails-open epic https://github.com/FS-GG/.github/issues/266)"
+
+  - id: fr-gameplay-test-obligation
+    coherent: false
+    owner: sdd
+    summary: >
+      Decision recorded 2026-07-19 (ADR-0048, .github#1191): the SDD half of the "gameplay must be
+      headlessly tested" initiative. An FR may carry an optional, closed-set classification facet on
+      its coverage line (initially `{ gameplay }`, extensible additively), populating the currently-inert
+      classification field on the structured `Requirement` (today the FR grammar is id+prose+refs only
+      and `Requirement.Priority` is parsed nowhere). For each FR whose class is in the obligation-bearing
+      set, derivation mints a standing obligation satisfied ONLY by a real test — `kind` in a recognized
+      test set AND `synthetic: false` — which finally makes `ExpectedEvidenceKinds` READ AND ENFORCED for
+      classified FRs rather than coerced to `verification`. `verify`/`ship` gain a per-classified-FR
+      readiness disposition (satisfied/unmet) plus an aggregate "classified-FR obligations unmet" count
+      that Governance binds as a block-on-ship check (see profile-bound-gate-inheritance / ADR-0049).
+      OPT-IN + BACKWARD COMPATIBLE: an unannotated FR is unclassified, every existing spec across the org
+      stays valid with no migration, and no readiness flips until the facet is authored. The classifier
+      is the SOLE sanctioned relief valve — because Governance forbids waivers and the synthetic gate is
+      non-relaxable, the only way to exempt a requirement is to not classify it `gameplay`, a visible,
+      diff-reviewable act.
+    note: >
+      STANDING OBLIGATION (coherent:false) — DECISION ONLY, no code yet. Nothing is implemented or
+      published: the SDD spec grammar has not grown the facet, derivation does not yet mint the obligation,
+      and `verify`/`ship` expose no per-FR disposition. This is SCHEMA GROWTH → PUBLISH-BEFORE-FLIP
+      (ADR-0037): SDD must PUBLISH the facet-parsing + obligation-deriving grammar (a versioned authoring
+      surface — `docs/reference/authoring-contracts.md`, drift-guarded) FIRST, then the per-FR count is
+      wired and this row can flip. Flip is ALSO gated on the reference-game end-to-end proof shared with
+      ADR-0049 — a game passing the full classify → non-synthetic test → satisfied chain — sequenced on
+      the Coordination board, not here. Modeled on the `project.visualSurface` precedent one granularity
+      finer (per classified FR, not once per work item). Contract touched: the SDD authoring grammar
+      (facet + per-class satisfaction rule) and the `governance-handoff` readiness surface (new per-FR
+      disposition + aggregate count). Version bumps land WITH the publish, not with this decision row.
+    resolved_by: "PENDING — ADR-0048 (.github#1191) records the decision + this coherence id; the SDD grammar publish and the per-FR readiness wiring are unscheduled work, to be sequenced on the Coordination board alongside FS.GG.Game.Harness / fs-gg-playtest."
+    impact: "Once implemented, published, and flipped: a gameplay FR that has not been exercised by a real (non-synthetic) headless test is un-satisfiable, and — via profile-bound-gate-inheritance — unshippable. Until then this row records the obligation so the pending contract change is visible and gated."
+    tracking: "ADR-0048 (FS-GG/.github#1191, merged). Implementation/publish/flip: unscheduled — track on the Coordination board with ADR-0049's profile-bound-gate-inheritance and the reference-game proof."
+
+  - id: profile-bound-gate-inheritance
+    coherent: false
+    owner: governance
+    summary: >
+      Decision recorded 2026-07-19 (ADR-0049, .github#1191): the Governance half of the "gameplay must be
+      headlessly tested" initiative. A gate may be declared ONCE in an org-owned reference set and bound to
+      a scaffold template-profile (e.g. `game`); at enforcement time the engine consults the profile-bound
+      gates for the product's `TemplateProfile` IN ADDITION to its local `capabilities.yml`. `TemplateProfile`
+      — today provenance-only (`Surface.TemplateProfile` records which template a root was instantiated from
+      and binds nothing) — becomes the LOAD-BEARING KEY inherited gates are looked up by. Inherited gates are
+      a FLOOR a product cannot lower: local `.fsgg/` edits cannot remove or downgrade an inherited gate,
+      closing the divergence hole the audit found (FS.GG.Game has already dropped the `evidence` domain from
+      its copied gate set). The per-classified-FR readiness count from ADR-0048 (fr-gameplay-test-obligation)
+      is the FIRST profile-bound gate, bound to `game` at `maturity: block-on-ship`. The strictness dial still
+      composes — an inherited block-on-ship gate tightens under strict/release exactly like a local one
+      (`maturityFloor` − `profileTighten`).
+    note: >
+      STANDING OBLIGATION (coherent:false) — DECISION ONLY, no code yet. Nothing is implemented or published:
+      Governance has no profile→gate map, `deriveEffectiveSeverity` does not union inherited gates, and
+      `TemplateProfile` still binds nothing. This RETIRES the "policy is purely local" invariant the
+      `fs-gg-governance` overlay assumed → a versioned CONTRACT CHANGE to the governance config /
+      governance-handoff surface, under PUBLISH-BEFORE-FLIP (ADR-0037): Governance must publish the
+      profile-scoped binding + floor enforcement FIRST, then bind the `game` gate and flip this row. Flipping
+      the `game` binding on MUST follow a proof that a reference game passes the full chain end-to-end
+      (classify → non-synthetic headless test → satisfied → shippable) — shared with ADR-0048, sequenced on
+      the Coordination board, not decided here. The overlay keeps copying local, product-specific gates; only
+      the org-owned floor moves to inheritance, and existing products gain the floor without re-scaffolding.
+      Contract touched: `governance-capabilities` (profile-bound gate declaration) + `governance-handoff`
+      (enforcement now unions inherited gates with local). Version bumps land WITH the publish.
+    resolved_by: "PENDING — ADR-0049 (.github#1191) records the decision + this coherence id; the Governance profile→gate inheritance implementation, the org-owned reference set binding, and the `game` flip are unscheduled work, to be sequenced on the Coordination board."
+    impact: "Once implemented, published, and flipped: every product scaffolded on the `game` profile inherits the gameplay gate as an org-owned block-on-ship floor it cannot delete — combined with the non-relaxable synthetic gate and no-waiver posture, a game lacking a non-synthetic test for a classified gameplay FR becomes unshippable. Until then this row records the obligation so the pending contract change is visible and gated."
+    tracking: "ADR-0049 (FS-GG/.github#1191, merged). Depends on fr-gameplay-test-obligation (ADR-0048). Implementation/publish/flip + reference-game proof: unscheduled — track on the Coordination board."
