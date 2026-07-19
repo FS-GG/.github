@@ -50,6 +50,17 @@ module Render =
           Url: string
           Detail: string }
 
+    /// A `predicate --json` result — the ADR-0050 oracle verdict, structured (.github#1202). `ownerValue`
+    /// and `note` are non-null exactly on `contradicts`; `reason` on `unknown`.
+    type PredicateResult =
+        { Verdict: string
+          Id: string
+          Field: string
+          Value: string
+          OwnerValue: string option
+          Note: string option
+          Reason: string option }
+
     /// `ready --json` — the machine contract a reconciler reads: a JSON array of the startable rows. A
     /// real JSON writer, so a title or path carrying a quote cannot forge the array.
     val renderReadyJson: rows: Scan.Row list -> string
@@ -66,3 +77,7 @@ module Render =
     /// `lint --json` — a JSON array of the findings, each carrying its code, severity, and the item it is
     /// about. A real JSON writer, so a finding detail carrying a quote cannot forge the array.
     val renderLintJson: findings: LintFinding list -> string
+
+    /// `predicate --json` — a single JSON object: the ADR-0050 verdict and its assertion (.github#1202).
+    /// A real JSON writer, so a governing note carrying a quote cannot forge the object.
+    val renderPredicateJson: result: PredicateResult -> string

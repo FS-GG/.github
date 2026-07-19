@@ -32,6 +32,7 @@
     <Compile Include="LandableTests.fs" />
     <Compile Include="ChoreTests.fs" />
     <Compile Include="KitTests.fs" />
+    <Compile Include="RegistryPredicateTests.fs" />
   </ItemGroup>
 
   <ItemGroup>

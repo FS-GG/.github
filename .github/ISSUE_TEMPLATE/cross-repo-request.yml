@@ -33,6 +33,34 @@ body:
     attributes:
       label: Affected contract / registry entry
       description: Name the contract or registry id (e.g. `scaffold-provider@1`, `governance-handoff@1`, `fs-gg-ui-version`). Link the registry entry if one exists.
+  - type: markdown
+    attributes:
+      value: |
+        **Registry assertion (optional).** If this request asks `.github` to set a `registry/skills.yml`
+        field to a value, state it *structurally* below — id, field, value — rather than only in the
+        prose above. A filing-time check re-verifies the triple against the OWNING producer's manifest
+        (`owner:` decides whose word is law) and auto-comments the owner-declared value if they disagree,
+        before triage — the ADR-0050 predicate oracle. A machine cannot tell a fenced YAML *quotation*
+        from an *assertion* (#683), so the claim lives in these fields, not in the body. Leave blank
+        if the request asserts no registry value. Today only `mirrored` is checked.
+  - type: input
+    id: assert-id
+    attributes:
+      label: Asserted registry id
+      description: The `registry/skills.yml` row id, e.g. `fs-gg-playtest`.
+      placeholder: "fs-gg-playtest"
+  - type: input
+    id: assert-field
+    attributes:
+      label: Asserted registry field
+      description: The field being asserted, e.g. `mirrored`.
+      placeholder: "mirrored"
+  - type: input
+    id: assert-value
+    attributes:
+      label: Asserted registry value
+      description: The value you are asserting the field has, e.g. `true`.
+      placeholder: "true"
   - type: dropdown
     id: priority
     attributes:

@@ -114,6 +114,13 @@ jobs:
       - name: Shim parity — the corpus is green THROUGH the ADR-0034 §4.4 shim
         run: bash tests/coord-engine-parity/shim.sh
 
+      # THE REGISTRY-PREDICATE ORACLE, over LOCAL fixture files (ADR-0050 call-site A, .github#1202). The
+      # verdict logic is unit-tested pure; this drives the COMPILED binary's file edge — reading
+      # registry/skills.yml, locating and parsing the owning producer's manifest, and the 0/3/4 exit
+      # contract — and refutes the #1194 instance (`fs-gg-playtest mirrored: true`) end to end.
+      - name: The predicate oracle refutes a wrong cross-repo request — over local files
+        run: bash tests/registry-predicate/run.sh
+
       - name: Test — the wire contract, and the residue rule
         run: dotnet test tests/FS.GG.Coord.Cli.Tests/FS.GG.Coord.Cli.Tests.fsproj -c Release --logger "console;verbosity=normal"
 
