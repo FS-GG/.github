@@ -1,0 +1,116 @@
+name: Cross-repo request — registry predicate check
+
+# ADR-0050 call-site A, DELIVERED (.github#1209). #1202 built the oracle (`fsgg-coord predicate`) and
+# the structured id/field/value assertion field on the cross-repo-request form; this fires it. When a
+# `cross-repo:request` is filed that asserts a registry field/value, re-verify it against the OWNING
+# producer's manifest (`owner:` decides whose word is law) and auto-comment the owner-declared value if
+# they disagree — before triage. The #1194 instance (`fs-gg-playtest mirrored: true`, which FS.GG.Game
+# declares `false`) is then refuted from data, not from a human's memory of `mirrored:` semantics.
+#
+# FAIL CLOSED. The oracle exits 0 agrees / 3 contradicts / 4 unknown, and this workflow comments ONLY on
+# `contradicts`. A missing row, an absent/malformed owner value, or an unreadable manifest is `unknown`,
+# and `unknown`/`agrees`/`none` post nothing — a refutation is never asserted where it could not be
+# proven (#266).
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  predicate:
+    # Only cross-repo requests. Most issues carry no registry assertion and the oracle would no-op, but
+    # gating here avoids building the engine and cloning three repos on every unrelated issue.
+    if: contains(github.event.issue.labels.*.name, 'cross-repo:request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Build the engine
+        run: |
+          set -euo pipefail
+          dotnet restore src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --locked-mode
+          dotnet build src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj --no-restore -c Release
+
+      # The producer repos, at `main` — the manifests the oracle reads to decide whose word is law.
+      # Public, so the default token suffices; paths mirror the `source:` prefixes in skills.yml (the
+      # same set skill-registry-coherence.yml clones). WITHOUT them the oracle fails closed to `unknown`
+      # and this workflow stays silent — correct, but it would never refute anything, so the clone is
+      # load-bearing.
+      - name: Check out the producer repos
+        run: |
+          set -euo pipefail
+          mkdir -p .repos
+          for repo in FS.GG.SDD FS.GG.Rendering FS.GG.Game; do
+            git clone --depth 1 --filter=blob:none \
+              "https://github.com/FS-GG/$repo.git" ".repos/$repo"
+            echo "cloned $repo @ $(git -C ".repos/$repo" rev-parse --short HEAD)"
+          done
+
+      - name: Run the predicate oracle on the request
+        id: predicate
+        env:
+          # The body is UNTRUSTED user input — it reaches the engine only on stdin, never interpolated
+          # into the shell (the ADR-0044 / #683 rule: the assertion is read structurally, not from prose).
+          BODY: ${{ github.event.issue.body }}
+          FSGG_REPOS_ROOT: .repos
+        run: |
+          set -uo pipefail
+          ENGINE=src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine
+          out="$(printf '%s' "$BODY" | "$ENGINE" predicate --json)"; rc=$?
+          printf 'verdict json: %s\n(exit %s)\n' "$out" "$rc"
+
+          verdict="$(printf '%s' "$out" | jq -r '.verdict')"
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+
+          # Stash the comment fields (meaningful only on `contradicts`). A random-ish delimiter so an
+          # owner value or note can never forge the heredoc terminator.
+          d="FSGG_$RANDOM$RANDOM"
+          for k in ownerValue id field value note; do
+            v="$(printf '%s' "$out" | jq -r --arg k "$k" '.[$k] // ""')"
+            { printf '%s<<%s\n' "$k" "$d"; printf '%s\n' "$v"; printf '%s\n' "$d"; } >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Auto-comment the contradiction, once
+        if: steps.predicate.outputs.verdict == 'contradicts'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          MARKER: "<!-- fsgg:predicate -->"
+          OWNER_VALUE: ${{ steps.predicate.outputs.ownerValue }}
+          ASSERT_ID: ${{ steps.predicate.outputs.id }}
+          ASSERT_FIELD: ${{ steps.predicate.outputs.field }}
+          ASSERT_VALUE: ${{ steps.predicate.outputs.value }}
+          NOTE: ${{ steps.predicate.outputs.note }}
+        run: |
+          set -euo pipefail
+          # Idempotent on an `edited` re-trigger: if we already left a predicate comment, don't stack a
+          # second one. (A corrected assertion that re-contradicts is left to a human — better than spam.)
+          if gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" --json comments \
+               --jq '.comments[].body' 2>/dev/null | grep -qF "$MARKER"; then
+            echo "a predicate comment already exists on #$ISSUE — skipping."
+            exit 0
+          fi
+
+          # Build the body with printf into a file (no heredoc — its content would dedent out of the YAML
+          # block scalar). Untrusted fields (ASSERT_*) are printf ARGS, never part of the format string.
+          out="$RUNNER_TEMP/predicate-comment.md"
+          {
+            printf '%s\n' "$MARKER"
+            printf '**Registry predicate check — this request contradicts its owner (ADR-0050).**\n\n'
+            printf 'This request asserts `%s` → `%s: %s`, but the **owning producer manifest** declares `%s: %s`.\n\n' \
+              "$ASSERT_ID" "$ASSERT_FIELD" "$ASSERT_VALUE" "$ASSERT_FIELD" "$OWNER_VALUE"
+            printf '> %s\n\n' "$NOTE"
+            printf 'That field is owned by the producer, not by `.github` — verify against the owner before this is triaged. If the owner manifest is wrong, the fix belongs in the producer repo; if this request is right, the owner must change its manifest first. (Auto-checked by the ADR-0050 predicate oracle; `unknown`/`agrees` are silent.)\n'
+          } > "$out"
+
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$out"
+          echo "commented the contradiction on #$ISSUE."
