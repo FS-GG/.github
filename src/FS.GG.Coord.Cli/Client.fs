@@ -431,6 +431,168 @@ module Client =
     /// REST reads apiece, and 31 of the 36 are in `.github` already — so scoping saves about 22 requests of
     /// 5,000/hr. The scoped read was never buying what its cost estimate claimed, and that estimate was what
     /// made a fail-open guard look like a reasonable trade.
+    // ---- the ADR-0050 registry-predicate oracle, resolved off local files (.github#1202/#1203) ---------
+    //
+    // The IMPURE edge of `RegistryPredicate` (Core, pure): these read `registry/skills.yml` and the OWNING
+    // producer's manifest off disk. TWO callers consume them — the `predicate` command (call-site A,
+    // filing-time) and the flip-time enrichment below (call-site B) — so they live ONCE, here, ABOVE both,
+    // because a module reads top-down and the offer path is above the command (#485). Everything fails
+    // CLOSED to `Unreadable`/`Silent` → `Unknown`, so a context without `registry/` (a receiver, ADR-0042)
+    // never gets a verdict it could not prove (#266).
+
+    /// Producer skill-manifest locations, in the order the Python reconcile probes them
+    /// (`fsgg-skill-registry-check` MANIFEST_CANDIDATES) — the first hit wins. Kept in step by eye; a
+    /// producer that moves its manifest changes both.
+    let private manifestCandidates =
+        [ ".agents/skills/skill-manifest.json"
+          "template/skill-manifest/skill-manifest.json" ]
+
+    let private envOr (name: string) (fallback: string) : string =
+        match Environment.GetEnvironmentVariable name with
+        | null
+        | "" -> fallback
+        | v -> v
+
+    /// The value of a manifest ENTRY's field, honoring `mirror_of` EXACTLY. `mirrored` is a BOOL, so a
+    /// JSON bool renders `true`/`false` and ANY other kind — a STRING `"true"`, a number, an array,
+    /// null, or an absent field — is `Silent`: an unparseable verdict is UNKNOWN, never believed
+    /// (.github#658; the Python `mirror_of` is `value if isinstance(value, bool) else None`,
+    /// `scripts/fsgg-skill-registry-check:333`). Believing a string `"true"` here was a fail-OPEN — a
+    /// bad merge or hand-edit would forge a false Agrees/Contradicts, the exact refutation the filing
+    /// check auto-comments. Only `mirrored` reaches here today (the Cli gates on `supportsField`); a
+    /// future string-typed field must add its OWN typed arm rather than fall through this bool rule.
+    ///
+    /// The lookup normalises the field FIRST (`supportsField` already accepted `Mirrored`/` mirrored `),
+    /// because `TryGetProperty` is case-SENSITIVE against the manifest's canonical lower-kebab key — an
+    /// un-normalised `Mirrored` would miss and downgrade a real #1194 refutation to `Unknown`.
+    let private manifestFieldValue (entry: JsonElement) (field: string) : RegistryPredicate.OwnerDeclaration =
+        let mutable el = Unchecked.defaultof<JsonElement>
+        let key = field.Trim().ToLowerInvariant()
+
+        if not (entry.TryGetProperty(key, &el)) then
+            RegistryPredicate.Silent
+        else
+            match el.ValueKind with
+            | JsonValueKind.True -> RegistryPredicate.Declares "true"
+            | JsonValueKind.False -> RegistryPredicate.Declares "false"
+            | _ -> RegistryPredicate.Silent
+
+    /// What the OWNING producer's manifest declares for `(row.Id, field)`, resolved off local producer
+    /// checkouts under `reposRoot`. Fails closed to `Unreadable`/`Silent` — never throws — so a missing
+    /// checkout, a missing/unparseable manifest, or an absent field all become `Unknown` at the oracle,
+    /// never a refutation it could not prove (ADR-0050 / #266).
+    let private resolveOwnerDeclaration
+        (reposRoot: string)
+        (row: RegistryPredicate.Row)
+        (field: string)
+        : RegistryPredicate.OwnerDeclaration =
+        match row.Source with
+        | None ->
+            RegistryPredicate.Unreadable(
+                sprintf "row `%s` declares no `source:`, so its owning producer cannot be located" row.Id
+            )
+        | Some source ->
+            let repoDir = source.Split('/').[0]
+
+            let manifestPath =
+                manifestCandidates
+                |> List.map (fun c -> Path.Combine(reposRoot, repoDir, c))
+                |> List.tryFind File.Exists
+
+            match manifestPath with
+            | None ->
+                RegistryPredicate.Unreadable(
+                    sprintf
+                        "no producer manifest for `%s` under `%s` (looked for %s) — check the producer repos out, or the oracle fails closed"
+                        repoDir
+                        reposRoot
+                        (String.concat ", " manifestCandidates)
+                )
+            | Some path ->
+                try
+                    use doc = JsonDocument.Parse(File.ReadAllText path)
+                    let root = doc.RootElement
+                    let mutable skills = Unchecked.defaultof<JsonElement>
+
+                    if
+                        root.ValueKind <> JsonValueKind.Object
+                        || not (root.TryGetProperty("skills", &skills))
+                        || skills.ValueKind <> JsonValueKind.Array
+                    then
+                        RegistryPredicate.Unreadable(sprintf "manifest `%s` has no `skills` array" path)
+                    else
+                        let entry =
+                            skills.EnumerateArray()
+                            |> Seq.tryFind (fun e ->
+                                let mutable idEl = Unchecked.defaultof<JsonElement>
+
+                                e.ValueKind = JsonValueKind.Object
+                                && e.TryGetProperty("id", &idEl)
+                                && idEl.ValueKind = JsonValueKind.String
+                                && idEl.GetString() = row.Id)
+
+                        match entry with
+                        // The owning manifest does not declare this id at all — SILENT, not a refutation.
+                        | None -> RegistryPredicate.Silent
+                        | Some e -> manifestFieldValue e field
+                with e ->
+                    RegistryPredicate.Unreadable(sprintf "manifest `%s` could not be read: %s" path e.Message)
+
+    /// Resolve ONE declared assertion to a verdict against the owning manifest (ADR-0050 call-site B,
+    /// .github#1213). This is the Cli half of the split the `predicate` command already runs
+    /// (findRow → supportsField → resolveOwnerDeclaration → classify); the two agree because they are the
+    /// same calls. `rows` is `registry/skills.yml` parsed ONCE by the caller — a per-item re-parse would
+    /// read the file once per blocked item.
+    let private resolveAssertion
+        (reposRoot: string)
+        (rows: RegistryPredicate.Row list)
+        (a: RegistryPredicate.Assertion)
+        : RegistryPredicate.Verdict =
+        let owner =
+            match RegistryPredicate.findRow rows a.Id with
+            | Some row when RegistryPredicate.supportsField a.Field -> resolveOwnerDeclaration reposRoot row a.Field
+            | _ -> RegistryPredicate.Silent
+
+        RegistryPredicate.classify rows owner a
+
+    /// Populate `Item.Predicate` for the BLOCKED items whose body DECLARED a registry predicate — ADR-0050
+    /// call-site B firing (.github#1213). `Snapshot.parse` already lifted the pure `DeclaredPredicate`
+    /// assertion off each body; this is the impure half — resolving it against the owning manifest — so it
+    /// runs here at the offer path's edge, never in the pure parser.
+    ///
+    /// SCOPED, so the manifest reads are bounded to the handful of registry items that could ever be gated:
+    /// only `Blocked` items with a `DeclaredPredicate` are resolved — the gate reads the field only in
+    /// `BLOCKER-CLEARED`, and everything else keeps `None`. `registry/` absent ⇒ `parseRows ""` = `[]` ⇒
+    /// every declared predicate resolves to `Unknown` and NO manifest is read: receiver-safe and cheap by
+    /// construction (ADR-0042), and the gate then HOLDS the item, which is the fail-closed answer (#266).
+    let private enrichPredicates (request: Snapshot.Request) : Snapshot.Request =
+        let needsResolving (c: Snapshot.Candidate) =
+            c.Item.Status = Blocked && c.DeclaredPredicate.IsSome
+
+        if not (request.Candidates |> List.exists needsResolving) then
+            request
+        else
+            let registryPath = envOr "FSGG_REGISTRY" "registry/skills.yml"
+            let reposRoot = envOr "FSGG_REPOS_ROOT" ".repos"
+
+            let rows =
+                if File.Exists registryPath then
+                    RegistryPredicate.parseRows(File.ReadAllText registryPath)
+                else
+                    []
+
+            let enrich (c: Snapshot.Candidate) : Snapshot.Candidate =
+                match c.DeclaredPredicate with
+                | Some a when c.Item.Status = Blocked ->
+                    { c with
+                        Item =
+                            { c.Item with
+                                Predicate = Some(resolveAssertion reposRoot rows a) } }
+                | _ -> c
+
+            { request with
+                Candidates = request.Candidates |> List.map enrich }
+
     /// A parsed snapshot's rows as a `Chore.Whole` — the ONE construction of that case, so the label is
     /// never spelled twice (#485) and never asserted by a caller who only believes the board is whole. The
     /// argument is a `Request` the caller must have parsed from an UNFILTERED read; that obligation is the
@@ -441,7 +603,11 @@ module Client =
     let private wholeBoard (ctx: Context) (opts: Options) : Chore.Board option =
         match scanAndDecide ctx { opts with Repo = None } Cache.Scheduling with
         | Error _ -> None
-        | Ok(_, doc, _) -> Snapshot.parse doc |> Result.toOption |> Option.map wholeOf
+        // Resolve the flip-time predicate before building the board (ADR-0050 call-site B, .github#1213):
+        // `Snapshot.parse` lifted the declared assertion off each body, `enrichPredicates` resolves it to
+        // `Item.Predicate` against the owning manifest, and the gate in `Chore.derive` reads that. A parse
+        // failure keeps the board `None`, exactly as before.
+        | Ok(_, doc, _) -> Snapshot.parse doc |> Result.toOption |> Option.map (enrichPredicates >> wholeOf)
 
     let private offerChoreAt (ctx: Context) (opts: Options) (boundary: Chore.Boundary) (repo: string) (observed: Chore.Board) : unit =
         // No worker id resolves ⇒ no lock is possible ⇒ no offer. `next` itself needs no worker, and that
@@ -3244,104 +3410,10 @@ module Client =
                 ExitGreen
 
     // ---- predicate: the ADR-0050 registry oracle (call-site A, local files, .github#1202) --------------
-
-    /// Producer skill-manifest locations, in the order the Python reconcile probes them
-    /// (`fsgg-skill-registry-check` MANIFEST_CANDIDATES) — the first hit wins. Kept in step by eye; a
-    /// producer that moves its manifest changes both.
-    let private manifestCandidates =
-        [ ".agents/skills/skill-manifest.json"
-          "template/skill-manifest/skill-manifest.json" ]
-
-    let private envOr (name: string) (fallback: string) : string =
-        match Environment.GetEnvironmentVariable name with
-        | null
-        | "" -> fallback
-        | v -> v
-
-    /// The value of a manifest ENTRY's field, honoring `mirror_of` EXACTLY. `mirrored` is a BOOL, so a
-    /// JSON bool renders `true`/`false` and ANY other kind — a STRING `"true"`, a number, an array,
-    /// null, or an absent field — is `Silent`: an unparseable verdict is UNKNOWN, never believed
-    /// (.github#658; the Python `mirror_of` is `value if isinstance(value, bool) else None`,
-    /// `scripts/fsgg-skill-registry-check:333`). Believing a string `"true"` here was a fail-OPEN — a
-    /// bad merge or hand-edit would forge a false Agrees/Contradicts, the exact refutation the filing
-    /// check auto-comments. Only `mirrored` reaches here today (the Cli gates on `supportsField`); a
-    /// future string-typed field must add its OWN typed arm rather than fall through this bool rule.
-    ///
-    /// The lookup normalises the field FIRST (`supportsField` already accepted `Mirrored`/` mirrored `),
-    /// because `TryGetProperty` is case-SENSITIVE against the manifest's canonical lower-kebab key — an
-    /// un-normalised `Mirrored` would miss and downgrade a real #1194 refutation to `Unknown`.
-    let private manifestFieldValue (entry: JsonElement) (field: string) : RegistryPredicate.OwnerDeclaration =
-        let mutable el = Unchecked.defaultof<JsonElement>
-        let key = field.Trim().ToLowerInvariant()
-
-        if not (entry.TryGetProperty(key, &el)) then
-            RegistryPredicate.Silent
-        else
-            match el.ValueKind with
-            | JsonValueKind.True -> RegistryPredicate.Declares "true"
-            | JsonValueKind.False -> RegistryPredicate.Declares "false"
-            | _ -> RegistryPredicate.Silent
-
-    /// What the OWNING producer's manifest declares for `(row.Id, field)`, resolved off local producer
-    /// checkouts under `reposRoot`. Fails closed to `Unreadable`/`Silent` — never throws — so a missing
-    /// checkout, a missing/unparseable manifest, or an absent field all become `Unknown` at the oracle,
-    /// never a refutation it could not prove (ADR-0050 / #266).
-    let private resolveOwnerDeclaration
-        (reposRoot: string)
-        (row: RegistryPredicate.Row)
-        (field: string)
-        : RegistryPredicate.OwnerDeclaration =
-        match row.Source with
-        | None ->
-            RegistryPredicate.Unreadable(
-                sprintf "row `%s` declares no `source:`, so its owning producer cannot be located" row.Id
-            )
-        | Some source ->
-            let repoDir = source.Split('/').[0]
-
-            let manifestPath =
-                manifestCandidates
-                |> List.map (fun c -> Path.Combine(reposRoot, repoDir, c))
-                |> List.tryFind File.Exists
-
-            match manifestPath with
-            | None ->
-                RegistryPredicate.Unreadable(
-                    sprintf
-                        "no producer manifest for `%s` under `%s` (looked for %s) — check the producer repos out, or the oracle fails closed"
-                        repoDir
-                        reposRoot
-                        (String.concat ", " manifestCandidates)
-                )
-            | Some path ->
-                try
-                    use doc = JsonDocument.Parse(File.ReadAllText path)
-                    let root = doc.RootElement
-                    let mutable skills = Unchecked.defaultof<JsonElement>
-
-                    if
-                        root.ValueKind <> JsonValueKind.Object
-                        || not (root.TryGetProperty("skills", &skills))
-                        || skills.ValueKind <> JsonValueKind.Array
-                    then
-                        RegistryPredicate.Unreadable(sprintf "manifest `%s` has no `skills` array" path)
-                    else
-                        let entry =
-                            skills.EnumerateArray()
-                            |> Seq.tryFind (fun e ->
-                                let mutable idEl = Unchecked.defaultof<JsonElement>
-
-                                e.ValueKind = JsonValueKind.Object
-                                && e.TryGetProperty("id", &idEl)
-                                && idEl.ValueKind = JsonValueKind.String
-                                && idEl.GetString() = row.Id)
-
-                        match entry with
-                        // The owning manifest does not declare this id at all — SILENT, not a refutation.
-                        | None -> RegistryPredicate.Silent
-                        | Some e -> manifestFieldValue e field
-                with e ->
-                    RegistryPredicate.Unreadable(sprintf "manifest `%s` could not be read: %s" path e.Message)
+    //
+    // The impure readers this command shares with the flip-time enrichment (`resolveOwnerDeclaration` &c.)
+    // live UP beside `wholeOf` — the flip gate (call-site B, .github#1213) needs them before the offer path,
+    // and a module reads top-down, so ONE copy sits above both callers rather than a second here (#485).
 
     /// `predicate` — the oracle as a query: one verdict word on stdout, the decision in the exit code
     /// (0 agrees / 3 contradicts / 4 unknown, the `landable` shape). `--json` emits the structured

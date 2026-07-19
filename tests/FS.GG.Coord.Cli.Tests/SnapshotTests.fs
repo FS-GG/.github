@@ -239,6 +239,43 @@ module SnapshotTests =
         Assert.Equal(None, (List.head r.Candidates).Item.HumanBlock)
 
     [<Fact>]
+    let ``ADR-0050: the id/field/value assertion parses onto Candidate.DeclaredPredicate (.github#1213)`` () =
+        // The PURE half of the flip-time gate: the body's `### Asserted registry ...` form sections are read
+        // into the assertion here; the owner VERDICT is resolved later at the offer path. `Item.Predicate`
+        // stays None — resolution is impure and never runs in `parse`.
+        // `Paths:` FIRST, then the assertion sections: `sectionValue` collects the value section up to the
+        // next `### ` heading or end-of-body, so a trailing `Paths:` line would be swallowed into the value.
+        // In a real declaration the assertion sits in its own bounded form sections; ordering it last here
+        // keeps the value clean. (A polluted value only ever fails CLOSED — the gate holds — never a flip.)
+        let r =
+            snapshot
+                """{ "owner":"o","repo":"r","number":1,"status":"Blocked","state":"OPEN",
+                     "body":"Paths: src/A\n\n### Asserted registry id\n\nfs-gg-playtest\n\n### Asserted registry field\n\nmirrored\n\n### Asserted registry value\n\ntrue" }"""
+            |> Snapshot.parse
+            |> ok
+
+        let c = List.head r.Candidates
+
+        let expected: RegistryPredicate.Assertion =
+            { Id = "fs-gg-playtest"
+              Field = "mirrored"
+              Value = "true" }
+
+        Assert.Equal(Some expected, c.DeclaredPredicate)
+
+        Assert.Equal(None, c.Item.Predicate)
+        Assert.Equal(Declared [ Matchable "src/A" ], c.Item.TouchSet)
+
+    [<Fact>]
+    let ``an item whose body declares no assertion has DeclaredPredicate None`` () =
+        let r =
+            snapshot """{ "owner":"o","repo":"r","number":1,"status":"Blocked","state":"OPEN","body":"Paths: src/A" }"""
+            |> Snapshot.parse
+            |> ok
+
+        Assert.Equal(None, (List.head r.Candidates).DeclaredPredicate)
+
+    [<Fact>]
     let ``bashPaths is carried through untouched — the engine decides from its OWN parse`` () =
         // The field exists so a divergence can show both parses side by side. It must never feed the
         // decision, or the shadow would be comparing bash against itself.

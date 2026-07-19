@@ -22,7 +22,10 @@ module Snapshot =
 
     type Candidate =
         { Item: Item
-          BashPaths: string list option }
+          BashPaths: string list option
+          /// The registry-predicate ASSERTION this item's body declares (ADR-0050 call-site B), or `None`.
+          /// The PURE id/field/value triple; the offer path resolves it to `Item.Predicate` (.github#1213).
+          DeclaredPredicate: RegistryPredicate.Assertion option }
 
     /// The claim lease, in minutes. It is CONFIGURABLE in the client (`FSGG_CLAIM_LEASE_MIN`, default
     /// 120), so the engine may not assume it — a repo that shortened its lease and an engine that hard-
@@ -251,6 +254,19 @@ module Snapshot =
                 | None, Ok Closed -> Ok None
                 | _ -> stringField path "body" el |> Result.map HumanBlock.parse
 
+        // The registry-predicate ASSERTION the body declares, if any (ADR-0050 call-site B, .github#1213) —
+        // parsed off the SAME body, on the same terms as `humanBlock`. This is the PURE half: only the
+        // id/field/value triple the form renders, never the owner VERDICT, which needs the owning manifest
+        // off disk and is resolved at the offer path's impure edge (`Client.enrichPredicates`). Absent on an
+        // unreadable or swept-closed body — a predicate we did not read is one the flip gate holds on anyway.
+        let declaredPredicate =
+            match optProp "bodyUnreadable" el with
+            | Some _ -> Ok None
+            | None ->
+                match optProp "body" el, state with
+                | None, Ok Closed -> Ok None
+                | _ -> stringField path "body" el |> Result.map RegistryPredicate.parseAssertion
+
         let blockers =
             match optProp "blockers" el with
             | None -> Ok []
@@ -284,8 +300,8 @@ module Snapshot =
             | None -> Ok None
             | Some _ -> intField path "itemPr" el |> Result.map Some
 
-        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, humanBlock with
-        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok hb ->
+        match r, status, state, touchSet, blockers, claimR, bashPaths, itemPr, humanBlock, declaredPredicate with
+        | Ok r, Ok st, Ok state, Ok ts, Ok bl, Ok cl, Ok bp, Ok ip, Ok hb, Ok dp ->
             Ok
                 { Item =
                     { Ref = r
@@ -296,16 +312,15 @@ module Snapshot =
                       Claim = cl
                       ItemPr = ip
                       HumanBlock = hb
-                      // The registry predicate is RESOLVED impurely — the verdict needs the owning
-                      // producer's manifest off disk — so it is never set here: `parse` is pure (ADR-0050
-                      // call-site B, .github#1203). `None` is the ungated common case, and a context that
-                      // never resolves one (a plain `parse`, a receiver) flips on blockers-cleared exactly
-                      // as today. Populating it for the blocked items that DECLARE a predicate is the offer
-                      // path's job and is wired in a follow-up (the impure `RegistryPredicate` readers live
-                      // in `Client.predicate` and want factoring to a shared edge first).
+                      // The registry predicate VERDICT is RESOLVED impurely — it needs the owning producer's
+                      // manifest off disk — so it is never set here: `parse` is pure (ADR-0050 call-site B,
+                      // .github#1203). `None` is the ungated common case; the offer path resolves it from the
+                      // `DeclaredPredicate` assertion below (`Client.enrichPredicates`, .github#1213), and a
+                      // context that never resolves one (a plain `parse`, a receiver) flips as today.
                       Predicate = None }
-                  BashPaths = bp }
-        | a, b, c, d, e, f, g, h, i ->
+                  BashPaths = bp
+                  DeclaredPredicate = dp }
+        | a, b, c, d, e, f, g, h, i, j ->
             [ a |> Result.map ignore
               b |> Result.map ignore
               c |> Result.map ignore
@@ -314,7 +329,8 @@ module Snapshot =
               f |> Result.map ignore
               g |> Result.map ignore
               h |> Result.map ignore
-              i |> Result.map ignore ]
+              i |> Result.map ignore
+              j |> Result.map ignore ]
             |> collect
             |> Result.map (fun _ -> Unchecked.defaultof<Candidate>)
 
