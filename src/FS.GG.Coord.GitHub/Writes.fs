@@ -651,3 +651,99 @@ module Writes =
               Subject = parent.Short }
 
         transport.Send request |> Result.map ignore
+
+    // ---- coordination rooms (ADR-0051) ---------------------------------------------------------------
+
+    /// Append a `Rooms: <roomRef>` line to a body, fence-safely. PURE, so `room open`'s write can be
+    /// validated in a test with no network.
+    ///
+    /// UNLIKE `rewrite`, this APPENDS rather than replaces: a room membership is additive (`Rooms.parse`
+    /// unions every line), so a second room adds a second line and never clobbers the first. The fence is
+    /// closed BEFORE the append for `rewrite`'s exact reason (#972): a line appended under an unterminated
+    /// fence lands inside the code block and `Rooms.parse` — which reads only `Markdown.unfenced` lines —
+    /// would never see it, so the write would silently vanish.
+    let appendRoomLine (body: string) (roomRef: string) : string =
+        let declaration = $"Rooms: %s{roomRef}"
+        let out = ResizeArray<string>()
+
+        for line, _ in Markdown.classify body do
+            out.Add line
+
+        match Markdown.unterminatedFenceCloser body with
+        | Some closer -> out.Add closer
+        | None -> ()
+
+        if out.Count > 0 && not (String.IsNullOrWhiteSpace(out.[out.Count - 1])) then
+            out.Add ""
+
+        out.Add declaration
+        String.Join("\n", out)
+
+    /// Write a `Rooms: <roomRef>` back-reference onto an item's body (ADR-0051). Does NOT take a `Held`:
+    /// `room open` writes onto the items of a contended cluster it need not itself hold, exactly as `say`
+    /// and `child` write to items without the lock. The CURRENT body is read by the caller and passed in,
+    /// so the append is pure and the PATCH is the only IO.
+    let writeRoomRef (transport: IGitHubTransport) (ref: Ref) (currentBody: string) (roomRef: string) : IoResult<unit> =
+        patchBody transport ref (Rewritten(appendRoomLine currentBody roomRef))
+
+    /// Create the room ISSUE (ADR-0051). A net-new write — no other verb POSTs an issue — returning the new
+    /// item's `Ref` so the caller can write each member's `Rooms:` back-reference to it. The room is created
+    /// OFF the board (nothing calls `add`): it is coordination scaffolding, not deliverable work.
+    let createRoom (transport: IGitHubTransport) (owner: string) (repo: string) (title: string) (body: string) : IoResult<Ref> =
+        let payload =
+            let o = Nodes.JsonObject()
+            o.["title"] <- Nodes.JsonValue.Create title
+            o.["body"] <- Nodes.JsonValue.Create body
+            o.ToJsonString()
+
+        let request =
+            { Method = "POST"
+              Path = $"repos/%s{owner}/%s{repo}/issues"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = $"%s{owner}/%s{repo} room" }
+
+        match transport.Send request with
+        | Error e -> Error e
+        | Ok response ->
+            try
+                use doc = JsonDocument.Parse response.Body
+
+                match doc.RootElement.TryGetProperty "number" with
+                | true, v when v.ValueKind = JsonValueKind.Number ->
+                    Ok
+                        { Owner = owner
+                          Repo = repo
+                          Number = v.GetInt32() }
+                | _ ->
+                    Error(
+                        Malformed(
+                            $"%s{owner}/%s{repo}",
+                            "the room issue was created but the response carried no number — we cannot reference a room we cannot name"
+                        )
+                    )
+            with :? JsonException as e ->
+                Error(Malformed($"%s{owner}/%s{repo}", $"the issue-create response is not JSON: %s{e.Message}"))
+
+    /// Close the room ISSUE (ADR-0051 §4). Its lifecycle is DERIVED: a room dies when every item that
+    /// currently references it is done, and the caller (`done --flip`'s roll-up) has already established
+    /// that. This just PATCHes the issue closed — a room carries no lock and no lease, so there is nothing
+    /// else to unwind.
+    let closeRoom (transport: IGitHubTransport) (ref: Ref) : IoResult<unit> =
+        let payload =
+            let o = Nodes.JsonObject()
+            o.["state"] <- Nodes.JsonValue.Create "closed"
+            o.ToJsonString()
+
+        let request =
+            { Method = "PATCH"
+              Path = $"repos/%s{ref.Owner}/%s{ref.Repo}/issues/%d{ref.Number}"
+              Query = []
+              Body = Json payload
+              Budget = Rest
+              IfNoneMatch = None
+              Subject = ref.Short }
+
+        transport.Send request |> Result.map ignore

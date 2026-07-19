@@ -2746,7 +2746,12 @@ module Client =
                         | rs, _ -> rs
 
                     let mutable failure: Errors.IoError option = None
-                    let offBoard = System.Collections.Generic.HashSet<string * string * int>()
+
+                    // Off-board open issues, WITH their bodies (as `who` keeps them): one list read serves both
+                    // the candidate scan and the `Rooms:` extraction below, so widening the subject set to
+                    // coordination rooms (ADR-0051) costs no extra body read — only the message read per room.
+                    let offBoard =
+                        System.Collections.Generic.Dictionary<string * string * int, string>()
 
                     for (o, r) in repos do
                         if failure.IsNone then
@@ -2756,8 +2761,8 @@ module Client =
                             match Reads.openIssues ctx.Transport o r with
                             | Error e -> failure <- Some e
                             | Ok issues ->
-                                for (n, _) in issues do
-                                    offBoard.Add((o, r, n)) |> ignore
+                                for (n, body) in issues do
+                                    offBoard.[(o, r, n)] <- body
 
                     let inProgressRefs =
                         boardRows
@@ -2765,11 +2770,28 @@ module Client =
                         |> List.map (fun r -> r.Ref.Owner, r.Ref.Repo, r.Ref.Number)
                         |> Set.ofList
 
+                    // ADR-0051 — the subject set WIDENS to the coordination ROOMS the in-flight items
+                    // reference. A worker is in a room by holding a claim on an item that carries `Rooms: #R`,
+                    // and folding #R in here — behind the SAME per-worker cursor — is the whole mechanism the
+                    // ADR calls "the one real code delta". Derived from the bodies already in hand, so the
+                    // added cost is one message read per DISTINCT room, the bound ADR-0051 sets. A room may
+                    // live in a repo outside `--repo` scope; `Reads.messages` takes owner/repo/number
+                    // directly, so a cross-repo room is still reached. The recipient filter below is unchanged,
+                    // so a worker still sees only messages addressed to it or broadcast (`*`) — exactly as for
+                    // items, which is why this widens the SUBJECTS without broadening delivery.
+                    let rooms =
+                        offBoard
+                        |> Seq.collect (fun kv ->
+                            let (o, r, _) = kv.Key
+                            Rooms.parse o r kv.Value)
+                        |> Seq.map (fun rf -> rf.Owner, rf.Repo, rf.Number)
+                        |> Set.ofSeq
+
                     let candidates =
                         if failure.IsSome then
                             []
                         else
-                            Seq.append offBoard inProgressRefs
+                            Seq.append (Seq.append offBoard.Keys inProgressRefs) rooms
                             |> Seq.distinct
                             |> Seq.sortBy (fun (o, r, n) -> o, r, n)
                             |> List.ofSeq
@@ -2824,6 +2846,110 @@ module Client =
                                     eprint "fsgg-coord-engine: --peek — cursor not advanced."
 
                         ExitGreen
+
+    /// `room open --over N,M` — open a coordination room over a contended cluster (ADR-0051). Creates the
+    /// room ISSUE (off the board — coordination scaffolding, not deliverable work) and writes a `Rooms:`
+    /// back-reference onto each named item, so their holders share the room's channel via `say`/`inbox`.
+    /// No lock is taken or required: a room is opened over other workers' items, exactly as `say` speaks
+    /// to them.
+    let roomOpen (ctx: Context) (opts: Options) : int =
+        match worker opts with
+        | Error c -> c
+        | Ok w ->
+            if List.isEmpty opts.Over then
+                eprint "fsgg-coord-engine: room open needs --over N,M (the items to open the room over)"
+                ExitError
+            else
+                let parsed = opts.Over |> List.map (fun t -> t, parseRef ctx t)
+                let bad = parsed |> List.choose (fun (t, r) -> match r with Error m -> Some(t, m) | Ok _ -> None)
+
+                match bad with
+                | _ :: _ ->
+                    for (t, msg) in bad do
+                        eprint $"fsgg-coord-engine: --over '%s{t}': %s{msg}"
+
+                    ExitError
+                | [] ->
+                    let members =
+                        parsed
+                        |> List.choose (fun (_, r) ->
+                            match r with
+                            | Ok ref -> Some ref
+                            | Error _ -> None)
+                        |> List.distinct
+
+                    match members with
+                    | [] ->
+                        eprint "fsgg-coord-engine: room open needs at least one item"
+                        ExitError
+                    | first :: _ ->
+                        // A room is INTRA-REPO (ADR-0027 §5, which ADR-0051 amends): every member shares one
+                        // repo, and the room lives there with them. This is not a mere convenience — it is what
+                        // makes the derived close (ADR-0051 §4) SOUND. That close scans the room's own repo for
+                        // surviving referrers; a member in another repo would be invisible to it, so completing
+                        // the last same-repo member would close the room while the cross-repo member is still
+                        // open (the one error §4 must never make). Refusing a cross-repo `--over` here is what
+                        // keeps every tool-created room within a single repo, so the repo-local scan is exact.
+                        // A cross-repo knot is cross-repo-coordination's domain (ADR-0001), not a room's.
+                        let owner, repo = first.Owner, first.Repo
+
+                        let strangers =
+                            members |> List.filter (fun m -> m.Owner <> owner || m.Repo <> repo)
+
+                        if not (List.isEmpty strangers) then
+                            let named = strangers |> List.map (fun m -> $"%s{m.Owner}/%s{m.Repo}#%d{m.Number}") |> String.concat ", "
+
+                            eprint
+                                $"fsgg-coord-engine: room open is intra-repo (ADR-0027 §5) — these members are outside %s{owner}/%s{repo}: %s{named}. A cross-repo knot is cross-repo-coordination's domain (ADR-0001), not a room's."
+
+                            ExitError
+                        else
+
+                        let memberList = members |> List.map (fun r -> r.Short) |> String.concat ", "
+                        let title = $"coordination room over %s{memberList}"
+
+                        let bodyText =
+                            $"Coordination room (ADR-0051), opened by worker %s{w.Id} over %s{memberList}.\n\n"
+                            + "Workers holding these items share this room's channel — reach it with `say` on this "
+                            + "issue and read it with `inbox`. Membership and lifecycle are DERIVED from the "
+                            + "`Rooms:` back-references on the items: this room closes itself when every referenced "
+                            + "item is done. Record any touch-set agreement as a `widen` on the real items, not here.\n\n"
+                            + "Paths: none"
+
+                        match Writes.createRoom ctx.Transport owner repo title bodyText with
+                        | Error e -> fail e
+                        | Ok room ->
+                            // Every member shares the room's repo (enforced above), so the back-reference is a
+                            // bare `#n` — which `Rooms.parse`, defaulting a bare ref to the member's own repo,
+                            // resolves to exactly this room.
+                            let roomToken = $"#%d{room.Number}"
+
+                            let mutable failure: Errors.IoError option = None
+
+                            for m in members do
+                                if failure.IsNone then
+                                    match Reads.issueBody ctx.Transport m.Owner m.Repo m.Number with
+                                    | Error e -> failure <- Some e
+                                    | Ok mbody ->
+                                        // Idempotent: a member already referencing the room keeps its one line
+                                        // rather than growing a duplicate (the union in `Rooms.parse` would
+                                        // collapse it anyway, but a clean body is worth the read).
+                                        if Rooms.parse m.Owner m.Repo mbody |> List.contains room then
+                                            ()
+                                        else
+                                            match Writes.writeRoomRef ctx.Transport m mbody roomToken with
+                                            | Error e -> failure <- Some e
+                                            | Ok() -> ()
+
+                            match failure with
+                            | Some e ->
+                                eprint
+                                    $"fsgg-coord-engine: room %s{room.Short} was created, but a `Rooms:` back-reference could not be written: %s{Errors.explain e}. The room exists; wire the remaining members by hand or re-run."
+
+                                Errors.exitCode e
+                            | None ->
+                                printfn "opened room %s over %s" room.Short memberList
+                                ExitGreen
 
     let doneCmd (ctx: Context) (opts: Options) : int =
         match oneArg opts "done: an issue ref", worker opts with
@@ -2884,6 +3010,51 @@ module Client =
                                                     eprint $"      %s{reason}"
                                             | Done.NoParent -> ()
                                 | None -> ()
+
+                            // ADR-0051 §4 — A ROOM DIES WITH ITS WORK. This item just completed, so any
+                            // coordination room it referenced may now be empty. For each room the item's
+                            // `Rooms:` line names, scan the ROOM'S repo for an OPEN issue that still references
+                            // it; finding none, close the room. Derived lifecycle: no manual close, no
+                            // room-lease, no litter.
+                            //
+                            // FAIL-CLOSED and ADVISORY, in that order. Every read here can fail, and a failure
+                            // leaves the room OPEN and never touches the GREEN stamp — closing a room while a
+                            // member is still open is the one error to avoid, and the stamp is a fact about the
+                            // MERGE that owes nothing to a room. The completed item is already CLOSED (the stamp
+                            // required State=Closed), so it is absent from `openIssues` and cannot keep its own
+                            // room alive.
+                            //
+                            // SAME-REPO ONLY, and that guard is what makes the repo-local scan SOUND. A room in
+                            // the completed item's own repo has all its members there too (`room open` is
+                            // intra-repo, ADR-0027 §5), so the scan below sees every possible referrer. A room
+                            // in ANOTHER repo — only reachable via a cross-repo `Rooms:` reference, which
+                            // `room open` refuses to create — may have referrers this scan cannot see, so it is
+                            // LEFT OPEN rather than closed on a partial view. Without this guard, finishing the
+                            // last same-repo referrer would close a room a cross-repo member still needs.
+                            if opts.Flip then
+                                match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+                                | Error _ -> ()
+                                | Ok body ->
+                                    for room in Rooms.parse ref.Owner ref.Repo body do
+                                        if room.Owner <> ref.Owner || room.Repo <> ref.Repo then
+                                            // A cross-repo room reference — not ours to auto-close (above).
+                                            ()
+                                        else
+                                            match Reads.openIssues ctx.Transport room.Owner room.Repo with
+                                            | Error _ -> ()
+                                            | Ok issues ->
+                                                let stillReferenced =
+                                                    issues
+                                                    |> List.exists (fun (_, b) ->
+                                                        Rooms.parse room.Owner room.Repo b |> List.contains room)
+
+                                                if not stillReferenced then
+                                                    match Writes.closeRoom ctx.Transport room with
+                                                    | Ok() ->
+                                                        printfn "  ⋄ %s closed — every referenced item is done (ADR-0051)" room.Short
+                                                    | Error e ->
+                                                        eprint
+                                                            $"fsgg-coord-engine: the stamp is GREEN, but room %s{room.Short} could not be closed: %s{Errors.explain e}"
 
                             // #533 — A FINISHED ITEM MUST NOT KEEP ITS LOCK. `done` verified the merge, set
                             // the column Done, and rolled the parent up — and, until here, left the claim
@@ -4385,6 +4556,7 @@ module Client =
             | Overlap -> overlapCmd ctx opts
             | Say -> say ctx opts
             | Inbox -> inbox ctx opts
+            | RoomOpen -> roomOpen ctx opts
             | DoneCmd -> doneCmd ctx opts
             | VerifyPaths -> verifyPaths ctx opts
             | Bootstrap -> bootstrapCmd ctx opts

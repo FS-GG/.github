@@ -391,3 +391,23 @@ module Writes =
     /// number where an id belongs attaches the wrong issue silently. It is sent as a JSON NUMBER, not a
     /// string: the string form collects a 422, which is what `gh api -F` (rather than `-f`) was for.
     val child: transport: IGitHubTransport -> parent: Ref -> childId: int64 -> IoResult<unit>
+
+    /// Append a `Rooms: <roomRef>` line to a body, fence-safely (ADR-0051). PURE — exposed so `room open`'s
+    /// body write is testable with no network. APPENDS, never replaces: a room membership is additive
+    /// (`Rooms.parse` unions lines), and the fence is closed before the append (#972) so the line is not
+    /// swallowed into a code block where `Rooms.parse` would never see it.
+    val appendRoomLine: body: string -> roomRef: string -> string
+
+    /// Write a `Rooms: <roomRef>` back-reference onto an item's body (ADR-0051). Does NOT take a `Held`:
+    /// `room open` writes onto the items of a contended cluster it need not itself hold, exactly like `say`
+    /// and `child`. The caller passes the current body (already read), so the append is pure.
+    val writeRoomRef: transport: IGitHubTransport -> ref: Ref -> currentBody: string -> roomRef: string -> IoResult<unit>
+
+    /// Create the room ISSUE (ADR-0051), returning its `Ref`. A net-new write — no other verb POSTs an
+    /// issue. The room is created OFF the board (nothing calls `add`): coordination scaffolding, not
+    /// deliverable work.
+    val createRoom: transport: IGitHubTransport -> owner: string -> repo: string -> title: string -> body: string -> IoResult<Ref>
+
+    /// Close the room ISSUE (ADR-0051 §4). A room's lifecycle is derived — it dies when every currently
+    /// referencing item is done — so this only PATCHes the issue closed; a room carries no lock or lease.
+    val closeRoom: transport: IGitHubTransport -> ref: Ref -> IoResult<unit>

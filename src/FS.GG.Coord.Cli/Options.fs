@@ -39,6 +39,7 @@ module Options =
         | Issues
         | Followup
         | Predicate
+        | RoomOpen
         | Help
         | Version
 
@@ -138,7 +139,12 @@ module Options =
           /// worker runs in a per-item worktree (pnext-item §2), so a fan-out IS a pile of `../<repo>-<n>`
           /// directories, and this is the verb that names which is which — the remedy #419's own warning
           /// points at when N agents collide on one id. `who` is the only reader.
-          Local: bool }
+          Local: bool
+
+          /// `room open --over N,M` — the item refs the room is opened over (ADR-0051). A comma-separated
+          /// list resolved to `Ref`s by the handler, each of which gets a `Rooms: #room` back-reference
+          /// written onto its body. `RoomOpen` is the only reader; `scopeOf FOver` refuses it everywhere else.
+          Over: string list }
 
     [<Literal>]
     let DefaultLeaseMinutes = 120
@@ -209,8 +215,14 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                <ref> --to W --message M      holding the item). The message is POSITIONAL — the form
                                              every skill prescribes — and --message is its alias
   inbox  [--repo NAME] [--peek] [--json]     messages addressed to this worker across every in-flight
-                                             claim (ON the board and off it, #461/case 25); --peek does
-                                             not advance the cursor
+                                             claim (ON the board and off it, #461/case 25), AND the
+                                             coordination rooms those items reference (ADR-0051); --peek
+                                             does not advance the cursor
+  room open --over N,M [--repo NAME]         open a coordination room over a contended cluster (ADR-0051):
+                                             create the room issue and write a `Rooms: #room` back-reference
+                                             onto each named item, so their holders share its channel. The
+                                             room is off-board and closes itself when every referenced item
+                                             is done
   done   <ref> [--flip] [--evidence E]       stamp the item done; --flip rolls the parent up (add
                [--partial "why"]             --partial "why" if this child does NOT complete its parent, #614)
   verify-paths --pr N [--repo NAME]          did the PR stay inside its issue's touch-set? (OK/DRIFT/
@@ -316,6 +328,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FFlip
         | FLimit
         | FLocal
+        | FOver
 
     type private FlagScope =
         /// Every command honours it. Named deliberately — the flags here are the ones whose readers really
@@ -362,6 +375,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FSha -> Only [ Landable ]
         | FLabel -> Only [ Issues ]
         | FState -> Only [ Issues ]
+
+        | FOver -> Only [ RoomOpen ]
 
         // `--force` bypasses the #516 one-item-per-worker check, and `claim` is the ONLY reader. The usage
         // block advertised `release [--force]` for the whole life of the port and `release` never read it —
@@ -414,6 +429,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Force then FForce, "--force"
           if o.Mint then FMint, "--mint"
           if o.Flip then FFlip, "--flip"
+          if not (List.isEmpty o.Over) then FOver, "--over"
           if o.Limit.IsSome then FLimit, "-n" ]
 
     /// The argv spelling of a command — the word a refusal must name, because it is the word the caller
@@ -456,6 +472,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Issues -> "issues"
         | Followup -> "followup"
         | Predicate -> "predicate"
+        | RoomOpen -> "room open"
         | Help -> "--help"
         | Version -> "--version"
 
@@ -719,6 +736,24 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                 | other -> Error $"--state must be open, closed, or all (got '%s{other}')"
             | [ "--state" ] -> Error "--state needs a value"
 
+            // `room open --over N,M` — a comma-separated list of item refs the room is opened over. Split on
+            // the comma and trim, so `--over 12, 13` and `--over 12,13` are one form; empties are dropped, so
+            // a trailing comma is not a phantom ref. A single VALUE (not consume-the-rest like `--paths`), so
+            // a stray flag after it is still caught by `unknown argument`.
+            | "--over" :: value :: _ when value.StartsWith "-" -> Error $"--over needs a value (got flag '%s{value}')"
+            | "--over" :: value :: t ->
+                let refs =
+                    value.Split(',')
+                    |> Array.map (fun s -> s.Trim())
+                    |> Array.filter (fun s -> s <> "")
+                    |> List.ofArray
+
+                if List.isEmpty refs then
+                    Error "--over needs at least one item ref (e.g. --over 12,13)"
+                else
+                    flags { acc with Over = refs } t
+            | [ "--over" ] -> Error "--over needs a value"
+
             | "--all" :: t -> flags { acc with All = true } t
             | "--batch" :: t -> flags { acc with Batch = true } t
             | "--strict" :: t -> flags { acc with Strict = true } t
@@ -834,7 +869,8 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Sha = None
               Label = None
               IssueState = None
-              Local = false }
+              Local = false
+              Over = [] }
 
         match args with
         | []
@@ -903,5 +939,12 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `landable` shape. Text by default; `--json` opts into the structured verdict. Assertion is
         // POSITIONAL (`predicate <id> <field> <value>`) or read from a `cross-repo-request` body on stdin.
         | "predicate" :: rest -> flags { defaults with Command = Predicate; Render = Text } rest
+
+        // `room open` — the ONLY two-word verb (ADR-0051). A `room` namespace, so `room close`/`room list`
+        // have a home if they ever land; today `open` is the one subcommand, and anything else under `room`
+        // is named and refused rather than swallowed. Text, like `add`: it reports the room it created.
+        | "room" :: "open" :: rest -> flags { defaults with Command = RoomOpen; Render = Text } rest
+        | "room" :: sub :: _ -> Error $"unknown room subcommand: '%s{sub}' (expected: open)"
+        | [ "room" ] -> Error "room needs a subcommand (open)"
 
         | other :: _ -> Error $"unknown command: %s{other}"

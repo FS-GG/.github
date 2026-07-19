@@ -1133,3 +1133,71 @@ let ``#895 the pre-claim column read is the CALLER's - the CAS routes no board r
     // this transport.
     Assert.Equal(0, transport.GraphQlCalls)
     Assert.Equal(3, transport.RestCalls)
+
+// ---- appendRoomLine (ADR-0051, #1215) — PURE, fence-safe, additive -----------------------------------
+
+[<Fact>]
+let ``appendRoomLine appends a Rooms line the parser can read back`` () =
+    let body = appendRoomLine "An ordinary issue body.\n\nPaths: src/A" "#42"
+    // The written line must be a REAL declaration to `Rooms.parse` — resolved against the item's own repo.
+    Assert.Equal<FS.GG.Coord.Types.Ref list>(
+        [ { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 42 } ],
+        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" body)
+
+[<Fact>]
+let ``appendRoomLine is additive — a second room keeps the first`` () =
+    let once = appendRoomLine "body" "#12"
+    let twice = appendRoomLine once "#13"
+
+    Assert.Equal<FS.GG.Coord.Types.Ref list>(
+        [ { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 12 }
+          { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 13 } ],
+        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" twice)
+
+[<Fact>]
+let ``appendRoomLine closes an unterminated fence FIRST, so the line is not swallowed (#972)`` () =
+    // A body ending inside a fence would otherwise eat the appended declaration, and `Rooms.parse` —
+    // which reads only unfenced lines — would never see it. The room MUST survive.
+    let body = appendRoomLine "See the grammar:\n\n```\nRooms: #99\n" "#42"
+
+    Assert.Equal<FS.GG.Coord.Types.Ref list>(
+        [ { Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 42 } ],
+        FS.GG.Coord.Rooms.parse "FS-GG" "FS.GG.SDD" body)
+
+// ---- room WRITES (ADR-0051, #1215): create the issue, back-ref members, close on roll-up ------------
+
+[<Fact>]
+let ``createRoom POSTs to the issues endpoint and returns the new room's ref`` () =
+    let transport = scripted [ ok """{"number":220}""" ]
+
+    match createRoom transport "FS-GG" "FS.GG.SDD" "coordination room over FS.GG.SDD#302" "Paths: none" with
+    | Ok r ->
+        Assert.Equal({ Owner = "FS-GG"; Repo = "FS.GG.SDD"; Number = 220 }, r)
+        Assert.True(transport.Logged "issue-list FS-GG/FS.GG.SDD", "createRoom did not hit the repo's issues endpoint")
+    | Error e -> failwith $"createRoom must return the new room's ref — got %A{e}"
+
+[<Fact>]
+let ``createRoom fails LOUDLY when the response carries no number`` () =
+    // We cannot reference a room we cannot name — a created-but-unnameable room must be an error, not a
+    // silent success that then writes back-references to nothing.
+    let transport = scripted [ ok """{"url":"whatever"}""" ]
+
+    match createRoom transport "FS-GG" "FS.GG.SDD" "t" "b" with
+    | Error _ -> ()
+    | Ok r -> failwith $"a numberless create must fail — got %A{r}"
+
+[<Fact>]
+let ``writeRoomRef PATCHes the member issue with the appended Rooms line`` () =
+    let transport = scripted [ ok "{}" ]
+
+    match writeRoomRef transport aRef "Paths: src/A" "#220" with
+    | Ok() -> Assert.True(transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}", "writeRoomRef did not PATCH the member body")
+    | Error e -> failwith $"writeRoomRef must succeed on a 200 — got %A{e}"
+
+[<Fact>]
+let ``closeRoom PATCHes the room issue (the derived roll-up close)`` () =
+    let transport = scripted [ ok "{}" ]
+
+    match closeRoom transport aRef with
+    | Ok() -> Assert.True(transport.Logged $"issue-patch FS-GG/FS.GG.SDD %d{aRef.Number}", "closeRoom did not PATCH the room issue")
+    | Error e -> failwith $"closeRoom must succeed on a 200 — got %A{e}"
