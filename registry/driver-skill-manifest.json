@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "skills": [
+    {
+      "id": "workRoadmap",
+      "scope": "driver",
+      "sha256": "197462deb8cbb375115af3e1d27c5ca32e168432afb6955d5ef7b4a0da8731b0",
+      "supplied-by": ".claude/skills/workRoadmap",
+      "materializes-when": "feedback == true and lifecycle == spec-kit"
+    }
+  ]
+}

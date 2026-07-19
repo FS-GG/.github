@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""Emit `.github`'s producer skill-manifest for its own authored DRIVER skills (ADR-0054).
+
+`.github` is a producer — of the third `skill-registry` class ADR-0054 names: a `.github`-authored,
+product-materialized `scope: driver` skill (the first is `workRoadmap`, ADR-0053/#1224). Every other
+row in `registry/skills.yml` is reconciled from a *producer* repo's `skill-manifest.json` (SDD's
+emitted process manifest, Rendering's/Game's template manifests); this is the emitter that gives
+`.github` its own, so a `scope: driver` row is reconciled the same way — `registry = manifest = bytes`
+rather than hand-authored.
+
+WHAT IT EMITS: `registry/driver-skill-manifest.json`, the `skill-manifest` v1 shape the reconcile
+(`scripts/fsgg-skill-registry-check`) and the union gate (`scripts/skill-union-assert.sh`) already
+read — `{ "schemaVersion": 1, "skills": [ {id, scope, sha256, supplied-by, materializes-when} ] }`.
+`sha256` is the `Fsgg.SkillMirror` canonical-body digest of the authored SKILL.md (BOM stripped, then
+sha256 over the UTF-8 bytes) — byte-equal to `sha256sum SKILL.md` for a BOM-free body, and equal to
+what `scripts/skill-union-assert.sh --digest` and `fsgg-skill-registry-check` compute, so the three
+never drift. `supplied-by` is the authored skill dir under the repo root, so the reconcile derives
+`source: .github/<supplied-by>/SKILL.md` (completeness() in fsgg-skill-registry-check).
+
+THE DRIVER DECLARATIONS below are this emitter's only authored data — the id, scope, source dir and
+materializes-when predicate of each `.github`-authored driver. The predicate is authored, not derived:
+`workRoadmap` runs only where BOTH composed producers' skills are materialized (ADR-0053 §6) —
+`fs-gg-sdd-*` (all `always`) AND the `fs-gg-feedback-*` pair. The pair's binding constraint is
+`fs-gg-feedback-capture`'s `feedback == true and lifecycle == spec-kit` (`fs-gg-feedback-report` is
+`always`), so the composed AND reduces to exactly that. The bytes come from the tree; only these four
+facts per driver are authored here.
+
+AUTHORED IN TWO ROOTS: a `.github` driver skill lives byte-identically in both ADR-0011 skill roots
+(`.claude/skills/<id>`, `.agents/skills/<id>`); `skill-roots-selfcheck.yml` asserts that identity.
+The digest is read from the canonical `.claude` root (the `supplied-by` path), which the reconcile
+resolves to for `source:` too.
+
+Usage:
+  scripts/generate-driver-manifest --check    # regenerate in memory, diff vs the committed file;
+                                              #   exit 1 on drift (the CI regeneration gate)
+  scripts/generate-driver-manifest --write    # (re)write registry/driver-skill-manifest.json
+  scripts/generate-driver-manifest            # default: --check
+
+Pure stdlib; no network, no tokens.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import sys
+
+# Repo root = the parent of scripts/ (this file lives at scripts/generate-driver-manifest).
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MANIFEST_PATH = os.path.join("registry", "driver-skill-manifest.json")
+
+# skill-manifest schema version (the MANIFEST document's schema — NOT skills.yml's schemaVersion).
+MANIFEST_SCHEMA_VERSION = 1
+
+# The `.github`-authored drivers. See the module docstring for why the predicate is what it is.
+# `supplied-by` is the authored skill dir under the repo root; the SKILL.md under it is digested.
+DRIVERS = [
+    {
+        "id": "workRoadmap",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/workRoadmap",
+        "materializes-when": "feedback == true and lifecycle == spec-kit",
+    },
+]
+
+
+def canonical_digest(raw: bytes) -> str:
+    """sha256 over the body text's UTF-8 bytes, BOM-free (Fsgg.SkillMirror.sha256)."""
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    return hashlib.sha256(raw).hexdigest()
+
+
+def build_manifest() -> str:
+    """Render the manifest JSON text (with trailing newline) from the authored SKILL.md bodies."""
+    skills = []
+    for driver in DRIVERS:
+        skill_md = os.path.join(REPO_ROOT, driver["supplied-by"], "SKILL.md")
+        try:
+            with open(skill_md, "rb") as handle:
+                raw = handle.read()
+        except OSError as exc:
+            sys.stderr.write(f"generate-driver-manifest: cannot read {skill_md}: {exc}\n")
+            raise SystemExit(2)
+        skills.append(
+            {
+                "id": driver["id"],
+                "scope": driver["scope"],
+                "sha256": canonical_digest(raw),
+                "supplied-by": driver["supplied-by"],
+                "materializes-when": driver["materializes-when"],
+            }
+        )
+    doc = {"schemaVersion": MANIFEST_SCHEMA_VERSION, "skills": skills}
+    return json.dumps(doc, indent=2) + "\n"
+
+
+def main(argv: list[str]) -> int:
+    mode = "check"
+    for arg in argv:
+        if arg in ("--check", "--write"):
+            mode = arg[2:]
+        elif arg in ("-h", "--help"):
+            sys.stdout.write(__doc__ or "")
+            return 0
+        else:
+            sys.stderr.write(f"generate-driver-manifest: unknown argument: {arg}\n")
+            return 1
+
+    generated = build_manifest()
+    target = os.path.join(REPO_ROOT, MANIFEST_PATH)
+
+    if mode == "write":
+        with open(target, "w") as handle:
+            handle.write(generated)
+        sys.stdout.write(f"generate-driver-manifest: wrote {MANIFEST_PATH}\n")
+        return 0
+
+    # check
+    try:
+        with open(target) as handle:
+            committed = handle.read()
+    except OSError:
+        committed = None
+    if committed != generated:
+        sys.stderr.write(
+            f"::error::generate-driver-manifest: {MANIFEST_PATH} is stale — "
+            "run `scripts/generate-driver-manifest --write` and commit.\n"
+        )
+        return 1
+    sys.stdout.write(f"generate-driver-manifest: {MANIFEST_PATH} is current.\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

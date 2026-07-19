@@ -55,6 +55,14 @@ jobs:
 
       # The producer repos, at `main` — the bodies whose digests the registry declares. Public, so
       # the default GITHUB_TOKEN suffices. Paths mirror the `source:` prefixes in skills.yml.
+      #
+      # `.github` is ALSO a producer now (ADR-0054): it authors its own `scope: driver` skills and
+      # emits registry/driver-skill-manifest.json. But it is not a REMOTE to clone — it is THIS
+      # checkout — so it is made reachable under the same --repos-root the others use with a symlink,
+      # NOT a network fetch. The reconcile reads specific files (the manifest + each source SKILL.md)
+      # and lists one level of --repos-root; it never walks the tree, so the symlink pointing back at
+      # the workspace (which contains .repos) cannot recurse it. The registry names `.github` by its
+      # `source:` prefix, so a missing .repos/.github would be a fail-closed `manifest-found` finding.
       - name: Check out the producer repos
         run: |
           set -euo pipefail
@@ -64,6 +72,8 @@ jobs:
               "https://github.com/FS-GG/$repo.git" ".repos/$repo"
             echo "cloned $repo @ $(git -C ".repos/$repo" rev-parse --short HEAD)"
           done
+          ln -s "$GITHUB_WORKSPACE" .repos/.github
+          echo "linked .github (this checkout) @ $(git rev-parse --short HEAD)"
 
       # THE MERGE BASE'S registry — and ONLY on a pull request (#422).
       #
