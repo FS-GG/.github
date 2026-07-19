@@ -109,6 +109,16 @@ CONTRACT_PACKAGES: dict[str, list[str]] = {
     # it (a `dotnet new` tool humans install), but it IS published and must be checked against the feed
     # — a package-bearing contract with no mapping here is the unchecked-subject error (epic #266).
     "new-sdd-workspace": ["FS.GG.NewSddWorkspace"],
+    # The six FS.GG.Net.* transport packages ship as one coherent set at one version (ADR-0052); a
+    # partial publish is a real defect, so every member is compared rather than just .Core.
+    "fs-gg-net": [
+        "FS.GG.Net.Core",
+        "FS.GG.Net.WebSocket",
+        "FS.GG.Net.WebSocket.Server",
+        "FS.GG.Net.Protobuf",
+        "FS.GG.Net.Grpc",
+        "FS.GG.Net.Elmish",
+    ],
 }
 
 def _packages_for(contract_id: str) -> list[str]:

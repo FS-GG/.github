@@ -89,6 +89,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `game-sim-core` | FS.GG.Game | `0.5.1` | `0.5.1` |
 | `game-scene-adapter` | FS.GG.Game | `0.5.1` | `0.5.1` |
 | `fs-gg-audio` | FS.GG.Audio | `0.3.0` | `0.3.0` |
+| `fs-gg-net` | FS.GG.Net | `0.1.0` | `0.1.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
 | `coord-engine` | FS-GG/.github | `0.6.0` | `0.6.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.4.0` | `0.4.0` |
