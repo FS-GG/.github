@@ -98,7 +98,9 @@ jobs:
           # 18 → 20: `driver-rules` in both pnext-item roots (#889, #1059).
           # 20 → 22: `release-columns` in both pnext-item roots (#889/#900, #1099).
           # 22 → 23: `contract-versions` in docs/registry/compatibility.md (#1081 option 2 slice A).
-          expected=23
+          # 23 → 24: `skill-registry-counts` in docs/registry/compatibility.md (#1206 — the hand-maintained
+          #          skill-registry row counts become a generated projection off registry/skills.yml).
+          expected=24
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"
