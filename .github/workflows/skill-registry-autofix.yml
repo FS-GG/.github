@@ -14,8 +14,11 @@
 # skill-body merge, or a scheduled auto-PR here that polls. The issue says to "cost the simple
 # version first" — and the simple version is the only one that lives entirely in `.github`. Dispatch
 # would mean editing four producer repos' workflows; polling reuses the producer checkout the
-# detection job already does. Detection already polls on `schedule:`; this is its auto-PR twin, run
-# 25 minutes later so a body merged overnight is both detected AND has a reconcile PR by morning.
+# detection job already does. Detection already polls on `schedule:`; this is its auto-PR twin. It
+# runs HOURLY (.github#1207) so a body merged at 10:00 is reconciled by ~10:42, not left stale until
+# the next 06:42 nightly run — the staleness window #299/#1207 costed, cut from ~24h to ~1h. At the
+# 06:xx hour it still lands 25 min after the nightly detection, so a nightly-detected drift also gets
+# its PR.
 #
 # WHAT IT WILL AND WON'T RECONCILE. `--write` is self-limiting to the MECHANICAL cases — it rewrites
 # a stale `sha256:` / `materializes-when:` verbatim from the manifest, and adds a missing row
@@ -93,7 +96,7 @@
 #
 # NOR CAN `registry-coherence` SIMPLY BE MADE REQUIRED. Its verdict is a function of OTHER repos'
 # `main`s, so requiring it would let a producer's skill-body merge turn every open `.github` PR red
-# and block the repo until the next 06:42 run landed — an external repo's merge deadlocking this
+# and block the repo until the next hourly (:42) run landed — an external repo's merge deadlocking this
 # one's, the hazard `check-required-contexts.py` (#549) exists to document. It stays non-required,
 # which means native auto-merge can never be safe on this PR.
 #
@@ -123,9 +126,13 @@
 name: skill-registry-autofix
 
 on:
-  # Detection runs at 17 6; this runs 25 min later so a nightly-detected drift also gets its PR.
+  # HOURLY (.github#1207): runs at :42 every hour, so a producer's skill-body merge is reconciled
+  # within ~1h instead of waiting for the next 06:42 nightly run — the staleness window #299/#1207
+  # costed, cut from ~24h to ~1h. Detection (`skill-registry-coherence`) still runs daily at 17 6; at
+  # that hour this still lands 25 min later, so a nightly-detected drift also gets its PR — but the
+  # window no longer WAITS on detection to shrink.
   schedule:
-    - cron: "42 6 * * *"
+    - cron: "42 * * * *"
   workflow_dispatch:
     inputs:
       dry-run:
@@ -412,7 +419,7 @@ jobs:
       #                                  whether the reconcile is CORRECT, and it is NOT a required check
       #                                  on `main` — nor may it become one: its verdict is a function of
       #                                  OTHER repos' `main`s, so requiring it would let a producer's merge
-      #                                  block every open PR here until the next 06:42 run (#549). So
+      #                                  block every open PR here until the next hourly (:42) run (#549). So
       #                                  nothing but this flag will ever look at it, and an ABSENT check
       #                                  reads exactly like a passing one to any "is anything red?" rollup
       #                                  (#606). A renamed job or a narrowed `paths:` filter would
