@@ -2,7 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-19
-- **Affects:** FS-GG/.github (owns `registry/skills.yml`, the new producer emitter for its own authored drivers, the scaffold-time materializer wiring, and the `contract-coherence.yml` pin); FS.GG.SDD (owns `Fsgg.Registry`, which learns the driver-class vocabulary and publishes the CLI carrying it). Amends nothing; **resolves the open question deferred by [ADR-0053](0053-roadmap-driven-milestone-loop-disposable-sdd-subagents.md) §Consequences** ("Delivery to product trees is a follow-up, not decided here").
+- **Affects:** FS-GG/.github (owns `registry/skills.yml`, the new producer emitter for its own authored drivers, the scaffold-time materializer wiring, and the `contract-coherence.yml` pin); FS.GG.SDD (owns `Fsgg.Registry`, which learns the driver-class vocabulary and publishes the CLI carrying it).
+- **Resolves:** the delivery-fabric question [ADR-0053](0053-roadmap-driven-milestone-loop-disposable-sdd-subagents.md) §Consequences deferred ("Delivery to product trees is a follow-up, not decided here"). No prior decision is changed — every ADR-0053 decision stands.
 - **Decides:** [FS-GG/.github#1224](https://github.com/FS-GG/.github/issues/1224)
 
 ## Context
