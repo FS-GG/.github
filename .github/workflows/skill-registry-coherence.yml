@@ -125,6 +125,13 @@ jobs:
       # The path travels through `env:`, never `${{ }}` interpolated into the shell — the fixture next
       # door already asserts that of the autofix workflow's stamp, and a value spliced into a `run:`
       # body is one edit away from being a value somebody else controls.
+      # .github's OWN driver skill-manifest must be current with the authored SKILL.md bodies it
+      # digests (ADR-0054) — the producer-emitter half of `registry = manifest = bytes` for the driver
+      # class. This is the regeneration gate rostered in scripts/generated-paths (so verify-paths
+      # subtracts the artifact); the reconcile below is the consumer half.
+      - name: Driver skill-manifest is current
+        run: python scripts/generate-driver-manifest --check
+
       - name: Assert registry = manifest = bytes
         env:
           BASELINE: ${{ steps.baseline.outputs.path }}

@@ -190,7 +190,7 @@ jobs:
           # `loose` treats the literal as a single version (and tolerates SDD's 4-segment grammar, which
           # strict semver rejects), so 0.13.0 -> 0.14.0 is a real update the bot will open. Do NOT drop
           # this token back to the default without re-reading #576.
-          dotnet tool install --global FS.GG.SDD.Cli --version 0.13.0
+          dotnet tool install --global FS.GG.SDD.Cli --version 0.17.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Assert build-config source .props are well-formed XML

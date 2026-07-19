@@ -273,6 +273,9 @@ jobs:
       - name: Stamp the producer commits this reconcile is computed from
         run: |
           set -euo pipefail
+          # `.repos/*/` deliberately omits the `.github` symlink (a dotfile the glob skips): .github's
+          # driver bytes cannot move without a commit to THIS repo, so there is no independent producer
+          # drift to stamp — the reconcile still treats it as a producer (Python's os.listdir sees it).
           for d in .repos/*/; do
             repo="$(basename "$d")"
             printf '%s\t%s\n' "$repo" "$(git -C "$d" rev-parse HEAD)"
