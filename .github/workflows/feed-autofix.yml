@@ -100,7 +100,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - name: Install PyYAML
@@ -148,7 +148,7 @@ jobs:
           # So `git push` needs no explicit credential and no token in a remote URL: the checkout
           # persists this one. Same reason as skill-registry-autofix.
           token: ${{ steps.app-token.outputs.token }}
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - name: Install PyYAML
