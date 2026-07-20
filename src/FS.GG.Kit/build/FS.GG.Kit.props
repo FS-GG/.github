@@ -19,6 +19,15 @@
     <!-- Materialize automatically as part of the consumer's build. A receiver that would rather
          materialize on an explicit `dotnet build -t:FsggKitMaterialize` sets this false. -->
     <FsggKitMaterializeOnBuild Condition="'$(FsggKitMaterializeOnBuild)' == ''">true</FsggKitMaterializeOnBuild>
+
+    <!-- Also materialize the build-config capability (dist/dotnet Directory.Build.props +
+         Directory.Packages.props) to <root>/. OPT-IN and OFF by default: build-config reaches only 4
+         receivers (sdd/rendering/governance/game), not templates/audio/net, and .github imports rather
+         than copies it (.github#609). A receiver that today `receives: build-config` sets this true; the
+         materialized files are committed, exactly as the sync-build-config byte-copies are, so this is
+         the write arm that replaces that copy — not a live per-build input. global.json stays UNMANAGED
+         (.github#903) and is not carried. -->
+    <FsggKitMaterializeBuildConfig Condition="'$(FsggKitMaterializeBuildConfig)' == ''">false</FsggKitMaterializeBuildConfig>
   </PropertyGroup>
 
 </Project>
