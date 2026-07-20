@@ -1,0 +1,89 @@
+# Does the PUBLISHED FS.GG.Kit still carry canonical's coordination-kit bytes? (.github#1291, epic #266)
+#
+# FS.GG.Kit (ADR-0062) ships the coordination kit as one versioned package; a `kit-delivery: package`
+# receiver MATERIALIZES it onto disk from a pinned version, so the PACKAGE'S CONTENT is what the fleet
+# restores. verify-package.sh proves the kit is derived-correct at PACK time, and coordination-coherence
+# checks each RECEIVER — but nothing rechecked the PUBLISHED artifact as canonical (registry/repos.lock)
+# moved. That gap is .github#1291: fs.gg.coord.cli 0.6.0 -> 0.7.0 (#660) advanced the manifest on main,
+# every pack-time gate stayed green, and the published FS.GG.Kit 0.1.0 still carried the 0.6.0 bytes, so
+# the first from-scratch materialize (FS.GG.Net) drifted and coordination-coherence red.
+#
+# This is engine-pin-coherence one layer up: engine-pin-coherence guards the PIN the fleet copies; this
+# guards the PACKAGE the fleet materializes. Same #266 lesson — a subject nothing watches goes stale in
+# silence — so this mirrors engine-pin-coherence's shape exactly.
+#
+# WHY THE LIVE CHECK IS NOT A pull_request gate. The staleness is a property of MAIN (repos.lock) plus
+# the FEED (the published kit), not of any PR's diff: #660 touched the manifest and nothing under
+# src/FS.GG.Kit/, so no path-filtered PR trigger could ever see it, and it is fixed by REPUBLISHING
+# (release-kit.yml), not by editing some other PR. So the live check runs on main, on a schedule, and on
+# demand; a PR runs the fixture, whose subject IS the diff.
+#
+# The gate FAILS CLOSED (epic #266): an unreadable lock, an unreachable feed, a missing manifest are
+# ERRORS, never "coherent". So this workflow must never gain a `continue-on-error` or a conditional that
+# lets the live job be skipped into green — "nothing to check" and "checked, and it's fine" must not
+# share an exit code.
+name: kit-published-coherence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-kit-published-coherence.py"
+      - "scripts/fsgg_feed.py"   # the shared feed reader + NuGet ordering (.github#263)
+      - "tests/kit-published-coherence/**"
+      - ".github/workflows/kit-published-coherence.yml"
+  push:
+    branches: [main]
+    # DELIBERATELY UNFILTERED, like engine-pin-coherence. The verdict is a function of main's repos.lock
+    # AND the feed, and both move without touching any one path: a kit-source bump changes repos.lock,
+    # and a republish changes the feed while touching no file here. A paths filter would leave a red
+    # standing for up to a day after the merge/publish that fixed it.
+  schedule:
+    # Daily, offset from feed-coherence (06:17), engine-freshness/pin-coherence (06:43) and
+    # engine-pin-coherence (06:53) so the feed reads do not contend. This trigger catches a kit-source
+    # bump nobody republished: it touches no file here, so no push can see it, and the published kit
+    # grows stale in silence until something periodic reads the feed.
+    - cron: "37 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kit-published-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Offline. Proves the gate reds on drift and fails-closed on every unreadable-subject condition
+  # before we trust its green.
+  fixture:
+    name: fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Run the kit-published-coherence fixture (no network)
+        run: bash tests/kit-published-coherence/run.sh
+
+  # Online. The actual coherence signal: the newest published FS.GG.Kit against main's repos.lock.
+  published:
+    name: published
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: fixture
+    # The live read is about main's repos.lock + the feed, not about a PR's diff (see the header). On a
+    # PR the fixture above is the whole subject.
+    if: github.event_name != 'pull_request'
+    # No token: the kit is read anonymously from public nuget.org (ADR-0039 — where receivers restore
+    # it), so the gate needs no feed credential.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Is the newest published FS.GG.Kit coherent with canonical?
+        run: python scripts/check-kit-published-coherence.py
