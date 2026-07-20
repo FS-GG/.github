@@ -6,6 +6,7 @@
 - **Interacts with:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) (this is the principle's flagship application — the single highest-leverage *derive, don't restate*); [ADR-0037](0037-schema-growth-is-publish-before-flip.md) (publish-before-flip — a generated `package-version` cannot lead the feed because it *is* the feed read); [ADR-0044](0044-generated-artifacts-are-derived-from-their-generators.md) (the generated-artifact model, here applied to registry fields as well as files); [ADR-0034](0034-typed-coordination-engine.md) (fail-closed gate discipline, preserved).
 - **Decision-first ADR:** records the approach and a recommendation for the derived-field mechanism. The **implementation** — item [.github#1260](https://github.com/FS-GG/.github/issues/1260) — is left open and unblocked; it proceeds once an option here is accepted. This ADR builds nothing.
 - **Source:** [docs/reports/2026-07-20-cross-repo-coordination-overhead-root-cause.md](../reports/2026-07-20-cross-repo-coordination-overhead-root-cause.md) §3A, §7 P1.
+- **Amended 2026-07-20** — see [§ Amendment](#amendment-2026-07-20--resolve-the-where-does-the-feed-read-run-question) below. The Decision as first written left the *where does the feed read run* question open (a contradiction [.github#1273](https://github.com/FS-GG/.github/issues/1273) tracked and this amendment settles). The amendment is authoritative where it and the original Decision differ.
 
 ## Context
 
@@ -92,3 +93,59 @@ Publish-before-flip (ADR-0037) is **strengthened**, not bypassed: a generated `p
   Removes the projection but also the single coherent snapshot the registry exists to be — a consumer
   would have to query N feeds to answer "what can I restore against?" The registry's value is that it is
   *one* place; Option A keeps that while making the one place generated. Rejected.
+
+## Amendment (2026-07-20) — resolve the *where does the feed read run* question
+
+The Decision above says the derived fields are "emitted by reading the feed/source value **at generation
+time**" with "**no literal to flip and nothing to drift**." Reviewed on
+[PR #1268](https://github.com/FS-GG/.github/pull/1268), that under-specified the one point that decides
+the whole implementation, and it read two ways that cannot both hold: *read at generation time* implies
+**no committed literal**, while "keep the registry as one coherent snapshot" implies the value **is**
+committed. [.github#1273](https://github.com/FS-GG/.github/issues/1273) tracked the contradiction; this
+amendment settles it.
+
+**The unnamed second risk.** Option A named one risk (fail-closed on an unreadable source, #266). The
+deciding one it did not name: `generate-projections --check`, `feed-coherence.yml`, and
+`source-coherence.yml` all run on `pull_request` — they are **blocking** gates. `--check` is safe to
+block a PR *only because generation reads local files*: two runs on the same tree always agree, so a red
+means "you forgot to regenerate," never "the world moved." A generator that read the **live feed** at
+`--check` time would red an unrelated PR whenever a producer published mid-review — reintroducing "a
+publish reds `.github@main`" into a *blocking* gate, the exact behaviour P1 exists to remove.
+
+**The invariant (load-bearing, adopted).** *No `generate-*` generator reads the network at PR-blocking
+`--check` time. A value derived from external/mutable truth is written on the **scheduled / dispatch**
+path (a bot), and PR `--check` only diffs the committed cache **offline**.* This preserves ADR-0034's
+fail-closed **blocking**-gate discipline (the gate stays offline-deterministic) while keeping the
+fail-closed **detection** on the scheduled path (an unreadable source reds there, and never renders as
+"the value is whatever was last committed").
+
+**The mechanism — now: A′ (materialized cache).** A′ keeps `package-version` / `version` / live tags as
+**committed** fields in `dependencies.yml`, but their **sole writer** is a scheduled bot — the existing
+`feed-autofix` generalized beyond its one hardcoded `fs-gg-ui-template` row (`.github#1067`/`#1081`) to
+every package-bearing contract, running on `schedule` + `repository_dispatch`. PR-time `--check` diffs
+the committed cache offline. This is Option B's *mechanism* (a bot writing a committed literal on a
+schedule) adopted to reach Option A's *goal* (the human, and the hand-flip commit class, out of the
+loop) — the reconciliation the original text gestured at but did not name, made safe by the invariant.
+It is shippable now and **decoupled from P2**.
+
+**The end-state — later: C (schema removal), gated on P2.** The full *derive, don't restate* win
+(ADR-0058) removes the derived fields from the registry schema and computes them on demand, leaving no
+committed cache at all. C is deferred because it is coupled to P2
+([.github#1261](https://github.com/FS-GG/.github/issues/1261) /
+[FS.GG.SDD#612](https://github.com/FS-GG/FS.GG.SDD/issues/612)): the schema is validated by
+`Fsgg.Registry` shipping from SDD — the two-repo publish-before-flip rail P2 dissolves — and computing a
+`package-version` on demand needs a `contract-id → package-id` map added to the registry, itself a
+schema/cross-repo change. When P2 lands, C supersedes A′; until then A′ is the design and A′'s committed
+cache is the "one coherent snapshot" the registry keeps.
+
+**What the amendment does *not* change.** `compatibility.md`'s contract-version region is **already** a
+generated projection (`fsgg-contract-versions`, gated by the required `projections` workflow; ADR-0044) —
+done, no work owed. The **semantic** fields (ownership edges `owner`/`consumers`, coherence *intent*,
+scope *meaning*) stay hand-authored and fail-closed-gated, exactly as the Decision says: the registry
+becomes "derived where a source exists, authored where one does not."
+
+**Implementation (#1260) acceptance bar, updated.** (1) The generalized `feed-autofix` bot is the sole
+writer of the derived fields and runs only on `schedule`/`repository_dispatch`/`workflow_dispatch` — not
+on `pull_request`. (2) No `generate-*` step invoked by a PR-blocking `--check` reads the network. (3) The
+scheduled detection path fails **closed** on an unreadable feed/source (reds; never emits the
+last-committed value silently). (4) Semantic gates are untouched.
