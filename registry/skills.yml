@@ -98,7 +98,12 @@
 # undeclared is not `not mirrored`. Do NOT "tidy" the file by adding `mirrored: false` everywhere —
 # that would manufacture, by hand, exactly the confident default the gate exists to refuse.
 #
-# `schemaVersion` IS 2. THE OWED 1→2 BUMP IS NOW PAID (ADR-0054 step 2, .github#1230).
+# `schemaVersion` IS 3. THE 1→2 BUMP WAS PAID (ADR-0054 step 2, .github#1230); 2→3 adds the
+# `operator` skill class (ADR-0057) — a `.github`-authored, never-materialized scope (`materializes-when:
+# "false"`), whose rows are reconciled from `.github`'s OWN driver manifest exactly as `driver`'s are.
+# Same publish-before-flip rail (ADR-0037): FS.GG.SDD taught Fsgg.Registry the `operator` token and
+# PUBLISHED FS.GG.SDD.Cli 0.18.x; .github THEN (this flip) bumps this scalar + `skill-registry.version`
+# 2 → 3 and advances the contract-coherence.yml pin 0.17.0 → 0.18.x. See the DRIVER/OPERATOR blocks below.
 #
 # Two schema growths are behind this scalar, both now covered by a validator that KNOWS them:
 #   * `mirrored:` (.github#658) — .github#686 decided that an OPTIONAL, ADDITIVE, back-compatible field
@@ -119,8 +124,8 @@
 #      + `mirrored`), verified before this flip; the new rules bind only against this declared `2`.
 # ADR-0015 §3's "same PR" is unsatisfiable — this document lives in .github and its validator in
 # FS.GG.SDD, no PR spans two repos — which ADR-0037 (.github#689) amends to the two-PR order above.
-schemaVersion: 2
-updated: "2026-07-19"
+schemaVersion: 3
+updated: "2026-07-20"
 
 # The scaffold parameters `materializes-when` predicates may reference, read at scaffold time from
 # scaffold-provenance.json → effectiveParameters.
@@ -274,3 +279,16 @@ skills:
   # digest of the authored SKILL.md, reconciled from the driver manifest.
   # ------------------------------------------------------------------------------------------------
   - { id: workRoadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: 197462deb8cbb375115af3e1d27c5ca32e168432afb6955d5ef7b4a0da8731b0, materializes-when: "feedback == true and lifecycle == spec-kit" }
+
+  # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
+  #
+  # The FOURTH skill class, and the mirror image of `driver`: also reconciled from `.github`'s OWN
+  # producer manifest, but delivered to no tree. `drive-board` (the cross-repo sibling of workRoadmap,
+  # ADR-0053) runs ONLY in an operator checkout where every repo is a sibling — a single product tree
+  # has no siblings, so it can be materialized nowhere. `materializes-when` is the never-true literal
+  # `false` (ADR-0017's grammar, `always`'s exact opposite), so the scope-agnostic union gate
+  # (scripts/skill-union-assert.sh) reads an operator row as `declared ∧ condition-false ∧ absent → a
+  # justified downstream omission` — no gate change. The scope value's job is the CATALOG; the
+  # never-materialize behaviour rides the predicate. Schema growth ADR-0057 pays for (schemaVersion 2→3
+  # below), publish-before-flip, SDD first (ADR-0037).
+  - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 28edb56f4cc7926ef423f9980ad6161e5d6c18cbe5f6008bc7b3c7981e2c7027, materializes-when: "false" }

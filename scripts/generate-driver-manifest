@@ -56,14 +56,25 @@ MANIFEST_PATH = os.path.join("registry", "driver-skill-manifest.json")
 # skill-manifest schema version (the MANIFEST document's schema — NOT skills.yml's schemaVersion).
 MANIFEST_SCHEMA_VERSION = 1
 
-# The `.github`-authored drivers. See the module docstring for why the predicate is what it is.
-# `supplied-by` is the authored skill dir under the repo root; the SKILL.md under it is digested.
+# The `.github`-authored non-kit skills this repo emits into registry/skills.yml — two scopes:
+#   * `scope: driver`   (ADR-0054) — product-materialized; runs in a scaffolded product tree.
+#   * `scope: operator` (ADR-0057) — materialized NOWHERE; runs only in the operator checkout where
+#     every repo is a sibling. Its `materializes-when` is the never-true literal `false`, so the
+#     scope-agnostic union gate reads it as a justified downstream absence (no gate change needed).
+# See the module docstring for why each predicate is what it is. `supplied-by` is the authored skill
+# dir under the repo root; the SKILL.md under it is digested.
 DRIVERS = [
     {
         "id": "workRoadmap",
         "scope": "driver",
         "supplied-by": ".claude/skills/workRoadmap",
         "materializes-when": "feedback == true and lifecycle == spec-kit",
+    },
+    {
+        "id": "drive-board",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/drive-board",
+        "materializes-when": "false",
     },
 ]
 

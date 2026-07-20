@@ -483,9 +483,12 @@ contracts:
       depName=FS.GG.SDD.Cli`, .github#127), so a schema/validator advance cannot silently freeze the gate (the H2 defect).
 
   - id: skill-registry
-    version: "2"            # == registry/skills.yml top-level `schemaVersion` — the skill-catalog document schema.
+    version: "3"            # == registry/skills.yml top-level `schemaVersion` — the skill-catalog document schema.
                             # BUMPED "1" → "2" (ADR-0054 step 2, .github#1230): the owed `mirrored` bump PAID
                             # alongside the `scope: driver` growth — see "THE OWED BUMP" below.
+                            # BUMPED "2" → "3" (ADR-0057 step 2): adds the `operator` skill class — a
+                            # `.github`-authored, never-materialized scope. Same publish-before-flip rail:
+                            # FS.GG.SDD.Cli 0.18.x teaches Fsgg.Registry `operator`, this pin advances onto it.
     owner: github
     # ADR-0017 (.github#163/#168): the org's single authoritative skill catalog (process + product),
     # condition-aware. Registered as a governed contract per ADR-0015 (mirrors `registry-schema`): the
@@ -543,13 +546,15 @@ contracts:
     # diagnostics — measured before this flip), rejecting nothing the live document did; the new rules bind
     # only against the declared `2`. The SDD half shipped as SDD#595 (not the earlier-planned #420).
     surface: >
-      registry/skills.yml — the authoritative catalog of every process + product + driver skill ({id,
-      scope, owner, source, canonical-body sha256, materializes-when predicate, mirrored}). `scope` is
-      one of process | product | driver. GENERATED/RECONCILED from the producer skill-manifests
+      registry/skills.yml — the authoritative catalog of every process + product + driver + operator
+      skill ({id, scope, owner, source, canonical-body sha256, materializes-when predicate, mirrored}).
+      `scope` is one of process | product | driver | operator. GENERATED/RECONCILED from the producer
+      skill-manifests
       (Rendering's template/skill-manifest/skill-manifest.json; SDD's emitted process manifest
       .agents/skills/skill-manifest.json — SDD#111 closing #109; and, since ADR-0054, `.github`'s OWN
       driver manifest registry/driver-skill-manifest.json — emitted by scripts/generate-driver-manifest
-      for the `.github`-authored, product-materialized `scope: driver` class, e.g. workRoadmap), never
+      for the `.github`-authored `scope: driver` (product-materialized, e.g. workRoadmap) AND, since
+      ADR-0057, `scope: operator` (never-materialized, e.g. drive-board) classes), never
       hand-authored bytes. `materializes-when` is the ADR-0017
       predicate grammar the union gate (scripts/skill-union-assert.sh --params) evaluates against a
       scaffold's scaffold-provenance.json effectiveParameters. `mirrored` (OPTIONAL boolean, .github#658)
