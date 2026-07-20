@@ -28,6 +28,16 @@
          the write arm that replaces that copy — not a live per-build input. global.json stays UNMANAGED
          (.github#903) and is not carried. -->
     <FsggKitMaterializeBuildConfig Condition="'$(FsggKitMaterializeBuildConfig)' == ''">false</FsggKitMaterializeBuildConfig>
+
+    <!-- First-time build-config adoption (.github#387 safety). OFF by default: the materialize REFUSES
+         to overwrite a pre-existing, hand-authored .props (one lacking the 'Source of truth: FS-GG/.github'
+         marker) rather than silently clobber it. A build-config receiver adopting the package sets this
+         true for ONE run — it moves the hand-authored Directory.Build.props / Directory.Packages.props to
+         Directory.Build.local.props / Directory.Packages.local.props (which the canonical file imports, so
+         repo-specific settings survive), then writes the canonical marked file. After that the .props
+         carries the marker and materialize overwrites it freely, so this can go back to false. This is the
+         package-side equivalent of sync-build-config.sh's adopt mode. -->
+    <FsggKitAdoptBuildConfig Condition="'$(FsggKitAdoptBuildConfig)' == ''">false</FsggKitAdoptBuildConfig>
   </PropertyGroup>
 
 </Project>

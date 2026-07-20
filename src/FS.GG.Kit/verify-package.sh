@@ -107,6 +107,41 @@ done
 [ ! -f "$recv2/global.json" ] || fail "global.json was materialized — it must stay unmanaged (.github#903)"
 echo "   Directory.Build.props + Directory.Packages.props materialized (opt-in); global.json correctly withheld"
 
+echo "== 3c. adopt/marker safety: a hand-authored .props is REFUSED, and --adopt preserves it (.github#387) =="
+recv3="$WORK/recv-adopt"; mkdir -p "$recv3"
+# A pre-existing, hand-authored Directory.Build.props (no 'Source of truth' marker).
+printf '<Project>\n  <PropertyGroup><HandAuthored>keepme</HandAuthored></PropertyGroup>\n</Project>\n' > "$recv3/Directory.Build.props"
+handauthored_sha="$(sha256sum "$recv3/Directory.Build.props" | cut -d' ' -f1)"
+cat > "$WORK/adopt.proj" <<EOF
+<Project>
+  <Import Project="$HERE/build/FS.GG.Kit.props" />
+  <Import Project="$HERE/build/FS.GG.Kit.targets" />
+  <PropertyGroup>
+    <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
+    <FsggKitReceiverRoot>$recv3</FsggKitReceiverRoot>
+    <FsggKitMaterializeBuildConfig>true</FsggKitMaterializeBuildConfig>
+  </PropertyGroup>
+</Project>
+EOF
+# Default (no adopt): materialize MUST refuse and leave the hand-authored file byte-for-byte untouched.
+if dotnet msbuild "$WORK/adopt.proj" -t:FsggKitMaterialize -nologo >/dev/null 2>&1; then
+  fail "materialize CLOBBERED a hand-authored Directory.Build.props — the .github#387 refusal is not firing"
+fi
+[ "$(sha256sum "$recv3/Directory.Build.props" | cut -d' ' -f1)" = "$handauthored_sha" ] \
+  || fail "hand-authored Directory.Build.props was modified despite the refusal"
+[ ! -f "$recv3/Directory.Build.local.props" ] \
+  || fail "refusal path created a *.local.props — it must not touch anything"
+# --adopt (FsggKitAdoptBuildConfig=true): move the hand-authored file to *.local.props, then write canonical.
+dotnet msbuild "$WORK/adopt.proj" -t:FsggKitMaterialize -nologo -p:FsggKitAdoptBuildConfig=true >/dev/null
+[ "$(sha256sum "$recv3/Directory.Build.local.props" | cut -d' ' -f1)" = "$handauthored_sha" ] \
+  || fail "adopt did not preserve the hand-authored file as Directory.Build.local.props"
+grep -q "Source of truth: FS-GG/.github" "$recv3/Directory.Build.props" \
+  || fail "adopt did not write the canonical (marked) Directory.Build.props"
+# A second run is now idempotent: the canonical file carries the marker, so no refusal, no re-adopt.
+dotnet msbuild "$WORK/adopt.proj" -t:FsggKitMaterialize -nologo >/dev/null \
+  || fail "materialize refused a canonical (marked) .props — the marker check is too strict"
+echo "   unmarked .props refused (and left intact); adopt moved it to *.local.props; marked .props overwritten freely"
+
 echo "== 4. a tampered kit file is a LOUD failure =="
 cp -r "$WORK/unpacked/kit" "$WORK/tampered"
 echo "CORRUPT" >> "$WORK/tampered/skills/pnext-item/SKILL.md"     # bytes drift from the recorded sha256
