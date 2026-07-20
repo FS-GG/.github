@@ -239,7 +239,7 @@ skills:
   # only in the feedback-gated `capture` never reaches a reporter on the `sdd` or `none` lane. Predicate
   # is the manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality — do not
   # "normalize" it to match the row above). Vendored Rendering#248 (PR #251); reconciled .github#298.
-  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: e3a4e8e2984deee4e253065f9d89197be9755b0094323f5aba0102018250897c, materializes-when: "always" }
+  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: cd572f459ab768f1d8d7391278621c013c6e11989345bca1d01208a6a75c2b2d, materializes-when: "always" }
 
   # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
   # fs-gg-project was formerly gated `lifecycle == spec-kit`, so under the `sdd`/`none` lanes NEITHER
