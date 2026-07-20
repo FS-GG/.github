@@ -7,6 +7,13 @@
       "sha256": "197462deb8cbb375115af3e1d27c5ca32e168432afb6955d5ef7b4a0da8731b0",
       "supplied-by": ".claude/skills/workRoadmap",
       "materializes-when": "feedback == true and lifecycle == spec-kit"
+    },
+    {
+      "id": "drive-board",
+      "scope": "operator",
+      "sha256": "28edb56f4cc7926ef423f9980ad6161e5d6c18cbe5f6008bc7b3c7981e2c7027",
+      "supplied-by": ".claude/skills/drive-board",
+      "materializes-when": "false"
     }
   ]
 }

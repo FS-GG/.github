@@ -167,8 +167,13 @@ jobs:
           # is coupled to the schema, so it moves WITH the schema. #576 (bot freeze) stays open and
           # unrelated; a red pin gate absent a schema bump is still a #576 report, not a hand-advance.
           #
-          # ADVANCED 0.13.0 → 0.17.0 (.github#1230, ADR-0054 step 2) — and this is NOT the sixth
-          # hand-advance the warning above forbids either, on the same grounds as the 0.13.0 advance:
+          # ADVANCED 0.13.0 → 0.17.0 (.github#1230, ADR-0054 step 2), THEN 0.17.0 → 0.18.x (ADR-0057
+          # step 2): 0.18.x teaches Fsgg.Registry the `operator` token (0.17.0 REJECTS a `scope:
+          # operator` row exactly as 0.15.0 rejected `driver`), paired with the skills.yml `schemaVersion`
+          # 2→3 + `skill-registry.version` 2→3 bump. Until FS.GG.SDD publishes 0.18.x this install FAILS
+          # (version not on the feed) — this flip is BLOCKED on that publish by design (ADR-0037 order).
+          # Neither advance is the sixth hand-advance the warning above forbids, on the same grounds as
+          # the 0.13.0 advance:
           # it is the ADR-0037 step-2 obligation coupled to a schema bump, not a bid to GREEN #576.
           # registry/skills.yml grows a third `skill-registry` class — a `.github`-authored, product-
           # materialized `scope: driver` row (`workRoadmap`, ADR-0054/#1224) — and pays the OWED
@@ -195,7 +200,7 @@ jobs:
           # in that gap shadows the pin with a version-shaped literal from the prose — the `0.14.0` above
           # was captured in place of the real pin until this block was moved above the annotation (#1236).
           # renovate: datasource=nuget depName=FS.GG.SDD.Cli versioning=loose
-          dotnet tool install --global FS.GG.SDD.Cli --version 0.17.0
+          dotnet tool install --global FS.GG.SDD.Cli --version 0.18.0
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Assert build-config source .props are well-formed XML
