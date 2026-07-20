@@ -126,6 +126,10 @@ expect_fail "unknown receives capability"     1 "unknown capability" "$(variant 
 expect_fail "duplicate repo id"               1 "duplicate"          "$(variant dupid       's/id: sdd,/id: .github,/')"
 expect_fail "invalid role"                    1 "role"               "$(variant badrole     's/role: framework/role: banana/')"
 expect_fail "not exactly one authority"       1 "exactly one"        "$(variant twoauth     's/role: framework/role: authority/')"
+# kit-delivery (ADR-0062/#1287): a bad value, and the field on a repo that does not receive the kit.
+expect_fail "kit-delivery bad value"          1 "byte-copy|package"  "$(variant kdbad  's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], kit-delivery: bogus/')"
+expect_fail "kit-delivery on non-receiver"    1 "does not receive coordination-kit" "$(variant kdnonrecv 's/role: authority, receives: \[labels\]/role: authority, receives: [labels], kit-delivery: package/')"
+expect_pass "kit-delivery: package on a coordination-kit receiver" "$(variant kdpkg 's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], kit-delivery: package/')"
 expect_fail "authority receives the kit"      1 "must not RECEIVE"   "$(variant authkit     's/full: FS-GG\/.github,   role: authority, receives: \[labels\]/full: FS-GG\/.github,   role: authority, receives: [labels, coordination-kit]/')"
 expect_fail "kit source missing"              1 "source missing"     "$(variant nosource    's/source: scripts\/democlient/source: scripts\/nope/')"
 expect_fail "kit id is not kebab/dotted"      1 "kit id"             "$(variant badkitid    's/id: demo-skill,/id: Demo Skill,/')"
@@ -352,6 +356,23 @@ list_kit="$(bash "$REPOS_SH" list --receives coordination-kit --registry "$BASE"
 list_labels="$(bash "$REPOS_SH" list --receives labels --field id --registry "$BASE" | tr '\n' ',')"
 [ "$list_labels" = ".github,sdd," ] && ok "list --receives labels --field id -> both, in order" \
   || bad "list labels ids" "got: $list_labels"
+
+# --- kit-delivery filter (ADR-0062/#1287): coordination-propagate asks for byte-copy only ---
+# BASE: sdd receives coordination-kit with the field ABSENT, i.e. byte-copy.
+kd_bc="$(bash "$REPOS_SH" list --receives coordination-kit --kit-delivery byte-copy --registry "$BASE")"
+[ "$kd_bc" = "FS-GG/FS.GG.SDD" ] && ok "absent kit-delivery counts as byte-copy" || bad "kit-delivery byte-copy (absent)" "got: $kd_bc"
+kd_pkg="$(bash "$REPOS_SH" list --receives coordination-kit --kit-delivery package --registry "$BASE")"
+[ -z "$kd_pkg" ] && ok "no package receivers when none migrated" || bad "kit-delivery package (none)" "got: $kd_pkg"
+KDPKG="$(variant kdpkg2 's/receives: \[labels, coordination-kit\]/receives: [labels, coordination-kit], kit-delivery: package/')"
+kd_bc2="$(bash "$REPOS_SH" list --receives coordination-kit --kit-delivery byte-copy --registry "$KDPKG")"
+[ -z "$kd_bc2" ] && ok "a migrated receiver drops out of the byte-copy set (propagate skips it)" || bad "kit-delivery byte-copy (migrated)" "got: $kd_bc2"
+kd_pkg2="$(bash "$REPOS_SH" list --receives coordination-kit --kit-delivery package --registry "$KDPKG")"
+[ "$kd_pkg2" = "FS-GG/FS.GG.SDD" ] && ok "a migrated receiver is in the package set" || bad "kit-delivery package (migrated)" "got: $kd_pkg2"
+# usage guards
+rc=0; bash "$REPOS_SH" list --receives coordination-kit --kit-delivery bogus --registry "$BASE" >/dev/null 2>&1 || rc=$?
+[ "$rc" -ne 0 ] && ok "list --kit-delivery rejects a bad value" || bad "kit-delivery bad value not rejected"
+rc=0; bash "$REPOS_SH" list --all --kit-delivery package --registry "$BASE" >/dev/null 2>&1 || rc=$?
+[ "$rc" -ne 0 ] && ok "list --kit-delivery refuses --all (it narrows a --receives query)" || bad "kit-delivery with --all not rejected"
 [ "$(bash "$REPOS_SH" digest "$ROOT/.claude/skills/demo-skill")" = "$SKILL_SHA" ] \
   && ok "digest skill dir -> sha256 of SKILL.md" || bad "digest skill dir"
 [ "$(bash "$REPOS_SH" digest "$ROOT/scripts/democlient")" = "$CLIENT_SHA" ] \
