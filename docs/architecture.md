@@ -667,9 +667,9 @@ Composition happens **at scaffold time**, not by vendoring:
                                                                applied via         (FS.GG.Templates)
 
  FS.GG.Contracts ── validates ──▶ registry/dependencies.yml   (FS-GG/.github)
- dist/dotnet/*  ── sync-build-config.sh ──▶ Directory.Build.props + .config/fsgg-build-config.sha
-                                            in all component repos  (the pin the drift gate
-                                            is judged against — ADR-0036, NOT .github@main)
+ dist/dotnet/*  ── FS.GG.Kit package ──▶ Directory.Build.props + Directory.Packages.props
+                                         materialized in the 4 build-config receivers  (ADR-0062;
+                                         sync-build-config.sh now only DERIVES the kit's FILES)
 ```
 
 The result is a real, windowed F# UI app plus a `.fsgg/` lifecycle skeleton you
@@ -683,15 +683,18 @@ install is what keeps the composition honest. See the
 
 ## 7. Build, release, and CI conventions
 
-- **One org-shared build config.** [`dist/dotnet/`](../dist/dotnet/) holds the
-  canonical `Directory.Build.props` and `Directory.Packages.props`, distributed
-  verbatim by [`sync-build-config.sh`](../scripts/sync-build-config.sh). Each repo
-  imports a `*.local.props` for repo-specific settings. A `--check` mode is the drift
-  gate, run by the reusable `contract-coherence.yml` workflow (ADR-0006) and by each
-  receiver's own `gate.yml`. See [`docs/build/README.md`](build/README.md). The pinned
-  `.config/dotnet-tools.json` also lives under `dist/dotnet/`, but since #1077 it is
-  distributed by the **coordination-kit** (not build-config) — so it reaches all six kit
-  receivers, alongside the `fsgg-coord` shim that execs the engine it names.
+- **One org-shared build config, now delivered as a package** (ADR-0062, #1262).
+  [`dist/dotnet/`](../dist/dotnet/) holds the canonical `Directory.Build.props` and
+  `Directory.Packages.props`. They no longer byte-copy: they ship inside the **FS.GG.Kit**
+  package, and each of the 4 build-config receivers **materializes** them from a pinned
+  `FS.GG.Kit` (`FsggKitMaterializeBuildConfig`), refreshed by `kit-materialize.yml` on a
+  Renovate bump. Each repo imports a `*.local.props` for repo-specific settings. The drift
+  gate is now each receiver's `build-config-drift` job asserting its committed `.props` match
+  the pinned package (a `dotnet build -t:FsggKitMaterialize` + git-clean check); the byte-copy
+  `build-config-propagate` push and the reusable `sync-build-config.sh --check` step are
+  **retired**. [`sync-build-config.sh`](../scripts/sync-build-config.sh) survives only as the
+  kit's `FILES`/marker **derive source** (ADR-0058). See [`docs/build/README.md`](build/README.md).
+  The pinned `.config/dotnet-tools.json` is distributed by the **coordination-kit** (#1077).
 - **`dist/dotnet/` also holds `global.json`, and it is deliberately NOT managed**
   (ADR-0006's 2026-07-17 amendment,
   [#903](https://github.com/FS-GG/.github/issues/903)). It is a fourth canonical
@@ -701,17 +704,15 @@ install is what keeps the composition honest. See the
   the steady state rather than a defect — enforcing byte-coherence would merge-freeze
   every receiver still holding the previous canonical bytes. This is a settled
   decision, not a pending rollout step; `tests/sync-build-config` holds the line.
-- **The drift gate compares against a PIN, not against `main`** (ADR-0036,
-  [#592](https://github.com/FS-GG/.github/issues/592)). Each receiver commits
-  `.config/fsgg-build-config.sha` — the `.github` commit its managed files came from —
-  and `--check` diffs against **that** commit's `dist/dotnet/`. This is a **load-bearing
-  shape rule**, not a detail: the receivers check `.github` out at `ref: main`, so while
-  the gate compared against `main` the verdict of a *required* check was a function of
-  **another repo's moving branch at CI time**. A receiver could not make it green from its
-  own PR, and any edit here red-lit **every open PR in every adopting repo** — twice, once
-  for a change to an **XML comment**. Now: **behind → green** (a loud notice; the
-  `build-config-propagate` bot's rolling PR bumps files+pin together), **hand-edited →
-  red**. An absent pin means legacy mode, so unpinned receivers are unchanged.
+- **The build-config drift gate no longer compares against a `.sha` pin — RETIRED** (ADR-0062,
+  #1262; superseding ADR-0036, [#592](https://github.com/FS-GG/.github/issues/592)). ADR-0036 had
+  each receiver commit `.config/fsgg-build-config.sha` — the `.github` commit its managed files came
+  from — and `--check` diff against **that** commit's `dist/dotnet/`, so a *required* gate's verdict
+  depended only on the receiver's own tree rather than on `.github@main` at CI time (which had twice
+  red-lit every open PR in every adopter, once for an **XML comment** change). Under package delivery
+  that model is gone: the pin is not managed by the package path, so it would freeze while the
+  materialize moved the `.props` forward. Each receiver's committed `.props` are now checked against
+  its **pinned FS.GG.Kit** (above), and the `.config/fsgg-build-config.sha` pin is deleted from each.
 - **Distribution edges must not make the consumer's gate depend on the producer's `main`.**
   ADR-0036 generalises past build config: any org→repo distribution whose *enforcement* runs
   in the consumer's CI has to be judged against something in the consumer's own tree, or the

@@ -79,7 +79,11 @@ repos:
 # fabric in this org that demonstrably runs — was frozen out of the largest repo. #634 found it stuck.
 # The enforcement arm had taken the delivery arm hostage.
 #
-# The four rows above are what `build-config-propagate.yml` iterates. The push arm now exists.
+# The four rows above USED to be what `build-config-propagate.yml` iterated as a byte-copy PUSH; that arm
+# was RETIRED in #1262 (ADR-0062). Build config now ships as the FS.GG.Kit package — each of the four
+# materializes Directory.Build.props / Directory.Packages.props from a pinned FS.GG.Kit
+# (FsggKitMaterializeBuildConfig), and its own `build-config-drift` job asserts the committed .props match
+# that package. `build-config` is still RECEIVED (via the package), it is simply no longer pushed.
 #
 # TEMPLATES AND AUDIO ARE DELIBERATELY NOT RECEIVERS, and this is a REVIEWED CLAIM, not an oversight:
 #   * templates has NO `Directory.Build.props` at all — it never adopted the shared config, and it does

@@ -1,6 +1,6 @@
 # ADR-0036 — The shared-build-config drift check compares against a pin, not against `main`
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md) (#1262). Build config now ships as the **FS.GG.Kit package**, not by byte-copy — so the receiver-side `sync-build-config.sh --check` and the `.config/fsgg-build-config.sha` pin this ADR designed are **retired**. Each receiver's `build-config-drift` job now asserts its committed `.props` match its pinned FS.GG.Kit (a `dotnet build -t:FsggKitMaterialize` + git-clean check), and the package materialize's content-addressed verify (ADR-0014) is the integrity guarantee. The pin model below correctly de-raced the byte-copy check for as long as that check existed; it is recorded here as history.
 - **Date:** 2026-07-14
 - **Affects:** `.github` (`dist/dotnet/`, `scripts/sync-build-config.sh`, `build-config-propagate.yml`), and every repo that `receives: shared-build-config` — FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance, FS.GG.Game, FS.GG.Audio, FS.GG.Templates (each commits a `.config/fsgg-build-config.sha` pin)
 - **Amends:** [ADR-0006](0006-org-shared-dotnet-build-config-and-unified-restore-locked-mode-gate.md) (the org-shared .NET build config)

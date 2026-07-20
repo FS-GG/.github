@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 # Distribute the FS-GG org-shared .NET build configuration into a consumer repo.
 #
+# RETIRED AS A LIVE FABRIC (#1262 / ADR-0062). Build config now ships as the FS.GG.Kit package: receivers
+# materialize dist/dotnet/'s .props from a pinned FS.GG.Kit (FsggKitMaterializeBuildConfig) instead of
+# taking them by byte-copy. So the apply / --check / --adopt modes below are no longer wired to any
+# workflow — build-config-propagate.yml and the reusable contract-coherence drift step are gone, and each
+# receiver's own `build-config-drift` job now asserts its committed .props match the package. This script
+# SURVIVES because it is the DERIVE SOURCE for the kit's build-config members: src/FS.GG.Kit/stage-kit.sh
+# reads the FILES=() list below (ADR-0058, derive-don't-restate) and MaterializeKit mirrors the marker/
+# adopt safety. Edit FILES or the marker here and the package follows. The executable modes are kept
+# working (and self-tested) as the documented contract of that derive, not because a workflow calls them.
+#
 # Source of truth: this repo's dist/dotnet/ (Directory.Build.props, Directory.Packages.props).
 # See docs/build/README.md for the adoption model and the unified lockfile-restore-enforcement gate
 # (ADR-0006). (.config/dotnet-tools.json used to live here too; #1077 moved it to the coordination-kit.)

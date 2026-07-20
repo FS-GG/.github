@@ -621,35 +621,12 @@ A repo that ENFORCES but does not RECEIVE can only go red and stay red.
 A repo that RECEIVES but never ADOPTED gets build files written into it by a bot."
 fi
 
-# THE CHANNEL EXISTS AND IS ROSTER-DRIVEN. A propagate arm with a hardcoded target list is the roster
-# rotting in a second place; a missing arm is the bug itself.
-BCP=".github/workflows/build-config-propagate.yml"
-if [ -f "$REPO_ROOT/$BCP" ]; then ok "build-config: the propagate arm exists — the enforcement has a distribution half"
-else bad "build-config: NO propagate arm — the drift check enforces a config nothing ever sends (#626)"; fi
-
-if grep -q -- "--receives build-config" "$REPO_ROOT/$BCP" 2>/dev/null; then
-  ok "build-config: propagate reads its receivers from the ROSTER, not a hardcoded list"
-else
-  bad "build-config: propagate does not read the roster — a second copy of the receiver list will rot"
-fi
-
-# A ZERO-RECEIVER RUN MUST FAIL, NOT SUCCEED QUIETLY. This capability's entire history is "iterated the
-# empty set and nobody noticed", and #503 is the same lesson one layer up: a guard that sums pairs across
-# capabilities reports green having checked a third of its mandate.
-if grep -q "propagate to nobody" "$REPO_ROOT/$BCP" 2>/dev/null; then
-  ok "build-config: a zero-receiver plan is an ERROR — the empty set may not report success (#503, #626)"
-else
-  bad "build-config: propagate would iterate an empty receiver set and exit 0 — that is the bug, again"
-fi
-
-# The path filter must cover what the syncer actually writes. Unlike the kit's hand-maintained list, this
-# one is a WILDCARD over dist/dotnet/ — so assert it stays a wildcard rather than decaying into an
-# enumeration that a new managed file can silently fall out of.
-if grep -qE '^\s+- "dist/dotnet/\*\*"' "$REPO_ROOT/$BCP" 2>/dev/null; then
-  ok "build-config: the path filter is a WILDCARD over dist/dotnet/ — a new managed file cannot fall out of it"
-else
-  bad "build-config: the propagate path filter enumerates files — a managed file missing from it propagates NOTHING, silently"
-fi
+# The byte-copy PUSH arm (build-config-propagate.yml) was RETIRED in #1262 (ADR-0062): build config now
+# ships as the FS.GG.Kit package, so there is no propagate workflow whose shape (roster-driven, non-empty,
+# wildcard paths) this could assert. Each receiver materializes Directory.Build.props / Directory.Packages.props
+# from its pinned FS.GG.Kit, and its own `build-config-drift` job asserts the committed .props still match
+# that package. The receiver-set invariant above still holds — build config is still RECEIVED (now via the
+# package), it is simply no longer PUSHED.
 
 echo "repos-registry fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-registry fixture FAILED"; exit 1; }
