@@ -59,7 +59,7 @@ registry like any other, and this org gates its registries.
 | [0033](0033-fixed-step-double-buffer-is-a-simulation-primitive.md) | The fixed-step double buffer is a **simulation** primitive, owned by `FS.GG.Game.Core` — one accumulator in the org | Accepted |
 | [0034](0034-typed-coordination-engine.md) | The coordination engine is a **typed core**; the tool is the model, and the docs are its projection | Accepted |
 | [0035](0035-observed-run-receipts.md) | A test obligation is satisfied by a run SDD **read**, not by a `pass` an agent **typed** | Accepted |
-| [0036](0036-the-build-config-drift-check-pins-its-source.md) | The shared-build-config drift check compares against a **pin**, not against `main` | Accepted |
+| [0036](0036-the-build-config-drift-check-pins-its-source.md) | The shared-build-config drift check compares against a **pin**, not against `main` | Superseded |
 | [0037](0037-schema-growth-is-publish-before-flip.md) | Schema growth is **publish-before-flip** — two ordered PRs; the validator gates on the declared `schemaVersion` | Accepted |
 | [0038](0038-the-corpus-is-the-cut-over-gate.md) | The **defect corpus** is the cut-over gate; the shadow clock is demoted to telemetry | Accepted |
 | [0039](0039-nuget-org-is-the-read-path.md) | **nuget.org is the read path; the org feed is the publish path** | Accepted |
