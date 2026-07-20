@@ -19,11 +19,12 @@ never drift. `supplied-by` is the authored skill dir under the repo root, so the
 
 THE DRIVER DECLARATIONS below are this emitter's only authored data — the id, scope, source dir and
 materializes-when predicate of each `.github`-authored driver. The predicate is authored, not derived:
-`workRoadmap` runs only where BOTH composed producers' skills are materialized (ADR-0053 §6) —
-`fs-gg-sdd-*` (all `always`) AND the `fs-gg-feedback-*` pair. The pair's binding constraint is
-`fs-gg-feedback-capture`'s `feedback == true and lifecycle == spec-kit` (`fs-gg-feedback-report` is
-`always`), so the composed AND reduces to exactly that. The bytes come from the tree; only these four
-facts per driver are authored here.
+`workRoadmap` runs only where the composed producers' skills are materialized (ADR-0053 §6, as amended
+by ADR-0056) — `fs-gg-sdd-*` (all `always`) AND `fs-gg-feedback-report` (`always`). `fs-gg-feedback-capture`
+was the one binding clause (`feedback == true and lifecycle == spec-kit`); ADR-0056 D3 freezes it and
+schedules its removal, so the driver no longer ANDs against a skill that is going away, and step 4 is
+report-only. The composition therefore reduces to `always` — the driver materializes on the `sdd` lane
+it was built for. The bytes come from the tree; only these four facts per driver are authored here.
 
 AUTHORED IN TWO ROOTS: a `.github` driver skill lives byte-identically in both ADR-0011 skill roots
 (`.claude/skills/<id>`, `.agents/skills/<id>`); `skill-roots-selfcheck.yml` asserts that identity.
@@ -68,7 +69,7 @@ DRIVERS = [
         "id": "workRoadmap",
         "scope": "driver",
         "supplied-by": ".claude/skills/workRoadmap",
-        "materializes-when": "feedback == true and lifecycle == spec-kit",
+        "materializes-when": "always",
     },
     {
         "id": "drive-board",
