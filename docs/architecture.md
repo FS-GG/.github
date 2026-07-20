@@ -341,8 +341,9 @@ SDD-owned field. `fsgg-governance route --mode gate` returns exit `2`
 **The reference gate set** — `samples/sdd-reference-gate-set/.fsgg/`
 (`governance.yml`/`policy.yml`/`capabilities.yml`/`tooling.yml`) — is packed *in
 place* into a **content-only** NuGet package `FS.GG.Governance.ReferenceGateSet`
-whose version is *derived from* the four contained `schemaVersion`s rather than
-chosen (ADR-0007 — hence its four segments;
+whose version is a plain SemVer that bumps on any change to the packed set — content or schema —
+rather than *derived from* the four contained `schemaVersion`s (ADR-0055, superseding ADR-0007; the
+four schema generations now ship as an in-package `schema-manifest.json`, and
 [§5](#5-the-contract-registry--the-single-source-of-truth) carries the current one). This is the
 one versioned source of truth the Templates overlay diffs against.
 
@@ -527,7 +528,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | Contract | Owner | `version` | `package-version` |
 |---|---|---|---|
 | `fsgg-contracts` | FS.GG.SDD | `4.0.0` | `4.0.0` |
-| `governance-reference-gate-set` | FS.GG.Governance | `1.2.1.1` | `1.2.1.1` |
+| `governance-reference-gate-set` | FS.GG.Governance | `1.3.0` | `1.3.0` |
 | `fs-gg-ui-template` | FS.GG.Rendering | `0.14.0` | `0.14.0` |
 | `game-sim-core` | FS.GG.Game | `0.7.1` | `0.7.1` |
 | `game-scene-adapter` | FS.GG.Game | `0.7.1` | `0.7.1` |
@@ -644,8 +645,8 @@ BOM coherence guarded on every Rendering PR), and
 `governance-cli-handoff-consumer-published` (the full strict/light matrix proven
 through the composed workspace). Cross-repo decisions are recorded as ADRs
 (ADR-0002 composition-by-scaffold, ADR-0005 `.fsgg` slot ownership + canonical
-`name`, ADR-0006 shared-build-config, ADR-0007 reference-gate-set version
-derivation, ADR-0008 the CLI orchestrator axis, ADR-0009 detect-and-remediate
+`name`, ADR-0006 shared-build-config, ADR-0055 reference-gate-set version
+(plain SemVer + in-package schema manifest, superseding ADR-0007), ADR-0008 the CLI orchestrator axis, ADR-0009 detect-and-remediate
 orchestration policy).
 
 ---
