@@ -2,7 +2,7 @@
 
 - **Date:** 2026-07-20, hub at `.github@b5ba1fb` (main)
 - **Owner:** `.github` (cross-repo coordination)
-- **Status:** Analysis + proposals. No decision is taken here; §7 lists candidate changes, each of which would need to be argued and filed.
+- **Status:** Analysis + proposals. No decision is taken here; §7 lists candidate changes, each of which would need to be argued and filed. *(Updated same day at `.github@df8c970`: §6a records how the live hotspot cleared — SDD#609 turned out to be a provider bug and is now closed; P1 notes the org has begun auto-reconciling the skill-registry.)*
 - **Question:** The last 24 hours across the eight FS-GG repos were dominated by coordination work and repos pinging each other. Why, and what would reduce it?
 - **Method:** org-wide commit census (8 repos, `--since=2026-07-19`); six parallel deep traces (registry coherence + publish-before-flip; kit/build-config sync; the typed coordination engine + rooms/predicate; ADR + skill-scope churn; package/Contracts propagation; live board state); cross-checked against the prior [2026-07-12 throughput audit](2026-07-12-issue-throughput-and-recurring-error-loops.md) to see what the org learned in the eight days since.
 
@@ -98,6 +98,23 @@ The entire live surface is one migration wave — the ADR-0056 spec-kit→sdd de
 
 **Immediate, no-design-needed actions:** (1) assign an owner to **SDD#609**; (2) re-verify and clear **Rendering#939**'s blocker; (3) close the dangling Governance **PR#284** ("…v4 — abandoned").
 
+### 6a. Update — the live surface cleared the same day (as of `.github@df8c970`)
+
+The hotspot resolved within ~2 hours of this analysis, and **not** the way §6 predicted — which is itself the more interesting finding.
+
+- **SDD#609 was never SDD's work.** Rather than sitting unowned until an SDD owner picked it up (the action §6 recommended), a Templates/Rendering worker re-root-caused it **across the boundary**: the wedge was `scaffold.providerWroteSddTree`, caused by the `fs-gg-ui` template (a **provider**, in FS.GG.Rendering) instantiating its ADR-0056 sdd-lane sentinel into the product's SDD-owned `readiness/` tree. The fix was a **relocation** in the provider (Rendering#954 → PR#955), so "SDD owes nothing." The provider republished (Rendering#956), the registry flipped, and Templates re-pinned. **SDD#609 is now CLOSED/COMPLETED** having required no SDD change at all. Action (1) is therefore moot — and its premise ("the true bottleneck, unowned") was wrong: the bottleneck was a mislabeled provider bug, and the org found and fixed it fast.
+- **The whole Templates chain is green.** #260 and #258 CLOSED, #259 MERGED; `composition` passes on `main` again.
+- **Rendering#939 is CLOSED** — action (2) is moot.
+- **Governance PR#284 is now CLOSED** (branch deleted) — action (3) done. It was a Renovate Contracts 3.0.0→4.0.0 bump manually marked "— abandoned"; Renovate had flagged it for autoclose but skipped because the branch was hand-modified, so it was waiting on a manual close.
+
+**Two corrections to the analysis this forces.** First, §6's live diagnosis was *over-pessimistic on one axis*: the "being right about a blocker and being assigned to it are different things" meta-finding did **not** reproduce here — the correct owner (a provider repo) was found and the fix shipped same-day. The real lesson is milder: **the first-filed owner was wrong** (SDD, not Rendering), and the cost was the re-root-cause hop, not an ownership stall. Second, and confirming the report's thesis: clearing one mislabeled sentinel-path bug still cost a **provider fix + a coherent-set publish + a registry flip + a Templates re-pin across three repos** — the exact multi-repo ceremony §3 describes, incurred for a one-line file relocation.
+
+**What this feeds back into §7.** The resolution sharpens the proposals in three specific ways — two additions and, importantly, one deliberate *non*-addition:
+
+- **It strengthens P1 with a live proof point** (see the P1 note): the auto-reconcile bot is a running half-implementation of P1, and it demonstrates the exact gap P1 names — automating the flip moved the churn from a human to the bot but did not remove the committed literal. P1 is no longer a hypothesis; it has a before/after.
+- **It is fresh evidence for P6** ("gate capabilities, not declarations"). The wedge was caught by `scaffold.providerWroteSddTree` — a guard that fired because the scaffold *actually failed to emit the skill tree*, not because a registry literal was mistyped. A real provider bug was caught by a capability check. That is P6 working as intended, in the wild.
+- **It tempts a fourth proposal that should be declined.** The genuinely new fact is that #609 was *filed against the wrong repo* — SDD (where the symptom surfaced) instead of Rendering (where the cause lived) — and the re-root-cause hop cost real time. This looks like it wants a mechanism ("detect the true owner at filing time"). It should not get one: the system self-corrected in ~2h via an ordinary worker, and minting that mechanism is precisely the accretion **P5/P6 exist to prevent**. Recording the temptation and declining it is the report passing its own test.
+
 ---
 
 ## 7. Proposals — leverage-ordered
@@ -106,6 +123,8 @@ Backwards compatibility is explicitly not a constraint here. These are ordered b
 
 ### P1 — Generate the derived registry fields; stop hand-flipping them. *(kills ~6 commits/day)*
 `package-version`, `version`, live tags, and the whole of `compatibility.md`'s literal region are **pure functions of ground truth** that the coherence gates already compute. Replace the "assert equality against a typed literal" gates with **generators**: the registry *reads* the feed/source value at generation time; there is nothing to flip and nothing to drift. Keep the fail-closed gate on the *semantic* fields only (ownership edges, coherence intent, scope meaning). This alone collapses the entire "publish-before-flip step 2" class and the `feed-autofix`/reconcile satellites. It is the single highest-leverage change in the system.
+
+> **Update (`.github@df8c970`):** the org has started down this path for one field — `skill-registry-autofix.yml` now **auto-reconciles `skills.yml` against producer manifests** (`.github#299`), and the reconcile commits are now bot-authored (`fs-gg-cross-repo-dispatch[bot]`) rather than hand-flipped. This is the right *direction* — derive from the producer, don't hand-copy — but note it is still landing as **registry commits** (four in the last day: #1195, #1219, #1255, #1257); the churn moved from a human's keyboard to the bot's, it did not disappear. The full P1 win requires the value to be *read at generation time* so there is no committed literal to reconcile at all.
 
 ### P2 — Collapse publish-before-flip by removing the two-repo split. *(kills the step-1/step-2 dance)*
 The schema document and its validator are in different repos *only* because of where they were first written. Options, any of which dissolves the rail: (a) move the `Fsgg.Registry` validator's **schema-of-record into `.github`** (a data file the CLI reads), so a schema change is one PR in `.github`; or (b) make the validator **schema-version-agnostic** — validate structure, not a pinned enum, so adding an enum value is not "schema growth" at all and needs no CLI republish. (b) is the deeper fix: it also removes the "additive is still growth" tax (`.github#686`) for the common case.
