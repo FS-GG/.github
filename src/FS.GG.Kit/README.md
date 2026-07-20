@@ -46,7 +46,14 @@ then materialize to the **repo root** and are committed, exactly as the `sync-bu
 are — this is the write arm that replaces that copy, not a live per-build input. `global.json` stays
 **unmanaged** (`.github#903`, per-repo SDK bands are legitimate) and is not carried. Build-config has no
 `repos.lock` row — that capability uses the ADR-0036 pin model, so "behind" is a version-pin decision
-(which `FS.GG.Kit` a receiver references), not drift.
+(which `FS.GG.Kit` a receiver references), not drift. Repo-specific overrides live in
+`Directory.Build.local.props` / `Directory.Packages.local.props`, which the materialize never touches.
+
+> **For the receiver switch (not this slice):** the per-receiver adoption must add the
+> **adopt/marker safety** `sync-build-config.sh` has (`.github#387`: refuse to clobber a *hand-authored*
+> `.props`, route it through an imported `*.local.props`), and should run the build-config materialize
+> **explicitly** (`-t:FsggKitMaterialize` with `FsggKitMaterializeOnBuild=false`) rather than on every
+> build. Tracked on [.github#1262](https://github.com/FS-GG/.github/issues/1262).
 
 ### Knobs (set before the package reference, or in a `Directory.Build.props`)
 
