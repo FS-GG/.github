@@ -1,6 +1,6 @@
 ---
 name: workRoadmap
-description: Drive a markdown roadmap to completion, one milestone at a time, each in a fresh disposable subagent. Use when a repo has a roadmap doc whose checklist items are milestones and you want them worked end-to-end without babysitting. For each unchecked milestone the parent spawns a NEW subagent that takes it to done via the SDD lifecycle (fs-gg-sdd-* — charter/specify through ship), ticks the roadmap with a progress note, runs the feedback pair (fs-gg-feedback-capture then fs-gg-feedback-report), and opens/reviews/merges its own PR on green — then the subagent dies and the parent spawns the next one against updated main. When the roadmap is fully checked, the parent writes a detailed timestamped report to docs/reports/ and lands that as its own PR. Runs in a scaffolded fsgg-sdd product repo where the fs-gg-sdd-* and fs-gg-feedback-* skills are materialized. Canonized by ADR-0053; see also the fs-gg-sdd-lifecycle and pnext-item skills.
+description: Drive a markdown roadmap to completion, one milestone at a time, each in a fresh disposable subagent. Use when a repo has a roadmap doc whose checklist items are milestones and you want them worked end-to-end without babysitting. For each unchecked milestone the parent spawns a NEW subagent that takes it to done via the SDD lifecycle (fs-gg-sdd-* — charter/specify through ship), ticks the roadmap with a progress note, runs fs-gg-feedback-report, and opens/reviews/merges its own PR on green — then the subagent dies and the parent spawns the next one against updated main. When the roadmap is fully checked, the parent writes a detailed timestamped report to docs/reports/ and lands that as its own PR. Runs in a scaffolded fsgg-sdd product repo where the fs-gg-sdd-* and fs-gg-feedback-report skills are materialized. Canonized by ADR-0053 (§6 as amended by ADR-0056); see also the fs-gg-sdd-lifecycle and pnext-item skills.
 ---
 
 # workRoadmap
@@ -21,10 +21,13 @@ across many disposable workers, driven off one markdown file.**
 ## Where this runs
 
 A **scaffolded fsgg-sdd product repo** — one where `fs-gg-sdd-*` (the lifecycle skills) and
-`fs-gg-feedback-capture` / `fs-gg-feedback-report` are materialized. If those skills are not present,
-you are in the wrong tree (e.g. FS-GG/.github itself, a kit source, does not materialize them) and
-this skill has nothing to drive. Stop and say so rather than degrading into a plain edit loop — the
-whole value here is the SDD-per-milestone discipline.
+`fs-gg-feedback-report` are materialized. If those skills are not present, you are in the wrong tree
+(e.g. FS-GG/.github itself, a kit source, does not materialize them) and this skill has nothing to
+drive. Stop and say so rather than degrading into a plain edit loop — the whole value here is the
+SDD-per-milestone discipline. (`fs-gg-feedback-capture` — the Spec Kit `after_*` hook skill — is
+**not** required: it is frozen and scheduled for removal, gated to the legacy `spec-kit` lane per
+ADR-0056 D3. On the default `sdd` lane it is absent, and the driver no longer invokes it; where a
+legacy tree still carries capture records, `fs-gg-feedback-report` reads them.)
 
 Preconditions, checked once before the loop:
 
@@ -114,9 +117,11 @@ The parent hands each subagent essentially this, with `<MILESTONE>` and `<ROADMA
 > 3. **Update the roadmap.** In `<ROADMAP>`, flip this milestone's top-level `- [ ]` → `- [x]` and
 >    append the one-line progress note (PR number filled in at step 5, merge date, one-clause
 >    outcome, feedback pointer). Commit it on your branch as part of the milestone.
-> 4. **Run the feedback pair, in order:** `fs-gg-feedback-capture`, then `fs-gg-feedback-report`.
->    Capture records this run; report rolls it up. File whatever findings they surface as issues (do
->    not silently drop them) and put their numbers in the roadmap progress note.
+> 4. **Run `fs-gg-feedback-report`.** It rolls up the milestone's feedback — reading any
+>    `fs-gg-feedback-capture` records only where a legacy `spec-kit` tree still has them; the driver
+>    itself invokes nothing else (capture is frozen and off the default `sdd` lane, ADR-0056 D3). File
+>    whatever findings report surfaces as issues (do not silently drop them) and put their numbers in
+>    the roadmap progress note.
 > 5. **Open a PR, review it, merge on green** — the [pnext-item](../pnext-item/SKILL.md) §5–6 way:
 >    open the PR, give it a real review, wait for required checks, and merge once green. A problem you
 >    find on the way you FIX in this PR when that keeps it reviewable, or file at its root cause when
@@ -163,5 +168,7 @@ a detailed report and lands it:
   authority on stage order, not this file.
 - [pnext-item](../pnext-item/SKILL.md) — the open-PR → review → merge-on-green loop each subagent
   reuses, and the "fix the cause, then take it" discipline for problems found mid-milestone.
-- `fs-gg-feedback-capture`, `fs-gg-feedback-report` — the post-ship feedback pair.
+- `fs-gg-feedback-report` — the post-ship feedback roll-up the driver runs (step 4). Its legacy
+  sibling `fs-gg-feedback-capture` is frozen and scheduled for removal (ADR-0056 D3); report reads
+  capture records where a `spec-kit` tree still has them, but the driver invokes only report.
 - ADR-0018 (transient/durable SDD artifact taxonomy) — what the lifecycle leaves behind per milestone.

@@ -271,14 +271,16 @@ skills:
   # ADR-0011 skill roots; the `driver` class is precisely what lets a `.github`-authored skill ride the
   # product-materialization fabric without pretending a producer owns it.
   #
-  # `materializes-when` is COMPOSED — the driver runs only where BOTH producers' skills are present
-  # (ADR-0053 §6): `fs-gg-sdd-*` (all `always`) AND the `fs-gg-feedback-*` pair. The pair's binding
-  # constraint is fs-gg-feedback-capture's `feedback == true and lifecycle == spec-kit` (report is
-  # `always`), so the AND-of-producers reduces to exactly that predicate — refuse-if-incomplete
-  # expressed structurally, not in prose. registry = manifest = bytes: sha256 is the canonical-body
-  # digest of the authored SKILL.md, reconciled from the driver manifest.
+  # `materializes-when` is COMPOSED — the driver runs only where the producers' skills are present
+  # (ADR-0053 §6, as amended by ADR-0056): `fs-gg-sdd-*` (all `always`) AND `fs-gg-feedback-report`
+  # (`always`). The one binding clause used to be fs-gg-feedback-capture's
+  # `feedback == true and lifecycle == spec-kit`, but ADR-0056 D3 froze capture and scheduled its
+  # removal, so the driver no longer ANDs against a skill that is going away (step 4 is report-only);
+  # the AND-of-producers collapses to `always`, and the driver finally materializes on the `sdd` lane
+  # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
+  # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
-  - { id: workRoadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: 197462deb8cbb375115af3e1d27c5ca32e168432afb6955d5ef7b4a0da8731b0, materializes-when: "feedback == true and lifecycle == spec-kit" }
+  - { id: workRoadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: 2b9313bf960ba6df3f5634ba19919f9013a9f6e58d83734f102bfa4705b06812, materializes-when: "always" }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #

@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-07-19
 - **Affects:** All scaffolded `fsgg-sdd` product components (they run the loop); FS.GG.SDD (owns the `fs-gg-sdd-*` lifecycle the loop drives) and FS.GG.Game (owns the `fs-gg-feedback-*` pair the loop runs); FS-GG/.github (canonical author of the `workRoadmap` skill).
+- **Amended by:** [ADR-0056](0056-sdd-is-the-default-lifecycle-spec-kit-is-legacy-and-scheduled-for-removal.md) §Decision.3 — **§6 is re-keyed.** Its refuse-if-incomplete clause no longer keys on the `fs-gg-feedback-*` *pair*: `fs-gg-feedback-capture` is Spec Kit `after_*` hook machinery frozen and scheduled for removal, so §6 keys on `fs-gg-feedback-report` (`always`) alone, alongside `fs-gg-sdd-*`. The loop's feedback step (Decision 3's `fs-gg-feedback-capture` then `fs-gg-feedback-report` sub-clause) becomes **report-only** — capture is no longer invoked, and where a legacy `spec-kit` tree still holds capture records `fs-gg-feedback-report` reads them — and the loop now materializes on the default `sdd` lane it was built for (the Rouge1 symptom ADR-0056 Context names). The one-milestone-per-fresh-disposable-subagent decision, the fail-closed ledger, and the merge boundary are all unchanged.
 
 ## Context
 

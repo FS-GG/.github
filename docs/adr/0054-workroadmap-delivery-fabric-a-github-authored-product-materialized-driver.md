@@ -5,7 +5,9 @@
 - **Affects:** FS-GG/.github (owns `registry/skills.yml`, the new producer emitter for its own authored drivers, the scaffold-time materializer wiring, and the `contract-coherence.yml` pin); FS.GG.SDD (owns `Fsgg.Registry`, which learns the driver-class vocabulary and publishes the CLI carrying it).
 - **Resolves:** the delivery-fabric question [ADR-0053](0053-roadmap-driven-milestone-loop-disposable-sdd-subagents.md) §Consequences deferred ("Delivery to product trees is a follow-up, not decided here"). No prior decision is changed — every ADR-0053 decision stands.
 - **Decides:** [FS-GG/.github#1224](https://github.com/FS-GG/.github/issues/1224)
-- **Amended by:** [ADR-0057](0057-operator-scope-a-github-authored-never-materialized-skill-class.md) — adds a **fourth** class, `scope: operator` (`.github`-authored, materialized nowhere), beside the three named here. The three classes above and the `scope: driver` decision are unchanged.
+- **Amended by:**
+  - [ADR-0057](0057-operator-scope-a-github-authored-never-materialized-skill-class.md) — adds a **fourth** class, `scope: operator` (`.github`-authored, materialized nowhere), beside the three named here. The three classes above and the `scope: driver` decision are unchanged.
+  - [ADR-0056](0056-sdd-is-the-default-lifecycle-spec-kit-is-legacy-and-scheduled-for-removal.md) §Decision.3 — the composed (AND-of-producers) `materializes-when` this ADR gives `workRoadmap` **collapses to `fs-gg-feedback-report`'s `always`**. Its one binding clause was `fs-gg-feedback-capture`'s `feedback == true and lifecycle == spec-kit`; ADR-0056 freezes capture and schedules its removal, so the driver no longer ANDs against a skill that is going away, and it now materializes on the `sdd` lane. The `scope: driver` class, `.github`'s producer emitter, and the reconcile fabric are all unchanged — only this one row's predicate value changes ([.github#1247](https://github.com/FS-GG/.github/issues/1247)).
 
 ## Context
 
