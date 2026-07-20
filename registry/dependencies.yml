@@ -240,28 +240,31 @@ contracts:
     surface: ".fsgg/governance.yml"
     consumers: [governance]
   - id: governance-reference-gate-set
-    version: "1.2.1.1"
-    package-version: "1.2.1.1"
+    version: "1.3.0"
+    package-version: "1.3.0"
     owner: governance
     # .github#15 (H3, epic #16 Pillar 3): the validated reference .fsgg gate set published as a
     # content-only NuGet package FS.GG.Governance.ReferenceGateSet — ONE versioned source of truth
     # for the Templates overlay drift gate (Templates#14). Packs the four files IN PLACE from
     # samples/sdd-reference-gate-set/.fsgg/ (single source, byte-identical, 0 drift); ships no
     # assembly and no dependency group (content-only — installing imposes no governance runtime
-    # dependency). Version is DERIVED from the four contained schemaVersion declarations:
-    # Version = "{governance}.{capabilities}.{policy}.{tooling}" = 1.2.1.1 today; a bump to any one
-    # file's schemaVersion changes exactly one segment (deterministic + distinguishable, ADR-0007).
+    # dependency). Version is a plain SemVer that bumps on ANY change to the packed set — content
+    # or schema (content-only >= PATCH; a change a consumer drift gate must re-pin to absorb >= MINOR;
+    # a break >= MAJOR) = 1.3.0 today. It no longer encodes the contained schemaVersions; those move
+    # INTO the package as a machine-readable schema-manifest.json ({governance, capabilities, policy,
+    # tooling}) packed alongside the .fsgg set (ADR-0055, superseding ADR-0007's 4-segment
+    # {governance}.{capabilities}.{policy}.{tooling} rule in full).
     # Production is gated on the G1–G7 reference-set guard, so the shipped artifact is provably the
     # tested artifact. It bundles the governance-policy@1 / governance-capabilities@2 /
     # governance-tooling@1 / governance-descriptor@1 surfaces as one pinnable set.
-    # Feed: PUBLISHED — live on the org GitHub Packages feed at 1.2.1.1 (check-feed-coherence.py
+    # Feed: PUBLISHED — live on the org GitHub Packages feed at 1.3.0 (check-feed-coherence.py
     # verifies it as a mandatory daily subject) + nuget.org (ADR-0012 dual-publish). The org-feed
     # push LANDED once the admin blocker .github#21 closed (2026-06-28); the earlier "local pack
     # now / org push DEFERRED (admin-blocked)" state is retired (.github#382).
     surface: >
       FS.GG.Governance.ReferenceGateSet content package —
       contentFiles/any/any/.fsgg/{governance,capabilities,policy,tooling}.yml, byte-identical to
-      samples/sdd-reference-gate-set/.fsgg/; version-derivation rule per ADR-0007.
+      samples/sdd-reference-gate-set/.fsgg/; version-derivation rule per ADR-0055.
     consumers: [templates]   # Templates#14 overlay drift gate (git diff --exit-code)
     bundles: [governance-policy, governance-capabilities, governance-tooling, governance-descriptor]
   - id: fs-gg-ui-template
