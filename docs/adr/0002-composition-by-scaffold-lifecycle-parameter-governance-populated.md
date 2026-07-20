@@ -3,6 +3,9 @@
 - **Status:** Accepted
 - **Date:** 2026-06-27
 - **Affects:** FS.GG.Rendering, FS.GG.SDD, FS.GG.Governance, FS.GG.Templates, .github
+- **Amended by:**
+  - [ADR-0004](0004-constitution-ownership-for-lifecycle-sdd-products.md) §D4 — constitution ownership for `lifecycle=sdd` products: SDD owns it.
+  - [ADR-0056](0056-sdd-is-the-default-lifecycle-spec-kit-is-legacy-and-scheduled-for-removal.md) §D2 — the `lifecycle` **default** flips `spec-kit → sdd` and `spec-kit` becomes legacy, frozen, and scheduled for removal. D1 (composition-by-scaffold) and D3 (governance populated-by-default) stand.
 
 ## Context
 
