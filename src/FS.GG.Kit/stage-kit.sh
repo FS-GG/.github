@@ -96,8 +96,9 @@ done
 # to the coordination kit as the engine manifest (#1077) and is staged above as a `config` row.
 SBC="$SRC_ROOT/scripts/sync-build-config.sh"
 [ -f "$SBC" ] || die "sync-build-config.sh not found at $SBC (is this a .github checkout?)"
-# Extract the FILES=(...) array body: drop the delimiters, strip comments and quotes.
-bc_files=($(sed -n '/^FILES=(/,/^)/{/^FILES=(/d;/^)/d;s/#.*//;s/"//g;p}' "$SBC"))
+# Extract the FILES=(...) array body: drop the delimiters, strip comments / quotes / whitespace, and
+# read one member per line (mapfile, not word-splitting — SC2207).
+mapfile -t bc_files < <(sed -n '/^FILES=(/,/^)/{/^FILES=(/d;/^)/d;s/#.*//;s/[[:space:]"]//g;/^$/d;p}' "$SBC")
 [ "${#bc_files[@]}" -gt 0 ] || die "could not derive the build-config FILES set from $SBC (its FILES=(...) shape changed?)"
 for rel in "${bc_files[@]}"; do
   from="$SRC_ROOT/dist/dotnet/$rel"

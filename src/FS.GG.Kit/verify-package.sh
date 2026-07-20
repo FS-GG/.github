@@ -42,7 +42,7 @@ for kind in skill client config; do
   n_rows=$((n_rows + c))
 done
 [ "$n_ck" -eq "$n_rows" ] || fail "staged $n_ck coordination-kit file(s) but registry names $n_rows row(s) — the derived set is incomplete"
-n_files="$(sed -n '/^FILES=(/,/^)/{/^FILES=(/d;/^)/d;s/#.*//;s/"//g;p}' "$SRC_ROOT/scripts/sync-build-config.sh" | grep -c .)"
+n_files="$(sed -n '/^FILES=(/,/^)/{/^FILES=(/d;/^)/d;s/#.*//;s/[[:space:]"]//g;/^$/d;p}' "$SRC_ROOT/scripts/sync-build-config.sh" | grep -c .)"
 [ "$n_bc" -eq "$n_files" ] || fail "staged $n_bc build-config file(s) but sync-build-config names $n_files FILES member(s)"
 echo "   $n_ck coordination-kit file(s) = $n_rows registry rows (digests in repos.lock); $n_bc build-config file(s) = $n_files sync-build-config FILES"
 
