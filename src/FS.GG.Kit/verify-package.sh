@@ -26,20 +26,30 @@ while IFS=$'\t' read -r _kind _pkgrel _dest sha; do
   grep -qi "^$sha  " "$LOCK" || fail "staged digest $sha is not in registry/repos.lock (derive-don't-restate broken)"
 done < "$WORK/stage/kit-manifest.tsv"
 n_staged="$(wc -l < "$WORK/stage/kit-manifest.tsv")"
-echo "   $n_staged staged kit file(s), all digests present in repos.lock"
+# COUNT parity, not just subset: the manifest must carry EVERY kit row, not merely no extras. Derive the
+# expected count from the same reader, so a kit row added/removed never needs an edit here (ADR-0058) —
+# a truncated manifest (a silently smaller kit) fails instead of passing the subset check above.
+n_rows=0
+for kind in skill client config; do
+  c="$(bash "$SRC_ROOT/scripts/repos.sh" kit --field source --kind "$kind" --registry "$SRC_ROOT/registry/repos.yml" | grep -c .)" || true
+  n_rows=$((n_rows + c))
+done
+[ "$n_staged" -eq "$n_rows" ] || fail "staged $n_staged kit file(s) but registry names $n_rows kit row(s) — the derived set is incomplete"
+echo "   $n_staged staged kit file(s) = $n_rows registry kit row(s), all digests present in repos.lock"
 
 echo "== 2. pack + content assert =="
 dotnet pack "$HERE/FS.GG.Kit.csproj" -c Release -o "$WORK/out" >/dev/null
 nupkg="$(echo "$WORK"/out/FS.GG.Kit.*.nupkg)"
 [ -f "$nupkg" ] || fail "no nupkg produced"
 entries="$(unzip -Z1 "$nupkg")"
-for want in \
-  "build/FS.GG.Kit.props" "build/FS.GG.Kit.targets" "README.md" "kit/kit-manifest.tsv" \
-  "kit/client/fsgg-coord" "kit/config/dotnet-tools.json" \
-  "kit/skills/cross-repo-coordination/SKILL.md" "kit/skills/intra-repo-parallel-work/SKILL.md" \
-  "kit/skills/check-board/SKILL.md" "kit/skills/pnext-item/SKILL.md"; do
+# Fixed build logic the package always ships...
+for want in "build/FS.GG.Kit.props" "build/FS.GG.Kit.targets" "README.md" "kit/kit-manifest.tsv"; do
   grep -qx "$want" <<<"$entries" || fail "nupkg is missing $want"
 done
+# ...and EVERY member the manifest names, derived — not a restated list of skill names (ADR-0058).
+while IFS=$'\t' read -r _kind pkgrel _dest _sha; do
+  grep -qx "kit/$pkgrel" <<<"$entries" || fail "nupkg is missing kit/$pkgrel (named by the manifest)"
+done < "$WORK/stage/kit-manifest.tsv"
 echo "   nupkg carries every kit member + manifest + build logic"
 
 echo "== 3. materialize into a fresh receiver root =="

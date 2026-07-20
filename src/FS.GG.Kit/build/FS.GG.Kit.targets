@@ -112,6 +112,14 @@
                 }
 
                 ClientFiles = clients.ToArray();
+                // A floor, not decoration: an EMPTY or truncated-to-zero manifest would otherwise
+                // materialize nothing and report success — a silently missing kit, the one failure mode
+                // ADR-0062 exists to rule out. The producer guards this too (stage-kit.sh), but the
+                // consumer-side task is where the load-bearing guarantee is asserted, so it holds the
+                // line independently.
+                if (verified == 0 && !Log.HasLoggedErrors)
+                    Log.LogError("FS.GG.Kit: kit-manifest.tsv named no files to materialize — the package is malformed or truncated.");
+
                 if (!Log.HasLoggedErrors)
                     Log.LogMessage(MessageImportance.High,
                         "FS.GG.Kit: materialized " + verified + " file(s) (" + copied + " written) into " + ReceiverRoot + ".");
@@ -130,9 +138,11 @@
       <Output TaskParameter="ClientFiles" ItemName="_FsggKitClient" />
     </MaterializeKit>
     <!-- The client shim must be executable; File API cannot set the +x bit on netstandard, so chmod on
-         unix. Windows has no exec bit and needs none. -->
+         unix. Windows has no exec bit and needs none. Each path is quoted — a receiver checkout under a
+         spaced path (macOS "Application Support", Windows "C:\Users\John Doe") would otherwise split the
+         command and red the consumer's build. -->
     <Exec Condition="'$(OS)' != 'Windows_NT' And '@(_FsggKitClient)' != ''"
-          Command="chmod +x @(_FsggKitClient->'%(FullPath)', ' ')" />
+          Command="chmod +x @(_FsggKitClient->'&quot;%(FullPath)&quot;', ' ')" />
   </Target>
 
   <Target Name="FsggKitMaterializeOnBuild"
