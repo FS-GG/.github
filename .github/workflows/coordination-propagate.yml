@@ -63,10 +63,14 @@ jobs:
       - id: roster
         run: |
           set -euo pipefail
-          repos="$(bash scripts/repos.sh list --receives coordination-kit \
+          # Only the BYTE-COPY receivers: a repo that has switched to the FS.GG.Kit package
+          # (kit-delivery: package, ADR-0062/#1287) materializes the kit from its pin and must NOT
+          # receive a byte-copy sync PR. coordination-coherence still checks them all — this filter
+          # narrows the PUSH, not the drift check.
+          repos="$(bash scripts/repos.sh list --receives coordination-kit --kit-delivery byte-copy \
             | jq -R -s -c 'split("\n") | map(select(length>0)) | map({full:., owner:(split("/")[0]), name:(split("/")[1])})')"
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
-          echo "coordination-kit receivers: $repos"
+          echo "coordination-kit byte-copy receivers: $repos"
           # The PR title names what the kit contains; read it from the roster so adding a kit item
           # doesn't leave the title describing a subset of the diff (it said "cross-repo-coordination
           # + fsgg-coord" for months after intra-repo-parallel-work joined).

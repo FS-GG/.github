@@ -9,7 +9,10 @@
 #
 # Usage:
 #   repos.sh validate [--registry <file>] [--root <dir>]   # schema + invariants + kit digests
-#   repos.sh list (--receives <cap> | --all) [--field id|full] [--registry <file>]
+#   repos.sh list (--receives <cap> | --all) [--field id|full] [--kit-delivery byte-copy|package] [--registry <file>]
+#                                                           # --kit-delivery narrows a --receives
+#                                                           # coordination-kit query to how the repo
+#                                                           # takes the kit (absent row == byte-copy).
 #                                                           # roster query for consumers (apply-labels …).
 #                                                           # --all: every rostered repo, receives or not.
 #   repos.sh caps [--field id|workflow|script|push|receivers|reason] [--registry <file>]
@@ -185,14 +188,15 @@ cmd_relock() {
 }
 
 cmd_list() {
-  local cap="" all=0 field="full" reg="$REG_DEFAULT"
+  local cap="" all=0 field="full" reg="$REG_DEFAULT" delivery=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --receives) need_val list "$@"; cap="$2";   shift 2 ;;
-      --all)      all=1;                          shift 1 ;;
-      --field)    need_val list "$@"; field="$2"; shift 2 ;;
-      --registry) need_val list "$@"; reg="$2";   shift 2 ;;
-      *)          die "list: unknown arg '$1'." ;;
+      --receives)     need_val list "$@"; cap="$2";      shift 2 ;;
+      --all)          all=1;                             shift 1 ;;
+      --field)        need_val list "$@"; field="$2";    shift 2 ;;
+      --kit-delivery) need_val list "$@"; delivery="$2"; shift 2 ;;
+      --registry)     need_val list "$@"; reg="$2";      shift 2 ;;
+      *)              die "list: unknown arg '$1'." ;;
     esac
   done
   # --all is how repos-audit.sh sweeps for an adopted-but-UNROSTERED capability: a repo that wires a
@@ -204,12 +208,24 @@ cmd_list() {
     [ -n "$cap" ] || die "list: --receives <cap> or --all is required."
   fi
   case "$field" in id|full) ;; *) die "list: --field must be id or full." ;; esac
+  # --kit-delivery filters coordination-kit receivers by HOW they take the kit (ADR-0062, #1287):
+  # 'byte-copy' (the default when the row omits it) or 'package'. coordination-propagate asks for the
+  # byte-copy set so it SKIPS a receiver that has switched to the FS.GG.Kit package; coordination-
+  # coherence asks for none and checks them all. Absent field == 'byte-copy', so the filter is a pure
+  # narrowing that adding the field to no row changes nothing.
+  case "$delivery" in ""|byte-copy|package) ;; *) die "list: --kit-delivery must be byte-copy or package." ;; esac
+  if [ -n "$delivery" ] && [ "$all" = 1 ]; then
+    die "list: --kit-delivery filters coordination-kit receivers; use it with --receives, not --all."
+  fi
   [ -f "$reg" ] || die "registry not found: $reg"
   if [ "$all" = 1 ]; then
     yaml2json "$reg" | jq -r --arg f "$field" '.repos[] | .[$f]'
   else
-    yaml2json "$reg" | jq -r --arg cap "$cap" --arg f "$field" \
-      '.repos[] | select((.receives // []) | index($cap)) | .[$f]'
+    yaml2json "$reg" | jq -r --arg cap "$cap" --arg f "$field" --arg d "$delivery" \
+      '.repos[]
+       | select((.receives // []) | index($cap))
+       | select($d == "" or ((."kit-delivery" // "byte-copy") == $d))
+       | .[$f]'
   fi
 }
 
@@ -339,8 +355,8 @@ cmd_validate() {
   [ -z "$dups" ] || err "duplicate repo id(s): $(echo "$dups" | tr '\n' ' ')"
 
   # --- per-repo fields + receives vocabulary ---
-  local id full role recv cap
-  while IFS=$'\t' read -r id full role recv; do
+  local id full role recv delivery cap
+  while IFS=$'\t' read -r id full role recv delivery; do
     [ -n "$id" ] || continue
     [[ "$id"   =~ ^[a-z0-9.][a-z0-9._-]*$ ]] || err "repo id '$id' must be lowercase kebab/dotted."
     [[ "$full" =~ ^FS-GG/.+ ]]               || err "repo '$id' full '$full' must be 'FS-GG/<repo>'."
@@ -349,7 +365,18 @@ cmd_validate() {
       echo "$KNOWN_CAPS" | jq -e --arg c "$cap" 'index($c)' >/dev/null \
         || err "repo '$id' receives unknown capability '$cap' (known: $(echo "$KNOWN_CAPS" | jq -r 'join(", ")'))."
     done
-  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" "))] | @tsv')
+    # kit-delivery (ADR-0062, #1287): how this repo takes the coordination kit. Optional; the ABSENCE
+    # means 'byte-copy', so it is not written on a row until that row switches to 'package'. It is
+    # meaningful ONLY on a coordination-kit receiver — set on anything else it is a silent no-op that
+    # reads as intent, so reject it. '@tsv' emits an empty field when the key is absent.
+    case "$delivery" in
+      "") ;;
+      byte-copy|package)
+        echo "$recv" | grep -qw coordination-kit \
+          || err "repo '$id' sets kit-delivery '$delivery' but does not receive coordination-kit — the field only governs how a coordination-kit receiver takes the kit." ;;
+      *) err "repo '$id' kit-delivery '$delivery' invalid (byte-copy|package)." ;;
+    esac
+  done < <(echo "$json" | jq -r '.repos[] | [.id, .full, .role, ((.receives // []) | join(" ")), (."kit-delivery" // "")] | @tsv')
 
   # --- exactly one authority, matching the top-level, and not a kit receiver ---
   local authct; authct="$(echo "$json" | jq '[.repos[] | select(.role=="authority")] | length')"
