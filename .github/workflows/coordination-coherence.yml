@@ -9,8 +9,8 @@
 # to check. Mirrors the contract-coherence / skill-union-assert reusable-gate pattern.
 #
 # ON A PULL REQUEST THE GATE ATTRIBUTES THE DRIFT (#450). Canonical is `.github@main`, which moves
-# constantly, and the receiver's own main moves behind it in the window before coordination-propagate's
-# sync PR lands. The check used to compare the PR's tree against canonical and report one identical
+# constantly, and the receiver's own main moves behind it in the window before a Renovate FS.GG.Kit pin
+# bump re-materializes the kit. The check used to compare the PR's tree against canonical and report one identical
 # `DRIFT` for all three of:
 #
 #   1. the PR itself edits a vendored kit file   — real drift, and the author's to fix

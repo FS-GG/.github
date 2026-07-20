@@ -25,12 +25,13 @@
 #   PULL (the gate)   .github/workflows/coordination-coherence.yml checks out both this repo and the
 #                     caller and runs `--check`, so a receiver's CI FAILS when its kit has drifted.
 #                     It reports drift. It cannot fix it.
-#   PUSH (the arm)    .github/workflows/coordination-propagate.yml, on a push to .github's main that
-#                     touches a kit file, runs this script in APPLY mode against every
-#                     `receives: coordination-kit` repo in the roster, opens/updates a rolling
-#                     `coordination-kit/sync` PR there, and lands it (auto-merge, or a direct merge
-#                     once the receiver's own required gates are green). THAT is what propagates.
-#                     Nothing else does — a receiver does not poll, and no schedule re-syncs it.
+#   DELIVERY          each receiver takes the kit as the versioned FS.GG.Kit package (ADR-0062): it
+#                     references the package at a pinned version and MATERIALIZES the kit onto disk
+#                     (.config/kit/FS.GG.Kit.receiver.proj). A hub change is one publish; Renovate bumps
+#                     the pin and kit-materialize.yml re-materializes the committed kit on that PR. The
+#                     byte-copy PUSH arm (coordination-propagate.yml, which ran this script in APPLY
+#                     mode to open a rolling sync PR per receiver) was retired in #1262 step 3. This
+#                     script's APPLY mode lives on — kit-materialize's verify + the materialize use it.
 #
 # Managed kit files (source here -> path in the receiver):
 #   scripts/fsgg-coord                                          -> scripts/fsgg-coord              (chmod +x)
@@ -310,8 +311,9 @@ fi
 # the author's to fix:
 #
 #   1. the branch itself edits a vendored kit file       -> REAL drift. The kit is owned by .github.
-#   2. the base branch is BEHIND canonical               -> the REPO's drift. coordination-propagate owes
-#                                                           it a sync PR; a PR author cannot fix it.
+#   2. the base branch is BEHIND canonical               -> the REPO's drift. A Renovate FS.GG.Kit bump
+#                                                           (re-materialized by kit-materialize) brings it
+#                                                           current; a PR author cannot fix it.
 #   3. the branch predates a kit sync already on base    -> nothing is wrong AT ALL.
 #
 # Canonical is `.github@main`, which moves constantly, so (2) and (3) fire on PRs that never went near
@@ -350,7 +352,7 @@ done <<< "$head_drift"
 if [ -n "$authored_drift" ]; then
   announce error "$authored_drift"
   echo "::error::coordination-sync: this branch changes a vendored kit file and the result does NOT match canonical." >&2
-  echo "::error::coordination-sync: the kit is owned by FS-GG/.github — land the change THERE and let coordination-propagate carry it back, or run 'coordination-sync $target' from a .github checkout to restore it." >&2
+  echo "::error::coordination-sync: the kit is owned by FS-GG/.github — land the change THERE (it reaches this repo as an FS.GG.Kit package bump via kit-materialize), or run 'coordination-sync $target' from a .github checkout to restore it." >&2
   exit 1
 fi
 
@@ -382,6 +384,6 @@ fi
 # red on the branch, it does not retire the red on the repo.
 announce warning "$inherited_drift"
 echo "::warning::coordination-sync: '$base_ref' is BEHIND the canonical kit ($(printf '%s' "$inherited_drift" | grep -c .) file(s) above). This is NOT caused by your branch and CANNOT be fixed in it." >&2
-echo "::warning::coordination-sync: coordination-propagate owes ${repo:-this repo} a 'coordination-kit/sync' PR; landing that is what clears this. Your PR is unaffected — merging it neither causes nor worsens the drift." >&2
+echo "::warning::coordination-sync: a Renovate FS.GG.Kit bump (re-materialized by kit-materialize) brings ${repo:-this repo} current; landing that is what clears this. Your PR is unaffected — merging it neither causes nor worsens the drift." >&2
 echo "coordination-sync: OK — kit drift on '$base_ref' is not this branch's (advisory above)."
 exit 0

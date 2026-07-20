@@ -330,8 +330,8 @@ printf '%s' "$out3" | grep -q '::error::' \
 # not red. B1 is main-as-it-was, so pointing --base-ref at it reproduces exactly that window.
 expect_out "base-ref: (2) main behind canonical -> rc 0 (not the branch's drift)" 0 \
   'is BEHIND the canonical kit' bash "$SYNC" --check --base-ref "$B1" "$G"
-expect_out "base-ref: (2) ...and names the arm that owes the fix" 0 \
-  'coordination-propagate owes' bash "$SYNC" --check --base-ref "$B1" "$G"
+expect_out "base-ref: (2) ...and names the delivery path that clears it" 0 \
+  'kit-materialize' bash "$SYNC" --check --base-ref "$B1" "$G"
 out2="$(bash "$SYNC" --check --base-ref "$B1" "$G" 2>&1)"
 printf '%s' "$out2" | grep -q '::error::' \
   && bad "base-ref: (2) a repo-level drift must not red an innocent PR" "$out2" \
