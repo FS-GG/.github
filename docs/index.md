@@ -44,8 +44,10 @@ Kept current — the system as built, and the machinery that keeps it coherent.
   the [2026-06-30 project-management topologies analysis](2026-06-30-project-management-topologies-adr-registry-projects-v2-analysis.md),
   the [2026-07-12 up-front design practices report](reports/2026-07-12-up-front-design-practices-and-the-proposal-gap.md)
   (what feeds the ADR pipeline, and the stale `Blocked by` premise in ADR-0034),
-  and the [2026-07-12 issue-throughput & recurring-error-loops audit](reports/2026-07-12-issue-throughput-and-recurring-error-loops.md)
-  (which of the day's 127 closures were real progress, and the five loops that regenerate).
+  the [2026-07-12 issue-throughput & recurring-error-loops audit](reports/2026-07-12-issue-throughput-and-recurring-error-loops.md)
+  (which of the day's 127 closures were real progress, and the five loops that regenerate),
+  and the [2026-07-20 cross-repo coordination overhead root-cause](reports/2026-07-20-cross-repo-coordination-overhead-root-cause.md)
+  (why ~76% of the day's commits were coordination bookkeeping, and the one anti-pattern under the five friction engines).
 
 The current recommendation is to stop treating the UI runtime, lifecycle
 workflow, and governance system as one self-hosting platform. The rendering
