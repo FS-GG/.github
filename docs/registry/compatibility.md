@@ -75,7 +75,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | Contract | Owner | version | package-version |
 |---|---|---|---|
 | `scaffold-provider` | FS.GG.SDD | `1.1.0` | — |
-| `fsgg-contracts` | FS.GG.SDD | `4.0.0` | `4.0.0` |
+| `fsgg-contracts` | FS.GG.SDD | `5.0.0` | `5.0.0` |
 | `scaffold-provenance` | FS.GG.SDD | `1.1.0` | — |
 | `governance-handoff` | FS.GG.SDD | `1.1.0` | — |
 | `governance-policy` | FS.GG.Governance | `1` | — |
