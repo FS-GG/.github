@@ -459,20 +459,17 @@ if bash "$REPOS_SH" validate >/dev/null 2>&1; then ok "the checked-in registry/r
 else bad "real registry/repos.yml validates" "$(bash "$REPOS_SH" validate 2>&1)"; fi
 
 # --- CI guard on the gate itself (#266) ---
-# Two DIFFERENT workflows are armed by a hand-maintained `paths:` filter that must enumerate every
-# kit source, and in both a missing entry fails SILENTLY — the workflow simply never runs, and a
-# workflow that never runs reports nothing at all:
+# repos-registry-selftest.yml is armed by a hand-maintained `paths:` filter that must enumerate every
+# kit source, and a missing entry fails SILENTLY — the workflow simply never runs, and a workflow that
+# never runs reports nothing at all: `validate` is the only thing asserting the kit digests, so a kit
+# source outside its filter is never digest-checked and the gate is green because it never ran (#266).
 #
-#   repos-registry-selftest.yml  `validate` is the only thing asserting the kit digests. A kit source
-#                                outside its filter is never digest-checked; the gate is green because
-#                                it never ran (#266).
-#   coordination-propagate.yml   the PUSH arm. A kit source outside its filter PROPAGATES NOTHING:
-#                                receivers keep an old copy, their `coordination-kit` gate reddens,
-#                                and someone hand-syncs it (#463). Its own header warns of exactly
-#                                this, and nothing asserted it — so assert it here.
+# (coordination-propagate.yml — the byte-copy PUSH arm — was the OTHER subject asserted here until
+# #1262 step 3 retired it. Every receiver now takes the kit as the FS.GG.Kit package via
+# kit-materialize, so there is no byte-copy `paths:` filter left to keep complete.)
 #
-# Same check, same kit, two subjects. Assert every kit source (and, for skills, the .agents mirror
-# that carries the same bytes) is covered, on each trigger the workflow is supposed to fire on.
+# Assert every kit source (and, for skills, the .agents mirror that carries the same bytes) is covered,
+# on each trigger the workflow is supposed to fire on.
 uncovered_for() {                             # <workflow-path> <trigger>[,<trigger>...]
   python3 - "$REPO_ROOT" "$1" "$2" <<'PY'
 import sys, yaml, re, pathlib
@@ -591,10 +588,6 @@ PY
 uncovered="$(caps_uncovered_for ".github/workflows/repos-registry-selftest.yml" "pull_request,push")"
 if [ -z "$uncovered" ]; then ok "every capability's detector subject is covered by the selftest paths: filter"
 else bad "capability detector ungated — renaming it leaves the roster invalid, green" "$uncovered"; fi
-
-uncovered="$(uncovered_for ".github/workflows/coordination-propagate.yml" "push")"
-if [ -z "$uncovered" ]; then ok "every kit source is covered by the propagate paths: filter"
-else bad "kit source unpropagated — an edit to it never reaches the receivers (#463)" "$uncovered"; fi
 
 # ---- build-config: the capability that was a legal word nobody said (#626) ------------------------
 # FOUR repos (sdd, rendering, governance, game) run a `Shared-build-config drift check` against

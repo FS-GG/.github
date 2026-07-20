@@ -151,10 +151,12 @@ item), **#497/#507** (the claim scan dies at 128 KiB — **state is travelling t
 
 ### 2.3 There is no module boundary, so predicates multiply
 
-Five copies of schedulability (#485). Six statements of the claim protocol. Three
-enumerations of the kit — one of which, `coordination-propagate.yml:24-37`, carries its own
+Five copies of schedulability (#485). Six statements of the claim protocol. The kit was
+enumerated in three places — one of which, `coordination-propagate.yml`, carried its own
 epitaph: *"HAND-MAINTAINED, and it must match repos.yml `kit:` … A kit item missing here does
-not fail: **it PROPAGATES NOTHING, silently**."*
+not fail: **it PROPAGATES NOTHING, silently**."* That copy is now gone — #1262 step 3 retired
+the byte-copy PUSH arm once every receiver took the kit as the FS.GG.Kit package — so the
+enumeration that most invited silent drift has been removed rather than deduplicated.
 
 ### 2.4 The budget is a shared global with no owner
 

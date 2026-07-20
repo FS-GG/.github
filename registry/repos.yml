@@ -37,20 +37,19 @@
 # repo that is not rostered is drift — so this list can no longer rot without a red check. Do not
 # hand-maintain it against intent; maintain it against what the callers actually do.
 #
-# `kit-delivery` (OPTIONAL, per repo; ADR-0062 / #1287) — HOW a coordination-kit receiver takes the
-# kit, decoupling the byte-copy PUSH from the drift CHECK that `receives: coordination-kit` used to
-# fuse:
-#   byte-copy (the DEFAULT when the field is ABSENT) — the authority opens a sync PR via
-#             `coordination-propagate`; the receiver commits the bytes; `coordination-coherence`
-#             checks them against canonical.
-#   package   — the receiver references the versioned `FS.GG.Kit` package and MATERIALIZES the kit
-#             from its pin (a Renovate bump replaces the sync PR). `coordination-propagate` SKIPS it
-#             (`repos.sh list ... --kit-delivery byte-copy`); `coordination-coherence` STILL checks
-#             it (materialized bytes == canonical at pin==latest, so the check is undisturbed).
-# Legal only on a coordination-kit receiver, and only ever WRITTEN as `package` (absent == byte-copy),
-# so a row carries it exactly while that receiver is migrated. When every receiver reads `package`,
-# `coordination-propagate` + the `*-selftest` family retire (#1262 step 3). `repos.sh validate`
-# enforces the vocabulary and the receiver requirement.
+# `kit-delivery` (per repo; ADR-0062 / #1287) — HOW a coordination-kit receiver takes the kit. It once
+# decoupled the byte-copy PUSH from the drift CHECK that `receives: coordination-kit` used to fuse:
+#   package   — the receiver references the versioned `FS.GG.Kit` package and MATERIALIZES the kit from
+#             its pin; a Renovate bump + `kit-materialize.yml` refresh the committed kit (they replace
+#             the sync PR). `coordination-coherence` checks the materialized bytes against canonical
+#             (pin==latest, so the check is undisturbed).
+#   byte-copy (the schema default when the field is ABSENT) — the RETIRED path: the authority opened a
+#             sync PR via `coordination-propagate`; the receiver committed the bytes. Every receiver now
+#             reads `package`, so `coordination-propagate` (the byte-copy PUSH) was retired in #1262
+#             step 3. `coordination-coherence` (the CHECK) and `scripts/coordination-sync` + its selftest
+#             STAY — the check still verifies each receiver's materialized kit against canonical.
+# Legal only on a coordination-kit receiver, and only ever WRITTEN as `package` (absent == byte-copy).
+# `repos.sh validate` enforces the vocabulary and the receiver requirement.
 
 schemaVersion: 6
 updated: 2026-07-17
