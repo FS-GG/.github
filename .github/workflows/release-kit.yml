@@ -1,0 +1,196 @@
+name: release-kit
+
+# Publishes FS.GG.Kit — the coordination kit as one versioned artifact (ADR-0062, .github#1262) — to the
+# org GitHub Packages feed and (dormant, see below) nuget.org. `.github` does not normally own a release
+# workflow; this is the THIRD exception, on the same grounds as release-coord-engine.yml and
+# release-new-sdd-workspace.yml: the artifact lives here, so its publish does too (ADR-0039 §5).
+#
+# WHY THIS PUBLISH IS LOAD-BEARING. Slice 1 (.github#1274) stood up the producer; nothing consumes it until
+# it is on a feed. Once published, a receiver references FS.GG.Kit at a pinned version and picks up kit
+# changes through the existing Renovate + dispatch fabric instead of N byte-copy sync PRs — the whole point
+# of ADR-0062. So this workflow is the distribution path the migration's remaining slices depend on.
+#
+# NUGET.ORG IS NOT OPTIONAL FOR REACH. Five of the six receiver repos restore FS.GG.* from PUBLIC nuget.org
+# (the org GitHub Packages feed needs a credential even to read; they do not configure one — ADR-0039). A
+# kit that exists only on the org feed cannot be consumed by most of the fleet, exactly as it cannot for the
+# coordination engine. So this dual-publishes (ADR-0012 org feed + nuget.org; ADR-0013 OIDC Trusted
+# Publishing, no stored key), the byte-identical .nupkg, no re-pack.
+#
+# Version is the EVALUATED csproj <Version> (msbuild -getProperty), never a grep and never pinned in this
+# header. A tag is a COHERENCE CHECK against it, never the source of truth. The kit ships STABLE (no
+# -preview): the shared Renovate preset sets ignoreUnstable=true, so a prerelease would be invisible to the
+# fabric that is supposed to carry it — refuse rather than ship it silently.
+#
+# Release by pushing a tag `kit/v<version>` matching the csproj <Version>; or run manually
+# (workflow_dispatch) with publish=true. A manual run with publish=false is a pack-only dry run.
+#
+# ⚠ THE nuget.org POLICY IS BOUND TO BOTH THIS WORKFLOW'S FILENAME AND THE PACKAGE ID. An org-owner must
+# create a Trusted Publishing policy for: Repository Owner `FS-GG` · Repository `.github` · Workflow file
+# `release-kit.yml` · package `FS.GG.Kit`, and `vars.NUGET_ORG_PUBLISH` must be `true` (it already is — the
+# coord engine relies on it; check-publish-flags.py asserts it). Renaming either afterwards invalidates the
+# token exchange (see .github#624). Until the policy exists, NuGet/login fail-closes with a 401 — the correct
+# direction: never a silent no-op, never a half-published set.
+
+on:
+  push:
+    tags: ['kit/v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Push to the feeds (false = pack-only dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-kit-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack & publish FS.GG.Kit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.repository == 'FS-GG/.github'
+    # Least-privilege: only this job gains packages: write, and the push uses the run-scoped GITHUB_TOKEN,
+    # never a PAT. id-token: write mints the GitHub OIDC token for nuget.org Trusted Publishing (ADR-0013).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Resolve version + publish decision
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          proj=src/FS.GG.Kit/FS.GG.Kit.csproj
+          version="$(dotnet msbuild "$proj" -getProperty:Version | tr -d '[:space:]')"
+          if [ -z "$version" ]; then
+            echo "::error::could not read <Version> from $proj (build defect); refusing to publish."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # A `-preview` kit would be INVISIBLE to the shared Renovate preset (ignoreUnstable: true), so
+          # receivers would never be bumped — defeating the point of shipping it as a package. Refuse.
+          case "$version" in
+            *-*) echo "::error::version '$version' is a prerelease. The org's Renovate preset sets ignoreUnstable=true, so receivers would never see it. Publish a stable 0.x version."; exit 1 ;;
+          esac
+
+          if [ "$EVENT" = "push" ]; then
+            # The tag is a coherence check against the evaluated version, never the source of truth.
+            tag_version="${REF#kit/v}"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::tag $REF ($tag_version) does not match csproj <Version> ($version)."
+              exit 1
+            fi
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$DISPATCH_PUBLISH" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore (locked)
+        run: dotnet restore src/FS.GG.Kit/FS.GG.Kit.csproj --locked-mode
+
+      # THE KIT IS NEVER PUBLISHED UNVERIFIED. verify-package.sh is the kit's gate: it proves the packed set
+      # is derived from registry/repos.yml (digests == repos.lock, count == registry rows), packs every
+      # member, materializes the skills/client/manifest onto disk, and fails loud on a tampered file. A
+      # publish that skipped it would ship the package without the evidence that it works.
+      - name: Verify — derive, pack, materialize, fail-loud
+        run: bash src/FS.GG.Kit/verify-package.sh
+
+      - name: Pack
+        run: dotnet pack src/FS.GG.Kit/FS.GG.Kit.csproj -c Release -o artifacts/packages
+
+      # A PACKAGE THAT PACKS BUT DOES NOT MATERIALIZE FROM A REAL RESTORE is the failure mode here. The gate
+      # above invokes the materialize target directly; this drives it the way a receiver will — a throwaway
+      # consumer with a real PackageReference, so NuGet's auto-import of build/FS.GG.Kit.{props,targets} and
+      # the on-build materialize are exercised end to end against the actual .nupkg.
+      - name: Smoke — a real consumer restores the package and gets the skills on disk
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"; recv="$work/recv"; mkdir -p "$recv"
+          # ABSOLUTE source path, and it has to be: a NuGet source in a config resolves RELATIVE TO THAT
+          # FILE. --configfile makes NuGet use ONLY this file, so the runner's global packageSourceMapping
+          # cannot filter the local feed out (the reason a naive local-feed restore 404s).
+          cat > "$work/isolated.config" <<CFG
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources><clear /><add key="local" value="${{ github.workspace }}/artifacts/packages" /></packageSources>
+          </configuration>
+          CFG
+          cat > "$work/Consumer.csproj" <<CSPROJ
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net10.0</TargetFramework>
+              <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              <IncludeBuildOutput>false</IncludeBuildOutput>
+              <FsggKitReceiverRoot>$recv</FsggKitReceiverRoot>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="FS.GG.Kit" Version="${{ steps.v.outputs.version }}" />
+            </ItemGroup>
+          </Project>
+          CSPROJ
+          dotnet restore "$work/Consumer.csproj" --configfile "$work/isolated.config"
+          dotnet build   "$work/Consumer.csproj" -c Release --no-restore
+          for root in .claude/skills .agents/skills; do
+            for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
+              [ -f "$recv/$root/$s/SKILL.md" ] || { echo "::error::packaged kit did not materialize $root/$s/SKILL.md from a real restore"; exit 1; }
+            done
+          done
+          [ -x "$recv/scripts/fsgg-coord" ] || { echo "::error::packaged kit did not materialize an executable scripts/fsgg-coord"; exit 1; }
+          echo "packaged kit: a real consumer restore materialized every skill + the executable client" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push to org GitHub Packages feed
+        if: steps.v.outputs.push == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Kit.*.nupkg" \
+            --source https://nuget.pkg.github.com/FS-GG/index.json \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      # nuget.org dual-publish (ADR-0012/0013). Gated on vars.NUGET_ORG_PUBLISH so org-feed releases keep
+      # working until an org-owner creates the Trusted Publishing policy for THIS workflow + FS.GG.Kit (see
+      # the header). Pushes the BYTE-IDENTICAL org-feed .nupkg, no re-pack.
+      - name: NuGet login (OIDC → short-lived key)
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push byte-identical package to nuget.org
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Kit.*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+            --skip-duplicate
+
+      - name: Summary
+        run: |
+          {
+            echo "### FS.GG.Kit ${{ steps.v.outputs.version }}"
+            if [ "${{ steps.v.outputs.push }}" = "true" ]; then
+              echo "Published \`FS.GG.Kit\` **${{ steps.v.outputs.version }}** to the org feed."
+            else
+              echo "Pack-only dry run — nothing pushed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
