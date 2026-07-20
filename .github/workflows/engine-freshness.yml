@@ -62,7 +62,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - name: Run the engine-freshness fixture (no network)
@@ -87,7 +87,7 @@ jobs:
           # `git log <tag>..HEAD` would fail — which this gate reports as an ERROR rather than as
           # "no drift", but an error every run is a gate nobody reads. Fetch it all.
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - name: Has the engine's source outrun the version the fleet restores?

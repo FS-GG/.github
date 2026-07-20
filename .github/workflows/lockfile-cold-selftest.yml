@@ -55,7 +55,7 @@ jobs:
       # green test for a step nobody runs. Declared, per this repo's convention: PyYAML is not on the
       # runner by default, and a fixture that silently skipped its own failure leg on ImportError would
       # be the fails-open shape epic #266 exists to stamp out.
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - name: Install PyYAML

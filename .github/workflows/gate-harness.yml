@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       # One leg drives gate.load_yaml, which lazily imports PyYAML — the same dependency every YAML
