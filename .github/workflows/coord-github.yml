@@ -61,6 +61,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
 
       # Locked restore, like every other project in the org. A silent version SUBSTITUTION fails here
       # rather than quietly changing what the tests ran against (ADR-0006; NU1603/NU1608 are errors).

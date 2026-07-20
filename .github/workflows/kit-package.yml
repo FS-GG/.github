@@ -52,6 +52,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
 
       # Locked restore — a silent dependency substitution fails here rather than changing what the
       # gate ran against (ADR-0006). The package has no dependencies today, so this is cheap; it arms

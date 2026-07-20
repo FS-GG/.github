@@ -114,6 +114,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
       - name: Build the engine (for the projection-closure fixture case)
         run: |
           set -euo pipefail
@@ -266,6 +268,8 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
       - name: Regenerate the projections the flip makes stale
         if: steps.run.outputs.changed == 'true' && !inputs.dry-run
         run: |
