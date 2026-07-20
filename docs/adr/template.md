@@ -32,6 +32,11 @@ thought of. If you genuinely considered no alternative, say that.>
 
 <!-- HOUSE RULES
 
+* Derive, don't restate (ADR-0058). If this ADR adds a gate, projection, registry field, or
+  scope class, name in one sentence what it DERIVES from — or argue why the fact has no
+  authoritative home. A hand-maintained copy of a fact that lives elsewhere must be justified as
+  the exception, not presented as the default. Prefer a generator to an assert-equality gate;
+  gate the capability, not the declaration.
 * A cross-repo boundary is decided in an ORG ADR (ADR-0033 §5). A repo-local ADR may EXECUTE
   such a decision, and must CITE the org ADR that made it.
 * Scope: ADRs here are for decisions that span more than one FS-GG repo. A decision that
