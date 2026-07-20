@@ -71,6 +71,7 @@ on:
     paths:
       - "scripts/feed-autofix"
       - "scripts/fsgg_feed.py"
+      - "scripts/registry_packages.py"
       - "tests/feed-autofix/**"
       - ".github/workflows/feed-autofix.yml"
 
@@ -164,8 +165,12 @@ jobs:
           set -uo pipefail
           # NOT `set -e`: exit 1 is a FINDING with a report to act on, not a crash. Losing the
           # distinction is how "could not tell" starts reading like "nothing to do".
+          # Reconciles EVERY package-bearing row (.github#1260). --pr-body carries the rows it FLIPPED;
+          # --findings-body carries the rows it REFUSED (the standing issue). The two are independent:
+          # a run can flip clean rows AND refuse others in one pass.
           python scripts/feed-autofix registry/dependencies.yml \
-            --write --json --pr-body /tmp/pr-body.md --run-url "$RUN_URL" \
+            --write --json --pr-body /tmp/pr-body.md --findings-body /tmp/findings.md \
+            --run-url "$RUN_URL" \
             > /tmp/report.json 2> /tmp/err.txt
           rc=$?
           cat /tmp/err.txt >&2
@@ -180,21 +185,21 @@ jobs:
           echo "--- what the bot found ---"
           [ -s /tmp/report.json ] && jq . /tmp/report.json || echo "(no report — see the error above)"
           if [ -s /tmp/pr-body.md ]; then
-            echo "--- the PR body it would post ---"
+            echo "--- the PR body it would post (rows flipped) ---"
             cat /tmp/pr-body.md
+          fi
+          if [ -s /tmp/findings.md ]; then
+            echo "--- the issue body it would post (rows refused) ---"
+            cat /tmp/findings.md
           fi
 
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          # rc 0 (all clean) and rc 1 (some row refused) BOTH emit a JSON report whose `.changed` says
+          # whether any CLEAN row flipped — the push/PR steps gate on that, the issue step gates on
+          # rc==1. Only rc 2 (a defect that produced no report) forces changed=false.
           case "$rc" in
-            0) echo "changed=$(jq -r '.changed' /tmp/report.json)" >> "$GITHUB_OUTPUT" ;;
-            1) echo "changed=false" >> "$GITHUB_OUTPUT"
-               # Env-passed to the issue step, never interpolated into a run script. The delimiter
-               # is unguessable rather than `EOF`: a finding containing a line that IS the delimiter
-               # would close the block early and leave its own tail to be parsed as further
-               # `key=value` output.
-               { echo "finding<<FSGG_FINDING_a7f3c1"; cat /tmp/err.txt; echo "FSGG_FINDING_a7f3c1"; } \
-                 >> "$GITHUB_OUTPUT" ;;
-            *) echo "changed=false" >> "$GITHUB_OUTPUT" ;;
+            0|1) echo "changed=$(jq -r '.changed' /tmp/report.json)" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "changed=false" >> "$GITHUB_OUTPUT" ;;
           esac
           exit 0
 
@@ -211,13 +216,17 @@ jobs:
         if: steps.run.outputs.rc == '1'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          FINDING: ${{ steps.run.outputs.finding }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          TITLE="[feed-autofix] the fs-gg-ui-template row cannot be reconciled automatically"
-          # ONE standing issue. A bot that opened a fresh issue every morning would be teaching
-          # people to filter its mail, which is the same lesson a permanently-red check teaches.
+          # The body is composed by the bot (compose_findings) and written to /tmp/findings.md — it
+          # aggregates EVERY row the run refused, and already carries the `Paths: none` sentinel. On
+          # rc==1 that file must exist; a missing one is a defect, not "no findings".
+          [ -s /tmp/findings.md ] || { echo "::error::rc==1 but /tmp/findings.md is empty — the bot reported a finding with no body." >&2; exit 1; }
+          body="$(cat /tmp/findings.md)"
+          # ONE standing issue, generalized across every package-bearing row (.github#1260) — the bot
+          # aggregates all refusals into the one body above. A fresh issue per row per morning would
+          # teach people to filter its mail, the permanently-red-check lesson.
+          TITLE="[feed-autofix] rows that cannot be reconciled automatically"
           #
           # THREE traps are avoided here deliberately, and the first two were live bugs in review:
           #
@@ -236,21 +245,10 @@ jobs:
             --jq '.[] | [.number, .title] | @tsv')" \
             || { echo "::error::could not read the issue list — refusing to guess whether the standing issue exists." >&2; exit 1; }
           existing="$(printf '%s\n' "$issues" | awk -F'\t' -v t="$TITLE" '$2 == t { print $1; exit }')"
-          body="$(printf '%s\n\n```\n%s\n```\n\n%s\n\n%s\n' \
-            "\`feed-autofix\` read the live org feed and REFUSED to write the registry. This is the bot working: it does not guess." \
-            "$FINDING" \
-            "The finding above names what it could not settle. Until a human does, publish-before-flip step 2 is owed BY HAND for this release, and \`feed-coherence\` will be red on \`main\`." \
-            "Found by [this run]($RUN_URL). Refs #748.")"
           if [ -n "$existing" ]; then
             gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${existing}/comments" \
               -f body="$body" --jq '"commented on #\(.issue_url | split("/") | last)"'
           else
-            # `Paths: none` is the real sentinel for an item whose scope IS the question (#496):
-            # this needs a DECISION, not a touch-set, and `lint` reds on an item declaring neither.
-            # Appended with printf rather than written literally — a bare `Paths: none` at column 0
-            # inside a `run: |` block ENDS the block scalar, and YAML then reads it as a top-level
-            # workflow key. The file stops parsing, and the error points ~140 lines away.
-            body="$(printf '%s\n\nPaths: none\n' "$body")"
             jq -n --arg t "$TITLE" --arg b "$body" '{title:$t, body:$b, labels:["registry"]}' \
               | gh api -X POST "repos/${GITHUB_REPOSITORY}/issues" --input - --jq '"opened #\(.number) \(.html_url)"'
           fi
@@ -303,7 +301,7 @@ jobs:
           # (#683). This bot's PR must never close #748 — it is the thing #748 asks to EXIST.
           # Two -m flags, not one with an embedded newline: a message body at column 0 inside a
           # `run: |` block ends the block scalar (the same trap as the issue step above).
-          git commit -m "registry: flip fs-gg-ui-template to the version the feed serves, and regenerate its projections" \
+          git commit -m "registry: flip the package-versions the feed advanced, and regenerate projections" \
                      -m "Opened by feed-autofix.yml. Refs #748, #1081."
           # No remote-url rewrite and no token in the URL: the checkout above persisted the App
           # credential. Plain --force: this branch is bot-owned, nobody else writes it, and
@@ -322,7 +320,7 @@ jobs:
           # budget is routinely exhausted by the worker fan-out (#587, #528).
           existing="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=${GITHUB_REPOSITORY%%/*}:${BRANCH}" \
             --paginate --jq '.[0].number // empty')"
-          title="registry: publish-before-flip step 2 — flip fs-gg-ui-template to the feed"
+          title="registry: publish-before-flip step 2 — flip the rows the feed advanced"
           if [ -n "$existing" ]; then
             jq -n --rawfile b /tmp/pr-body.md '{body:$b}' \
               | gh api -X PATCH "repos/${GITHUB_REPOSITORY}/pulls/${existing}" --input - \

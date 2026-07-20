@@ -100,18 +100,29 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     parse_version,
 )
 
-# The repo that owns the fs-gg-ui coherent set and cuts its tags.
+# The contract -> package map and the subject-set definition are SHARED with
+# scripts/check-feed-coherence.py (ADR-0060 §Amendment, .github#1260). The DETECTION half reds when
+# any package-bearing row falls behind the feed; this RESPONSE half must reconcile the SAME rows from
+# the SAME map, or "the gate reds but the bot has nothing to fix" is a new silent gap (epic #266).
+from registry_packages import (  # noqa: E402  (path shim above must run first)
+    BESPOKE_CONTRACT,
+    packages_for,
+    subjects,
+)
+
+# The repo that owns the fs-gg-ui coherent set and cuts its tags. Used ONLY by the bespoke template
+# strategy below (the generic strategy reads the feed, which needs no producer identity).
 PRODUCER = "FS-GG/FS.GG.Rendering"
 
-# The contract this bot reconciles. Deliberately ONE row, not "every row carrying a package-version".
-#
-# The other package-bearing contracts (fsgg-contracts, game-sim-core, fs-gg-audio, ...) have a
-# SINGLE version field whose flip is a one-line value swap. `fs-gg-ui-template` is the only row
-# whose flip requires a JUDGEMENT the feed can settle — framework release vs template-only cut, i.e.
-# whether `version` moves with `package-version` or holds — and it is the row that has drifted all
-# seven times. A bot that reconciled every row would be inventing a mechanism for six rows that do
-# not need one; when one of them drifts, widen this deliberately.
-CONTRACT = "fs-gg-ui-template"
+# `fs-gg-ui-template` is the ONE row with a bespoke strategy: its `version` is the FRAMEWORK pin and
+# moves with the package on a framework release (but HOLDS on a template-only cut), and it carries a
+# `package-tag` whose provenance triple this bot verifies. Every OTHER package-bearing row takes the
+# GENERIC strategy: flip `package-version` (only) to the feed's newest. Their `version` is NOT
+# feed-derived — it is the source/component version, owned elsewhere (fsgg-contracts.version is gated
+# against SDD source by check-source-coherence.py; the rest track their component's own release) — so
+# a feed-reading bot must never write it. This is why the split is by STRATEGY, not a widening of the
+# single-row bot the original was (.github#1260 generalized it; ADR-0060 Option A′).
+TEMPLATE_CONTRACT = BESPOKE_CONTRACT
 
 TEMPLATE_PACKAGE = "FS.GG.UI.Template"
 
@@ -242,25 +253,25 @@ def derive_members(resolve_feed, resolve_nuspec, stable_channel: bool) -> tuple[
 # preserve — the write must therefore touch only the bytes between the quotes.
 # --------------------------------------------------------------------------------------------
 
-def load_row(path: str) -> dict:
+def load_contracts(path: str) -> list[dict]:
+    """The registry's `contracts:` list. A missing/mis-shaped list is a DEFECT (GateError, rc 2), not
+    a per-row finding: the bot cannot find its subject set at all, which is "could not read its
+    subject", never "this one row needs a human"."""
     with open(path, encoding="utf-8") as fh:
         doc = yaml.safe_load(fh)
     contracts = (doc or {}).get("contracts")
     if not isinstance(contracts, list):
-        raise Finding(f"{path}: no `contracts:` list — the registry's shape changed.")
-    for c in contracts:
-        if isinstance(c, dict) and c.get("id") == CONTRACT:
-            return c
-    raise Finding(f"{path}: no contract with id {CONTRACT!r}. It was renamed or removed.")
+        raise GateError(f"{path}: no `contracts:` list — the registry's shape changed.")
+    return contracts
 
 
-def _require_str(row: dict, field: str) -> str:
+def _require_str(row: dict, contract_id: str, field: str) -> str:
     # A MISSING field and a MIS-TYPED one need different remedies, so they get different messages.
     # Collapsing them tells a human to "quote" a key that is not there, sending them to look for a
     # quoting bug that does not exist.
     if field not in row:
         raise Finding(
-            f"{CONTRACT} has no `{field}` — the row lost a field this bot writes. It was renamed "
+            f"{contract_id} has no `{field}` — the row lost a field this bot writes. It was renamed "
             f"or dropped; either way the flip cannot be recorded. Restore it, or retire this bot's "
             f"claim on it."
         )
@@ -269,7 +280,7 @@ def _require_str(row: dict, field: str) -> str:
         # YAML coerces an unquoted 1.10 to the float 1.1 — the .github#267 trap, restated: a
         # bot that wrote a float back would corrupt the row it exists to repair.
         raise Finding(
-            f"{CONTRACT}.{field} is {v!r} ({type(v).__name__}), not a quoted string. "
+            f"{contract_id}.{field} is {v!r} ({type(v).__name__}), not a quoted string. "
             f"Quote it — an unquoted version is a float, not a version."
         )
     return v
@@ -393,15 +404,15 @@ def verify_tags(candidate: str, kind: str, resolve_tag) -> tuple[str, list[str]]
 # The write: bytes between the quotes, and nothing else.
 # --------------------------------------------------------------------------------------------
 
-def rewrite_field(text: str, field: str, new: str) -> tuple[str, bool]:
-    """Replace CONTRACT's `field` value in `text`, preserving its trailing comment verbatim.
+def rewrite_field(text: str, contract_id: str, field: str, new: str) -> tuple[str, bool]:
+    """Replace `contract_id`'s `field` value in `text`, preserving its trailing comment verbatim.
 
-    Anchored inside the `- id: <CONTRACT>` block so a same-named field on another row cannot be
+    Anchored inside the `- id: <contract_id>` block so a same-named field on another row cannot be
     hit: the search starts at the id line and stops at the next list item.
     """
-    start = re.search(rf"^\s*-\s+id:\s*{re.escape(CONTRACT)}\s*$", text, re.M)
+    start = re.search(rf"^\s*-\s+id:\s*{re.escape(contract_id)}\s*$", text, re.M)
     if not start:
-        raise Finding(f"cannot locate the `- id: {CONTRACT}` block to write into.")
+        raise Finding(f"cannot locate the `- id: {contract_id}` block to write into.")
     nxt = re.search(r"^\s*-\s+id:\s", text[start.end():], re.M)
     lo, hi = start.end(), start.end() + (nxt.start() if nxt else len(text) - start.end())
 
@@ -409,7 +420,7 @@ def rewrite_field(text: str, field: str, new: str) -> tuple[str, bool]:
     pat = re.compile(rf'^(\s*{re.escape(field)}:\s*")([^"]*)(")', re.M)
     m = pat.search(block)
     if not m:
-        raise Finding(f"cannot locate a quoted `{field}:` in the {CONTRACT} block.")
+        raise Finding(f"cannot locate a quoted `{field}:` in the {contract_id} block.")
     if m.group(2) == new:
         return text, False
     block = block[:m.start()] + m.group(1) + new + m.group(3) + block[m.end():]
@@ -430,9 +441,9 @@ _VER = r"\d+(?:\.\d+){0,3}(?:-[0-9A-Za-z.-]*[0-9A-Za-z])?"
 _ADVANCED_RE = re.compile(rf"ADVANCED\s+(?P<from>{_VER})\s*->\s*(?P<to>{_VER})")
 
 
-def stale_prose(text: str, field: str, new: str) -> str | None:
+def stale_prose(text: str, contract_id: str, field: str, new: str) -> str | None:
     """Return a description if `field`'s comment still describes a flip other than `-> new`."""
-    start = re.search(rf"^\s*-\s+id:\s*{re.escape(CONTRACT)}\s*$", text, re.M)
+    start = re.search(rf"^\s*-\s+id:\s*{re.escape(contract_id)}\s*$", text, re.M)
     if not start:
         return None
     nxt = re.search(r"^\s*-\s+id:\s", text[start.end():], re.M)
@@ -455,24 +466,106 @@ def stale_prose(text: str, field: str, new: str) -> str | None:
     )
 
 
-def reconcile(path: str, resolve_feed, resolve_nuspec, resolve_tag) -> dict:
-    """Compute (and optionally apply) the flip. Returns a report dict."""
-    row = load_row(path)
-    pin = _require_str(row, "version")
-    package = _require_str(row, "package-version")
-    tag = _require_str(row, "package-tag")
-
-    stable_channel = not is_prerelease(package)
-    live = resolve_feed(TEMPLATE_PACKAGE)
+def _feed_newest(pkg: str, resolve_feed, stable_channel: bool, contract_id: str) -> str:
+    """The newest feed version of `pkg` on the row's channel. Raises Finding on an empty stable
+    channel — the same fail-closed the detection gate applies, so the two never disagree."""
+    live = resolve_feed(pkg)
     if stable_channel:
         stable = [v for v in live if not is_prerelease(v)]
         if not stable:
             raise Finding(
-                f"the feed serves no stable {TEMPLATE_PACKAGE} — only prereleases {sorted(live)} — "
-                f"while the registry declares the stable {package!r}. Nothing to flip TO."
+                f"the feed serves no stable version of {pkg} — only prereleases {sorted(live)} — "
+                f"while {contract_id} declares the stable channel. Nothing to flip TO. Publish the "
+                f"stable package, or move the registry row to a prerelease channel."
             )
         live = stable
-    candidate = newest(live)
+    return newest(live)
+
+
+def reconcile_generic(contract_id: str, row: dict, text: str, resolve_feed) -> tuple[dict, str]:
+    """The GENERIC strategy for every package-bearing row except fs-gg-ui-template.
+
+    Flips `package-version` (and nothing else) to the newest version the feed serves for the row's
+    mapped package(s). It NEVER writes `version`: for these rows `version` is the source/component
+    version, owned by check-source-coherence.py (fsgg-contracts) or the producing repo, and a
+    feed-reading bot writing it would land a value it has no authority for. It writes no
+    `package-tag` — these rows carry none.
+
+    A COHERENT-SET row (fs-gg-audio, fs-gg-net: many packages at one version) requires every member
+    at ONE version; members at different versions are a PARTIAL PUBLISH — a real release defect — and
+    raise rather than picking one, exactly as the template strategy refuses a partial framework cut.
+    """
+    package = _require_str(row, contract_id, "package-version")
+    packages = packages_for(contract_id)
+    stable_channel = not is_prerelease(package)
+
+    member_newest = {pkg: _feed_newest(pkg, resolve_feed, stable_channel, contract_id) for pkg in packages}
+    distinct = sorted({v for v in member_newest.values()}, key=parse_version)
+    if len(distinct) > 1:
+        raise Finding(
+            f"PARTIAL PUBLISH — {contract_id} is a coherent set published at ONE version, but its "
+            f"members are at different versions on the org feed: "
+            + ", ".join(f"{p}={member_newest[p]}" for p in sorted(member_newest))
+            + ". A consumer cannot restore the set at any single version, so `package-version` "
+            f"cannot be derived — it would be a guess. That is a release defect in the producer, "
+            f"not a registry defect. Refusing to write."
+        )
+    candidate = distinct[0]
+
+    if len(packages) == 1:
+        notes = [f"{packages[0]} newest on the org feed = {candidate}"]
+    else:
+        notes = [
+            f"coherent set = {len(packages)} members ({', '.join(packages)}), all at {candidate} "
+            f"on the org feed"
+        ]
+
+    cur, want = parse_version(package), parse_version(candidate)
+    if want < cur:
+        raise Finding(
+            f"{contract_id} is AHEAD of the feed — `package-version` {package!r} but the newest on "
+            f"the org feed is {candidate!r}. That is the FR-007 INVERSION: the registry advertises a "
+            f"version consumers cannot restore. A bot must not 'fix' it by winding the registry BACK "
+            f"— that would erase the evidence of a publish that failed or was unlisted, and make an "
+            f"unrestorable pin look deliberate. A human must decide."
+        )
+
+    changes: list[str] = []
+    flagged: list[str] = []
+    text, did = rewrite_field(text, contract_id, "package-version", candidate)
+    if did:
+        changes.append(f"package-version: {package} -> {candidate}")
+    s = stale_prose(text, contract_id, "package-version", candidate)
+    if s:
+        flagged.append(s)
+
+    report = {
+        "contract": contract_id,
+        "candidate": candidate,
+        "kind": "single" if len(packages) == 1 else "coherent-set",
+        "changed": bool(changes),
+        "changes": changes,
+        "stale_prose": flagged,
+        "notes": notes,
+    }
+    return report, text
+
+
+def reconcile_template(row: dict, text: str, resolve_feed, resolve_nuspec, resolve_tag) -> tuple[dict, str]:
+    """The BESPOKE strategy for fs-gg-ui-template — the one row whose `version` is feed-derived.
+
+    Classifies the release framework-vs-template-only against the FS.GG.UI coherent set (so `version`
+    advances only on a framework release), and verifies the `package-tag` provenance triple. Unchanged
+    from the original single-row bot except that it now takes the accumulated `text` in and returns it,
+    so the aggregating loop can thread one write across every row.
+    """
+    cid = TEMPLATE_CONTRACT
+    pin = _require_str(row, cid, "version")
+    package = _require_str(row, cid, "package-version")
+    tag = _require_str(row, cid, "package-tag")
+
+    stable_channel = not is_prerelease(package)
+    candidate = _feed_newest(TEMPLATE_PACKAGE, resolve_feed, stable_channel, cid)
 
     notes: list[str] = [f"{TEMPLATE_PACKAGE} newest on the org feed = {candidate}"]
     cur, want = parse_version(package), parse_version(candidate)
@@ -494,9 +587,6 @@ def reconcile(path: str, resolve_feed, resolve_nuspec, resolve_tag) -> dict:
     # the pin HOLDS. This is the whole reason classify() exists.
     new_pin = candidate if kind == "framework" else pin
 
-    with open(path, encoding="utf-8") as fh:
-        text = original = fh.read()
-
     changes: list[str] = []
     flagged: list[str] = []
     for field, old, new in (
@@ -504,73 +594,129 @@ def reconcile(path: str, resolve_feed, resolve_nuspec, resolve_tag) -> dict:
         ("package-version", package, candidate),
         ("package-tag", tag, package_tag),
     ):
-        text, did = rewrite_field(text, field, new)
+        text, did = rewrite_field(text, cid, field, new)
         if did:
             changes.append(f"{field}: {old} -> {new}")
         # The prose check runs on EVERY field, changed or not: #856's `package-tag` was left
         # untouched AND its comment left describing 0.10.0, so "unchanged" is not "coherent".
-        s = stale_prose(text, field, new)
+        s = stale_prose(text, cid, field, new)
         if s:
             flagged.append(s)
 
-    return {
-        "contract": CONTRACT,
+    report = {
+        "contract": cid,
         "candidate": candidate,
         "kind": kind,
         "changed": bool(changes),
         "changes": changes,
         "stale_prose": flagged,
         "notes": notes,
+    }
+    return report, text
+
+
+def reconcile(path: str, resolve_feed, resolve_nuspec, resolve_tag) -> dict:
+    """Reconcile EVERY package-bearing row against the live feed, in one pass.
+
+    Each row is reconciled INDEPENDENTLY: a clean row flips, a row with a finding (partial publish,
+    FR-007 inversion, ...) is recorded and the pass continues — one problem row does not withhold the
+    other rows' flips (which was the single-row bot's implicit all-or-nothing). The subject set and
+    the contract->package map are the SAME ones check-feed-coherence.py detects against
+    (scripts/registry_packages.py), so the bot fixes exactly what the gate reds on.
+
+    Returns the aggregate report. A GateError (unmapped subject, stale map, unreadable feed) is a
+    DEFECT and propagates — the bot cannot trust its own subject set, so it writes nothing.
+    """
+    contracts = load_contracts(path)
+    subject_rows = subjects(contracts)
+    if not subject_rows:
+        raise GateError(
+            f"{path}: no contract carries a `package-version`. Either the registry is malformed or "
+            f"the bot is pointed at the wrong file; either way there is nothing to reconcile."
+        )
+    # NB: the REVERSE hygiene check (a CONTRACT_PACKAGES entry with no contract in the registry — a
+    # stale map) is deliberately NOT done here. It belongs to check-feed-coherence.py, which reads the
+    # FULL registry; the bot iterates the rows it is GIVEN, so a stale map entry names a row it never
+    # visits. The direction that DOES matter to the bot — a subject row with no mapping — is caught
+    # per row by packages_for (an unmapped package-bearing contract is the epic #266 unchecked subject).
+
+    with open(path, encoding="utf-8") as fh:
+        text = original = fh.read()
+
+    rows: list[dict] = []
+    findings: list[dict] = []
+    for row in subject_rows:
+        cid = str(row.get("id", "")).strip()
+        try:
+            if cid == TEMPLATE_CONTRACT:
+                rep, text = reconcile_template(row, text, resolve_feed, resolve_nuspec, resolve_tag)
+            else:
+                rep, text = reconcile_generic(cid, row, text, resolve_feed)
+            rows.append(rep)
+        except Finding as e:
+            findings.append({"contract": cid, "message": str(e)})
+
+    return {
+        "rows": rows,
+        "findings": findings,
+        "changed": any(r["changed"] for r in rows),
+        "stale_prose": [s for r in rows for s in r["stale_prose"]],
         "text": text,
         "original": original,
     }
 
 
+def _row_section(r: dict) -> list[str]:
+    """One changed row's block in the PR body: what was asserted, then what was written."""
+    lines = [f"### `{r['contract']}` — {r['kind']} {r['candidate']}", ""]
+    lines += [f"- {n}" for n in r["notes"]]
+    if r["contract"] == TEMPLATE_CONTRACT:
+        lines += [
+            "",
+            f"Classified **{r['kind']}**"
+            + (
+                " — every FS.GG.UI.* member moved, so the `version` framework pin advances with the "
+                "package."
+                if r["kind"] == "framework"
+                else " — no FS.GG.UI.* member moved, so the `version` framework pin HOLDS and the "
+                "two fields decouple (the 0.4.1 shape)."
+            ),
+        ]
+    lines += ["", "```"]
+    lines += r["changes"] or ["(no field changed)"]
+    lines += ["```", ""]
+    return lines
+
+
 def compose_body(report: dict, run_url: str) -> str:
     """The standing PR's body. Deterministic: `run_url` is injected, never read from the env.
 
-    Says three things, in the order a reviewer needs them: what was ASSERTED (so the flip can be
+    Says three things, in the order a reviewer needs them: what was ASSERTED (so each flip can be
     disbelieved), what was WRITTEN, and what is left for a HUMAN. The last section is the point —
     a PR that silently carried stale prose would reproduce #856 with a bot's signature on it.
     """
-    kind = report["kind"]
-    v = report["candidate"]
+    changed_rows = [r for r in report["rows"] if r["changed"]]
     lines = [
-        f"Publish-before-flip (FR-007) step 2, for **{kind} release {v}** — opened by "
-        f"`feed-autofix.yml` (.github#748).",
+        "Publish-before-flip (FR-007) step 2 — opened by `feed-autofix.yml` (.github#748).",
         "",
-        "FS.GG.Rendering published; this row records it. The flip below is **derived from the "
-        "live org feed**, not from a release's self-report, so it is correct for a release that "
-        "was dispatched, hand-published, or re-published.",
+        "A producer published; these rows record it. Each flip below is **derived from the live org "
+        "feed**, not from a release's self-report, so it is correct for a release that was "
+        "dispatched, hand-published, or re-published. The generic rows flip `package-version` only "
+        "(their `version` is source/component-owned and not the feed's to decide); "
+        "`fs-gg-ui-template` additionally moves its framework pin on a framework release.",
         "",
-        "## What was asserted",
+        f"## Rows flipped ({len(changed_rows)})",
         "",
     ]
-    lines += [f"- {n}" for n in report["notes"]]
-    lines += [
-        "",
-        f"Classified **{kind}**"
-        + (
-            " — every FS.GG.UI.* member moved, so the `version` framework pin advances with the "
-            "package."
-            if kind == "framework"
-            else " — no FS.GG.UI.* member moved, so the `version` framework pin HOLDS and the two "
-            "fields decouple (the 0.4.1 shape)."
-        ),
-        "",
-        "## What this PR writes",
-        "",
-        "```",
-    ]
-    lines += report["changes"] or ["(no field changed)"]
-    lines += ["```", ""]
+    for r in changed_rows:
+        lines += _row_section(r)
 
     if report["stale_prose"]:
         lines += [
             "## Still needs a human — provenance prose",
             "",
-            "The bot writes the three mechanical fields and **not** the provenance comments: "
-            "\"what makes this a major\" is the judgement this row exists to record, and a bot "
+            "The bot writes the mechanical version fields and **not** the provenance comments: "
+            "\"what makes this a major\" is the judgement each row exists to record, and a bot "
             "must not author it.",
             "",
             "But a comment that contradicts its own value is worse than no comment, and that is "
@@ -585,20 +731,54 @@ def compose_body(report: dict, run_url: str) -> str:
         lines += [
             "## Provenance prose",
             "",
-            "Every comment in the row agrees with the value it annotates. Nothing owed.",
+            "Every comment in every flipped row agrees with the value it annotates. Nothing owed.",
             "",
         ]
+
+    if report["findings"]:
+        lines += [
+            "## Rows the bot REFUSED (a separate issue tracks each)",
+            "",
+            "These rows are behind the feed but could not be flipped safely — the standing "
+            "`feed-autofix` issue carries the detail. They are NOT in this PR.",
+            "",
+        ]
+        lines += [f"- `{f['contract']}`" for f in report["findings"]]
+        lines += [""]
 
     lines += [
         "## What the bot did NOT check",
         "",
-        "- The `version` pin on a **template-only** cut is carried over unchanged, not verified — "
-        "there is nothing on the feed to verify it against.",
-        "- Whether this release *should* have happened, and what it means. That is the prose above.",
+        "- A generic row's `version`, and the `fs-gg-ui-template` pin on a **template-only** cut, "
+        "are carried over unchanged, not verified — there is nothing on the feed to verify them "
+        "against.",
+        "- Whether these releases *should* have happened, and what they mean. That is the prose above.",
         "",
         f"Computed by [this run]({run_url}).",
         "",
         "Refs #748, #267, #250.",
+    ]
+    return "\n".join(lines)
+
+
+def compose_findings(findings: list[dict], run_url: str) -> str:
+    """The standing issue's body: every row the bot REFUSED to flip, and why. Deterministic —
+    `run_url` is injected. One issue aggregates all findings; a bot that opened a fresh issue per
+    row per morning would be teaching people to filter its mail (the permanently-red-check lesson)."""
+    lines = [
+        "`feed-autofix` read the live org feed and REFUSED to write these rows. This is the bot "
+        "working: it does not guess.",
+        "",
+    ]
+    for f in findings:
+        lines += [f"### `{f['contract']}`", "", "```", f["message"], "```", ""]
+    lines += [
+        "Until a human settles each, publish-before-flip step 2 is owed BY HAND for that row, and "
+        "`check-feed-coherence` will be red on `main` for it.",
+        "",
+        f"Found by [this run]({run_url}). Refs #748.",
+        "",
+        "Paths: none",
     ]
     return "\n".join(lines)
 
@@ -609,6 +789,11 @@ def main() -> int:
     ap.add_argument("--write", action="store_true", help="apply the flip to the registry file")
     ap.add_argument("--json", action="store_true", help="emit the report as JSON on stdout")
     ap.add_argument("--pr-body", metavar="PATH", help="write the standing PR's body to PATH")
+    ap.add_argument(
+        "--findings-body",
+        metavar="PATH",
+        help="write the standing issue's body (rows the bot refused) to PATH, if any finding exists",
+    )
     ap.add_argument("--run-url", default="", help="the run URL stamped into --pr-body (injected)")
     ap.add_argument("--fixture", help="serve a canned feed+tags instead of the live ones (tests only)")
     args = ap.parse_args()
@@ -685,42 +870,51 @@ def main() -> int:
             except urllib.error.URLError as e:
                 raise GateError(f"{PRODUCER} unreachable reading tag {t!r}: {e.reason}") from e
 
+    # reconcile() reconciles EVERY subject row. A per-row Finding is captured in report["findings"]
+    # (rc 1), never raised past here — one refused row must not withhold the others' flips. Only a
+    # GateError (unmapped subject, stale map, unreadable feed) is a DEFECT that stops the whole run.
     try:
         report = reconcile(args.registry, resolve_feed, resolve_nuspec, resolve_tag)
-    except Finding as e:
-        print(f"feed-autofix: FINDING — {e}", file=sys.stderr)
-        if args.json:
-            print(json.dumps({"changed": False, "finding": str(e)}))
-        return 1
     except GateError as e:
         print(f"feed-autofix: {e}", file=sys.stderr)
         return 2
 
     text = report.pop("text")
     report.pop("original")
+    findings = report["findings"]
 
     if args.write and report["changed"]:
         with open(args.registry, "w", encoding="utf-8") as fh:
             fh.write(text)
 
-    if args.pr_body:
+    if args.pr_body and report["changed"]:
         with open(args.pr_body, "w", encoding="utf-8") as fh:
             fh.write(compose_body(report, args.run_url))
+
+    if args.findings_body and findings:
+        with open(args.findings_body, "w", encoding="utf-8") as fh:
+            fh.write(compose_findings(findings, args.run_url))
 
     if args.json:
         print(json.dumps(report, indent=2))
     else:
-        for n in report["notes"]:
-            print(f"  ok   {n}")
-        if report["changed"]:
-            print(f"\n{report['kind']} release {report['candidate']} — flip:")
-            for c in report["changes"]:
-                print(f"  {c}")
-        else:
-            print(f"\nalready coherent at {report['candidate']} ({report['kind']}).")
+        for r in report["rows"]:
+            for n in r["notes"]:
+                print(f"  ok   {r['contract']:31} {n}")
+            if r["changed"]:
+                print(f"  FLIP {r['contract']:31} {r['kind']} {r['candidate']}:")
+                for c in r["changes"]:
+                    print(f"         {c}")
         for s in report["stale_prose"]:
-            print(f"  NEEDS A HUMAN: {s}")
-    return 0
+            print(f"  NEEDS A HUMAN (prose): {s}")
+        for f in findings:
+            print(f"  FINDING {f['contract']}: {f['message']}", file=sys.stderr)
+        if not report["changed"] and not findings:
+            print("\nalready coherent — every package-bearing row matches the feed.")
+
+    # A finding a human must settle is rc 1 (the workflow opens the standing issue); a clean run —
+    # whether it flipped rows or found nothing to do — is rc 0.
+    return 1 if findings else 0
 
 
 if __name__ == "__main__":
