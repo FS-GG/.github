@@ -124,6 +124,13 @@ fixture() {
   python3 - "$1" "$2" "$MEMBERS" "$3" <<'PY'
 import json, sys
 feed, tags, members, out = json.loads(sys.argv[1]), json.loads(sys.argv[2]), sys.argv[3].split(), sys.argv[4]
+# The generalized bot (.github#1260) reconciles EVERY package-bearing row, and the `registry` helper's
+# snippet carries two GENERIC neighbours (fsgg-contracts, game-sim-core) alongside the template. Serve
+# their packages at the snippet's declared versions so they reconcile to NO CHANGE — every template
+# case below therefore also proves the generic rows are read and left alone. `setdefault` so a case
+# that deliberately advances a neighbour (the multi-row cases) can override.
+feed.setdefault("FS.GG.Contracts", ["2.0.1"])
+feed.setdefault("FS.GG.Game.Core", ["0.5.0"])
 deps = [m for m in members if m != "FS.GG.UI"]
 nuspec = {}
 for version in feed.get("FS.GG.UI", []):
@@ -242,6 +249,9 @@ NEW = "FS.GG.UI.Holograms"
 feed = {m: ["0.11.0"] for m in members}
 feed[NEW] = ["0.10.0"]
 feed["FS.GG.UI.Template"] = ["0.11.0"]
+# The generic neighbours the `registry` snippet carries, at their no-change versions (.github#1260).
+feed["FS.GG.Contracts"] = ["2.0.1"]
+feed["FS.GG.Game.Core"] = ["0.5.0"]
 
 # ...and the BOM at 0.11.0 declares it, because the upstream parity test locks the BOM's membership
 # to the packable set. That declaration is the whole reason the bot can now see the straggler.
@@ -286,6 +296,8 @@ NEW = "FS.GG.UI.Holograms"
 feed = {m: ["0.11.0"] for m in members}
 feed[NEW] = ["0.11.0"]          # this time it DID publish
 feed["FS.GG.UI.Template"] = ["0.11.0"]
+feed["FS.GG.Contracts"] = ["2.0.1"]      # generic neighbours, no-change (.github#1260)
+feed["FS.GG.Game.Core"] = ["0.5.0"]
 deps = [m for m in members if m != "FS.GG.UI"] + [NEW]
 body = "\n".join(f'      <dependency id="{d}" version="[0.11.0]" />' for d in deps)
 nuspec = {
@@ -345,6 +357,8 @@ import json, sys
 members, tags, out = sys.argv[1].split(), json.loads(sys.argv[2]), sys.argv[3]
 feed = {m: ["0.11.0"] for m in members}
 feed["FS.GG.UI.Template"] = ["0.11.0"]
+feed["FS.GG.Contracts"] = ["2.0.1"]      # generic neighbours, no-change (.github#1260)
+feed["FS.GG.Game.Core"] = ["0.5.0"]
 nuspec = {
     "FS.GG.UI@0.11.0": (
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -519,17 +533,20 @@ else
   bad "unreadable member: exits 2 rather than classifying on partial data" "rc=$rc: $out"
 fi
 
-# A vanished row must not read as "nothing to do".
+# A registry with NO package-bearing subject must not read as "nothing to do" — the generalized bot
+# (.github#1260) reconciles whatever package-bearing rows exist, so "no subject at all" is a loud
+# DEFECT (rc 2), never a silent green. (The single-row bot's "I expected fs-gg-ui-template and it is
+# gone" is not a concept here: the bot expects no fixed row.)
 cat > "$WORK/r9.yml" <<'YAML'
 contracts:
   - id: game-sim-core
     version: "0.5.0"
 YAML
 out="$(python3 "$BOT" "$WORK/r9.yml" --fixture "$WORK/f6.json" 2>&1)"; rc=$?
-if [ "$rc" -eq 1 ] && echo "$out" | grep -q "renamed or removed"; then
-  ok "vanished row: reported as a finding, not silence"
+if [ "$rc" -eq 2 ] && echo "$out" | grep -q "no contract carries a .package-version."; then
+  ok "no package-bearing subject: a loud defect, not silence"
 else
-  bad "vanished row: reported as a finding, not silence" "rc=$rc: $out"
+  bad "no package-bearing subject: a loud defect, not silence" "rc=$rc: $out"
 fi
 
 # A member with NO stable version, while the registry tracks the stable channel. Must be a FINDING,
@@ -582,6 +599,134 @@ else
   bad "unquoted version: refused as a finding" "rc=$rc: $out"
 fi
 
+# ============================================================================================
+# GENERIC ROWS (.github#1260). Every package-bearing row EXCEPT fs-gg-ui-template takes the generic
+# strategy: flip `package-version` (only) to the feed's newest. The load-bearing safety property is
+# that it NEVER writes `version` — for these rows `version` is source/component-owned, not the feed's
+# to decide — so each case below asserts the `version` line survives the flip byte-for-byte.
+# ============================================================================================
+
+# GEN-1. A single-package generic row BEHIND the feed: flip package-version, leave version untouched.
+cat > "$WORK/g1.yml" <<'YAML'
+contracts:
+  - id: game-sim-core
+    version: "0.5.0"   # component version — NOT feed-derived; the bot must not touch it
+    package-version: "0.5.0"   # published — flips to the feed's newest
+YAML
+fixture '{"FS.GG.Game.Core":["0.6.0"]}' '{}' "$WORK/g1.json"
+out="$(python3 "$BOT" "$WORK/g1.yml" --fixture "$WORK/g1.json" --write --json 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q '"kind": "single"'; then
+  ok "generic single: classified single, exits 0"
+else
+  bad "generic single: classified single, exits 0" "rc=$rc: $out"
+fi
+if grep -q 'package-version: "0.6.0"' "$WORK/g1.yml"; then
+  ok "generic single: package-version flipped to the feed newest"
+else
+  bad "generic single: package-version flipped to the feed newest" "$(grep version "$WORK/g1.yml")"
+fi
+if grep -q 'version: "0.5.0"   # component version' "$WORK/g1.yml"; then
+  ok "generic single: version is LEFT UNTOUCHED (not the feed's to decide)"
+else
+  bad "generic single: version is LEFT UNTOUCHED" "the bot wrote a version it has no authority for: $(grep version "$WORK/g1.yml")"
+fi
+
+# GEN-2. A generic row AHEAD of the feed is the FR-007 inversion — refuse, do not wind back.
+cat > "$WORK/g2.yml" <<'YAML'
+contracts:
+  - id: game-sim-core
+    version: "0.9.0"
+    package-version: "0.9.0"
+YAML
+before="$(cat "$WORK/g2.yml")"
+fixture '{"FS.GG.Game.Core":["0.6.0"]}' '{}' "$WORK/g2.json"
+out="$(python3 "$BOT" "$WORK/g2.yml" --fixture "$WORK/g2.json" --write 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && echo "$out" | grep -q "AHEAD of the feed"; then
+  ok "generic ahead: refused as a finding (exit 1), not wound back"
+else
+  bad "generic ahead: refused as a finding (exit 1)" "rc=$rc: $out"
+fi
+[ "$before" = "$(cat "$WORK/g2.yml")" ] && ok "generic ahead: registry untouched" \
+  || bad "generic ahead: registry untouched" "the bot wound the registry back"
+
+# GEN-3. A COHERENT-SET row (fs-gg-net, 6 members) with every member at ONE new version: flip.
+NET='FS.GG.Net.Core FS.GG.Net.WebSocket FS.GG.Net.WebSocket.Server FS.GG.Net.Protobuf FS.GG.Net.Grpc FS.GG.Net.Elmish'
+cat > "$WORK/g3.yml" <<'YAML'
+contracts:
+  - id: fs-gg-net
+    version: "0.1.0"
+    package-version: "0.1.0"
+YAML
+feed_net="$(python3 -c 'import json,sys; print(json.dumps({p:["0.2.0"] for p in sys.argv[1].split()}))' "$NET")"
+fixture "$feed_net" '{}' "$WORK/g3.json"
+out="$(python3 "$BOT" "$WORK/g3.yml" --fixture "$WORK/g3.json" --write --json 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q '"kind": "coherent-set"' && grep -q 'package-version: "0.2.0"' "$WORK/g3.yml"; then
+  ok "coherent set: every member at one version -> flip"
+else
+  bad "coherent set: every member at one version -> flip" "rc=$rc: $out"
+fi
+
+# GEN-4. The same set with ONE member left behind is a PARTIAL PUBLISH — refuse, name the straggler.
+cat > "$WORK/g4.yml" <<'YAML'
+contracts:
+  - id: fs-gg-net
+    version: "0.1.0"
+    package-version: "0.1.0"
+YAML
+before="$(cat "$WORK/g4.yml")"
+feed_partial="$(python3 -c 'import json,sys
+p=sys.argv[1].split(); f={x:["0.2.0"] for x in p}; f["FS.GG.Net.Grpc"]=["0.1.0"]; print(json.dumps(f))' "$NET")"
+fixture "$feed_partial" '{}' "$WORK/g4.json"
+out="$(python3 "$BOT" "$WORK/g4.yml" --fixture "$WORK/g4.json" --write 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && echo "$out" | grep -q "PARTIAL PUBLISH" && echo "$out" | grep -q "FS.GG.Net.Grpc=0.1.0"; then
+  ok "coherent set partial: refused, straggler named"
+else
+  bad "coherent set partial: refused, straggler named" "rc=$rc: $out"
+fi
+[ "$before" = "$(cat "$WORK/g4.yml")" ] && ok "coherent set partial: registry untouched" \
+  || bad "coherent set partial: registry untouched" "the bot flipped to a version a member cannot serve"
+
+# GEN-5. MULTI-ROW aggregation: one row flips, one row is a finding, in ONE pass. The flip lands and
+# the finding is reported — a refused row does not withhold a clean row's flip.
+cat > "$WORK/g5.yml" <<'YAML'
+contracts:
+  - id: game-sim-core
+    version: "0.5.0"
+    package-version: "0.5.0"
+  - id: game-scene-adapter
+    version: "0.9.0"
+    package-version: "0.9.0"
+YAML
+fixture '{"FS.GG.Game.Core":["0.6.0"],"FS.GG.Game.Render":["0.6.0"]}' '{}' "$WORK/g5.json"
+out="$(python3 "$BOT" "$WORK/g5.yml" --fixture "$WORK/g5.json" --write --json \
+  --pr-body "$WORK/g5-pr.md" --findings-body "$WORK/g5-iss.md" --run-url http://run 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ]; then ok "multi-row: rc 1 (a finding exists)"; else bad "multi-row: rc 1" "rc=$rc: $out"; fi
+if grep -q 'package-version: "0.6.0"' "$WORK/g5.yml" && grep -q 'version: "0.9.0"' "$WORK/g5.yml"; then
+  ok "multi-row: the clean row flipped, the refused row is byte-identical"
+else
+  bad "multi-row: clean flip + refused untouched" "$(grep -E 'id:|version:' "$WORK/g5.yml")"
+fi
+if grep -q 'game-sim-core' "$WORK/g5-pr.md" && grep -q 'game-scene-adapter' "$WORK/g5-iss.md"; then
+  ok "multi-row: PR body carries the flip, issue body carries the finding"
+else
+  bad "multi-row: PR body / issue body split" "pr=$(cat "$WORK/g5-pr.md") iss=$(cat "$WORK/g5-iss.md")"
+fi
+
+# GEN-6. A package-bearing row with NO mapping in CONTRACT_PACKAGES is the epic #266 unchecked
+# subject — a DEFECT (rc 2), never a silent skip.
+cat > "$WORK/g6.yml" <<'YAML'
+contracts:
+  - id: totally-unmapped-contract
+    version: "1.0.0"
+    package-version: "1.0.0"
+YAML
+out="$(python3 "$BOT" "$WORK/g6.yml" --fixture "$WORK/g1.json" 2>&1)"; rc=$?
+if [ "$rc" -eq 2 ] && echo "$out" | grep -q "no package id is mapped"; then
+  ok "unmapped subject: a loud defect (rc 2), not a silent skip"
+else
+  bad "unmapped subject: a loud defect (rc 2)" "rc=$rc: $out"
+fi
+
 # --- #1081 option 2 CLOSURE: a flip is not done when the YAML is written — it is done when the
 # projections it feeds are regenerated. This is the exact bug #1081 names: feed-autofix wrote the
 # registry and the REQUIRED `projection` gate stayed red, so no flip it opened could ever merge. Every
@@ -597,9 +742,25 @@ CHECKPROJ="$ROOT/scripts/check-projection.py"
 # `package-version`. A regex substitution (not a YAML round-trip) so the file the gate reads keeps the
 # real shape; bounded to each `- id:` block so it cannot bleed into a sibling that shares a version.
 FLIPPED="$WORK/registry-twice-moved.yml"
-python3 - "$ROOT/registry/dependencies.yml" "$FLIPPED" <<'PY'
+VERS="$WORK/closure-versions.txt"
+# DERIVE the from-versions from the live registry and bump each, rather than hardcoding them — a
+# hardcoded pair silently ROTS when the registry moves past it (the bump becomes a no-op, the "flip"
+# writes nothing, and this #1081 guard passes on a registry it never actually flipped, testing
+# nothing). That is exactly how it was found dead here (.github#1260): the registry had advanced to
+# 0.15.0/0.7.0 while the test still bumped 0.12.0/0.4.0. Deriving keeps the guard live by construction.
+python3 - "$ROOT/registry/dependencies.yml" "$FLIPPED" "$VERS" <<'PY'
 import re, sys
 s = open(sys.argv[1], encoding="utf-8").read()
+def current(cid):
+    m = re.search(
+        r'- id: ' + re.escape(cid) + r'\n(?:(?!\s*- id:).*\n)*?\s*version: "([^"]*)"', s)
+    if not m:
+        sys.exit(f"closure test: no `version:` for {cid} — the registry shape changed.")
+    return m.group(1)
+def bumped(v):  # advance the last numeric segment: a definitely-higher version that still parses
+    p = v.split(".")
+    p[-1] = str(int(re.match(r"\d+", p[-1]).group()) + 1)
+    return ".".join(p)
 def bump(text, cid, frm, to):
     # inside `- id: <cid>` up to (not into) the next `- id:`, advance version/package-version == frm
     pat = re.compile(
@@ -609,20 +770,25 @@ def bump(text, cid, frm, to):
     while n:
         text, n = pat.subn(r'\g<1>' + to + r'\g<2>', text, count=1)
     return text
-s = bump(s, "fs-gg-ui-template", "0.12.0", "0.13.0")
-s = bump(s, "coord-engine", "0.4.0", "0.5.0")
+tf, cf = current("fs-gg-ui-template"), current("coord-engine")
+tt, ct = bumped(tf), bumped(cf)
+s = bump(s, "fs-gg-ui-template", tf, tt)
+s = bump(s, "coord-engine", cf, ct)
 open(sys.argv[2], "w", encoding="utf-8").write(s)
+open(sys.argv[3], "w", encoding="utf-8").write(f"{tt}\n{ct}\n")
 PY
+TMPL_TO="$(sed -n 1p "$VERS")"
+CE_TO="$(sed -n 2p "$VERS")"
 
 # RED half — no engine: the write alone leaves the REQUIRED gate red against the un-regenerated
 # region. The direct #1081 regression guard; it must fail while the region is stale, naming both moves.
 if red="$(python3 "$CHECKPROJ" "$FLIPPED" "$ROOT/docs/registry/compatibility.md" 2>&1)"; then
   bad "closure: a flip WITHOUT regeneration must red the required projection gate" \
       "the gate passed on a stale region — the write-only bug #1081 names is not caught: $red"
-elif printf '%s' "$red" | grep -q "0.13.0" && printf '%s' "$red" | grep -q "0.5.0"; then
+elif printf '%s' "$red" | grep -q "$TMPL_TO" && printf '%s' "$red" | grep -q "$CE_TO"; then
   ok "closure: a flip without regeneration reds the required gate (both moved contracts)"
 else
-  bad "closure: gate red, but not for the two moved contracts" "$red"
+  bad "closure: gate red, but not for the two moved contracts ($TMPL_TO / $CE_TO)" "$red"
 fi
 
 # GREEN half — regenerate from the flipped registry and assert the required `projection` gate AND
