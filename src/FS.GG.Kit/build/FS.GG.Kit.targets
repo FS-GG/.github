@@ -9,8 +9,9 @@
 
     The packed kit sits beside this file at ../kit/, described by ../kit/kit-manifest.tsv
     (kind <TAB> package-rel path <TAB> receiver dest <TAB> sha256). MaterializeKit copies each entry to
-    its receiver destination(s), verifies the bytes against the recorded sha256 (the same digest that
-    writes registry/repos.lock), and ERRORS on a missing or mismatched file rather than skipping it.
+    its receiver destination(s), verifies the bytes against the recorded sha256, and ERRORS on a missing
+    or mismatched file rather than skipping it. The coordination kit (skill/client/config) always
+    materializes; the build-config capability is opt-in (IncludeBuildConfig).
   -->
 
   <PropertyGroup>
@@ -34,6 +35,11 @@
             public string KitDir { get; set; }
             public string ReceiverRoot { get; set; }
             public string SkillRoots { get; set; }
+            // The build-config capability (Directory.Build.props / Directory.Packages.props) reaches
+            // only 4 of the receivers and .github imports rather than copies it, so it is OPT-IN: a
+            // consumer that wants it sets FsggKitMaterializeBuildConfig=true. Off, build-config rows are
+            // skipped; the coordination kit always materializes.
+            public bool IncludeBuildConfig { get; set; }
 
             [Output] public ITaskItem[] ClientFiles { get; set; }
 
@@ -71,6 +77,9 @@
                         continue;
                     }
                     string kind = f[0], pkgRel = f[1], receiverDest = f[2], want = f[3].ToLowerInvariant();
+
+                    // build-config is opt-in (see IncludeBuildConfig): skip it unless the consumer asked.
+                    if (kind == "build-config" && !IncludeBuildConfig) continue;
 
                     var src = Path.Combine(KitDir, pkgRel.Replace('/', Path.DirectorySeparatorChar));
                     if (!File.Exists(src))
@@ -134,7 +143,8 @@
   <!-- Public entry point. Invoke explicitly (`dotnet build -t:FsggKitMaterialize`) or let it run as part
        of the consumer's build (FsggKitMaterializeOnBuild, default true). -->
   <Target Name="FsggKitMaterialize">
-    <MaterializeKit KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)" SkillRoots="$(FsggKitSkillRoots)">
+    <MaterializeKit KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)" SkillRoots="$(FsggKitSkillRoots)"
+                    IncludeBuildConfig="$(FsggKitMaterializeBuildConfig)">
       <Output TaskParameter="ClientFiles" ItemName="_FsggKitClient" />
     </MaterializeKit>
     <!-- The client shim must be executable; File API cannot set the +x bit on netstandard, so chmod on

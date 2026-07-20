@@ -17,11 +17,16 @@
 #   skills/<name>/SKILL.md        one per `kind: skill` row (name = basename of the row's source)
 #   client/<name>                 one per `kind: client` row (name = basename of source)
 #   config/<name>                 one per `kind: config` row (name = basename of the row's dest)
+#   build-config/<rel>            one per sync-build-config.sh FILES member (the build-config capability)
 #   kit-manifest.tsv              kind <TAB> package-rel path <TAB> receiver dest <TAB> sha256
 #
-# The sha256 column is the ADR-0014 content-addressed record, taken with the SAME digest function that
-# writes registry/repos.lock (scripts/repos.sh digest == sha256sum), so a materialized file that does
-# not match is a loud failure at restore, never a silently missing or stale skill.
+# The sha256 column is the content-addressed record, so a materialized file that does not match is a
+# loud failure at restore, never a silently missing or stale file. For the coordination kit
+# (skill/client/config) it is taken with the SAME digest that writes registry/repos.lock
+# (scripts/repos.sh digest == sha256sum), so the two distribution paths cannot diverge (ADR-0014). The
+# build-config members have NO repos.lock row — that capability uses the ADR-0036 pin model, so their
+# sha256 is a self-consistent integrity record only, and "behind" is a version-pin decision (which
+# FS.GG.Kit a receiver references), not drift.
 #
 # Exit: 0 staged; 2 on any misconfiguration (a manifest that does not parse, a source that is missing).
 set -euo pipefail
@@ -82,6 +87,24 @@ paste <(read_kit source config) <(read_kit dest config) | while IFS=$'\t' read -
   mkdir -p "$OUT/config"
   cp "$from" "$OUT/config/$name"
   printf 'config\tconfig/%s\t%s\t%s\n' "$name" "$dest" "$(digest "$from")" >> "$MANIFEST"
+done
+
+# --- build-config: the sync-build-config.sh FILES set, materialized at the receiver ROOT (opt-in) ---
+# DERIVE the byte-identity set from sync-build-config.sh (ADR-0058), rather than restating it here — the
+# same FILES it distributes. global.json is DELIBERATELY not in that list (.github#903: per-repo SDK
+# bands are legitimate), so it is not carried either. `.config/dotnet-tools.json` is NOT here — it moved
+# to the coordination kit as the engine manifest (#1077) and is staged above as a `config` row.
+SBC="$SRC_ROOT/scripts/sync-build-config.sh"
+[ -f "$SBC" ] || die "sync-build-config.sh not found at $SBC (is this a .github checkout?)"
+# Extract the FILES=(...) array body: drop the delimiters, strip comments and quotes.
+bc_files=($(sed -n '/^FILES=(/,/^)/{/^FILES=(/d;/^)/d;s/#.*//;s/"//g;p}' "$SBC"))
+[ "${#bc_files[@]}" -gt 0 ] || die "could not derive the build-config FILES set from $SBC (its FILES=(...) shape changed?)"
+for rel in "${bc_files[@]}"; do
+  from="$SRC_ROOT/dist/dotnet/$rel"
+  [ -f "$from" ] || die "canonical build-config source missing: dist/dotnet/$rel"
+  mkdir -p "$OUT/build-config/$(dirname "$rel")"
+  cp "$from" "$OUT/build-config/$rel"
+  printf 'build-config\tbuild-config/%s\t%s\t%s\n' "$rel" "$rel" "$(digest "$from")" >> "$MANIFEST"
 done
 
 [ -s "$MANIFEST" ] || die "manifest is empty — the kit reader returned no rows (run: scripts/repos.sh validate)"
