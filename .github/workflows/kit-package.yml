@@ -1,0 +1,63 @@
+# FS.GG.Kit gate (ADR-0062, .github#1262). Packs the coordination-kit package and proves it derives
+# from registry/repos.yml, packs every kit member, materializes the skills/client/manifest onto disk,
+# and fails LOUD on a tampered file. The logic lives in src/FS.GG.Kit/verify-package.sh — nothing
+# executes a workflow, so the gate CALLS a script rather than hand-rolling the checks in YAML (#724).
+#
+# Triggers on the package sources AND on the kit sources the package derives from (the skills, the
+# client, the registry that names them, its reader) — an edit to any of those changes what the package
+# ships, exactly as coordination-sync-selftest triggers on the same set. This gate is additive: it does
+# not touch the byte-copy fabric, which stays authoritative until receivers migrate (the #1262 follow-ups).
+name: kit-package
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Kit/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "scripts/fsgg-coord"
+      - "dist/dotnet/.config/dotnet-tools.json"
+      - "registry/repos.yml"
+      - "registry/repos.lock"
+      - "scripts/repos.sh"
+      - ".github/workflows/kit-package.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Kit/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "scripts/fsgg-coord"
+      - "dist/dotnet/.config/dotnet-tools.json"
+      - "registry/repos.yml"
+      - "registry/repos.lock"
+      - "scripts/repos.sh"
+      - ".github/workflows/kit-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kit-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Locked restore — a silent dependency substitution fails here rather than changing what the
+      # gate ran against (ADR-0006). The package has no dependencies today, so this is cheap; it arms
+      # the enforcement the moment one is ever added.
+      - name: Restore (locked)
+        run: dotnet restore src/FS.GG.Kit/FS.GG.Kit.csproj --locked-mode
+
+      - name: Verify the kit package (derive, pack, materialize, fail-loud)
+        run: bash src/FS.GG.Kit/verify-package.sh

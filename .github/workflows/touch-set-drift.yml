@@ -53,6 +53,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
 
       - name: Build the engine (the shim execs it, ADR-0040 D.2)
         run: |

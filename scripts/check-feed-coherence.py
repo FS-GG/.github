@@ -69,67 +69,17 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
     parse_version,
 )
 
-# contract id -> the package id(s) whose newest feed version `package-version` names.
-#
-# This mapping is deliberately HERE and not in the registry: adding a `package-id` field to
-# dependencies.yml is a change to the registry schema, which is a versioned cross-repo contract
-# owned by FS.GG.Contracts (Fsgg.Registry). That is a `contract-change` in its own right and is
-# not worth coupling to this gate. The cost is that a NEW package-bearing contract must be added
-# below — and forgetting to is an ERROR, not a silent skip (see `_packages_for`).
-#
-# fs-gg-ui-template is the awkward one: its `version` is the FRAMEWORK pin (FS.GG.UI.*) and its
-# `package-version` is the TEMPLATE package. The two decouple across template-only releases, so
-# only the template package is feed-comparable here.
-CONTRACT_PACKAGES: dict[str, list[str]] = {
-    "fsgg-contracts": ["FS.GG.Contracts"],
-    "governance-reference-gate-set": ["FS.GG.Governance.ReferenceGateSet"],
-    "fs-gg-ui-template": ["FS.GG.UI.Template"],
-    "game-sim-core": ["FS.GG.Game.Core"],
-    "game-scene-adapter": ["FS.GG.Game.Render"],
-    # All four ship as one coherent set at one version; a partial publish is a real defect and
-    # should be reported, so every member is compared rather than just .Core.
-    "fs-gg-audio": [
-        "FS.GG.Audio.Core",
-        "FS.GG.Audio.Host",
-        "FS.GG.Audio.Engine",
-        "FS.GG.Audio.Elmish",
-    ],
-    # `.github` is a producer too (ADR-0039 §5) and had no row here, so this gate had no subject for
-    # the one package whose staleness degrades every worker in the fleet (.github#1067).
-    #
-    # WHAT THIS ENTRY DOES AND DOES NOT BUY. It catches the registry falling behind the feed — publish
-    # 0.4.0 and forget to flip the row, and this reds. That is real and it is the .github#250 class,
-    # which has hit other rows 7+ times. It does NOT catch the engine's OWN recurring failure (source
-    # merged, never published), and no entry here could: this gate compares the registry to the feed
-    # and never looks at source. See the coord-engine row in registry/dependencies.yml, and .github#1075
-    # for the detector that measures commits since the release tag instead of comparing two scalars.
-    "coord-engine": ["FS.GG.Coord.Cli"],
-    # `.github`'s second producer package (ADR-0016's single org scaffolder). Registered with
-    # `consumers: []` under schemaVersion 2 (.github#1067 → SDD#508 → .github#1114): nothing restores
-    # it (a `dotnet new` tool humans install), but it IS published and must be checked against the feed
-    # — a package-bearing contract with no mapping here is the unchecked-subject error (epic #266).
-    "new-sdd-workspace": ["FS.GG.NewSddWorkspace"],
-    # The six FS.GG.Net.* transport packages ship as one coherent set at one version (ADR-0052); a
-    # partial publish is a real defect, so every member is compared rather than just .Core.
-    "fs-gg-net": [
-        "FS.GG.Net.Core",
-        "FS.GG.Net.WebSocket",
-        "FS.GG.Net.WebSocket.Server",
-        "FS.GG.Net.Protobuf",
-        "FS.GG.Net.Grpc",
-        "FS.GG.Net.Elmish",
-    ],
-}
-
-def _packages_for(contract_id: str) -> list[str]:
-    pkgs = CONTRACT_PACKAGES.get(contract_id)
-    if not pkgs:
-        raise GateError(
-            f"contract {contract_id!r} declares a `package-version` but no package id is mapped "
-            f"in CONTRACT_PACKAGES. Add it — an unmapped package-bearing contract is exactly the "
-            f"unchecked subject epic #266 is about."
-        )
-    return pkgs
+# The contract -> package map, the subject-set definition, and the stale-mapping check are SHARED
+# with scripts/feed-autofix (ADR-0060 §Amendment, .github#1260): the DETECTION half (this gate) and
+# the RESPONSE half (the bot) must act on the same subjects from the same map, or "the gate reds but
+# the bot cannot fix it" becomes a new silent gap. See scripts/registry_packages.py for why the map
+# lives outside the registry.
+from registry_packages import (  # noqa: E402  (path shim above must run first)
+    CONTRACT_PACKAGES,
+    packages_for,
+    stale_mappings,
+    subjects,
+)
 
 
 def check_contract(contract_id: str, declared: str, resolve) -> list[str]:
@@ -145,7 +95,7 @@ def check_contract(contract_id: str, declared: str, resolve) -> list[str]:
     # The filter lives here, not in newest(): "which channel to compare on" is this gate's policy,
     # not a version-ordering fact — and check-pin-coherence.py shares newest() unchanged.
     stable_channel = not is_prerelease(declared)
-    for pkg in _packages_for(contract_id):
+    for pkg in packages_for(contract_id):
         live = resolve(pkg)
         if stable_channel:
             stable = [v for v in live if not is_prerelease(v)]
@@ -233,8 +183,8 @@ def main(argv: list[str]) -> int:
             return feed_versions(pkg, token)
 
     contracts = doc.get("contracts") or []
-    subjects = [c for c in contracts if c.get("package-version") is not None]
-    if not subjects:
+    subject_rows = subjects(contracts)
+    if not subject_rows:
         print(
             "::error::check-feed-coherence: no contract in the registry carries a "
             "`package-version`. Either the registry is malformed or the gate is pointed at the "
@@ -245,8 +195,7 @@ def main(argv: list[str]) -> int:
 
     # A mapping entry whose contract has vanished from the registry is stale, and a stale mapping
     # is how the next unchecked subject hides. Report it.
-    known = {str(c.get("id", "")).strip() for c in contracts}
-    for orphan in sorted(set(CONTRACT_PACKAGES) - known):
+    for orphan in stale_mappings(contracts):
         print(
             f"::error::check-feed-coherence: CONTRACT_PACKAGES maps {orphan!r}, which is not a "
             f"contract in the registry. Remove the stale mapping.",
@@ -254,9 +203,9 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    print(f"comparing {len(subjects)} package-bearing contract(s) against the org feed:")
+    print(f"comparing {len(subject_rows)} package-bearing contract(s) against the org feed:")
     problems: list[str] = []
-    for c in subjects:
+    for c in subject_rows:
         cid = str(c.get("id", "")).strip()
         declared = c["package-version"]
         # An UNQUOTED `package-version: 1.10` is YAML-coerced to the float 1.1 before this gate

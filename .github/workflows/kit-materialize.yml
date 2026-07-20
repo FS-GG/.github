@@ -1,0 +1,127 @@
+# Reusable kit-materialize (ADR-0062, FS-GG/.github#1262).
+#
+# The consume-side companion to release-kit.yml. A `coordination-kit` receiver that has switched to
+# `kit-delivery: package` (registry/repos.yml) no longer takes the kit by byte-copy sync PR — it
+# REFERENCES the versioned FS.GG.Kit package (.config/kit/FS.GG.Kit.receiver.proj) and MATERIALIZES the
+# kit onto disk from its pin. Those materialized files (the coordination skills, scripts/fsgg-coord,
+# .config/dotnet-tools.json, and for a build-config receiver Directory.Build.props / Directory.Packages.props)
+# are COMMITTED, because the agent harness loads skills as real files (ADR-0011) and coordination-coherence
+# checks the committed bytes against canonical.
+#
+# THE GAP THIS CLOSES is the exact analogue of lockfile-sync (#145): Renovate bumps the FS.GG.Kit
+# <PackageVersion> in Directory.Packages.local.props WITHOUT running the materialize, so the committed
+# kit would stay at the OLD version's bytes while the pin says the new one — and coordination-coherence
+# (which still runs against every receiver, package-delivery or not) would see the committed kit drift
+# from canonical. This job re-runs the materialize on the bump PR and pushes the refreshed kit back to
+# the branch, so the receiver's committed kit tracks its pin with no human in the loop. It is the
+# package-fabric replacement for the `coordination-propagate` sync PR that `--kit-delivery byte-copy`
+# now skips for these repos (#1287).
+#
+# RE-TRIGGER + PROVISIONING mechanics are identical to lockfile-sync.yml, and are shared with it rather
+# than restated (ADR-0058):
+#   * The commit is authored with the org `fs-gg-cross-repo-dispatch` GitHub *App* installation token,
+#     NOT GITHUB_TOKEN. App-token pushes re-run `on: pull_request` workflows, so the caller's
+#     coordination-coherence re-evaluates the freshened kit; a GITHUB_TOKEN push would not. Self-limiting:
+#     the second pass materializes 0-written -> no diff -> no commit -> no push, so there is no loop.
+#   * PROVISIONING (the fs-gg-cross-repo-dispatch App secrets resolve AND this repo is in the App
+#     installation with contents:write) is CONTINUOUSLY asserted by lockfile-sync.yml's `preflight` job,
+#     which runs UNGATED on every PR in exactly the four repos that adopt this workflow (SDD, Rendering,
+#     Governance, Templates — the confirmed-provisioned set, #145 header). That gate names the repo, the
+#     secret, and the fix on the FIRST PR after adoption, months before any bump PR. Re-implementing it
+#     here would be a 340-line restatement of a check that already fires on the same PRs; instead this
+#     job's own token mint is the backstop — if a repo were somehow de-provisioned, lockfile-sync's
+#     preflight on the same PR reds it with the full remedy, and this mint fails loud rather than silent.
+#     A receiver that adopts kit-materialize WITHOUT lockfile-sync must not rely on that composition —
+#     none exists today (all four adopters carry both), and the fan-out keeps them paired.
+#
+# Restore/materialize is anonymous: FS.GG.Kit ships to PUBLIC nuget.org (release-kit.yml dual-publishes,
+# ADR-0012/0013), and the receiver's hermetic nuget.config resolves it there — no org-feed credential.
+
+name: kit-materialize
+
+on:
+  workflow_call:
+    inputs:
+      receiver-project:
+        description: "The FS.GG.Kit receiver project to materialize from."
+        type: string
+        default: .config/kit/FS.GG.Kit.receiver.proj
+      dotnet-version:
+        description: "SDK to install — must match the caller's gate.yml band (Feature 211 uses 10.0.x)."
+        type: string
+        default: "10.0.x"
+    secrets:
+      app-id:
+        description: "GitHub App id (org fs-gg-cross-repo-dispatch App; provisioned by .github#21)."
+        required: true
+      app-private-key:
+        description: "GitHub App private key (PEM) for the same App."
+        required: true
+
+# contents:read here; the App installation token performs the git WRITE (contents:write on the repo).
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    name: Materialize the kit from its pin
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # BOT BRANCHES THAT MOVE THE FS.GG.Kit PIN WITHOUT RE-MATERIALIZING, same-repo only (never fork
+    # heads — a fork push would 403, and we never auto-commit to an untrusted head). Renovate is the
+    # only bot that edits the receiver's central <PackageVersion>; it is the byte-copy sync PR's
+    # replacement, so the branch prefix is `renovate/`. Evaluated in the caller's event context.
+    # Non-kit renovate/* PRs are harmless: the materialize is idempotent (0 written -> no diff -> no push).
+    if: >-
+      startsWith(github.event.pull_request.head.ref, 'renovate/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Mint App installation token (contents:write on this repo)
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Checkout PR branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: true
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+
+      # Re-materialize from the (now bumped) pin. RECEIVER_PROJECT is env-passed, never interpolated into
+      # the run script — the org's uniform anti-injection pattern (cf. lockfile-sync.yml / contract-coherence.yml).
+      # The materialize is content-addressed and fails LOUD on a missing/tampered kit member (ADR-0014),
+      # so a malformed package reds this job rather than committing a broken kit.
+      - name: Materialize
+        env:
+          RECEIVER_PROJECT: ${{ inputs.receiver-project }}
+        run: |
+          set -euo pipefail
+          dotnet build "$RECEIVER_PROJECT" -t:FsggKitMaterialize -v minimal
+
+      - name: Commit and push if the kit changed
+        run: |
+          set -euo pipefail
+          # The materialize writes ONLY managed kit files; the receiver project's obj/ and bin/ are
+          # gitignored, so anything unignored here is a kit member the bump legitimately refreshed. If
+          # nothing drifted (a non-kit renovate PR, or the pin already matched), there is no commit.
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "Kit already matches the pin — nothing to materialize."
+            exit 0
+          fi
+          # The App pushed this branch, so the App authors the commit. GitHub links a bot commit to its
+          # account ONLY via `<BOT_USER_ID>+<slug>[bot]@users.noreply.github.com`, and BOT_USER_ID is the
+          # id of the `[bot]` USER (297630107), NOT the App id — the same trap #514 fixed in
+          # skill-registry-autofix.yml and lockfile-sync.yml. Literal, because no step output carries it.
+          git config user.name  "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "297630107+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m 'chore: materialize FS.GG.Kit (dotnet build -t:FsggKitMaterialize)'
+          git push
