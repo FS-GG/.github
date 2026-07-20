@@ -1,6 +1,6 @@
 # ADR-0058: Adopt one governing principle — *derive, don't restate; gate capabilities, not declarations*
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-20
 - **Affects:** FS-GG/.github (owns the ADR process, `registry/`, and the coherence gates this principle judges); every FS-GG repo (the principle is the test each future cross-repo ADR must pass, and the lens on each new gate/projection/scope).
 - **Interacts with:** [ADR-0044](0044-generated-artifacts-are-derived-from-their-generators.md) (this principle, already applied at the generated-artifact seam — the proof that it is implementable, not a slogan); [ADR-0037](0037-schema-growth-is-publish-before-flip.md) and [ADR-0015](0015-register-the-registry-schema-as-a-governed-contract.md) (the publish-before-flip rail the principle would shorten); [ADR-0054](0054-workroadmap-delivery-fabric-a-github-authored-product-materialized-driver.md) / [ADR-0057](0057-operator-scope-a-github-authored-never-materialized-skill-class.md) (the scope-class accretion the principle is meant to slow — see the companion policy, below); [ADR-0034](0034-typed-coordination-engine.md) (fail-closed gates, which this principle keeps rather than removes).

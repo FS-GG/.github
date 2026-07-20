@@ -1,6 +1,6 @@
 # ADR-0062: A versioned kit package replaces the byte-copy sync fan-out
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-20
 - **Affects:** FS-GG/.github (owns the coordination kit, the `dist/dotnet` build config, `registry/repos.yml`'s `kit:` rows, and the `coordination-propagate` / `build-config-propagate` / `-selftest` workflow family); all kit receivers (the 8 framework repos) and build-config receivers (4) that today absorb sync PRs.
 - **Interacts with:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) (the governing principle — a byte-copy is a hand-maintained restatement of the hub's bytes in N repos); [ADR-0019](0019-org-repo-roster-registry-and-coordination-kit.md) (the coordination kit + roster this changes the *delivery* of); [ADR-0036](0036-the-build-config-drift-check-pins-its-source.md) (which already softened the build-config half — "behind" is green-with-notice, not a merge-freeze); [ADR-0034](0034-typed-coordination-engine.md) (the `fsgg-coord` client already ships as a `dotnet tool` shim — the precedent this generalizes to the rest of the kit).
@@ -29,7 +29,7 @@ a copy of it. That is the shape the rest of the kit has not yet taken.
 
 ## Decision
 
-**Recommended — Option A: ship the kit and build config as one versioned artifact on the org feed.**
+**Decision — Option A: ship the kit and build config as one versioned artifact on the org feed.**
 
 Package the coordination kit (shared skills) and the `dist/dotnet` build config as a versioned artifact
 — call it `FS.GG.Kit` — published to the org feed like any other FS-GG package. Each repo **references**
