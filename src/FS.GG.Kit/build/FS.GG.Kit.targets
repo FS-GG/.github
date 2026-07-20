@@ -41,6 +41,20 @@
             // skipped; the coordination kit always materializes.
             public bool IncludeBuildConfig { get; set; }
 
+            // Hand-authored-file safety (.github#387), mirroring sync-build-config.sh. A canonical
+            // build-config .props carries MARKER; a hand-authored repo file does not. First-time adoption
+            // (FsggKitAdoptBuildConfig=true) moves a pre-existing UNMARKED .props to *.local.props — which
+            // the canonical file <Import>s — so repo-specific settings survive the takeover. Off (the
+            // default), the task REFUSES to overwrite an unmarked .props rather than silently clobber it.
+            // This gate is build-config only: the coordination kit (skills/client/config) is distributed,
+            // content-addressed content nobody hand-authors, so its overwrite stays unconditional.
+            public bool AdoptBuildConfig { get; set; }
+
+            // A canonical synced .props carries this exact string (see dist/dotnet/Directory.Build.props);
+            // it is the same marker sync-build-config.sh keys its refusal on, so the two tools agree on
+            // what "hand-authored" means.
+            const string Marker = "Source of truth: FS-GG/.github";
+
             [Output] public ITaskItem[] ClientFiles { get; set; }
 
             static string Sha256Hex(string path)
@@ -48,6 +62,11 @@
                 using (var sha = SHA256.Create())
                 using (var fs = File.OpenRead(path))
                     return BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
+            }
+
+            static bool CarriesMarker(string path)
+            {
+                return File.Exists(path) && File.ReadAllText(path).Contains(Marker);
             }
 
             public override bool Execute()
@@ -104,6 +123,38 @@
                     foreach (var dest in dests)
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(dest));
+
+                        // Hand-authored-file safety (.github#387) — build-config .props only. An existing
+                        // dest that does NOT carry the marker was written by the receiver, not by a prior
+                        // sync/materialize, so overwriting it would destroy their settings.
+                        if (kind == "build-config" && File.Exists(dest) && !CarriesMarker(dest))
+                        {
+                            var localDest = dest.EndsWith(".props", StringComparison.OrdinalIgnoreCase)
+                                ? dest.Substring(0, dest.Length - ".props".Length) + ".local.props"
+                                : dest + ".local";
+                            if (!AdoptBuildConfig)
+                            {
+                                Log.LogError("FS.GG.Kit: refusing to overwrite hand-authored " + dest +
+                                    " (no '" + Marker + "' marker). Set FsggKitAdoptBuildConfig=true once to move it to " +
+                                    Path.GetFileName(localDest) + " (imported by the canonical file), or remove it first.");
+                                continue;
+                            }
+                            if (File.Exists(localDest))
+                            {
+                                // Both a hand-authored dest and a pre-existing *.local.props exist. Moving
+                                // dest onto localDest would destroy the latter; fall-through would destroy
+                                // the former. Refuse — fail-closed, exactly as sync-build-config.sh --adopt.
+                                Log.LogError("FS.GG.Kit: refusing to adopt " + dest + ": a hand-authored " +
+                                    Path.GetFileName(dest) + " and " + Path.GetFileName(localDest) + " both exist. Merge the " +
+                                    "settings you want into " + Path.GetFileName(localDest) + ", delete " + Path.GetFileName(dest) +
+                                    ", then re-materialize.");
+                                continue;
+                            }
+                            File.Move(dest, localDest);
+                            Log.LogMessage(MessageImportance.High, "FS.GG.Kit: adopted " + Path.GetFileName(dest) +
+                                " -> " + Path.GetFileName(localDest) + " (hand-authored settings preserved via import).");
+                        }
+
                         if (!File.Exists(dest) || !string.Equals(Sha256Hex(dest), want, StringComparison.OrdinalIgnoreCase))
                         {
                             File.Copy(src, dest, true);
@@ -144,7 +195,7 @@
        of the consumer's build (FsggKitMaterializeOnBuild, default true). -->
   <Target Name="FsggKitMaterialize">
     <MaterializeKit KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)" SkillRoots="$(FsggKitSkillRoots)"
-                    IncludeBuildConfig="$(FsggKitMaterializeBuildConfig)">
+                    IncludeBuildConfig="$(FsggKitMaterializeBuildConfig)" AdoptBuildConfig="$(FsggKitAdoptBuildConfig)">
       <Output TaskParameter="ClientFiles" ItemName="_FsggKitClient" />
     </MaterializeKit>
     <!-- The client shim must be executable; File API cannot set the +x bit on netstandard, so chmod on
