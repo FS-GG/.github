@@ -226,8 +226,8 @@ jobs:
           # accepted as of CLI 0.2.1 (SDD#32).
           fsgg-sdd registry validate dotgithub/registry/dependencies.yml --text
 
-      - name: Build-config drift gate
-        if: ${{ inputs.check-build-config }}
-        shell: bash
-        run: |
-          bash dotgithub/scripts/sync-build-config.sh --check "caller/${{ inputs.repo-path }}"
+      # The build-config drift gate that used to live here (`sync-build-config.sh --check`, the ADR-0036
+      # pin model) was RETIRED in #1262 (ADR-0062): build config now ships as the FS.GG.Kit package, and
+      # each receiver's own `build-config-drift` job asserts its committed .props match the pinned package
+      # (a `dotnet build -t:FsggKitMaterialize` + git-clean check). The `check-build-config` input above is
+      # kept as a no-op for caller compatibility; nothing reads it now.
