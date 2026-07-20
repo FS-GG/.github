@@ -1,6 +1,6 @@
 # ADR-0061: Collapse the publish-before-flip schema/validator split
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-20
 - **Affects:** FS-GG/.github (owns `registry/dependencies.yml` and its schema-of-record comment block, the `contract-coherence` pin, `registry-schema`); FS.GG.SDD (owns `Fsgg.Registry` — the typed validator in FS.GG.Contracts — and publishes the `FS.GG.SDD.Cli` that carries it). The decision is about *which repo the schema-of-record lives in*, so it is inherently cross-repo.
 - **Interacts with:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) (the governing principle — the split is a fact stored in two places); [ADR-0015](0015-register-the-registry-schema-as-a-governed-contract.md) §3 (the "one PR teaches and bumps" step that *cannot exist* because no PR spans two repos); [ADR-0037](0037-schema-growth-is-publish-before-flip.md) (the two-ordered-PR rail this split forces every schema change onto); `.github#689` (the incident that named ADR-0015 §3 impossible); `.github#686` (the "additive is still growth" tax option (b) would remove).
@@ -27,7 +27,7 @@ validator version in another.
 
 ## Decision
 
-**Recommended — Option (b): make the validator schema-version-agnostic.**
+**Decision — Option (b): make the validator schema-version-agnostic.**
 
 Change `Fsgg.Registry` to validate **structure**, not a pinned enum: an unknown scope value (or wire
 provenance, or any enumerated token) is accepted as an opaque, well-formed string rather than checked

@@ -1,6 +1,6 @@
 # ADR-0059: Freeze the coordination taxonomy — two real instances before a new class
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-20
 - **Affects:** FS-GG/.github (owns `registry/skills.yml`, the coordination `Protocol.fs` where scope classes, body-grammar families, and predicate surfaces are defined, and this policy); FS.GG.SDD (owns `Fsgg.Registry`, which learns any vocabulary a new class would add) — the policy governs *when* those two repos may grow a taxonomy, not *how*.
 - **Interacts with:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) (the governing principle this operationalizes for *taxonomy* growth specifically — this ADR is its first concrete application); [ADR-0054](0054-workroadmap-delivery-fabric-a-github-authored-product-materialized-driver.md) and [ADR-0057](0057-operator-scope-a-github-authored-never-materialized-skill-class.md) (the `driver` and `operator` scope classes this policy proposes to collapse — see the *proposed first application*, below); [ADR-0017](0017-skill-registry-condition-aware-materialization.md) (the `materializes-when` predicate language a delivery field would replace two classes with); [ADR-0034](0034-typed-coordination-engine.md) (the typed engine whose `Protocol.fs` is the surface this freezes).

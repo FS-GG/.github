@@ -1,6 +1,6 @@
 # ADR-0060: Generate the derived registry fields instead of hand-flipping them
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-07-20
 - **Affects:** FS-GG/.github (owns `registry/dependencies.yml`, the coherence gates `check-feed-coherence.py` / `check-source-coherence.py` / `check-pin-coherence.py` / `check-projection.py`, `feed-autofix`, `generate-projections`, and `docs/registry/compatibility.md`). No product repo changes; consumers still receive versions through the existing pin/dispatch fabric.
 - **Interacts with:** [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) (this is the principle's flagship application — the single highest-leverage *derive, don't restate*); [ADR-0037](0037-schema-growth-is-publish-before-flip.md) (publish-before-flip — a generated `package-version` cannot lead the feed because it *is* the feed read); [ADR-0044](0044-generated-artifacts-are-derived-from-their-generators.md) (the generated-artifact model, here applied to registry fields as well as files); [ADR-0034](0034-typed-coordination-engine.md) (fail-closed gate discipline, preserved).
@@ -38,7 +38,7 @@ the last day), so the churn moved from a human's keyboard to the bot's; it did n
 
 ## Decision
 
-**Recommended — Option A: generate the derived fields at generation time; keep the fail-closed gate on
+**Decision — Option A: generate the derived fields at generation time; keep the fail-closed gate on
 the semantic fields only.**
 
 Replace the "assert equality against a typed literal" gates for the *derived* fields with **generators**:
