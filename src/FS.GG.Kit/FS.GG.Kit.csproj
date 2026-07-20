@@ -1,0 +1,97 @@
+<!--
+  FS.GG.Kit — the coordination kit as ONE versioned package (ADR-0062).
+
+  WHAT THIS REPLACES. Today the coordination kit (the shared skills + the fsgg-coord client + the
+  engine tool manifest) is delivered to N receivers by byte-identical file copy: scripts/coordination-sync
+  writes it into each `receives: coordination-kit` repo, the coordination-coherence gate fails a
+  receiver whose copy drifted, and coordination-propagate opens a rolling sync PR in every receiver on
+  each hub change. The report (docs/reports/2026-07-20-*) measured 80-116 sync commits per repo per ten
+  days: one hub commit multiplied into N downstream PRs. ADR-0062 Option A ships the kit as a versioned
+  artifact instead — receivers REFERENCE it and pick up a change through the Renovate + dispatch fabric
+  every other package already uses, exactly as the fsgg-coord CLI already did (ADR-0034 §4.4).
+
+  DERIVED, NOT RESTATED (ADR-0058). This project packs no committed list of kit files. `stage-kit.sh`
+  reads the `kit:` rows of registry/repos.yml — the ONE manifest coordination-sync also reads, via the
+  same scripts/repos.sh reader — and stages exactly that content-addressed set at pack time. The two
+  distribution paths cannot pack different kits while both exist, and a kit row added or retired needs
+  no edit here.
+
+  THIS IS PR #1 OF THE MIGRATION (.github#1262). It stands up the producer for the `coordination-kit`
+  capability and its materialize contract. It changes NOTHING for receivers yet — the byte-copy fabric
+  is untouched and still authoritative — so it is additive and safe to land on its own. The publish
+  workflow, the per-receiver switch to a package reference, the `dist/dotnet` build-config half, and the
+  deletion of the *-propagate / *-selftest / *-coherence family are the sequenced follow-ups ADR-0062
+  names; each is its own reviewable change.
+
+  IDENTITY IS FOREVER (ADR-0003): PackageId FS.GG.Kit is the product identity — never renamed in place.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- A content-only package: it ships kit files + a materialize target, no assembly. A TFM is still
+         required for `dotnet pack`; net10.0 matches the repo's global.json floor. IncludeBuildOutput
+         false means no lib/ folder is produced or packed. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+
+    <IsPackable>true</IsPackable>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <PackageId>FS.GG.Kit</PackageId>
+    <Version>0.1.0</Version>
+
+    <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
+    <Authors>FS-GG</Authors>
+    <Company>FS-GG</Company>
+    <PackageTags>fsgg;coordination;kit;skills;dotnet</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Kit</PackageProjectUrl>
+
+    <!-- NU5128: a package with no lib/ref assembly and no dependencies. That is exactly what a
+         content-only kit package IS (SuppressDependenciesWhenPacking above), not a defect. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+
+    <!-- Where the kit is staged before packing: under obj/ (gitignored), regenerated every pack, so
+         the derived set is never committed and cannot go stale. BaseIntermediateOutputPath (obj/) is
+         resolved in the SDK props imported ABOVE this body; IntermediateOutputPath is not set until the
+         SDK targets run (after the body), so using it here would evaluate empty and stage into src/. -->
+    <KitStagingDir>$(BaseIntermediateOutputPath)kit-staging</KitStagingDir>
+  </PropertyGroup>
+
+  <!-- Consumer-imported build logic (the materialize + verify contract) and the README, packed at the
+       well-known paths NuGet auto-imports build/ from and reads the readme from. -->
+  <ItemGroup>
+    <None Include="build/FS.GG.Kit.props"   Pack="true" PackagePath="build/" />
+    <None Include="build/FS.GG.Kit.targets" Pack="true" PackagePath="build/" />
+    <None Include="README.md"               Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Derive the packed kit from registry/repos.yml at pack time, then add the staged files as package
+       content. TargetsForTfmSpecificContentInPackage is NuGet's supported hook for COMPUTED package
+       content — items added here land in the nupkg without being static <None> globs (which MSBuild
+       evaluates before StageKit could have written anything). -->
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddKitContent</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="StageKit" BeforeTargets="Pack">
+    <Exec Command="bash &quot;$(MSBuildProjectDirectory)/stage-kit.sh&quot; &quot;$(KitStagingDir)&quot;" />
+  </Target>
+
+  <Target Name="AddKitContent" DependsOnTargets="StageKit">
+    <ItemGroup>
+      <_KitStaged Include="$(KitStagingDir)/**/*" />
+      <!-- Constant folder PackagePath: NuGet appends each glob item's RecursiveDir-relative path
+           (skills/check-board/SKILL.md, client/fsgg-coord, …) under kit/. Naming the folder rather than
+           the file also sidesteps NuGet reading an extension-less destination (the fsgg-coord client)
+           as a directory and doubling the path onto it. -->
+      <TfmSpecificPackageFile Include="@(_KitStaged)">
+        <PackagePath>kit/</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+
+</Project>

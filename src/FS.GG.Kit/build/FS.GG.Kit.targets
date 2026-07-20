@@ -1,0 +1,143 @@
+<Project>
+
+  <!--
+    FS.GG.Kit materialize + verify (ADR-0062, ADR-0014). Auto-imported by NuGet from the package's
+    build/ folder. A package reference is not a file on disk, but the agent harness loads skills as
+    real files (ADR-0011) and `scripts/fsgg-coord` must be executable — so a receiver MATERIALIZES the
+    packaged kit onto disk. This is the load-bearing half of ADR-0062: getting it wrong would trade a
+    loud sync PR for a SILENTLY missing skill, so the materialize is content-addressed and fails LOUD.
+
+    The packed kit sits beside this file at ../kit/, described by ../kit/kit-manifest.tsv
+    (kind <TAB> package-rel path <TAB> receiver dest <TAB> sha256). MaterializeKit copies each entry to
+    its receiver destination(s), verifies the bytes against the recorded sha256 (the same digest that
+    writes registry/repos.lock), and ERRORS on a missing or mismatched file rather than skipping it.
+  -->
+
+  <PropertyGroup>
+    <FsggKitDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../kit'))</FsggKitDir>
+  </PropertyGroup>
+
+  <UsingTask TaskName="MaterializeKit" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$([MSBuild]::NormalizePath('$(MSBuildToolsPath)', 'Microsoft.Build.Tasks.Core.dll'))">
+    <Task>
+      <Code Type="Class" Language="cs">
+        <![CDATA[
+        using System;
+        using System.Collections.Generic;
+        using System.IO;
+        using System.Security.Cryptography;
+        using Microsoft.Build.Framework;
+        using Microsoft.Build.Utilities;
+
+        public class MaterializeKit : Task
+        {
+            public string KitDir { get; set; }
+            public string ReceiverRoot { get; set; }
+            public string SkillRoots { get; set; }
+
+            [Output] public ITaskItem[] ClientFiles { get; set; }
+
+            static string Sha256Hex(string path)
+            {
+                using (var sha = SHA256.Create())
+                using (var fs = File.OpenRead(path))
+                    return BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
+            }
+
+            public override bool Execute()
+            {
+                var manifest = Path.Combine(KitDir, "kit-manifest.tsv");
+                if (!File.Exists(manifest))
+                {
+                    Log.LogError("FS.GG.Kit: kit-manifest.tsv not found under " + KitDir + " — the package is malformed.");
+                    return false;
+                }
+
+                var roots = new List<string>();
+                foreach (var r in (SkillRoots ?? "").Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                    roots.Add(r.Trim());
+
+                var clients = new List<ITaskItem>();
+                int copied = 0, verified = 0;
+
+                foreach (var raw in File.ReadAllLines(manifest))
+                {
+                    var line = raw.Trim();
+                    if (line.Length == 0) continue;
+                    var f = line.Split('\t');
+                    if (f.Length != 4)
+                    {
+                        Log.LogError("FS.GG.Kit: malformed manifest row (want 4 tab-separated fields): " + line);
+                        continue;
+                    }
+                    string kind = f[0], pkgRel = f[1], receiverDest = f[2], want = f[3].ToLowerInvariant();
+
+                    var src = Path.Combine(KitDir, pkgRel.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(src))
+                    {
+                        Log.LogError("FS.GG.Kit: packaged kit file missing: " + pkgRel + " — cannot materialize " + receiverDest + ".");
+                        continue;
+                    }
+                    var srcHash = Sha256Hex(src);
+                    if (!string.Equals(srcHash, want, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.LogError("FS.GG.Kit: package integrity — " + pkgRel + " sha256 " + srcHash + " != manifest " + want + ".");
+                        continue;
+                    }
+
+                    var dests = new List<string>();
+                    if (kind == "skill")
+                        foreach (var root in roots)
+                            dests.Add(Path.Combine(ReceiverRoot, root, receiverDest.Replace('/', Path.DirectorySeparatorChar)));
+                    else
+                        dests.Add(Path.Combine(ReceiverRoot, receiverDest.Replace('/', Path.DirectorySeparatorChar)));
+
+                    foreach (var dest in dests)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                        if (!File.Exists(dest) || !string.Equals(Sha256Hex(dest), want, StringComparison.OrdinalIgnoreCase))
+                        {
+                            File.Copy(src, dest, true);
+                            copied++;
+                        }
+                        var got = Sha256Hex(dest);
+                        if (!string.Equals(got, want, StringComparison.OrdinalIgnoreCase))
+                        {
+                            Log.LogError("FS.GG.Kit: materialized " + dest + " sha256 " + got + " != " + want + ".");
+                            continue;
+                        }
+                        verified++;
+                        if (kind == "client") clients.Add(new TaskItem(dest));
+                    }
+                }
+
+                ClientFiles = clients.ToArray();
+                if (!Log.HasLoggedErrors)
+                    Log.LogMessage(MessageImportance.High,
+                        "FS.GG.Kit: materialized " + verified + " file(s) (" + copied + " written) into " + ReceiverRoot + ".");
+                return !Log.HasLoggedErrors;
+            }
+        }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <!-- Public entry point. Invoke explicitly (`dotnet build -t:FsggKitMaterialize`) or let it run as part
+       of the consumer's build (FsggKitMaterializeOnBuild, default true). -->
+  <Target Name="FsggKitMaterialize">
+    <MaterializeKit KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)" SkillRoots="$(FsggKitSkillRoots)">
+      <Output TaskParameter="ClientFiles" ItemName="_FsggKitClient" />
+    </MaterializeKit>
+    <!-- The client shim must be executable; File API cannot set the +x bit on netstandard, so chmod on
+         unix. Windows has no exec bit and needs none. -->
+    <Exec Condition="'$(OS)' != 'Windows_NT' And '@(_FsggKitClient)' != ''"
+          Command="chmod +x @(_FsggKitClient->'%(FullPath)', ' ')" />
+  </Target>
+
+  <Target Name="FsggKitMaterializeOnBuild"
+          AfterTargets="Build"
+          Condition="'$(FsggKitMaterializeOnBuild)' == 'true'"
+          DependsOnTargets="FsggKitMaterialize" />
+
+</Project>

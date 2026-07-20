@@ -1,0 +1,24 @@
+<Project>
+
+  <!--
+    FS.GG.Kit consumer defaults (ADR-0062). Auto-imported by NuGet from the package's build/ folder.
+    Every knob is overridable from the consumer BEFORE this import (a PackageReference imports build/
+    props early), or from a Directory.Build.props.
+  -->
+  <PropertyGroup>
+    <!-- The repo root the kit materializes into. Skills land under <root>/<skill-root>/<name>/SKILL.md,
+         the client at <root>/scripts/fsgg-coord, the engine manifest at <root>/.config/dotnet-tools.json.
+         Defaults to the referencing project's directory; a receiver whose kit lives at the repo root sets
+         this to that root (e.g. in a repo-root Directory.Build.props: $(MSBuildThisFileDirectory)). -->
+    <FsggKitReceiverRoot Condition="'$(FsggKitReceiverRoot)' == ''">$(MSBuildProjectDirectory)</FsggKitReceiverRoot>
+
+    <!-- The skill roots a receiver holds, ';'-separated. Matches coordination-sync's AGENT_SKILL_ROOTS
+         default so the packaged and byte-copied kits materialize to the same places. -->
+    <FsggKitSkillRoots Condition="'$(FsggKitSkillRoots)' == ''">.claude/skills;.agents/skills</FsggKitSkillRoots>
+
+    <!-- Materialize automatically as part of the consumer's build. A receiver that would rather
+         materialize on an explicit `dotnet build -t:FsggKitMaterialize` sets this false. -->
+    <FsggKitMaterializeOnBuild Condition="'$(FsggKitMaterializeOnBuild)' == ''">true</FsggKitMaterializeOnBuild>
+  </PropertyGroup>
+
+</Project>
