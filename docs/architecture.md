@@ -406,15 +406,20 @@ lifecycle (the `.fsgg/` `charter → ship` process), **coexisting** with a stand
 `specs/NNN-*` history rather than replacing it — because SDD *brackets* implementation (§4.2)
 rather than authoring it. As the first repo `init`'d by hand (no `fs-gg-ui-template` pin), it
 is the forcing workload that makes SDD define a provider-less **"dev-repo" provenance shape**.
-The consumer `game` scaffold provider is deferred and `dotnet new fs-gg-ui --profile game` is
-**frozen** for the epic's duration — a named sequel epic retires the freeze. Phased plan:
+The consumer `game` scaffold provider was deferred and `dotnet new fs-gg-ui --profile game`
+**frozen** for the epic's duration. [ADR-0063](adr/0063-scaffold-materializer-sources-skills-from-the-owner-repo.md)
+then **cancelled** that deferred provider: the freeze is retired not by a second provider but by the
+scaffold materializer sourcing FS.GG.Game's `product-skills/` (and any owner repo's skills) directly
+from the `owner`/`source` the registry row already names. Phased plan:
 [`docs/reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md`](reports/2026-07-06-extract-fs-gg-game-component-sdd-driven.md).
 
 `FS.GG.Game.Render` projects `Game.Core` onto `FS.GG.UI.Scene` (consumed from nuget.org), and the
 four game product skills migrated `owner: fs-gg-rendering → fs-gg-game` byte-identically (reconciled
 from FS.GG.Game's own producer skill-manifest; registry = manifest = bytes). Rendering keeps
 **frozen** byte-identical copies of the game starter + skills — an accepted two-copies cost tracked
-as the `game-starter-two-copies` coherence row, retired by the P6 provider epic. Live phase state is
+as the `game-starter-two-copies` coherence row, retired by owner-repo materializer sourcing
+([ADR-0063](adr/0063-scaffold-materializer-sources-skills-from-the-owner-repo.md)) rather than the
+originally-planned provider epic. Live phase state is
 the `game-extraction` coherence row's to report, not this page's.
 
 ---
