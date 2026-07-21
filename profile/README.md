@@ -10,21 +10,20 @@ drives it through a structured lifecycle from charter to ship, and — only if y
 opt in — checks it against rules you control. Each piece ships on its own and is
 usable on its own; you adopt only what you need.
 
-> **📖 Two things, named precisely.** FS-GG is the **platform** — **seven
-> framework components** (Rendering, SDD, Governance, Templates, Game, Audio, and
-> Net) across **eight repositories** in this org (those seven plus this
-> coordination repo), the framework we build and publish. What you scaffold *with*
-> the platform is a **workspace**: a generated repo carrying a runnable **app**, the
-> `.fsgg/` lifecycle, agent skills, and optional governance. Within the platform,
-> each repository is a **component**. *The platform is what we maintain; a workspace
-> is what you build with it.* →
+> **📖 Two things, named precisely.** FS-GG is the **platform** — the framework
+> components we build and publish, each in its own repository alongside this
+> coordination repo (the full list is in [The components](#the-components) below).
+> What you scaffold *with* the platform is a **workspace**: a generated repo carrying
+> a runnable **app**, the `.fsgg/` lifecycle, agent skills, and optional governance.
+> Within the platform, each repository is a **component**. *The platform is what we
+> maintain; a workspace is what you build with it.* →
 > [vocabulary (ADR-0020)](https://github.com/FS-GG/.github/blob/main/docs/adr/0020-platform-workspace-component-vocabulary.md)
 
 > **New here?**
 > - **Building an app?** Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
 >   install, scaffold, build, run, and ship your first workspace in one sitting.
 > - **Want to understand how FS-GG is built?** Read the **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
->   the seven-component split, the one-way dependency rule, the contract registry, and how it all composes.
+>   the component split, the one-way dependency rule, the contract registry, and how it all composes.
 
 ---
 
@@ -196,22 +195,62 @@ fsgg-sdd --version                            # the CLI's OWN version — not yo
 
 ## The components
 
-Seven framework components ship independently; you adopt only what you need. Each
-is public on nuget.org and restores with no credential.
+<!-- BEGIN GENERATED: fsgg-component-count -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from registry/repos.yml by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
 
-| Component | What it does | Ships |
+  The component/repository COUNT was hand-typed into a dozen consumer-facing places and rotted
+  the instant Game/Audio/Net were added — "five repositories" / "four components" were wrong in
+  the org profile, four component READMEs and five consumer-guide files (roadmap §3a, #1313). It
+  is now a pure count of registry/repos.yml's roster rows, whose SET is held closed by
+  check-roster-closure.py; add or retire a repo THERE and every doc that states the count follows.
+-->
+
+**Seven framework components** ship independently — each public on [nuget.org](https://www.nuget.org) and restoring with no credential (ADR-0039) — across **eight** repositories in the org (those seven plus this `.github` coordination repo).
+
+<!-- END GENERATED: fsgg-component-count -->
+
+You adopt only what you need — each component stands alone. The table below is
+generated from the org registry, so it never falls out of step with what actually
+ships; the exact acquire command and package IDs are in
+[Pick your path](#pick-your-path) below and in each component's README.
+
+<!-- BEGIN GENERATED: fsgg-component-inventory -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from registry/repos.yml + registry/dependencies.yml by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
+
+  The component inventory was a hand-maintained table in the profile page and the consumer
+  'what ships' guide, and it rotted: Game/Audio/Net shipped without ever being added (roadmap
+  §3a, #1313). The ROW SET is now the framework rows of registry/repos.yml's roster; each row's
+  description is that component's `role` in registry/dependencies.yml, and the version is its
+  package-bearing contracts' live `package-version` (held to the feed by check-feed-coherence.py).
+  Add a framework repo to the roster and a row appears; bump a package and the version follows —
+  with no hand edit to any consumer doc. If a description reads too technically, fix the `role`
+  in registry/dependencies.yml (the one home), not a copy here.
+-->
+
+*Generated from `registry/repos.yml` (the org repo roster, ADR-0019) joined with
+`registry/dependencies.yml` (each component's `role` and its contracts' live `package-version`).
+`Current version` is `—` for a component whose packages are not (yet) tracked as a
+package-bearing contract owned by that component. The exact acquire command and package IDs are
+authored beside this table — package IDs are stable identity, versions are not (readme-standard).*
+
+| Component | What it does | Current version |
 |---|---|---|
-| [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework: Scene, layout, input, viewer/host, controls, themes — Elmish/MVU over SkiaSharp/OpenGL. The render core is Elmish-free; idiomatic Elmish is an optional adapter. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
-| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI: scaffold a workspace, then drive `charter → ship` with structured artifacts and JSON/text/rich reports. Also ships `FS.GG.Contracts`, the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
-| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / route tooling — a pure inference kernel that checks your artifacts, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition: wires SDD + Rendering + Governance into one ready-to-run workspace at scaffold time. | the `FS.GG.Templates` `dotnet new` pack + the `FS.GG.NewSddWorkspace` tool |
-| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | Game-simulation libraries: a game/simulation core and a companion renderer, consumable as plain F# libraries. | `FS.GG.Game.Core` + `FS.GG.Game.Render` |
-| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | Audio-engine libraries: synthesis/host/engine, with an optional Elmish adapter. | `FS.GG.Audio.Core` (+ `.Host` / `.Engine` / `.Elmish`) |
-| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | Networking/transport libraries: protobuf over WebSocket/gRPC, render-independent, with an optional Elmish adapter. | `FS.GG.Net.Core` (+ `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`) |
+| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | spec-driven lifecycle CLI + contracts | `5.0.1` |
+| [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | Skia/OpenGL + Elmish UI framework + fs-gg-ui template | `0.16.0` |
+| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | optional rule/evidence/gate tooling | `1.3.0` |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | downstream composition (fs-gg-fullstack, providers, overlays) | — |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | render-independent game-simulation component + new BCL-only bottom layer (FS.GG.Game.Core / .Render); ADR-0022 | `0.7.1` |
+| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | render-independent game-audio component — Core vocabulary / Host backend seam / Engine (buses/fades/ducking/3D) / Elmish Cmd bridge; ADR-0023 | `0.3.0` |
+| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | render-independent transport component — protobuf over WebSocket (client + Kestrel server) / gRPC; ITransport / IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho; ADR-0052 | `0.1.0` |
 
-An eighth repository — [**FS-GG/.github**](https://github.com/FS-GG/.github) — is
-this coordination repo: the org's shared docs, registry, and cross-repo fabric. It
-is not a consumer component.
+<!-- END GENERATED: fsgg-component-inventory -->
+
+The [**FS-GG/.github**](https://github.com/FS-GG/.github) coordination repo — the
+org's shared docs, registry, and cross-repo fabric — is not a consumer component.
 
 ### Pick your path
 
@@ -287,7 +326,7 @@ surface stays machine-checkable.
 
 > **📐 Want the full picture?** Read the
 > **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
-> the seven-component split, the one-way dependency rule, the contract registry, the
+> the component split, the one-way dependency rule, the contract registry, the
 > shared F# house style, and how the repositories compose into one runnable
 > workspace, with links to every source.
 
