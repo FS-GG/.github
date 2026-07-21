@@ -8,11 +8,13 @@ description: Common questions and failure modes for people building apps with FS
 
 # FAQ & troubleshooting
 
-## Do I have to use all four components?
+## Do I have to use every component?
 
 No. Each ships and runs on its own. Adopt only what your goal needs — see
 [Which components do I need?](which-products.md). The common case is Rendering plus
-the SDD lifecycle, with governance added later (or never).
+the SDD lifecycle, with governance added later (or never); the render-independent
+building blocks (game-sim, audio, networking) are each a plain
+`dotnet add package` when a goal calls for one.
 
 ## Do I have to use governance?
 
