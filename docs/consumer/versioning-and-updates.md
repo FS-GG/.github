@@ -3,7 +3,7 @@ title: Versions, feeds & updates
 category: FS.GG
 categoryindex: 6
 index: 17
-description: How an FS-GG consumer installs from the right feeds, pins versions, and stays current across the four components.
+description: How an FS-GG consumer installs from the right feeds, pins versions, and stays current across the FS-GG components.
 ---
 
 # Versions, feeds & updates
@@ -21,8 +21,14 @@ version and feed details live in each component's installation doc.
 | **Rendering** | `FS.GG.UI.*` packages + `fs-gg-ui` template | `<PackageReference>` from nuget.org (pin via `FsGgUiVersion`), or scaffold from the `fs-gg-ui` template |
 | **Governance** | `FS.GG.Governance.Cli` global tool (`fsgg-governance`) + reference gate set | `dotnet tool install --global FS.GG.Governance.Cli` |
 | **Templates** | `FS.GG.Templates` template package (`fs-gg-governance` overlay, `rendering` provider) | `dotnet new install FS.GG.Templates` |
+| **Game** | `FS.GG.Game.*` libs — `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter) | `dotnet add package FS.GG.Game.Core` |
+| **Audio** | `FS.GG.Audio.*` libs — `.Core` / `.Host` / `.Engine` / `.Elmish` | `dotnet add package FS.GG.Audio.Core` |
+| **Net** | `FS.GG.Net.*` libs — `.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish` | `dotnet add package FS.GG.Net.Core` |
 
-All FS-GG packages are published to **public nuget.org**, so the installs above need no
+Game, Audio, and Net are **render-independent building blocks** — each depends on
+no other FS-GG component, so you add just the packages a goal needs (start from the
+entry package in each row above and add siblings as required). All FS-GG packages
+are published to **public nuget.org**, so the installs above need no
 `--add-source`. Rendering's `FS.GG.UI.*` are **preview** packages on `net10.0` — nuget.org
 serves prereleases, and your `FsGgUiVersion` pins the exact preview version. The org GitHub
 Packages feed (`https://nuget.pkg.github.com/FS-GG/index.json`) remains the coherence/`-preview`

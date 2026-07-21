@@ -44,7 +44,7 @@ Spec Kit keeps the lifecycle **logic in agent prompts** (A re-derives the workfl
 each run). FS-GG **freezes the lifecycle bookkeeping into the CLI** (M) — what stage
 you're on, which artifacts exist, whether requirements are covered, whether the
 readiness gates pass — and leaves the agent only the genuinely novel part. See
-[Architecture §3, House style](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#3-house-style-shared-across-all-four-component-repos)
+[Architecture §3, House style](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#3-house-style-shared-across-all-component-repos)
 and [§4.2](https://github.com/FS-GG/.github/blob/main/docs/architecture.md#42-fsggsdd--lifecycle-cli--contract-backbone).
 
 ---

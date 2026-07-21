@@ -20,8 +20,8 @@ If you are contributing to one of the FS-GG repos themselves, read that repo's
 
 ## What FS-GG is, for a consumer
 
-FS-GG is F# tooling for building **desktop UI apps** on `net10.0`, made of
-four components you compose as needed:
+FS-GG is F# tooling for building **desktop UI apps** on `net10.0` — a family of
+components you compose as needed. The pieces most consumers start with:
 
 - **[FS.GG.Rendering](https://github.com/FS-GG/FS.GG.Rendering)** — render an
   Elmish/MVU app with SkiaSharp over OpenGL.
@@ -30,7 +30,21 @@ four components you compose as needed:
 - **[FS.GG.Governance](https://github.com/FS-GG/FS.GG.Governance)** *(optional)* —
   check your artifacts against rules you control, advisory by default.
 - **[FS.GG.Templates](https://github.com/FS-GG/FS.GG.Templates)** — the
-  composition that wires the three together at scaffold time.
+  composition that wires the others together at scaffold time.
+
+Underneath sit three **render-independent building blocks**, each usable on its
+own with a plain `dotnet add package`:
+
+- **[FS.GG.Game](https://github.com/FS-GG/FS.GG.Game)** — a BCL-only
+  game-simulation core (`FS.GG.Game.Core`) plus a thin Scene adapter.
+- **[FS.GG.Audio](https://github.com/FS-GG/FS.GG.Audio)** — game audio: an effect
+  vocabulary, a device seam, a mixing engine, and an Elmish bridge.
+- **[FS.GG.Net](https://github.com/FS-GG/FS.GG.Net)** — a domain-neutral transport
+  (protobuf over WebSocket / gRPC) with an Elmish bridge.
+
+For the authoritative, always-current inventory of every component and what it
+ships, see [`docs/architecture.md`](../architecture.md) — this guide links the
+live source rather than restating a count that drifts.
 
 You only adopt what you need. The hard rule is one-directional: governance may
 *inspect* your work, but rendering and the lifecycle never *require* governance
@@ -46,9 +60,9 @@ to build, test, or ship. Your inner loop is never blocked by governance.
 
 1. **[Getting started](getting-started.md)** — install the CLI, scaffold a
    runnable app, build it, run it, and make one pass through the lifecycle.
-2. **[Which components do I need?](which-products.md)** — a decision guide for the
-   four common goals (just a UI, a managed lifecycle, the full stack, adding
-   governance).
+2. **[Which components do I need?](which-products.md)** — a decision guide by goal
+   (just a UI, a managed lifecycle, the full stack, adding governance, or pulling
+   in a render-independent building block: game-sim, audio, networking).
 3. **[The development lifecycle](lifecycle.md)** — what each stage from `charter`
    to `ship` reads, writes, and reports.
 4. **[Who drives the lifecycle](who-drives-the-lifecycle.md)** — who runs the
