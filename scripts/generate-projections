@@ -75,6 +75,9 @@ TARGETS=(
   "versions:docs/architecture.md"
   "contract-versions:docs/registry/compatibility.md"
   "skill-registry-counts:docs/registry/compatibility.md"
+  "component-count:profile/README.md"
+  "component-inventory:profile/README.md"
+  "component-inventory:docs/consumer/versioning-and-updates.md"
 )
 
 # The marker a kind uses. One function, so the BEGIN a target is searched for, the BEGIN written into
@@ -92,6 +95,8 @@ marker() { # kind, BEGIN|END
     versions)              echo "<!-- $2 GENERATED: fsgg-versions -->" ;;
     contract-versions)     echo "<!-- $2 GENERATED: fsgg-contract-versions -->" ;;
     skill-registry-counts) echo "<!-- $2 GENERATED: fsgg-skill-registry-counts -->" ;;
+    component-count)       echo "<!-- $2 GENERATED: fsgg-component-count -->" ;;
+    component-inventory)   echo "<!-- $2 GENERATED: fsgg-component-inventory -->" ;;
     *)                     echo "<!-- $2 GENERATED: fsgg-protocol:$1 -->" ;;
   esac
 }
@@ -105,6 +110,8 @@ source_of() { # kind
     versions)              echo "registry/dependencies.yml" ;;
     contract-versions)     echo "registry/dependencies.yml" ;;
     skill-registry-counts) echo "registry/skills.yml" ;;
+    component-count)       echo "registry/repos.yml" ;;
+    component-inventory)   echo "registry/repos.yml + registry/dependencies.yml" ;;
     *)                     echo "src/FS.GG.Coord.Core/Protocol.fs" ;;
   esac
 }
@@ -133,7 +140,8 @@ fi
 FACTS="$(mktemp)"
 REG="$(mktemp)"
 SKILLS="$(mktemp)"
-trap 'rm -f "$FACTS" "$REG" "$SKILLS"' EXIT
+ROSTER="$(mktemp)"
+trap 'rm -f "$FACTS" "$REG" "$SKILLS" "$ROSTER"' EXIT
 "$ENGINE" facts --json >"$FACTS"
 
 # THE SECOND SOURCE. `versions` is emitted from the REGISTRY, not the engine — the two regions project
@@ -172,6 +180,23 @@ python3 -c '
 import json, sys, yaml
 json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)
 ' "$HERE/registry/skills.yml" >"$SKILLS"
+
+# A THIRD registry source, on the same terms. The consumer-facing count and component-inventory regions
+# (#1313) are emitted from `registry/repos.yml` — the org repo ROSTER (ADR-0019) — joined with the
+# `repos:`/`contracts:` blocks of `registry/dependencies.yml` for each component's description and live
+# version. The roster is the ONE authoritative list of the framework repos every org fabric iterates,
+# gated by `scripts/repos.sh` and `check-roster-closure.py`; the version leads are held to the live feed
+# by `check-feed-coherence.py` (see the transcode comment above). So counting the roster's framework rows
+# and projecting each component's `role` + version here centralises no lie — it removes the hand-typed
+# component COUNT and the hand-maintained component table that rotted the whole consumer-doc surface
+# (roadmap §3a: "five repositories" / "four components" wrong in a dozen places).
+# `default=str` because registry/repos.yml carries an unquoted `updated:` YAML date, which PyYAML loads
+# as a `datetime.date` that json.dump cannot serialize (dependencies.yml/skills.yml quote theirs). The
+# rendering never reads `updated`, so stringifying it is harmless — it just keeps the transcode total.
+python3 -c '
+import json, sys, yaml
+json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout, default=str)
+' "$HERE/registry/repos.yml" >"$ROSTER"
 
 # ---- the projections -----------------------------------------------------------------------------
 # ONE rendering PER REGION KIND, and a document says which kind it carries. There is still exactly one
@@ -691,6 +716,91 @@ render_skill_registry_counts() {
     | "| \(.scope) | `\(.owner)` | \(.n) |"
   ' "$SKILLS"
   jq -r '.skills | "| **total** | | **\(length)** |"' "$SKILLS"
+  echo ""
+}
+
+# `component-count` — the framework/repository COUNT (#1313), emitted from registry/repos.yml. THE FIRST
+# consumer-facing region, and the second emitted from the roster rather than the engine.
+#
+# WHY THIS REGION EXISTS. The component/repository count was hand-typed into a dozen consumer-facing
+# places — the org profile, four component READMEs, five consumer-guide files — and rotted the instant
+# Game/Audio/Net were added: "five repositories" and "four components" were wrong across the whole
+# surface (roadmap §3a). It is now a pure count of the roster's rows, so "add the eighth component" is a
+# roster edit that every doc stating the count follows, with no hand edit (ADR-0058 derive-don't-restate).
+render_component_count() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from registry/repos.yml by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  The component/repository COUNT was hand-typed into a dozen consumer-facing places and rotted"
+  echo "  the instant Game/Audio/Net were added — \"five repositories\" / \"four components\" were wrong in"
+  echo "  the org profile, four component READMEs and five consumer-guide files (roadmap §3a, #1313). It"
+  echo "  is now a pure count of registry/repos.yml's roster rows, whose SET is held closed by"
+  echo "  check-roster-closure.py; add or retire a repo THERE and every doc that states the count follows."
+  echo "-->"
+  echo ""
+  jq -r '
+    def word:
+      {"1":"one","2":"two","3":"three","4":"four","5":"five","6":"six","7":"seven","8":"eight",
+       "9":"nine","10":"ten","11":"eleven","12":"twelve"}[tostring]
+      // error("registry/repos.yml states a repo count outside the number-word map (1-12) in render_component_count — extend it");
+    def cap: (.[0:1] | ascii_upcase) + .[1:];
+    (.repos | length) as $total
+    | ([.repos[] | select(.role == "framework")] | length) as $fw
+    | "**\($fw | word | cap) framework components** ship independently — each public on [nuget.org](https://www.nuget.org) and restoring with no credential (ADR-0039) — across **\($total | word)** repositories in the org (those \($fw | word) plus this `.github` coordination repo)."
+  ' "$ROSTER"
+  echo ""
+}
+
+# `component-inventory` — the component-inventory table (#1313), emitted from registry/repos.yml joined
+# with registry/dependencies.yml. Carried by the profile page AND the consumer "what ships" guide, so
+# both state the SAME inventory from one source (the projection philosophy: a fact in every doc that
+# states it, from the one place that owns it).
+#
+# THE ROW SET IS THE ROSTER, NOT A HAND LIST. Every framework row in registry/repos.yml gets a row; the
+# description is that component's `role` in registry/dependencies.yml, and the version is its
+# package-bearing contracts' live `package-version`. So "add the eighth component" (a roster row) grows
+# every table, and "bump a package" (a contracts flip) updates every version — the two edits roadmap §3a
+# names as the rot, closed at their source. Package IDs are STABLE identity, not a rot vector
+# (readme-standard.md), so the exact `dotnet add package` / `dotnet tool install` lines stay AUTHORED
+# beside this table rather than generated into it — the registry carries no consumer package-id list.
+render_component_inventory() {
+  echo "<!--"
+  echo "  DO NOT EDIT THIS REGION. It is emitted from registry/repos.yml + registry/dependencies.yml by"
+  echo "  scripts/generate-projections, and \`projections\` in CI fails on any diff."
+  echo ""
+  echo "  The component inventory was a hand-maintained table in the profile page and the consumer"
+  echo "  'what ships' guide, and it rotted: Game/Audio/Net shipped without ever being added (roadmap"
+  echo "  §3a, #1313). The ROW SET is now the framework rows of registry/repos.yml's roster; each row's"
+  echo "  description is that component's \`role\` in registry/dependencies.yml, and the version is its"
+  echo "  package-bearing contracts' live \`package-version\` (held to the feed by check-feed-coherence.py)."
+  echo "  Add a framework repo to the roster and a row appears; bump a package and the version follows —"
+  echo "  with no hand edit to any consumer doc. If a description reads too technically, fix the \`role\`"
+  echo "  in registry/dependencies.yml (the one home), not a copy here."
+  echo "-->"
+  echo ""
+  echo "*Generated from \`registry/repos.yml\` (the org repo roster, ADR-0019) joined with"
+  echo "\`registry/dependencies.yml\` (each component's \`role\` and its contracts' live \`package-version\`)."
+  echo "\`Current version\` is \`—\` for a component whose packages are not (yet) tracked as a"
+  echo "package-bearing contract owned by that component. The exact acquire command and package IDs are"
+  echo "authored beside this table — package IDs are stable identity, versions are not (readme-standard).*"
+  echo ""
+  echo "| Component | What it does | Current version |"
+  echo "|---|---|---|"
+  # `// error(...)`, not a bare lookup: a framework repo the roster names but dependencies.yml does not
+  # describe must RED the gate, never render "null" as a fact — the same discipline render_versions uses.
+  # `|` is ESCAPED (cell) so a pipe in a `role` cannot silently split the cell and shift every column.
+  jq -r --slurpfile dep "$REG" '
+    def cell: gsub("\\|"; "\\|");
+    $dep[0] as $d
+    | .repos
+    | map(select(.role == "framework"))[]
+    | .id as $id
+    | .full as $full
+    | ($d.repos[$id] // error("roster framework repo `\($id)` has no entry in registry/dependencies.yml repos: — the inventory cannot state what it does")) as $r
+    | ([ $d.contracts[] | select(.owner == $id and has("package-version")) | .["package-version"] ] | unique | sort) as $vers
+    | "| [**\($r.name)**](https://github.com/\($full)) | \($r.role | rtrimstr("\n") | gsub("\n"; " ") | cell) | \(if ($vers | length) > 0 then ($vers | map("`" + . + "`") | join(" / ")) else "—" end) |"
+  ' "$ROSTER"
   echo ""
 }
 

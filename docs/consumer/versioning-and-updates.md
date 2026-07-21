@@ -15,15 +15,55 @@ version and feed details live in each component's installation doc.
 
 ## What ships, and how you get it
 
-| Component | Artifact | Install |
+The component inventory and its live versions are generated from the org registry,
+so this table never drifts from what actually ships:
+
+<!-- BEGIN GENERATED: fsgg-component-inventory -->
+<!--
+  DO NOT EDIT THIS REGION. It is emitted from registry/repos.yml + registry/dependencies.yml by
+  scripts/generate-projections, and `projections` in CI fails on any diff.
+
+  The component inventory was a hand-maintained table in the profile page and the consumer
+  'what ships' guide, and it rotted: Game/Audio/Net shipped without ever being added (roadmap
+  §3a, #1313). The ROW SET is now the framework rows of registry/repos.yml's roster; each row's
+  description is that component's `role` in registry/dependencies.yml, and the version is its
+  package-bearing contracts' live `package-version` (held to the feed by check-feed-coherence.py).
+  Add a framework repo to the roster and a row appears; bump a package and the version follows —
+  with no hand edit to any consumer doc. If a description reads too technically, fix the `role`
+  in registry/dependencies.yml (the one home), not a copy here.
+-->
+
+*Generated from `registry/repos.yml` (the org repo roster, ADR-0019) joined with
+`registry/dependencies.yml` (each component's `role` and its contracts' live `package-version`).
+`Current version` is `—` for a component whose packages are not (yet) tracked as a
+package-bearing contract owned by that component. The exact acquire command and package IDs are
+authored beside this table — package IDs are stable identity, versions are not (readme-standard).*
+
+| Component | What it does | Current version |
 |---|---|---|
-| **SDD** | `FS.GG.SDD.Cli` global tool (`fsgg-sdd`) | `dotnet tool install --global FS.GG.SDD.Cli` |
-| **Rendering** | `FS.GG.UI.*` packages + `fs-gg-ui` template | `<PackageReference>` from nuget.org (pin via `FsGgUiVersion`), or scaffold from the `fs-gg-ui` template |
-| **Governance** | `FS.GG.Governance.Cli` global tool (`fsgg-governance`) + reference gate set | `dotnet tool install --global FS.GG.Governance.Cli` |
-| **Templates** | `FS.GG.Templates` template package (`fs-gg-governance` overlay, `rendering` provider) | `dotnet new install FS.GG.Templates` |
-| **Game** | `FS.GG.Game.*` libs — `FS.GG.Game.Core` (BCL-only sim) + `FS.GG.Game.Render` (Scene adapter) | `dotnet add package FS.GG.Game.Core` |
-| **Audio** | `FS.GG.Audio.*` libs — `.Core` / `.Host` / `.Engine` / `.Elmish` | `dotnet add package FS.GG.Audio.Core` |
-| **Net** | `FS.GG.Net.*` libs — `.Core` / `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish` | `dotnet add package FS.GG.Net.Core` |
+| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | spec-driven lifecycle CLI + contracts | `5.0.1` |
+| [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | Skia/OpenGL + Elmish UI framework + fs-gg-ui template | `0.16.0` |
+| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | optional rule/evidence/gate tooling | `1.3.0` |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | downstream composition (fs-gg-fullstack, providers, overlays) | — |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | render-independent game-simulation component + new BCL-only bottom layer (FS.GG.Game.Core / .Render); ADR-0022 | `0.7.1` |
+| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | render-independent game-audio component — Core vocabulary / Host backend seam / Engine (buses/fades/ducking/3D) / Elmish Cmd bridge; ADR-0023 | `0.3.0` |
+| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | render-independent transport component — protobuf over WebSocket (client + Kestrel server) / gRPC; ITransport / IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho; ADR-0052 | `0.1.0` |
+
+<!-- END GENERATED: fsgg-component-inventory -->
+
+Acquire any of them with a standard .NET command — the **verb** follows the artifact
+kind, and the **package IDs** are stable identity (spell them out; never pin a version
+in prose — let `dotnet` resolve the current one from nuget.org):
+
+| Artifact kind | Acquire command |
+|---|---|
+| **Library** (a `PackageReference`) | `dotnet add package <id>` — e.g. `FS.GG.UI`, `FS.GG.Game.Core`, `FS.GG.Audio.Core`, `FS.GG.Net.Core` |
+| **Global tool** (a CLI) | `dotnet tool install --global <id>` — e.g. `FS.GG.SDD.Cli` (`fsgg-sdd`), `FS.GG.Governance.Cli` (`fsgg-governance`) |
+| **`dotnet new` template pack** | `dotnet new install <id>` — e.g. `FS.GG.Templates` |
+
+Rendering's `FS.GG.UI.*` are a multi-package set: reference the `FS.GG.UI` entry
+package (or scaffold from the `fs-gg-ui` template) and pin the framework via
+`FsGgUiVersion`.
 
 Game, Audio, and Net are **render-independent building blocks** — each depends on
 no other FS-GG component, so you add just the packages a goal needs (start from the
