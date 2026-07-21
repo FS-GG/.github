@@ -1,0 +1,100 @@
+<!--
+  FS.GG.Drivers — the `.github`-authored DRIVER skill bytes as ONE versioned package (ADR-0054
+  §Byte-transport, resolving .github#1300; the ADR-0062 FS.GG.Kit pattern, one consumer over).
+
+  WHAT THIS DELIVERS. `.github` authors a `scope: driver` skill class (ADR-0054) — a `.github`-authored,
+  PRODUCT-materialized skill (the first is `workRoadmap`, ADR-0053/#1224). The scaffold-time materializer
+  in the SDD CLI cannot reach `.github`: `fsgg-sdd scaffold` runs on an OFFLINE inner loop and generic SDD
+  is barred from embedding a cross-repo source (FS.GG.SDD/CLAUDE.md, scaffold FR-002/SC-005). So `.github`
+  PUBLISHES the driver bytes as a versioned package the CLI pins, restores at build/publish time (online),
+  and materializes into a scaffold's skill roots at scaffold time (offline), with the ADR-0014
+  content-addressed sha256 (from registry/driver-skill-manifest.json) as the integrity guarantee.
+
+  WHY A SEPARATE PACKAGE FROM FS.GG.Kit. Same SUBSTRATE (ADR-0063: "reuse ADR-0062's substrate rather than
+  invent a second one"), different CONSUMER and materialize point. FS.GG.Kit ships the coordination kit to
+  the framework repos, materialized on the receiver's BUILD (ADR-0062). This ships driver skills to the
+  SDD CLI, materialized into a scaffold at SCAFFOLD time (ADR-0054 names the edge: FS.GG.SDD.Cli → this
+  package). Folding driver bytes into FS.GG.Kit would couple the SDD CLI to the whole coordination kit; a
+  separate package keeps the dependency honest.
+
+  NO CONSUMER MATERIALIZE TARGET, DELIBERATELY. FS.GG.Kit ships build/*.targets that materialize on the
+  consumer's build. This package ships only build/FS.GG.Drivers.props — a stable handle to the packed
+  content ($(FsggDriversContentDir)) — because the MATERIALIZE is the SDD CLI's, in F#, at scaffold time
+  (ADR-0063: the materializer sources owner-repo bytes from a pinned, content-addressed channel). A
+  package reference is not a materialized file (ADR-0062, ADR-0014); the materialize step lives downstream.
+
+  DERIVED, NOT RESTATED (ADR-0058). This project packs no committed list of driver skills. stage-drivers.py
+  reads registry/driver-skill-manifest.json — the ONE authored source, emitted by
+  scripts/generate-driver-manifest — and stages exactly its `scope: driver` rows at pack time. A driver
+  added/retired in the emitter needs no edit here.
+
+  IDENTITY IS FOREVER (ADR-0003): PackageId FS.GG.Drivers is the product identity — never renamed in place.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- A content-only package: it ships driver skill bytes + a content handle, no assembly. A TFM is
+         still required for `dotnet pack`; net10.0 matches the repo's global.json floor. IncludeBuildOutput
+         false means no lib/ folder is produced or packed. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+
+    <IsPackable>true</IsPackable>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <PackageId>FS.GG.Drivers</PackageId>
+    <Version>0.1.0</Version>
+
+    <Description>The .github-authored driver skill bytes (scope: driver, e.g. workRoadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
+    <Authors>FS-GG</Authors>
+    <Company>FS-GG</Company>
+    <PackageTags>fsgg;driver;skills;workroadmap;scaffold;dotnet</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/FS-GG/.github</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/FS-GG/.github/tree/main/src/FS.GG.Drivers</PackageProjectUrl>
+
+    <!-- NU5128: a package with no lib/ref assembly and no dependencies. That is exactly what a
+         content-only driver package IS (SuppressDependenciesWhenPacking above), not a defect. -->
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+
+    <!-- Where the driver bytes are staged before packing: under obj/ (gitignored), regenerated every
+         pack, so the derived set is never committed and cannot go stale. BaseIntermediateOutputPath (obj/)
+         is resolved in the SDK props imported ABOVE this body; IntermediateOutputPath is not set until the
+         SDK targets run (after the body), so using it here would evaluate empty and stage into src/. -->
+    <DriversStagingDir>$(BaseIntermediateOutputPath)drivers-staging</DriversStagingDir>
+  </PropertyGroup>
+
+  <!-- Consumer-imported handle to the packed content (no materialize logic — that is the SDD CLI's), and
+       the README, packed at the well-known paths NuGet auto-imports build/ from and reads the readme
+       from. -->
+  <ItemGroup>
+    <None Include="build/FS.GG.Drivers.props" Pack="true" PackagePath="build/" />
+    <None Include="README.md"                 Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Derive the packed driver set from registry/driver-skill-manifest.json at pack time, then add the
+       staged files as package content. TargetsForTfmSpecificContentInPackage is NuGet's supported hook
+       for COMPUTED package content — items added here land in the nupkg without being static <None> globs
+       (which MSBuild evaluates before StageDrivers could have written anything). -->
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddDriversContent</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="StageDrivers" BeforeTargets="Pack">
+    <Exec Command="python3 &quot;$(MSBuildProjectDirectory)/stage-drivers.py&quot; &quot;$(DriversStagingDir)&quot;" />
+  </Target>
+
+  <Target Name="AddDriversContent" DependsOnTargets="StageDrivers">
+    <ItemGroup>
+      <_DriversStaged Include="$(DriversStagingDir)/**/*" />
+      <!-- Constant folder PackagePath: NuGet appends each glob item's RecursiveDir-relative path
+           (driver-skill-manifest.json, skills/workRoadmap/SKILL.md, …) under drivers/. -->
+      <TfmSpecificPackageFile Include="@(_DriversStaged)">
+        <PackagePath>drivers/</PackagePath>
+      </TfmSpecificPackageFile>
+    </ItemGroup>
+  </Target>
+
+</Project>

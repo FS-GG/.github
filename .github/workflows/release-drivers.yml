@@ -1,0 +1,204 @@
+name: release-drivers
+
+# Publishes FS.GG.Drivers — the `.github`-authored driver skill bytes as one versioned artifact
+# (ADR-0054 §Byte-transport, resolving .github#1300; the ADR-0062 FS.GG.Kit pattern one consumer over) —
+# to the org GitHub Packages feed and (dormant, see below) nuget.org. `.github` does not normally own a
+# release workflow; this is the FOURTH exception, on the same grounds as release-coord-engine.yml,
+# release-new-sdd-workspace.yml and release-kit.yml: the artifact lives here, so its publish does too
+# (ADR-0039 §5).
+#
+# WHY THIS PUBLISH IS LOAD-BEARING. This is step 1 of ADR-0054 §Byte-transport (.github#1304): the
+# `.github` producer-emitter now produces a PUBLISHED PACKAGE, not only a reconciled skills.yml row.
+# Nothing consumes the driver until it is on a feed. Once published, the SDD CLI references FS.GG.Drivers
+# at a pinned version, restores it at build time, and materializes the driver into a scaffold's skill
+# roots at scaffold time (step 2 — the narrow SDD cross-repo materializer request, ADR-0037
+# publish-before-flip: it cannot name a delivered artifact until this publish makes one exist).
+#
+# NUGET.ORG IS NOT OPTIONAL FOR REACH. The SDD CLI restores FS.GG.* from PUBLIC nuget.org (the org
+# GitHub Packages feed needs a credential even to read — ADR-0039). A driver package that exists only on
+# the org feed cannot be consumed by the CLI, exactly as it cannot for the coordination engine or kit. So
+# this dual-publishes (ADR-0012 org feed + nuget.org; ADR-0013 OIDC Trusted Publishing, no stored key),
+# the byte-identical .nupkg, no re-pack.
+#
+# Version is the EVALUATED csproj <Version> (msbuild -getProperty), never a grep and never pinned in this
+# header. A tag is a COHERENCE CHECK against it, never the source of truth. The package ships STABLE (no
+# -preview): the shared Renovate preset sets ignoreUnstable=true, so a prerelease would be invisible to
+# the fabric that is supposed to carry it — refuse rather than ship it silently.
+#
+# Release by pushing a tag `drivers/v<version>` matching the csproj <Version>; or run manually
+# (workflow_dispatch) with publish=true. A manual run with publish=false is a pack-only dry run.
+#
+# ⚠ THE nuget.org POLICY IS BOUND TO BOTH THIS WORKFLOW'S FILENAME AND THE PACKAGE ID. An org-owner must
+# create a Trusted Publishing policy for: Repository Owner `FS-GG` · Repository `.github` · Workflow file
+# `release-drivers.yml` · package `FS.GG.Drivers`, and `vars.NUGET_ORG_PUBLISH` must be `true` (it already
+# is — the coord engine relies on it; check-publish-flags.py asserts it). Renaming either afterwards
+# invalidates the token exchange (see .github#624). Until the policy exists, NuGet/login fail-closes with
+# a 401 — the correct direction: never a silent no-op, never a half-published set.
+
+on:
+  push:
+    tags: ['drivers/v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Push to the feeds (false = pack-only dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-drivers-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack & publish FS.GG.Drivers
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.repository == 'FS-GG/.github'
+    # Least-privilege: only this job gains packages: write, and the push uses the run-scoped GITHUB_TOKEN,
+    # never a PAT. id-token: write mints the GitHub OIDC token for nuget.org Trusted Publishing (ADR-0013).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Resolve version + publish decision
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          proj=src/FS.GG.Drivers/FS.GG.Drivers.csproj
+          version="$(dotnet msbuild "$proj" -getProperty:Version | tr -d '[:space:]')"
+          if [ -z "$version" ]; then
+            echo "::error::could not read <Version> from $proj (build defect); refusing to publish."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # A `-preview` package would be INVISIBLE to the shared Renovate preset (ignoreUnstable: true),
+          # so the SDD CLI would never be bumped — defeating the point of shipping it as a package. Refuse.
+          case "$version" in
+            *-*) echo "::error::version '$version' is a prerelease. The org's Renovate preset sets ignoreUnstable=true, so consumers would never see it. Publish a stable 0.x version."; exit 1 ;;
+          esac
+
+          if [ "$EVENT" = "push" ]; then
+            # The tag is a coherence check against the evaluated version, never the source of truth.
+            tag_version="${REF#drivers/v}"
+            if [ "$tag_version" != "$version" ]; then
+              echo "::error::tag $REF ($tag_version) does not match csproj <Version> ($version)."
+              exit 1
+            fi
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$DISPATCH_PUBLISH" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore (locked)
+        run: dotnet restore src/FS.GG.Drivers/FS.GG.Drivers.csproj --locked-mode
+
+      # THE PACKAGE IS NEVER PUBLISHED UNVERIFIED. verify-package.sh is the gate: it proves the packed set
+      # is derived from registry/driver-skill-manifest.json, packs every driver member + the manifest, and
+      # fails loud on a byte that does not match its recorded sha256 (the ADR-0014 record the SDD CLI
+      # verifies against). A publish that skipped it would ship the package without the evidence it works.
+      - name: Verify — derive, pack, content-address, fail-loud
+        run: bash src/FS.GG.Drivers/verify-package.sh
+
+      - name: Pack
+        run: dotnet pack src/FS.GG.Drivers/FS.GG.Drivers.csproj -c Release -o artifacts/packages
+
+      # A PACKAGE THAT PACKS BUT DOES NOT RESOLVE FROM A REAL RESTORE is the failure mode here. The gate
+      # above packs the nupkg; this drives it the way the SDD CLI will — a throwaway consumer with a real
+      # PackageReference, so NuGet's auto-import of build/FS.GG.Drivers.props is exercised against the
+      # actual .nupkg and the driver bytes are proven reachable at $(FsggDriversContentDir).
+      - name: Smoke — a real consumer restores the package and can reach the driver bytes
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          # ABSOLUTE source path, and it has to be: a NuGet source in a config resolves RELATIVE TO THAT
+          # FILE. --configfile makes NuGet use ONLY this file, so the runner's global packageSourceMapping
+          # cannot filter the local feed out (the reason a naive local-feed restore 404s).
+          cat > "$work/isolated.config" <<CFG
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources><clear /><add key="local" value="${{ github.workspace }}/artifacts/packages" /></packageSources>
+          </configuration>
+          CFG
+          # Quoted delimiter: the shell expands nothing inside. The one dynamic value —
+          # ${{ steps.v.outputs.version }} — is an Actions expression, substituted when the runner
+          # renders this run-script (before any shell runs), so it lands regardless of quoting; every
+          # $(…) below is a literal MSBuild property, kept verbatim.
+          cat > "$work/Consumer.csproj" <<'CSPROJ'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <TargetFramework>net10.0</TargetFramework>
+              <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              <IncludeBuildOutput>false</IncludeBuildOutput>
+            </PropertyGroup>
+            <ItemGroup>
+              <PackageReference Include="FS.GG.Drivers" Version="${{ steps.v.outputs.version }}" />
+            </ItemGroup>
+            <!-- Prove build/FS.GG.Drivers.props imported and the packed bytes are reachable. -->
+            <Target Name="AssertDriverBytes" AfterTargets="Build">
+              <Error Condition="'$(FsggDriversContentDir)' == ''" Text="build/FS.GG.Drivers.props did not import — FsggDriversContentDir is empty" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/driver-skill-manifest.json')" Text="restored package has no drivers/driver-skill-manifest.json at $(FsggDriversContentDir)" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/workRoadmap/SKILL.md')" Text="restored package has no workRoadmap SKILL.md at $(FsggDriversContentDir)" />
+              <Message Importance="high" Text="FS.GG.Drivers: driver bytes reachable at $(FsggDriversContentDir)" />
+            </Target>
+          </Project>
+          CSPROJ
+          dotnet restore "$work/Consumer.csproj" --configfile "$work/isolated.config"
+          dotnet build   "$work/Consumer.csproj" -c Release --no-restore
+          echo "packaged driver: a real consumer restore reached driver-skill-manifest.json + workRoadmap SKILL.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push to org GitHub Packages feed
+        if: steps.v.outputs.push == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Drivers.*.nupkg" \
+            --source https://nuget.pkg.github.com/FS-GG/index.json \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      # nuget.org dual-publish (ADR-0012/0013). Gated on vars.NUGET_ORG_PUBLISH so org-feed releases keep
+      # working until an org-owner creates the Trusted Publishing policy for THIS workflow + FS.GG.Drivers
+      # (see the header). Pushes the BYTE-IDENTICAL org-feed .nupkg, no re-pack.
+      - name: NuGet login (OIDC → short-lived key)
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push byte-identical package to nuget.org
+        if: steps.v.outputs.push == 'true' && vars.NUGET_ORG_PUBLISH == 'true'
+        run: |
+          dotnet nuget push "artifacts/packages/FS.GG.Drivers.*.nupkg" \
+            --source https://api.nuget.org/v3/index.json \
+            --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+            --skip-duplicate
+
+      - name: Summary
+        run: |
+          {
+            echo "### FS.GG.Drivers ${{ steps.v.outputs.version }}"
+            if [ "${{ steps.v.outputs.push }}" = "true" ]; then
+              echo "Published \`FS.GG.Drivers\` **${{ steps.v.outputs.version }}** to the org feed."
+            else
+              echo "Pack-only dry run — nothing pushed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
