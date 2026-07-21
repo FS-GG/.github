@@ -1,0 +1,25 @@
+<Project>
+
+  <!--
+    FS.GG.Drivers consumer handle (ADR-0054, ADR-0062, ADR-0063). Auto-imported by NuGet from the
+    package's build/ folder when a project references FS.GG.Drivers.
+
+    This package ships driver skill BYTES, not a materialize step: the materialize is the SDD CLI's, in
+    F#, at scaffold time (ADR-0063 — the scaffold materializer sources owner-repo bytes from a pinned,
+    content-addressed channel; ADR-0054 §Byte-transport — offline at scaffold time, so the CLI embeds the
+    bytes it restored online at build time). All this file does is expose WHERE the packed content is, so
+    the consumer's build can locate it without hard-coding a NuGet-cache path.
+
+    $(FsggDriversContentDir) points at the package's content root, which holds:
+      driver-skill-manifest.json      the delivered set + per-skill sha256 (ADR-0014 verify record)
+      skills/<id>/SKILL.md            the bytes for each `scope: driver` row
+
+    The consumer reads driver-skill-manifest.json, and for each row whose `materializes-when` predicate
+    holds, lays skills/<id>/SKILL.md into the scaffold's skill roots, verifying the bytes against the
+    row's sha256 (the load-bearing half — a package reference is not a file on disk).
+  -->
+  <PropertyGroup>
+    <FsggDriversContentDir Condition="'$(FsggDriversContentDir)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../drivers'))</FsggDriversContentDir>
+  </PropertyGroup>
+
+</Project>

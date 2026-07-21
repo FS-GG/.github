@@ -1,13 +1,16 @@
 # Assert `vars.NUGET_ORG_PUBLISH` is `true` wherever a workflow gates a nuget.org publish on it
 # (.github#750, epic #266).
 #
-# Two release workflows here (release-coord-engine.yml, release-new-sdd-workspace.yml) publish to public
-# nuget.org via Trusted Publishing and gate their nuget.org steps on `vars.NUGET_ORG_PUBLISH == 'true'`.
-# The gate is deliberate — without the OIDC policy in place NuGet/login fail-closes (401) — so the variable
-# is a switch. But nothing asserts the switch is on. FS.GG.Coord.Cli is one of the two packages behind it,
-# and it is the coordination engine the whole FLEET restores; unset the variable and `dotnet tool restore`
-# fails in five receivers, as an empty version list rather than an error (ADR-0039). scripts/check-publish-
-# flags.py closes that.
+# Several release workflows here (release-coord-engine.yml, release-new-sdd-workspace.yml, release-kit.yml,
+# release-drivers.yml) publish to public nuget.org via Trusted Publishing and gate their nuget.org steps on
+# `vars.NUGET_ORG_PUBLISH == 'true'`. The gate is deliberate — without the OIDC policy in place NuGet/login
+# fail-closes (401) — so the variable is a switch. But nothing asserts the switch is on. FS.GG.Coord.Cli is
+# one of the packages behind it, and it is the coordination engine the whole FLEET restores; unset the
+# variable and `dotnet tool restore` fails in five receivers, as an empty version list rather than an error
+# (ADR-0039). scripts/check-publish-flags.py closes that: the `assert` job SCANS every workflow in
+# .github/workflows, so a new gated publisher is caught without editing the script — the `paths:` lists
+# below only decide which workflow edits re-run the gate at PR time, so keep them enumerating the gated
+# release workflows.
 #
 # THE SCHEDULE IS THE LOAD-BEARING TRIGGER. The #750 hazard is the repo VARIABLE being unset — which touches
 # no file in this repo, so no path-filtered trigger can see it. Only a periodic run can. This mirrors
@@ -25,6 +28,8 @@ on:
       - "tests/publish-flags/**"
       - ".github/workflows/release-coord-engine.yml"
       - ".github/workflows/release-new-sdd-workspace.yml"
+      - ".github/workflows/release-kit.yml"
+      - ".github/workflows/release-drivers.yml"
       - ".github/workflows/publish-flags.yml"
   push:
     branches: [main]
@@ -33,6 +38,8 @@ on:
       - "tests/publish-flags/**"
       - ".github/workflows/release-coord-engine.yml"
       - ".github/workflows/release-new-sdd-workspace.yml"
+      - ".github/workflows/release-kit.yml"
+      - ".github/workflows/release-drivers.yml"
       - ".github/workflows/publish-flags.yml"
   schedule:
     # Daily. The variable being unset out-of-band touches no file here — only a periodic run notices.

@@ -1,0 +1,60 @@
+# FS.GG.Drivers gate (ADR-0054 §Byte-transport, ADR-0062, .github#1304). Packs the driver-skills package
+# and proves it derives from registry/driver-skill-manifest.json, packs every `scope: driver` member +
+# the manifest, and fails LOUD on a byte that does not match its recorded sha256. The logic lives in
+# src/FS.GG.Drivers/verify-package.sh — nothing executes a workflow, so the gate CALLS a script rather
+# than hand-rolling the checks in YAML (#724).
+#
+# Triggers on the package sources AND on the driver sources the package derives from (the authored skill
+# bodies, the manifest that names them, the emitter that produces it) — an edit to any of those changes
+# what the package ships, exactly as kit-package triggers on the coordination-kit sources. This gate is
+# additive: it stands alongside the skill-registry reconcile (which keeps the manifest current vs the
+# bytes) and does not replace it.
+
+name: drivers-package
+
+on:
+  pull_request:
+    paths:
+      - "src/FS.GG.Drivers/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "registry/driver-skill-manifest.json"
+      - "scripts/generate-driver-manifest"
+      - ".github/workflows/drivers-package.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/FS.GG.Drivers/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - "registry/driver-skill-manifest.json"
+      - "scripts/generate-driver-manifest"
+      - ".github/workflows/drivers-package.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drivers-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Locked restore — a silent dependency substitution fails here rather than changing what the
+      # gate ran against (ADR-0006). The package has no dependencies today, so this is cheap; it arms
+      # the enforcement the moment one is ever added.
+      - name: Restore (locked)
+        run: dotnet restore src/FS.GG.Drivers/FS.GG.Drivers.csproj --locked-mode
+
+      - name: Verify the driver package (derive, pack, content-address, fail-loud)
+        run: bash src/FS.GG.Drivers/verify-package.sh
