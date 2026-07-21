@@ -9,6 +9,13 @@
       "materializes-when": "always"
     },
     {
+      "id": "workBoard",
+      "scope": "driver",
+      "sha256": "02ccd2a602bc3a0bcca453901b77bcf7085c3d656807494bbcec2077ec3ec665",
+      "supplied-by": ".claude/skills/workBoard",
+      "materializes-when": "always"
+    },
+    {
       "id": "drive-board",
       "scope": "operator",
       "sha256": "28edb56f4cc7926ef423f9980ad6161e5d6c18cbe5f6008bc7b3c7981e2c7027",

@@ -287,6 +287,10 @@ skills:
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
   - { id: workRoadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: 2b9313bf960ba6df3f5634ba19919f9013a9f6e58d83734f102bfa4705b06812, materializes-when: "always" }
+  # workBoard — homed beside its owner+predicate siblings and reconciled verbatim from
+  # .github's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's.
+  - { id: workBoard,              scope: driver,  owner: .github,         source: .github/.claude/skills/workBoard/SKILL.md, sha256: 02ccd2a602bc3a0bcca453901b77bcf7085c3d656807494bbcec2077ec3ec665, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
