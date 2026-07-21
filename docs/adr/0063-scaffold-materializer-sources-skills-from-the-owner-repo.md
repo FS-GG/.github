@@ -4,9 +4,10 @@
 - **Date:** 2026-07-21
 - **Affects:** **FS.GG.SDD** (owns the scaffold materializer — this is the change: `src/FS.GG.SDD.Cli/RegistrySkillManifest.fs` reads only the frozen *provider* manifest today); **.github** (`registry/skills.yml`'s `owner`/`source`/`materializes-when` fields already declare where every skill's bytes live — this makes that declaration the *delivery* authority; owns the `scope: driver` rows); **FS.GG.Game** (owner of the game `product-skills/` — becomes a delivery *source*, so no game skill need be frozen into a donor); **FS.GG.Rendering** (its frozen `--profile game` `template/product-skills/` copies are retired); **FS.GG.Templates** (the deferred consumer `game` provider is no longer composed).
 - **Amends:** [ADR-0022](0022-extract-fs-gg-game-as-an-sdd-driven-component.md) §Decision 4 — the deferred *"consumer `game` scaffold provider"* sequel epic is **cancelled, not executed.** ADR-0022 §4 froze `dotnet new fs-gg-ui --profile game` and tracked *"two game-starter copies during the freeze … retired by the sequel provider epic."* Those copies are retired **here**, by the materializer sourcing FS.GG.Game's `product-skills/` directly — no second provider is stood up. §4's rejection of *live re-sourcing from within the rendering provider* stands (see Alternatives). The rest of ADR-0022 (the component cut, the majors, the ownership migration) is untouched.
-- **Interacts with:** [ADR-0054](0054-workroadmap-delivery-fabric-a-github-authored-product-materialized-driver.md) — the `scope: driver` `workRoadmap` gap ([FS.GG.SDD#620](https://github.com/FS-GG/FS.GG.SDD/issues/620)) is the **same defect** as this one (an `owner: .github` skill the materializer cannot reach), and closes under this decision. [ADR-0017](0017-skill-registry-condition-aware-materialization.md) — the `owner`/`source`/`materializes-when` catalog fields this makes load-bearing for delivery. [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) — a frozen donor copy is a *restatement* of the owner's bytes; sourcing from the owner **derives** delivery from the registry instead. [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md) — the same "bytes come from a pinned package restore, not a cross-repo copy" shape; the two decisions likely share a delivery substrate (see Consequences). [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) — the content-addressed materialize-and-verify is **preserved**; only the *byte source* changes.
+- **Interacts with:** [ADR-0054](0054-workroadmap-delivery-fabric-a-github-authored-product-materialized-driver.md) — the `scope: driver` `workRoadmap` gap (FS.GG.SDD#620, re-homed to [.github#1300](https://github.com/FS-GG/.github/issues/1300)) is the **same defect** as this one (an `owner: .github` skill the materializer cannot reach); this ADR settles its *design* (owner-authored, delivered, pinned), and #1300 settles its *transport*. [ADR-0017](0017-skill-registry-condition-aware-materialization.md) — the `owner`/`source`/`materializes-when` catalog fields this makes load-bearing for delivery. [ADR-0058](0058-adopt-one-governing-principle-derive-dont-restate.md) — a frozen donor copy is a *restatement* of the owner's bytes; sourcing from the owner **derives** delivery from the registry instead. [ADR-0062](0062-versioned-kit-package-replaces-byte-copy-sync.md) — the same "bytes come from a pinned package restore, not a cross-repo copy" shape; the two decisions likely share a delivery substrate (see Consequences). [ADR-0014](0014-skill-vendoring-one-manifest-one-materialize-verify.md) — the content-addressed materialize-and-verify is **preserved**; only the *byte source* changes.
 - **Decision-first ADR:** records the approach and cancels a deferred epic. The **implementation** — teaching the materializer to source owner-repo bytes, and retiring Rendering's frozen game copies — is a Coordination epic, filed and sequenced separately (ADR-0001). This ADR builds nothing.
 - **Resolves:** [.github#1299](https://github.com/FS-GG/.github/issues/1299) (the game-skill instance).
+- **Transport decision — [.github#1300](https://github.com/FS-GG/.github/issues/1300) is canonical.** This ADR decides the *principle* — deliver each owner-authored skill from the `owner`/`source` its registry row names, **pinned and content-addressed**, never a live scaffold-time reach. It does **not** pick the *byte-transport* (a provider-vendored subtree vs. a `.github`-published package vs. a variant). That pick is #1300's — the same decision for the driver (`workRoadmap`) and game (`fs-gg-playtest`) classes alike, because the `fsgg-sdd scaffold` inner loop is **offline** and generic SDD is contractually barred from reaching cross-repo (`FS.GG.SDD/CLAUDE.md`, scaffold FR-002/SC-005), so a *delivered* channel must exist first. This ADR's consequences sequence **behind** whichever transport #1300 selects.
 
 ## Context
 
@@ -49,9 +50,15 @@ it and the fabric that would has not shipped.
 
 For a row whose bytes do not live in the restored provider template — a `mirrored: false` product row
 (`fs-gg-playtest`) or a `scope: driver` / `owner: .github` row (`workRoadmap`) — the materializer
-reads the declared `source:` path from the **owner** repo's delivery and lays it into the scaffold
-wherever `materializes-when` holds. The frozen provider template remains the source for skills that
-*are* mirrored into it; nothing about the mirrored path changes.
+lays the declared `source:` path into the scaffold wherever `materializes-when` holds, **from a
+delivered, pinned, content-addressed channel** — *not* by reaching into the owner repo at scaffold
+time. "Sources from the owner" names the *authority* for the bytes (the registry `owner`/`source`),
+not a live cross-repo fetch: `fsgg-sdd scaffold` runs on an offline inner loop and generic SDD is
+barred from embedding a cross-repo source, so the owner's bytes must arrive through a channel that
+already exists locally (a provider-vendored subtree, or a `.github`-published package restore). Which
+channel is [.github#1300](https://github.com/FS-GG/.github/issues/1300)'s to decide. The frozen
+provider template remains the source for skills that *are* mirrored into it; nothing about the
+mirrored path changes.
 
 This is **Route C** of [.github#1299](https://github.com/FS-GG/.github/issues/1299), chosen over
 Route A (compose a bespoke `game` provider) and Route B (live re-source inside the rendering
@@ -76,9 +83,11 @@ this derives delivery from the row.
   `FS.GG.Game`'s and `.github`'s skill bytes through a *pinned, content-addressed* delivery, not a
   live `main` read — otherwise a scaffold's contents stop being reproducible from its provenance. This
   is where this decision meets **ADR-0062**: owner-repo skill bytes are a natural payload for the same
-  versioned-package restore (`FS.GG.Kit`-shaped) that ADR-0062 chose for the coordination kit. The
-  implementation epic should resolve the two together rather than invent a second delivery substrate.
-  Getting this wrong trades a loud missing skill for a *silently stale or unreproducible* one.
+  versioned-package restore (`FS.GG.Kit`-shaped) that ADR-0062 chose for the coordination kit. **The
+  transport is [.github#1300](https://github.com/FS-GG/.github/issues/1300)'s to choose** — for the
+  driver (`workRoadmap`) and game (`fs-gg-playtest`) classes together — and it should reuse ADR-0062's
+  substrate rather than invent a second one. Getting this wrong trades a loud missing skill for a
+  *silently stale or unreproducible* one.
 - **The content-addressed materialize-and-verify (ADR-0014) is preserved** — only the byte *source*
   changes. `scaffold-provenance.json` gains the owner-sourced artifacts it omits today; the verify
   gate keeps a scaffold honest against the pinned bytes.
