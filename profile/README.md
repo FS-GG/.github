@@ -239,13 +239,13 @@ authored beside this table — package IDs are stable identity, versions are not
 
 | Component | What it does | Current version |
 |---|---|---|
-| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | spec-driven lifecycle CLI + contracts | `5.0.1` |
-| [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | Skia/OpenGL + Elmish UI framework + fs-gg-ui template | `0.16.0` |
-| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | optional rule/evidence/gate tooling | `1.3.0` |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | downstream composition (fs-gg-fullstack, providers, overlays) | — |
-| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | render-independent game-simulation component + new BCL-only bottom layer (FS.GG.Game.Core / .Render); ADR-0022 | `0.7.1` |
-| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | render-independent game-audio component — Core vocabulary / Host backend seam / Engine (buses/fades/ducking/3D) / Elmish Cmd bridge; ADR-0023 | `0.3.0` |
-| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | render-independent transport component — protobuf over WebSocket (client + Kestrel server) / gRPC; ITransport / IMessageChannel seam + Sequential/Multiplexed correlation + serve/ServerEcho; ADR-0052 | `0.1.0` |
+| [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | Lifecycle CLI to scaffold a workspace and drive it from charter to ship; ships the typed cross-repo contracts | `5.0.1` |
+| [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework — MVU over SkiaSharp/OpenGL with layout, input, controls and themes, plus the fs-gg-ui template | `0.16.0` |
+| [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional tooling that checks your artifacts against rules you control — advisory by default | `1.3.0` |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | Wires SDD, Rendering and Governance into one ready-to-run workspace at scaffold time | — |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | Game-simulation libraries — a render-independent simulation core with a companion renderer, usable as plain F# libraries | `0.7.1` |
+| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | Audio-engine libraries — synthesis, playback and mixing (buses, fades, ducking, 3D), with an optional Elmish adapter | `0.3.0` |
+| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | Networking/transport libraries — protobuf messaging over WebSocket or gRPC, render-independent, with an optional Elmish adapter | `0.1.0` |
 
 <!-- END GENERATED: fsgg-component-inventory -->
 
