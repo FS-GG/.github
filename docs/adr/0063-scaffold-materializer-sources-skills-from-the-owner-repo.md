@@ -57,8 +57,9 @@ not a live cross-repo fetch: `fsgg-sdd scaffold` runs on an offline inner loop a
 barred from embedding a cross-repo source, so the owner's bytes must arrive through a channel that
 already exists locally (a provider-vendored subtree, or a `.github`-published package restore). Which
 channel is [.github#1300](https://github.com/FS-GG/.github/issues/1300)'s to decide. The frozen
-provider template remains the source for skills that *are* mirrored into it; nothing about the
-mirrored path changes.
+provider template remains the source for skills that *are* mirrored into it.
+
+> **Superseded in part by the [2026-07-21 amendment](#amendment-2026-07-21--game-product-skills-are-uniformly-owner-sourced-the-four-mirroredtrue-rows-flip).** The original text below read that "nothing about the mirrored path changes" and that the four game `mirrored: true` rows stay mirrored into Rendering. Under the amendment the four game product skills — `fs-gg-game-core`, `fs-gg-audio`, `fs-gg-persistence`, `fs-gg-model-swap` — flip `mirrored: true → mirrored: false` and become owner-sourced too, so the mirrored path **is** retired for the game class (they move `Mirrored → NoCounterpart`). Read the amendment as the governing text where it and the paragraphs below disagree.
 
 This is **Route C** of [.github#1299](https://github.com/FS-GG/.github/issues/1299), chosen over
 Route A (compose a bespoke `game` provider) and Route B (live re-source inside the rendering
@@ -94,7 +95,9 @@ this derives delivery from the row.
 - **`FrozenMirrorVerdict.fs`'s `NoCounterpart` entries stay correct and stay.** They assert
   *"no rendering mirror exists"*, which remains true and is now simply orthogonal to delivery —
   delivery no longer depends on a mirror existing. The FS.GG.Rendering#505 / `mirrored: true` refusal
-  is vindicated, not worked around.
+  is vindicated, not worked around. *(Amended 2026-07-21: this now understates the reach. The four
+  game `mirrored: true` rows flip to `mirrored: false` and thereby move `Mirrored → NoCounterpart`,
+  **growing** the `NoCounterpart` set rather than leaving it fixed. See the [amendment](#amendment-2026-07-21--game-product-skills-are-uniformly-owner-sourced-the-four-mirroredtrue-rows-flip).)*
 - **Existing scaffolds need a backfill.** `Rougue1` and any shipped `sdd`-lane tree are missing the
   owner-sourced skills; the epic must say whether `fsgg-sdd upgrade` / re-vendor backfills them
   (FS.GG.SDD#620 asks the same question — answer it once).
@@ -116,3 +119,54 @@ this derives delivery from the row.
 - **Do nothing / keep the freeze and accept the gap.** Record `fs-gg-playtest` as gated-in but
   undeliverable until some later epic. Rejected: the gap is already shipping (`Rougue1`), a second
   instance (`workRoadmap`) is open, and the freeze was always a bridge ADR-0022 committed to retiring.
+
+## Amendment (2026-07-21) — Game product skills are uniformly owner-sourced: the four `mirrored:true` rows flip
+
+The Decision above kept a split delivery model for the game class: the four game product skills that
+were mirrored into Rendering — `fs-gg-game-core`, `fs-gg-audio`, `fs-gg-persistence`,
+`fs-gg-model-swap` — stayed `mirrored: true` and kept flowing through the frozen provider template,
+while only the *newer* `mirrored: false` rows (`fs-gg-ai`, `ballistics`, `effects`, `physics`,
+`playtest`) were owner-sourced. That left two delivery paths for one class of skill, and two things
+for a reader to reconcile: a `NoCounterpart` set that had to *stay fixed* and a mirrored path the ADR
+said "nothing changes" about.
+
+**The decision (operator-approved 2026-07-21): make the game class uniform.** The four
+`mirrored: true` game product rows flip **`mirrored: true → mirrored: false`** and become
+owner-sourced through the same channel as their siblings — delivered from the **`FS.GG.Game.Skills`**
+package that already carries `fs-gg-ai`/`ballistics`/`effects`/`physics`/`playtest`. After the flip
+**every** game product skill is owner-sourced and **none** is mirrored into the Rendering provider.
+There is no longer a game-class mirrored path to reason about; the split is gone.
+
+This is not a new mechanism — it is the Decision's mechanism applied to the whole class. Per
+**ADR-0058 (derive-don't-restate)** each flip is a *one-line-per-row* change to FS.GG.Game's producer
+manifest, from which the registry **auto-reconciles** `registry/skills.yml` (ADR-0060); no row is
+hand-edited in `.github` and no frozen copy is authored. Per **ADR-0062 (package substrate)** the
+bytes arrive through the pinned, content-addressed `FS.GG.Game.Skills` package restore — the same
+substrate this ADR already commits the owner-sourced rows to — so the flip **adds no provider and
+freezes no copy**; it moves four rows off the mirror and onto a channel that already delivers their
+siblings.
+
+**Effect on `FrozenMirrorVerdict.fs`.** The Decision/Consequences text that these four rows "stay
+`Mirrored`" and that the `NoCounterpart` set "stays correct and stays" is corrected: the four move
+**`Mirrored → NoCounterpart`**. This *grows* the `NoCounterpart` set (it is not fixed), and it is the
+intended, verified end state — "no rendering mirror exists" becomes true for the whole game product
+class, exactly as it is already true for `ai`/`ballistics`/`effects`/`physics`/`playtest`. The
+FS.GG.Rendering#505 / `mirrored: true` refusal is not contradicted: nothing is being *forged* into a
+mirror; a mirror is being **retired**.
+
+**The chain (publish-before-flip).** Ordered so no scaffold ever loses a skill:
+
+1. **[FS.GG.Game#454](https://github.com/FS-GG/FS.GG.Game/issues/454)** — flip the four rows to
+   `mirrored: false` in FS.GG.Game's producer manifest and **republish `FS.GG.Game.Skills`** carrying
+   them. The package must ship the four *before* the mirror is retired, so the owner-sourced channel
+   is live first.
+2. **[FS.GG.Rendering#965](https://github.com/FS-GG/FS.GG.Rendering/issues/965)** — retire
+   Rendering's frozen `--profile game` copies for the four, now that `FS.GG.Game.Skills` delivers
+   them. This extends the Consequences' "frozen `--profile game` copies are retired" from the
+   already-owner-sourced rows to cover these four as well.
+
+This amendment is the governance record for the **FS.GG.Game#454 → FS.GG.Rendering#965** chain. It
+does not disturb the transport decision ([.github#1300](https://github.com/FS-GG/.github/issues/1300)
+remains canonical) or the content-addressed materialize-and-verify contract (ADR-0014): it only
+enlarges the set of rows the owner-sourced channel carries and correspondingly the set the mirror no
+longer needs to.
