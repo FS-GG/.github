@@ -1,16 +1,18 @@
 # FS-GG
 
 **F# tooling for building desktop UI apps** — a SkiaSharp/OpenGL UI
-framework, a spec-driven development lifecycle CLI, and optional governance,
-composed into one runnable workspace on `net10.0`.
+framework, a spec-driven development lifecycle CLI, optional governance, and
+libraries for game-simulation, audio, and networking, composed into one runnable
+workspace on `net10.0`.
 
 You describe a Model-View-Update (MVU) app; FS-GG renders it, scaffolds it,
 drives it through a structured lifecycle from charter to ship, and — only if you
 opt in — checks it against rules you control. Each piece ships on its own and is
 usable on its own; you adopt only what you need.
 
-> **📖 Two things, named precisely.** FS-GG is the **platform** — the five
-> repositories in this org (Rendering, SDD, Governance, Templates, and this
+> **📖 Two things, named precisely.** FS-GG is the **platform** — **seven
+> framework components** (Rendering, SDD, Governance, Templates, Game, Audio, and
+> Net) across **eight repositories** in this org (those seven plus this
 > coordination repo), the framework we build and publish. What you scaffold *with*
 > the platform is a **workspace**: a generated repo carrying a runnable **app**, the
 > `.fsgg/` lifecycle, agent skills, and optional governance. Within the platform,
@@ -22,7 +24,7 @@ usable on its own; you adopt only what you need.
 > - **Building an app?** Start with the **[Consumer guide](https://github.com/FS-GG/.github/blob/main/docs/consumer/index.md)** —
 >   install, scaffold, build, run, and ship your first workspace in one sitting.
 > - **Want to understand how FS-GG is built?** Read the **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
->   the four-component split, the one-way dependency rule, the contract registry, and how it all composes.
+>   the seven-component split, the one-way dependency rule, the contract registry, and how it all composes.
 
 ---
 
@@ -194,12 +196,22 @@ fsgg-sdd --version                            # the CLI's OWN version — not yo
 
 ## The components
 
-| Component | What it gives you | Ships |
+Seven framework components ship independently; you adopt only what you need. Each
+is public on nuget.org and restores with no credential.
+
+| Component | What it does | Ships |
 |---|---|---|
 | [**FS.GG.Rendering**](https://github.com/FS-GG/FS.GG.Rendering) | The UI framework: Scene, layout, input, viewer/host, controls, themes — Elmish/MVU over SkiaSharp/OpenGL. The render core is Elmish-free; idiomatic Elmish is an optional adapter. | `FS.GG.UI.*` packages + the `fs-gg-ui` `dotnet new` template |
 | [**FS.GG.SDD**](https://github.com/FS-GG/FS.GG.SDD) | The lifecycle CLI: scaffold a workspace, then drive `charter → ship` with structured artifacts and JSON/text/rich reports. Also ships `FS.GG.Contracts`, the typed cross-repo contract backbone. | `FS.GG.SDD.Cli` (`fsgg-sdd`) + `FS.GG.Contracts` |
 | [**FS.GG.Governance**](https://github.com/FS-GG/FS.GG.Governance) | Optional rule / evidence / route tooling — a pure inference kernel that checks your artifacts, advisory by default. | `FS.GG.Governance.Cli` (`fsgg-governance`) + the reference gate set |
-| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition: wires SDD + Rendering + Governance into one ready-to-run workspace at scaffold time. | the `rendering` scaffold provider + `fs-gg-governance` overlay |
+| [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | The composition: wires SDD + Rendering + Governance into one ready-to-run workspace at scaffold time. | the `FS.GG.Templates` `dotnet new` pack + the `FS.GG.NewSddWorkspace` tool |
+| [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | Game-simulation libraries: a game/simulation core and a companion renderer, consumable as plain F# libraries. | `FS.GG.Game.Core` + `FS.GG.Game.Render` |
+| [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | Audio-engine libraries: synthesis/host/engine, with an optional Elmish adapter. | `FS.GG.Audio.Core` (+ `.Host` / `.Engine` / `.Elmish`) |
+| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | Networking/transport libraries: protobuf over WebSocket/gRPC, render-independent, with an optional Elmish adapter. | `FS.GG.Net.Core` (+ `.WebSocket` / `.WebSocket.Server` / `.Protobuf` / `.Grpc` / `.Elmish`) |
+
+An eighth repository — [**FS-GG/.github**](https://github.com/FS-GG/.github) — is
+this coordination repo: the org's shared docs, registry, and cross-repo fabric. It
+is not a consumer component.
 
 ### Pick your path
 
@@ -209,6 +221,9 @@ fsgg-sdd --version                            # the CLI's OWN version — not yo
 | Run a managed dev lifecycle | **FS.GG.SDD** (`fsgg-sdd`) | [SDD quickstart](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/quickstart.md) |
 | Scaffold a full-stack workspace (one command) | **`new-sdd-workspace`** (wraps the FS.GG.Templates `rendering` provider) | [Scaffolder README](https://github.com/FS-GG/.github/blob/main/scripts/NewSddWorkspace/README.md) |
 | Add rules / gates to a workspace | **FS.GG.Governance** overlay | [Adopting governance](https://github.com/FS-GG/FS.GG.SDD/blob/main/docs/adopting-governance.md) |
+| Build a game / simulation as a library | **FS.GG.Game** (`dotnet add package FS.GG.Game.Core`) | [FS.GG.Game](https://github.com/FS-GG/FS.GG.Game) |
+| Add audio (synthesis / playback) | **FS.GG.Audio** (`dotnet add package FS.GG.Audio.Core`) | [FS.GG.Audio](https://github.com/FS-GG/FS.GG.Audio) |
+| Wire networking / transport (WebSocket / gRPC) | **FS.GG.Net** (`dotnet add package FS.GG.Net.Core`) | [FS.GG.Net](https://github.com/FS-GG/FS.GG.Net) |
 
 Not sure? See **[Which components do I need?](https://github.com/FS-GG/.github/blob/main/docs/consumer/which-products.md)**
 
@@ -272,7 +287,7 @@ surface stays machine-checkable.
 
 > **📐 Want the full picture?** Read the
 > **[Architecture guide](https://github.com/FS-GG/.github/blob/main/docs/architecture.md)** —
-> the four-component split, the one-way dependency rule, the contract registry, the
+> the seven-component split, the one-way dependency rule, the contract registry, the
 > shared F# house style, and how the repositories compose into one runnable
 > workspace, with links to every source.
 

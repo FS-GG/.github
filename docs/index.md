@@ -26,7 +26,7 @@ description: Index for the FS.GG split-repository direction and the documents th
 Kept current — the system as built, and the machinery that keeps it coherent.
 
 - [Architecture](architecture.md) — the newcomer's map of the whole system: the
-  four-component split, the one-way dependency rule, the contract registry, the shared
+  seven-component split, the one-way dependency rule, the contract registry, the shared
   F# house style, and how the repositories compose. **Start here.**
 - [Architecture Decision Records](adr/README.md) — cross-repo decisions (ADR-0001…),
   each with status and supersession history.
