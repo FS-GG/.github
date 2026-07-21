@@ -72,6 +72,12 @@ DRIVERS = [
         "materializes-when": "always",
     },
     {
+        "id": "workBoard",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/workBoard",
+        "materializes-when": "always",
+    },
+    {
         "id": "drive-board",
         "scope": "operator",
         "supplied-by": ".claude/skills/drive-board",
