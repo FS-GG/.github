@@ -541,7 +541,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `game-scene-adapter` | FS.GG.Game | `0.8.0` | `0.8.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.4.0` | `0.4.0` |
 | `fs-gg-net` | FS.GG.Net | `0.2.0` | `0.2.0` |
-| `coord-engine` | FS-GG/.github | `0.7.0` | `0.7.0` |
+| `coord-engine` | FS-GG/.github | `0.8.0` | `0.8.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.4.0` | `0.4.0` |
 
 **The orchestrator axis.** `fs-gg-ui-template` pins `minimum-fsgg-sdd` at **`0.6.0`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below).
