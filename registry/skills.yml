@@ -290,7 +290,7 @@ skills:
   # workBoard — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: workBoard,              scope: driver,  owner: .github,         source: .github/.claude/skills/workBoard/SKILL.md, sha256: 02ccd2a602bc3a0bcca453901b77bcf7085c3d656807494bbcec2077ec3ec665, materializes-when: always }
+  - { id: workBoard,              scope: driver,  owner: .github,         source: .github/.claude/skills/workBoard/SKILL.md, sha256: 5c84366ac4e08ce00bcdeed1b46eb88324b034e03d0d433fb7bf030aac051a27, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #

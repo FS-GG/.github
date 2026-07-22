@@ -61,8 +61,10 @@ is a **runtime** property, not a materialization gate. So before the loop, check
 
 1. **The board is wired.** `FSGG_COORD_OWNER` and `FSGG_COORD_PROJECT` are set (read them from the
    environment / `.claude/settings.json`). Absent → *"this workspace has no coordination board (scaffolded
-   `--no-coordination`?). Use [workRoadmap](../workRoadmap/SKILL.md) for a markdown roadmap, or re-wire
-   with `new-sdd-workspace --board owner/title`."*
+   `--no-coordination`?). Use [workRoadmap](../workRoadmap/SKILL.md) for a markdown roadmap, or **retrofit**
+   the coordination kit + board onto it with `new-sdd-workspace retrofit <workspace>` (add `--board
+   owner/title` for a non-default board) — the idempotent inverse of the scaffold-time wiring, which is
+   exactly what `--no-coordination` left off (#1343)."*
 2. **The kit is present.** `scripts/fsgg-coord` resolves, and `check-board` + `pnext-item` are
    materialized in this tree. Absent → the same class of message: the workspace was not wired for
    coordination, so this is not the skill for it.
@@ -70,6 +72,10 @@ is a **runtime** property, not a materialization gate. So before the loop, check
    The default org board (`FS-GG` / `Coordination`) works on any engine; a workspace pointed at its
    **own** (non-`FS-GG`) board needs the post-0.4.0 engine for the offer/chore path (#1140) — a
    version/permission failure stops with the reset/permission guidance it prints, **not** a stack trace.
+   That own board can be **user-owned**, not only org-owned (#1344, #1349): set `FSGG_COORD_OWNER_TYPE=user`
+   with an explicit `FSGG_COORD_OWNER` for a named account, or `FSGG_COORD_OWNER_TYPE=user` with **no**
+   `FSGG_COORD_OWNER` to drive the token's **own** `viewer` board with no login in config (the CLI labels
+   it `@me`). Unset / `org` keeps the org default, byte-identical.
 
 That is the whole of "or fail gracefully": the skill lands everywhere, and decides at runtime whether the
 workspace is board-capable. A miss is a clean stop with a pointer, not an error.
