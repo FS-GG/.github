@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-22** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-07-22** — ADD `cut-nuget-release` operator skill (owner github; [.github#1362](https://github.com/FS-GG/.github/issues/1362), ADR-0057): reconciled the new `.github`-authored release-train skill from `registry/driver-skill-manifest.json` into the operator block. It audits every rostered producer for package-affecting commits since its last successful release, sequences coherent-set publications, verifies GitHub Packages plus nuget.org, and reconciles the dependency registry. Like `drive-board`, it requires sibling repository checkouts and is therefore `scope: operator` with `materializes-when: false`; it is available byte-identically in this operator checkout's `.claude`, `.codex`, and `.agents` roots but is intentionally absent from product workspaces. No schema change; operator rows increase 1→2.
 
 - **2026-07-22** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 0 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 1 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
