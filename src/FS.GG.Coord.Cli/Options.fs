@@ -514,6 +514,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "templates" -> "FS.GG.Templates"
         | "game" -> "FS.GG.Game"
         | "audio" -> "FS.GG.Audio"
+        | "net" -> "FS.GG.Net"
         | _ ->
             // owner/repo -> the repo part (bash's `${1#*/}`); a literal name -> itself.
             match raw.IndexOf('/') with

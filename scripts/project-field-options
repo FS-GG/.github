@@ -249,15 +249,41 @@ def assert_live_precondition(snapshot: dict[str, Any], live: dict[str, Any]) -> 
         raise Refused("project item total changed after the snapshot; capture a new complete snapshot")
 
 
-def roster_ids(path: Path) -> list[str]:
+def roster_pairs(path: Path) -> list[tuple[str, str]]:
     try:
         text = path.read_text()
     except OSError as exc:
         raise Refused(f"cannot read roster {path}: {exc}") from exc
-    ids = re.findall(r"^\s*-\s*\{\s*id:\s*([^,\s]+)\s*,\s*full:\s*[^,}]+", text, re.MULTILINE)
+    pairs = re.findall(r"^\s*-\s*\{\s*id:\s*([^,\s]+)\s*,\s*full:\s*([^,}\s]+)", text, re.MULTILINE)
+    ids = [repo_id for repo_id, _ in pairs]
     if not ids or len(ids) != len(set(ids)):
         raise Refused("roster repo rows were absent or duplicated; refusing a partial parse")
-    return ids
+    return pairs
+
+
+def roster_ids(path: Path) -> list[str]:
+    return [repo_id for repo_id, _ in roster_pairs(path)]
+
+
+def compare_resolver(roster: Path, resolver: Path) -> None:
+    try:
+        text = resolver.read_text()
+    except OSError as exc:
+        raise Refused(f"cannot read embedded repo resolver {resolver}: {exc}") from exc
+    match = re.search(r"let resolveRepo \(raw: string\).*?=\s*(.*?)\n\s*/// An owner \+ repo", text, re.DOTALL)
+    if not match:
+        raise Refused("could not isolate Options.resolveRepo; refusing a partial resolver check")
+    actual = dict(re.findall(r'^\s*\|\s*"([^"]+)"\s*->\s*"([^"]+)"', match.group(1), re.MULTILINE))
+    expected = {
+        repo_id: full.split("/", 1)[1]
+        for repo_id, full in roster_pairs(roster)
+        if repo_id != full.split("/", 1)[1]
+    }
+    if actual != expected:
+        missing = sorted(set(expected) - set(actual))
+        stale = sorted(set(actual) - set(expected))
+        wrong = sorted(k for k in set(actual) & set(expected) if actual[k] != expected[k])
+        raise Refused(f"embedded --repo resolver drift: missing={missing}; stale={stale}; wrong={wrong}")
 
 
 def documented_options(path: Path) -> list[dict[str, str]]:
@@ -364,9 +390,11 @@ def cmd_check(args: argparse.Namespace) -> None:
     else:
         state = read_state(args.owner, args.project_number, args.project_title, args.field)
         options = state["field"]["options"]
-    compare_roster(options, Path(args.roster), set(args.allow_extra))
+    roster = Path(args.roster)
+    compare_roster(options, roster, set(args.allow_extra))
+    compare_resolver(roster, Path(args.resolver))
     names = [o["name"] for o in options]
-    print(f"Repo Scope matches roster ({len(roster_ids(Path(args.roster)))} repos; allowed extras={sorted(set(names)-set(roster_ids(Path(args.roster))))})")
+    print(f"Repo Scope and --repo resolver match roster ({len(roster_ids(roster))} repos; allowed extras={sorted(set(names)-set(roster_ids(roster)))})")
 
 
 def cmd_restore(args: argparse.Namespace) -> None:
@@ -434,6 +462,7 @@ def parse_args() -> argparse.Namespace:
     check = subs.add_parser("check", help="compare roster ids with Repo Scope options")
     common(check)
     check.add_argument("--roster", default="registry/repos.yml")
+    check.add_argument("--resolver", default="src/FS.GG.Coord.Cli/Options.fs")
     source = check.add_mutually_exclusive_group()
     source.add_argument("--snapshot", help="check an integrity-verified captured field instead of live GitHub")
     source.add_argument("--schema", help="check the bounded options table in board-schema.md (CI/offline)")

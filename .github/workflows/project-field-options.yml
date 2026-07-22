@@ -7,6 +7,8 @@ on:
       - "scripts/project-field-options"
       - "docs/coordination/board-schema.md"
       - "docs/coordination/board-schema-snapshots/**"
+      - ".claude/skills/cross-repo-coordination/SKILL.md"
+      - ".agents/skills/cross-repo-coordination/SKILL.md"
       - "tests/project-field-options/**"
       - ".github/workflows/project-field-options.yml"
   push:
@@ -16,6 +18,8 @@ on:
       - "scripts/project-field-options"
       - "docs/coordination/board-schema.md"
       - "docs/coordination/board-schema-snapshots/**"
+      - ".claude/skills/cross-repo-coordination/SKILL.md"
+      - ".agents/skills/cross-repo-coordination/SKILL.md"
       - "tests/project-field-options/**"
       - ".github/workflows/project-field-options.yml"
   workflow_dispatch:

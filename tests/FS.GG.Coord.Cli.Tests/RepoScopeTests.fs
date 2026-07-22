@@ -42,6 +42,7 @@ module RepoScopeTests =
     [<InlineData("templates", "FS.GG.Templates")>]
     [<InlineData("game", "FS.GG.Game")>]
     [<InlineData("audio", "FS.GG.Audio")>]
+    [<InlineData("net", "FS.GG.Net")>]
     [<InlineData("Governance", "FS.GG.Governance")>] // never a casing bug — the map is case-insensitive
     [<InlineData("FS-GG/FS.GG.SDD", "FS.GG.SDD")>] // owner/repo -> the repo part
     [<InlineData("FS.GG.SDD", "FS.GG.SDD")>] // a literal name passes through
@@ -55,6 +56,7 @@ module RepoScopeTests =
     [<Theory>]
     [<InlineData("sdd")>]
     [<InlineData("FS-GG/FS.GG.SDD")>]
+    [<InlineData("net")>]
     [<InlineData(".github")>]
     let ``resolveRepo is idempotent`` (raw: string) =
         let once = Options.resolveRepo raw
