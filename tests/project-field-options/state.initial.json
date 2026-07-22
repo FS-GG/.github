@@ -1,0 +1,17 @@
+{
+  "field": {
+    "id": "field_repo_scope",
+    "name": "Repo Scope",
+    "options": [
+      {"color": "GRAY", "description": "", "id": "opt_dotgithub", "name": ".github"},
+      {"color": "BLUE", "description": "SDD", "id": "opt_sdd", "name": "sdd"},
+      {"color": "PURPLE", "description": "cross-repository", "id": "opt_cross", "name": "cross-repo"}
+    ]
+  },
+  "items": [
+    {"id": "item_1", "number": 1, "repoScope": ".github", "title": "one"},
+    {"id": "item_2", "number": 2, "repoScope": "sdd", "title": "two"},
+    {"id": "item_3", "number": 3, "repoScope": null, "title": "three"}
+  ],
+  "project": {"id": "project_coordination", "number": 1, "title": "Coordination"}
+}

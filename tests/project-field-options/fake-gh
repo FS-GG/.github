@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+
+def fail(message: str) -> None:
+    print(message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+if sys.argv[1:] != ["api", "graphql", "--input", "-"]:
+    fail(f"unexpected argv: {sys.argv[1:]}")
+
+state_path = Path(os.environ["PROJECT_FIELD_OPTIONS_FAKE_STATE"])
+state = json.loads(state_path.read_text())
+request = json.load(sys.stdin)
+query = request["query"]
+variables = request["variables"]
+
+
+def project(fields=False, items=None):
+    value = {"id": state["project"]["id"], "number": 1, "title": "Coordination"}
+    if fields:
+        value["fields"] = {"nodes": [{"id": state["field"]["id"], "name": "Repo Scope", "options": state["field"]["options"]}]}
+    if items is not None:
+        value["items"] = items
+    return {"data": {"organization": {"projectV2": value}}}
+
+
+if "query ProjectFieldOptionsField" in query:
+    reply = project(fields=True)
+elif "query ProjectFieldOptionsItems" in query:
+    all_items = state["items"]
+    start = int(variables.get("after") or 0)
+    page_size = 2
+    selected = all_items[start : start + page_size]
+    nodes = []
+    option_by_name = {o["name"]: o["id"] for o in state["field"]["options"]}
+    for item in selected:
+        value = item.get("repoScope")
+        nodes.append(
+            {
+                "id": item["id"],
+                "type": "ISSUE",
+                "fieldValueByName": {"name": value, "optionId": option_by_name[value]} if value else None,
+                "content": {
+                    "number": item["number"],
+                    "title": item["title"],
+                    "url": f"https://example.invalid/{item['number']}",
+                    "repository": {"nameWithOwner": "FS-GG/.github"},
+                },
+            }
+        )
+    total = len(all_items) + (1 if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_BAD_TOTAL") else 0)
+    end = start + len(selected)
+    reply = project(
+        items={
+            "totalCount": total,
+            "pageInfo": {"hasNextPage": end < len(all_items), "endCursor": str(end) if end < len(all_items) else None},
+            "nodes": nodes,
+        }
+    )
+elif "mutation ProjectFieldOptionsUpdate" in query:
+    if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_FORBID_MUTATION"):
+        fail("field mutation was forbidden by fixture")
+    options = variables["options"]
+    materialized = []
+    for option in options:
+        copied = dict(option)
+        copied.setdefault("id", "opt_" + copied["name"].replace(".", "dot"))
+        materialized.append(copied)
+    state["field"]["options"] = materialized
+    if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_CLEAR_ON_UPDATE"):
+        for item in state["items"]:
+            item["repoScope"] = None
+    state["fieldMutationCount"] = state.get("fieldMutationCount", 0) + 1
+    state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    reply = {"data": {"updateProjectV2Field": {"projectV2Field": state["field"]}}}
+elif "mutation ProjectFieldOptionsRestore" in query:
+    if os.environ.get("PROJECT_FIELD_OPTIONS_FAKE_DROP_RESTORE"):
+        reply = {"data": {}}
+    else:
+        by_id = {item["id"]: item for item in state["items"]}
+        option_by_id = {o["id"]: o["name"] for o in state["field"]["options"]}
+        n = 0
+        while f"item{n}" in variables:
+            item = by_id[variables[f"item{n}"]]
+            item["repoScope"] = option_by_id[variables[f"option{n}"]] if f"option{n}" in variables else None
+            n += 1
+        state["restoreMutationCount"] = state.get("restoreMutationCount", 0) + 1
+        state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+        reply = {"data": {}}
+else:
+    fail("unexpected GraphQL document")
+
+print(json.dumps(reply))

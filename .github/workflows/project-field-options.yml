@@ -1,0 +1,35 @@
+name: project-field-options
+
+on:
+  pull_request:
+    paths:
+      - "registry/repos.yml"
+      - "scripts/project-field-options"
+      - "docs/coordination/board-schema.md"
+      - "docs/coordination/board-schema-snapshots/**"
+      - "tests/project-field-options/**"
+      - ".github/workflows/project-field-options.yml"
+  push:
+    branches: [main]
+    paths:
+      - "registry/repos.yml"
+      - "scripts/project-field-options"
+      - "docs/coordination/board-schema.md"
+      - "docs/coordination/board-schema-snapshots/**"
+      - "tests/project-field-options/**"
+      - ".github/workflows/project-field-options.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise guarded migration and recovery
+        run: bash tests/project-field-options/run.sh
+      - name: Check roster against documented Repo Scope schema
+        run: scripts/project-field-options check --schema docs/coordination/board-schema.md

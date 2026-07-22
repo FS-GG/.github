@@ -1,0 +1,471 @@
+#!/usr/bin/env python3
+"""Guarded Projects v2 single-select inspection and migration.
+
+The dangerous operation here is ``updateProjectV2Field``.  A field update has
+historically recreated its options and cleared every item value.  This tool
+therefore makes a complete, integrity-checked item-id -> option-name snapshot a
+hard precondition, preserves existing option ids when GitHub accepts them, and
+repairs then verifies every old assignment after the mutation.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+class Refused(RuntimeError):
+    pass
+
+
+FIELD_QUERY = r"""
+query ProjectFieldOptionsField($owner:String!,$number:Int!){
+  organization(login:$owner){projectV2(number:$number){
+    id number title
+    fields(first:100){nodes{
+      ... on ProjectV2SingleSelectField{id name options{id name color description}}
+    }}
+  }}
+}
+"""
+
+ITEMS_QUERY = r"""
+query ProjectFieldOptionsItems($owner:String!,$number:Int!,$field:String!,$after:String){
+  organization(login:$owner){projectV2(number:$number){
+    id number title
+    items(first:100,after:$after){
+      totalCount pageInfo{hasNextPage endCursor}
+      nodes{
+        id
+        fieldValueByName(name:$field){
+          ... on ProjectV2ItemFieldSingleSelectValue{name optionId}
+        }
+      }
+    }
+  }}
+}
+"""
+
+UPDATE_FIELD = r"""
+mutation ProjectFieldOptionsUpdate(
+  $field:ID!,$name:String!,$options:[ProjectV2SingleSelectFieldOptionInput!]
+){
+  updateProjectV2Field(input:{fieldId:$field,name:$name,singleSelectOptions:$options}){
+    projectV2Field{
+      ... on ProjectV2SingleSelectField{id name options{id name color description}}
+    }
+  }
+}
+"""
+
+
+def canonical(value: Any) -> bytes:
+    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def digest_payload(snapshot: dict[str, Any]) -> str:
+    payload = {k: v for k, v in snapshot.items() if k != "sha256"}
+    return hashlib.sha256(canonical(payload)).hexdigest()
+
+
+def graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    gh = os.environ.get("PROJECT_FIELD_OPTIONS_GH", "gh")
+    payload = {"query": query, "variables": variables}
+    proc = subprocess.run(
+        [gh, "api", "graphql", "--input", "-"],
+        input=canonical(payload),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if proc.returncode:
+        raise Refused(f"GraphQL transport failed ({proc.returncode}): {proc.stderr.decode().strip()}")
+    try:
+        reply = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise Refused(f"GraphQL returned invalid JSON: {exc}") from exc
+    if reply.get("errors"):
+        raise Refused("GraphQL refused the operation: " + json.dumps(reply["errors"], sort_keys=True))
+    if "data" not in reply:
+        raise Refused("GraphQL returned neither data nor errors")
+    return reply["data"]
+
+
+def project_field(owner: str, number: int, title: str, field_name: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    data = graphql(FIELD_QUERY, {"owner": owner, "number": number})
+    project = (data.get("organization") or {}).get("projectV2")
+    if not project:
+        raise Refused(f"project {owner}/{number} was not readable")
+    if project.get("title") != title:
+        raise Refused(f"project {owner}/{number} is {project.get('title')!r}, expected {title!r}")
+    fields = [n for n in project["fields"]["nodes"] if n and n.get("name") == field_name]
+    if len(fields) != 1 or "options" not in fields[0]:
+        raise Refused(f"expected exactly one readable single-select field named {field_name!r}")
+    field = fields[0]
+    option_names = [o["name"] for o in field["options"]]
+    option_ids = [o["id"] for o in field["options"]]
+    if len(option_names) != len(set(option_names)) or len(option_ids) != len(set(option_ids)):
+        raise Refused(f"field {field_name!r} has duplicate option names or ids")
+    return project, field
+
+
+def read_state(owner: str, number: int, title: str, field_name: str) -> dict[str, Any]:
+    project, field = project_field(owner, number, title, field_name)
+    after: str | None = None
+    items: list[dict[str, Any]] = []
+    total: int | None = None
+    seen_cursors: set[str] = set()
+    while True:
+        data = graphql(
+            ITEMS_QUERY,
+            {"owner": owner, "number": number, "field": field_name, "after": after},
+        )
+        page_project = (data.get("organization") or {}).get("projectV2")
+        if not page_project or page_project.get("id") != project["id"]:
+            raise Refused("project disappeared or changed while paging items")
+        page = page_project["items"]
+        page_total = int(page["totalCount"])
+        if total is None:
+            total = page_total
+        elif total != page_total:
+            raise Refused(f"project item count changed while paging ({total} -> {page_total}); retry snapshot")
+        for raw in page["nodes"]:
+            value = raw.get("fieldValueByName")
+            item = {
+                "id": raw["id"],
+                "repoScope": value.get("name") if value else None,
+                "repoScopeOptionId": value.get("optionId") if value else None,
+            }
+            items.append(item)
+        info = page["pageInfo"]
+        if not info["hasNextPage"]:
+            break
+        cursor = info.get("endCursor")
+        if not cursor or cursor in seen_cursors:
+            raise Refused("item pagination did not advance")
+        seen_cursors.add(cursor)
+        after = cursor
+    assert total is not None
+    ids = [i["id"] for i in items]
+    if len(items) != total:
+        raise Refused(f"incomplete item read: received {len(items)} of totalCount={total}")
+    if len(ids) != len(set(ids)):
+        raise Refused("item pagination returned duplicate project item ids")
+    valid_names = {o["name"] for o in field["options"]}
+    option_id_by_name = {o["name"]: o["id"] for o in field["options"]}
+    unknown = sorted({i["repoScope"] for i in items if i["repoScope"] not in valid_names and i["repoScope"] is not None})
+    if unknown:
+        raise Refused(f"items refer to options absent from field metadata: {unknown}")
+    mismatched_ids = [
+        i["id"]
+        for i in items
+        if i["repoScope"] is not None and i["repoScopeOptionId"] != option_id_by_name[i["repoScope"]]
+    ]
+    if mismatched_ids:
+        raise Refused(f"{len(mismatched_ids)} items returned an option name/id mismatch")
+    return {
+        "formatVersion": 1,
+        "capturedAt": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
+        "project": {"owner": owner, "number": number, "id": project["id"], "title": title},
+        "field": {
+            "id": field["id"],
+            "name": field_name,
+            "options": field["options"],
+        },
+        "itemTotalCount": total,
+        "items": sorted(items, key=lambda i: i["id"]),
+    }
+
+
+def seal(snapshot: dict[str, Any]) -> dict[str, Any]:
+    result = dict(snapshot)
+    result["sha256"] = digest_payload(result)
+    return result
+
+
+def load_snapshot(path: Path) -> dict[str, Any]:
+    try:
+        snapshot = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise Refused(f"cannot read snapshot {path}: {exc}") from exc
+    required = {"formatVersion", "project", "field", "itemTotalCount", "items", "sha256"}
+    if not required.issubset(snapshot):
+        raise Refused(f"snapshot is missing keys: {sorted(required - set(snapshot))}")
+    if snapshot["formatVersion"] != 1:
+        raise Refused(f"unsupported snapshot formatVersion {snapshot['formatVersion']!r}")
+    actual = digest_payload(snapshot)
+    if snapshot["sha256"] != actual:
+        raise Refused(f"snapshot integrity failure: recorded {snapshot['sha256']}, computed {actual}")
+    items = snapshot["items"]
+    ids = [i.get("id") for i in items]
+    if len(items) != snapshot["itemTotalCount"] or len(ids) != len(set(ids)) or None in ids:
+        raise Refused("snapshot is incomplete or has duplicate/missing item ids")
+    names = [o.get("name") for o in snapshot["field"]["options"]]
+    option_ids = [o.get("id") for o in snapshot["field"]["options"]]
+    if None in names or None in option_ids or len(names) != len(set(names)) or len(option_ids) != len(set(option_ids)):
+        raise Refused("snapshot field option names/ids are incomplete or duplicated")
+    unknown = sorted({i.get("repoScope") for i in items if i.get("repoScope") not in set(names) and i.get("repoScope") is not None})
+    if unknown:
+        raise Refused(f"snapshot items use unknown options: {unknown}")
+    option_id_by_name = {o["name"]: o.get("id") for o in snapshot["field"]["options"]}
+    mismatched_ids = [
+        i.get("id")
+        for i in items
+        if i.get("repoScope") is not None
+        and i.get("repoScopeOptionId") != option_id_by_name[i["repoScope"]]
+    ]
+    if mismatched_ids:
+        raise Refused(f"snapshot contains {len(mismatched_ids)} option name/id mismatches")
+    return snapshot
+
+
+def assignment_map(state: dict[str, Any]) -> dict[str, str | None]:
+    return {i["id"]: i.get("repoScope") for i in state["items"]}
+
+
+def option_semantics(state: dict[str, Any], include_ids: bool = True) -> list[dict[str, Any]]:
+    keys = ("id", "name", "color", "description") if include_ids else ("name", "color", "description")
+    return [{k: o.get(k) for k in keys} for o in state["field"]["options"]]
+
+
+def assert_live_precondition(snapshot: dict[str, Any], live: dict[str, Any]) -> None:
+    if snapshot["project"] != live["project"]:
+        raise Refused("snapshot project identity does not match the live project")
+    if snapshot["field"]["id"] != live["field"]["id"] or snapshot["field"]["name"] != live["field"]["name"]:
+        raise Refused("snapshot field identity does not match the live field")
+    if option_semantics(snapshot) != option_semantics(live):
+        raise Refused("field options changed after the snapshot; capture a new complete snapshot")
+    if assignment_map(snapshot) != assignment_map(live):
+        raise Refused("item assignments changed after the snapshot; capture a new complete snapshot")
+    if snapshot["itemTotalCount"] != live["itemTotalCount"]:
+        raise Refused("project item total changed after the snapshot; capture a new complete snapshot")
+
+
+def roster_ids(path: Path) -> list[str]:
+    try:
+        text = path.read_text()
+    except OSError as exc:
+        raise Refused(f"cannot read roster {path}: {exc}") from exc
+    ids = re.findall(r"^\s*-\s*\{\s*id:\s*([^,\s]+)\s*,\s*full:\s*[^,}]+", text, re.MULTILINE)
+    if not ids or len(ids) != len(set(ids)):
+        raise Refused("roster repo rows were absent or duplicated; refusing a partial parse")
+    return ids
+
+
+def documented_options(path: Path) -> list[dict[str, str]]:
+    try:
+        text = path.read_text()
+    except OSError as exc:
+        raise Refused(f"cannot read board schema {path}: {exc}") from exc
+    match = re.search(
+        r"<!-- repo-scope-options:start -->(.*?)<!-- repo-scope-options:end -->",
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        raise Refused("board schema lacks the bounded Repo Scope options table")
+    names = re.findall(r"^\|\s*`([^`]+)`\s*\|", match.group(1), re.MULTILINE)
+    if not names or len(names) != len(set(names)):
+        raise Refused("board schema Repo Scope rows were absent or duplicated")
+    return [{"name": name} for name in names]
+
+
+def compare_roster(options: list[dict[str, Any]], roster: Path, allowed_extra: set[str]) -> None:
+    expected = set(roster_ids(roster))
+    actual = {o["name"] for o in options}
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected - allowed_extra)
+    if missing or unexpected:
+        raise Refused(f"Repo Scope drift: missing roster ids={missing}; unexpected options={unexpected}")
+
+
+def chunks(values: list[Any], size: int) -> list[list[Any]]:
+    return [values[i : i + size] for i in range(0, len(values), size)]
+
+
+def apply_repairs(project_id: str, field_id: str, option_ids: dict[str, str], repairs: list[tuple[str, str | None]]) -> None:
+    for group in chunks(repairs, 25):
+        declarations = ["$project:ID!", "$field:ID!"]
+        selections: list[str] = []
+        variables: dict[str, Any] = {"project": project_id, "field": field_id}
+        for n, (item_id, value) in enumerate(group):
+            declarations.append(f"$item{n}:ID!")
+            variables[f"item{n}"] = item_id
+            if value is None:
+                selections.append(
+                    f"r{n}:clearProjectV2ItemFieldValue(input:{{projectId:$project,itemId:$item{n},fieldId:$field}})"
+                    "{projectV2Item{id}}"
+                )
+            else:
+                if value not in option_ids:
+                    raise Refused(f"cannot restore item {item_id}: live option {value!r} is absent")
+                declarations.append(f"$option{n}:String!")
+                variables[f"option{n}"] = option_ids[value]
+                selections.append(
+                    f"r{n}:updateProjectV2ItemFieldValue(input:{{projectId:$project,itemId:$item{n},fieldId:$field,"
+                    + ("value:{singleSelectOptionId:$option%d}}){projectV2Item{id}}" % n)
+                )
+        query = "mutation ProjectFieldOptionsRestore(" + ",".join(declarations) + "){" + " ".join(selections) + "}"
+        graphql(query, variables)
+
+
+def restore(snapshot: dict[str, Any], live: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+    expected = assignment_map(snapshot)
+    current = assignment_map(live)
+    missing_items = sorted(set(expected) - set(current))
+    if missing_items:
+        raise Refused(f"cannot restore: {len(missing_items)} snapshotted project items disappeared")
+    repairs = [(item_id, expected[item_id]) for item_id in sorted(expected) if current[item_id] != expected[item_id]]
+    option_ids = {o["name"]: o["id"] for o in live["field"]["options"]}
+    missing_options = sorted({o["name"] for o in snapshot["field"]["options"]} - set(option_ids))
+    if missing_options:
+        raise Refused(f"cannot restore: snapshotted options disappeared: {missing_options}")
+    if repairs:
+        apply_repairs(live["project"]["id"], live["field"]["id"], option_ids, repairs)
+    verified = read_state(args.owner, args.project_number, args.project_title, args.field)
+    after = assignment_map(verified)
+    drift = {item: {"before": value, "after": after.get(item, "<missing>")} for item, value in expected.items() if after.get(item, "<missing>") != value}
+    if drift:
+        sample = dict(list(drift.items())[:10])
+        raise Refused(f"restore verification failed for {len(drift)} items; sample={json.dumps(sample, sort_keys=True)}")
+    print(f"restored and verified {len(expected)} prior assignments ({len(repairs)} writes)")
+    return verified
+
+
+def cmd_snapshot(args: argparse.Namespace) -> None:
+    state = seal(read_state(args.owner, args.project_number, args.project_title, args.field))
+    output = Path(args.output)
+    if output.exists() and not args.force:
+        raise Refused(f"snapshot output already exists: {output} (use --force deliberately)")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(json.dumps(state, indent=2, sort_keys=True).encode() + b"\n")
+    print(f"snapshot {output}: {state['itemTotalCount']} items, sha256={state['sha256']}")
+
+
+def cmd_verify_snapshot(args: argparse.Namespace) -> None:
+    snapshot = load_snapshot(Path(args.snapshot))
+    print(f"valid complete snapshot: {snapshot['itemTotalCount']} items, sha256={snapshot['sha256']}")
+
+
+def cmd_check(args: argparse.Namespace) -> None:
+    if args.schema:
+        options = documented_options(Path(args.schema))
+    elif args.snapshot:
+        state = load_snapshot(Path(args.snapshot))
+        options = state["field"]["options"]
+    else:
+        state = read_state(args.owner, args.project_number, args.project_title, args.field)
+        options = state["field"]["options"]
+    compare_roster(options, Path(args.roster), set(args.allow_extra))
+    names = [o["name"] for o in options]
+    print(f"Repo Scope matches roster ({len(roster_ids(Path(args.roster)))} repos; allowed extras={sorted(set(names)-set(roster_ids(Path(args.roster))))})")
+
+
+def cmd_restore(args: argparse.Namespace) -> None:
+    snapshot = load_snapshot(Path(args.snapshot))
+    live = read_state(args.owner, args.project_number, args.project_title, args.field)
+    restore(snapshot, live, args)
+
+
+def cmd_add_option(args: argparse.Namespace) -> None:
+    if not args.apply:
+        raise Refused("add-option is destructive and requires --apply after a verified remote backup exists")
+    snapshot = load_snapshot(Path(args.snapshot))
+    live = read_state(args.owner, args.project_number, args.project_title, args.field)
+    assert_live_precondition(snapshot, live)
+    names = [o["name"] for o in live["field"]["options"]]
+    if args.name in names:
+        raise Refused(f"option {args.name!r} already exists; use restore/check/verify instead of mutating again")
+    options = [
+        {"id": o["id"], "name": o["name"], "color": o["color"], "description": o.get("description") or ""}
+        for o in live["field"]["options"]
+    ]
+    options.append({"name": args.name, "color": args.color, "description": args.description})
+    mutation_error: Exception | None = None
+    try:
+        graphql(UPDATE_FIELD, {"field": live["field"]["id"], "name": args.field, "options": options})
+    except Exception as exc:  # response loss can happen after GitHub applied the mutation
+        mutation_error = exc
+        print(f"field update did not return a verdict; entering recovery: {exc}", file=sys.stderr)
+    post = read_state(args.owner, args.project_number, args.project_title, args.field)
+    post_names = [o["name"] for o in post["field"]["options"]]
+    if args.name not in post_names:
+        if mutation_error:
+            raise Refused(f"field mutation did not land: {mutation_error}")
+        raise Refused(f"field mutation returned success but option {args.name!r} is absent")
+    verified = restore(snapshot, post, args)
+    before_semantics = option_semantics(snapshot, include_ids=False)
+    by_name = {o["name"]: o for o in verified["field"]["options"]}
+    old_after = [{k: by_name[o["name"]].get(k) for k in ("name", "color", "description")} for o in snapshot["field"]["options"] if o["name"] in by_name]
+    if len(old_after) != len(before_semantics) or old_after != before_semantics:
+        raise Refused("assignments were recovered, but existing option semantics changed; snapshot remains the recovery authority")
+    final_names = [o["name"] for o in verified["field"]["options"]]
+    if final_names.count(args.name) != 1:
+        raise Refused(f"final verification found {final_names.count(args.name)} copies of {args.name!r}")
+    print(f"migration complete: added {args.name!r}; all {snapshot['itemTotalCount']} prior assignments match snapshot")
+
+
+def common(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--owner", default="FS-GG")
+    parser.add_argument("--project-number", type=int, default=1)
+    parser.add_argument("--project-title", default="Coordination")
+    parser.add_argument("--field", default="Repo Scope")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subs = parser.add_subparsers(dest="command", required=True)
+    snap = subs.add_parser("snapshot", help="capture every item assignment and field option")
+    common(snap)
+    snap.add_argument("--output", required=True)
+    snap.add_argument("--force", action="store_true")
+    snap.set_defaults(func=cmd_snapshot)
+    verify = subs.add_parser("verify-snapshot", help="verify local completeness and integrity")
+    verify.add_argument("--snapshot", required=True)
+    verify.set_defaults(func=cmd_verify_snapshot)
+    check = subs.add_parser("check", help="compare roster ids with Repo Scope options")
+    common(check)
+    check.add_argument("--roster", default="registry/repos.yml")
+    source = check.add_mutually_exclusive_group()
+    source.add_argument("--snapshot", help="check an integrity-verified captured field instead of live GitHub")
+    source.add_argument("--schema", help="check the bounded options table in board-schema.md (CI/offline)")
+    check.add_argument("--allow-extra", action="append", default=["cross-repo"])
+    check.set_defaults(func=cmd_check)
+    recovery = subs.add_parser("restore", help="restore and verify all snapshotted assignments")
+    common(recovery)
+    recovery.add_argument("--snapshot", required=True)
+    recovery.set_defaults(func=cmd_restore)
+    add = subs.add_parser("add-option", help="guarded update + automatic restore + verification")
+    common(add)
+    add.add_argument("--snapshot", required=True)
+    add.add_argument("--name", required=True)
+    add.add_argument("--color", default="GRAY", choices=["GRAY", "BLUE", "GREEN", "YELLOW", "ORANGE", "RED", "PINK", "PURPLE"])
+    add.add_argument("--description", default="")
+    add.add_argument("--apply", action="store_true")
+    add.set_defaults(func=cmd_add_option)
+    return parser.parse_args()
+
+
+def main() -> int:
+    try:
+        args = parse_args()
+        args.func(args)
+        return 0
+    except Refused as exc:
+        print(f"project-field-options: REFUSED: {exc}", file=sys.stderr)
+        return 3
+    except KeyboardInterrupt:
+        print("project-field-options: interrupted; use the saved snapshot with restore", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())
