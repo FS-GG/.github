@@ -142,3 +142,28 @@ module Transport =
 
     /// Read the API base from the environment, so the corpus can redirect it.
     val apiBaseFromEnv: unit -> string
+
+    /// Which concrete `ProjectV2Owner` a coordination board hangs off.
+    ///
+    /// An org-owned board and a user-owned board answer to DIFFERENT GraphQL root fields —
+    /// `organization(login:)` and `user(login:)` — so the owner kind has to be chosen before the Projects
+    /// v2 query is built. A user login queried through `organization(login:)` resolves to `null` and every
+    /// board read/write fails. `Org` is the default, and its documents are byte-identical to the ones that
+    /// preceded this type — the FS-GG board is untouched.
+    type OwnerKind =
+        | Org
+        | User
+
+    module OwnerKind =
+
+        /// The GraphQL root field that resolves this owner by login, and the `data.<field>` the response is
+        /// nested under.
+        val ownerField: kind: OwnerKind -> string
+
+        /// Rewrite an ORG-shaped ProjectV2 query for this owner kind. `Org` is a no-op (byte-identical);
+        /// `User` swaps the single `organization(login: $owner)` selection for `user(login: $owner)`.
+        val forOwner: kind: OwnerKind -> orgQuery: string -> string
+
+        /// The owner kind for this client, from `FSGG_COORD_OWNER_TYPE`. `user` selects `User`; anything
+        /// else (unset, empty, `org`, `organization`, or unrecognised) is `Org`.
+        val fromEnv: unit -> OwnerKind

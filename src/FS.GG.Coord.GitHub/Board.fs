@@ -135,7 +135,13 @@ module Board =
     let bootstrap (transport: IGitHubTransport) (owner: string) (title: string) : IoResult<BoardMap> =
         let subject = $"the board '%s{title}' in %s{owner}"
 
-        match transport.Send(query ProjectsDoc [ "owner", VString owner ] subject) with
+        // OWNER-KIND AWARE (#1344). An org-owned board answers to `organization(login:)`, a user-owned one
+        // to `user(login:)`. `Org` is the default and its document/parse path are byte-identical to what
+        // preceded this — the FS-GG board does not move.
+        let kind = OwnerKind.fromEnv ()
+        let ownerField = OwnerKind.ownerField kind
+
+        match transport.Send(query (OwnerKind.forOwner kind ProjectsDoc) [ "owner", VString owner ] subject) with
         | Error e -> Error e
         | Ok projectsResponse ->
 
@@ -145,7 +151,7 @@ module Board =
 
         let project =
             try
-                data.GetProperty("organization").GetProperty("projectsV2").GetProperty("nodes").EnumerateArray()
+                data.GetProperty(ownerField).GetProperty("projectsV2").GetProperty("nodes").EnumerateArray()
                 |> Seq.tryFind (fun n ->
                     match n.TryGetProperty "title" with
                     | true, t when t.ValueKind = JsonValueKind.String -> t.GetString() = title
@@ -165,7 +171,7 @@ module Board =
         let number = p.GetProperty("number").GetInt32()
         let id = p.GetProperty("id").GetString()
 
-        match transport.Send(query FieldsDoc [ "owner", VString owner; "number", VNumber(double number) ] subject) with
+        match transport.Send(query (OwnerKind.forOwner kind FieldsDoc) [ "owner", VString owner; "number", VNumber(double number) ] subject) with
         | Error e -> Error e
         | Ok fieldsResponse ->
 
@@ -176,7 +182,7 @@ module Board =
         let fields =
             try
                 fieldsData
-                    .GetProperty("organization")
+                    .GetProperty(ownerField)
                     .GetProperty("projectV2")
                     .GetProperty("fields")
                     .GetProperty("nodes")

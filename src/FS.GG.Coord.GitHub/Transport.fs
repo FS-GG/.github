@@ -56,6 +56,53 @@ module Transport =
         | "" -> DefaultApiBase
         | b -> b.TrimEnd('/')
 
+    /// Which concrete `ProjectV2Owner` a coordination board hangs off.
+    ///
+    /// GitHub's GraphQL exposes an org-owned and a user-owned board under DIFFERENT root fields —
+    /// `organization(login:)` and `user(login:)` — even though both implement the same `ProjectV2Owner`
+    /// interface, and the `projectsV2`/`projectV2` selection that hangs off them is byte-for-byte identical.
+    /// A user login queried through `organization(login:)` resolves to `null` and every board read/write
+    /// fails, so the owner kind has to be chosen BEFORE the query is built.
+    ///
+    /// `Org` IS THE DEFAULT, AND ITS QUERIES ARE BYTE-IDENTICAL to the pre-existing ones — nothing on the
+    /// FS-GG (org-owned) board changes. `User` is the same document with the one root selection swapped.
+    type OwnerKind =
+        | Org
+        | User
+
+    module OwnerKind =
+
+        /// The GraphQL root field that resolves this owner by login — and the `data.<field>` the response
+        /// comes back under, so the writer and the reader cannot pick different names.
+        let ownerField (kind: OwnerKind) =
+            match kind with
+            | Org -> "organization"
+            | User -> "user"
+
+        /// Rewrite an ORG-shaped ProjectV2 query for this owner kind.
+        ///
+        /// `Org` returns the document UNCHANGED — byte-identical, so the org path provably cannot drift.
+        /// `User` swaps the single `organization(login: $owner)` selection for `user(login: $owner)`; the
+        /// rest of the document is identical across both, because everything below the root field hangs off
+        /// the shared `ProjectV2Owner` interface.
+        let forOwner (kind: OwnerKind) (orgQuery: string) =
+            match kind with
+            | Org -> orgQuery
+            | User -> orgQuery.Replace("organization(login: $owner)", "user(login: $owner)")
+
+        /// The owner kind for THIS client, read from `FSGG_COORD_OWNER_TYPE`.
+        ///
+        /// Unset, empty, `org`, or `organization` is `Org` — the default that keeps the org board
+        /// byte-identical. Only an explicit `user` selects `User`. An unrecognised value falls back to
+        /// `Org` rather than failing: the safe direction is the one that leaves the FS-GG board reachable.
+        let fromEnv () =
+            match Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE" with
+            | null -> Org
+            | v ->
+                match v.Trim().ToLowerInvariant() with
+                | "user" -> User
+                | _ -> Org
+
     /// The `Link` header's `rel="next"`, if there is one.
     ///
     /// GitHub paginates with `Link: <https://…?page=2>; rel="next", <…>; rel="last"`. Parsing it is how the
