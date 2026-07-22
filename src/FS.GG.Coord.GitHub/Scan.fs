@@ -258,12 +258,15 @@ module Scan =
 
         let subject = $"the board '%s{title}' in %s{owner}"
 
-        // OWNER-KIND AWARE (#1344). Resolved once for the whole paginated scan: an org-owned board answers
-        // to `organization(login:)`, a user-owned one to `user(login:)`. `Org` is the default and keeps
-        // both the document and the parse path below byte-identical to what preceded this.
+        // OWNER-KIND AWARE (#1344, #1349). Resolved once for the whole paginated scan: an org-owned board
+        // answers to `organization(login:)`, a user-owned one to `user(login:)`, and a token's OWN board to
+        // `viewer` (no login). `Org` is the default and keeps both the document and the parse path below
+        // byte-identical to what preceded this. `ownerVars` binds `$owner` for Org/User and NOTHING for
+        // Viewer, in lockstep with the document `forOwner` produces.
         let kind = OwnerKind.fromEnv ()
         let ownerField = OwnerKind.ownerField kind
         let boardDoc = OwnerKind.forOwner kind BoardDoc
+        let ownerVars = OwnerKind.ownerVars kind owner
 
         let rec page (cursor: string option) (acc: Row list) (guard: int) : IoResult<Row list> =
             if guard <= 0 then
@@ -271,8 +274,8 @@ module Scan =
             else
 
             let variables =
-                [ "owner", VString owner
-                  "number", VNumber(double projectNumber) ]
+                ownerVars
+                @ [ "number", VNumber(double projectNumber) ]
                 @ (match cursor with
                    | Some c -> [ "cursor", VString c ]
                    | None -> [])

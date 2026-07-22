@@ -135,13 +135,15 @@ module Board =
     let bootstrap (transport: IGitHubTransport) (owner: string) (title: string) : IoResult<BoardMap> =
         let subject = $"the board '%s{title}' in %s{owner}"
 
-        // OWNER-KIND AWARE (#1344). An org-owned board answers to `organization(login:)`, a user-owned one
-        // to `user(login:)`. `Org` is the default and its document/parse path are byte-identical to what
-        // preceded this — the FS-GG board does not move.
+        // OWNER-KIND AWARE (#1344, #1349). An org-owned board answers to `organization(login:)`, a user-owned
+        // one to `user(login:)`, and a token's OWN board to `viewer` (no login). `Org` is the default and its
+        // document/parse path are byte-identical to what preceded this — the FS-GG board does not move.
+        // `ownerVars` binds `$owner` for Org/User and NOTHING for Viewer, in lockstep with the document.
         let kind = OwnerKind.fromEnv ()
         let ownerField = OwnerKind.ownerField kind
+        let ownerVars = OwnerKind.ownerVars kind owner
 
-        match transport.Send(query (OwnerKind.forOwner kind ProjectsDoc) [ "owner", VString owner ] subject) with
+        match transport.Send(query (OwnerKind.forOwner kind ProjectsDoc) ownerVars subject) with
         | Error e -> Error e
         | Ok projectsResponse ->
 
@@ -171,7 +173,7 @@ module Board =
         let number = p.GetProperty("number").GetInt32()
         let id = p.GetProperty("id").GetString()
 
-        match transport.Send(query (OwnerKind.forOwner kind FieldsDoc) [ "owner", VString owner; "number", VNumber(double number) ] subject) with
+        match transport.Send(query (OwnerKind.forOwner kind FieldsDoc) (ownerVars @ [ "number", VNumber(double number) ]) subject) with
         | Error e -> Error e
         | Ok fieldsResponse ->
 

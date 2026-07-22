@@ -77,6 +77,15 @@ let private userPage (nodes: string) (hasNext: bool) (cursor: string) =
         "pageInfo":{{"hasNextPage":%s{hn},"endCursor":"%s{cursor}"}},
         "nodes":[%s{nodes}]}}}}}}}}}}"""
 
+/// One page of a VIEWER-owned board — nested under `data.viewer`, exactly as GitHub answers a `viewer`
+/// query (#1349): the token's own board, resolved with no login at all.
+let private viewerPage (nodes: string) (hasNext: bool) (cursor: string) =
+    let hn = if hasNext then "true" else "false"
+
+    $"""{{"data":{{"viewer":{{"projectV2":{{"items":{{
+        "pageInfo":{{"hasNextPage":%s{hn},"endCursor":"%s{cursor}"}},
+        "nodes":[%s{nodes}]}}}}}}}}}}"""
+
 /// A recorder that CAPTURES the GraphQL document of every request into `docs`, then serves the scripted
 /// responses in order. It is how the owner-kind tests prove which root field the query actually hit.
 let private capturing (docs: System.Collections.Generic.List<string>) (responses: IoResult<Response> list) =
@@ -99,9 +108,11 @@ let ``a USER-owned board is scanned through user(login:) and its rows resolve (#
     use _sandbox = new Sandbox()
 
     // A board owned by a personal account answers to `user(login:)`, and its items come back nested under
-    // `data.user`. `FSGG_COORD_OWNER_TYPE=user` selects that shape; without it, a user login queried through
-    // `organization(login:)` resolves to null and the whole board is unreachable.
+    // `data.user`. `FSGG_COORD_OWNER_TYPE=user` WITH an explicit `FSGG_COORD_OWNER` selects that shape;
+    // without it, a user login queried through `organization(login:)` resolves to null and the whole board is
+    // unreachable. (With NO explicit owner, `user` falls to viewer-scoping — a separate test, #1349.)
     Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", "EHotwagner")
 
     try
         let docs = System.Collections.Generic.List<string>()
@@ -122,6 +133,42 @@ let ``a USER-owned board is scanned through user(login:) and its rows resolve (#
                     Assert.DoesNotContain("organization(login: $owner)", d)
             )
         | other -> failwith $"a user-owned board must resolve through user(login:) — got %A{other}"
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", null)
+
+[<Fact>]
+let ``a VIEWER-owned board is scanned through viewer, with no login in config (#1349)`` () =
+    use _sandbox = new Sandbox()
+
+    // `FSGG_COORD_OWNER_TYPE=user` with NO explicit `FSGG_COORD_OWNER` scans the board through the token's own
+    // `viewer` identity: its items come back nested under `data.viewer`, the document selects the
+    // argument-less `viewer` root, and it carries no `$owner` variable at all. No login travels to the API.
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", null)
+
+    try
+        let docs = System.Collections.Generic.List<string>()
+
+        let transport =
+            capturing docs [ ok (viewerPage (issueNode 7 "Ready" "" "OPEN") false "") ]
+
+        match Scan.board transport Cache.Scheduling "@me" "TowerDefense" 3 with
+        | Ok [ row ] ->
+            Assert.Equal(7, row.Ref.Number)
+            Assert.Equal(Ready, row.Status)
+
+            // The document hit the `viewer` root — not organization, not user(login:) — and declares no
+            // `$owner` variable: no login reaches the API.
+            Assert.All(
+                docs,
+                fun d ->
+                    Assert.Contains("viewer {", d)
+                    Assert.DoesNotContain("organization(login: $owner)", d)
+                    Assert.DoesNotContain("user(login: $owner)", d)
+                    Assert.DoesNotContain("$owner", d)
+            )
+        | other -> failwith $"a viewer-owned board must resolve through viewer — got %A{other}"
     finally
         Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
 

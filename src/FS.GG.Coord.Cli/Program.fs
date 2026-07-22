@@ -162,7 +162,16 @@ let private scan (opts: Options) =
         | "" -> fallback
         | v -> v
 
-    let owner = env "FSGG_COORD_OWNER" "FS-GG"
+    // The board owner LABEL (subject text, cache key, board JSON). The queries themselves pick org/user/viewer
+    // from `OwnerKind.fromEnv` in the GitHub layer; this is only the human-facing name. `user` with no
+    // explicit `FSGG_COORD_OWNER` is viewer-scoped (#1349) — no login in config — so it is labelled `@me`
+    // rather than mislabelled as the org default.
+    let owner =
+        match env "FSGG_COORD_OWNER" "" with
+        | "" when (env "FSGG_COORD_OWNER_TYPE" "").Trim().ToLowerInvariant() = "user" -> "@me"
+        | "" -> "FS-GG"
+        | v -> v
+
     let title = env "FSGG_COORD_PROJECT" "Coordination"
 
     // The token is REQUIRED, and its absence is said out loud. An unauthenticated read of an org Projects v2

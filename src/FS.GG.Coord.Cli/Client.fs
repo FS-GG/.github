@@ -3711,9 +3711,19 @@ module Client =
         | Some token ->
             let transport = new Transport.HttpTransport(Transport.apiBaseFromEnv (), token)
 
+            // The board owner LABEL (subject text, cache key, board JSON). The queries pick org/user/viewer
+            // from `OwnerKind.fromEnv` in the GitHub layer; this is only the human-facing name. `user` with no
+            // explicit `FSGG_COORD_OWNER` is viewer-scoped (#1349) — no login in config — so it is labelled
+            // `@me` rather than mislabelled as the org default.
+            let owner =
+                match env "FSGG_COORD_OWNER" "" with
+                | "" when (env "FSGG_COORD_OWNER_TYPE" "").Trim().ToLowerInvariant() = "user" -> "@me"
+                | "" -> "FS-GG"
+                | v -> v
+
             Ok(
                 { Transport = transport
-                  Owner = env "FSGG_COORD_OWNER" "FS-GG"
+                  Owner = owner
                   Title = env "FSGG_COORD_PROJECT" "Coordination"
                   DefaultRepo = None
                   ChoreLocks = parseChoreLocks (env "FSGG_COORD_CHORE_LOCKS" "") },

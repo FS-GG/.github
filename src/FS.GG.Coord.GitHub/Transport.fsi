@@ -149,21 +149,29 @@ module Transport =
     /// `organization(login:)` and `user(login:)` — so the owner kind has to be chosen before the Projects
     /// v2 query is built. A user login queried through `organization(login:)` resolves to `null` and every
     /// board read/write fails. `Org` is the default, and its documents are byte-identical to the ones that
-    /// preceded this type — the FS-GG board is untouched.
+    /// preceded this type — the FS-GG board is untouched. `Viewer` (#1349) resolves the board from the
+    /// token's own `viewer` identity, needing no login in config at all.
     type OwnerKind =
         | Org
         | User
+        | Viewer
 
     module OwnerKind =
 
-        /// The GraphQL root field that resolves this owner by login, and the `data.<field>` the response is
-        /// nested under.
+        /// The GraphQL root field that resolves this owner, and the `data.<field>` the response is nested
+        /// under. `Org`/`User` resolve by login; `Viewer` is the authenticated token's own User.
         val ownerField: kind: OwnerKind -> string
 
         /// Rewrite an ORG-shaped ProjectV2 query for this owner kind. `Org` is a no-op (byte-identical);
-        /// `User` swaps the single `organization(login: $owner)` selection for `user(login: $owner)`.
+        /// `User` swaps `organization(login: $owner)` for `user(login: $owner)`; `Viewer` swaps it for the
+        /// argument-less `viewer` root and drops the now-unused `$owner: String!` variable declaration.
         val forOwner: kind: OwnerKind -> orgQuery: string -> string
 
-        /// The owner kind for this client, from `FSGG_COORD_OWNER_TYPE`. `user` selects `User`; anything
-        /// else (unset, empty, `org`, `organization`, or unrecognised) is `Org`.
+        /// The owner variables this kind binds. `Org`/`User` bind `$owner`; `Viewer` binds nothing — its
+        /// document declares no `$owner`, and GitHub rejects a request supplying an undeclared variable.
+        val ownerVars: kind: OwnerKind -> owner: string -> (string * Var) list
+
+        /// The owner kind for this client, from `FSGG_COORD_OWNER_TYPE` (and, for `user`, whether an explicit
+        /// `FSGG_COORD_OWNER` is set). `user` with a login is `User`; `user` with no login is `Viewer`;
+        /// anything else (unset, empty, `org`, `organization`, or unrecognised) is `Org`.
         val fromEnv: unit -> OwnerKind
