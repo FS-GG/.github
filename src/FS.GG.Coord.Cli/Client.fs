@@ -2544,13 +2544,42 @@ module Client =
                 scan [] candidates
 
 
-    let widen (ctx: Context) (opts: Options) : int =
-        match oneArg opts "widen: an issue ref", worker opts with
+    type private PathUpdate =
+        | Union
+        | Replace
+
+    let private declaredPathTokens (touchSet: TouchSet) : string list =
+        match touchSet with
+        | Undeclared
+        | Unreadable _ -> []
+        | DeclaredNone -> [ "none" ]
+        | DeclaredChore -> [ "any" ]
+        | Declared tokens ->
+            tokens
+            |> List.map (function
+                | Matchable token
+                | Unmatchable token -> token)
+
+    let private normalizePathTokens (tokens: string list) : string list =
+        // Round-trip through the one grammar the issue-body reader uses. This normalizes comma-separated
+        // arguments, a leading `./`, backticks and duplicates before the union is formed, so two spellings
+        // of one path cannot make a repeated `widen` grow the declaration (#1377).
+        "Paths: " + String.Join(" ", tokens)
+        |> TouchSet.parse
+        |> declaredPathTokens
+
+    let private updateTouchSet (update: PathUpdate) (ctx: Context) (opts: Options) : int =
+        let verb, past, action =
+            match update with
+            | Union -> "widen", "widened", "add paths to"
+            | Replace -> "set-paths", "set", "replace"
+
+        match oneArg opts $"%s{verb}: an issue ref", worker opts with
         | Error c, _
         | _, Error c -> c
         | Ok arg, Ok w ->
             if List.isEmpty opts.Paths then
-                eprint "fsgg-coord-engine: widen needs --paths <token>..."
+                eprint $"fsgg-coord-engine: %s{verb} needs --paths <token>..."
                 ExitError
             else
                 match parseRef ctx arg with
@@ -2563,16 +2592,16 @@ module Client =
                     match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) (sessionOf w) ref with
                     | Error e -> fail e
                     | Ok Writes.DoesNotHold ->
-                        eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — widen rewrites the touch-set of a lock you must be holding (#706)."
+                        eprint $"fsgg-coord-engine: %s{w.Id} does not hold %s{ref.Short} — %s{verb} can only %s{action} the touch-set of a lock you hold (#706)."
                         ExitError
-                    // #1031: our id, another session. `widen` PATCHes the issue BODY, so a twin's touch-set
+                    // #1031: our id, another session. A path update PATCHes the issue BODY, so a twin's touch-set
                     // would be rewritten under them — re-reserving files they are editing, or handing away
                     // files they are.
-                    | Ok(Writes.TwinHolds theirs) -> twinRefusal "widen" w.Id ref theirs
+                    | Ok(Writes.TwinHolds theirs) -> twinRefusal verb w.Id ref theirs
                     | Ok(Writes.Holds held) ->
                         // #523 — validate BEFORE the read of the body, and rewrite BEFORE the PATCH. A bad
                         // token cannot reach the write, because it cannot produce the value the write takes.
-                        match Writes.validate opts.Paths with
+                        match opts.Paths |> normalizePathTokens |> Writes.validate with
                         | Error msg ->
                             eprint $"fsgg-coord-engine: %s{msg}"
                             ExitError
@@ -2580,71 +2609,92 @@ module Client =
                             match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
                             | Error e -> fail e
                             | Ok body ->
-                                let rewritten = Writes.rewrite body validated
+                                // #1377 — `widen` means union. Its name is now its behaviour: every existing
+                                // token survives and repeated additions are idempotent. Replacement remains
+                                // available only through the deliberately named `set-paths` command, which is
+                                // also the operation used to narrow an over-reservation.
+                                let proposed =
+                                    match update with
+                                    | Replace -> Ok validated
+                                    | Union ->
+                                        declaredPathTokens (TouchSet.parse body)
+                                        @ validated.Tokens
+                                        |> List.distinct
+                                        |> Writes.validate
 
-                                // #523/#353 — RE-CHECK BEFORE THE PATCH, and let its verdict GATE the write.
-                                // ADR-0021's "re-declare AND re-check overlap before continuing" is the half a
-                                // worker cannot do alone. The overlap scan runs against the PROPOSED touch-set
-                                // (`rewritten.Body`, computed in memory above — `activeCollisions` takes it as an
-                                // argument and never re-reads THIS item's body, so it needs no landed PATCH) and
-                                // compares it to the live claims in THIS item's repo. If the scan is UNREADABLE —
-                                // an exhausted GraphQL budget, a malformed claim — we REFUSE, and the body is left
-                                // untouched: that is #523. Landing the declaration first and re-checking afterwards
-                                // (as bash did) meant that on an exhausted budget the touch-set landed UNVERIFIED
-                                // and the workers it now collided with were never told. Only once we HOLD a verdict
-                                // do we PATCH. A scan that SUCCEEDS and finds a collision still lands the widen —
-                                // that is widen's job, and how a bad declaration gets fixed — and then notifies each
-                                // colliding worker on their own issue; only the unreadable case refuses. Same-repo
-                                // scope: a cross-repo namesake is a phantom (#353), its innocent holder uncommented.
-                                match activeCollisions ctx opts ref (TouchSet.parse rewritten.Body) with
-                                | Error e -> fail e
-                                | Ok collisions ->
-                                    match Writes.widen ctx.Transport held rewritten with
+                                match proposed with
+                                | Error msg ->
+                                    eprint $"fsgg-coord-engine: %s{msg}"
+                                    ExitError
+                                | Ok proposed ->
+                                    let rewritten = Writes.rewrite body proposed
+
+                                    // #523/#353 — RE-CHECK BEFORE THE PATCH, and let its verdict GATE the write.
+                                    // ADR-0021's "re-declare AND re-check overlap before continuing" is the half a
+                                    // worker cannot do alone. The overlap scan runs against the PROPOSED touch-set
+                                    // (`rewritten.Body`, computed in memory above — `activeCollisions` takes it as an
+                                    // argument and never re-reads THIS item's body, so it needs no landed PATCH) and
+                                    // compares it to the live claims in THIS item's repo. If the scan is UNREADABLE —
+                                    // an exhausted GraphQL budget, a malformed claim — we REFUSE, and the body is left
+                                    // untouched: that is #523. Landing the declaration first and re-checking afterwards
+                                    // (as bash did) meant that on an exhausted budget the touch-set landed UNVERIFIED
+                                    // and the workers it now collided with were never told. Only once we HOLD a verdict
+                                    // do we PATCH. A scan that SUCCEEDS and finds a collision still lands the update
+                                    // and then notifies each colliding worker on their own issue; only an unreadable
+                                    // scan refuses. Same-repo scope: a cross-repo namesake is a phantom (#353).
+                                    match activeCollisions ctx opts ref (TouchSet.parse rewritten.Body) with
                                     | Error e -> fail e
-                                    | Ok() ->
-                                        printfn "widened %s → Paths: %s" ref.Short (String.Join(", ", opts.Paths))
+                                    | Ok collisions ->
+                                        match Writes.widen ctx.Transport held rewritten with
+                                        | Error e -> fail e
+                                        | Ok() ->
+                                            let paths = String.Join(", ", proposed.Tokens)
+                                            printfn "%s %s → Paths: %s" past ref.Short paths
 
-                                        // Declaration time is the cheap moment to learn that editing a kit source
-                                        // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
-                                        KitDigest.digestWarn ()
+                                            // Declaration time is the cheap moment to learn that editing a kit source
+                                            // obliges a re-digest (#469); OBSERVED off the tree, advisory, never fatal.
+                                            KitDigest.digestWarn ()
 
-                                        match collisions with
-                                        | [] ->
-                                            printfn "DISJOINT — the widened touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
-                                            ExitGreen
-                                        | collisions ->
-                                            // The notify is the part a worker cannot do alone. A post that fails is
-                                            // reported, but the collision still stands — it does not become a DISJOINT.
-                                            let paths = String.Join(", ", opts.Paths)
+                                            match collisions with
+                                            | [] ->
+                                                printfn "DISJOINT — the updated touch-set clears every live claim in %s/%s (#353)." ref.Owner ref.Repo
+                                                ExitGreen
+                                            | collisions ->
+                                                // The notify is the part a worker cannot do alone. A post that fails is
+                                                // reported, but the collision still stands — it does not become DISJOINT.
 
-                                            for other, holder, toks in collisions do
-                                                eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
-                                                eprint $"  %s{toks}"
+                                                for other, holder, toks in collisions do
+                                                    eprint $"OVERLAP — now collides with %s{other.Short} (worker %s{holder})"
+                                                    eprint $"  %s{toks}"
 
-                                                // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
-                                                // overlap is TRANSIENT — the scheduler already sequences it and
-                                                // it self-clears the moment a claim drops — whereas `Blocked by`
-                                                // is a DURABLE edge nothing ever recomputes. Offering the durable
-                                                // remedy for the transient condition is how a ring got drawn on a
-                                                // premise withdrawn 60 seconds later and held #1059 hostage: a
-                                                // category error the tool used to recommend first. `Blocked by` is
-                                                // correct ONLY for a real logical dependency (this work must be
-                                                // authored against the other's LANDED result), which outlives any
-                                                // claim — and that distinction is the thing the worker has to
-                                                // decide, so the message names it instead of defaulting to the
-                                                // edge that closes rings.
-                                                let msg =
-                                                    $"heads up: I widened %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
+                                                    // DO NOT RECOMMEND `Blocked by` FOR A BARE OVERLAP (#1090). An
+                                                    // overlap is TRANSIENT — the scheduler already sequences it and
+                                                    // it self-clears the moment a claim drops — whereas `Blocked by`
+                                                    // is a DURABLE edge nothing ever recomputes. Offering the durable
+                                                    // remedy for the transient condition is how a ring got drawn on a
+                                                    // premise withdrawn 60 seconds later and held #1059 hostage: a
+                                                    // category error the tool used to recommend first. `Blocked by` is
+                                                    // correct ONLY for a real logical dependency (this work must be
+                                                    // authored against the other's LANDED result), which outlives any
+                                                    // claim — and that distinction is the thing the worker has to
+                                                    // decide, so the message names it instead of defaulting to the
+                                                    // edge that closes rings.
+                                                    let msg =
+                                                        $"heads up: I %s{past} %s{ref.Short} to `Paths: %s{paths}`, which now overlaps your touch-set here (%s{toks}). This is a TRANSIENT overlap — the scheduler already sequences us, and it clears the moment one claim drops, so you may not need to do anything. To unblock the board sooner: narrow with `set-paths`, or split one touch-set so we are disjoint. Only add a `Blocked by` edge if there is a real DEPENDENCY — my work must be authored against your LANDED result, not merely the same files — because that edge is durable and nothing re-checks it once the overlap is gone. Reply here."
 
-                                                match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
-                                                | Error e ->
-                                                    eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
-                                                | Ok() -> eprint $"  notified worker %s{holder} on %s{other.Short}"
+                                                    match Writes.say ctx.Transport (WorkerId w.Id) (WorkerId holder) other msg with
+                                                    | Error e ->
+                                                        eprint $"  could NOT notify worker %s{holder} on %s{other.Short}: %s{Errors.explain e}"
+                                                    | Ok() -> eprint $"  notified worker %s{holder} on %s{other.Short}"
 
-                                            eprint "fsgg-coord-engine: widening introduced a collision — do NOT keep editing the shared paths until it is resolved."
-                                            // A real same-repo collision exits non-zero (engine ExitContended=6; bash's
-                                            // literal 1 disposed on the record, ADR-0040 §5).
-                                            ExitContended
+                                                eprint "fsgg-coord-engine: the path update introduced a collision — do NOT keep editing the shared paths until it is resolved."
+                                                // A real same-repo collision exits non-zero (engine ExitContended=6;
+                                                // bash's literal 1 disposed on the record, ADR-0040 §5).
+                                                ExitContended
+
+    let widen (ctx: Context) (opts: Options) : int = updateTouchSet Union ctx opts
+
+    let setPaths (ctx: Context) (opts: Options) : int = updateTouchSet Replace ctx opts
 
     /// `paths_of` FAILS CLOSED (#494 leg k). A touch-set read FOR SCHEDULING that we could not complete is
     /// NOT an empty touch-set: an empty set reads as "disjoint from everything", so a failed body read would
@@ -4642,6 +4692,7 @@ module Client =
             | SetField -> setField ctx opts
             | Child -> child ctx opts
             | Widen -> widen ctx opts
+            | SetPaths -> setPaths ctx opts
             | Overlap -> overlapCmd ctx opts
             | Say -> say ctx opts
             | Inbox -> inbox ctx opts

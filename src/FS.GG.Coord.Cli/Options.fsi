@@ -58,6 +58,8 @@ module Options =
         | Child
         /// Widen a held item's touch-set (`widen <ref> --paths T...`).
         | Widen
+        /// Replace a held item's touch-set explicitly (`set-paths <ref> --paths T...`).
+        | SetPaths
         /// Report whether an item's touch-set overlaps another's, or the repo's live claims
         /// (`overlap <ref> --active` | `overlap <ref-a> <ref-b>`). Repo-scoped (#353).
         | Overlap
@@ -145,7 +147,7 @@ module Options =
           ToWorker: string option
           /// `--message <text>` (`say`).
           Message: string option
-          /// `--paths <token>...` (`widen`) — the new touch-set.
+          /// `--paths <token>...` (`widen`/`set-paths`) — paths to add, or the explicit replacement.
           Paths: string list
 
           /// `--pr <n>` (`verify-paths`) — the pull request to check.

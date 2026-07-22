@@ -8,7 +8,7 @@
 # expected drift in the PR.
 a5ab4c0588521170a8059d3a8088ebbba3883af0ede234598b67368f591a00b8  .claude/skills/check-board
 d066756bd54fad0411d846c084e62caf66192e735d91eed4e36899d6ebad65be  .claude/skills/cross-repo-coordination
-3deb14091fc07b15c9e07b15f460c34be0eb2bfbbfc6eafb200d92371f6d3c29  .claude/skills/intra-repo-parallel-work
-359450aff05860406dc59f825770d86255ea151ee5532eb029470e886c3d0618  .claude/skills/pnext-item
-95483c5c8f90d40ba0b1db81cbba728efd7a5861a72ba81a52b54664e1f47025  dist/dotnet/.config/dotnet-tools.json
+9781cf516e391ecca337730cd37cac3c9eb382a2da228f63315ecd8b55140db0  .claude/skills/intra-repo-parallel-work
+b2ea4df0b423d938651abbb49085dc1707843e9010a543606e999f673c762c38  .claude/skills/pnext-item
+90363dc3f2b14c985b4134ed96b2fb831248c771a0dc10842b2d4e61c9fd4e6a  dist/dotnet/.config/dotnet-tools.json
 a05f04b448105503fac390df79c165e00942e5ecf7e03c66e9ed5f38c424987a  scripts/fsgg-coord

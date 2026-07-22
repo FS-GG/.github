@@ -118,15 +118,34 @@ wx="$("$ENGINE" widen FS.GG.SDD#43 --worker ghost-000 --paths 'src/New/**' 2>&1)
 # Now hold it, then widen succeeds.
 run claim FS.GG.SDD#43 >/dev/null 2>&1
 wd="$("$ENGINE" widen FS.GG.SDD#43 --worker vole-418 --paths 'src/New/**' 'docs/**' 2>&1)"; wdrc=$?
-[ "$wdrc" -eq 0 ] && printf '%s' "$wd" | grep -q 'widened FS.GG.SDD#43 → Paths: src/New/\*\*, docs/\*\*' \
-  && ok "widen rewrites the touch-set of a HELD item" \
-  || bad "widen rewrites a held item's touch-set" "rc=$wdrc: $wd"
+[ "$wdrc" -eq 0 ] && printf '%s' "$wd" | grep -q 'widened FS.GG.SDD#43 → Paths: src/Other/\*\*, src/New/\*\*, docs/\*\*' \
+  && ok "#1377: widen unions new paths into a HELD item's existing touch-set" \
+  || bad "#1377: widen preserves a held item's existing touch-set" "rc=$wdrc: $wd"
+
+# A second call preserves both earlier generations; repeating it is idempotent (one token, not two).
+wd2="$("$ENGINE" widen FS.GG.SDD#43 --worker vole-418 --paths 'src/Third/**' 2>&1)"; wd2rc=$?
+[ "$wd2rc" -eq 0 ] && printf '%s' "$wd2" | grep -q 'Paths: src/Other/\*\*, src/New/\*\*, docs/\*\*, src/Third/\*\*' \
+  && ok "#1377: a second widen preserves every prior token" \
+  || bad "#1377: two widening calls produce the normalized union" "rc=$wd2rc: $wd2"
+wd3="$("$ENGINE" widen FS.GG.SDD#43 --worker vole-418 --paths './src/Third/**,' 2>&1)"; wd3rc=$?
+third_count="$(printf '%s' "$wd3" | head -n1 | grep -o 'src/Third/\*\*' | wc -l | tr -d ' ')"
+[ "$wd3rc" -eq 0 ] && [ "$third_count" = 1 ] \
+  && ok "#1377: repeated widen is idempotent" \
+  || bad "#1377: repeated widen must not duplicate a token" "rc=$wd3rc count=$third_count: $wd3"
 
 # ---- an unmatchable token is refused BEFORE any write (#273/#523) ----------------------------------
+before_bad="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43" | jq -r .body)"
 wu="$("$ENGINE" widen FS.GG.SDD#43 --worker vole-418 --paths '**/never.fs' 2>&1)"; wurc=$?
-[ "$wurc" -ne 0 ] && printf '%s' "$wu" | grep -qi 'reserve NOTHING' \
-  && ok "#273: an unmatchable token is refused before the write" \
-  || bad "#273: an unmatchable token is refused" "rc=$wurc: $wu"
+after_bad="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/FS.GG.SDD/issues/43" | jq -r .body)"
+[ "$wurc" -ne 0 ] && printf '%s' "$wu" | grep -qi 'reserve NOTHING' && [ "$after_bad" = "$before_bad" ] \
+  && ok "#273/#1377: an unmatchable new token is refused without modifying the union" \
+  || bad "#273/#1377: an unmatchable token must leave the existing declaration intact" "rc=$wurc: $wu"
+
+# Replacement remains available, but only under an explicit name; this is the narrowing operation.
+sp="$("$ENGINE" set-paths FS.GG.SDD#43 --worker vole-418 --paths 'src/Narrow/**' 2>&1)"; sprc=$?
+[ "$sprc" -eq 0 ] && printf '%s' "$sp" | grep -q 'set FS.GG.SDD#43 → Paths: src/Narrow/\*\*' \
+  && ok "#1377: set-paths explicitly replaces (and can narrow) the touch-set" \
+  || bad "#1377: set-paths is the explicit replacement operation" "rc=$sprc: $sp"
 
 # ---- done stamps a completed item ------------------------------------------------------------------
 dn="$(run "done" FS.GG.SDD#42 2>&1)"; dnrc=$?   # quoted: the coord VERB, not the loop keyword (SC1010, #648)
