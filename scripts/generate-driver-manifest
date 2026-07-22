@@ -26,8 +26,9 @@ schedules its removal, so the driver no longer ANDs against a skill that is goin
 report-only. The composition therefore reduces to `always` — the driver materializes on the `sdd` lane
 it was built for. The bytes come from the tree; only these four facts per driver are authored here.
 
-AUTHORED IN TWO ROOTS: a `.github` driver skill lives byte-identically in both ADR-0011 skill roots
-(`.claude/skills/<id>`, `.agents/skills/<id>`); `skill-roots-selfcheck.yml` asserts that identity.
+AUTHORED IN THREE ROOTS: a `.github` driver/operator skill lives byte-identically in every ADR-0011
+skill root (`.claude/skills/<id>`, `.codex/skills/<id>`, `.agents/skills/<id>`);
+`skill-roots-selfcheck.yml` asserts that identity.
 The digest is read from the canonical `.claude` root (the `supplied-by` path), which the reconcile
 resolves to for `source:` too.
 
@@ -81,6 +82,12 @@ DRIVERS = [
         "id": "drive-board",
         "scope": "operator",
         "supplied-by": ".claude/skills/drive-board",
+        "materializes-when": "false",
+    },
+    {
+        "id": "cut-nuget-release",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/cut-nuget-release",
         "materializes-when": "false",
     },
 ]
