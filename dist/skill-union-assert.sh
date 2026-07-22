@@ -72,12 +72,9 @@
 #   skill-union-assert.sh --digest <skill-dir>   # print the canonical SKILL.md digest and exit
 #   skill-union-assert.sh --eval-when <predicate> [--params <p.json>]  # print true/false, then exit
 #
-# WHICH ROOTS (.github#517) — the correct root set is a property of the TREE, not of this script,
-# because two lanes materialize different sets and both are right:
-#   - a SCAFFOLDED PRODUCT gets ADR-0011's three (.claude/.codex/.agents), fanned out by `fsgg-sdd`;
-#   - a KIT CONSUMER (this org's own repos — .github and friends) gets the two `coordination-sync`
-#     materializes into (.claude/skills .agents/skills). There is no `.codex/` here and never will be.
-# So a tree that is not a scaffolded product DECLARES its roots, and the resolution order is:
+# WHICH ROOTS (.github#517) — ADR-0065 gives scaffolded products and kit consumers the same default:
+# `.claude`, `.codex`, and `.agents`. A tree may still DECLARE an intentional override, and the
+# resolution order is:
 #   1. --roots            (explicit; what CI's reusable workflow passes)
 #   2. $AGENT_SKILL_ROOTS (env; the same knob `coordination-sync` reads)
 #   3. <product>/.agent-skill-roots  (checked in — the tree states its own root set)
@@ -146,12 +143,13 @@ need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
 #
 # A SOURCED fragment, not an executable: no shebang, no top-level effects. Source it AFTER defining
 # `die`. Like lib/args.sh (#356), the guard body is shared and the per-script parts are not — here
-# that means the caller supplies its own DEFAULT, because the two lanes legitimately differ:
+# that means the caller supplies its own DEFAULT. Since ADR-0065 every production caller uses the
+# same three-root default; the parameter remains for explicit fixtures and future migrations:
 #
 #   skill-union-assert.sh  product lane — ADR-0011's three (.claude/.codex/.agents), fanned out by fsgg-sdd
-#   coordination-sync      kit lane     — the two it materializes into (.claude/skills .agents/skills)
+#   coordination-sync      kit lane     — the same three, materialized from FS.GG.Kit
 #
-# It is the PRECEDENCE and the PARSING that must be shared, not the default. Before this hoist, only
+# It is the PRECEDENCE and the PARSING that must be shared. Before this hoist, only
 # the asserter read the tree's `.agent-skill-roots` (#517) and the writer hardcoded its own set, so a
 # tree's root set had two sources of truth that agreed only by coincidence of defaults (#525). The
 # moment a tree declared anything else they diverged silently, and in the direction that matters:
@@ -412,8 +410,7 @@ fi
 # .agent-skill-roots > ADR-0011's three. The precedence and the declaration parser live in
 # lib/roots.sh, because `coordination-sync` — the script that MATERIALIZES these roots — must resolve
 # them the same way the gate that ASSERTS them does. It did not, and a tree's root set had two sources
-# of truth agreeing only by coincidence of defaults (#525). The DEFAULT stays per-script: this is the
-# product lane (ADR-0011's three), the writer is the kit lane (its two).
+# of truth agreeing only by coincidence of defaults (#525). ADR-0065 now makes both defaults identical.
 resolve_roots "$PRODUCT" "$DEFAULT_ROOTS" "default (ADR-0011's three)" "$ROOTS_ARG"
 
 # shellcheck disable=SC2206
@@ -434,7 +431,7 @@ for r in "${ROOT_ARR[@]}"; do
     {
       echo "skill-union-assert: the roots came from the scaffolded-product default ('$DEFAULT_ROOTS')."
       echo "  If '$PRODUCT' is NOT a scaffolded product, declare the roots it actually keeps in"
-      echo "  $PRODUCT/$ROOTS_DECL_FILE (e.g. '.claude/skills .agents/skills' for a kit consumer), and re-run."
+      echo "  $PRODUCT/$ROOTS_DECL_FILE (for example, one root for an intentionally single-runtime tree), and re-run."
       echo "  If it IS a scaffolded product, this is a REAL partition: the producer never materialized '$r'."
     } >&2
   fi

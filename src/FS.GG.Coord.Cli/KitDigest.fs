@@ -82,11 +82,29 @@ module KitDigest =
         else
             None
 
-    /// The kit lane's skill roots — `coordination-sync`'s `DEFAULT_ROOTS`, which is what a receiver holds.
-    /// NOT ADR-0011's three.
-    let private kitSkillRoots = [ ".claude/skills"; ".agents/skills" ]
+    /// The universal skill roots — `coordination-sync`, FS.GG.Kit and fsgg-sdd share this default
+    /// under ADR-0065. Repos with an intentional override simply lack the other root directories;
+    /// `kitDivergedRoots` treats an absent root as outside that tree's declared runtime surface.
+    let private kitSkillRoots = [ ".claude/skills"; ".codex/skills"; ".agents/skills" ]
 
-    /// The KIT's skills whose two roots have diverged, as `(source, mirror)` directory pairs — read off the
+    let private skillCopies (roots: string list) (src: string) : (string * string) list =
+        let trim (s: string) = s.TrimEnd([| '/' |])
+        let source = trim src
+        let lane = roots |> List.map trim
+
+        match lane |> List.tryFind (fun root -> source.StartsWith(root + "/", StringComparison.Ordinal)) with
+        | None -> []
+        | Some sourceRoot ->
+            let name = source.Substring(sourceRoot.Length + 1)
+
+            if name = "" || name.Contains "/" then
+                []
+            else
+                lane
+                |> List.filter ((<>) sourceRoot)
+                |> List.map (fun targetRoot -> source, targetRoot + "/" + name)
+
+    /// The KIT's skills whose roots have diverged, as `(source, mirror)` directory pairs — read off the
     /// lock's declared sources, never off a directory listing (#647). A client kit yields no mirror, so a
     /// client-only staleness never nags about roots; a repo's OWN skills are not the kit's business and are
     /// not in the lock, so they are not policed here at all.
@@ -118,7 +136,7 @@ module KitDigest =
         let rootExists (r: string) = Directory.Exists(abs r)
 
         lock
-        |> List.choose (fun (_want, src) -> Kit.skillMirror kitSkillRoots src)
+        |> List.collect (fun (_want, src) -> skillCopies kitSkillRoots src)
         |> List.choose (fun (source, mirror) ->
             // The mirror's ROOT, not the skill's own directory: `.agents/skills` for `.agents/skills/x`.
             let mirrorRoot = Path.GetDirectoryName(mirror.Replace('/', Path.DirectorySeparatorChar))

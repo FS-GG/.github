@@ -71,7 +71,7 @@ expect "a clean surface — placeholder trailer, one mint, no literal — is gre
 # 1. THE REAL REGRESSIONS, replayed on a copy of the SHIPPED tree.
 # =============================================================================================
 REAL="$WORK/real"; mkdir -p "$REAL"
-cp -r "$REPO_ROOT/.claude" "$REPO_ROOT/.agents" "$REPO_ROOT/docs" \
+cp -r "$REPO_ROOT/.claude" "$REPO_ROOT/.codex" "$REPO_ROOT/.agents" "$REPO_ROOT/docs" \
       "$REPO_ROOT/.agent-skill-roots" "$REAL/"
 # ...and the ENGINE SOURCE, for rule 4 (#569). The remedy a worker runs is the one the TOOL prints,
 # so the tool's own strings are part of the shipped surface — copying only the docs is the blind spot

@@ -37,11 +37,13 @@
 #   scripts/fsgg-coord                                          -> scripts/fsgg-coord              (chmod +x)
 #   <kit row's `source`>/SKILL.md                               -> <root>/<basename source>/SKILL.md
 #     ...for each `kind: skill` row in repos.yml and each root in AGENT_SKILL_ROOTS (default roots:
-#        ".claude/skills .agents/skills"). The skill list is READ from the registry, never copied.
+#        ".claude/skills .codex/skills .agents/skills"). The skill list is READ from the registry,
+#        never copied.
 # Each skill's SKILL.md is the content-addressed unit (its sha256 is the repos.yml kit digest); a
 # multi-file skill's remainder would be added here alongside it.
 #
-# Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default ".claude/skills .agents/skills").
+# Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default
+#                         ".claude/skills .codex/skills .agents/skills").
 # Exit: 0 = in sync / written, or drift this branch did not author (--base-ref); 1 = drift; 2 = misconfiguration.
 
 set -euo pipefail
@@ -49,7 +51,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_ROOT="$(cd "$HERE/.." && pwd)"                 # the .github checkout = canonical kit source
 REG="$SRC_ROOT/registry/repos.yml"
-DEFAULT_ROOTS=".claude/skills .agents/skills"   # the kit lane: what a receiver holds. NOT ADR-0011's three.
+DEFAULT_ROOTS=".claude/skills .codex/skills .agents/skills"   # ADR-0065: one default for every lane.
 # `resolve_roots` (lib/roots.sh) also sets ROOTS_SRC and ROOTS_FROM_DEFAULT. This lane reads neither —
 # it materializes the kit rather than reporting on which rule chose the roots — so they are not
 # pre-declared here. skill-union-assert.sh, which does read both, declares both. (#648)
@@ -92,7 +94,7 @@ target="$(cd "$target" && pwd)"
 # structurally unreachable: the file could not be consulted because the tree holding it had not been
 # identified yet. So the writer hardcoded a root set while the gate read a declared one, and the two
 # agreed only by coincidence of defaults (#525). Same precedence, same parser, same file — lib/roots.sh.
-resolve_roots "$target" "$DEFAULT_ROOTS" "default (the kit lane's two)"
+resolve_roots "$target" "$DEFAULT_ROOTS" "default (ADR-0065's universal three)"
 # Attribution is a property of the CHECK. In apply mode there is no branch to attribute drift to, and a
 # caller passing --base-ref to a writer has misunderstood the flag — say so rather than ignoring it.
 [ -z "$base_ref" ] || [ "$mode" = "check" ] || die "--base-ref is only meaningful with --check."

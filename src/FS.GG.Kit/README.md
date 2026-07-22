@@ -60,7 +60,7 @@ are — this is the write arm that replaces that copy, not a live per-build inpu
 | property | default | meaning |
 |---|---|---|
 | `FsggKitReceiverRoot` | referencing project's dir | repo root the kit materializes into |
-| `FsggKitSkillRoots` | `.claude/skills;.agents/skills` | skill roots to materialize into |
+| `FsggKitSkillRoots` | `.claude/skills;.codex/skills;.agents/skills` | skill roots to materialize into |
 | `FsggKitMaterializeOnBuild` | `true` | materialize as part of the build; `false` to run `-t:FsggKitMaterialize` explicitly |
 | `FsggKitMaterializeBuildConfig` | `false` | also materialize `Directory.Build.props` + `Directory.Packages.props` to the repo root |
 

@@ -147,15 +147,15 @@ byte-identical union; non-zero = at least one violation, each printed with its c
 
 ### Which roots — a tree declares its own set (#517)
 
-The right root set is a property of **the tree being checked**, not of this script, because two
-lanes materialize different sets and *both are correct*:
+ADR-0065 gives both delivery lanes the same default root set:
 
 | Lane | Roots | Written by |
 | --- | --- | --- |
 | **Scaffolded product** | `.claude/skills` `.codex/skills` `.agents/skills` (ADR-0011's three) | `fsgg-sdd`, the sole mirror authority |
-| **Kit consumer** (FS-GG's own repos, incl. `.github`) | `.claude/skills` `.agents/skills` | `coordination-sync` (same default) |
+| **Kit consumer** (FS-GG's own repos, incl. `.github`) | `.claude/skills` `.codex/skills` `.agents/skills` | `FS.GG.Kit` / `coordination-sync` |
 
-So the roots resolve in this order, and a tree that is not a scaffolded product **declares** its set:
+The roots resolve in this order; a tree declares a set only when it intentionally overrides the
+universal default:
 
 1. `--roots` — explicit; what the reusable workflow passes.
 2. `$AGENT_SKILL_ROOTS` — the env knob, shared with `coordination-sync`.

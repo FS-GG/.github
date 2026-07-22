@@ -612,6 +612,8 @@ asserted where skills are produced (`doctor`, per-skill `sha256` in
 `scaffold-provenance`) *and* where they are consumed: the Templates composition gate
 enforces it hard in both lanes via the reusable `skill-union-assert.sh`
 (`skill-mirror-verified` coherence row, `coherent: true` since 2026-07-02).
+ADR-0065 applies the same `.claude/.codex/.agents` default to framework coordination-kit receivers:
+`FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
 
 **Skill *absence* is checkable too (ADR-0017).** The manifest is a superset catalog —
 a producer declares every skill it *can* emit, but emission is profile/lifecycle-gated,

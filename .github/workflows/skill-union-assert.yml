@@ -42,8 +42,8 @@ on:
         description: >-
           Space-separated AGENT_SKILL_ROOTS to check, relative to product-path. Defaults to ADR-0011's
           three, and this gate ALWAYS passes it explicitly — a product's own `.agent-skill-roots` is
-          deliberately NOT consulted here (see the note above). A kit-consumer repo asserting its own
-          two roots through this workflow must say so: roots: ".claude/skills .agents/skills".
+          deliberately NOT consulted here (see the note above). A tree intentionally supporting fewer
+          runtimes must say so explicitly, for example: roots: ".claude/skills .agents/skills".
         type: string
         default: ".claude/skills .codex/skills .agents/skills"
       manifest:
