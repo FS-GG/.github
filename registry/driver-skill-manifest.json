@@ -11,7 +11,7 @@
     {
       "id": "workBoard",
       "scope": "driver",
-      "sha256": "02ccd2a602bc3a0bcca453901b77bcf7085c3d656807494bbcec2077ec3ec665",
+      "sha256": "5c84366ac4e08ce00bcdeed1b46eb88324b034e03d0d433fb7bf030aac051a27",
       "supplied-by": ".claude/skills/workBoard",
       "materializes-when": "always"
     },
