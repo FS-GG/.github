@@ -21,7 +21,7 @@ module KitDigest =
 
     /// *Is the lock stale?* — OBSERVE the kit-digest obligation off the TREE and warn on stderr. Names any
     /// content-addressed kit source whose `registry/repos.lock` digest no longer matches the file, and any
-    /// KIT skill whose two roots have diverged. Never inferred from what was declared (#563): a declaration
+    /// KIT skill whose runtime roots have diverged. Never inferred from what was declared (#563): a declaration
     /// cannot prove a digest matches, so it is never asked to. Silent with no root or no lock.
     val digestWarn: unit -> unit
 

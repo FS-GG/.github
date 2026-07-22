@@ -1,19 +1,19 @@
 # Dogfood the skill-union assertion on THIS repo's own agent-skill roots (review M10, #132).
 #
 # skill-union-selftest.yml proves scripts/skill-union-assert.sh works (synthetic fixtures);
-# this proves *this* repo actually holds the byte-identical union it preaches. .codex/skills
-# doesn't exist here (ADR-0011/0014 scope the three-root invariant to scaffolded products) — this
-# repo's two roots are declared in `.agent-skill-roots`, which the script reads, so we run the BARE
+# this proves *this* repo actually holds the byte-identical union it preaches. ADR-0065 extends the
+# three-root invariant to kit consumers, so this repo declares `.claude/.codex/.agents` and runs the BARE
 # command with no --roots. That is deliberate (.github#517): the command CI runs is now character-
 # for-character the command a worker runs before pushing a kit edit, so this gate can never again be
 # green on a root set the worker's local run doesn't check.
-# Until this gate existed, .claude/skills ≡ .agents/skills held by manual discipline.
+# Until this gate existed, root identity held by manual discipline.
 name: skill-roots-selfcheck
 
 on:
   pull_request:
     paths:
       - ".claude/skills/**"
+      - ".codex/skills/**"
       - ".agents/skills/**"
       - ".agent-skill-roots"
       - "scripts/skill-union-assert.sh"
@@ -22,6 +22,7 @@ on:
     branches: [main]
     paths:
       - ".claude/skills/**"
+      - ".codex/skills/**"
       - ".agents/skills/**"
       - ".agent-skill-roots"
       - "scripts/skill-union-assert.sh"

@@ -75,7 +75,7 @@ cat > "$WORK/materialize.proj" <<EOF
 </Project>
 EOF
 dotnet msbuild "$WORK/materialize.proj" -t:FsggKitMaterialize -nologo >/dev/null
-for root in .claude/skills .agents/skills; do
+for root in .claude/skills .codex/skills .agents/skills; do
   for s in cross-repo-coordination intra-repo-parallel-work check-board pnext-item; do
     [ -f "$recv/$root/$s/SKILL.md" ] || fail "skill not materialized: $root/$s/SKILL.md"
   done
@@ -84,7 +84,7 @@ done
 [ -f "$recv/.config/dotnet-tools.json" ] || fail "engine manifest not materialized at .config/dotnet-tools.json"
 # build-config is OPT-IN: the default materialize must NOT write it.
 [ ! -f "$recv/Directory.Build.props" ]    || fail "build-config materialized without opt-in (Directory.Build.props at receiver root)"
-echo "   4 skills × 2 roots + executable client + engine manifest; build-config correctly withheld (opt-in off)"
+echo "   4 skills × 3 roots + executable client + engine manifest; build-config correctly withheld (opt-in off)"
 
 echo "== 3b. build-config materializes at the receiver root when opted in =="
 recv2="$WORK/recv-bc"; mkdir -p "$recv2"

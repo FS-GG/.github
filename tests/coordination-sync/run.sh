@@ -48,7 +48,7 @@ diff -q "$REPO_ROOT/scripts/fsgg-coord" "$RECV/scripts/fsgg-coord" >/dev/null \
 # these go red — where before, `--check` passed on a receiver that lacked it entirely.
 for i in "${!SKILLS[@]}"; do
   s="${SKILLS[$i]}"; src="${SKILL_SRCS[$i]}"
-  for root in .claude/skills .agents/skills; do
+  for root in .claude/skills .codex/skills .agents/skills; do
     [ -f "$RECV/$root/$s/SKILL.md" ] && ok "apply: $s in $root" \
       || bad "apply: $s in $root" "declared 'kind: skill' in repos.yml, not distributed"
   done
@@ -544,7 +544,7 @@ bash "$SYNC" "$NARROW" >/dev/null
          "the declaration is the root set, not a supplement to the hardcoded default"
 
 # Precedence: $AGENT_SKILL_ROOTS still overrides the declaration (CI's knob keeps working), and the
-# default still applies to a receiver that declares nothing — the coincidence that held until now.
+# default still applies to a receiver that declares nothing.
 ENVR="$WORK/env-receiver"; mkdir -p "$ENVR"
 printf '.gemini/skills\n' > "$ENVR/.agent-skill-roots"
 AGENT_SKILL_ROOTS=".claude/skills" bash "$SYNC" "$ENVR" >/dev/null
@@ -554,9 +554,11 @@ AGENT_SKILL_ROOTS=".claude/skills" bash "$SYNC" "$ENVR" >/dev/null
 
 PLAIN="$WORK/plain-receiver"; mkdir -p "$PLAIN"
 bash "$SYNC" "$PLAIN" >/dev/null
-[ -f "$PLAIN/.claude/skills/$one_skill/SKILL.md" ] && [ -f "$PLAIN/.agents/skills/$one_skill/SKILL.md" ] \
-  && ok "roots: a receiver declaring nothing still gets the kit lane's two (default unchanged)" \
-  || bad "roots: default root set changed" "the kit lane's default is NOT ADR-0011's three"
+[ -f "$PLAIN/.claude/skills/$one_skill/SKILL.md" ] \
+  && [ -f "$PLAIN/.codex/skills/$one_skill/SKILL.md" ] \
+  && [ -f "$PLAIN/.agents/skills/$one_skill/SKILL.md" ] \
+  && ok "roots: a receiver declaring nothing gets ADR-0065's universal three" \
+  || bad "roots: universal default root set is incomplete" "want .claude/.codex/.agents"
 
 # An empty/comment-only declaration is a MISCONFIGURATION (rc 2), never a silent fall-back to the
 # default: a tree that checked the file in meant to say something, and substituting the default there

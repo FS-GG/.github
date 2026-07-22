@@ -12,9 +12,9 @@
          this to that root (e.g. in a repo-root Directory.Build.props: $(MSBuildThisFileDirectory)). -->
     <FsggKitReceiverRoot Condition="'$(FsggKitReceiverRoot)' == ''">$(MSBuildProjectDirectory)</FsggKitReceiverRoot>
 
-    <!-- The skill roots a receiver holds, ';'-separated. Matches coordination-sync's AGENT_SKILL_ROOTS
-         default so the packaged and byte-copied kits materialize to the same places. -->
-    <FsggKitSkillRoots Condition="'$(FsggKitSkillRoots)' == ''">.claude/skills;.agents/skills</FsggKitSkillRoots>
+    <!-- The skill roots a receiver holds, ';'-separated. ADR-0065 makes this the same universal
+         three-root contract used by fsgg-sdd and coordination-sync. -->
+    <FsggKitSkillRoots Condition="'$(FsggKitSkillRoots)' == ''">.claude/skills;.codex/skills;.agents/skills</FsggKitSkillRoots>
 
     <!-- Materialize automatically as part of the consumer's build. A receiver that would rather
          materialize on an explicit `dotnet build -t:FsggKitMaterialize` sets this false. -->

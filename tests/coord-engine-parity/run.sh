@@ -4315,11 +4315,13 @@ fi
 # fixture exists only so the `widen` it rides can LAND (#706 requires the widener to hold the lock). #74 is
 # held by kite-469 with no neighbour, so the widen lands and the #353 re-check is DISJOINT (exit 0).
 KITROOT="$(mktemp -d)/kitroot"
-mkdir -p "$KITROOT/.claude/skills/pnext-item" "$KITROOT/.agents/skills/pnext-item" \
+mkdir -p "$KITROOT/.claude/skills/pnext-item" "$KITROOT/.codex/skills/pnext-item" \
+         "$KITROOT/.agents/skills/pnext-item" \
          "$KITROOT/scripts" "$KITROOT/registry"
 # (re)write the tree and relock it, so the lock is HONEST before each scenario (the corpus's `kit_seed`).
 kit_seed() {
   printf 'skill body v1\n' >"$KITROOT/.claude/skills/pnext-item/SKILL.md"
+  cp "$KITROOT/.claude/skills/pnext-item/SKILL.md" "$KITROOT/.codex/skills/pnext-item/SKILL.md"
   cp "$KITROOT/.claude/skills/pnext-item/SKILL.md" "$KITROOT/.agents/skills/pnext-item/SKILL.md"
   printf '#!/usr/bin/env bash\n# client v1\n' >"$KITROOT/scripts/fsgg-coord"
   { printf '# registry/repos.lock — GENERATED.\n'
@@ -4406,7 +4408,7 @@ if [ -z "$KIT_PORT" ]; then bad "kit fixture bound a port"; else
   kit_seed
   mkdir -p "$KITROOT/.claude/skills/fs-gg-product-layout" "$KITROOT/.agents/skills/fs-gg-product-layout" \
            "$KITROOT/.claude/skills/speckit-analyze"
-  # BOTH roots, legitimately differing: the per-agent wrapper line is the POINT of having two roots
+  # Two repo-local roots, legitimately differing: the per-agent wrapper line is the point of the pair
   # (specs/227-layout-product-skill/data-model.md pins the Codex-active/Claude-active pair), and
   # `skill-parity` validates them by PAIRING, never by byte-identity.
   printf 'This is the Claude-active wrapper.\n' >"$KITROOT/.claude/skills/fs-gg-product-layout/SKILL.md"
@@ -4435,7 +4437,7 @@ if [ -z "$KIT_PORT" ]; then bad "kit fixture bound a port"; else
     || bad "#647: a diverged KIT skill must still be named" "$w_kit"
 
   # (4b-ii) A ROOT THIS TREE HAS NOT GOT IS THIS TREE'S DECISION, NOT DRIFT (#647). `AGENT_SKILL_ROOTS` is
-  #      configurable — `coordination-sync`'s two roots are its DEFAULT, not a law — so a receiver may hold
+  #      configurable — the universal three are a DEFAULT, not a law — so a receiver may hold
   #      the kit in ONE root. Telling it to `cp` a skill into a root it deliberately does not keep would be
   #      this very issue's bug in a narrower coat: a warning, on a green tree, about nobody's mistake. The
   #      scan being replaced got this RIGHT (`Directory.Exists agentsDir || return []`) and the scoping

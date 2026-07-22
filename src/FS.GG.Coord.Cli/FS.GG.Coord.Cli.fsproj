@@ -48,7 +48,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coord-engine</ToolCommandName>
     <PackageId>FS.GG.Coord.Cli</PackageId>
-    <Version>0.8.0</Version>
+    <Version>0.9.0</Version>
     <AssemblyName>fsgg-coord-engine</AssemblyName>
 
     <Description>FS-GG typed coordination engine — the schedulability model behind `fsgg-coord` as one total function over a board-state snapshot, plus the typed IO layer that drives it. It IS the coordination tool (ADR-0034/ADR-0040): the `fsgg-coord` shim resolves and execs it; there is no bash left to shadow.</Description>
