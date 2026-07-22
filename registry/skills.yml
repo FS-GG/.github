@@ -251,6 +251,10 @@ skills:
   # fs-gg-game's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's. `mirrored: false` is the manifest's declared verdict.
   - { id: fs-gg-mapgen,           scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-mapgen/SKILL.md, sha256: e907574950786a713196545141338a635d85e8b340262b8eec1fecf1cc091907, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  # fs-gg-mapcraft — homed beside its owner+predicate siblings and reconciled verbatim from
+  # fs-gg-game's producer manifest by `--write` (.github#299/.github#1200). The position
+  # and this annotation are generated; the row's bytes are the manifest's. `mirrored: false` is the manifest's declared verdict.
+  - { id: fs-gg-mapcraft,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-mapcraft/SKILL.md, sha256: 73725ff9b9e8958d053842a895777704ac74092a28a600836495d12512fdd049, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 012290947136bf859fabd6577d575aefa59416ca54f0957184f18ee65534f659, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack" }
   - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: 509a7e89500da7675c90a363c7530d3a20061d8fad3493f953e5df7926763b07, materializes-when: "feedback == true and lifecycle == spec-kit" }
