@@ -83,17 +83,17 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.3.0` | `1.3.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.15.0` | `0.17.0` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.18.0` | `0.18.0` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |
-| `game-sim-core` | FS.GG.Game | `0.8.0` | `0.8.0` |
-| `game-scene-adapter` | FS.GG.Game | `0.8.0` | `0.8.0` |
+| `game-sim-core` | FS.GG.Game | `0.9.0` | `0.9.0` |
+| `game-scene-adapter` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.4.0` | `0.4.0` |
 | `fs-gg-net` | FS.GG.Net | `0.2.0` | `0.2.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
-| `coord-engine` | FS-GG/.github | `0.8.0` | `0.8.0` |
-| `new-sdd-workspace` | FS-GG/.github | `0.5.0` | `0.5.0` |
+| `coord-engine` | FS-GG/.github | `0.9.0` | `0.9.0` |
+| `new-sdd-workspace` | FS-GG/.github | `0.6.0` | `0.6.0` |
 
 <!-- END GENERATED: fsgg-contract-versions -->
 
@@ -117,16 +117,16 @@ The authoritative count of the `skill-registry` catalog ([`registry/skills.yml`]
 *Generated from `registry/skills.yml` — the authoritative breakdown of the skill catalog by
 `scope` and `owner`. This is the machine-owned count; the prose elsewhere on this page cites it.*
 
-**46 rows** = **16 process** + **27 product** + **2 driver** + **1 operator** (9 `fs-gg-game` + 18 `fs-gg-rendering`).
+**49 rows** = **16 process** + **30 product** + **2 driver** + **1 operator** (11 `fs-gg-game` + 19 `fs-gg-rendering`).
 
 | scope | owner | rows |
 |---|---|---|
 | driver | `.github` | 2 |
 | operator | `.github` | 1 |
 | process | `fs-gg-sdd` | 16 |
-| product | `fs-gg-game` | 9 |
-| product | `fs-gg-rendering` | 18 |
-| **total** | | **46** |
+| product | `fs-gg-game` | 11 |
+| product | `fs-gg-rendering` | 19 |
+| **total** | | **49** |
 
 <!-- END GENERATED: fsgg-skill-registry-counts -->
 
