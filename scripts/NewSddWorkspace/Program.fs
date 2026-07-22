@@ -18,6 +18,12 @@
 /// produced by current tooling. --pinned skips the self-update; --pinned with --ref <tag> gives a
 /// fully reproducible, pinned scaffold. ADR-0009's "no silent auto-update" still governs the
 /// in-project fsgg-sdd verbs — this default is only the create-a-new-workspace step.
+///
+/// It also carries a `retrofit <target>` subcommand — the INVERSE of step 5's scaffold-time wiring:
+/// run inside an ALREADY-scaffolded workspace (one made --no-coordination, or before the wiring
+/// existed), it idempotently materializes the coordination kit + board env onto it, re-emitting only
+/// what drifted and recording the event in scaffold-provenance.json. It is the precondition workBoard
+/// (ADR-0064) documents but cannot itself satisfy.
 module NewSddWorkspace.Program
 
 open System
@@ -304,6 +310,18 @@ let private writeUnder (target: string) (relPath: string) (content: string) =
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
     File.WriteAllText(dest, content)
 
+/// Add the owner/group/other execute bits to a file (the `fsgg-coord` shim must be runnable).
+/// Best-effort at the call site — a filesystem that rejects the mode (or Windows) leaves the file
+/// non-executable rather than failing the whole step, exactly as the inline version this replaces did.
+let private setExecutable (dest: string) =
+    File.SetUnixFileMode(
+        dest,
+        File.GetUnixFileMode dest
+        ||| UnixFileMode.UserExecute
+        ||| UnixFileMode.GroupExecute
+        ||| UnixFileMode.OtherExecute
+    )
+
 /// Merge the `fs.gg.coord.cli` tool into the workspace's `.config/dotnet-tools.json`, preserving any
 /// tools already there (the SDD scaffold may have written one). `manifestJson` is the fetched
 /// `dist/dotnet/.config/dotnet-tools.json` — we lift only the coord entry out of it.
@@ -376,15 +394,7 @@ let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
     (match fetchText (raw "scripts/fsgg-coord") with
      | Ok content ->
          writeUnder opts.Target "scripts/fsgg-coord" content
-         try
-             let dest = Path.Combine(opts.Target, "scripts", "fsgg-coord")
-             File.SetUnixFileMode(
-                 dest,
-                 File.GetUnixFileMode dest
-                 ||| UnixFileMode.UserExecute
-                 ||| UnixFileMode.GroupExecute
-                 ||| UnixFileMode.OtherExecute
-             )
+         try setExecutable (Path.Combine(opts.Target, "scripts", "fsgg-coord"))
          with _ -> ()
      | Error e -> problems.Add e)
     // 3 · the engine tool manifest (merge the coord tool)
@@ -405,6 +415,213 @@ let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
                 problems.Count
                 (problems.[problems.Count - 1])
         )
+
+// ── Coordination RETROFIT (the inverse of #1142's scaffold-time wiring) ───────
+//
+// `wireCoordination` above runs AT SCAFFOLD TIME, on a directory the scaffold just created, and
+// writes unconditionally. `retrofit` runs LATER, INSIDE an already-scaffolded workspace that was
+// created `--no-coordination` (or before #1142 landed), and must be IDEMPOTENT: it materializes only
+// what is missing or has drifted, leaves a coherent kit untouched, and records the event in
+// `scaffold-provenance.json`. It is the precondition `workBoard` (ADR-0064) documents but cannot
+// itself satisfy. Same kit, same board env, same HTTP fetch (no checkout) as the scaffold path.
+
+/// The retrofit invocation surface. A subset of `Options` — only the coordination inputs are
+/// meaningful here; the SDD/render/governance steps do not re-run on an existing workspace.
+type RetrofitOptions =
+    { Target: string
+      /// The FS-GG/.github ref to vendor the kit from (default `main`). Mirrors `--ref` on scaffold.
+      Ref: string
+      WorkspaceRepo: string option
+      BoardOwner: string
+      BoardTitle: string
+      ChoreLocks: string option }
+
+/// One file's reconciliation outcome. `Wrote(rel, wasMissing)` distinguishes a fresh materialization
+/// (`wasMissing = true`) from a drift repair (`false`); `Kept` means present-and-identical (no write);
+/// `Errored` carries a fetch/write failure. This three-way split is what makes the retrofit idempotent
+/// and lets the provenance record name exactly what changed.
+type private DriftAction =
+    | Wrote of rel: string * wasMissing: bool
+    | Kept of rel: string
+    | Errored of detail: string
+
+/// Write `desired` to `<target>/<rel>` ONLY if the on-disk bytes differ (or the file is absent),
+/// returning which of those three happened. The heart of the idempotent retrofit: an unchanged file
+/// is never rewritten, so re-running the retrofit on a coherent workspace is a pure no-op.
+let private reconcileFile (target: string) (rel: string) (desired: string) (makeExec: bool) : DriftAction =
+    let dest = Path.Combine(target, rel)
+    let existing = if File.Exists dest then Some(File.ReadAllText dest) else None
+    match existing with
+    | Some cur when cur = desired -> Kept rel
+    | _ ->
+        try
+            writeUnder target rel desired
+            if makeExec then (try setExecutable dest with _ -> ())
+            Wrote(rel, existing.IsNone)
+        with ex ->
+            Errored ex.Message
+
+/// Reconcile the `fs.gg.coord.cli` entry in `.config/dotnet-tools.json`. Drift is detected on the coord
+/// tool ONLY (the workspace's own tools are none of the retrofit's business) — if the manifest already
+/// carries an identical coord entry it is `Kept`, otherwise `mergeToolManifest` folds it in, preserving
+/// every other tool. `wasMissing` is true when no coord entry was there before.
+let private reconcileToolManifest (target: string) (manifestJson: string) : DriftAction =
+    let rel = ".config/dotnet-tools.json"
+    let dest = Path.Combine(target, ".config", "dotnet-tools.json")
+    try
+        let desiredCoord =
+            JsonNode.Parse(manifestJson).AsObject().["tools"].AsObject().["fs.gg.coord.cli"]
+        let currentCoord =
+            if File.Exists dest then
+                try
+                    match JsonNode.Parse(File.ReadAllText dest) with
+                    | :? JsonObject as o ->
+                        match o.["tools"] with
+                        | :? JsonObject as t ->
+                            match t.["fs.gg.coord.cli"] with
+                            | null -> None
+                            | v -> Some v
+                        | _ -> None
+                    | _ -> None
+                with _ ->
+                    None
+            else
+                None
+        let identical =
+            match currentCoord with
+            | Some c -> c.ToJsonString() = desiredCoord.ToJsonString()
+            | None -> false
+        if identical then
+            Kept rel
+        else
+            mergeToolManifest target manifestJson
+            Wrote(rel, currentCoord.IsNone)
+    with ex ->
+        Errored ex.Message
+
+/// The current value of one `env` key in `.claude/settings.json`, or None if the file/key is absent.
+let private currentEnvValue (target: string) (name: string) : string option =
+    let dest = Path.Combine(target, ".claude", "settings.json")
+    if not (File.Exists dest) then
+        None
+    else
+        try
+            match JsonNode.Parse(File.ReadAllText dest) with
+            | :? JsonObject as o ->
+                match o.["env"] with
+                | :? JsonObject as e ->
+                    match e.[name] with
+                    | null -> None
+                    | v -> Some(v.GetValue<string>())
+                | _ -> None
+            | _ -> None
+        with _ ->
+            None
+
+/// Reconcile the board env. If `.claude/settings.json` already carries the exact
+/// `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (+ `FSGG_COORD_CHORE_LOCKS` when one was asked for) it is
+/// `Kept`; otherwise `writeCoordinationEnv` merges the keys (never clobbering the rest of settings.json)
+/// and it is `Wrote`. `wasMissing` is true when no `FSGG_COORD_OWNER` was present before.
+let private reconcileEnv (target: string) (owner: string) (title: string) (choreLocks: string option) : DriftAction =
+    let rel = ".claude/settings.json (env)"
+    let curOwner = currentEnvValue target "FSGG_COORD_OWNER"
+    let choreMatches =
+        match choreLocks with
+        | None -> true // not asked for ⇒ nothing to reconcile on this key
+        | Some cl -> currentEnvValue target "FSGG_COORD_CHORE_LOCKS" = Some cl
+    let identical =
+        curOwner = Some owner
+        && currentEnvValue target "FSGG_COORD_PROJECT" = Some title
+        && choreMatches
+    if identical then
+        Kept rel
+    else
+        try
+            writeCoordinationEnv target owner title choreLocks
+            Wrote(rel, curOwner.IsNone)
+        with ex ->
+            Errored ex.Message
+
+/// What the retrofit did, aggregated across every kit file + the env.
+type private RetrofitReport =
+    { Wrote: (string * bool) list // (rel, wasMissing) — wasMissing=true ⇒ fresh; false ⇒ drift repair
+      Kept: string list
+      Problems: string list }
+
+/// Idempotently materialize the coordination kit + board env into an already-scaffolded workspace,
+/// touching ONLY what is missing or drifted. Same fetch surface as `wireCoordination` (the four skills
+/// into all three agent-skill roots, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest, the
+/// board env) — but every write goes through a reconcile so a coherent kit is left byte-for-byte intact.
+let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
+    let raw p = sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" opts.Ref p
+    let wrote = ResizeArray<string * bool>()
+    let kept = ResizeArray<string>()
+    let problems = ResizeArray<string>()
+    let record =
+        function
+        | Wrote(rel, m) -> wrote.Add(rel, m)
+        | Kept rel -> kept.Add rel
+        | Errored d -> problems.Add d
+    // 1 · the four skills → every agent-skill root, byte-identical (reconciled per root file).
+    for s in coordinationSkills do
+        match fetchText (raw (sprintf ".claude/skills/%s/SKILL.md" s)) with
+        | Ok content ->
+            for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
+                record (reconcileFile opts.Target (sprintf "%s/%s/SKILL.md" root s) content false)
+        | Error e -> problems.Add e
+    // 2 · the fsgg-coord shim (executable)
+    (match fetchText (raw "scripts/fsgg-coord") with
+     | Ok content -> record (reconcileFile opts.Target "scripts/fsgg-coord" content true)
+     | Error e -> problems.Add e)
+    // 3 · the engine tool manifest (merge the coord tool)
+    (match fetchText (raw "dist/dotnet/.config/dotnet-tools.json") with
+     | Ok content -> record (reconcileToolManifest opts.Target content)
+     | Error e -> problems.Add e)
+    // 4 · the board env (no network — always reconcilable)
+    record (reconcileEnv opts.Target opts.BoardOwner opts.BoardTitle opts.ChoreLocks)
+    { Wrote = List.ofSeq wrote
+      Kept = List.ofSeq kept
+      Problems = List.ofSeq problems }
+
+/// Append a `coordination` entry to the `retrofits` array in `.fsgg/scaffold-provenance.json`, naming
+/// what was freshly materialized vs re-emitted as drift. Additive and read-safe: a `retrofits` key is
+/// unknown to SDD's provenance schema, and System.Text.Json ignores unknown members on read, so a
+/// `doctor`/`verify` parse is unaffected. Merges into an existing document (never rewriting SDD's own
+/// keys); if none exists (a workspace with no provenance at all) it writes a minimal one carrying only
+/// the retrofit log.
+let private recordRetrofit (target: string) (opts: RetrofitOptions) (materialized: string list) (drift: string list) =
+    let dest = Path.Combine(target, ".fsgg", "scaffold-provenance.json")
+    let root =
+        if File.Exists dest then
+            match JsonNode.Parse(File.ReadAllText dest) with
+            | :? JsonObject as o -> o
+            | _ -> JsonObject()
+        else
+            JsonObject()
+    let retrofits =
+        match root.["retrofits"] with
+        | :? JsonArray as a -> a
+        | _ ->
+            let a = JsonArray()
+            root.["retrofits"] <- a
+            a
+    let entry = JsonObject()
+    entry.["kind"] <- JsonValue.Create "coordination"
+    entry.["tool"] <- JsonValue.Create "new-sdd-workspace"
+    entry.["at"] <- JsonValue.Create(DateTime.UtcNow.ToString "o")
+    entry.["ref"] <- JsonValue.Create opts.Ref
+    entry.["board"] <- JsonValue.Create(sprintf "%s/%s" opts.BoardOwner opts.BoardTitle)
+    opts.ChoreLocks |> Option.iter (fun cl -> entry.["choreLocks"] <- JsonValue.Create cl)
+    let arrOf (xs: string list) =
+        let a = JsonArray()
+        for x in xs do
+            a.Add(JsonValue.Create x)
+        a
+    entry.["materialized"] <- arrOf materialized
+    entry.["reMaterializedDrift"] <- arrOf drift
+    retrofits.Add entry
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath dest)) |> ignore
+    File.WriteAllText(dest, root.ToJsonString(JsonSerializerOptions(WriteIndented = true)))
 
 // ── Rendering (presentation edge) ────────────────────────────────────────────
 
@@ -518,7 +735,13 @@ let private usage () =
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Usage[/]"
     AnsiConsole.MarkupLine "  new-sdd-workspace [grey]<target-dir> <product-name>[/] [[options]]"
+    AnsiConsole.MarkupLine "  new-sdd-workspace [aqua]retrofit[/] [grey]<target-dir>[/] [[--board owner/title]] [[--repo owner/repo]] [[--chore-locks refs]] [[--ref git-ref]]"
     AnsiConsole.MarkupLine "  [dim](from a checkout: dotnet run --project scripts/NewSddWorkspace -- <target-dir> <product-name>)[/]"
+    AnsiConsole.WriteLine()
+    AnsiConsole.MarkupLine "[bold]Subcommands[/]"
+    AnsiConsole.MarkupLine "  [aqua]retrofit[/] <target-dir>   idempotently wire coordination ONTO an existing workspace (the"
+    AnsiConsole.MarkupLine "                        inverse of the scaffold-time step): vendor the kit + write the board"
+    AnsiConsole.MarkupLine "                        env, re-emit only what drifted, and record it in scaffold-provenance.json"
     AnsiConsole.WriteLine()
     AnsiConsole.MarkupLine "[bold]Options[/]"
     AnsiConsole.MarkupLine "  [green]--profile[/] <name>   render profile (default: game = provider default)"
@@ -921,6 +1144,45 @@ let private parse (argv: string list) : Result<Options, string> =
             rest
     | _ -> Error "target dir and product name are required"
 
+/// Parse `retrofit <target> [options]` — the coordination-retrofit subcommand. Only the coordination
+/// inputs (`--board`/`--repo`/`--chore-locks`/`--ref`) are accepted; the scaffold/render/governance
+/// flags are meaningless on an existing workspace and are rejected as unknown. Carries the same
+/// #388 flag-as-value guard as `parse`.
+let private parseRetrofit (argv: string list) : Result<RetrofitOptions, string> =
+    let rec flags (acc: RetrofitOptions) rest =
+        match rest with
+        | [] -> Ok acc
+        | "--board" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--board needs a value (got flag '%s')" value)
+        | "--board" :: value :: t ->
+            let owner, title = parseBoard value
+            flags { acc with BoardOwner = owner; BoardTitle = title } t
+        | [ "--board" ] -> Error "--board needs a value"
+        | "--repo" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--repo needs a value (got flag '%s')" value)
+        | "--repo" :: value :: t -> flags { acc with WorkspaceRepo = Some value } t
+        | [ "--repo" ] -> Error "--repo needs a value"
+        | "--chore-locks" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--chore-locks needs a value (got flag '%s')" value)
+        | "--chore-locks" :: value :: t -> flags { acc with ChoreLocks = Some value } t
+        | [ "--chore-locks" ] -> Error "--chore-locks needs a value"
+        | "--ref" :: value :: _ when value.StartsWith "--" ->
+            Error(sprintf "--ref needs a value (got flag '%s')" value)
+        | "--ref" :: value :: t -> flags { acc with Ref = value } t
+        | [ "--ref" ] -> Error "--ref needs a value"
+        | other :: _ -> Error(sprintf "unknown argument: %s" other)
+    match argv with
+    | target :: rest when not (target.StartsWith "--") ->
+        flags
+            { RetrofitOptions.Target = target
+              Ref = "main"
+              WorkspaceRepo = None
+              BoardOwner = "FS-GG"
+              BoardTitle = "Coordination"
+              ChoreLocks = None }
+            rest
+    | _ -> Error "retrofit needs a target directory (the workspace to wire): retrofit <target> [--board owner/title]"
+
 // ── Orchestration ────────────────────────────────────────────────────────────
 
 let private run (opts: Options) : int =
@@ -1094,6 +1356,128 @@ let private run (opts: Options) : int =
         summary results opts fatal
         if fatal then 1 else 0
 
+// ── Retrofit orchestration ────────────────────────────────────────────────────
+
+let private retrofitHeader (opts: RetrofitOptions) =
+    let grid = Grid()
+    grid.AddColumn() |> ignore
+    grid.AddColumn() |> ignore
+    grid.AddRow("[grey]target[/]", Markup.Escape opts.Target) |> ignore
+    grid.AddRow(
+        "[grey]board[/]",
+        sprintf "[aqua]%s/%s[/]" (Markup.Escape opts.BoardOwner) (Markup.Escape opts.BoardTitle)
+    )
+    |> ignore
+    opts.WorkspaceRepo
+    |> Option.iter (fun r -> grid.AddRow("[grey]repo[/]", Markup.Escape r) |> ignore)
+    grid.AddRow("[grey]kit ref[/]", Markup.Escape opts.Ref) |> ignore
+    let panel = Panel(grid)
+    panel.Header <- PanelHeader "[bold]new-sdd-workspace[/] [grey]· retrofit coordination[/]"
+    panel.Border <- BoxBorder.Rounded
+    panel.Padding <- Padding(1, 0, 1, 0)
+    AnsiConsole.Write panel
+
+/// Retrofit the coordination kit + board env onto an already-scaffolded workspace. Idempotent: it
+/// materializes only what is missing, repairs only what has drifted, and no-ops cleanly on a coherent
+/// workspace. Refuses (exit 2) a directory that is not a scaffolded workspace (no `.fsgg/`). Exit 1
+/// only when the kit could not be materialized AT ALL (every fetch failed on an unwired workspace);
+/// otherwise 0, mirroring the best-effort contract of the scaffold-time coordination step.
+let private runRetrofit (opts: RetrofitOptions) : int =
+    retrofitHeader opts
+    let fsggDir = Path.Combine(opts.Target, ".fsgg")
+    if not (Directory.Exists fsggDir) then
+        // The precondition the issue names: a workspace has a `.fsgg/` config. No `.fsgg/` ⇒ this is not
+        // a scaffolded workspace, so there is nothing to retrofit ONTO — refuse cleanly, naming the fix.
+        // A concise leading line (no target path) so the refusal is greppable on one line at any width.
+        AnsiConsole.WriteLine()
+        AnsiConsole.MarkupLine "[red]retrofit refused:[/] not a scaffolded workspace (no .fsgg/ directory)"
+        let panel =
+            Panel(
+                sprintf
+                    "[red]%s is not a scaffolded workspace[/] (no [grey].fsgg/[/] directory).\n\nRetrofit wires coordination ONTO an existing workspace. Scaffold one first:\n  [bold]new-sdd-workspace %s <product-name>[/]"
+                    (Markup.Escape opts.Target)
+                    (Markup.Escape opts.Target)
+            )
+        panel.Header <- PanelHeader "[red]nothing to retrofit[/]"
+        panel.Border <- BoxBorder.Rounded
+        panel.Padding <- Padding(1, 0, 1, 0)
+        AnsiConsole.Write panel
+        2
+    else
+        step 1 "retrofit coordination kit"
+        let report =
+            AnsiConsole
+                .Status()
+                .Start(
+                    sprintf "reconciling the coordination kit for %s/%s…" opts.BoardOwner opts.BoardTitle,
+                    fun _ -> retrofitCoordination opts
+                )
+        let materialized = report.Wrote |> List.choose (fun (r, m) -> if m then Some r else None)
+        let drift = report.Wrote |> List.choose (fun (r, m) -> if m then None else Some r)
+        let changed = not (List.isEmpty report.Wrote)
+
+        // Surface any fetch/write problems (best-effort — a 404 on one kit file never fails the run).
+        for p in report.Problems do
+            AnsiConsole.MarkupLine(sprintf "  [yellow]⚠[/] %s" (Markup.Escape p))
+
+        if changed then
+            // Fresh materialization and/or drift repair happened → record it in the provenance log.
+            recordRetrofit opts.Target opts materialized drift
+            if not (List.isEmpty materialized) then
+                AnsiConsole.MarkupLine(
+                    sprintf "  [green]✓[/] materialized %d missing kit piece(s): [grey]%s[/]"
+                        materialized.Length (Markup.Escape(String.Join(", ", materialized)))
+                )
+            if not (List.isEmpty drift) then
+                AnsiConsole.MarkupLine(
+                    sprintf "  [green]✓[/] re-emitted %d drifted kit piece(s): [grey]%s[/]"
+                        drift.Length (Markup.Escape(String.Join(", ", drift)))
+                )
+            if not (List.isEmpty report.Kept) then
+                AnsiConsole.MarkupLine(
+                    sprintf "  [grey]· %d piece(s) already coherent — left untouched[/]" report.Kept.Length
+                )
+            AnsiConsole.MarkupLine(
+                sprintf
+                    "  [green]✓[/] recorded retrofit in [grey].fsgg/scaffold-provenance.json[/] — board [aqua]%s/%s[/]"
+                    (Markup.Escape opts.BoardOwner)
+                    (Markup.Escape opts.BoardTitle)
+            )
+            if opts.BoardOwner.ToLowerInvariant() <> "fs-gg" then
+                AnsiConsole.MarkupLine
+                    "  [grey]note: offer/chores on a non-FS-GG board need an engine build with #1140 (post-0.4.0)[/]"
+            AnsiConsole.WriteLine()
+            AnsiConsole.MarkupLine(
+                sprintf "[bold]Done:[/] [green]%s[/] is now wired for coordination — /pnext-item and /check-board work." (Markup.Escape opts.Target)
+            )
+            0
+        elif not (List.isEmpty report.Kept) then
+            // Nothing written, but pieces are present → already wired. Refuse cleanly (no partial state):
+            // the kit is coherent, so the retrofit is a no-op and no provenance entry is appended.
+            AnsiConsole.MarkupLine(
+                sprintf "  [green]✓[/] already wired — %d kit piece(s) coherent, no drift to re-emit" report.Kept.Length
+            )
+            if not (List.isEmpty report.Problems) then
+                AnsiConsole.MarkupLine
+                    "  [yellow]⚠[/] some kit files could not be fetched to verify — re-run when the network is reachable"
+            AnsiConsole.WriteLine()
+            AnsiConsole.MarkupLine(
+                sprintf "[bold]Already wired:[/] [green]%s[/] carries the coordination kit + board env." (Markup.Escape opts.Target)
+            )
+            0
+        else
+            // Nothing present and nothing written — every fetch failed on an unwired workspace. Nothing
+            // was materialized, so there is no partial state; report the failure and exit non-zero.
+            let panel =
+                Panel(
+                    "[red]could not vendor the coordination kit[/] — every fetch from FS-GG/.github failed.\n\nCheck network reachability and re-run; nothing was written, so the workspace is unchanged."
+                )
+            panel.Header <- PanelHeader "[red]retrofit failed[/]"
+            panel.Border <- BoxBorder.Rounded
+            panel.Padding <- Padding(1, 0, 1, 0)
+            AnsiConsole.Write panel
+            1
+
 [<EntryPoint>]
 let main argv =
     match List.ofArray argv with
@@ -1109,6 +1493,17 @@ let main argv =
         | None ->
             AnsiConsole.MarkupLine "[yellow]aborted[/] — no scaffold created."
             130
+    // `retrofit <target> …` — wire coordination ONTO an existing workspace (the inverse of the
+    // scaffold-time step). Its own parser/orchestrator; it does not scaffold, so it skips the wizard
+    // and the fsgg-sdd steps entirely.
+    | "retrofit" :: rest ->
+        match parseRetrofit rest with
+        | Ok opts -> runRetrofit opts
+        | Error msg ->
+            AnsiConsole.MarkupLine(sprintf "[red]error:[/] %s" (Markup.Escape msg))
+            AnsiConsole.WriteLine()
+            usage ()
+            2
     | args ->
         match parse args with
         | Ok opts -> run opts
