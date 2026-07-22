@@ -162,8 +162,8 @@ skills:
   # fs-gg-rendering. `sha256` + condition authoritative (from the published skill-manifest.json).
   # `source` is the in-template canonical path (the manifest's supplied-by).
   # ------------------------------------------------------------------------------------------------
-  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: 03967b8619ab964f25eecfe15589f6509d4d384ceb50e7fc2fcb5e13d9807bbc, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
-  - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: ed12257f290a881c80cb07740773ce6d199edf11adfd0906b336a1b624ffc887, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: 80ad9d1b76d1c73a66a87e395539d8c31ab7c783f0370f3a1f4d5b2618e366de, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: cfe0ce69853f50b8cc10ab275fa0f868dd8d57b4a390b0d967a3878812b49c2f, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: 2d48e721837c571cd13e073c54787350cb59c4bd5e3cf9cc928c3d2c96303a23, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: 55e8fd8496083045e302f12ea1451230b24d93e9088e28df6e7622b5cfb52a27, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-layout,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-layout/SKILL.md,    sha256: 85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62, materializes-when: "profile in [app, game]" }
@@ -190,7 +190,7 @@ skills:
   # verbatim from FS.GG.Rendering's producer manifest by `--write` (.github#299) and RE-HOMED here from
   # the appended tail. No `mirrored:` — Rendering OWNS it, so the obligation question does not arise
   # (the manifest declares none; "absent is not classified", per the `mirrored:` note above).
-  - { id: fs-gg-symbol-design,    scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbol-design/SKILL.md, sha256: a8749ab5d0262fe2743a2389dce38debc8df41e0ca05cfd93c663dcbd380aeb5, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-symbol-design,    scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbol-design/SKILL.md, sha256: 9f509aea99589cc08ebebf7918a56309685d00461ba5bc3d73233640f07bf53a, materializes-when: "profile in [game, sample-pack]" }
   # GAME product skills — MIGRATED owner fs-gg-rendering → fs-gg-game (ADR-0022 P4, epic #213/#218).
   # Reconciled from FS.GG.Game's producer manifest FS.GG.Game/template/skill-manifest/skill-manifest.json
   # (schema skill-manifest v1; regenerable via `dotnet fsi scripts/generate-skill-manifest.fsx --check`,
@@ -204,7 +204,7 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 57a09c09353f8e6081deada8be46775707e9b557b46daf55e2f9ab529e95ac21, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 133907e6f0cabb3106817a9dd21b404ab9c4e1caced5207b804d524e4c9a73aa, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-audio's predicate is DELIBERATELY WIDER than its three block-mates: it carries `app`, which
   # game-core/persistence/model-swap do not. Audio rides the APP family too — FS.GG.Game compiled the
   # app-family launcher (Game#232, and #240 which found the silent launchers were table-only), so the
