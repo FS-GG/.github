@@ -62,12 +62,16 @@ done < "$WORK/stage/kit-manifest.tsv"
 echo "   nupkg carries every kit member + manifest + build logic"
 
 echo "== 3. materialize into a fresh receiver root =="
-unzip -q "$nupkg" "kit/*" -d "$WORK/unpacked"
+unzip -q "$nupkg" "kit/*" "build/*" -d "$WORK/unpacked"
+# Reproduce the global-packages-cache metadata seen on Linux: NuGet can extract ordinary nupkg
+# entries as executable even though their central-directory attributes are 0644. The materializer,
+# not the package cache, owns the modes receiver repos commit.
+find "$WORK/unpacked/kit" -type f -exec chmod a+x {} +
 recv="$WORK/recv"; mkdir -p "$recv"
 cat > "$WORK/materialize.proj" <<EOF
 <Project>
-  <Import Project="$HERE/build/FS.GG.Kit.props" />
-  <Import Project="$HERE/build/FS.GG.Kit.targets" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.targets" />
   <PropertyGroup>
     <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
     <FsggKitReceiverRoot>$recv</FsggKitReceiverRoot>
@@ -82,16 +86,31 @@ for root in .claude/skills .codex/skills .agents/skills; do
 done
 [ -x "$recv/scripts/fsgg-coord" ]        || fail "client not materialized executable at scripts/fsgg-coord"
 [ -f "$recv/.config/dotnet-tools.json" ] || fail "engine manifest not materialized at .config/dotnet-tools.json"
+unexpected_exec="$(find "$recv/.claude/skills" "$recv/.codex/skills" "$recv/.agents/skills" \
+  "$recv/.config/dotnet-tools.json" -type f -perm /111 -print)"
+[ -z "$unexpected_exec" ] || fail "non-client receiver output is executable after fresh materialize: $unexpected_exec"
 # build-config is OPT-IN: the default materialize must NOT write it.
 [ ! -f "$recv/Directory.Build.props" ]    || fail "build-config materialized without opt-in (Directory.Build.props at receiver root)"
 echo "   4 skills × 3 roots + executable client + engine manifest; build-config correctly withheld (opt-in off)"
+
+echo "== 3a. overwrite + byte-identical materialization normalize metadata =="
+probe="$recv/.agents/skills/check-board/SKILL.md"
+printf '\nSTALE\n' >> "$probe"
+chmod a-x "$probe"
+dotnet msbuild "$WORK/materialize.proj" -t:FsggKitMaterialize -nologo >/dev/null
+[ ! -x "$probe" ] || fail "overwrite inherited executable cache metadata for $probe"
+chmod a+x "$probe"
+dotnet msbuild "$WORK/materialize.proj" -t:FsggKitMaterialize -nologo >/dev/null
+[ ! -x "$probe" ] || fail "byte-identical materialize left non-client executable: $probe"
+[ -x "$recv/scripts/fsgg-coord" ] || fail "byte-identical materialize removed client execute mode"
+echo "   copied and hash-equal non-client destinations normalized non-executable; client remains executable"
 
 echo "== 3b. build-config materializes at the receiver root when opted in =="
 recv2="$WORK/recv-bc"; mkdir -p "$recv2"
 cat > "$WORK/materialize-bc.proj" <<EOF
 <Project>
-  <Import Project="$HERE/build/FS.GG.Kit.props" />
-  <Import Project="$HERE/build/FS.GG.Kit.targets" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.targets" />
   <PropertyGroup>
     <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
     <FsggKitReceiverRoot>$recv2</FsggKitReceiverRoot>
@@ -102,6 +121,7 @@ EOF
 dotnet msbuild "$WORK/materialize-bc.proj" -t:FsggKitMaterialize -nologo >/dev/null
 for f in Directory.Build.props Directory.Packages.props; do
   [ -f "$recv2/$f" ] || fail "build-config not materialized with opt-in: $f"
+  [ ! -x "$recv2/$f" ] || fail "build-config materialized executable: $f"
 done
 # and global.json must NOT be carried (.github#903 — deliberately unmanaged)
 [ ! -f "$recv2/global.json" ] || fail "global.json was materialized — it must stay unmanaged (.github#903)"
@@ -114,8 +134,8 @@ printf '<Project>\n  <PropertyGroup><HandAuthored>keepme</HandAuthored></Propert
 handauthored_sha="$(sha256sum "$recv3/Directory.Build.props" | cut -d' ' -f1)"
 cat > "$WORK/adopt.proj" <<EOF
 <Project>
-  <Import Project="$HERE/build/FS.GG.Kit.props" />
-  <Import Project="$HERE/build/FS.GG.Kit.targets" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.targets" />
   <PropertyGroup>
     <FsggKitDir>$WORK/unpacked/kit</FsggKitDir>
     <FsggKitReceiverRoot>$recv3</FsggKitReceiverRoot>
@@ -147,8 +167,8 @@ cp -r "$WORK/unpacked/kit" "$WORK/tampered"
 echo "CORRUPT" >> "$WORK/tampered/skills/pnext-item/SKILL.md"     # bytes drift from the recorded sha256
 cat > "$WORK/tamper.proj" <<EOF
 <Project>
-  <Import Project="$HERE/build/FS.GG.Kit.props" />
-  <Import Project="$HERE/build/FS.GG.Kit.targets" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.props" />
+  <Import Project="$WORK/unpacked/build/FS.GG.Kit.targets" />
   <PropertyGroup>
     <FsggKitDir>$WORK/tampered</FsggKitDir>
     <FsggKitReceiverRoot>$WORK/recv-tamper</FsggKitReceiverRoot>
