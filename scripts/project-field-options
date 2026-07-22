@@ -209,8 +209,9 @@ def load_snapshot(path: Path) -> dict[str, Any]:
     if len(items) != snapshot["itemTotalCount"] or len(ids) != len(set(ids)) or None in ids:
         raise Refused("snapshot is incomplete or has duplicate/missing item ids")
     names = [o.get("name") for o in snapshot["field"]["options"]]
-    if None in names or len(names) != len(set(names)):
-        raise Refused("snapshot field options are incomplete or duplicated")
+    option_ids = [o.get("id") for o in snapshot["field"]["options"]]
+    if None in names or None in option_ids or len(names) != len(set(names)) or len(option_ids) != len(set(option_ids)):
+        raise Refused("snapshot field option names/ids are incomplete or duplicated")
     unknown = sorted({i.get("repoScope") for i in items if i.get("repoScope") not in set(names) and i.get("repoScope") is not None})
     if unknown:
         raise Refused(f"snapshot items use unknown options: {unknown}")
@@ -324,6 +325,9 @@ def restore(snapshot: dict[str, Any], live: dict[str, Any], args: argparse.Names
         raise Refused(f"cannot restore: {len(missing_items)} snapshotted project items disappeared")
     repairs = [(item_id, expected[item_id]) for item_id in sorted(expected) if current[item_id] != expected[item_id]]
     option_ids = {o["name"]: o["id"] for o in live["field"]["options"]}
+    missing_options = sorted({o["name"] for o in snapshot["field"]["options"]} - set(option_ids))
+    if missing_options:
+        raise Refused(f"cannot restore: snapshotted options disappeared: {missing_options}")
     if repairs:
         apply_repairs(live["project"]["id"], live["field"]["id"], option_ids, repairs)
     verified = read_state(args.owner, args.project_number, args.project_title, args.field)
