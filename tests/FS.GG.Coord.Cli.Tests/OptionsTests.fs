@@ -124,6 +124,7 @@ module OptionsTests =
           [ "--apply" ], "reap", "batch"
           [ "--peek" ], "inbox", "who"
           [ "--local" ], "who", "next"
+          [ "--all-repos" ], "who", "next"
           [ "--dry-run" ], "flush", "reap"
           [ "--strict" ], "lint", "ready"
           [ "--batch" ], "set-field", "widen"
@@ -194,6 +195,19 @@ module OptionsTests =
         Assert.Equal(Text, (parse [ "lint"; "--text" ] |> ok).Render)
         Assert.Equal(30, (parse [ "take"; "--lease"; "30" ] |> ok).LeaseMinutes)
         Assert.Equal(Some "FS.GG.SDD", (parse [ "next"; "--repo"; "sdd" ] |> ok).Repo)
+
+    [<Fact>]
+    let ``#1369 claim and take keep text defaults while json opts into typed receipts`` () =
+        Assert.Equal(Text, (parse [ "claim"; ".github#1369" ] |> ok).Render)
+        Assert.Equal(Json, (parse [ "claim"; ".github#1369"; "--json" ] |> ok).Render)
+        Assert.Equal(Text, (parse [ "take"; "--repo"; ".github" ] |> ok).Render)
+        Assert.Equal(Json, (parse [ "take"; "--repo"; ".github"; "--json" ] |> ok).Render)
+
+    [<Fact>]
+    let ``#1369 who all-repos is explicit and cannot be combined with a repo slice`` () =
+        Assert.True((parse [ "who"; "--all-repos" ] |> ok).AllRepos)
+        let e = parse [ "who"; "--repo"; "sdd"; "--all-repos" ] |> rejected
+        Assert.Contains("mutually exclusive", e)
 
     [<Fact>]
     let ``#636 take --include-backlog is READ, not merely tolerated`` () =

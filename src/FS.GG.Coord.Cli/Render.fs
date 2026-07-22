@@ -1,6 +1,6 @@
 namespace FS.GG.Coord.Cli
 
-/// THE WIRE-JSON RENDERERS — the four `--json` machine contracts (`ready`, `who`, `inbox`, `lint`),
+/// THE WIRE-JSON RENDERERS — the machine contracts (`ready`, `who`, `claim`/`take`, `inbox`, `lint`),
 /// extracted out of `Client` as ADR-0047's second Client.fs decomposition seam. Each hand-writes its
 /// array with a real `Utf8JsonWriter`, so a worker id, path, branch, or title carrying a quote cannot
 /// forge the shape a consumer parses. The `who`/`lint` presentation DTOs (`WhoState`, `WhoRow`,
@@ -59,6 +59,19 @@ module Render =
           /// `--local` was not asked, or when no local worktree is on this item's `item/<n>-*` branch. It is
           /// informational: a claim with no local worktree is normal (another worker holds it, elsewhere).
           Worktree: string option }
+
+    type ClaimReceipt =
+        { Ref: Ref
+          Worker: string
+          Kind: string
+          MarkerObserved: bool
+          MarkerId: int64 option
+          AssigneeObserved: string option
+          Status: string option
+          StatusRead: string
+          StatusWrite: string
+          PendingBoardWrites: int option
+          Converged: bool }
 
     type LintFinding =
         { Code: string
@@ -180,6 +193,37 @@ module Render =
             w.WriteEndObject()
 
         w.WriteEndArray()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    let renderClaimReceiptJson (receipt: ClaimReceipt) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+        w.WriteStartObject()
+        w.WriteString("ref", receipt.Ref.Short)
+        w.WriteString("repo", $"%s{receipt.Ref.Owner}/%s{receipt.Ref.Repo}")
+        w.WriteNumber("number", receipt.Ref.Number)
+        w.WriteString("worker", receipt.Worker)
+        w.WriteString("kind", receipt.Kind)
+        w.WriteBoolean("markerObserved", receipt.MarkerObserved)
+        match receipt.MarkerId with
+        | Some id -> w.WriteNumber("markerId", id)
+        | None -> w.WriteNull("markerId")
+        // The assignee is an advisory account-level projection, never the worker lock. The current client
+        // does not mutate it; null makes that non-observation explicit instead of laundering it as success.
+        match receipt.AssigneeObserved with
+        | Some a -> w.WriteString("assigneeObserved", a)
+        | None -> w.WriteNull("assigneeObserved")
+        match receipt.Status with
+        | Some s -> w.WriteString("status", s)
+        | None -> w.WriteNull("status")
+        w.WriteString("statusRead", receipt.StatusRead)
+        w.WriteString("statusWrite", receipt.StatusWrite)
+        match receipt.PendingBoardWrites with
+        | Some n -> w.WriteNumber("pendingBoardWrites", n)
+        | None -> w.WriteNull("pendingBoardWrites")
+        w.WriteBoolean("converged", receipt.Converged)
+        w.WriteEndObject()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())
 

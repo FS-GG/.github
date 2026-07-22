@@ -226,6 +226,9 @@ module Options =
           /// `--local` (`who`) — join the live claims to the local git worktrees (#959). `who` is the only
           /// reader.
           Local: bool
+          /// `who --all-repos` — read every repository represented on the Coordination board instead of
+          /// silently defaulting to the current checkout's repository.
+          AllRepos: bool
 
           /// `--over N,M` (`room open`) — the item refs the coordination room is opened over (ADR-0051),
           /// comma-separated. `RoomOpen` is the only reader.

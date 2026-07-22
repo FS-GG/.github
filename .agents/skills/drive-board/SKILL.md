@@ -177,11 +177,15 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 >    `eval "$(scripts/fsgg-coord whoami --mint)"`. If `whoami` warns that your id came from the session,
 >    **stop and report it** — you hold no lock, and working anyway puts two workers on one item. Do not
 >    invent or copy an id.
-> 2. **Run [pnext-item](../pnext-item/SKILL.md) for `<REPO>`**, exactly as written: `take` (gate on the
->    exit code — 0 is the *only* code that means you hold an item, #585), read the item's **comments**
+> 2. **Run [pnext-item](../pnext-item/SKILL.md) for `<REPO>`**, exactly as written: `take --json` (gate on
+>    the exit code AND require its fresh `.converged == true` receipt), report that receipt to the host,
+>    and do not announce or implement before marker + `Status=In progress` are both observed; read the item's **comments**
 >    before you start (a prior worker's "do not do this" is the highest-signal thing on the board),
 >    `git fetch` then worktree from `origin/main` by name (#622), implement inside your declared
 >    `Paths:`, open a PR, review it, merge on green, and `done --flip` to earn the stamp.
+>    Before merge, name any post-merge release/publication/dispatch/deployment obligations. If any
+>    remain after merge, immediately reopen the auto-closed issue, set and freshly verify `In review`,
+>    keep the claim live, finish and verify those obligations, then close and earn `FSGG-DONE`.
 > 3. **A blocker you discover is the point, not a failure.** If the item cannot proceed until other
 >    work lands, file that work at its **root cause** (pnext-item §4), set `Blocked by` on this item to
 >    the blocker, and `release --status Blocked` so the board tells the truth. Report the blocker you
@@ -193,7 +197,8 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 > 5. **If `take` exits 5 (nothing schedulable) or 75 (rate budget exhausted)**, do not spin. Report the
 >    exit code and stop — 5 means this repo is dry for now, 75 means the shared budget is gone and the
 >    host must back the whole fleet off (§3).
-> 6. **Report back**: the item number, the merged PR, the done-stamp, any blocker/finding you filed
+> 6. **Report back**: the item number, the merged PR, the exact `FSGG-DONE` line, the post-merge
+>    obligation list and verification evidence (or explicitly `none`), any blocker/finding you filed
 >    (with issue numbers), and the `take` exit code if you got no item. Then exit.
 >
 > If the item cannot land from here and it is not a clean blocker to file — it needs a human decision,
@@ -210,11 +215,23 @@ checks the world the subagent claims to have changed. For each returned worker:
 scripts/fsgg-coord ready --repo <r> --all --json   # the always-fresh TRUTH read of the column
 ```
 
+Run the same fresh read **immediately after each worker reports a claim**, before describing that worker
+as active: its row must be `In progress`, and the typed receipt must have `markerObserved=true` and
+`converged=true`. Repeat this for every reported transition (`Blocked`, `In review`, `Done`): a worker
+message is intent; the fresh board row is the ledger. If they disagree, report and reconcile the lag
+instead of narrating the intended state as current.
+
 - The item it claimed to finish is **`Done`** on the board and its issue is **closed** (or the worker
   reported a blocker, in which case it is **`Blocked`** with a `Blocked by` edge). If it says "merged"
   and the item is still `In progress` or `Ready`, **treat it as a failed item, not a passed one** —
   and check for a **stale claim with a green open PR**, which is the real success path of a worker
   whose harness died between green and merge: `adopt` it rather than binning it (#697, intra-repo §3).
+- **Projects auto-`Done` is not completion evidence.** Require the worker's exact `FSGG-DONE` line,
+  then independently run `scripts/fsgg-coord done <issue>` and require exit 0 plus `FSGG-DONE` before
+  counting the item terminal. A `Done` row with a live claim, or a worker-reported outstanding
+  release/publication/dispatch/deployment obligation, is non-terminal: the issue must be open and the
+  fresh row `In review` while that work continues. If merge auto-closed/projected it, have the worker
+  restore that active state immediately and verify it; never narrate the auto-projection as earned.
 - No **orphaned claim** is left holding the item. If the worker died mid-flight, `reap` a lapsed lease
   — unless its `item/<n>-*` PR is open, which is proof the work is alive and outranks the timer (#581).
 - The **rate budget** did not silently strand a write. If any worker returned 75, run
@@ -232,7 +249,7 @@ reconcile pass shows all three of:
 
 - **No schedulable item in any repo** — `batch --repo <r>` empty for every `r`, and `next` explains
   *why* each remaining candidate is skipped (blocked, backlog, no touch-set) rather than startable.
-- **No live claims in flight** — `who` across every repo shows nothing held (or only stale ones you
+- **No live claims in flight** — `who --all-repos` shows nothing held (or only stale ones you
   have reaped/adopted).
 - **No `EPIC-ROLLUP-READY` epics and no cleared-but-still-`Blocked` items** left in check-board's
   findings. An item `Blocked` behind an issue that shipped is work advertised as unstartable; a

@@ -18,7 +18,7 @@
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "28edb56f4cc7926ef423f9980ad6161e5d6c18cbe5f6008bc7b3c7981e2c7027",
+      "sha256": "ad567d9e125811b07f29691bca931dc2e0e17e79f8c7ae4a4bbb0208e38fdd6d",
       "supplied-by": ".claude/skills/drive-board",
       "materializes-when": "false"
     },

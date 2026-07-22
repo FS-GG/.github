@@ -24,6 +24,7 @@ Env, all optional (each parity leg spawns a fresh server):
                               "Backlog"); "" = on the board with NO Status set (`fieldValueByName` null).
                               A Status write moves it — seed the world, then let the engine act on it.
   FSGG_PARITY_FAIL_STATUS=1   the item-Status read fails (a 502) — the corpus's GH_FAIL_ITEM_STATUS.
+  FSGG_PARITY_DEFER_WRITE=1   the Status mutation is GraphQL-rate-limited, so Board.boardWrite queues it.
   FSGG_PARITY_MARKERS=<json>  a JSON array of pre-existing markers to seed, each
                               {"n":<issue>, "id":<comment-id>, "worker":<w>, "prev":<enc?>, "age_hours":<h?>,
                               "session":<s?>}.
@@ -43,6 +44,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 RATE = {"cost": 1, "remaining": 4980}
 
 FAIL_STATUS = os.environ.get("FSGG_PARITY_FAIL_STATUS") == "1"
+DEFER_WRITE = os.environ.get("FSGG_PARITY_DEFER_WRITE") == "1"
 
 # The full Status option set, verbatim from harness.sh (fields.json): the restore target may be any of them.
 OPTIONS = [
@@ -121,6 +123,8 @@ def graphql(query, variables):
                 {"id": "PVTI_item", "project": {"number": 12}}]}}}, "rateLimit": RATE}}
         if "updateProjectV2ItemFieldValue" in query:
             _GQL["mutations"] += 1
+            if DEFER_WRITE:
+                return {"errors": [{"message": "API rate limit exceeded for installation"}]}
             opt = variables.get("optionId")
             _WRITES.append({"item": variables.get("itemId"), "field": variables.get("fieldId"),
                             "optionId": opt})
