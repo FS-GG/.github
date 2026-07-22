@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TOOL="$ROOT/scripts/project-field-options"
 FAKE="$ROOT/tests/project-field-options/fake-gh"
 ROSTER="$ROOT/tests/project-field-options/roster.yml"
+RESOLVER="$ROOT/tests/project-field-options/resolver.fs"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -43,7 +44,7 @@ else
   pass "snapshot tampering is refused"
 fi
 
-if run_tool check --snapshot "$WORK/before.json" --roster "$ROSTER" >/dev/null 2>&1; then
+if run_tool check --snapshot "$WORK/before.json" --roster "$ROSTER" --resolver "$RESOLVER" >/dev/null 2>&1; then
   fail "roster drift" "missing net option passed"
 else
   pass "roster-vs-field check reports missing net"
@@ -67,7 +68,7 @@ else
   fail "restore after destructive update" "$(cat "$WORK/state.json")"
 fi
 
-if run_tool check --roster "$ROSTER" >/dev/null; then
+if run_tool check --roster "$ROSTER" --resolver "$RESOLVER" >/dev/null; then
   pass "live roster-vs-field check passes after net is added"
 else
   fail "post-migration check" "live check failed"
