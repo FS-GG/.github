@@ -200,9 +200,12 @@ read the lock rather than the board.
    > item's touch-set is still **reserved**, and items with no `Paths:` are still **reported**, never
    > silently dropped.
 
-7. **`widen` closes ADR-0021's loop.** It rewrites the `Paths:` line, re-checks against every live
-   claim, and — the part a worker cannot do alone — **notifies the workers it now collides with**, on
-   their own items, then exits non-zero.
+7. **`widen` closes ADR-0021's loop.** It unions requested tokens with the existing `Paths:`
+   declaration, re-checks against every live claim, and — the part a worker cannot do alone —
+   **notifies the workers it now collides with**, on their own items, then exits non-zero. Repeated
+   calls preserve earlier tokens and are idempotent. `set-paths` is the separately named explicit
+   replacement/narrowing operation and carries the same held-lock and collision gates; the split
+   prevents an additive widening call from silently handing away paths declared earlier (#1377).
 
 8. **`overlap` gains `--active`** (one candidate against all in-flight claims), and
    **`verify-paths --pr N`** reports files a PR changed outside its issue's declared touch-set. CI

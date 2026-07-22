@@ -23,6 +23,7 @@ module Options =
         | SetField
         | Child
         | Widen
+        | SetPaths
         | Overlap
         | Say
         | Inbox
@@ -215,7 +216,8 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              every "QUEUED; flush replays it" message names (#862). Replays
                                              by DEFAULT; --dry-run lists the queue and writes nothing
   child  <parent-ref> <child-ref>            attach a child issue to a parent
-  widen  <ref> --paths T...                  widen a HELD item's touch-set
+  widen  <ref> --paths T...                  add paths to a HELD item's touch-set (union; idempotent)
+  set-paths <ref> --paths T...               replace a HELD item's touch-set explicitly (also narrows)
   overlap <ref> --active | <a> <b>           does an item's touch-set collide? (repo-scoped, #353)
   say    <ref> [--to W] <message>            message another worker; --to defaults to `*` (anyone
                <ref> --to W --message M      holding the item). The message is POSITIONAL — the form
@@ -367,7 +369,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FDryRun -> Only [ Flush ]
         | FStrict -> Only [ LintCmd ]
         | FBatch -> Only [ SetField ]
-        | FPaths -> Only [ Widen ]
+        | FPaths -> Only [ Widen; SetPaths ]
         | FTo -> Only [ Say ]
         | FMessage -> Only [ Say ]
         | FEvidence -> Only [ DoneCmd ]
@@ -465,6 +467,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | SetField -> "set-field"
         | Child -> "child"
         | Widen -> "widen"
+        | SetPaths -> "set-paths"
         | Overlap -> "overlap"
         | Say -> "say"
         | Inbox -> "inbox"
@@ -926,6 +929,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "set-field" :: rest -> flags { defaults with Command = SetField } rest
         | "child" :: rest -> flags { defaults with Command = Child } rest
         | "widen" :: rest -> flags { defaults with Command = Widen } rest
+        | "set-paths" :: rest -> flags { defaults with Command = SetPaths } rest
         | "overlap" :: rest -> flags { defaults with Command = Overlap; Render = Text } rest
         | "say" :: rest -> flags { defaults with Command = Say } rest
         // `inbox` reports as a human table by default (a worker reads it), `--json` for a machine consumer —

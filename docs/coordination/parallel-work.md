@@ -431,8 +431,8 @@ sits, so a body carrying two of them is ambiguous — and the reader **over**-re
 guess. Taking only the first would reserve a bare *quotation* and silently drop the real declaration
 beneath it: under-reserving, so two workers are told `DISJOINT` on a file they both edit, which is
 ADR-0021's own failure mode. Over-reserving costs a false `OVERLAP` — loud, investigable, and it
-spends only parallelism. `widen` rewrites the same lines the reader reads, collapsing duplicates to
-one, so it can never patch a quotation and leave the real declaration standing.
+spends only parallelism. `widen` and `set-paths` rewrite the same lines the reader reads, collapsing
+duplicates to one, so neither can patch a quotation and leave the real declaration standing.
 
 Two items may run in parallel **iff their touch-sets are disjoint**. Do not check this by hand,
 pairwise — ask the scheduler, which also accounts for what is already **in flight**:
@@ -539,14 +539,26 @@ baseline at all. A `Paths:` line asserted from an issue body rather than from th
 how a *false global lock* gets created.
 
 **Widening mid-flight.** ADR-0021 required a worker that widens its touch-set to re-declare and
-re-check. `widen` does all of it, including the part a worker cannot do alone — telling the workers it
-now collides with, on their own items:
+re-check. `widen` adds the requested tokens to the existing normalized union, preserving every earlier
+declaration and making repeated calls idempotent. It also does the part a worker cannot do alone —
+telling the workers it now collides with, on their own items:
 
 ```sh
 scripts/fsgg-coord widen <issue> --paths "src/Scene/**, src/Audio/**"
 ```
 
 It exits non-zero on a collision. Stop editing the shared paths until it is resolved.
+
+Replacement is a different operation because it can hand paths away. Use the explicit command when
+the complete declaration is known — most notably to narrow an over-reservation:
+
+```sh
+scripts/fsgg-coord set-paths <issue> --paths "src/Scene/**"
+```
+
+It carries the same held-lock, validation, collision re-check, and notification gates. Keeping the
+operations separate prevents a late additive `widen` from silently deleting paths declared earlier
+(FS-GG/.github#1377).
 
 **Drift.** The touch-set is a *declaration*, not an enforced boundary. `verify-paths` reads it back
 against what a PR actually changed:

@@ -55,6 +55,7 @@ module CommandSurfaceTests =
           "set-field", SetField
           "child", Child
           "widen", Widen
+          "set-paths", SetPaths
           "overlap", Overlap
           "say", Say
           "inbox", Inbox

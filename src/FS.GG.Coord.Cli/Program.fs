@@ -355,6 +355,7 @@ let main argv =
             | SetField
             | Child
             | Widen
+            | SetPaths
             | Overlap
             | Say
             | Inbox
