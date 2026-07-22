@@ -36,9 +36,32 @@ The live form must pass after every migration. A roster addition with no board
 option, an unexpected board option, an unreadable project, or a partial field
 read is a failure, never an empty/clean result.
 
+## Phase
+
+Product-repo scope determines the product phase. `P0 Decisions` and
+`P5 Versioning` remain board-wide phases rather than homes for a single product
+repo; every other rostered product maps as follows.
+
+<!-- repo-phase-map:start -->
+| Repo Scope | Phase |
+|---|---|
+| `.github` | `P0 Decisions` |
+| `rendering` | `P1 Rendering` |
+| `sdd` | `P2 SDD` |
+| `governance` | `P3 Governance` |
+| `templates` | `P4 Templates` |
+| `game` | `P6 Game` |
+| `audio` | `P7 Audio` |
+| `net` | `P8 Net` |
+<!-- repo-phase-map:end -->
+
+The coordination-kit protocol carries the same mapping. In particular, `net`
+is `P8 Net`; it must not be filed under `P1 Rendering` merely because a caller
+may eventually render network state.
+
 ## Guarded single-select migration
 
-`scripts/project-field-options` is intentionally specific and fail-closed. Its
+`scripts/project-field-options` is field-generic and fail-closed. Its
 snapshot contains every project item id and that item's option name (or null),
 the complete option metadata, the project/field identities, `totalCount`, and a
 SHA-256 over the canonical payload. It refuses duplicate ids, incomplete
@@ -59,6 +82,7 @@ Use this sequence from a clean, reviewed branch:
 
    ```sh
    scripts/project-field-options snapshot \
+     --field 'Repo Scope' \
      --output docs/coordination/board-schema-snapshots/2026-07-22-repo-scope-before-net.json
    scripts/project-field-options verify-snapshot \
      --snapshot docs/coordination/board-schema-snapshots/2026-07-22-repo-scope-before-net.json
@@ -75,6 +99,7 @@ Use this sequence from a clean, reviewed branch:
 
    ```sh
    scripts/project-field-options add-option \
+     --field 'Repo Scope' \
      --snapshot docs/coordination/board-schema-snapshots/2026-07-22-repo-scope-before-net.json \
      --name net --color GRAY \
      --description 'FS.GG.Net — render-independent transport component (ADR-0052)' \
@@ -87,6 +112,7 @@ Use this sequence from a clean, reviewed branch:
 
    ```sh
    scripts/project-field-options restore \
+     --field 'Repo Scope' \
      --snapshot docs/coordination/board-schema-snapshots/2026-07-22-repo-scope-before-net.json
    ```
 

@@ -6,6 +6,8 @@ TOOL="$ROOT/scripts/project-field-options"
 FAKE="$ROOT/tests/project-field-options/fake-gh"
 ROSTER="$ROOT/tests/project-field-options/roster.yml"
 RESOLVER="$ROOT/tests/project-field-options/resolver.fs"
+SCHEMA="$ROOT/docs/coordination/board-schema.md"
+SKILL="$ROOT/.claude/skills/cross-repo-coordination/SKILL.md"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -72,6 +74,14 @@ if run_tool check --roster "$ROSTER" --resolver "$RESOLVER" >/dev/null; then
   pass "live roster-vs-field check passes after net is added"
 else
   fail "post-migration check" "live check failed"
+fi
+
+if grep -Fq '| `net` | `P8 Net` |' "$SCHEMA" \
+  && grep -Fq 'a `net` item `P8 Net`' "$SKILL" \
+  && grep -Fq '`P8 Net`' "$SKILL"; then
+  pass "documented Repo Scope net maps to P8 Net"
+else
+  fail "net phase projection" "board schema and coordination skill must both map net to P8 Net"
 fi
 
 reset_state

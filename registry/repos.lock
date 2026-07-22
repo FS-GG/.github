@@ -7,7 +7,7 @@
 # not a decision. DO NOT reserve it in a `Paths:` touch-set (#527); regenerate it and name it as
 # expected drift in the PR.
 a5ab4c0588521170a8059d3a8088ebbba3883af0ede234598b67368f591a00b8  .claude/skills/check-board
-04a04c5b6e4fafe994d3165203c90ec33e597b945762bb3c43cd925f3a33a48e  .claude/skills/cross-repo-coordination
+d066756bd54fad0411d846c084e62caf66192e735d91eed4e36899d6ebad65be  .claude/skills/cross-repo-coordination
 3deb14091fc07b15c9e07b15f460c34be0eb2bfbbfc6eafb200d92371f6d3c29  .claude/skills/intra-repo-parallel-work
 359450aff05860406dc59f825770d86255ea151ee5532eb029470e886c3d0618  .claude/skills/pnext-item
 95483c5c8f90d40ba0b1db81cbba728efd7a5861a72ba81a52b54664e1f47025  dist/dotnet/.config/dotnet-tools.json
