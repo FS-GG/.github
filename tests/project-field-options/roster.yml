@@ -1,0 +1,5 @@
+schemaVersion: 1
+repos:
+  - { id: .github, full: FS-GG/.github, role: authority, receives: [labels] }
+  - { id: sdd, full: FS-GG/FS.GG.SDD, role: framework, receives: [labels] }
+  - { id: net, full: FS-GG/FS.GG.Net, role: framework, receives: [labels] }
