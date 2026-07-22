@@ -1,6 +1,6 @@
 namespace FS.GG.Coord.Cli
 
-/// THE WIRE-JSON RENDERERS — the four `--json` machine contracts (`ready`, `who`, `inbox`, `lint`),
+/// THE WIRE-JSON RENDERERS — the machine contracts (`ready`, `who`, `claim`/`take`, `inbox`, `lint`),
 /// extracted out of `Client` as ADR-0047's second Client.fs decomposition seam. Each hand-writes its
 /// array with a real `Utf8JsonWriter`, so a worker id, path, branch, or title carrying a quote cannot
 /// forge the shape a consumer parses. The `who`/`lint` presentation DTOs travel WITH their renderers —
@@ -40,6 +40,21 @@ module Render =
           /// only when `--local` was asked.
           Worktree: string option }
 
+    /// The fresh postcondition emitted by `claim --json` and `take --json`. The lock and board column are
+    /// separate observations; `Converged` is true only when both were read back successfully.
+    type ClaimReceipt =
+        { Ref: Ref
+          Worker: string
+          Kind: string
+          MarkerObserved: bool
+          MarkerId: int64 option
+          AssigneeObserved: string option
+          Status: string option
+          StatusRead: string
+          StatusWrite: string
+          PendingBoardWrites: int option
+          Converged: bool }
+
     /// A single `lint` finding, in the shape `lint --json` emits.
     type LintFinding =
         { Code: string
@@ -70,6 +85,9 @@ module Render =
     /// a STALE row also carries `livePr`/`prState`/`branchPushed`. `includeWorktree` is `who --local`
     /// (#959): the `worktree` field is emitted ONLY when asked, so the no-`--local` shape is byte-identical.
     val renderWhoJson: includeWorktree: bool -> rows: WhoRow list -> string
+
+    /// `claim --json` / `take --json` — one typed mutation receipt, safe to gate worker startup on.
+    val renderClaimReceiptJson: receipt: ClaimReceipt -> string
 
     /// `inbox --json` — a JSON array of the messages addressed to this worker.
     val renderInboxJson: msgs: (string * Reads.Message) list -> string

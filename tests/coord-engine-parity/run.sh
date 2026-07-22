@@ -726,6 +726,18 @@ else
   bad "who --json must emit a JSON array" "got: $whoj"
 fi
 
+whoscope="$(whor --json)"
+printf '%s' "$whoscope" | jq -e 'length > 0 and all(.repo == "FS-GG/FS.GG.SDD")' >/dev/null 2>&1 \
+  && ok "#1369: every non-empty who JSON row makes the repository scope explicit" \
+  || bad "#1369: who must disclose its repository scope" "$whoscope"
+
+allwho="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$WHOPORT" FSGG_COORD_CACHE="$(mktemp -d)" "$ENGINE" who --all-repos --json 2>"$CACHE/who-all.err")"; allrc=$?
+if [ "$allrc" -eq 0 ] && printf '%s' "$allwho" | jq -e 'type == "array" and all(has("repo"))' >/dev/null 2>&1; then
+  ok "#1369: who --all-repos is explicit, global, and keeps the JSON claims contract"
+else
+  bad "#1369: who --all-repos global view" "rc=$allrc out=$allwho err=$(cat "$CACHE/who-all.err" 2>/dev/null)"
+fi
+
 # IN-FLIGHT, NO MORE NO LESS: the three claimed/orphaned items, and NONE of the Ready candidates (#70–74).
 # `who` reports the LOCK; a Ready item nobody has claimed is not in flight, and the old live-only who would
 # have shown only #42.
@@ -1362,13 +1374,16 @@ rlastopt() { rget "$RS_PORT" /_writes | jq -r '.last.optionId'; }
 # (a) THE DEFECT. A claim over a Backlog item records `prev=Backlog`; release must put Backlog back, not Ready.
 rsrv FSGG_PARITY_STATUS=Backlog --
 if [ -z "$RS_PORT" ]; then bad "restore fixture (a) bound a port"; else
-  renv claim FS.GG.SDD#350 --force --worker pika-r01 >/dev/null 2>&1; crc=$?
+  receipt="$(renv claim FS.GG.SDD#350 --force --worker pika-r01 --json 2>/dev/null)"; crc=$?
+  printf '%s' "$receipt" | jq -e '.markerObserved == true and .status == "In progress" and .statusRead == "observed" and .statusWrite == "written" and .converged == true' >/dev/null 2>&1 \
+    && ok "#1369: claim --json freshly confirms the winning marker and board Status before work starts" \
+    || bad "#1369: a successful claim receipt must prove marker + Status convergence" "rc=$crc receipt=$receipt"
   rbodies 350 | grep -q 'prev=Backlog' \
     && ok "#481: the claim RECORDS the column it overwrote (prev=Backlog) in its own marker, over HTTP" \
     || bad "#481: the claim must record prev=Backlog" "rc=$crc bodies=$(rbodies 350)"
-  [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "1" ] \
-    && ok "#481/#418: a winning claim spends EXACTLY ONE item-scoped Status read (fieldValueByName), not a board scan" \
-    || bad "#481: the pre-claim read must be exactly one item read" "gql=$(rget "$RS_PORT" /_gql)"
+  [ "$(rget "$RS_PORT" /_gql | jq -r '.itemStatus')" = "2" ] \
+    && ok "#481/#1369: a win spends one pre-claim Status read and one postcondition readback, never a board scan" \
+    || bad "#1369: the claim must read Status back after its write" "gql=$(rget "$RS_PORT" /_gql)"
   renv release FS.GG.SDD#350 --worker pika-r01 >/dev/null 2>&1
   [ "$(rlastopt)" = "opt_backlog" ] \
     && ok "#481: release RESTORES Backlog (writes opt_backlog), instead of promoting it to Ready" \
@@ -1376,6 +1391,28 @@ if [ -z "$RS_PORT" ]; then bad "restore fixture (a) bound a port"; else
   [ -z "$(rbodies 350)" ] \
     && ok "#481: ...and the lease is dropped (the marker is deleted)" \
     || bad "#481: release must drop the marker" "bodies=$(rbodies 350)"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# A deferred write is still a won REST lock, but it is not a converged board. The receipt makes the
+# marker, stale column, write disposition, and queue depth separately machine-visible.
+rsrv FSGG_PARITY_STATUS=Ready FSGG_PARITY_DEFER_WRITE=1 --
+if [ -z "$RS_PORT" ]; then bad "claim receipt deferred-write fixture bound a port"; else
+  deferred="$(renv claim FS.GG.SDD#380 --force --worker pika-r02 --json 2>/dev/null)"; drc=$?
+  printf '%s' "$deferred" | jq -e '.markerObserved == true and .status == "Ready" and .statusWrite == "deferred" and .pendingBoardWrites == 1 and .converged == false' >/dev/null 2>&1 \
+    && ok "#1369: deferred Status writes are explicit and cannot masquerade as board convergence" \
+    || bad "#1369: deferred receipt" "rc=$drc receipt=$deferred"
+  kill "$RS_SRV" 2>/dev/null
+fi
+
+# A failed readback is a third state, not an empty Status. Even if the write landed, no worker may
+# announce it until a later read proves that fact.
+rsrv FSGG_PARITY_STATUS=Ready FSGG_PARITY_FAIL_STATUS=1 --
+if [ -z "$RS_PORT" ]; then bad "claim receipt failed-readback fixture bound a port"; else
+  unread="$(renv claim FS.GG.SDD#381 --force --worker pika-r03 --json 2>/dev/null)"; urc=$?
+  printf '%s' "$unread" | jq -e '.markerObserved == true and .status == null and .statusRead == "failed" and .statusWrite == "written" and .converged == false' >/dev/null 2>&1 \
+    && ok "#1369: failed Status readback stays explicit and non-converged" \
+    || bad "#1369: failed-readback receipt" "rc=$urc receipt=$unread"
   kill "$RS_SRV" 2>/dev/null
 fi
 

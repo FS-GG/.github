@@ -140,6 +140,8 @@ module Options =
           /// directories, and this is the verb that names which is which — the remedy #419's own warning
           /// points at when N agents collide on one id. `who` is the only reader.
           Local: bool
+          /// `who --all-repos` — suppress the checkout-repository default and read the whole board.
+          AllRepos: bool
 
           /// `room open --over N,M` — the item refs the room is opened over (ADR-0051). A comma-separated
           /// list resolved to `Ref`s by the handler, each of which gets a `Rooms: #room` back-reference
@@ -170,8 +172,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
                                              by default — a TRUTH read, so it shows items the scheduler
                                              will refuse; --status/--all widen past the default)
-  who    [--repo NAME] [--local] [--json]    who holds what, right now (held/stale/unclaimed;
+  who    [--repo NAME|--all-repos] [--local] [--json]
+                                             who holds what, right now (held/stale/unclaimed;
                                              --local joins claims to local git worktrees;
+                                             output always names its effective scope;
                                              --json for the machine contract, else a human table)
   reap   [--repo NAME] [--apply]             collect expired claims whose work is dead — REFUSING any with
                                              an open item/<n>-* PR (#581); a DRY RUN without --apply
@@ -187,8 +191,10 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              head you MEAN to gate, for a caller that just force-pushed (the
                                              PR object lags). Neither can green; both are pending (#737)
 
-  claim  <ref> [--worker W] [--force]        take the item's lock (comment-order CAS)
-  take   [--repo NAME] [--worker W]          schedule AND claim the next item, in one step. Ready only:
+  claim  <ref> [--worker W] [--force] [--json]
+                                             take the lock; --json emits a fresh marker/Status receipt
+  take   [--repo NAME] [--worker W] [--json]
+                                             schedule AND claim the next item, in one step. Ready only:
          [--include-backlog]                 a Backlog row is passed over AT THE COLUMN unless you ask for
                                              it (#636 — the flag has always worked here; only this line
                                              was missing, so the remedy for a Backlog-starved queue was
@@ -328,6 +334,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FFlip
         | FLimit
         | FLocal
+        | FAllRepos
         | FOver
 
     type private FlagScope =
@@ -352,6 +359,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
 
         | FMint -> Only [ WhoAmI ]
         | FLocal -> Only [ Who ]
+        | FAllRepos -> Only [ Who ]
         | FAll -> Only [ Ready ]
         | FActive -> Only [ Overlap ]
         | FApply -> Only [ Reap ]
@@ -416,6 +424,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
           if o.Apply then FApply, "--apply"
           if o.Peek then FPeek, "--peek"
           if o.Local then FLocal, "--local"
+          if o.AllRepos then FAllRepos, "--all-repos"
           if o.DryRun then FDryRun, "--dry-run"
           if o.Wait then FWait, "--wait"
           if o.Tries.IsSome then FTries, "--tries"
@@ -649,16 +658,19 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     | Only readers when List.contains o.Command readers -> None
                     | Only readers -> Some(spelling, readers))
 
-            match residue with
-            | Some(spelling, readers) ->
-                // NAME THE READERS, not just the refusal. The caller reached for this flag because they
-                // wanted something; the useful answer is where that something lives, which is why #867's
-                // original message named `ready` and `release` rather than only saying no.
-                let who = readers |> List.map (fun c -> $"`%s{commandName c}`") |> String.concat ", "
+            if o.AllRepos && o.Repo.IsSome then
+                Error "who: --repo and --all-repos are mutually exclusive — choose the repository slice or the whole board."
+            else
+                match residue with
+                | Some(spelling, readers) ->
+                    // NAME THE READERS, not just the refusal. The caller reached for this flag because they
+                    // wanted something; the useful answer is where that something lives, which is why #867's
+                    // original message named `ready` and `release` rather than only saying no.
+                    let who = readers |> List.map (fun c -> $"`%s{commandName c}`") |> String.concat ", "
 
-                Error
-                    $"%s{spelling} is not a flag of `%s{commandName o.Command}` — only %s{who} read it. It would have been ACCEPTED and IGNORED before #991; this refusal is the flag telling you the truth, not a new restriction."
-            | None -> normalizeSay o
+                    Error
+                        $"%s{spelling} is not a flag of `%s{commandName o.Command}` — only %s{who} read it. It would have been ACCEPTED and IGNORED before #991; this refusal is the flag telling you the truth, not a new restriction."
+                | None -> normalizeSay o
 
         let rec flags acc rest =
             match rest with
@@ -761,6 +773,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--apply" :: t -> flags { acc with Apply = true } t
             | "--peek" :: t -> flags { acc with Peek = true } t
             | "--local" :: t -> flags { acc with Local = true } t
+            | "--all-repos" :: t -> flags { acc with AllRepos = true } t
             | "--dry-run" :: t -> flags { acc with DryRun = true } t
 
             | "--wait" :: t -> flags { acc with Wait = true } t
@@ -870,6 +883,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
               Label = None
               IssueState = None
               Local = false
+              AllRepos = false
               Over = [] }
 
         match args with
@@ -899,13 +913,13 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         // `reap` reports as text (the operator reads it before deciding); its collect is gated behind
         // `--apply`, so the bare form is a DRY RUN.
         | "reap" :: rest -> flags { defaults with Command = Reap; Render = Text } rest
-        | "claim" :: rest -> flags { defaults with Command = Claim } rest
+        | "claim" :: rest -> flags { defaults with Command = Claim; Render = Text } rest
         // `adopt` reports as text (a precondition report the operator reads); it gates the `claim` transfer.
         | "adopt" :: rest -> flags { defaults with Command = Adopt; Render = Text } rest
         // `landable` prints ONE verdict word on stdout and puts the decision in the exit code — a query, not
         // a table, so no `Render` flip.
         | "landable" :: rest -> flags { defaults with Command = Landable } rest
-        | "take" :: rest -> flags { defaults with Command = Take } rest
+        | "take" :: rest -> flags { defaults with Command = Take; Render = Text } rest
         | "release" :: rest -> flags { defaults with Command = Release } rest
         | "heartbeat" :: rest -> flags { defaults with Command = Heartbeat } rest
         | "set-field" :: rest -> flags { defaults with Command = SetField } rest

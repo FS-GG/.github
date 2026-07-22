@@ -839,6 +839,19 @@ module Client =
 
 
     let who (ctx: Context) (opts: Options) : int =
+        let scopeText =
+            match opts.Repo with
+            | Some repo -> $"repository %s{ctx.Owner}/%s{repo}"
+            | None -> "all repositories represented on the Coordination board"
+
+        // Scope is part of the answer, including the empty answer. Without it, `[]` from the hub checkout
+        // was routinely reported as the org-wide claim set (#1369). A non-empty JSON row already names its
+        // repository; for an empty JSON answer the explicit scope rides stderr, preserving the array wire
+        // contract and callers that deliberately combine streams. The human table always carries a header.
+        match opts.Render with
+        | Json -> ()
+        | Text -> printfn "scope: %s" scopeText
+
         // A truth read — fresh, and it reads the LOCK, which is never cached.
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
         | Error e -> fail e
@@ -1046,7 +1059,11 @@ module Client =
                             | None -> row)
 
                     match opts.Render with
-                    | Json -> printfn "%s" (renderWhoJson opts.Local inFlight)
+                    | Json ->
+                        if List.isEmpty inFlight then
+                            eprint $"fsgg-coord-engine: who scope: %s{scopeText} (empty result)"
+
+                        printfn "%s" (renderWhoJson opts.Local inFlight)
                     | Text ->
                         if List.isEmpty inFlight then
                             printfn "nothing is in flight."
@@ -1569,6 +1586,82 @@ module Client =
                             | Error _ -> None
                         | Error _ -> None
 
+                    // A CLAIM IS TWO FACTS, NOT ONE: the REST marker is the lock; the Projects Status is
+                    // the user-visible ledger. A green CAS cannot prove the latter. This receipt re-reads
+                    // both AFTER the mutation and keeps every failure/lag explicit, so a worker can gate
+                    // implementation on `.converged` rather than parsing an optimistic sentence (#1369).
+                    let emitClaimReceipt (kind: string) (held: Writes.Held) statusOutcome =
+                        let markerObserved, markerId =
+                            match Writes.verifyHeld ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref with
+                            | Ok(Writes.Holds fresh) when fresh.MarkerId = held.MarkerId -> true, Some fresh.MarkerId
+                            | Ok(Writes.Holds fresh) -> false, Some fresh.MarkerId
+                            | Ok Writes.DoesNotHold
+                            | Ok(Writes.TwinHolds _) -> false, None
+                            | Error e ->
+                                eprint $"fsgg-coord-engine: post-claim marker readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                false, None
+
+                        let status, statusRead =
+                            match board.Force() with
+                            | Error e ->
+                                eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                None, "failed"
+                            | Ok b ->
+                                match Board.itemStatus ctx.Transport b ref.Owner ref.Repo ref.Number with
+                                | Ok s -> s |> Option.map statusWireName, "observed"
+                                | Error e ->
+                                    eprint $"fsgg-coord-engine: post-claim Status readback FAILED for %s{ref.Short}: %s{Errors.explain e}"
+                                    None, "failed"
+
+                        let statusWrite =
+                            match statusOutcome with
+                            | Ok Board.Written -> "written"
+                            | Ok Board.Deferred -> "deferred"
+                            | Ok Board.NotOnBoard -> "not-on-board"
+                            | Error _ -> "failed"
+
+                        let pending =
+                            match Cache.pending () with
+                            | Ok entries -> Some(List.length entries)
+                            | Error _ -> None
+
+                        let converged = markerObserved && status = Some "In progress"
+
+                        let receipt: ClaimReceipt =
+                            { Ref = ref
+                              Worker = w.Id
+                              Kind = kind
+                              MarkerObserved = markerObserved
+                              MarkerId = markerId
+                              // The assignee is account-level decoration, never the worker lock. This
+                              // client does not mutate it; null is the honest observation, not a success.
+                              AssigneeObserved = None
+                              Status = status
+                              StatusRead = statusRead
+                              StatusWrite = statusWrite
+                              PendingBoardWrites = pending
+                              Converged = converged }
+
+                        match opts.Render with
+                        | Json -> printfn "%s" (renderClaimReceiptJson receipt)
+                        | Text ->
+                            let humanPrefix =
+                                if kind = "renewed" then
+                                    $"held %s{ref.Short} by worker %s{w.Id} (lease renewed;"
+                                else
+                                    $"claimed %s{ref.Short} by worker %s{w.Id} ("
+
+                            if converged then
+                                printfn "%sboard confirmed: marker=%d, Status=In progress)" humanPrefix held.MarkerId
+                            else
+                                let shownStatus = status |> Option.defaultValue "UNREADABLE/UNSET"
+                                printfn "%slock held; board NOT confirmed: marker=%b, Status=%s, write=%s)" humanPrefix markerObserved shownStatus statusWrite
+                                eprint $"fsgg-coord-engine: do NOT announce or implement %s{ref.Short} yet — re-run `claim %s{ref.Short} --json` and require `.converged == true`; reconciliation retains CLAIM-STATUS-LAG repair."
+
+                        boardWriteNote ref "Status" "In progress" statusOutcome
+                        KitDigest.declaredWarn ctx.Transport ref
+                        ExitGreen
+
                     match Writes.claim ctx.Transport opts.LeaseMinutes (WorkerId w.Id) session ref readPreviousStatus with
                     | Error e -> fail e
                     | Ok(Writes.Won(held, collected)) ->
@@ -1578,7 +1671,9 @@ module Client =
                         // their expired claim was collected and the item is taken: a silent eviction is how a
                         // worker keeps building against a lock it no longer holds.
                         for evicted in collected do
-                            printfn "collected worker '%s' expired claim" evicted.Value
+                            match opts.Render with
+                            | Json -> eprint $"collected worker '%s{evicted.Value}' expired claim"
+                            | Text -> printfn "collected worker '%s' expired claim" evicted.Value
 
                             Writes.say
                                 ctx.Transport
@@ -1590,40 +1685,21 @@ module Client =
 
                         // Move the board column to In progress — the ONE board write, through the
                         // queue-aware path so an exhausted budget defers rather than drops (#510).
-                        match board.Force() with
-                        | Error e ->
-                            // The LOCK is held (the marker is posted); a board-write failure does not
-                            // un-hold it. Report the claim, note the board.
-                            printfn "claimed %s by worker %s" ref.Short w.Id
-                            eprint $"fsgg-coord-engine: note — the lock is held, but the board column could not be moved: %s{Errors.explain e}"
-                            // The LOCK is held, so the touch-set is reserved and the obligation is real —
-                            // whatever the board column says. #509.
-                            KitDigest.declaredWarn ctx.Transport ref
-                            ExitGreen
-                        | Ok b ->
-                            let outcome =
-                                Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
+                        let outcome =
+                            match board.Force() with
+                            | Error e -> Error e
+                            | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
 
-                            ignore held
-                            printfn "claimed %s by worker %s" ref.Short w.Id
-
-                            // #1151: the LOCK is held whatever the column says, so the claim stays GREEN —
-                            // but the outcome used to be collapsed into `Ok _ | Error _`, so a DEFERRED
-                            // In-progress move (exhausted budget, nothing replays it) left the board saying
-                            // Ready under a held lock, silently. Surface it, exactly as `done` now does.
-                            boardWriteNote ref "Status" "In progress" outcome
-
-                            // Declaration time is the cheap moment to learn that editing a kit source
-                            // obliges a relock (#469/#509) — one REST read, on the WIN path only.
-                            KitDigest.declaredWarn ctx.Transport ref
-                            ExitGreen
+                        emitClaimReceipt "claimed" held outcome
                     | Ok(Writes.Renewed(held, collected)) ->
                         // A live marker already ours — the claim RENEWED it in place rather than posting a
                         // second (a `take` retry, or a worker beating its own lease). Any stale debris it
                         // claimed over was still collected, so tell the evicted workers exactly as a fresh
                         // win does.
                         for evicted in collected do
-                            printfn "collected worker '%s' expired claim" evicted.Value
+                            match opts.Render with
+                            | Json -> eprint $"collected worker '%s{evicted.Value}' expired claim"
+                            | Text -> printfn "collected worker '%s' expired claim" evicted.Value
 
                             Writes.say
                                 ctx.Transport
@@ -1633,8 +1709,10 @@ module Client =
                                 $"your expired claim on %s{ref.Short} was collected — worker '%s{w.Id}' has taken the item. Stop working it."
                             |> ignore
 
-                        ignore held
-                        printfn "held %s by worker %s (lease renewed)" ref.Short w.Id
+                        let outcome =
+                            match board.Force() with
+                            | Error e -> Error e
+                            | Ok b -> Board.boardWrite ctx.Transport b ref.Owner ref.Repo ref.Number "Status" (Board.Set "In progress") w.Id
 
                         // THE SHARED-ID HAZARD, WARNED WHERE IT ACTUALLY BITES. This path bypassed the CAS —
                         // it renewed a marker on the strength of its worker id alone — and a marker bearing
@@ -1650,7 +1728,7 @@ module Client =
                                 $"fsgg-coord-engine: WARNING — worker id '%s{w.Id}' may not be unique to this worker. Give EACH worker its own id (do NOT invent one):  eval \"$(scripts/fsgg-coord whoami --mint)\""
                         | _ -> ()
 
-                        ExitGreen
+                        emitClaimReceipt "renewed" held outcome
                     | Ok(Writes.Lost holder) ->
                         eprint $"fsgg-coord-engine: %s{ref.Short} is already held by %s{holder.Value}. Pick another, or wait for the lease."
                         ExitRed
@@ -4519,9 +4597,10 @@ module Client =
         // where being left out bought you a verbatim string compare that matched nothing and exited 0.
         let opts =
             match opts.Command with
+            | Who ->
+                if opts.AllRepos then opts else { opts with Repo = scopedRepo opts }
             | Next
             | BatchCmd
-            | Who
             | Reap
             | Inbox
             | Landable
