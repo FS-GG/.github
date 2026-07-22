@@ -21,6 +21,13 @@
       "sha256": "28edb56f4cc7926ef423f9980ad6161e5d6c18cbe5f6008bc7b3c7981e2c7027",
       "supplied-by": ".claude/skills/drive-board",
       "materializes-when": "false"
+    },
+    {
+      "id": "cut-nuget-release",
+      "scope": "operator",
+      "sha256": "b5b9d1b23ff2a3e98b03780d2613146dd7e8d7b185ea3ca1cae349de1e732dbc",
+      "supplied-by": ".claude/skills/cut-nuget-release",
+      "materializes-when": "false"
     }
   ]
 }

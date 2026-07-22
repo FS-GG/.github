@@ -307,12 +307,13 @@ skills:
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
   # The FOURTH skill class, and the mirror image of `driver`: also reconciled from `.github`'s OWN
-  # producer manifest, but delivered to no tree. `drive-board` (the cross-repo sibling of workRoadmap,
-  # ADR-0053) runs ONLY in an operator checkout where every repo is a sibling — a single product tree
-  # has no siblings, so it can be materialized nowhere. `materializes-when` is the never-true literal
+  # producer manifest, but delivered to no tree. `drive-board` and `cut-nuget-release` run ONLY in an
+  # operator checkout where every repo is a sibling — a single product tree has no siblings, so they
+  # can be materialized nowhere. `materializes-when` is the never-true literal
   # `false` (ADR-0017's grammar, `always`'s exact opposite), so the scope-agnostic union gate
   # (scripts/skill-union-assert.sh) reads an operator row as `declared ∧ condition-false ∧ absent → a
   # justified downstream omission` — no gate change. The scope value's job is the CATALOG; the
   # never-materialize behaviour rides the predicate. Schema growth ADR-0057 pays for (schemaVersion 2→3
   # below), publish-before-flip, SDD first (ADR-0037).
   - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: 28edb56f4cc7926ef423f9980ad6161e5d6c18cbe5f6008bc7b3c7981e2c7027, materializes-when: "false" }
+  - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: b5b9d1b23ff2a3e98b03780d2613146dd7e8d7b185ea3ca1cae349de1e732dbc, materializes-when: "false" }
