@@ -129,6 +129,36 @@ expect_ok "--repo takes an owner/repo value" -- "$TGT" P --repo acme/Product.X
 expect_ok "--chore-locks takes a value" -- "$TGT" P --board acme/Roadmap --repo acme/Product.X --chore-locks "acme/Product.X#5,acme/Product.Y#7"
 expect_ok "flags combine, and --ref takes a value" -- "$TGT" P --upgrade --no-governance --ref v1.2.3
 
+# ── retrofit subcommand: its own parser, then a clean no-network refusal (#1343) ──────────────────
+# `retrofit <target> …` wires coordination onto an EXISTING workspace. Its parser is separate from the
+# scaffold parser, carries the same #388 flag-as-value guard, and — critically — refuses cleanly (exit
+# 2, no partial state, no network) when the target is not a scaffolded workspace (no .fsgg/). Both the
+# parse-reject and the refusal exit 2, distinguished here by the message substring. All stay hermetic:
+# a rejected parse never runs, and the refusal returns BEFORE any kit fetch (it checks .fsgg/ first).
+
+# Parse-reject leg (exit 2, parser message):
+expect_err "retrofit with no target is rejected" \
+  "retrofit needs a target directory" -- retrofit
+expect_err "retrofit with a leading flag (no target) is rejected" \
+  "retrofit needs a target directory" -- retrofit --board acme/Roadmap
+expect_err "retrofit --board swallowing the next flag as its value is caught (#388)" \
+  "--board needs a value (got flag '--repo')" -- retrofit "$TGT" --board --repo acme/R
+expect_err "retrofit --board with no following token needs a value" \
+  "--board needs a value" -- retrofit "$TGT" --board
+expect_err "retrofit --repo swallowing the next flag as its value is caught (#388)" \
+  "--repo needs a value (got flag '--ref')" -- retrofit "$TGT" --repo --ref v1
+expect_err "retrofit --chore-locks with no following token needs a value" \
+  "--chore-locks needs a value" -- retrofit "$TGT" --chore-locks
+expect_err "retrofit --ref with no following token needs a value" \
+  "--ref needs a value" -- retrofit "$TGT" --ref
+expect_err "retrofit rejects a scaffold-only flag as unknown" \
+  "unknown argument: --profile" -- retrofit "$TGT" --profile game
+# Refusal leg (parse ACCEPTED → runRetrofit → no .fsgg/ ⇒ clean refuse, exit 2, no network, no writes):
+expect_err "retrofit refuses a non-scaffolded target (no .fsgg/) cleanly" \
+  "not a scaffolded workspace (no .fsgg/ directory)" -- retrofit "$TGT"
+expect_err "retrofit parses the full coord flag-set, then refuses the non-scaffolded target" \
+  "not a scaffolded workspace (no .fsgg/ directory)" -- retrofit "$TGT" --board acme/Roadmap --repo acme/Product.X --chore-locks "acme/Product.X#5" --ref v1.2.3
+
 # ── main's non-parse dispatch: -h / --help print usage and exit 0 ─────────────────────────────────
 
 for h in --help -h; do

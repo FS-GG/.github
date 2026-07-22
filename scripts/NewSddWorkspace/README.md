@@ -64,6 +64,39 @@ env still lands. **Note:** `offer`/chores on a **non-FS-GG** board need an engin
 #1140 (post-`0.4.0`); the default FS-GG board works on any engine (embedded lock table), so the
 scaffolder surfaces the caveat only when you retarget the board.
 
+### Retrofit coordination onto an existing workspace (`retrofit`)
+
+The scaffold-time coordination step (above) only fires when you *create* a workspace. A workspace made
+with `--no-coordination` — or before that step existed — has its `.fsgg/` config but **no** coordination
+kit, no `fsgg-coord` shim, and no `FSGG_COORD_*` env, so `workBoard` (ADR-0064) refuses to drive its
+board. The **`retrofit`** subcommand wires coordination **onto** such a workspace — the exact inverse of
+the scaffold-time wiring:
+
+```sh
+new-sdd-workspace retrofit ./MyApp                                  # FS-GG/Coordination (default)
+new-sdd-workspace retrofit ./MyApp --board acme/Roadmap --repo acme/MyApp --chore-locks acme/MyApp#5
+```
+
+It is **idempotent** and never leaves partial state:
+
+- it vendors the same kit as the scaffold step (the four coordination skills into `.claude`/`.agents`/
+  `.codex` byte-identical, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest merged into any
+  existing `.config/dotnet-tools.json`) and writes `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT`
+  (+ `FSGG_COORD_CHORE_LOCKS`) merged into `.claude/settings.json` — **but writes each piece only if it
+  is missing or has drifted**, leaving a coherent kit byte-for-byte untouched;
+- it **records the retrofit** in `.fsgg/scaffold-provenance.json` (an additive `retrofits[]` entry
+  naming what was materialized vs re-emitted as drift; SDD's own provenance keys are preserved and the
+  key is read-safe — System.Text.Json ignores it);
+- run again on an already-wired workspace it **refuses cleanly** ("already wired — no drift to re-emit")
+  and appends no redundant provenance entry; if only some pieces drifted it **re-emits only those**;
+- run against a directory that is **not** a scaffolded workspace (no `.fsgg/`) it refuses with exit `2`
+  and names the fix (scaffold one first) — nothing is written.
+
+Options accepted: `--board <owner>/<title>`, `--repo <owner>/<repo>`, `--chore-locks <refs>`, `--ref
+<git-ref>` (the `FS-GG/.github` ref the kit is vendored from; default `main`). Best-effort like the
+scaffold step: a kit file that fails to fetch warns; only when the workspace is unwired **and** every
+fetch fails does it exit non-zero, having written nothing.
+
 ### Currency by default (ADR-0030)
 
 By default, **step 2 self-updates the `fsgg-sdd` CLI to the newest published build before it
