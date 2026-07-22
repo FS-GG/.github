@@ -56,6 +56,7 @@
             const string Marker = "Source of truth: FS-GG/.github";
 
             [Output] public ITaskItem[] ClientFiles { get; set; }
+            [Output] public ITaskItem[] NonClientFiles { get; set; }
 
             static string Sha256Hex(string path)
             {
@@ -83,6 +84,7 @@
                     roots.Add(r.Trim());
 
                 var clients = new List<ITaskItem>();
+                var nonClients = new List<ITaskItem>();
                 int copied = 0, verified = 0;
 
                 foreach (var raw in File.ReadAllLines(manifest))
@@ -168,10 +170,12 @@
                         }
                         verified++;
                         if (kind == "client") clients.Add(new TaskItem(dest));
+                        else nonClients.Add(new TaskItem(dest));
                     }
                 }
 
                 ClientFiles = clients.ToArray();
+                NonClientFiles = nonClients.ToArray();
                 // A floor, not decoration: an EMPTY or truncated-to-zero manifest would otherwise
                 // materialize nothing and report success — a silently missing kit, the one failure mode
                 // ADR-0062 exists to rule out. The producer guards this too (stage-kit.sh), but the
@@ -197,13 +201,20 @@
     <MaterializeKit KitDir="$(FsggKitDir)" ReceiverRoot="$(FsggKitReceiverRoot)" SkillRoots="$(FsggKitSkillRoots)"
                     IncludeBuildConfig="$(FsggKitMaterializeBuildConfig)" AdoptBuildConfig="$(FsggKitAdoptBuildConfig)">
       <Output TaskParameter="ClientFiles" ItemName="_FsggKitClient" />
+      <Output TaskParameter="NonClientFiles" ItemName="_FsggKitNonClient" />
     </MaterializeKit>
-    <!-- The client shim must be executable; File API cannot set the +x bit on netstandard, so chmod on
-         unix. Windows has no exec bit and needs none. Each path is quoted — a receiver checkout under a
+    <!-- NuGet extraction can make every global-packages-cache file executable on Unix even when the
+         nupkg records mode 0644. File.Copy then propagates that cache metadata, while a hash-equal
+         destination skips the copy entirely. Mode is therefore an explicit materialization postcondition:
+         the client shim is executable and every other receiver asset is not, on both copied and verified
+         paths. File API cannot portably set Unix mode from this netstandard task, so chmod at the target
+         edge. Windows has no exec bit and needs none. Each path is quoted — a receiver checkout under a
          spaced path (macOS "Application Support", Windows "C:\Users\John Doe") would otherwise split the
          command and red the consumer's build. -->
+    <Exec Condition="'$(OS)' != 'Windows_NT' And '@(_FsggKitNonClient)' != ''"
+          Command="chmod a-x @(_FsggKitNonClient->'&quot;%(FullPath)&quot;', ' ')" />
     <Exec Condition="'$(OS)' != 'Windows_NT' And '@(_FsggKitClient)' != ''"
-          Command="chmod +x @(_FsggKitClient->'&quot;%(FullPath)&quot;', ' ')" />
+          Command="chmod a+x @(_FsggKitClient->'&quot;%(FullPath)&quot;', ' ')" />
   </Target>
 
   <Target Name="FsggKitMaterializeOnBuild"
