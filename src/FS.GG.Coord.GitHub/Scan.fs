@@ -258,6 +258,13 @@ module Scan =
 
         let subject = $"the board '%s{title}' in %s{owner}"
 
+        // OWNER-KIND AWARE (#1344). Resolved once for the whole paginated scan: an org-owned board answers
+        // to `organization(login:)`, a user-owned one to `user(login:)`. `Org` is the default and keeps
+        // both the document and the parse path below byte-identical to what preceded this.
+        let kind = OwnerKind.fromEnv ()
+        let ownerField = OwnerKind.ownerField kind
+        let boardDoc = OwnerKind.forOwner kind BoardDoc
+
         let rec page (cursor: string option) (acc: Row list) (guard: int) : IoResult<Row list> =
             if guard <= 0 then
                 Error(Malformed(subject, "the board scan did not terminate within 100 pages — refusing to spin"))
@@ -274,7 +281,7 @@ module Scan =
                 { Method = "POST"
                   Path = "graphql"
                   Query = []
-                  Body = Query(BoardDoc, variables)
+                  Body = Query(boardDoc, variables)
                   Budget = GraphQl
                   IfNoneMatch = None
                   Subject = subject }
@@ -307,7 +314,7 @@ module Scan =
                 let items =
                     doc.RootElement
                         .GetProperty("data")
-                        .GetProperty("organization")
+                        .GetProperty(ownerField)
                         .GetProperty("projectV2")
                         .GetProperty("items")
 
@@ -332,7 +339,7 @@ module Scan =
             with
             | :? JsonException as e -> Error(Malformed(subject, $"the board scan's response is not JSON: %s{e.Message}"))
             | :? Collections.Generic.KeyNotFoundException ->
-                Error(Malformed(subject, "the board scan's response is missing `data.organization.projectV2.items`"))
+                Error(Malformed(subject, $"the board scan's response is missing `data.%s{ownerField}.projectV2.items`"))
 
         match page None [] 100 with
         | Error e -> Error e

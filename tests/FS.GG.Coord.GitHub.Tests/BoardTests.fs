@@ -866,6 +866,87 @@ let ``a board TITLE that does not exist is named back, so it can be fixed`` () =
     | Error(NotFound message) -> Assert.Contains("Coordination", message)
     | other -> failwith $"a missing board must name the title it looked for — got %A{other}"
 
+// ---- owner-kind awareness (#1344) ------------------------------------------------------------------
+
+/// A recorder that CAPTURES each request's GraphQL document into `docs`, then serves the scripted responses.
+let private capturing (docs: System.Collections.Generic.List<string>) (responses: IoResult<Response> list) =
+    let queue = System.Collections.Generic.Queue<IoResult<Response>>(responses)
+
+    Fake.Recorder(fun req ->
+        match req.Body with
+        | Query(doc, _) -> docs.Add doc
+        | _ -> ()
+
+        if queue.Count = 0 then
+            failwith "the transport was called more times than the test scripted"
+        else
+            queue.Dequeue())
+
+[<Fact>]
+let ``bootstrap resolves a USER-owned board through user(login:) (#1344)`` () =
+    // A personal-account board answers to `user(login:)`, and both the project list and the field schema come
+    // back nested under `data.user`. `FSGG_COORD_OWNER_TYPE=user` selects that shape; without it a user login
+    // queried through `organization(login:)` resolves to null and every board read fails.
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+
+    try
+        let docs = System.Collections.Generic.List<string>()
+
+        let transport =
+            capturing
+                docs
+                [ ok """{"data":{"user":{"projectsV2":{"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_user"}]}}}}"""
+                  ok """{"data":{"user":{"projectV2":{"fields":{"nodes":[
+                         {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+
+        match bootstrap transport "EHotwagner" "TowerDefense" with
+        | Ok b ->
+            Assert.Equal(3, b.Number)
+            Assert.Equal("PVT_user", b.Id)
+            Assert.Equal("EHotwagner", b.Owner)
+
+            match Map.tryFind "Status" b.Fields with
+            | Some { Type = SingleSelect options } -> Assert.Equal("opt_ready", options.["Ready"])
+            | other -> failwith $"the user board's Status must resolve — got %A{other}"
+
+            // Both documents (project list + field schema) hit the user node, not the organization node.
+            Assert.All(
+                docs,
+                fun d ->
+                    Assert.Contains("user(login: $owner)", d)
+                    Assert.DoesNotContain("organization(login: $owner)", d)
+            )
+        | other -> failwith $"a user-owned board must bootstrap — got %A{other}"
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+
+[<Fact>]
+let ``bootstrap still queries organization(login:) by default - org behaviour is byte-identical (#1344)`` () =
+    // THE REGRESSION GUARD. Env var unset ⇒ the org path is exactly what it was before #1344: both documents
+    // select `organization(login:)`, and neither carries a `user(login:)` selection.
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+
+    let docs = System.Collections.Generic.List<string>()
+
+    let transport =
+        capturing
+            docs
+            [ ok """{"data":{"organization":{"projectsV2":{"nodes":[{"number":12,"title":"Coordination","id":"PVT_coord"}]}}}}"""
+              ok """{"data":{"organization":{"projectV2":{"fields":{"nodes":[
+                     {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+
+    match bootstrap transport "FS-GG" "Coordination" with
+    | Ok b ->
+        Assert.Equal(12, b.Number)
+
+        Assert.All(
+            docs,
+            fun d ->
+                Assert.Contains("organization(login: $owner)", d)
+                Assert.DoesNotContain("user(login: $owner)", d)
+        )
+    | other -> failwith $"the org bootstrap must resolve unchanged — got %A{other}"
+
 // ---- the board-map + item-id caches (#418, case 10) ------------------------------------------------
 
 [<Fact>]

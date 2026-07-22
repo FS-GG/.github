@@ -68,6 +68,88 @@ let private issueNode (number: int) (status: string) (blockedBy: string) (state:
           "content":{{"__typename":"Issue","number":%d{number},"title":"item %d{number}",
                       "state":"%s{state}","repository":{{"nameWithOwner":"FS-GG/FS.GG.SDD"}}}}}}"""
 
+/// One page of a USER-owned board — the same shape as `page`, but nested under `data.user` instead of
+/// `data.organization`, exactly as GitHub answers a `user(login:)` query (#1344).
+let private userPage (nodes: string) (hasNext: bool) (cursor: string) =
+    let hn = if hasNext then "true" else "false"
+
+    $"""{{"data":{{"user":{{"projectV2":{{"items":{{
+        "pageInfo":{{"hasNextPage":%s{hn},"endCursor":"%s{cursor}"}},
+        "nodes":[%s{nodes}]}}}}}}}}}}"""
+
+/// A recorder that CAPTURES the GraphQL document of every request into `docs`, then serves the scripted
+/// responses in order. It is how the owner-kind tests prove which root field the query actually hit.
+let private capturing (docs: System.Collections.Generic.List<string>) (responses: IoResult<Response> list) =
+    let queue = System.Collections.Generic.Queue<IoResult<Response>>(responses)
+
+    Fake.Recorder(fun req ->
+        match req.Body with
+        | Query(doc, _) -> docs.Add doc
+        | _ -> ()
+
+        if queue.Count = 0 then
+            failwith "the transport was called more times than the test scripted"
+        else
+            queue.Dequeue())
+
+// ---- owner-kind awareness (#1344) ---------------------------------------------------------------------
+
+[<Fact>]
+let ``a USER-owned board is scanned through user(login:) and its rows resolve (#1344)`` () =
+    use _sandbox = new Sandbox()
+
+    // A board owned by a personal account answers to `user(login:)`, and its items come back nested under
+    // `data.user`. `FSGG_COORD_OWNER_TYPE=user` selects that shape; without it, a user login queried through
+    // `organization(login:)` resolves to null and the whole board is unreachable.
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+
+    try
+        let docs = System.Collections.Generic.List<string>()
+
+        let transport =
+            capturing docs [ ok (userPage (issueNode 7 "Ready" "" "OPEN") false "") ]
+
+        match Scan.board transport Cache.Scheduling "EHotwagner" "TowerDefense" 3 with
+        | Ok [ row ] ->
+            Assert.Equal(7, row.Ref.Number)
+            Assert.Equal(Ready, row.Status)
+
+            // The document hit the USER node, not the organization node — that is the whole fix.
+            Assert.All(
+                docs,
+                fun d ->
+                    Assert.Contains("user(login: $owner)", d)
+                    Assert.DoesNotContain("organization(login: $owner)", d)
+            )
+        | other -> failwith $"a user-owned board must resolve through user(login:) — got %A{other}"
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+
+[<Fact>]
+let ``an ORG-owned scan still queries organization(login:) - user support is OFF by default (#1344)`` () =
+    use _sandbox = new Sandbox()
+
+    // THE REGRESSION GUARD. With the env var unset, the org path must be byte-identical to what preceded
+    // #1344 — same root field, same `data.organization` parse — so nothing on the FS-GG board moves.
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+
+    let docs = System.Collections.Generic.List<string>()
+
+    let transport =
+        capturing docs [ ok (page (issueNode 1 "Ready" "" "OPEN") false "") ]
+
+    match Scan.board transport Cache.Scheduling "FS-GG" "Coordination" 12 with
+    | Ok [ row ] ->
+        Assert.Equal(1, row.Ref.Number)
+
+        Assert.All(
+            docs,
+            fun d ->
+                Assert.Contains("organization(login: $owner)", d)
+                Assert.DoesNotContain("user(login: $owner)", d)
+        )
+    | other -> failwith $"the org scan must resolve unchanged — got %A{other}"
+
 // ---- the cursor loop ----------------------------------------------------------------------------------
 
 [<Fact>]
