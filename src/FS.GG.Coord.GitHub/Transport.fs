@@ -66,18 +66,23 @@ module Transport =
     ///
     /// `Org` IS THE DEFAULT, AND ITS QUERIES ARE BYTE-IDENTICAL to the pre-existing ones — nothing on the
     /// FS-GG (org-owned) board changes. `User` is the same document with the one root selection swapped.
+    /// `Viewer` (#1349) resolves the board from the token's OWN identity — the `viewer` root, which needs no
+    /// login and so keeps the operator's own account name out of plaintext config.
     type OwnerKind =
         | Org
         | User
+        | Viewer
 
     module OwnerKind =
 
-        /// The GraphQL root field that resolves this owner by login — and the `data.<field>` the response
-        /// comes back under, so the writer and the reader cannot pick different names.
+        /// The GraphQL root field that resolves this owner — and the `data.<field>` the response comes back
+        /// under, so the writer and the reader cannot pick different names. `Org`/`User` resolve by login;
+        /// `Viewer` resolves the authenticated token's own User with no login at all.
         let ownerField (kind: OwnerKind) =
             match kind with
             | Org -> "organization"
             | User -> "user"
+            | Viewer -> "viewer"
 
         /// Rewrite an ORG-shaped ProjectV2 query for this owner kind.
         ///
@@ -85,22 +90,49 @@ module Transport =
         /// `User` swaps the single `organization(login: $owner)` selection for `user(login: $owner)`; the
         /// rest of the document is identical across both, because everything below the root field hangs off
         /// the shared `ProjectV2Owner` interface.
+        /// `Viewer` swaps that same selection for the `viewer` root — which takes NO argument — and drops the
+        /// now-unused `$owner: String!` operation variable (GraphQL rejects a declared-but-unused variable).
+        /// `viewer` implements the same `ProjectV2Owner` interface, so, again, everything below it is
+        /// identical.
         let forOwner (kind: OwnerKind) (orgQuery: string) =
             match kind with
             | Org -> orgQuery
             | User -> orgQuery.Replace("organization(login: $owner)", "user(login: $owner)")
+            | Viewer ->
+                orgQuery
+                    .Replace("organization(login: $owner)", "viewer")
+                    // Drop the `$owner` variable declaration — `viewer` never references it. Exactly one of
+                    // these two forms is present (comma-joined when other variables follow, bare otherwise).
+                    .Replace("query($owner: String!, ", "query(")
+                    .Replace("query($owner: String!)", "query")
 
-        /// The owner kind for THIS client, read from `FSGG_COORD_OWNER_TYPE`.
+        /// The owner variables this kind binds for the query. `Org`/`User` pass `$owner`; `Viewer` binds
+        /// NOTHING — its document declares no `$owner`, and GitHub rejects a request that supplies a variable
+        /// the operation does not declare, so the binding has to be dropped in lockstep with the declaration.
+        let ownerVars (kind: OwnerKind) (owner: string) : (string * Var) list =
+            match kind with
+            | Org
+            | User -> [ "owner", VString owner ]
+            | Viewer -> []
+
+        /// The owner kind for THIS client, read from `FSGG_COORD_OWNER_TYPE` (and, for `user`, whether an
+        /// explicit `FSGG_COORD_OWNER` login is set).
         ///
         /// Unset, empty, `org`, or `organization` is `Org` — the default that keeps the org board
-        /// byte-identical. Only an explicit `user` selects `User`. An unrecognised value falls back to
-        /// `Org` rather than failing: the safe direction is the one that leaves the FS-GG board reachable.
+        /// byte-identical. `user` WITH an explicit `FSGG_COORD_OWNER` is `User` (queries `user(login:)`, as
+        /// #1344). `user` with NO `FSGG_COORD_OWNER` is `Viewer` — resolve the board from the token's own
+        /// identity, so no login lives in config (#1349). An unrecognised value falls back to `Org` rather
+        /// than failing: the safe direction is the one that leaves the FS-GG board reachable.
         let fromEnv () =
             match Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE" with
             | null -> Org
             | v ->
                 match v.Trim().ToLowerInvariant() with
-                | "user" -> User
+                | "user" ->
+                    match Environment.GetEnvironmentVariable "FSGG_COORD_OWNER" with
+                    | null -> Viewer
+                    | o when o.Trim() = "" -> Viewer
+                    | _ -> User
                 | _ -> Org
 
     /// The `Link` header's `rel="next"`, if there is one.

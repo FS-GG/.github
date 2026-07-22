@@ -885,9 +885,11 @@ let private capturing (docs: System.Collections.Generic.List<string>) (responses
 [<Fact>]
 let ``bootstrap resolves a USER-owned board through user(login:) (#1344)`` () =
     // A personal-account board answers to `user(login:)`, and both the project list and the field schema come
-    // back nested under `data.user`. `FSGG_COORD_OWNER_TYPE=user` selects that shape; without it a user login
-    // queried through `organization(login:)` resolves to null and every board read fails.
+    // back nested under `data.user`. `FSGG_COORD_OWNER_TYPE=user` WITH an explicit `FSGG_COORD_OWNER` selects
+    // that shape; without it a user login queried through `organization(login:)` resolves to null and every
+    // board read fails. (With NO explicit owner, `user` falls to viewer-scoping — a separate test, #1349.)
     Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", "EHotwagner")
 
     try
         let docs = System.Collections.Generic.List<string>()
@@ -919,6 +921,49 @@ let ``bootstrap resolves a USER-owned board through user(login:) (#1344)`` () =
         | other -> failwith $"a user-owned board must bootstrap — got %A{other}"
     finally
         Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", null)
+
+[<Fact>]
+let ``bootstrap resolves a VIEWER-owned board through viewer, with no login in config (#1349)`` () =
+    // `FSGG_COORD_OWNER_TYPE=user` with NO explicit `FSGG_COORD_OWNER` resolves the board from the token's OWN
+    // `viewer` identity. Both documents select the argument-less `viewer` root, carry no `$owner` variable at
+    // all (GraphQL rejects a declared-but-unused variable), and the responses come back nested under
+    // `data.viewer`. Nothing about the operator's own login lives in plaintext config.
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+    Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", null)
+
+    try
+        let docs = System.Collections.Generic.List<string>()
+
+        let transport =
+            capturing
+                docs
+                [ ok """{"data":{"viewer":{"projectsV2":{"nodes":[{"number":3,"title":"TowerDefense","id":"PVT_viewer"}]}}}}"""
+                  ok """{"data":{"viewer":{"projectV2":{"fields":{"nodes":[
+                         {"id":"PVTSSF_status","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_ready","name":"Ready"}]}]}}}}}""" ]
+
+        match bootstrap transport "@me" "TowerDefense" with
+        | Ok b ->
+            Assert.Equal(3, b.Number)
+            Assert.Equal("PVT_viewer", b.Id)
+
+            match Map.tryFind "Status" b.Fields with
+            | Some { Type = SingleSelect options } -> Assert.Equal("opt_ready", options.["Ready"])
+            | other -> failwith $"the viewer board's Status must resolve — got %A{other}"
+
+            // Both documents hit the `viewer` root — not organization, not user(login:) — and neither declares
+            // or references a `$owner` variable: no login travels to the API at all.
+            Assert.All(
+                docs,
+                fun d ->
+                    Assert.Contains("viewer {", d)
+                    Assert.DoesNotContain("organization(login: $owner)", d)
+                    Assert.DoesNotContain("user(login: $owner)", d)
+                    Assert.DoesNotContain("$owner", d)
+            )
+        | other -> failwith $"a viewer-owned board must bootstrap — got %A{other}"
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
 
 [<Fact>]
 let ``bootstrap still queries organization(login:) by default - org behaviour is byte-identical (#1344)`` () =
@@ -946,6 +991,39 @@ let ``bootstrap still queries organization(login:) by default - org behaviour is
                 Assert.DoesNotContain("user(login: $owner)", d)
         )
     | other -> failwith $"the org bootstrap must resolve unchanged — got %A{other}"
+
+[<Fact>]
+let ``OwnerKind.fromEnv resolves org, user, and viewer from the environment (#1349)`` () =
+    let saved = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER"
+    let savedType = Environment.GetEnvironmentVariable "FSGG_COORD_OWNER_TYPE"
+
+    try
+        // Unset ⇒ Org (the default — the FS-GG board stays reachable no matter what else is set).
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", null)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", "EHotwagner")
+        Assert.Equal(OwnerKind.Org, OwnerKind.fromEnv ())
+
+        // `org`/`organization`/unrecognised ⇒ Org.
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "org")
+        Assert.Equal(OwnerKind.Org, OwnerKind.fromEnv ())
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "something-else")
+        Assert.Equal(OwnerKind.Org, OwnerKind.fromEnv ())
+
+        // `user` WITH an explicit login ⇒ User (queries `user(login:)`, #1344).
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", "user")
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", "EHotwagner")
+        Assert.Equal(OwnerKind.User, OwnerKind.fromEnv ())
+
+        // `user` with NO login ⇒ Viewer (resolve from the token's own identity, #1349).
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", null)
+        Assert.Equal(OwnerKind.Viewer, OwnerKind.fromEnv ())
+
+        // A blank login is treated as absent ⇒ Viewer, not a `user(login: "")` that would resolve to null.
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", "   ")
+        Assert.Equal(OwnerKind.Viewer, OwnerKind.fromEnv ())
+    finally
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER", saved)
+        Environment.SetEnvironmentVariable("FSGG_COORD_OWNER_TYPE", savedType)
 
 // ---- the board-map + item-id caches (#418, case 10) ------------------------------------------------
 
