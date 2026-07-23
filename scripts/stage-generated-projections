@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Stage a registry flip together with every path `generate-projections` says it owns.
+#
+# The generator's `--list` output is the one authoritative target set. Keeping another list in a
+# workflow is how feed-autofix omitted newly-added component-inventory projections in .github#1385.
+# This helper fails closed on malformed or empty output, then stages the registry source and the
+# complete, de-duplicated projection path set. It deliberately does not use `git add -A`: unrelated
+# build artifacts must never ride a bot commit.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$HERE"
+
+rows="$(bash scripts/generate-projections --list)" || {
+  echo "::error::stage-generated-projections: generate-projections --list failed; nothing staged." >&2
+  exit 2
+}
+
+paths="$({
+  printf '%s\n' "$rows" | awk -F '\t' '
+    NF != 3 {
+      printf "::error::stage-generated-projections: malformed generator row (%d fields, want 3): %s\n", NF, $0 > "/dev/stderr"
+      bad = 1
+      next
+    }
+    $2 == "" {
+      print "::error::stage-generated-projections: generator row has an empty path: " $0 > "/dev/stderr"
+      bad = 1
+      next
+    }
+    $2 ~ /^\// || $2 ~ /(^|\/)\.\.(\/|$)/ {
+      print "::error::stage-generated-projections: generator path is not repo-relative: " $2 > "/dev/stderr"
+      bad = 1
+      next
+    }
+    !seen[$2]++ { print $2 }
+    END { if (bad) exit 2 }
+  ' | LC_ALL=C sort -u
+})" || {
+  echo "::error::stage-generated-projections: refusing a partial target set; nothing staged." >&2
+  exit 2
+}
+
+[ -n "$paths" ] || {
+  echo "::error::stage-generated-projections: generator listed no paths; nothing staged." >&2
+  exit 2
+}
+
+mapfile -t projection_paths <<<"$paths"
+git add -- registry/dependencies.yml "${projection_paths[@]}"

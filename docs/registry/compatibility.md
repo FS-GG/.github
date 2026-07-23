@@ -83,7 +83,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.3.0` | `1.3.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.18.5` | `0.18.5` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.18.6` | `0.18.6` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |
