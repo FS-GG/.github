@@ -265,7 +265,7 @@ skills:
   # catalog; do not recreate it to make the old pair visually symmetric. Predicate is the current
   # manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality).
   # Vendored Rendering#248 (PR #251); reconciled .github#298.
-  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: cd572f459ab768f1d8d7391278621c013c6e11989345bca1d01208a6a75c2b2d, materializes-when: "always" }
+  - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: 9b46a1fc006167b1fe834baab3a3b34dfdd5419a1bec869a2039a50ad12630f6, materializes-when: "always" }
 
   # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
   # fs-gg-project was formerly gated `lifecycle == spec-kit`, so under the `sdd`/`none` lanes NEITHER
@@ -299,11 +299,11 @@ skills:
   # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
-  - { id: workRoadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: 2b9313bf960ba6df3f5634ba19919f9013a9f6e58d83734f102bfa4705b06812, materializes-when: "always" }
+  - { id: workRoadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: 9d3492594e8c56f1ca7aa570ab90568c40b6c78950772987ac297406a29ce416, materializes-when: "always" }
   # workBoard — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: workBoard,              scope: driver,  owner: .github,         source: .github/.claude/skills/workBoard/SKILL.md, sha256: 5c84366ac4e08ce00bcdeed1b46eb88324b034e03d0d433fb7bf030aac051a27, materializes-when: always }
+  - { id: workBoard,              scope: driver,  owner: .github,         source: .github/.claude/skills/workBoard/SKILL.md, sha256: c152811f08d5ba67f318feeb6234458fdccbd38e86e7e7a6d0c19651431093c4, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #

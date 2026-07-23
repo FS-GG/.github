@@ -4,14 +4,14 @@
     {
       "id": "workRoadmap",
       "scope": "driver",
-      "sha256": "2b9313bf960ba6df3f5634ba19919f9013a9f6e58d83734f102bfa4705b06812",
+      "sha256": "9d3492594e8c56f1ca7aa570ab90568c40b6c78950772987ac297406a29ce416",
       "supplied-by": ".claude/skills/workRoadmap",
       "materializes-when": "always"
     },
     {
       "id": "workBoard",
       "scope": "driver",
-      "sha256": "5c84366ac4e08ce00bcdeed1b46eb88324b034e03d0d433fb7bf030aac051a27",
+      "sha256": "c152811f08d5ba67f318feeb6234458fdccbd38e86e7e7a6d0c19651431093c4",
       "supplied-by": ".claude/skills/workBoard",
       "materializes-when": "always"
     },

@@ -1,6 +1,6 @@
 ---
 name: workBoard
-description: Drive a single product workspace's own wired project board to completion, fanning work out to fresh disposable subagents and re-planning after each wave — the board-ledger sibling of workRoadmap and the single-repo sibling of drive-board. Use inside a coordination-wired scaffolded workspace when you want its board burned down without babysitting it: the host reconciles the board (check-board), sizes a touch-set-disjoint wave against this one repo, spawns one fresh subagent per slot to run pnext-item, verifies each claimed result against ground truth (never the subagent's word), despawns it, and loops until the board is genuinely empty. A simple item is implemented directly; a complex one (Effort L/XL or a needs-sdd signal) runs the full fs-gg-sdd-* lifecycle inside the same claim/merge/done-stamp envelope. Refuses to run — cleanly, naming the fix — when the workspace has no board (scaffolded --no-coordination), no fsgg-coord engine, or no coordination kit. Composes check-board (analyze), pnext-item (the worker), and intra-repo-parallel-work (the claim/worktree/touch-set protocol) the workspace already carries. Canonized by ADR-0064; see also ADR-0053, ADR-0054, ADR-0057, ADR-0063.
+description: Drive a single product workspace's own wired project board to completion, fanning work out to fresh disposable subagents and re-planning after each wave — the board-ledger sibling of workRoadmap and the single-repo sibling of drive-board. Use inside a coordination-wired scaffolded workspace when you want its board burned down without babysitting it: the host reconciles the board (check-board), sizes a touch-set-disjoint wave against this one repo, spawns one fresh subagent per slot to run pnext-item, checkpoints and finalizes schema-v2 development feedback per item, verifies each claimed result against ground truth (never the subagent's word), despawns it, and loops until the board is genuinely empty. A simple item is implemented directly; a complex one (Effort L/XL or a needs-sdd signal) runs the full fs-gg-sdd-* lifecycle inside the same claim/merge/done-stamp envelope. Refuses to run — cleanly, naming the fix — when the workspace has no board (scaffolded --no-coordination), no fsgg-coord engine, or no coordination kit. Composes check-board (analyze), pnext-item (the worker), fs-gg-feedback-report (checkpoint/synthesis), and intra-repo-parallel-work (the claim/worktree/touch-set protocol) the workspace already carries. Canonized by ADR-0064; see also ADR-0053, ADR-0054, ADR-0057, ADR-0063.
 ---
 
 # workBoard
@@ -189,26 +189,35 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 >    `eval "$(scripts/fsgg-coord whoami --mint)"`. If `whoami` warns that your id came from the session,
 >    **stop and report it** — you hold no lock, and working anyway puts two workers on one item in the one
 >    tree we all share. Do not invent or copy an id.
-> 2. **Run [pnext-item](../pnext-item/SKILL.md) for `<REPO>`**, exactly as written: `take` (gate on the
+> 2. **Run [pnext-item](../pnext-item/SKILL.md) for `<REPO>`**: `take` (gate on the
 >    exit code — 0 is the *only* code that means you hold an item, #585), read the item's **comments**
 >    before you start (a prior worker's "do not do this" is the highest-signal thing on the board),
 >    `git fetch` then worktree from `origin/main` by name, implement **inside your declared `Paths:`** (in
->    a shared tree, a path you did not declare is one another worker may be editing), open a PR, review it,
->    merge on green, and `done --flip` to earn the stamp.
+>    a shared tree, a path you did not declare is one another worker may be editing). Pause before
+>    opening the PR for steps 3–4, then resume pnext-item: open, review, merge on green, and
+>    `done --flip` to earn the stamp.
 > 3. **Scale the implementation to the item.** A simple item (Effort `S`/`M`) you implement directly. A
 >    **complex** one (Effort `L`/`XL`, or a `needs-sdd` signal) you take through the full `fs-gg-sdd-*`
 >    lifecycle — still inside this one claim → PR → merge → done-stamp envelope. Both skill sets are here.
-> 4. **A blocker you discover is the point, not a failure.** If the item cannot proceed until other work
+> 4. **Checkpoint and finalize development feedback before opening the PR.** Use one stable cycle id
+>    based on the item number and slug. Checkpoint only material observations at: onboarding/first
+>    build; lifecycle authoring when used; first implementation/test/evidence loop; and
+>    verify/ship/PR orchestration. Capture misleading guidance, avoidable retries, workarounds,
+>    capability gaps, and unexpectedly effective composition when they occur. Finalize one schema-v2
+>    report, search prior reports and open/closed issues for recurrence, run the bundled validator,
+>    and include the checkpoint JSONL plus report in this item's PR.
+> 5. **A blocker you discover is the point, not a failure.** If the item cannot proceed until other work
 >    lands, file that work at its **root cause** (pnext-item §4), set `Blocked by` on this item to the
 >    blocker, and `release --status Blocked` so the board tells the truth. Report the blocker you filed —
 >    the host schedules around it next wave.
-> 5. **Findings you make, you FIX in the same PR when that keeps it reviewable**, or file at the root cause
+> 6. **Findings you make, you FIX in the same PR when that keeps it reviewable**, or file at the root cause
 >    — pnext-item §4 is the authority. Do **not** recurse into a second item yourself: you are one worker
 >    in a wave, and the host owns what comes next. Report what you filed; the host pops it.
-> 6. **If `take` exits 5 (nothing schedulable) or 75 (rate budget exhausted)**, do not spin. Report the
+> 7. **If `take` exits 5 (nothing schedulable) or 75 (rate budget exhausted)**, do not spin. Report the
 >    exit code and stop — 5 means the repo is dry for now, 75 means the shared budget is gone and the host
 >    must back the whole fleet off (§6).
-> 7. **Report back**: the item number, the merged PR, the done-stamp, any blocker/finding you filed (with
+> 8. **Report back**: the item number, the merged PR, the done-stamp, feedback report path, any
+>    blocker/finding you filed (with
 >    issue numbers), and the `take` exit code if you got no item. Then exit.
 >
 > If the item cannot land from here and it is not a clean blocker to file — it needs a human decision, or
@@ -287,7 +296,9 @@ When §5 says done, the host — **itself, not a subagent** — writes a report 
 `docs/reports/<YYYY-MM-DD>-workboard.md`, timestamped for today: what shipped this run (items, merged PRs,
 done-stamps), the blockers workers discovered and where they were filed, the follow-ups they queued, every
 rate-limit back-off, and the outstanding human-blocked items check-board named. Follow the house report
-style already in `docs/reports/`. **Land it as its own reviewed PR** — feature branch, open, review, merge
+style already in `docs/reports/`. Aggregate the item feedback reports by recurring root cause and owner,
+avoidable cost, positive patterns worth promoting, and development-surface coverage gaps; do not
+concatenate them. **Land it as its own reviewed PR** — feature branch, open, review, merge
 on green — the last thing to merge. Then report to the operator: board burned down, report PR number, and
 the list of items still parked on a human.
 
