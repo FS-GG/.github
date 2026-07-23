@@ -1,6 +1,6 @@
 ---
 name: workRoadmap
-description: Drive a markdown roadmap to completion, one milestone at a time, each in a fresh disposable subagent. Use when a repo has a roadmap doc whose checklist items are milestones and you want them worked end-to-end without babysitting. For each unchecked milestone the parent spawns a NEW subagent that takes it to done via the SDD lifecycle (fs-gg-sdd-* — charter/specify through ship), ticks the roadmap with a progress note, runs fs-gg-feedback-report, and opens/reviews/merges its own PR on green — then the subagent dies and the parent spawns the next one against updated main. When the roadmap is fully checked, the parent writes a detailed timestamped report to docs/reports/ and lands that as its own PR. Runs in a scaffolded fsgg-sdd product repo where the fs-gg-sdd-* and fs-gg-feedback-report skills are materialized. Canonized by ADR-0053 (§6 as amended by ADR-0056); see also the fs-gg-sdd-lifecycle and pnext-item skills.
+description: Drive a markdown roadmap to completion, one milestone at a time, each in a fresh disposable subagent. Use when a repo has a roadmap doc whose checklist items are milestones and you want them worked end-to-end without babysitting. For each unchecked milestone the parent spawns a NEW subagent that takes it to done via the SDD lifecycle (fs-gg-sdd-* — charter/specify through ship), checkpoints development feedback at bounded phase transitions, ticks the roadmap with a progress note, finalizes and validates fs-gg-feedback-report, and opens/reviews/merges its own PR on green — then the subagent dies and the parent spawns the next one against updated main. When the roadmap is fully checked, the parent writes a detailed cross-cycle report to docs/reports/ and lands that as its own PR. Runs in a scaffolded fsgg-sdd product repo where the fs-gg-sdd-* and schema-v2 fs-gg-feedback-report skills are materialized. Canonized by ADR-0053 (§6 as amended by ADR-0056); see also the fs-gg-sdd-lifecycle and pnext-item skills.
 ---
 
 # workRoadmap
@@ -24,10 +24,8 @@ A **scaffolded fsgg-sdd product repo** — one where `fs-gg-sdd-*` (the lifecycl
 `fs-gg-feedback-report` are materialized. If those skills are not present, you are in the wrong tree
 (e.g. FS-GG/.github itself, a kit source, does not materialize them) and this skill has nothing to
 drive. Stop and say so rather than degrading into a plain edit loop — the whole value here is the
-SDD-per-milestone discipline. (`fs-gg-feedback-capture` — the Spec Kit `after_*` hook skill — is
-**not** required: it is frozen and scheduled for removal, gated to the legacy `spec-kit` lane per
-ADR-0056 D3. On the default `sdd` lane it is absent, and the driver no longer invokes it; where a
-legacy tree still carries capture records, `fs-gg-feedback-report` reads them.)
+SDD-per-milestone discipline. Feedback checkpoints are agent-invoked JSONL events owned by
+`fs-gg-feedback-report`; they are not Spec Kit hooks and work on every lifecycle lane.
 
 Preconditions, checked once before the loop:
 
@@ -114,20 +112,26 @@ The parent hands each subagent essentially this, with `<MILESTONE>` and `<ROADMA
 >    plan → tasks → implement → verify/validate → **fs-gg-sdd-ship**. The milestone's nested
 >    checkboxes are your task list; all of them are in scope. Do not stop at "specified" or
 >    "planned" — the milestone is done when it is shipped and green.
-> 3. **Update the roadmap.** In `<ROADMAP>`, flip this milestone's top-level `- [ ]` → `- [x]` and
->    append the one-line progress note (PR number filled in at step 5, merge date, one-clause
+> 3. **Checkpoint development feedback.** Use `fs-gg-feedback-report` checkpoint mode with one
+>    stable cycle id. Capture only material observations at four bounded transitions:
+>    scaffold/onboarding + first build; lifecycle authoring before implementation; first
+>    implementation/test/evidence loop; and verify/ship/PR orchestration. Also checkpoint any
+>    misleading guidance, avoidable retry, workaround, capability gap, or unexpectedly effective
+>    composition when it occurs. Commit `feedback/checkpoints/<cycle-id>.jsonl`.
+> 4. **Update the roadmap.** In `<ROADMAP>`, flip this milestone's top-level `- [ ]` → `- [x]` and
+>    append the one-line progress note (PR number filled in at step 6, merge date, one-clause
 >    outcome, feedback pointer). Commit it on your branch as part of the milestone.
-> 4. **Run `fs-gg-feedback-report`.** It rolls up the milestone's feedback — reading any
->    `fs-gg-feedback-capture` records only where a legacy `spec-kit` tree still has them; the driver
->    itself invokes nothing else (capture is frozen and off the default `sdd` lane, ADR-0056 D3). File
->    whatever findings report surfaces as issues (do not silently drop them) and put their numbers in
->    the roadmap progress note.
-> 5. **Open a PR, review it, merge on green** — the [pnext-item](../pnext-item/SKILL.md) §5–6 way:
+> 5. **Finalize and validate `fs-gg-feedback-report`.** Synthesize the checkpoints and repository
+>    evidence into one schema-v2 cycle report. Search prior reports and open/closed issues before
+>    filing; add recurrence evidence to an existing issue instead of duplicating it. Run the bundled
+>    report validator and fix every error. File new actionable findings at their root owner and put
+>    issue numbers in the roadmap progress note.
+> 6. **Open a PR, review it, merge on green** — the [pnext-item](../pnext-item/SKILL.md) §5–6 way:
 >    open the PR, give it a real review, wait for required checks, and merge once green. A problem you
 >    find on the way you FIX in this PR when that keeps it reviewable, or file at its root cause when
 >    it does not belong here. Backfill the PR number into the roadmap note before you merge (or in an
 >    immediate follow-up commit if the number only exists after open).
-> 6. **Report back** to the parent: the milestone, the merged PR number, the roadmap line you wrote,
+> 7. **Report back** to the parent: the milestone, the merged PR number, the roadmap line you wrote,
 >    and any findings you filed. Then you are done — exit.
 >
 > If the milestone genuinely cannot land from here — it needs a human decision, or it is blocked on
@@ -142,8 +146,10 @@ a detailed report and lands it:
    should be a real report, not a changelog line — cover, per milestone: what shipped, the merged PR,
    the merge timestamp, what the SDD lifecycle produced (spec/plan/evidence pointers), the feedback
    findings and where they were filed, and any deviations from the original roadmap. Close with a
-   roll-up: total milestones, total PRs, open follow-ups the feedback runs generated, and anything a
-   human should look at. Follow the house report style already in `docs/reports/`.
+   roll-up: total milestones, total PRs, open follow-ups, recurring root causes by owner, aggregate
+   avoidable cost, positive patterns worth promoting, development-surface coverage gaps, and
+   anything a human should look at. Aggregate the schema-v2 reports; do not concatenate them.
+   Follow the house report style already in `docs/reports/`.
 2. **Land it as its own PR** — feature branch, open, review, merge on green — the same discipline every
    milestone used. The report is the last thing to merge.
 3. Report completion to the operator: roadmap fully checked, report PR number, follow-ups outstanding.
@@ -168,7 +174,6 @@ a detailed report and lands it:
   authority on stage order, not this file.
 - [pnext-item](../pnext-item/SKILL.md) — the open-PR → review → merge-on-green loop each subagent
   reuses, and the "fix the cause, then take it" discipline for problems found mid-milestone.
-- `fs-gg-feedback-report` — the post-ship feedback roll-up the driver runs (step 4). Its legacy
-  sibling `fs-gg-feedback-capture` is frozen and scheduled for removal (ADR-0056 D3); report reads
-  capture records where a `spec-kit` tree still has them, but the driver invokes only report.
+- `fs-gg-feedback-report` — the lifecycle-independent checkpoint and schema-v2 synthesis skill the
+  driver invokes during each milestone and validates before handoff.
 - ADR-0018 (transient/durable SDD artifact taxonomy) — what the lifecycle leaves behind per milestone.
