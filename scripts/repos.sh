@@ -18,7 +18,8 @@
 #   repos.sh caps [--field id|workflow|script|push|receivers|reason] [--registry <file>]
 #                                                           # the AUDITED capabilities (repos-audit.sh).
 #                                                           # No --field: a TSV row per capability —
-#                                                           # id, workflow, script, push, receivers, reason.
+#                                                           # id, workflow, script, materializer, push,
+#                                                           # receivers, reason.
 #   repos.sh received [--registry <file>]                   # cap<TAB>the repos that receive it, for
 #                                                           # EVERY capability the roster claims —
 #                                                           # including one with no `capabilities:` row.
@@ -244,6 +245,10 @@ cmd_list() {
 #                       reusable workflow to `uses:`, so the workflow detector cannot see it at all —
 #                       which is how `build-config` came to be received by four repos and audited by
 #                       nothing. Detected by a reference to the authority's script.
+#   materializer: <id>  PULL, by a package materializer. The receiver explicitly opts into the
+#                       materialized capability in its FS.GG.Kit receiver project AND its CI reruns
+#                       materialization and fails on drift. `build-config` is the currently supported
+#                       materializer detector.
 #   push:     true      PUSH. The AUTHORITY writes this INTO the receiver (apply-labels.sh reads this
 #                       very roster and pushes the labels in). The receiver wires nothing, so there is
 #                       no receiver-side artifact to detect and the `receives:` row is the INPUT to the
@@ -256,7 +261,7 @@ cmd_list() {
 # licence, and was used as one (#626 concluded the shared tool manifest "propagates to nobody" from
 # `build-config`'s empty rows, and shipped on it; four repos went red within twenty minutes).
 #
-# With no --field this emits a TSV row per capability — the audit needs every column at once, and six
+# With no --field this emits a TSV row per capability — the audit needs every column at once, and seven
 # `--field` passes over the same file is the kind of thing that drifts out of step.
 # What the roster actually CLAIMS: `cap<TAB>the repos that receive it`, one row per capability any
 # repo declares — INCLUDING one the `capabilities:` block has no row for. That inclusion is the whole
@@ -288,8 +293,8 @@ cmd_caps() {
       *)          die "caps: unknown arg '$1'." ;;
     esac
   done
-  case "$field" in ""|id|workflow|script|push|receivers|reason) ;;
-    *) die "caps: --field must be id, workflow, script, push, receivers or reason." ;; esac
+  case "$field" in ""|id|workflow|script|materializer|push|receivers|reason) ;;
+    *) die "caps: --field must be id, workflow, script, materializer, push, receivers or reason." ;; esac
   [ -f "$reg" ] || die "registry not found: $reg"
   # `push` is a BOOLEAN in YAML, so `// ""` cannot blank it — `false // ""` is `false`, not "".
   # Normalize it to the string the shell readers compare against ("true" or empty), or a `push: false`
@@ -301,6 +306,7 @@ cmd_caps() {
     yaml2json "$reg" | jq -r \
       '(.capabilities // [])[]
        | [ .id, (.workflow // ""), (.script // ""),
+           (.materializer // ""),
            (if .push == true then "true" else "" end),
            (.receivers // ""), (.reason // "") ] | @tsv'
   fi
@@ -422,14 +428,14 @@ cmd_validate() {
   # TAB IS IFS-*WHITESPACE* IN BASH, so `IFS=$'\t' read` collapses runs of tabs and DROPS empty
   # fields — a row with an empty `workflow` would shift `script` left into it, and this loop would
   # then report "capability 'build-config' names workflow 'sync-build-config.sh'". The old 4-column
-  # form never had an empty MIDDLE field, so it worked by luck; a 6-column row with three optional
+  # form never had an empty MIDDLE field, so it worked by luck; a 7-column row with four optional
   # detectors has one on almost every line. Re-delimit with a unit separator, which is NOT IFS
   # whitespace and therefore preserves empties. (jq's @tsv escapes any literal tab in a value, so the
   # substitution cannot corrupt a `reason:`.)
-  local cid cwf cscript cpush crecv creason line
+  local cid cwf cscript cmaterializer cpush crecv creason line
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    IFS=$'\x1f' read -r cid cwf cscript cpush crecv creason <<< "${line//$'\t'/$'\x1f'}"
+    IFS=$'\x1f' read -r cid cwf cscript cmaterializer cpush crecv creason <<< "${line//$'\t'/$'\x1f'}"
     [ -n "$cid" ] || continue
     echo "$KNOWN_CAPS" | jq -e --arg c "$cid" 'index($c)' >/dev/null \
       || err "capability '$cid' is not in the receives vocabulary (known: $(echo "$KNOWN_CAPS" | jq -r 'join(", ")'))."
@@ -440,13 +446,14 @@ cmd_validate() {
     # `receives:` word. Two is ambiguous: repos-audit would have to pick one, and a receiver that
     # satisfies the loose one would mask a gap in the strict one.
     local ndet=0
-    [ -n "$cwf" ]     && ndet=$((ndet + 1))
-    [ -n "$cscript" ] && ndet=$((ndet + 1))
-    [ "$cpush" = true ] && ndet=$((ndet + 1))
+    [ -n "$cwf" ]          && ndet=$((ndet + 1))
+    [ -n "$cscript" ]      && ndet=$((ndet + 1))
+    [ -n "$cmaterializer" ] && ndet=$((ndet + 1))
+    [ "$cpush" = true ]    && ndet=$((ndet + 1))
     if [ "$ndet" -eq 0 ]; then
-      err "capability '$cid' declares no detector — set 'workflow:' (a reusable workflow the receiver calls), 'script:' (an authority script the receiver runs from an inlined job), or 'push: true' with a reason (the authority writes it INTO the receiver; nothing is detectable receiver-side). A capability with no detector is audited in NEITHER direction while still being a legal 'receives' word, which is exactly how build-config came to be received by four repos and checked by nothing (#628)."
+      err "capability '$cid' declares no detector — set 'workflow:' (a reusable workflow the receiver calls), 'script:' (an authority script the receiver runs from an inlined job), 'materializer:' (an explicit package-materializer opt-in plus CI drift enforcement), or 'push: true' with a reason (the authority writes it INTO the receiver; nothing is detectable receiver-side). A capability with no detector is audited in NEITHER direction while still being a legal 'receives' word, which is exactly how build-config came to be received by four repos and checked by nothing (#628)."
     elif [ "$ndet" -gt 1 ]; then
-      err "capability '$cid' declares more than one detector (workflow/script/push) — a capability is verified ONE way; two lets a receiver satisfy the loose one and mask a gap in the strict one."
+      err "capability '$cid' declares more than one detector (workflow/script/materializer/push) — a capability is verified ONE way; two lets a receiver satisfy the loose one and mask a gap in the strict one."
     fi
 
     if [ -n "$cwf" ]; then
@@ -479,6 +486,16 @@ cmd_validate() {
         || err "capability '$cid' names script '$cscript', which is not in scripts/ — the audit greps receivers for a reference to it, so a script that does not exist reports every receiver unwired."
     fi
 
+    # Package materializers are compound receiver-side contracts. A receiver counts only when it
+    # explicitly opts into the materialized surface AND CI proves the committed result is current.
+    # Keep the detector vocabulary closed: accepting an unknown id here would make repos-audit sweep
+    # it with no implementation and turn a schema typo into a confident gap for every receiver.
+    case "$cmaterializer" in
+      "") ;;
+      build-config) ;;
+      *) err "capability '$cid' names unsupported materializer detector '$cmaterializer' (supported: build-config)." ;;
+    esac
+
     if [ "$cpush" = true ]; then
       [ -n "$creason" ] \
         || err "capability '$cid' declares 'push: true' with no 'reason' — a capability that is not verifiable at the receiver is the one place this roster can be unfalsifiable, so it must be a reviewed claim, not a blank."
@@ -498,7 +515,7 @@ cmd_validate() {
         ;;
       *) err "capability '$cid' receivers '$crecv' is invalid (omit it, or set it to 'none')." ;;
     esac
-  done < <(echo "$json" | jq -r '(.capabilities // [])[] | [.id, (.workflow // ""), (.script // ""), (if .push == true then "true" else "" end), (.receivers // ""), (.reason // "")] | @tsv')
+  done < <(echo "$json" | jq -r '(.capabilities // [])[] | [.id, (.workflow // ""), (.script // ""), (.materializer // ""), (if .push == true then "true" else "" end), (.receivers // ""), (.reason // "")] | @tsv')
 
   # --- CLOSURE: a capability a repo RECEIVES must be one the audit can detect (#628) ---------------
   #
@@ -522,7 +539,7 @@ cmd_validate() {
         | "\(.) (received by \($r.id))" ]
     | unique | join("; ")')"
   [ -z "$undetectable" ] \
-    || err "capability/ies received but NOT detectable — no 'capabilities:' row, so repos-audit sweeps them in NEITHER direction and the roster's claim about them can never go red: $undetectable. Give each a detector row (workflow:/script:/push:)."
+    || err "capability/ies received but NOT detectable — no 'capabilities:' row, so repos-audit sweeps them in NEITHER direction and the roster's claim about them can never go red: $undetectable. Give each a detector row (workflow:/script:/materializer:/push:)."
 
   # --- kit rows must not collide at the receiver (.github#348) ---
   # Two kit rows that resolve to one destination make the fabric unsatisfiable: coordination-sync

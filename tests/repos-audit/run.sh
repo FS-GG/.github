@@ -61,7 +61,8 @@ YAML
 }
 REG="$WORK/repos.yml"; mkreg "$REG"
 
-# gh stub: `list` (dir) prints filenames from $FIX/<slug>.list; raw file read prints $FIX/<slug>/<file>.
+# gh stub: `list` (dir) prints filenames from $FIX/<slug>.list; workflow raw reads print
+# $FIX/<slug>/<file>; receiver-project reads print $FIX/<slug>/receiver.proj.
 # slug = repo full with '/' -> '__'.
 #
 # The stub FAILS like gh does, because the bug under test (#320) lives entirely in how the audit reads
@@ -71,6 +72,7 @@ REG="$WORK/repos.yml"; mkreg "$REG"
 #   $FIX/<slug>.fail       an HTTP status every call for that repo fails with
 #   $FIX/<slug>.failtimes  countdown, so a transient class recovers on a later attempt (retry test)
 #   $FIX/<slug>.failfile   only *file* reads fail; the directory still lists
+#   $FIX/<slug>.failreceiver only the package receiver-project read fails
 #   $FIX/<slug>.gone       the repo itself 404s — private, renamed, or deleted
 cat > "$STUB/gh" <<'STUB'
 #!/usr/bin/env bash
@@ -78,11 +80,14 @@ set -uo pipefail
 # args: api [-H ...] <path> [--jq ...]
 path=""; n=$#; args=("$@")
 for ((i=1;i<n;i++)); do case "${args[i]}" in repos/*) path="${args[i]}";; esac; done
-# Three request kinds: the repo probe, the workflows dir, and one workflow file.
+# Four request kinds: the repo probe, the workflows dir, one workflow file, and the package receiver
+# project used by the materializer detector.
 case "$path" in
   */contents/.github/workflows)   kind=list; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
   */contents/.github/workflows/*) kind=file; repo="${path#repos/}"; repo="${repo%%/contents/*}"
                                   file="${path##*/contents/.github/workflows/}" ;;
+  */contents/.config/kit/FS.GG.Kit.receiver.proj)
+                                  kind=receiver; repo="${path#repos/}"; repo="${repo%%/contents/*}" ;;
   *)                              kind=repo; repo="${path#repos/}" ;;
 esac
 slug="${repo//\//__}"
@@ -99,7 +104,9 @@ if [ -f "$FIX/$slug.fail" ]; then
   fi
 fi
 # File reads only: the directory still lists, so the audit gets partway in before it loses the API.
-[ "$kind" = file ] && [ -f "$FIX/$slug.failfile" ] && apifail 403
+{ [ "$kind" = file ] || [ "$kind" = receiver ]; } \
+  && [ -f "$FIX/$slug.failfile" ] && apifail 403
+[ "$kind" = receiver ] && [ -f "$FIX/$slug.failreceiver" ] && apifail 403
 
 case "$kind" in
   repo) [ -f "$FIX/$slug.gone" ] && notfound   # invisible to this token: the API says 404, not 403
@@ -108,13 +115,15 @@ case "$kind" in
         cat "$FIX/$slug.list" ;;
   file) [ -f "$FIX/$slug/$file" ] || notfound
         cat "$FIX/$slug/$file" ;;
+  receiver) [ -f "$FIX/$slug/receiver.proj" ] || notfound
+            cat "$FIX/$slug/receiver.proj" ;;
 esac
 STUB
 chmod +x "$STUB/gh"
 
 # Helpers to shape a repo's workflows in the stub. Each clears any injected failure first, so a
 # fixture step never inherits the previous step's outage.
-clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.gone"; }
+clearfail(){ local slug="${1//\//__}"; rm -f "$FIX/$slug.fail" "$FIX/$slug.failtimes" "$FIX/$slug.failfile" "$FIX/$slug.failreceiver" "$FIX/$slug.gone"; }
 # wire_wf <repo> <wf>… — the repo's one workflow file calls each named AUTHORITY reusable workflow.
 # The drift legs (#503) need a repo that calls a workflow it never declared, so which workflows a
 # repo calls has to be a parameter, not the single hardcoded coordination-coherence.yml it was.
@@ -156,6 +165,48 @@ wire_both() { clearfail "$1"; local slug="${1//\//__}"
               mkdir -p "$FIX/$slug"; printf '%s\n%s\n' "coord.yml" "gate.yml" > "$FIX/$slug.list"
               printf 'jobs:\n  j1:\n    uses: FS-GG/.github/.github/workflows/%s@main\n' "$2" > "$FIX/$slug/coord.yml"
               printf 'jobs:\n  drift:\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          repository: FS-GG/.github\n          path: _org-build\n      - run: %s --check\n' "$3" > "$FIX/$slug/gate.yml"; }
+
+# wire_materializer <repo> [opt-in-mode] [enforcement-mode]
+#   opt-in-mode: true (default), missing, no-package, commented
+#   enforcement-mode: true (default), missing, commented, split, swallowed, no-fail
+# The real contract is compound: package provenance + explicit property in the receiver project, and
+# an executable workflow block that reruns FsggKitMaterialize then diffs both managed props.
+wire_materializer() {
+  clearfail "$1"
+  local slug="${1//\//__}" opt="${2:-true}" enforce="${3:-true}"
+  mkdir -p "$FIX/$slug"
+  printf '%s\n' "gate.yml" > "$FIX/$slug.list"
+  case "$enforce" in
+    true)
+      printf 'jobs:\n  build-config-drift:\n    steps:\n      - run: |\n          dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize -v minimal\n          if ! git diff --quiet -- Directory.Build.props Directory.Packages.props; then\n            exit 1\n          fi\n' > "$FIX/$slug/gate.yml" ;;
+    missing)
+      printf 'jobs:\n  build:\n    steps:\n      - run: dotnet test\n' > "$FIX/$slug/gate.yml" ;;
+    commented)
+      printf 'jobs:\n  build:\n    steps:\n      - run: |\n          # dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n          # if ! git diff --quiet -- Directory.Build.props Directory.Packages.props; then\n          echo no-materialize\n' > "$FIX/$slug/gate.yml" ;;
+    split)
+      printf 'jobs:\n  build-config-drift:\n    steps:\n      - run: |\n          dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n      - run: |\n          if ! git diff --quiet -- Directory.Build.props Directory.Packages.props; then\n            exit 1\n          fi\n' > "$FIX/$slug/gate.yml" ;;
+    swallowed)
+      printf 'jobs:\n  build-config-drift:\n    steps:\n      - run: |\n          dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n          git diff --quiet -- Directory.Build.props Directory.Packages.props || true\n' > "$FIX/$slug/gate.yml" ;;
+    no-fail)
+      printf 'jobs:\n  build-config-drift:\n    steps:\n      - run: |\n          dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n          if ! git diff --quiet -- Directory.Build.props Directory.Packages.props; then\n            echo drift-observed-but-not-failed\n          fi\n' > "$FIX/$slug/gate.yml" ;;
+  esac
+  case "$opt" in
+    true)
+      printf '<Project Sdk="Microsoft.NET.Sdk">\n  <PropertyGroup>\n    <FsggKitMaterializeBuildConfig>true</FsggKitMaterializeBuildConfig>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include="FS.GG.Kit" />\n  </ItemGroup>\n</Project>\n' > "$FIX/$slug/receiver.proj" ;;
+    missing)
+      printf '<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="FS.GG.Kit" /></ItemGroup></Project>\n' > "$FIX/$slug/receiver.proj" ;;
+    no-package)
+      printf '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><FsggKitMaterializeBuildConfig>true</FsggKitMaterializeBuildConfig></PropertyGroup></Project>\n' > "$FIX/$slug/receiver.proj" ;;
+    commented)
+      printf '<Project Sdk="Microsoft.NET.Sdk">\n<!--\n  <PropertyGroup><FsggKitMaterializeBuildConfig>true</FsggKitMaterializeBuildConfig></PropertyGroup>\n  <ItemGroup><PackageReference Include="FS.GG.Kit" /></ItemGroup>\n-->\n</Project>\n' > "$FIX/$slug/receiver.proj" ;;
+  esac
+}
+wire_materializer_and_workflow() {
+  wire_materializer "$1" "${3:-true}" "${4:-true}"
+  local slug="${1//\//__}"
+  printf '%s\n%s\n' "gate.yml" "coord.yml" > "$FIX/$slug.list"
+  printf 'jobs:\n  coordination:\n    uses: FS-GG/.github/.github/workflows/%s@main\n' "$2" > "$FIX/$slug/coord.yml"
+}
 unwired(){ clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"; printf '%s\n' "ci.yml" > "$FIX/$slug.list";
            printf 'jobs:\n  build:\n    runs-on: ubuntu-latest\n' > "$FIX/$slug/ci.yml"; }
 noflows(){ clearfail "$1"; local slug="${1//\//__}"; rm -f "$FIX/$slug.list"; rm -rf "${FIX:?}/$slug"; }  # "${FIX:?}": an empty FIX would make this `rm -rf /$slug` (SC2115, #648)
@@ -896,6 +947,117 @@ done
 [ "$big_ok" -eq 1 ] \
   && ok "a >64KiB workflow detects identically, on 5 consecutive runs (no pipefail/SIGPIPE race)" \
   || bad "a large workflow must not flip the verdict" "rc=$rc: $(printf '%s' "$out" | tail -4)"
+
+# ---------------------------------------------------------------------------------------------------
+# (25) THE #1395 REGRESSION: build-config moved from the authority script to FS.GG.Kit.
+#
+# The package-era receiver contract has two independently necessary halves:
+#   1. receiver.proj references FS.GG.Kit AND explicitly enables FsggKitMaterializeBuildConfig;
+#   2. executable CI reruns FsggKitMaterialize AND diffs both committed managed props.
+# Either half alone can pass without protecting the files, so the detector is intentionally compound.
+MATCAP="- { id: build-config, materializer: build-config, reason: package materializer plus CI drift enforcement }"
+MATREG="$WORK/materializer.yml"
+mkreg2 "$MATREG" "labels, build-config" "labels, build-config" "$MATCAP"
+
+wire_materializer FS-GG/FS.GG.SDD
+wire_materializer FS-GG/FS.GG.Rendering
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
+  && ok "materializer: package provenance + explicit opt-in + CI materialize/diff -> wired" \
+  || bad "the current package build-config contract must audit green" "rc=$rc: $out"
+
+# The manifest read is part of the subject. A 403 cannot be rendered as "missing opt-in" (a definite
+# gap) or as "not adopted" (a reverse-direction clean); it is the retryable no-verdict.
+wire_materializer FS-GG/FS.GG.SDD
+wire_materializer FS-GG/FS.GG.Rendering
+: > "$FIX/FS-GG__FS.GG.Rendering.failreceiver"
+out="$(PATH="$STUB:$PATH" REPOS_AUDIT_TRIES=1 bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q 'reading .config/kit/FS.GG.Kit.receiver.proj failed' \
+    && printf '%s' "$out" | grep -q '1 undetermined'; } \
+  && ok "materializer: unreadable receiver project -> retryable no-verdict, never a fabricated gap" \
+  || bad "an unreadable package opt-in is not an answer" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.SDD
+wire_materializer FS-GG/FS.GG.Rendering missing true
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
+    && printf '%s' "$out" | grep -q 'FS.GG.Kit package provenance plus explicit'; } \
+  && ok "materializer: declared receiver missing explicit opt-in -> gap" \
+  || bad "missing materializer opt-in must not pass" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.Rendering no-package true
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'FS.GG.Kit package provenance plus explicit'; } \
+  && ok "materializer: true property without FS.GG.Kit package provenance -> gap" \
+  || bad "a bare property must not impersonate package adoption" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.Rendering true missing
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement' \
+    && ! printf '%s' "$out" | grep -q 'missing: FS.GG.Kit package provenance'; } \
+  && ok "materializer: declared receiver missing CI enforcement -> gap, exact half named" \
+  || bad "missing CI enforcement must not pass or blame the present opt-in" "rc=$rc: $out"
+
+# Workflow-wide co-occurrence is not an execution relationship. Separate run blocks (and therefore
+# potentially separate jobs/clean checkouts) cannot prove the diff examines what materialization wrote.
+wire_materializer FS-GG/FS.GG.Rendering true split
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
+  && ok "materializer: split run blocks cannot assemble a false enforcement contract" \
+  || bad "materialize and diff in different run blocks must not pass" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.Rendering true swallowed
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
+  && ok "materializer: a swallowed diff is observation, not enforcement" \
+  || bad "git diff followed by || true must not pass" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.Rendering true no-fail
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
+  && ok "materializer: a diff guard without a non-zero exit does not enforce drift" \
+  || bad "a non-failing diff guard must not pass" "rc=$rc: $out"
+
+DRIFTMAT="$WORK/driftmaterializer.yml"
+mkreg2 "$DRIFTMAT" "labels, build-config" "labels" "$MATCAP"
+wire_materializer FS-GG/FS.GG.SDD
+wire_materializer FS-GG/FS.GG.Rendering
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTMAT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering adopts .* does not declare 'receives: build-config'" \
+    && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
+  && ok "materializer: fully wired but unrostered adopter -> drift" \
+  || bad "reverse-direction materializer adoption must remain visible" "rc=$rc: $out"
+
+# Incomplete unrostered adoption is drift too: either real half is an attempted capability adoption,
+# and leaving it unrostered would make the eventual second half invisible to the fabric.
+wire_materializer FS-GG/FS.GG.Rendering true missing
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTMAT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
+  && ok "materializer: unrostered opt-in without enforcement is still drift" \
+  || bad "partial unrostered adoption must fail loud" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.SDD
+wire_materializer FS-GG/FS.GG.Rendering commented commented
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'build-config'" \
+    && printf '%s' "$out" | grep -q 'package provenance plus explicit' \
+    && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize'; } \
+  && ok "materializer: XML/YAML comments are prose, not opt-in or enforcement" \
+  || bad "non-code mentions must not satisfy either materializer half" "rc=$rc: $out"
+
+# Multiple detector rows prove the materializer id is stored per capability, not read from the final
+# parser-loop local. Put build-config FIRST and a workflow detector LAST; Rendering has the package
+# half but not CI, so the exact missing half must still be diagnosed.
+MULTIMAT="$WORK/multimaterializer.yml"
+mkreg2 "$MULTIMAT" "labels, build-config, coordination-kit" "labels, build-config, coordination-kit" \
+  "$MATCAP" "- { id: coordination-kit, workflow: coordination-coherence.yml }"
+wire_materializer_and_workflow FS-GG/FS.GG.SDD coordination-coherence.yml
+wire_materializer_and_workflow FS-GG/FS.GG.Rendering coordination-coherence.yml true missing
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MULTIMAT" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement' \
+    && ! printf '%s' "$out" | grep -q 'missing: FS.GG.Kit package provenance'; } \
+  && ok "materializer: detector id is capability-local when a later detector row is different" \
+  || bad "materializer state leaked from the capability parse loop" "rc=$rc: $out"
 
 echo "repos-audit fixture — $((pass + failcount)) assertion(s): $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || { echo "::error::repos-audit fixture FAILED"; exit 1; }
