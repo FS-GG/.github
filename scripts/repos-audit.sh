@@ -200,6 +200,71 @@ strip_xml_comments() {
     }'
 }
 
+# Does one executable YAML literal `run: |` block enforce the package-era build-config contract?
+#
+# The block boundary is load-bearing. A materialize command in one step/job and a diff in another can
+# run in different clean checkouts, so finding both anywhere in one workflow file proves nothing.
+# The failure path is load-bearing too: `git diff ... || true`, or an `if ! git diff; then` branch that
+# only prints, observes drift and deliberately lets it pass. The four real receivers all use the
+# strict shape this recognizes: materialize, then `if ! git diff --quiet -- <both props>; then`, then
+# a non-zero `exit` inside that guard.
+workflow_enforces_build_config() {
+  awk '
+    function reset_block() {
+      materialized = 0
+      in_diff_guard = 0
+      diff_guard_fails = 0
+    }
+    function finish_block() {
+      if (materialized && diff_guard_fails) found = 1
+      reset_block()
+    }
+    function indentation(s,    n) {
+      match(s, /[^ ]/)
+      n = RSTART
+      return n == 0 ? length(s) : n - 1
+    }
+    BEGIN {
+      in_run = 0
+      found = 0
+      reset_block()
+    }
+    /^[ ]*(-[ ]+)?run:[ ]*[|][-+]?[ ]*$/ {
+      if (in_run) finish_block()
+      in_run = 1
+      run_indent = indentation($0)
+      next
+    }
+    {
+      if (!in_run) next
+      if ($0 !~ /^[ ]*$/ && indentation($0) <= run_indent) {
+        finish_block()
+        in_run = 0
+        next
+      }
+
+      line = $0
+      if (line ~ /^[[:space:]]*#/) next
+      if (line ~ /^[[:space:]]*dotnet[[:space:]]+build[[:space:]].*-t:FsggKitMaterialize([[:space:]]|$)/) {
+        materialized = 1
+      }
+      if (materialized && line ~ /^[[:space:]]*if[[:space:]]+![[:space:]]+git[[:space:]]+diff[[:space:]]+--quiet[[:space:]]+--[[:space:]]+Directory\.Build\.props[[:space:]]+Directory\.Packages\.props[[:space:]]*;[[:space:]]*then[[:space:]]*$/) {
+        in_diff_guard = 1
+        next
+      }
+      if (in_diff_guard && line ~ /^[[:space:]]*exit[[:space:]]+[1-9][0-9]*([[:space:];]|$)/) {
+        diff_guard_fails = 1
+      }
+      if (in_diff_guard && line ~ /^[[:space:]]*fi([[:space:];]|$)/) {
+        in_diff_guard = 0
+      }
+    }
+    END {
+      if (in_run) finish_block()
+      exit(found ? 0 : 1)
+    }'
+}
+
 # Which of the AUTHORITY's reusable workflows does <repo> call? Prints one filename per line (the set
 # may legitimately be empty). 0 = read it, 2 = could not determine (reason in $CALLS_ERR_FILE).
 #
@@ -336,10 +401,10 @@ repo_calls() {
 
       # Package-delivered build config has TWO receiver-side halves, and both must live:
       # materialization alone silently rewrites committed files, while a diff step without the opt-in
-      # materializes no build config and passes vacuously. Match executable command lines only; a
-      # whole-line YAML/shell comment naming either command is prose, not enforcement.
-      if grep -qE '^[[:space:]]*dotnet[[:space:]]+build[[:space:]].*-t:FsggKitMaterialize([[:space:]]|$)' <<< "$body" \
-          && grep -qE '^[[:space:]]*(if[[:space:]]+![[:space:]]+)?git[[:space:]]+diff[[:space:]]+--quiet[[:space:]]+--[[:space:]]+Directory\.Build\.props[[:space:]]+Directory\.Packages\.props([[:space:];]|$)' <<< "$body"; then
+      # materializes no build config and passes vacuously. One run block must carry the regeneration,
+      # the exact two-file diff, and a non-zero exit in that diff guard; workflow-wide co-occurrence
+      # or a swallowed/non-failing diff is not enforcement.
+      if workflow_enforces_build_config <<< "$text"; then
         build_config_enforced=1
       fi
     fi

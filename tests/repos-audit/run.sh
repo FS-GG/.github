@@ -168,7 +168,7 @@ wire_both() { clearfail "$1"; local slug="${1//\//__}"
 
 # wire_materializer <repo> [opt-in-mode] [enforcement-mode]
 #   opt-in-mode: true (default), missing, no-package, commented
-#   enforcement-mode: true (default), missing, commented
+#   enforcement-mode: true (default), missing, commented, split, swallowed, no-fail
 # The real contract is compound: package provenance + explicit property in the receiver project, and
 # an executable workflow block that reruns FsggKitMaterialize then diffs both managed props.
 wire_materializer() {
@@ -183,6 +183,12 @@ wire_materializer() {
       printf 'jobs:\n  build:\n    steps:\n      - run: dotnet test\n' > "$FIX/$slug/gate.yml" ;;
     commented)
       printf 'jobs:\n  build:\n    steps:\n      - run: |\n          # dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n          # if ! git diff --quiet -- Directory.Build.props Directory.Packages.props; then\n          echo no-materialize\n' > "$FIX/$slug/gate.yml" ;;
+    split)
+      printf 'jobs:\n  build-config-drift:\n    steps:\n      - run: |\n          dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n      - run: |\n          if ! git diff --quiet -- Directory.Build.props Directory.Packages.props; then\n            exit 1\n          fi\n' > "$FIX/$slug/gate.yml" ;;
+    swallowed)
+      printf 'jobs:\n  build-config-drift:\n    steps:\n      - run: |\n          dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n          git diff --quiet -- Directory.Build.props Directory.Packages.props || true\n' > "$FIX/$slug/gate.yml" ;;
+    no-fail)
+      printf 'jobs:\n  build-config-drift:\n    steps:\n      - run: |\n          dotnet build .config/kit/FS.GG.Kit.receiver.proj -t:FsggKitMaterialize\n          if ! git diff --quiet -- Directory.Build.props Directory.Packages.props; then\n            echo drift-observed-but-not-failed\n          fi\n' > "$FIX/$slug/gate.yml" ;;
   esac
   case "$opt" in
     true)
@@ -991,6 +997,26 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_
     && ! printf '%s' "$out" | grep -q 'missing: FS.GG.Kit package provenance'; } \
   && ok "materializer: declared receiver missing CI enforcement -> gap, exact half named" \
   || bad "missing CI enforcement must not pass or blame the present opt-in" "rc=$rc: $out"
+
+# Workflow-wide co-occurrence is not an execution relationship. Separate run blocks (and therefore
+# potentially separate jobs/clean checkouts) cannot prove the diff examines what materialization wrote.
+wire_materializer FS-GG/FS.GG.Rendering true split
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
+  && ok "materializer: split run blocks cannot assemble a false enforcement contract" \
+  || bad "materialize and diff in different run blocks must not pass" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.Rendering true swallowed
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
+  && ok "materializer: a swallowed diff is observation, not enforcement" \
+  || bad "git diff followed by || true must not pass" "rc=$rc: $out"
+
+wire_materializer FS-GG/FS.GG.Rendering true no-fail
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MATREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'CI FsggKitMaterialize + managed-props diff enforcement'; } \
+  && ok "materializer: a diff guard without a non-zero exit does not enforce drift" \
+  || bad "a non-failing diff guard must not pass" "rc=$rc: $out"
 
 DRIFTMAT="$WORK/driftmaterializer.yml"
 mkreg2 "$DRIFTMAT" "labels, build-config" "labels" "$MATCAP"
