@@ -30,6 +30,15 @@ FS.GG.Rendering ──(depends on no FS-GG component; never depends on Governanc
 
 ## Versioned contracts
 
+Current release amendments (2026-07-23): `governance-reference-gate-set` is source/package
+**1.4.0**, published from Governance PR #305 (merge `e29b057`, release run `29977440772`);
+the minor adds typed controlled-directory imports and fail-closed tree verification.
+`fs-gg-ui-template` is framework pin **0.18.6** / template package **0.18.7**, a
+template-only `--view-image` explicit-dimensions and safe-allocation release from Rendering
+PR #1032 (merge `4ea58be5`, release run `29977189289`). Both releases were verified on the
+org feed and nuget.org before the registry flip. The detailed historical cells below retain
+the prior-release narrative; the registry and generated version regions are authoritative.
+
 | Contract | Version | Owner | Surface | Consumers |
 |---|---|---|---|---|
 | `scaffold-provider` | 1.1.0 | SDD | `.fsgg/providers.yml` + invocation protocol (canonical product-name param `name`, ADR-0005). **1.1.0** (2026-07-05, additive; SDD feature 080, [Rendering#142](https://github.com/FS-GG/FS.GG.Rendering/issues/142)): optional **`identifierParameter`** sink — a descriptor can name the param that receives an SDD-derived valid-F# identifier, so a product whose name is an illegal F# identifier (hyphenated `Roquelike-DungeonCrawler`) compiles; `None` ⇒ identical to 1.0.0. Rendering declares `identifierParameter: rootNamespace`. Released in `FS.GG.UI.Template 0.1.66-preview.1` (2026-07-05) — see coherence `scaffold-provider-identifier`. | Templates, Rendering |
@@ -82,8 +91,8 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-capabilities` | FS.GG.Governance | `2` | — |
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
-| `governance-reference-gate-set` | FS.GG.Governance | `1.3.0` | `1.3.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.18.6` | `0.18.6` |
+| `governance-reference-gate-set` | FS.GG.Governance | `1.4.0` | `1.4.0` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.18.6` | `0.18.7` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |
