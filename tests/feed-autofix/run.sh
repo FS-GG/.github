@@ -502,6 +502,93 @@ else
   bad "coherent prose: not flagged" "$out"
 fi
 
+# #1385's exact blind spot: none of these heads says ADVANCED, but each explicitly asserts the prior
+# value. The old detector returned an empty stale_prose list and made the standing PR falsely claim
+# every comment agreed. All three contradictions must be surfaced, while the prose remains untouched.
+cat > "$WORK/r7c.yml" <<'YAML'
+contracts:
+  - id: fsgg-contracts
+    version: "2.0.1"
+    package-version: "2.0.1"
+  - id: fs-gg-ui-template
+    version: "0.10.0"   # FRAMEWORK 0.10.0 (human release judgement). PRIOR — 0.9.2 history.
+    package-version: "0.10.0"   # FRAMEWORK 0.10.0: all members live. PRIOR — 0.9.2 history.
+    package-tag: "fs-gg-ui-template/v0.10.0"   # FRAMEWORK tag triple fs-gg-ui/v0.10.0 -> fs-gg-ui-template/v0.10.0 -> v0.10.0, all at oldsha. PRIOR — older history.
+  - id: game-sim-core
+    version: "0.5.0"
+    package-version: "0.5.0"
+YAML
+before="$(cat "$WORK/r7c.yml")"
+out="$(python3 "$BOT" "$WORK/r7c.yml" --fixture "$WORK/f7.json" --write --json 2>&1)"; rc=$?
+if grep -q '`version` is now 0.11.0, but its current-history head still names 0.10.0' <<<"$out" \
+   && grep -q '`package-version` is now 0.11.0, but its current-history head still names 0.10.0' <<<"$out" \
+   && grep -q '`package-tag` is now fs-gg-ui-template/v0.11.0, but its current-history tag chain still names fs-gg-ui-template/v0.10.0' <<<"$out"; then
+  ok "stale prose: framework heads and tag chains are reported without ADVANCED"
+else
+  bad "stale prose: framework heads and tag chains are reported without ADVANCED" "rc=$rc: $out"
+fi
+if grep -q 'FRAMEWORK 0.10.0 (human release judgement)' "$WORK/r7c.yml" \
+   && grep -q 'FRAMEWORK tag triple fs-gg-ui/v0.10.0' "$WORK/r7c.yml"; then
+  ok "stale prose: non-ADVANCED judgement remains human-authored"
+else
+  bad "stale prose: non-ADVANCED judgement remains human-authored" \
+      "before:
+$before
+after:
+$(cat "$WORK/r7c.yml")"
+fi
+
+# The prose recognizer shares the accepted NuGet grammar and matches explicit provenance forms, not
+# arbitrary dotted numbers. These are direct unit legs because the subject is the recognizer itself;
+# routing through feed/tag classification would add unrelated failure modes and weaken the diagnosis.
+if python3 - "$BOT" <<'PY'
+import importlib.machinery, importlib.util, sys
+
+loader = importlib.machinery.SourceFileLoader("feed_autofix_fixture", sys.argv[1])
+spec = importlib.util.spec_from_loader(loader.name, loader)
+mod = importlib.util.module_from_spec(spec)
+loader.exec_module(mod)
+
+def row(field, value, comment):
+    return f'contracts:\n  - id: fs-gg-ui-template\n    {field}: "{value}" # {comment}\n'
+
+cases = [
+    # A one-segment NuGet version is valid and a stale explicit head must not pass unseen.
+    (row("version", "2", "PUBLISHED 1. PRIOR — history."), "version", "2", True),
+    # Build metadata is valid and must be consumed as part of the literal, not truncated at 1.2.3.
+    (row("version", "1.2.3+build.7", "FRAMEWORK 1.2.3+build.7. PRIOR — history."),
+     "version", "1.2.3+build.7", False),
+    # An unrelated runtime version before the provenance form is not the annotated package value.
+    (row("version", "1.2.3", "Requires .NET 8.0; FRAMEWORK 1.2.3. PRIOR — history."),
+     "version", "1.2.3", False),
+    # The same full grammar applies inside the template tag chain.
+    (row("package-tag", "fs-gg-ui-template/v1.2.3+build.7",
+         "FRAMEWORK tag triple fs-gg-ui/v1.2.3+build.7 -> fs-gg-ui-template/v1.2.3+build.7 -> v1.2.3+build.7. PRIOR — history."),
+     "package-tag", "fs-gg-ui-template/v1.2.3+build.7", False),
+    (row("package-tag", "fs-gg-ui-template/v2",
+         "FRAMEWORK tag triple fs-gg-ui/v1 -> fs-gg-ui-template/v1 -> v1. PRIOR — history."),
+     "package-tag", "fs-gg-ui-template/v2", True),
+    # ADVANCED uses the same parser: metadata is neither truncated nor a way around stale detection.
+    (row("version", "1.2.5+build.8",
+         "FRAMEWORK pin — ADVANCED 1.2.3+build.6 -> 1.2.4+build.7. PRIOR — history."),
+     "version", "1.2.5+build.8", True),
+    (row("version", "1.2.4+build.7",
+         "FRAMEWORK pin — ADVANCED 1.2.3+build.6 -> 1.2.4+build.7. PRIOR — history."),
+     "version", "1.2.4+build.7", False),
+]
+
+for text, field, new, want_stale in cases:
+    got = mod.stale_prose(text, "fs-gg-ui-template", field, new)
+    if bool(got) != want_stale:
+        raise SystemExit(f"{field} {new}: stale={got!r}, want_stale={want_stale}")
+PY
+then
+  ok "stale prose: shared NuGet grammar and anchored provenance forms"
+else
+  bad "stale prose: shared NuGet grammar and anchored provenance forms" \
+      "one-segment, +metadata, .NET-prefix, or tag-chain case failed"
+fi
+
 # --------------------------------------------------------------------------------------------
 # 8. FAIL CLOSED. "Nothing to check" and "checked, and it's fine" must not share an exit code.
 # --------------------------------------------------------------------------------------------
@@ -792,14 +879,21 @@ else
 fi
 
 # GREEN half — regenerate from the flipped registry and assert the required `projection` gate AND
-# `generate-projections --check` both go green. Needs the engine (the CI fixture job builds it); a
-# local run without one SKIPs, leaving the always-on RED half as the guard. Runs in a throwaway copy
-# of the tracked tree so it never touches the real checkout.
+# `generate-projections --check` both go green. Then exercise the exact staging helper used by the bot
+# and prove a FRAMEWORK advance leaves no generated projection unstaged — including the two component
+# inventory consumers added after the old three-path workflow list (#1385). Needs the engine (the CI
+# fixture job builds it); a local run without one SKIPS, leaving the always-on RED half as the guard.
+# Runs in a throwaway copy of the tracked tree so it never touches the real checkout.
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
 if [ -x "$ENGINE" ]; then
   TREE="$WORK/closure-tree"
   mkdir -p "$TREE"
   git -C "$ROOT" archive HEAD | tar -x -C "$TREE"
+  git -C "$TREE" init -q
+  git -C "$TREE" config user.name fixture
+  git -C "$TREE" config user.email fixture@example.invalid
+  git -C "$TREE" add -A
+  git -C "$TREE" commit -qm baseline
   cp "$FLIPPED" "$TREE/registry/dependencies.yml"
   if FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$TREE/scripts/generate-projections" >/dev/null 2>&1 \
      && python3 "$CHECKPROJ" "$TREE/registry/dependencies.yml" "$TREE/docs/registry/compatibility.md" >/dev/null 2>&1 \
@@ -808,6 +902,23 @@ if [ -x "$ENGINE" ]; then
   else
     bad "closure: regeneration did not green the gates" \
         "$(python3 "$CHECKPROJ" "$TREE/registry/dependencies.yml" "$TREE/docs/registry/compatibility.md" 2>&1)"
+  fi
+
+  if bash "$TREE/scripts/stage-generated-projections" \
+     && git -C "$TREE" diff --quiet \
+     && staged="$(git -C "$TREE" diff --cached --name-only)" \
+     && grep -qx 'registry/dependencies.yml' <<<"$staged" \
+     && grep -qx 'docs/architecture.md' <<<"$staged" \
+     && grep -qx 'docs/registry/compatibility.md' <<<"$staged" \
+     && grep -qx 'profile/README.md' <<<"$staged" \
+     && grep -qx 'docs/consumer/versioning-and-updates.md' <<<"$staged"; then
+    ok "closure: bot staging includes EVERY projection changed by a framework advance"
+  else
+    bad "closure: bot staging left a generated projection unstaged or omitted" \
+        "unstaged:
+$(git -C "$TREE" diff --name-only)
+staged:
+$(git -C "$TREE" diff --cached --name-only)"
   fi
 else
   printf '  SKIP closure GREEN half — no engine at %s (the CI fixture job builds it)\n' "$ENGINE"

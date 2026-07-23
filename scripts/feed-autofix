@@ -437,12 +437,65 @@ def rewrite_field(text: str, contract_id: str, field: str, new: str) -> tuple[st
 # would be reported as rot. The fixture caught it: a flag that fires on the happy path is the
 # cry-wolf shape `skill-registry-autofix`'s header refuses, and it would have buried the ONE real
 # finding this function exists to surface under two false ones.
-_VER = r"\d+(?:\.\d+){0,3}(?:-[0-9A-Za-z.-]*[0-9A-Za-z])?"
-_ADVANCED_RE = re.compile(rf"ADVANCED\s+(?P<from>{_VER})\s*->\s*(?P<to>{_VER})")
+# Not every current-history head uses the word ADVANCED. The live #1385 shape starts `FRAMEWORK
+# 0.18.5`, and the tag field starts with a three-tag chain. Recognize only explicit provenance forms,
+# not the first version-looking token anywhere: `Requires .NET 8.0; FRAMEWORK 1.2.3` annotates 1.2.3,
+# not 8.0. The literal grammar is imported from the feed comparator so one-segment versions and build
+# metadata cannot drift between "accepted value" and "audited prose" again. Capture a token here,
+# then ask `parse_version` whether it is a NuGet version; duplicating that parser in a prose regex is
+# the narrowing that caused the bug.
+_VERSION_TOKEN = r"[0-9A-Za-z][0-9A-Za-z.+-]*"
+_ADVANCED_RE = re.compile(
+    rf"\bADVANCED\s+(?P<from>{_VERSION_TOKEN})\s*->\s*(?P<to>{_VERSION_TOKEN})",
+    re.I,
+)
+_NAMED_HEAD_VERSION_RE = re.compile(
+    rf"\b(?:FRAMEWORK|TEMPLATE-ONLY|PUBLISHED|SOURCE\s+SemVer)\s+"
+    rf"(?P<version>{_VERSION_TOKEN})",
+    re.I,
+)
+_LEADING_HEAD_VERSION_RE = re.compile(
+    rf"^\s*(?:→\s*)?(?P<version>{_VERSION_TOKEN})"
+)
+_TEMPLATE_TAG_RE = re.compile(
+    rf"fs-gg-ui-template/v(?P<version>{_VERSION_TOKEN})"
+)
+
+
+def _prose_version(match: re.Match[str], expected: str, group: str = "version") -> str | None:
+    """Resolve one captured prose token through the authoritative NuGet parser.
+
+    A sentence-ending full stop is ambiguous because NuGet build metadata itself may contain dots.
+    Prefer an exact match to the expected field value, then accept the first parseable spelling. This
+    keeps `1.2.3+build.7.` coherent with expected `1.2.3+build.7`, while still detecting `PUBLISHED 1.`
+    against expected `2`.
+    """
+    raw = match.group(group)
+    candidates = list(dict.fromkeys((raw, raw.rstrip(".,;:"))))
+    for candidate in candidates:
+        if candidate == expected:
+            try:
+                parse_version(candidate)
+                return candidate
+            except GateError:
+                pass
+    for candidate in candidates:
+        try:
+            parse_version(candidate)
+            return candidate
+        except GateError:
+            pass
+    return None
 
 
 def stale_prose(text: str, contract_id: str, field: str, new: str) -> str | None:
-    """Return a description if `field`'s comment still describes a flip other than `-> new`."""
+    """Return a description when the current-history head explicitly names another value.
+
+    `ADVANCED from -> to` remains the strongest form. The fallback covers the equally explicit
+    `FRAMEWORK 0.18.5` and template-tag-chain forms that #1385 proved the old recognizer could not see.
+    A head with no dotted version assertion is left alone: the bot reports contradictions, it does
+    not require authored prose to use one vocabulary.
+    """
     start = re.search(rf"^\s*-\s+id:\s*{re.escape(contract_id)}\s*$", text, re.M)
     if not start:
         return None
@@ -456,13 +509,40 @@ def stale_prose(text: str, contract_id: str, field: str, new: str) -> str | None
     # archive as rot.
     head = m.group("comment").split("PRIOR")[0]
     adv = _ADVANCED_RE.search(head)
-    if not adv:
+    if adv:
+        described_to = _prose_version(adv, new, "to")
+        described_from = _prose_version(adv, "", "from")
+        if not described_to or not described_from:
+            return None
+        if described_to == new:
+            return None
+        return (
+            f"`{field}` is now {new}, but its comment still describes "
+            f"\"ADVANCED {described_from} -> {described_to}\""
+        )
+
+    if field == "package-tag":
+        tag = _TEMPLATE_TAG_RE.search(head)
+        if not tag:
+            return None
+        expected_version = new.split("/v", 1)[1] if "/v" in new else new
+        version = _prose_version(tag, expected_version)
+        if not version:
+            return None
+        described = f"fs-gg-ui-template/v{version}"
+        if described == new:
+            return None
+        return f"`{field}` is now {new}, but its current-history tag chain still names {described}"
+
+    stated = _NAMED_HEAD_VERSION_RE.search(head) or _LEADING_HEAD_VERSION_RE.search(head)
+    if not stated:
         return None
-    if adv.group("to") == new:
+    version = _prose_version(stated, new)
+    if not version or version == new:
         return None
     return (
-        f"`{field}` is now {new}, but its comment still describes "
-        f"\"ADVANCED {adv.group('from')} -> {adv.group('to')}\""
+        f"`{field}` is now {new}, but its current-history head still names "
+        f"{version}"
     )
 
 

@@ -70,6 +70,7 @@ on:
   pull_request:
     paths:
       - "scripts/feed-autofix"
+      - "scripts/stage-generated-projections"
       - "scripts/fsgg_feed.py"
       - "scripts/registry_packages.py"
       - "tests/feed-autofix/**"
@@ -257,9 +258,10 @@ jobs:
 
       # --- REGENERATE the projections the flip makes stale (#1081 option 2). feed-autofix writes
       # registry/dependencies.yml and nothing else — correctly; #748 forbids it prose. But the registry
-      # feeds two GENERATED projections: docs/architecture.md's `fsgg-versions` region and
-      # docs/registry/compatibility.md's `fsgg-contract-versions` region (the machine-owned half split
-      # out by #1125). A flip that leaves them stale is red on the REQUIRED `projection` gate and on
+      # feeds four GENERATED projection files: docs/architecture.md's `fsgg-versions` region,
+      # docs/registry/compatibility.md's `fsgg-contract-versions` region, and the component inventory
+      # in both profile/README.md and docs/consumer/versioning-and-updates.md. A flip that leaves any
+      # stale is red on the REQUIRED `projection` gate and on
       # `projections` — which is why every flip this bot opened before #1125 could never merge (#1081).
       # Regenerating is mechanical (the literal is machine-owned now), so the bot does it; the authored
       # prose it must not touch is not regenerated and stays exactly as the human left it.
@@ -295,11 +297,12 @@ jobs:
           git config user.name  "${APP_SLUG}[bot]"
           git config user.email "297630107+${APP_SLUG}[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
-          # The registry flip AND the projections regenerated from it (#1081 option 2) — one atomic
+          # The registry flip AND every path the generator says it owns (#1081/#1385) — one atomic
           # commit, so the standing PR is structurally green on the REQUIRED `projection` gate. The
-          # two docs are named explicitly rather than `git add -A` so a stray build artifact can never
-          # ride along; a registry flip regenerates only these two registry-sourced regions.
-          git add registry/dependencies.yml docs/architecture.md docs/registry/compatibility.md
+          # helper derives the complete target set from `generate-projections --list`; there is no
+          # second hand-kept list for a newly-added projection to fall out of. It still stages only the
+          # registry source plus declared generator outputs, never unrelated build artifacts.
+          bash scripts/stage-generated-projections
           # No closing keyword anywhere near an issue number: GitHub does not parse "not", and a
           # squash merge closes from the COMMIT MESSAGE, where backticks are ordinary characters
           # (#683). This bot's PR must never close #748 — it is the thing #748 asks to EXIST.
