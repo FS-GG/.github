@@ -12,26 +12,31 @@
 # scaffold's `scaffold-provenance.json` effectiveParameters. Absent ⇒ `always`.
 #
 # SOURCES OF THIS SNAPSHOT (.github#168, epic #163):
-#   * PRODUCT skills (21) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
-#     (2026-07-06, epic #213/#218): 17 rows owned by `fs-gg-rendering` (reconciled from
-#     FS.GG.Rendering's `template/skill-manifest/skill-manifest.json`) + 4 GAME rows now owned by
-#     `fs-gg-game` (reconciled from FS.GG.Game's `template/skill-manifest/skill-manifest.json`,
-#     merged FS.GG.Game#4). The four migrated rows — `fs-gg-game-core`/`fs-gg-audio`/
-#     `fs-gg-persistence`/`fs-gg-model-swap` (all `profile in [game, sample-pack]`) — moved
+#   * PRODUCT skills (28) — SPLIT across TWO producers after the ADR-0022 P4 skill-ownership migration
+#     (2026-07-06, epic #213/#218): 18 rows owned by `fs-gg-rendering` (reconciled from
+#     FS.GG.Rendering's `template/skill-manifest/skill-manifest.json`) + 10 rows owned by
+#     `fs-gg-game` (reconciled from FS.GG.Game's `template/skill-manifest/skill-manifest.json`).
+#     The two current manifests carry 18 and 14 entries respectively, with four shared ids
+#     (`fs-gg-collision`/`fs-gg-grids`/`fs-gg-line-drawing`/`fs-gg-visibility`) counted once under
+#     their authoritative Rendering owner: 28 unique product rows. The four
+#     migrated rows — `fs-gg-game-core`/`fs-gg-audio`/`fs-gg-persistence`/`fs-gg-model-swap` — moved
 #     BYTE-IDENTICALLY; FS.GG.Rendering STILL ships frozen copies from `--profile game` (two-copies
 #     cost, ADR-0022 §6, retired at P6). The migration also corrected two digests that had drifted from
 #     Rendering's live manifest (Feature 250 / 0.1.67 body changes): `fs-gg-game-core` 87b9c55c…→16fd32b7…
-#     and `fs-gg-model-swap` 68edbe46…→a48df195…. registry = manifest = bytes for all 21 rows.
+#     and `fs-gg-model-swap` 68edbe46…→a48df195…. Registry = manifest = bytes for the current set.
+#     2026-07-23 accepted-removal reconcile (.github#1393, Rendering#951/PR #952): retired
+#     `fs-gg-feedback-capture` after Rendering removed its source and manifest entry under ADR-0056 D3.
+#     `fs-gg-feedback-report` remains an `always` row, and the `workRoadmap` driver remains `always`
+#     and report-only; neither depends on the retired capture skill.
 #     2026-07-10 completeness reconcile (.github#298, epic #266): the product set grew 20→21 —
 #     `fs-gg-feedback-report` was vendored into Rendering on 2026-07-10 (Rendering#248, PR #251) and
 #     was never flipped here. It is the FIRST row the `declared-completeness` arm caught after that
 #     arm shipped (.github#289/PR #293, twelve minutes later) — the assertion working on live drift
-#     rather than on the backlog it was written for. Like its sibling `fs-gg-feedback-capture` it is
-#     `feedback`-gated and supplied from a `template/<feature>/skill/` path rather than the usual
-#     `template/product-skills/<id>/`; unlike it, the predicate carries NO `lifecycle` clause, so the
-#     report skill materializes on every lane whose `feedback == true`. Reconciled verbatim from
+#     rather than on the backlog it was written for. It is supplied from a
+#     `template/<feature>/skill/` path rather than the usual `template/product-skills/<id>/`, and its
+#     predicate is now `always`, so the report skill materializes on every lane. Reconciled verbatim from
 #     Rendering's producer manifest by `--write` (which appends it, per .github#289), then RE-HOMED
-#     from the appended tail into the product block beside its sibling — as `--write`'s own emitted
+#     from the appended tail into the product block — as `--write`'s own emitted
 #     comment instructs. The row's bytes are the tool's; only its position and annotation are ours.
 #     2026-07-10 completeness reconcile (.github#289, epic #266): the product set grew 16→20 —
 #     `fs-gg-collision`/`fs-gg-grids`/`fs-gg-line-drawing`/`fs-gg-visibility` had shipped on
@@ -92,7 +97,7 @@
 # ABSENT IS "NOT CLASSIFIED", NOT `false`. `select(.mirrored == true)` reads an absent field as false
 # (`null == true` is false), so a manifest predating the field answers "not mirrored" for EVERY body,
 # confidently, and every real mirror goes unguarded — the trap FS.GG.Game#282 nearly shipped. So the
-# 33 rows below that carry no `mirrored:` are not asserting "no obligation"; they are rows for which
+# Rows below that carry no `mirrored:` are not asserting "no obligation"; they are rows for which
 # the question does not arise, because FS.GG.Rendering holds no second copy of them. The moment it
 # does, `fsgg-skill-registry-check`'s `mirror-verdict` arm goes RED until the owner declares one:
 # undeclared is not `not mirrored`. Do NOT "tidy" the file by adding `mirrored: false` everywhere —
@@ -205,7 +210,7 @@ skills:
   # §6; retired by the P6 provider epic). This reconcile also CORRECTS two digests that had drifted from
   # Rendering's live manifest since the 2026-07-05 snapshot (bodies changed in Rendering Feature 250 /
   # 0.1.67, never reconciled): fs-gg-game-core 87b9c55c…→16fd32b7… and fs-gg-model-swap 68edbe46…→a48df195….
-  # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 17 rows
+  # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 18 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
   - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 133907e6f0cabb3106817a9dd21b404ab9c4e1caced5207b804d524e4c9a73aa, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
@@ -216,21 +221,22 @@ skills:
   # (`predicate-matches`, .github#292, asserts equality). Reconciled .github#486.
   # DO NOT "normalize" it to `profile in [game, sample-pack]` to match the rows around it — that is a
   # row-shaped optical illusion, and the gate goes red on the correction. (Same trap, same answer, as
-  # the fs-gg-feedback-report / fs-gg-feedback-capture pair below.)
+  # the historical divergence between retained `fs-gg-feedback-report` and retired
+  # `fs-gg-feedback-capture`.)
   - { id: fs-gg-audio,            scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-audio/SKILL.md,           sha256: e9fff88a3be86c2d95829357ffc180e3c53c18f2872b4f84e792de5a24f73bb7, mirrored: false, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-persistence,      scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-persistence/SKILL.md,     sha256: 9461822e5c282f0cac37aa0a88720fbb910319a6571d74bbcb1119eeb48530fb, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-model-swap,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-model-swap/SKILL.md,      sha256: 720a21596be6d24b05191c91da82e228ff9c8f63837a82ad60d3c089fdbb5a26, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   # The four GAME-ORIGINATED skills. Unlike the four above, these were never an ADR-0022 migration:
   # they were authored in FS.GG.Game and have NO FS.GG.Rendering counterpart, so no frozen mirror
   # exists for them and the `frozen-mirror` arm correctly derives none. Verified against Rendering's
-  # live tree (.github#486): `template/product-skills/` ships 17 skills and none of these four is
-  # among them. Do NOT "fix" that absence by vendoring them into Rendering — it would manufacture a
-  # two-copies obligation ADR-0022 §6 never imposed. (FS.GG.Rendering#505 asked for exactly that, for
-  # ballistics + effects, and is a no-op; see the note there.) The `frozen-mirror` arm of
-  # `fsgg-skill-registry-check` is the ONLY thing that reads `owner:` to look for a twin, and it
-  # derives none for these four. `skill-union-assert.sh` has no twin concept at all — it never reads
-  # this registry (it asserts the byte-identical union across a scaffold's skill roots), so it needed
-  # no change to tolerate them (.github#486 checked; #311 had asked).
+  # live tree (.github#486): none of these four appears in Rendering's current
+  # `template/product-skills/` set. Do NOT "fix" that absence by vendoring them into Rendering — it
+  # would manufacture a two-copies obligation ADR-0022 §6 never imposed. (FS.GG.Rendering#505 asked
+  # for exactly that, for ballistics + effects, and is a no-op; see the note there.) The
+  # `frozen-mirror` arm of `fsgg-skill-registry-check` is the ONLY thing that reads `owner:` to look
+  # for a twin, and it derives none for these four. `skill-union-assert.sh` has no twin concept at all
+  # — it never reads this registry (it asserts the byte-identical union across a scaffold's skill
+  # roots), so it needed no change to tolerate them (.github#486 checked; #311 had asked).
   #
   # ballistics shipped 2026-07-10 (Game#40, PR #58); ai / effects / physics were declared by FS.GG.Game's
   # manifest and never flipped here at all — the `declared-completeness` arm (.github#289) caught all
@@ -253,13 +259,12 @@ skills:
   - { id: fs-gg-mapcraft,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-mapcraft/SKILL.md, sha256: 73725ff9b9e8958d053842a895777704ac74092a28a600836495d12512fdd049, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: ea09cb1375df3992eef20811f3d8931e7b6fdc77a3af0fa29a61e985c775afa2, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack" }
-  - { id: fs-gg-feedback-capture, scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback/skill/SKILL.md,                sha256: 509a7e89500da7675c90a363c7530d3a20061d8fad3493f953e5df7926763b07, materializes-when: "feedback == true and lifecycle == spec-kit" }
-  # Sibling of fs-gg-feedback-capture: same off-convention supplied-by path (template/<feature>/skill/,
-  # not template/product-skills/<id>/) — but the predicate is now `always` (Rendering#434), NOT the
-  # `feedback` gate its sibling carries: a reporter must ride EVERY lane, because an instruction placed
-  # only in the feedback-gated `capture` never reaches a reporter on the `sdd` or `none` lane. Predicate
-  # is the manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality — do not
-  # "normalize" it to match the row above). Vendored Rendering#248 (PR #251); reconciled .github#298.
+  # `fs-gg-feedback-report` is the retained report-only half of the former feedback pair. Its predicate
+  # is `always` (Rendering#434): a reporter must ride EVERY lane. Rendering#951 / PR #952 removed
+  # `fs-gg-feedback-capture` under ADR-0056 D3, and .github#1393 removed that retired row from this
+  # catalog; do not recreate it to make the old pair visually symmetric. Predicate is the current
+  # manifest's bytes verbatim (`predicate-matches`, .github#292, asserts equality).
+  # Vendored Rendering#248 (PR #251); reconciled .github#298.
   - { id: fs-gg-feedback-report,  scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/feedback-report/skill/SKILL.md,         sha256: cd572f459ab768f1d8d7391278621c013c6e11989345bca1d01208a6a75c2b2d, materializes-when: "always" }
 
   # ADR-0017 §C2 seam — CLOSED, covered on all lanes (FS.GG.Rendering#91, PR #101; reconcile .github#183).
@@ -288,8 +293,8 @@ skills:
   # `materializes-when` is COMPOSED — the driver runs only where the producers' skills are present
   # (ADR-0053 §6, as amended by ADR-0056): `fs-gg-sdd-*` (all `always`) AND `fs-gg-feedback-report`
   # (`always`). The one binding clause used to be fs-gg-feedback-capture's
-  # `feedback == true and lifecycle == spec-kit`, but ADR-0056 D3 froze capture and scheduled its
-  # removal, so the driver no longer ANDs against a skill that is going away (step 4 is report-only);
+  # `feedback == true and lifecycle == spec-kit`, but ADR-0056 D3 froze capture and Rendering#951
+  # removed it, so the driver no longer ANDs against the retired skill (step 4 is report-only);
   # the AND-of-producers collapses to `always`, and the driver finally materializes on the `sdd` lane
   # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
