@@ -885,17 +885,34 @@ def bumped(v):
     parts[-1] = str(int(tail.group()) + 1)
     return ".".join(parts)
 
+def template_tag(version):
+    return f"fs-gg-ui-template/v{version}"
+
+def assert_template_row(text, relationship):
+    framework = field(text, "fs-gg-ui-template", "version")
+    package = field(text, "fs-gg-ui-template", "package-version")
+    tag = field(text, "fs-gg-ui-template", "package-tag")
+    if relationship == "coupled" and framework != package:
+        sys.exit("closure test: failed to construct the coupled template/framework starting state.")
+    if relationship == "decoupled" and framework == package:
+        sys.exit("closure test: failed to construct the decoupled template/framework starting state.")
+    if tag != template_tag(package):
+        sys.exit(
+            f"closure test: {relationship} template row is not internally coherent: "
+            f"package-version={package}, package-tag={tag}."
+        )
+
 live_framework = field(live, "fs-gg-ui-template", "version")
 live_template = field(live, "fs-gg-ui-template", "package-version")
 live_coord = field(live, "coord-engine", "version")
 
 coupled = set_field(live, "fs-gg-ui-template", "package-version", live_framework)
+coupled = set_field(coupled, "fs-gg-ui-template", "package-tag", template_tag(live_framework))
 decoupled_template = live_template if live_template != live_framework else bumped(live_framework)
 decoupled = set_field(live, "fs-gg-ui-template", "package-version", decoupled_template)
-if field(coupled, "fs-gg-ui-template", "version") != field(coupled, "fs-gg-ui-template", "package-version"):
-    sys.exit("closure test: failed to construct the coupled template/framework starting state.")
-if field(decoupled, "fs-gg-ui-template", "version") == field(decoupled, "fs-gg-ui-template", "package-version"):
-    sys.exit("closure test: failed to construct the decoupled template/framework starting state.")
+decoupled = set_field(decoupled, "fs-gg-ui-template", "package-tag", template_tag(decoupled_template))
+assert_template_row(coupled, "coupled")
+assert_template_row(decoupled, "decoupled")
 open(source, "w", encoding="utf-8").write(decoupled)
 open(coupled_out, "w", encoding="utf-8").write(coupled)
 
@@ -905,21 +922,25 @@ def flip(base, framework_from, template_from, coord_from):
     coord_to = bumped(coord_from)
     changed = set_field(base, "fs-gg-ui-template", "version", framework_to)
     changed = set_field(changed, "fs-gg-ui-template", "package-version", template_to)
+    changed = set_field(changed, "fs-gg-ui-template", "package-tag", template_tag(template_to))
     changed = set_field(changed, "coord-engine", "version", coord_to)
     changed = set_field(changed, "coord-engine", "package-version", coord_to)
-    return changed, framework_to, template_to, coord_to
+    relationship = "coupled" if framework_to == template_to else "decoupled"
+    assert_template_row(changed, relationship)
+    return changed, framework_to, template_to, template_tag(template_to), coord_to
 
-decoupled_flip, df, dt, dc = flip(decoupled, live_framework, decoupled_template, live_coord)
-coupled_flip, cf, ct, cc = flip(coupled, live_framework, live_framework, live_coord)
+decoupled_flip, df, dt, dtag, dc = flip(decoupled, live_framework, decoupled_template, live_coord)
+coupled_flip, cf, ct, ctag, cc = flip(coupled, live_framework, live_framework, live_coord)
 open(decoupled_flip_out, "w", encoding="utf-8").write(decoupled_flip)
 open(coupled_flip_out, "w", encoding="utf-8").write(coupled_flip)
-open(decoupled_versions, "w", encoding="utf-8").write(f"{df}\n{dt}\n{dc}\n")
-open(coupled_versions, "w", encoding="utf-8").write(f"{cf}\n{ct}\n{cc}\n")
+open(decoupled_versions, "w", encoding="utf-8").write(f"{df}\n{dt}\n{dtag}\n{dc}\n")
+open(coupled_versions, "w", encoding="utf-8").write(f"{cf}\n{ct}\n{ctag}\n{cc}\n")
 PY
 
 TMPL_FRAMEWORK_TO="$(sed -n 1p "$VERS_DECOUPLED")"
 TMPL_PACKAGE_TO="$(sed -n 2p "$VERS_DECOUPLED")"
-CE_TO="$(sed -n 3p "$VERS_DECOUPLED")"
+TMPL_TAG_TO="$(sed -n 3p "$VERS_DECOUPLED")"
+CE_TO="$(sed -n 4p "$VERS_DECOUPLED")"
 
 # RED half — no engine: the write alone leaves the REQUIRED gate red against the un-regenerated
 # region. The direct #1081 regression guard; it must fail while the region is stale, naming all
@@ -929,10 +950,11 @@ if red="$(python3 "$CHECKPROJ" "$FLIPPED_DECOUPLED" "$ROOT/docs/registry/compati
       "the gate passed on a stale region — the write-only bug #1081 names is not caught: $red"
 elif printf '%s' "$red" | grep -q "$TMPL_FRAMEWORK_TO" \
    && printf '%s' "$red" | grep -q "$TMPL_PACKAGE_TO" \
-   && printf '%s' "$red" | grep -q "$CE_TO"; then
-  ok "closure: a flip without regeneration reds the required gate (three independent values)"
+   && printf '%s' "$red" | grep -q "$CE_TO" \
+   && grep -q "package-tag: \"$TMPL_TAG_TO\"" "$FLIPPED_DECOUPLED"; then
+  ok "closure: stale projections name all projected values and the package tag moved coherently"
 else
-  bad "closure: gate red, but not for all moved values ($TMPL_FRAMEWORK_TO / $TMPL_PACKAGE_TO / $CE_TO)" "$red"
+  bad "closure: gate/tag evidence omitted a moved value ($TMPL_FRAMEWORK_TO / $TMPL_PACKAGE_TO / $TMPL_TAG_TO / $CE_TO)" "$red"
 fi
 
 # GREEN half — regenerate from the flipped registry and assert the required `projection` gate AND
@@ -949,10 +971,11 @@ if [ -x "$ENGINE" ]; then
   closure_case() {
     local mode="$1" base="$2" flipped="$3" versions="$4"
     local tree="$WORK/closure-$mode-tree"
-    local framework_to template_to coord_to expected staged allowed unexpected
+    local framework_to template_to tag_to coord_to expected staged allowed unexpected
     framework_to="$(sed -n 1p "$versions")"
     template_to="$(sed -n 2p "$versions")"
-    coord_to="$(sed -n 3p "$versions")"
+    tag_to="$(sed -n 3p "$versions")"
+    coord_to="$(sed -n 4p "$versions")"
 
     mkdir -p "$tree"
     git -C "$ROOT" archive HEAD | tar -x -C "$tree"
@@ -970,10 +993,11 @@ if [ -x "$ENGINE" ]; then
           "the gate passed on a stale region: $red"
     elif printf '%s' "$red" | grep -q "$framework_to" \
        && printf '%s' "$red" | grep -q "$template_to" \
-       && printf '%s' "$red" | grep -q "$coord_to"; then
-      ok "closure ($mode): stale projections name every independently moved value"
+       && printf '%s' "$red" | grep -q "$coord_to" \
+       && grep -q "package-tag: \"$tag_to\"" "$flipped"; then
+      ok "closure ($mode): stale projections name every projected value and the tag moved coherently"
     else
-      bad "closure ($mode): stale gate omitted a moved value ($framework_to / $template_to / $coord_to)" "$red"
+      bad "closure ($mode): stale gate omitted a moved value ($framework_to / $template_to / $tag_to / $coord_to)" "$red"
     fi
 
     if FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$tree/scripts/generate-projections" >/dev/null 2>&1 \
