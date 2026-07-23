@@ -26,7 +26,7 @@
 # impossible to check is a green nobody earned (#628):
 #   labels             — the shared cross-repo labels (scripts/apply-labels.sh)      [push:     authority-pushed]
 #   coordination-kit   — coordination skills, the fsgg-coord client + the engine manifest [workflow: coordination-coherence.yml]
-#   build-config       — the org-shared .NET build config (scripts/sync-build-config.sh)  [script: sync-build-config.sh]
+#   build-config       — the org-shared .NET build config from FS.GG.Kit [materializer: build-config]
 #   lockfile-sync      — the reusable lockfile-sync workflow                          [workflow: lockfile-sync.yml]
 #   contract-coherence — the reusable contract-coherence gate                         [workflow: contract-coherence.yml]
 #
@@ -51,8 +51,8 @@
 # Legal only on a coordination-kit receiver, and only ever WRITTEN as `package` (absent == byte-copy).
 # `repos.sh validate` enforces the vocabulary and the receiver requirement.
 
-schemaVersion: 6
-updated: 2026-07-17
+schemaVersion: 7
+updated: 2026-07-23
 authority: FS-GG/.github
 
 repos:
@@ -67,10 +67,12 @@ repos:
 
 # `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).
 #
-# FOUR repos — sdd, rendering, governance, game — run a `Shared-build-config drift check` in their own
-# `gate.yml`: they check out `.github` and run `sync-build-config.sh --check`, so a managed file that
-# diverges from `dist/dotnet/` fails the PR. That ENFORCEMENT has been live for months. Nothing ever
-# PUSHED them an update, because this capability had no receivers and no propagate arm.
+# FOUR repos — sdd, rendering, governance, game — run a `build-config-drift` job in their own
+# `gate.yml`. Each explicitly enables `<FsggKitMaterializeBuildConfig>true</…>` in its
+# `.config/kit/FS.GG.Kit.receiver.proj`; CI reruns `FsggKitMaterialize`, then fails if
+# Directory.Build.props or Directory.Packages.props changed. Both halves are required: the opt-in
+# without the diff gate can rewrite committed build inputs unnoticed, while the gate without the
+# opt-in materializes no build config and passes vacuously.
 #
 # So the fabric was a RATCHET. Every edit to `dist/dotnet/` red-lit those four until a human hand-synced
 # each one — and because the coordination kit's sync PR is a rolling branch, the red landed on the kit's
@@ -103,14 +105,15 @@ repos:
 # from the build decision above.
 #
 # So the claim this roster makes is falsifiable and exactly as strong as reality: **a repo receives
-# build-config iff it enforces build-config.** As of #628 that symmetry IS verified: the capability now
-# declares a `script:` detector, so repos-audit sweeps it in both directions like any other — a rostered
-# repo that stopped running the drift check is a GAP, and a repo that starts running it without saying so
-# is DRIFT. Whether templates and audio SHOULD adopt is a live question, filed there — it is not answered
-# here by quietly listing them, and if either one wires the check, the audit will now say so out loud.
+# build-config iff it explicitly enables package materialization AND enforces its generated result in
+# CI.** #628 first closed that symmetry with the then-current `script:` detector. #1395 moves the
+# detector with the delivery contract: `materializer: build-config` proves both package-era halves and
+# sweeps them in both directions. A rostered repo missing either half is a GAP; an unrostered repo adding
+# either half is DRIFT. Whether templates, audio, or net SHOULD adopt is a separate decision, not answered
+# here by quietly listing them.
 
-# The capabilities that map to a reusable `.github` workflow, and are therefore AUDITED
-# (scripts/repos-audit.sh). This is the ONE place that mapping lives. The audit used to hardcode it
+# The receiver capabilities and the detectors that make them AUDITED (scripts/repos-audit.sh). This
+# is the ONE place that mapping lives. The audit used to hardcode reusable-workflow mappings
 # in a `wf_for_cap` case statement and an `AUDITED_CAPS` string — the redeclared-by-hand disease
 # this registry exists to cure, one layer down.
 #
@@ -129,6 +132,8 @@ repos:
 #   workflow:  the receiver calls .github's reusable workflow (a `uses:` of it)
 #   script:    the receiver INLINES a job that runs .github's script — there is no reusable workflow
 #              to `uses:`, so the workflow detector cannot see it at all
+#   materializer: the receiver explicitly opts into an FS.GG.Kit materializer AND CI reruns it and
+#                 fails on generated-file drift; `build-config` is the supported compound detector
 #   push:      the AUTHORITY writes it into the receiver; nothing is wired receiver-side to detect
 #
 # AND NOTHING MAY BE `receives:`d THAT HAS NO ROW HERE. That closure is what makes the promise above
@@ -141,17 +146,17 @@ capabilities:
   - { id: coordination-kit, workflow: coordination-coherence.yml }
   - { id: lockfile-sync,    workflow: lockfile-sync.yml }
 
-  # SCRIPT-DELIVERED, and therefore invisible to the `uses:` detector until #628 gave it one of its
-  # own. sdd/rendering/governance/game each inline a `Build-config drift check` job in their gate.yml
-  # that checks .github out and runs this script — governance from `_org-build/`, the others from
-  # `.github/`, which is why the detector matches the BASENAME and not a path.
+  # PACKAGE-MATERIALIZED. #628's `script:` detector was correct for the old inline
+  # sync-build-config.sh check, but ADR-0062/#1262 retired that wiring. The package-era contract has
+  # two independently necessary halves: explicit receiver-project opt-in and CI materialize+diff
+  # enforcement. The compound detector requires both and treats either unrostered half as drift.
   - id: build-config
-    script: sync-build-config.sh
+    materializer: build-config
     reason: >-
-      Delivered as a script, not a reusable workflow: receivers wire it by inlining a job that checks
-      FS-GG/.github out and runs `sync-build-config.sh --check`. For as long as that was true it was
-      outside repos-audit's mandate entirely — four repos enforced it (SDD's as a REQUIRED status
-      check) while `receives:` said zero, and the audit reported green over all of them. #628.
+      Delivered by the pinned FS.GG.Kit package. A receiver opts in with
+      FsggKitMaterializeBuildConfig=true and its CI reruns FsggKitMaterialize, then diffs the two
+      managed props. Both are required: either half alone can pass without protecting committed build
+      inputs. #1395 moves the detector that #628 introduced from the retired script to this contract.
 
   # PUSH. `labels` is not pulled by anybody: scripts/apply-labels.sh reads THIS roster and pushes the
   # labels into each repo. So the `receives: labels` row is the INPUT to the push, not a claim about

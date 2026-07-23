@@ -7,8 +7,9 @@
 # declaring a capability now means you are AUDITED for wiring it.
 #
 # The audit reads its whole mandate from the roster's `capabilities:` block — which capabilities exist
-# and HOW each is detectable in a receiver. It then reads every rostered repo's .github/workflows/*
-# ONCE and compares what the repo REALLY wires against what it DECLARES, in both directions:
+# and HOW each is detectable in a receiver. It then reads every rostered repo's receiver-side
+# evidence once (workflows, plus any detector-specific manifest) and compares what the repo REALLY
+# wires against what it DECLARES, in both directions:
 #
 #   declared + wired      ok
 #   declared + not wired  a GAP — the repo promised to participate and did not (exit 1)
@@ -24,6 +25,9 @@
 #                       reusable workflow to `uses:`, so the workflow detector is structurally blind
 #                       to it — which is how `build-config` came to be enforced by four repos, in a
 #                       REQUIRED check, and audited by nothing at all, for months.
+#   materializer: <id>  the receiver explicitly opts into a package materializer AND CI reruns it and
+#                       fails on drift. `build-config` requires both the FS.GG.Kit receiver-project
+#                       opt-in and workflow enforcement; either half alone is incomplete adoption.
 #   push:     true      the AUTHORITY writes it into the receiver (apply-labels.sh reads this roster
 #                       and pushes the labels in). Nothing is wired at the receiver, so there is
 #                       nothing to detect there and this sweep skips it.
@@ -58,8 +62,8 @@
 # Usage:
 #   repos-audit.sh [--registry <file>] [--repos-sh <path>]
 # Exit: 0 = every declared receiver is wired; 1 = at least one gap (a declared receiver is unwired,
-# or a repo adopted a capability it never rostered); 2 = no verdict, RETRYABLE — a receiver whose
-# workflows could not be read (rate limit, auth, outage); 3 = no verdict, PERMANENT — a roster that
+# or a repo adopted a capability it never rostered); 2 = no verdict, RETRYABLE — receiver evidence
+# could not be read (rate limit, auth, outage); 3 = no verdict, PERMANENT — a roster that
 # cannot be enumerated, a capability that names no receiver, a capability that is RECEIVED but has no
 # detector (#628), or a bad invocation.
 #
@@ -110,8 +114,9 @@ command -v gh >/dev/null 2>&1 || die "gh not found (required to read receiver wo
 # disease registry/repos.yml exists to cure. A capability the roster gained was audited only if
 # somebody also remembered to edit this file, and "a capability with no mapping here is simply not
 # audited" meant forgetting was silent (#503). `repos.sh validate` now checks the mapping instead: a
-# `workflow:` must exist and be `workflow_call`-able, a `script:` must exist in scripts/, a `push:`
-# must carry a reason — and nothing a repo RECEIVES may lack a row entirely (#628).
+# `workflow:` must exist and be `workflow_call`-able, a `script:` must exist in scripts/, a
+# `materializer:` must name a supported compound detector, a `push:` must carry a reason — and
+# nothing a repo RECEIVES may lack a row entirely (#628).
 
 # --- gh-isolated fetchers (stubbed in the fixture) ---------------------------------------------
 # A failed read is not an answer. These used to end in `2>/dev/null || true`, which turned "I could
@@ -164,6 +169,36 @@ list_workflows() {  # <repo> -> workflow filenames, one per line; rc per gh_api
 get_workflow() {    # <repo> <file> -> raw workflow text; rc per gh_api
   gh_api -H "Accept: application/vnd.github.raw" "repos/$1/contents/.github/workflows/$2"
 }
+get_repo_file() {   # <repo> <repo-relative path> -> raw text; rc per gh_api
+  gh_api -H "Accept: application/vnd.github.raw" "repos/$1/contents/$2"
+}
+
+# XML comments may span lines, so stripping only whole-line `<!-- … -->` comments would let a prose
+# example satisfy an opt-in detector. This small streaming filter removes comments while preserving
+# any real XML before/after them; it deliberately does not attempt to "repair" malformed XML.
+strip_xml_comments() {
+  awk '
+    BEGIN { in_comment = 0 }
+    {
+      line = $0
+      out = ""
+      while (length(line) > 0) {
+        if (in_comment) {
+          finish = index(line, "-->")
+          if (finish == 0) { line = ""; break }
+          line = substr(line, finish + 3)
+          in_comment = 0
+        } else {
+          start = index(line, "<!--")
+          if (start == 0) { out = out line; line = ""; break }
+          out = out substr(line, 1, start - 1)
+          line = substr(line, start + 4)
+          in_comment = 1
+        }
+      }
+      print out
+    }'
+}
 
 # Which of the AUTHORITY's reusable workflows does <repo> call? Prints one filename per line (the set
 # may legitimately be empty). 0 = read it, 2 = could not determine (reason in $CALLS_ERR_FILE).
@@ -179,12 +214,14 @@ get_workflow() {    # <repo> <file> -> raw workflow text; rc per gh_api
 #
 #   wf:<file>.yml      a `uses:` of the AUTHORITY's reusable workflow  (the `workflow:` detector)
 #   script:<file>.sh   a reference to one of the AUTHORITY's scripts   (the `script:` detector)
+#   materializer:<id>  BOTH package opt-in and CI enforcement          (the `materializer:` detector)
 #
-# One pass, both kinds. Re-walking a repo's workflows once per detector kind would double the API
+# One pass, all kinds. Re-walking a repo's workflows once per detector kind would multiply the API
 # traffic against the rate limit this script already treats as its main adversary — the same reasoning
 # that made this function repo-major rather than cap-major in the first place.
 repo_calls() {
   local repo="$1" f rc=0 frc files text
+  local build_config_enforced=0 build_config_opted_in=0 project prc=0 project_code
   : > "$CALLS_ERR_FILE"
 
   files="$(list_workflows "$repo")" || rc=$?
@@ -202,7 +239,7 @@ repo_calls() {
         "$repo" "$(gh_last_err)" > "$CALLS_ERR_FILE"
       return 2
     fi
-    return 0                              # visible, but no workflows dir: it calls nothing.
+    files=""                              # visible, but no workflows dir: no CI enforcement.
   fi
 
   while IFS= read -r f; do
@@ -296,8 +333,42 @@ repo_calls() {
       if grep -qE "repository:[[:space:]]*[\"']?${AUTHORITY//./\\.}[\"']?[[:space:]]*\$" <<< "$body"; then
         grep -oE "[A-Za-z0-9._-]+\.sh" <<< "$body" | sed -E 's#^#script:#' || true
       fi
+
+      # Package-delivered build config has TWO receiver-side halves, and both must live:
+      # materialization alone silently rewrites committed files, while a diff step without the opt-in
+      # materializes no build config and passes vacuously. Match executable command lines only; a
+      # whole-line YAML/shell comment naming either command is prose, not enforcement.
+      if grep -qE '^[[:space:]]*dotnet[[:space:]]+build[[:space:]].*-t:FsggKitMaterialize([[:space:]]|$)' <<< "$body" \
+          && grep -qE '^[[:space:]]*(if[[:space:]]+![[:space:]]+)?git[[:space:]]+diff[[:space:]]+--quiet[[:space:]]+--[[:space:]]+Directory\.Build\.props[[:space:]]+Directory\.Packages\.props([[:space:];]|$)' <<< "$body"; then
+        build_config_enforced=1
+      fi
     fi
   done <<< "$files"
+
+  # The opt-in is not a workflow fact: it lives in the package receiver project. Read the project
+  # directly rather than grepping the whole repository (which the contents API cannot do and which
+  # would count docs/comments as adoption). A missing project is an examined "not opted in"; an API
+  # failure is undetermined, because the reverse-direction sweep cannot know whether this repo adopted.
+  if [ "${NEEDS_BUILD_CONFIG_MATERIALIZER:-0}" -eq 1 ] && [ "$repo" != "$AUTHORITY" ]; then
+    project="$(get_repo_file "$repo" ".config/kit/FS.GG.Kit.receiver.proj")" || prc=$?
+    if [ "$prc" -eq "$RC_UNREACHABLE" ]; then
+      printf 'could not determine: reading .config/kit/FS.GG.Kit.receiver.proj failed — %s' "$(gh_last_err)" > "$CALLS_ERR_FILE"
+      return 2
+    fi
+    if [ "$prc" -eq 0 ]; then
+      project_code="$(strip_xml_comments <<< "$project")"
+      if grep -qE '^[[:space:]]*<FsggKitMaterializeBuildConfig>[[:space:]]*true[[:space:]]*</FsggKitMaterializeBuildConfig>[[:space:]]*$' <<< "$project_code" \
+          && grep -qE '^[[:space:]]*<PackageReference[[:space:]][^>]*Include[[:space:]]*=[[:space:]]*["'\'']FS\.GG\.Kit["'\''][^>]*/?>[[:space:]]*$' <<< "$project_code"; then
+        build_config_opted_in=1
+      fi
+    fi
+
+    [ "$build_config_opted_in" -eq 0 ] || echo "materializer-opt-in:build-config"
+    [ "$build_config_enforced" -eq 0 ] || echo "materializer-enforcement:build-config"
+    if [ "$build_config_opted_in" -eq 1 ] && [ "$build_config_enforced" -eq 1 ]; then
+      echo "materializer:build-config"
+    fi
+  fi
   return 0
 }
 
@@ -311,7 +382,7 @@ all_repos_list() {  # every rostered repo, receives or not — the drift check's
   else bash "$REPOS_SH" list --all; fi
 }
 
-caps_list() {  # id<TAB>workflow<TAB>script<TAB>push<TAB>receivers<TAB>reason, one audited capability per line
+caps_list() {  # id<TAB>workflow<TAB>script<TAB>materializer<TAB>push<TAB>receivers<TAB>reason
   if [ -n "$REGISTRY" ]; then bash "$REPOS_SH" caps --registry "$REGISTRY"
   else bash "$REPOS_SH" caps; fi
 }
@@ -334,9 +405,10 @@ caps="$(caps_list)" \
 [ -n "$caps" ] \
   || die "the roster declares no audited capabilities (registry 'capabilities:' is missing or empty). This audit's entire mandate comes from there, so it would examine nothing. Examining nothing is a failure to audit, not a clean audit."
 
-declare -A CAP_TOKEN CAP_SUBJ CAP_PUSH CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS CAP_UNDET
+declare -A CAP_TOKEN CAP_SUBJ CAP_KIND CAP_MATERIALIZER CAP_PUSH CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS CAP_UNDET
 CAPS_ORDER=""
 rostered_total=0
+NEEDS_BUILD_CONFIG_MATERIALIZER=0
 # TAB IS IFS-*WHITESPACE* IN BASH: `IFS=$'\t' read` collapses runs of tabs and DROPS empty fields, so
 # a capability with an empty `workflow` (every script:/push: row) would shift its `script` left into
 # `wf` and be audited as a reusable workflow that does not exist. Re-delimit with a unit separator,
@@ -344,7 +416,7 @@ rostered_total=0
 # substitution cannot corrupt a `reason:`.
 while IFS= read -r capline; do
   [ -n "$capline" ] || continue
-  IFS=$'\x1f' read -r cap wf script push recv reason <<< "${capline//$'\t'/$'\x1f'}"
+  IFS=$'\x1f' read -r cap wf script materializer push recv reason <<< "${capline//$'\t'/$'\x1f'}"
   [ -n "$cap" ] || continue
   # `repos.sh validate` already enforces exactly-one-detector, and CI runs it — but this script must
   # not INFER that it ran. An unvalidated roster reaching a gate that assumes validation is how a
@@ -353,11 +425,21 @@ while IFS= read -r capline; do
   # CAP_TOKEN is what a receiver's workflows must contain for this capability to count as wired, in
   # the tagged form repo_calls emits. CAP_SUBJ is the same thing in human words, for the diagnostics.
   if [ -n "$wf" ]; then
+    CAP_KIND["$cap"]="workflow"
     CAP_TOKEN["$cap"]="wf:$wf"
     CAP_SUBJ["$cap"]="$AUTHORITY/.github/workflows/$wf"
   elif [ -n "$script" ]; then
+    CAP_KIND["$cap"]="script"
     CAP_TOKEN["$cap"]="script:$script"
     CAP_SUBJ["$cap"]="$AUTHORITY's scripts/$script"
+  elif [ -n "$materializer" ]; then
+    [ "$materializer" = build-config ] \
+      || die "capability '$cap' names unsupported materializer detector '$materializer' (supported: build-config; repos.sh validate catches this)."
+    CAP_KIND["$cap"]="materializer"
+    CAP_MATERIALIZER["$cap"]="$materializer"
+    CAP_TOKEN["$cap"]="materializer:$materializer"
+    CAP_SUBJ["$cap"]="FS.GG.Kit '$materializer' materializer opt-in plus CI regeneration/diff enforcement"
+    NEEDS_BUILD_CONFIG_MATERIALIZER=1
   elif [ "$push" = true ]; then
     # PUSH: the authority writes this INTO the receiver, so there is NOTHING receiver-side to detect
     # and both sweep directions are meaningless for it. This is the one honest way to be unauditable,
@@ -368,7 +450,7 @@ while IFS= read -r capline; do
     CAP_TOKEN["$cap"]=""
     CAP_SUBJ["$cap"]="(pushed by the authority — nothing to detect at the receiver)"
   else
-    die "capability '$cap' declares no detector (workflow:/script:/push:) — there is nothing to audit it by, so it would be swept in NEITHER direction while remaining a legal 'receives' word. That is #628 exactly. Fix registry/repos.yml (repos.sh validate catches this)."
+    die "capability '$cap' declares no detector (workflow:/script:/materializer:/push:) — there is nothing to audit it by, so it would be swept in NEITHER direction while remaining a legal 'receives' word. That is #628 exactly. Fix registry/repos.yml (repos.sh validate catches this)."
   fi
   CAPS_ORDER="$CAPS_ORDER $cap"
   CAP_WIRED["$cap"]=0; CAP_GAPS["$cap"]=0; CAP_UNDET["$cap"]=0
@@ -441,11 +523,11 @@ while IFS= read -r recvline; do
   [ -n "$cap" ] || continue
   case " $CAPS_ORDER " in
     *" $cap "*) ;;
-    *) die "repo(s) [$by] receive '$cap', but the roster declares no 'capabilities:' row for it — so this audit has no detector for it and sweeps it in NEITHER direction: it can be found neither unwired nor adopted-but-unrostered. A capability that is legal to receive and impossible to check is a green nobody earned (#628). Give '$cap' a detector row (workflow:/script:/push:) in registry/repos.yml." ;;
+    *) die "repo(s) [$by] receive '$cap', but the roster declares no 'capabilities:' row for it — so this audit has no detector for it and sweeps it in NEITHER direction: it can be found neither unwired nor adopted-but-unrostered. A capability that is legal to receive and impossible to check is a green nobody earned (#628). Give '$cap' a detector row (workflow:/script:/materializer:/push:) in registry/repos.yml." ;;
   esac
 done <<< "$received"
 
-# --- what the repos ACTUALLY call ----------------------------------------------------------------
+# --- what the repos ACTUALLY adopt ---------------------------------------------------------------
 all_repos="$(all_repos_list)" \
   || die "cannot enumerate the roster — repos.sh list --all failed. The roster is unreadable, which is not the same as empty."
 
@@ -480,21 +562,36 @@ while IFS= read -r repo; do
     [ -n "${CAP_PUSH[$cap]:-}" ] && continue
 
     subj="${CAP_SUBJ[$cap]}"; token="${CAP_TOKEN[$cap]}"
-    declared=0; calls_it=0
+    declared=0; calls_it=0; partial_it=0
     # Herestrings, not pipes — the same rule repo_calls explains at length. These three are SAFE
     # today only because a roster line and a token list are far under the 64KiB pipe buffer, so the
     # writer always finishes before `grep -q` exits. That is a property of the DATA, not of the code,
     # and it is exactly the kind of accident that stops being true quietly. One rule, no exceptions.
     if grep -qxF "$repo"  <<< "${CAP_ROSTER[$cap]}"; then declared=1; fi
     if grep -qxF "$token" <<< "$calls";              then calls_it=1; fi
+    materializer="${CAP_MATERIALIZER[$cap]:-}"
+    if [ "${CAP_KIND[$cap]:-}" = materializer ] \
+        && { grep -qxF "materializer-opt-in:$materializer" <<< "$calls" \
+             || grep -qxF "materializer-enforcement:$materializer" <<< "$calls"; }; then
+      partial_it=1
+    fi
 
     if [ "$declared" -eq 1 ] && [ "$calls_it" -eq 1 ]; then
       echo "ok: $repo wires $subj (receives: $cap)"
       audited=$((audited + 1)); wired=$((wired + 1)); CAP_WIRED["$cap"]=$(( ${CAP_WIRED[$cap]} + 1 ))
     elif [ "$declared" -eq 1 ]; then
-      echo "::error::repos-audit: $repo receives '$cap' but nothing in its workflows references $subj"
+      if [ "${CAP_KIND[$cap]:-}" = materializer ]; then
+        missing=""
+        grep -qxF "materializer-opt-in:$materializer" <<< "$calls" \
+          || missing="${missing} FS.GG.Kit package provenance plus explicit <FsggKitMaterializeBuildConfig>true</FsggKitMaterializeBuildConfig> opt-in;"
+        grep -qxF "materializer-enforcement:$materializer" <<< "$calls" \
+          || missing="${missing} CI FsggKitMaterialize + managed-props diff enforcement;"
+        echo "::error::repos-audit: $repo receives '$cap' but is missing:${missing}"
+      else
+        echo "::error::repos-audit: $repo receives '$cap' but nothing in its workflows references $subj"
+      fi
       audited=$((audited + 1)); gaps=$((gaps + 1)); CAP_GAPS["$cap"]=$(( ${CAP_GAPS[$cap]} + 1 ))
-    elif [ "$calls_it" -eq 1 ]; then
+    elif [ "$calls_it" -eq 1 ] || [ "$partial_it" -eq 1 ]; then
       # The reverse direction (#503). `lockfile-sync` sat like this for six repos: really adopted,
       # never rostered, so `list --receives lockfile-sync` returned nothing and the audit believed
       # the capability had no receivers — while the thing it was supposed to be watching ran, and
@@ -504,9 +601,17 @@ while IFS= read -r repo; do
       # enforced by four repos and rostered by none. It could not fire, because a capability with no
       # detector row was not swept at all.
       if [ -n "${CAP_NONE[$cap]:-}" ]; then
-        echo "::error::repos-audit: $repo references $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
+        if [ "${CAP_KIND[$cap]:-}" = materializer ]; then
+          echo "::error::repos-audit: $repo adopts $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
+        else
+          echo "::error::repos-audit: $repo references $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
+        fi
       else
-        echo "::error::repos-audit: $repo references $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
+        if [ "${CAP_KIND[$cap]:-}" = materializer ]; then
+          echo "::error::repos-audit: $repo adopts $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
+        else
+          echo "::error::repos-audit: $repo references $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
+        fi
       fi
       drift=$((drift + 1))
     fi
@@ -545,8 +650,8 @@ fi
 # ::error:: annotations above say which. Splitting them into two codes would buy a caller nothing it
 # cannot read, at the cost of a fourth branch in every consumer of this contract.
 if [ "$gaps" -ne 0 ] || [ "$drift" -ne 0 ]; then
-  [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their reusable workflow." >&2
-  [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) call a reusable workflow for a capability they do not declare — the roster does not describe the org." >&2
+  [ "$gaps"  -eq 0 ] || echo "::error::repos-audit: $gaps declared receiver(s) have not wired their capability detector." >&2
+  [ "$drift" -eq 0 ] || echo "::error::repos-audit: $drift repo(s) adopt a capability they do not declare — the roster does not describe the org." >&2
   exit 1
 fi
 echo "repos-audit: OK — every declared receiver is wired."

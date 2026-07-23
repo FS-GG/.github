@@ -246,11 +246,22 @@ expect_pass "a script-delivered capability passes on its script detector" \
   "$(capreg cap_script "labels, build-config" \
      "- { id: build-config, script: sync-build-config.sh, reason: receivers inline a job that runs it }")"
 
+expect_pass "a package-materialized capability passes on the supported compound detector" \
+  "$(capreg cap_materializer "labels, build-config" \
+     "- { id: build-config, materializer: build-config, reason: explicit package opt-in plus CI enforcement }")"
+
+expect_fail "capability naming an unsupported materializer detector" 1 "unsupported materializer detector" \
+  "$(capreg cap_badmaterializer "labels, build-config" \
+     "- { id: build-config, materializer: imaginary, reason: no audit implementation exists }")"
+
 # Two detectors is ambiguous: repos-audit would have to pick one, and a receiver satisfying the loose
 # one would mask a gap in the strict one.
 expect_fail "capability declaring two detectors" 1 "more than one detector" \
   "$(capreg cap_twodet "labels, coordination-kit" \
      "- { id: coordination-kit, workflow: coordination-coherence.yml, script: sync-build-config.sh }")"
+expect_fail "materializer plus another detector is also rejected as ambiguous" 1 "more than one detector" \
+  "$(capreg cap_twodet_materializer "labels, build-config" \
+     "- { id: build-config, script: sync-build-config.sh, materializer: build-config }")"
 
 # The script detector's subject must EXIST, for the same reason the workflow's must: the audit greps
 # receivers for a reference to it, so a typo'd script reports EVERY receiver unwired — a gate that is
@@ -317,8 +328,8 @@ expect_fail "'receivers:' with a value other than none" 1 "is invalid" \
 
 # --- caps query (repos-audit.sh reads its mandate through this) ---
 caps_tsv="$(bash "$REPOS_SH" caps --registry "$BASE")"
-[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t\t\t\nlabels\t\t\ttrue\t\tauthority-pushed by apply-labels.sh; nothing is wired at the receiver')" ] \
-  && ok "caps -> a TSV row per capability: id, workflow, script, push, receivers, reason" \
+[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t\t\t\t\nlabels\t\t\t\ttrue\t\tauthority-pushed by apply-labels.sh; nothing is wired at the receiver')" ] \
+  && ok "caps -> a TSV row per capability: id, workflow, script, materializer, push, receivers, reason" \
   || bad "caps TSV" "got: $(printf '%s' "$caps_tsv" | cat -A | head -2)"
 caps_ids="$(bash "$REPOS_SH" caps --field id --registry "$BASE")"
 [ "$caps_ids" = "$(printf 'coordination-kit\nlabels')" ] && ok "caps --field id -> the capability ids" \
@@ -330,6 +341,9 @@ caps_ids="$(bash "$REPOS_SH" caps --field id --registry "$BASE")"
 [ "$(bash "$REPOS_SH" caps --field push --registry "$BASE")" = "$(printf '\ntrue')" ] \
   && ok "caps --field push -> 'true' or empty, never the string 'false'" \
   || bad "caps --field push" "got: $(bash "$REPOS_SH" caps --field push --registry "$BASE")"
+[ -z "$(bash "$REPOS_SH" caps --field materializer --registry "$BASE")" ] \
+  && ok "caps --field materializer -> empty for non-materializer rows" \
+  || bad "caps --field materializer" "got: $(bash "$REPOS_SH" caps --field materializer --registry "$BASE")"
 
 # --- list --all (the unrostered-adopter sweep starts from every repo, not from a declaration) ---
 all_repos="$(bash "$REPOS_SH" list --all --field id --registry "$BASE" | tr '\n' ',')"
