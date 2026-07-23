@@ -577,11 +577,11 @@ contracts:
     consumers: [github]     # .github's union gate + registry validation; Templates (P4, Templates#49) via provenance.
     validator: >
       Typed Fsgg.Registry validator (fsgg-sdd) — asserts registry = producer manifest = materialized bytes,
-      condition-aware. Both producer sides are now emitted: the 21 PRODUCT rows are producer-reconciled from
-      the two product manifests (17 from Rendering's — Feature 238 / Rendering#76; 4 GAME rows from
-      FS.GG.Game's, since the ADR-0022 P4 ownership migration), and the 16 PROCESS rows from SDD's EMITTED
-      process manifest (.agents/skills/skill-manifest.json; SDD#111 closing #109) — registry = manifest =
-      bytes for both. Rendering's predicate-grammar alignment (Rendering#77) has LANDED, so no producer
+      condition-aware. Product rows are producer-reconciled from Rendering's and Game's current manifests;
+      the generated Skill-registry row-counts block in docs/registry/compatibility.md is the authoritative
+      per-owner total. The 16 PROCESS rows come from SDD's EMITTED process manifest
+      (.agents/skills/skill-manifest.json; SDD#111 closing #109) — registry = manifest = bytes for every
+      owner. Rendering's predicate-grammar alignment (Rendering#77) has LANDED, so no producer
       condition gates the enforcing flip; it now waits on the typed validator assertion shipping and a
       green skill-registry-coherence. See coherence id `skill-registry-published`.
   - id: game-sim-core
@@ -762,7 +762,7 @@ dependencies:
   # .github#135: the contract-coherence gate validates THIS registry with SDD's typed Fsgg.Registry validator.
   - { from: github,    to: sdd,        via: "registry-schema@1 (Fsgg.Registry / fsgg-sdd validates registry/dependencies.yml; gate pins FS.GG.SDD.Cli — ADR-0015)" }
   # ADR-0017 (.github#163/#168): registry/skills.yml is reconciled FROM the producer skill-manifests.
-  - { from: github,    to: rendering,  via: "skill-registry@1 <- rendering product skill-manifest (17 skills, sha256 + materializes-when; Feature 238 / Rendering#76). Grammar aligned on the ADR-0017 canonical form (Rendering#77, closed 2026-07-04)." }
+  - { from: github,    to: rendering,  via: "skill-registry@1 <- rendering product skill-manifest (current set and counts projected from registry/skills.yml; sha256 + materializes-when; Feature 238 / Rendering#76). Grammar aligned on the ADR-0017 canonical form (Rendering#77, closed 2026-07-04)." }
   - { from: github,    to: sdd,        via: "skill-registry@1 <- sdd EMITTED process skill-manifest (.agents/skills/skill-manifest.json, 16 fs-gg-sdd-* skills, always; SDD#111 closing #109). Producer-emitted digests reconciled into skills.yml — registry = manifest = bytes." }
   # rendering depends on no other FS-GG product (it never depends on Governance).
 
@@ -1439,11 +1439,11 @@ coherence:
       [missing]/[unexpected] classes) already shipped (.github#164, merged #167).
     note: >
       STANDING REQUEST (coherent:false) — the catalog + contract landed (.github#168) and BOTH producer
-      halves are now emitted: the 21 PRODUCT rows are reconciled from the two product producers (17 from
-      Rendering's published manifest — Feature 238 / Rendering#76, closes Rendering#71; 4 GAME rows from
-      FS.GG.Game's manifest since the ADR-0022 P4 ownership migration, FS.GG.Game#4); the 16 PROCESS rows
-      are reconciled from SDD's EMITTED process manifest (.agents/skills/skill-manifest.json — SDD#111
-      closing #109).
+      halves are now emitted: PRODUCT rows are reconciled from Rendering's and Game's current producer
+      manifests (the generated Skill-registry row-counts block is the authoritative current per-owner
+      total; Feature 238 / Rendering#76, closes Rendering#71; ADR-0022 P4 migration, FS.GG.Game#4);
+      the 16 PROCESS rows are reconciled from SDD's EMITTED process manifest
+      (.agents/skills/skill-manifest.json — SDD#111 closing #109).
       BOTH producer-side conditions are now CLEARED (.github#290); no producer work gates the flip:
         (1) CLEARED — P2, SDD now EMITS a process skill-manifest (.agents/skills/skill-manifest.json,
             schema skill-manifest v1; SDD#111 closing cross-repo #109), regenerable/checkable via
@@ -1456,9 +1456,9 @@ coherence:
             predicates (`(profile == "app" || …)`) that the gate evaluator (bare-token `==`/`in [..]`/`and`/
             `or`, no parens/quotes) reads as FALSE. `scripts/generate-skill-manifest.fsx` now carries an
             explicit normalizer: template.json keeps the C-style conditions the `dotnet new` engine
-            requires, and the generator EMITS the canonical form. Verified on FS.GG.Rendering@main
-            (4ba4491): 0 of 21 manifest entries contain `&&`/`||`/parens/quotes. registry = manifest =
-            evaluable, so nothing is normalized on the way in any more.
+            requires, and the generator EMITS the canonical form. The current Rendering manifest
+            contains no C-style entries. registry = manifest = evaluable, so nothing is normalized
+            on the way in any more.
       Remaining to flip — .github-side only: publish the typed skills.yml validator assertion
       (`Fsgg.Registry`), flip this row, and update the epic's `skill-mirror-verified` /
       `fsgg-sdd-orchestrator-axis` cross-refs. The guards this row's flip was warned about are satisfied
@@ -1467,7 +1467,7 @@ coherence:
       pattern epic #266 exists to kill. That gate is drift-prone (no producer→.github re-digest propagation
       edge, #299), so re-check it at flip time rather than trusting this note.
       Contract touched: skill-registry, skill-manifest/scaffold-provider (grammar).
-    resolved_by: "PENDING — NO producer-side condition remains (.github#290): P2 SDD process-manifest emission DONE (SDD#111 closing #109); Rendering#77 predicate-grammar alignment DONE (closed 2026-07-04, cf93eabd — generator normalizes on emit, shipped manifest is 0/21 C-style). What remains is .github-side: publish the typed `Fsgg.Registry` validator assertion over skills.yml, then flip. Catalog + `skill-registry` contract: FS-GG/.github#168 (epic #163, ADR-0017)."
+    resolved_by: "PENDING — NO producer-side condition remains (.github#290): P2 SDD process-manifest emission DONE (SDD#111 closing #109); Rendering#77 predicate-grammar alignment DONE (closed 2026-07-04, cf93eabd — generator normalizes on emit, the current shipped manifest has zero C-style entries). What remains is .github-side: publish the typed `Fsgg.Registry` validator assertion over skills.yml, then flip. Catalog + `skill-registry` contract: FS-GG/.github#168 (epic #163, ADR-0017)."
     impact: "A single authoritative skill catalog exists (both producer halves emitted, both in the canonical grammar) and skill absence is condition-checkable; the enforcing union gate can be turned on across both lanes (P4, FS.GG.Templates#49) once the typed validator assertion ships and skill-registry-coherence is green on main."
     tracking: "Epic FS-GG/.github#163 (ADR-0017) + .github#168 (this catalog/contract). P2 process-manifest EMISSION: DONE — FS-GG/FS.GG.SDD#111 (closing cross-repo #109). Grammar alignment: DONE — FS-GG/FS.GG.Rendering#77 (verified .github#290). Flip readiness rides on the typed validator + a green skill-registry-coherence (drift source: .github#299)."
   - id: scaffold-provider-identifier
