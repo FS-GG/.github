@@ -825,101 +825,221 @@ fi
 # that moves the feed once reproduces this bug's easier half and misses the one that kept `main` red.
 CHECKPROJ="$ROOT/scripts/check-projection.py"
 
-# The flip, applied to a COPY of the REAL registry: two contracts advanced, each `version` and any
-# `package-version`. A regex substitution (not a YAML round-trip) so the file the gate reads keeps the
-# real shape; bounded to each `- id:` block so it cannot bleed into a sibling that shares a version.
-FLIPPED="$WORK/registry-twice-moved.yml"
-VERS="$WORK/closure-versions.txt"
-# DERIVE the from-versions from the live registry and bump each, rather than hardcoding them — a
-# hardcoded pair silently ROTS when the registry moves past it (the bump becomes a no-op, the "flip"
-# writes nothing, and this #1081 guard passes on a registry it never actually flipped, testing
-# nothing). That is exactly how it was found dead here (.github#1260): the registry had advanced to
-# 0.15.0/0.7.0 while the test still bumped 0.12.0/0.4.0. Deriving keeps the guard live by construction.
-python3 - "$ROOT/registry/dependencies.yml" "$FLIPPED" "$VERS" <<'PY'
+# Build two truthful starting states from the REAL registry:
+#   - decoupled preserves the live relationship when it is already decoupled, otherwise synthesises
+#     the valid template-only shape (package ahead of the framework pin);
+#   - coupled deliberately makes the template package equal the framework pin.
+# Then advance the framework pin, template package, and coord-engine package independently by FIELD.
+# Matching on field names matters: the old fixture matched values, so a valid decoupled row advanced
+# only the framework field and then demanded package-version projections that correctly did not move.
+#
+# This is still a text substitution rather than a YAML round-trip: the production registry carries
+# provenance comments whose bytes are part of the contract.
+BASE_DECOUPLED="$WORK/registry-decoupled-base.yml"
+BASE_COUPLED="$WORK/registry-coupled-base.yml"
+FLIPPED_DECOUPLED="$WORK/registry-decoupled-flipped.yml"
+FLIPPED_COUPLED="$WORK/registry-coupled-flipped.yml"
+VERS_DECOUPLED="$WORK/closure-decoupled-versions.txt"
+VERS_COUPLED="$WORK/closure-coupled-versions.txt"
+cp "$ROOT/registry/dependencies.yml" "$BASE_DECOUPLED"
+
+python3 - "$BASE_DECOUPLED" "$BASE_COUPLED" "$FLIPPED_DECOUPLED" "$FLIPPED_COUPLED" \
+  "$VERS_DECOUPLED" "$VERS_COUPLED" <<'PY'
 import re, sys
-s = open(sys.argv[1], encoding="utf-8").read()
-def current(cid):
+
+source, coupled_out, decoupled_flip_out, coupled_flip_out, decoupled_versions, coupled_versions = sys.argv[1:]
+live = open(source, encoding="utf-8").read()
+
+def block(text, cid):
     m = re.search(
-        r'- id: ' + re.escape(cid) + r'\n(?:(?!\s*- id:).*\n)*?\s*version: "([^"]*)"', s)
+        r'(^\s*- id: ' + re.escape(cid) + r'\n(?:(?!^\s*- id:).*\n)*)',
+        text,
+        flags=re.MULTILINE,
+    )
     if not m:
-        sys.exit(f"closure test: no `version:` for {cid} — the registry shape changed.")
+        sys.exit(f"closure test: no row for {cid} — the registry shape changed.")
+    return m
+
+def field(text, cid, name):
+    row = block(text, cid).group(1)
+    m = re.search(r'^\s*' + re.escape(name) + r': "([^"]*)"', row, flags=re.MULTILINE)
+    if not m:
+        sys.exit(f"closure test: no `{name}:` for {cid} — the registry shape changed.")
     return m.group(1)
-def bumped(v):  # advance the last numeric segment: a definitely-higher version that still parses
-    p = v.split(".")
-    p[-1] = str(int(re.match(r"\d+", p[-1]).group()) + 1)
-    return ".".join(p)
-def bump(text, cid, frm, to):
-    # inside `- id: <cid>` up to (not into) the next `- id:`, advance version/package-version == frm
-    pat = re.compile(
-        r'(- id: ' + re.escape(cid) + r'\n(?:(?!\s*- id:).*\n)*?\s*(?:package-)?version: ")'
-        + re.escape(frm) + r'(")')
-    n = 1
-    while n:
-        text, n = pat.subn(r'\g<1>' + to + r'\g<2>', text, count=1)
-    return text
-tf, cf = current("fs-gg-ui-template"), current("coord-engine")
-tt, ct = bumped(tf), bumped(cf)
-s = bump(s, "fs-gg-ui-template", tf, tt)
-s = bump(s, "coord-engine", cf, ct)
-open(sys.argv[2], "w", encoding="utf-8").write(s)
-open(sys.argv[3], "w", encoding="utf-8").write(f"{tt}\n{ct}\n")
+
+def set_field(text, cid, name, value):
+    row_match = block(text, cid)
+    row = row_match.group(1)
+    pattern = re.compile(r'(^\s*' + re.escape(name) + r': ")[^"]*(")', flags=re.MULTILINE)
+    updated, count = pattern.subn(r'\g<1>' + value + r'\g<2>', row, count=1)
+    if count != 1:
+        sys.exit(f"closure test: expected exactly one {cid}.{name}, found {count}.")
+    return text[:row_match.start(1)] + updated + text[row_match.end(1):]
+
+def bumped(v):
+    # Advance the last numeric segment: definitely higher while preserving the accepted version shape.
+    parts = v.split(".")
+    tail = re.match(r"\d+", parts[-1])
+    if not tail:
+        sys.exit(f"closure test: cannot bump version {v!r}.")
+    parts[-1] = str(int(tail.group()) + 1)
+    return ".".join(parts)
+
+def template_tag(version):
+    return f"fs-gg-ui-template/v{version}"
+
+def assert_template_row(text, relationship):
+    framework = field(text, "fs-gg-ui-template", "version")
+    package = field(text, "fs-gg-ui-template", "package-version")
+    tag = field(text, "fs-gg-ui-template", "package-tag")
+    if relationship == "coupled" and framework != package:
+        sys.exit("closure test: failed to construct the coupled template/framework starting state.")
+    if relationship == "decoupled" and framework == package:
+        sys.exit("closure test: failed to construct the decoupled template/framework starting state.")
+    if tag != template_tag(package):
+        sys.exit(
+            f"closure test: {relationship} template row is not internally coherent: "
+            f"package-version={package}, package-tag={tag}."
+        )
+
+live_framework = field(live, "fs-gg-ui-template", "version")
+live_template = field(live, "fs-gg-ui-template", "package-version")
+live_coord = field(live, "coord-engine", "version")
+
+coupled = set_field(live, "fs-gg-ui-template", "package-version", live_framework)
+coupled = set_field(coupled, "fs-gg-ui-template", "package-tag", template_tag(live_framework))
+decoupled_template = live_template if live_template != live_framework else bumped(live_framework)
+decoupled = set_field(live, "fs-gg-ui-template", "package-version", decoupled_template)
+decoupled = set_field(decoupled, "fs-gg-ui-template", "package-tag", template_tag(decoupled_template))
+assert_template_row(coupled, "coupled")
+assert_template_row(decoupled, "decoupled")
+open(source, "w", encoding="utf-8").write(decoupled)
+open(coupled_out, "w", encoding="utf-8").write(coupled)
+
+def flip(base, framework_from, template_from, coord_from):
+    framework_to = bumped(framework_from)
+    template_to = bumped(template_from)
+    coord_to = bumped(coord_from)
+    changed = set_field(base, "fs-gg-ui-template", "version", framework_to)
+    changed = set_field(changed, "fs-gg-ui-template", "package-version", template_to)
+    changed = set_field(changed, "fs-gg-ui-template", "package-tag", template_tag(template_to))
+    changed = set_field(changed, "coord-engine", "version", coord_to)
+    changed = set_field(changed, "coord-engine", "package-version", coord_to)
+    relationship = "coupled" if framework_to == template_to else "decoupled"
+    assert_template_row(changed, relationship)
+    return changed, framework_to, template_to, template_tag(template_to), coord_to
+
+decoupled_flip, df, dt, dtag, dc = flip(decoupled, live_framework, decoupled_template, live_coord)
+coupled_flip, cf, ct, ctag, cc = flip(coupled, live_framework, live_framework, live_coord)
+open(decoupled_flip_out, "w", encoding="utf-8").write(decoupled_flip)
+open(coupled_flip_out, "w", encoding="utf-8").write(coupled_flip)
+open(decoupled_versions, "w", encoding="utf-8").write(f"{df}\n{dt}\n{dtag}\n{dc}\n")
+open(coupled_versions, "w", encoding="utf-8").write(f"{cf}\n{ct}\n{ctag}\n{cc}\n")
 PY
-TMPL_TO="$(sed -n 1p "$VERS")"
-CE_TO="$(sed -n 2p "$VERS")"
+
+TMPL_FRAMEWORK_TO="$(sed -n 1p "$VERS_DECOUPLED")"
+TMPL_PACKAGE_TO="$(sed -n 2p "$VERS_DECOUPLED")"
+TMPL_TAG_TO="$(sed -n 3p "$VERS_DECOUPLED")"
+CE_TO="$(sed -n 4p "$VERS_DECOUPLED")"
 
 # RED half — no engine: the write alone leaves the REQUIRED gate red against the un-regenerated
-# region. The direct #1081 regression guard; it must fail while the region is stale, naming both moves.
-if red="$(python3 "$CHECKPROJ" "$FLIPPED" "$ROOT/docs/registry/compatibility.md" 2>&1)"; then
+# region. The direct #1081 regression guard; it must fail while the region is stale, naming all
+# independently moved values from the live decoupled start.
+if red="$(python3 "$CHECKPROJ" "$FLIPPED_DECOUPLED" "$ROOT/docs/registry/compatibility.md" 2>&1)"; then
   bad "closure: a flip WITHOUT regeneration must red the required projection gate" \
       "the gate passed on a stale region — the write-only bug #1081 names is not caught: $red"
-elif printf '%s' "$red" | grep -q "$TMPL_TO" && printf '%s' "$red" | grep -q "$CE_TO"; then
-  ok "closure: a flip without regeneration reds the required gate (both moved contracts)"
+elif printf '%s' "$red" | grep -q "$TMPL_FRAMEWORK_TO" \
+   && printf '%s' "$red" | grep -q "$TMPL_PACKAGE_TO" \
+   && printf '%s' "$red" | grep -q "$CE_TO" \
+   && grep -q "package-tag: \"$TMPL_TAG_TO\"" "$FLIPPED_DECOUPLED"; then
+  ok "closure: stale projections name all projected values and the package tag moved coherently"
 else
-  bad "closure: gate red, but not for the two moved contracts ($TMPL_TO / $CE_TO)" "$red"
+  bad "closure: gate/tag evidence omitted a moved value ($TMPL_FRAMEWORK_TO / $TMPL_PACKAGE_TO / $TMPL_TAG_TO / $CE_TO)" "$red"
 fi
 
 # GREEN half — regenerate from the flipped registry and assert the required `projection` gate AND
 # `generate-projections --check` both go green. Then exercise the exact staging helper used by the bot
-# and prove a FRAMEWORK advance leaves no generated projection unstaged — including the two component
-# inventory consumers added after the old three-path workflow list (#1385). Needs the engine (the CI
-# fixture job builds it); a local run without one SKIPS, leaving the always-on RED half as the guard.
-# Runs in a throwaway copy of the tracked tree so it never touches the real checkout.
+# in BOTH coupled and decoupled starting states. The expected staged set comes from the actual diff
+# produced by the generator, not from another historical path list in this fixture. The generator's
+# own --list remains the whitelist: every changed generated path plus the registry source must be
+# staged, and no unrelated path may ride the bot commit.
+#
+# Needs the engine (the CI fixture job builds it); a local run without one SKIPS, leaving the always-on
+# RED half as the guard. Each case runs in a throwaway copy of the tracked tree.
 ENGINE="${FSGG_COORD_ENGINE_BIN:-$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine}"
 if [ -x "$ENGINE" ]; then
-  TREE="$WORK/closure-tree"
-  mkdir -p "$TREE"
-  git -C "$ROOT" archive HEAD | tar -x -C "$TREE"
-  git -C "$TREE" init -q
-  git -C "$TREE" config user.name fixture
-  git -C "$TREE" config user.email fixture@example.invalid
-  git -C "$TREE" add -A
-  git -C "$TREE" commit -qm baseline
-  cp "$FLIPPED" "$TREE/registry/dependencies.yml"
-  if FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$TREE/scripts/generate-projections" >/dev/null 2>&1 \
-     && python3 "$CHECKPROJ" "$TREE/registry/dependencies.yml" "$TREE/docs/registry/compatibility.md" >/dev/null 2>&1 \
-     && FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$TREE/scripts/generate-projections" --check >/dev/null 2>&1; then
-    ok "closure: regenerating greens BOTH the projection gate and generate-projections --check"
-  else
-    bad "closure: regeneration did not green the gates" \
-        "$(python3 "$CHECKPROJ" "$TREE/registry/dependencies.yml" "$TREE/docs/registry/compatibility.md" 2>&1)"
-  fi
+  closure_case() {
+    local mode="$1" base="$2" flipped="$3" versions="$4"
+    local tree="$WORK/closure-$mode-tree"
+    local framework_to template_to tag_to coord_to expected staged allowed unexpected
+    framework_to="$(sed -n 1p "$versions")"
+    template_to="$(sed -n 2p "$versions")"
+    tag_to="$(sed -n 3p "$versions")"
+    coord_to="$(sed -n 4p "$versions")"
 
-  if bash "$TREE/scripts/stage-generated-projections" \
-     && git -C "$TREE" diff --quiet \
-     && staged="$(git -C "$TREE" diff --cached --name-only)" \
-     && grep -qx 'registry/dependencies.yml' <<<"$staged" \
-     && grep -qx 'docs/architecture.md' <<<"$staged" \
-     && grep -qx 'docs/registry/compatibility.md' <<<"$staged" \
-     && grep -qx 'profile/README.md' <<<"$staged" \
-     && grep -qx 'docs/consumer/versioning-and-updates.md' <<<"$staged"; then
-    ok "closure: bot staging includes EVERY projection changed by a framework advance"
-  else
-    bad "closure: bot staging left a generated projection unstaged or omitted" \
-        "unstaged:
-$(git -C "$TREE" diff --name-only)
+    mkdir -p "$tree"
+    git -C "$ROOT" archive HEAD | tar -x -C "$tree"
+    cp "$base" "$tree/registry/dependencies.yml"
+    FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$tree/scripts/generate-projections" >/dev/null 2>&1
+    git -C "$tree" init -q
+    git -C "$tree" config user.name fixture
+    git -C "$tree" config user.email fixture@example.invalid
+    git -C "$tree" add -A
+    git -C "$tree" commit -qm baseline
+
+    cp "$flipped" "$tree/registry/dependencies.yml"
+    if red="$(python3 "$CHECKPROJ" "$tree/registry/dependencies.yml" "$tree/docs/registry/compatibility.md" 2>&1)"; then
+      bad "closure ($mode): a flip WITHOUT regeneration must red the required projection gate" \
+          "the gate passed on a stale region: $red"
+    elif printf '%s' "$red" | grep -q "$framework_to" \
+       && printf '%s' "$red" | grep -q "$template_to" \
+       && printf '%s' "$red" | grep -q "$coord_to" \
+       && grep -q "package-tag: \"$tag_to\"" "$flipped"; then
+      ok "closure ($mode): stale projections name every projected value and the tag moved coherently"
+    else
+      bad "closure ($mode): stale gate omitted a moved value ($framework_to / $template_to / $tag_to / $coord_to)" "$red"
+    fi
+
+    if FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$tree/scripts/generate-projections" >/dev/null 2>&1 \
+       && python3 "$CHECKPROJ" "$tree/registry/dependencies.yml" "$tree/docs/registry/compatibility.md" >/dev/null 2>&1 \
+       && FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$tree/scripts/generate-projections" --check >/dev/null 2>&1; then
+      ok "closure ($mode): regeneration greens both projection gates"
+    else
+      bad "closure ($mode): regeneration did not green the gates" \
+          "$(python3 "$CHECKPROJ" "$tree/registry/dependencies.yml" "$tree/docs/registry/compatibility.md" 2>&1)"
+    fi
+
+    expected="$(git -C "$tree" diff --name-only | LC_ALL=C sort -u)"
+    allowed="$({
+      printf '%s\n' 'registry/dependencies.yml'
+      FSGG_COORD_ENGINE_BIN="$ENGINE" bash "$tree/scripts/generate-projections" --list | awk -F '\t' 'NF == 3 { print $2 }'
+    } | LC_ALL=C sort -u)"
+    unexpected="$(comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$allowed"))"
+    : > "$tree/unrelated-build-output.txt"
+
+    if [ -z "$unexpected" ] \
+       && grep -qx 'registry/dependencies.yml' <<<"$expected" \
+       && bash "$tree/scripts/stage-generated-projections" \
+       && git -C "$tree" diff --quiet \
+       && staged="$(git -C "$tree" diff --cached --name-only | LC_ALL=C sort -u)" \
+       && [ "$staged" = "$expected" ] \
+       && ! grep -qx 'unrelated-build-output.txt' <<<"$staged"; then
+      ok "closure ($mode): staging exactly matches the actual registry/generated diff"
+    else
+      bad "closure ($mode): staging was incomplete or included an unrelated path" \
+          "actual changed paths:
+$expected
+paths outside registry + generator --list:
+${unexpected:--}
+unstaged:
+$(git -C "$tree" diff --name-only)
 staged:
-$(git -C "$TREE" diff --cached --name-only)"
-  fi
+${staged:-$(git -C "$tree" diff --cached --name-only)}"
+    fi
+  }
+
+  closure_case decoupled "$BASE_DECOUPLED" "$FLIPPED_DECOUPLED" "$VERS_DECOUPLED"
+  closure_case coupled "$BASE_COUPLED" "$FLIPPED_COUPLED" "$VERS_COUPLED"
 else
   printf '  SKIP closure GREEN half — no engine at %s (the CI fixture job builds it)\n' "$ENGINE"
 fi
@@ -947,7 +1067,7 @@ if [ -x "$ENGINE" ]; then
   GTREE="$WORK/accept4-tree"
   mkdir -p "$GTREE"
   git -C "$ROOT" archive HEAD | tar -x -C "$GTREE"
-  cp "$FLIPPED" "$GTREE/registry/dependencies.yml"   # the twice-moved flip from the closure case above
+  cp "$FLIPPED_DECOUPLED" "$GTREE/registry/dependencies.yml"   # the twice-moved flip above
 
   reacted=""
   # `generated-paths --roster` names each generator's `--list` invocation; strip `--list` to get the
