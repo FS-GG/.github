@@ -78,7 +78,6 @@ jobs:
       # The fixture's paths:-coverage assertion parses this workflow with PyYAML. Declare it rather
       # than inheriting whatever the runner image happens to ship: a gate that asserts other gates
       # cannot itself rest on an undeclared dependency. Mirrors repos-audit-selftest.yml.
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the repos-registry fixture
         run: bash tests/repos-registry/run.sh

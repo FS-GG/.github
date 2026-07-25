@@ -150,11 +150,7 @@ jobs:
           path: receiver
           persist-credentials: false
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
 
       - name: Verify ${{ matrix.repo.full }}'s required contexts are all producible
         env:

@@ -1,0 +1,41 @@
+{
+  "large_checker_threshold_lines": 500,
+  "checkers": [
+    {
+      "source": "scripts/check-pin-coherence.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/pin-coherence/run.sh",
+      "workflow": ".github/workflows/pin-coherence.yml"
+    },
+    {
+      "source": "scripts/check-paths-coherence.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/paths-coherence/run.sh",
+      "workflow": ".github/workflows/paths-coherence.yml"
+    },
+    {
+      "source": "scripts/check-worker-id-attractor.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/worker-id-attractor/run.sh",
+      "workflow": ".github/workflows/worker-id-attractor.yml"
+    },
+    {
+      "source": "scripts/check-required-contexts.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/required-contexts/run.sh",
+      "workflow": ".github/workflows/required-context-coherence-selftest.yml"
+    },
+    {
+      "source": "scripts/check-closing-keywords.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/closing-keywords/run.sh",
+      "workflow": ".github/workflows/closing-keywords.yml"
+    },
+    {
+      "source": "scripts/check-recipe-pagination.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/recipe-pagination/run.sh",
+      "workflow": ".github/workflows/recipe-pagination.yml"
+    }
+  ]
+}

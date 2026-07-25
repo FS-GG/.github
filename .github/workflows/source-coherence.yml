@@ -84,11 +84,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the source-coherence fixture (no network)
         run: bash tests/source-coherence/run.sh
       - name: Run the emitted-contract-version fixture (no network)
@@ -116,12 +112,7 @@ jobs:
           sparse-checkout: src/FS.GG.Contracts
           sparse-checkout-cone-mode: true
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
 
       - name: Assert fsgg-contracts `version` == FS.GG.Contracts source SemVer
         run: |

@@ -36,7 +36,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the repos-audit fixture
         run: bash tests/repos-audit/run.sh

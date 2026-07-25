@@ -64,8 +64,7 @@ jobs:
       - uses: actions/checkout@v7
       # The gate PARSES workflows since #737 (a recipe is fence-scanned; a workflow's shell lives in
       # `run:` blocks, and its comments are prose that must stay legal). That needs PyYAML.
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the recipe-landable fixture
         run: bash tests/recipe-landable/run.sh
       # The fixture drives the gate against throwaway recipes AND against this repo's real ones. This
