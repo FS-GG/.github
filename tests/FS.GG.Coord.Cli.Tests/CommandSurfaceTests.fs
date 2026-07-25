@@ -43,6 +43,7 @@ module CommandSurfaceTests =
           "next", Next
           "batch", BatchCmd
           "ready", Ready
+          "reconcile", Reconcile
           "who", Who
           "reap", Reap
           "claim", Claim

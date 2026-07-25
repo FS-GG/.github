@@ -109,6 +109,23 @@ module OptionsTests =
     let ``ready --all is a boolean widen with no value`` () =
         Assert.True((parse [ "ready"; "--all" ] |> ok).All)
 
+    [<Fact>]
+    let ``reconcile is a text dry-run by default and apply is explicit`` () =
+        let dry = parse [ "reconcile"; "--repo"; ".github" ] |> ok
+        Assert.Equal(Reconcile, dry.Command)
+        Assert.Equal(Text, dry.Render)
+        Assert.False(dry.Apply)
+
+        let apply = parse [ "reconcile"; "--apply" ] |> ok
+        Assert.True(apply.Apply)
+        Assert.Equal(Text, apply.Render)
+
+        let mixed = parse [ "reconcile"; "--apply"; "--json" ]
+        Assert.Equal(
+            Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode.",
+            mixed
+        )
+
     // ================================================================================================
     // #991 — THE RESIDUE RULE, GENERALISED. The rule was always general; its enforcement was one arm.
     // ================================================================================================

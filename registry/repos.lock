@@ -6,9 +6,9 @@
 # `repos-registry-selftest` fails on any diff, so nobody AUTHORS it — a collision here is a REBASE,
 # not a decision. DO NOT reserve it in a `Paths:` touch-set (#527); regenerate it and name it as
 # expected drift in the PR.
-c61c9a8ff53b7d586a064e079b5d7cdf596202d55eba22b5134b64ea375e0fff  .claude/skills/check-board
-28e27a82efe67040a985b136f9720737c317d7196ea4a09dc9d4f6765188d8e5  .claude/skills/cross-repo-coordination
-3a68a84816b3a30f7b640aeefa037873b74c179a033a881c3c56f1dd6a1baeae  .claude/skills/intra-repo-parallel-work
-3d68ceca602d186d875c905eab06f1627ea2b4c4b680aa185cc51d68f9c596d1  .claude/skills/pnext-item
+558a936de5b38860bde88515c7dafed0ade11ad3b13246f1488bc0b498061153  .claude/skills/check-board
+c857dab77484ebebdb60d88bd5b7259b5b7f7f489a8e310a66502637359802c0  .claude/skills/cross-repo-coordination
+7bee25b83b422cf0654178a741de4e90a424c24931ae119004843c5fc74b784f  .claude/skills/intra-repo-parallel-work
+107c998b5946ed8b50ccaffd1aa972b038f136488d6a583e8b09f211b11c02ac  .claude/skills/pnext-item
 90363dc3f2b14c985b4134ed96b2fb831248c771a0dc10842b2d4e61c9fd4e6a  dist/dotnet/.config/dotnet-tools.json
 a05f04b448105503fac390df79c165e00942e5ecf7e03c66e9ed5f38c424987a  scripts/fsgg-coord

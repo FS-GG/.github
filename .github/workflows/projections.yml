@@ -112,7 +112,9 @@ jobs:
           # 25 → 27: `component-inventory` in profile/README.md AND docs/consumer/versioning-and-updates.md
           #          (#1313 — the hand-maintained component table becomes a projection off the roster +
           #          registry/dependencies.yml).
-          expected=27
+          # 27 → 37: M3 routes ten skill projections into focused references and emits each one to the
+          #          third active root (`.codex`) as well as `.claude`/`.agents` (#1413).
+          expected=37
 
           list="$(bash scripts/generate-projections --list)"
           n="$(printf '%s\n' "$list" | grep -c .)"

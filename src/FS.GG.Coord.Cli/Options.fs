@@ -12,6 +12,7 @@ module Options =
         | Next
         | BatchCmd
         | Ready
+        | Reconcile
         | Who
         | Reap
         | Claim
@@ -173,6 +174,9 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
   ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
                                              by default — a TRUTH read, so it shows items the scheduler
                                              will refuse; --status/--all widen past the default)
+  reconcile [--repo NAME] [--apply] [--json]  derive mechanically safe board repairs from a fresh scan;
+                                             dry-run by default. Judgement findings remain report-only in
+                                             `lint`; --apply performs only typed chore remedies
   who    [--repo NAME|--all-repos] [--local] [--json]
                                              who holds what, right now (held/stale/unclaimed;
                                              --local joins claims to local git worktrees;
@@ -364,7 +368,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | FAllRepos -> Only [ Who ]
         | FAll -> Only [ Ready ]
         | FActive -> Only [ Overlap ]
-        | FApply -> Only [ Reap ]
+        | FApply -> Only [ Reap; Reconcile ]
         | FPeek -> Only [ Inbox ]
         | FDryRun -> Only [ Flush ]
         | FStrict -> Only [ LintCmd ]
@@ -456,6 +460,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Next -> "next"
         | BatchCmd -> "batch"
         | Ready -> "ready"
+        | Reconcile -> "reconcile"
         | Who -> "who"
         | Reap -> "reap"
         | Claim -> "claim"
@@ -662,7 +667,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     | Only readers when List.contains o.Command readers -> None
                     | Only readers -> Some(spelling, readers))
 
-            if o.AllRepos && o.Repo.IsSome then
+            if o.Command = Reconcile && o.Apply && o.Render = Json then
+                Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode."
+            elif o.AllRepos && o.Repo.IsSome then
                 Error "who: --repo and --all-repos are mutually exclusive — choose the repository slice or the whole board."
             else
                 match residue with
@@ -911,6 +918,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "next" :: rest -> flags { defaults with Command = Next } rest
         | "batch" :: rest -> flags { defaults with Command = BatchCmd } rest
         | "ready" :: rest -> flags { defaults with Command = Ready } rest
+        | "reconcile" :: rest -> flags { defaults with Command = Reconcile; Render = Text } rest
         // `who` is a HUMAN truth read by default (the table case 20 asserts), and `--json` opts into the
         // machine contract cases 20/25 consume — the mirror of `ready`/`batch`, where JSON is the default.
         | "who" :: rest -> flags { defaults with Command = Who; Render = Text } rest

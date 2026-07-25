@@ -15,6 +15,7 @@
     <Compile Include="OptionsTests.fs" />
     <Compile Include="CommandSurfaceTests.fs" />
     <Compile Include="DocumentedInvocationTests.fs" />
+    <Compile Include="SkillProgressiveDisclosureTests.fs" />
     <Compile Include="ExitContractTests.fs" />
     <Compile Include="RuleSubsetTests.fs" />
     <Compile Include="IdentityTests.fs" />

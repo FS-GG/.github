@@ -343,6 +343,7 @@ let main argv =
             | Next
             | BatchCmd
             | Ready
+            | Reconcile
             | Who
             | Reap
             | Budget

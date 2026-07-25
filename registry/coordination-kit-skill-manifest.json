@@ -4,11 +4,26 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "c5cfd92b547ba7acdd2a0fcfaaa48cf0c2c460e19b1e4a9f898dffce1af8b131",
+      "tree-sha256": "2328952d12e674fc298e771c9046844dc55fdec126fd671a603ff34aaadb8a84",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "c61c9a8ff53b7d586a064e079b5d7cdf596202d55eba22b5134b64ea375e0fff",
+          "sha256": "558a936de5b38860bde88515c7dafed0ade11ad3b13246f1488bc0b498061153",
+          "executable": false
+        },
+        {
+          "path": "references/deep-detail.md",
+          "sha256": "3a774b01b439e4ac64802bac7b5f81365a50215d415fb52440d7880288524b3e",
+          "executable": false
+        },
+        {
+          "path": "references/judgement-findings.md",
+          "sha256": "4d1829883c233ea4a05da6475222a43ee4873f302e50b3695dc6ee566feea454",
+          "executable": false
+        },
+        {
+          "path": "references/mechanical-reconciliation.md",
+          "sha256": "01d580f1066975585845d7796fc1eeb7593882f8f9a0e1d3fd0e7f167ae785a2",
           "executable": false
         }
       ]
@@ -16,11 +31,31 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "1826b9551a77129188e4c06f11f61f81409f170fc03fc15b6001185c128eb55d",
+      "tree-sha256": "4e03ce46799e5b31f95a9ce900273e795810271d0204bed9a6f6de7dda0cedb2",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "28e27a82efe67040a985b136f9720737c317d7196ea4a09dc9d4f6765188d8e5",
+          "sha256": "c857dab77484ebebdb60d88bd5b7259b5b7f7f489a8e310a66502637359802c0",
+          "executable": false
+        },
+        {
+          "path": "references/coherent-releases.md",
+          "sha256": "81390861d504fb2573c43495c8781b6aeb819cd04b8f25dec558b3389451baf5",
+          "executable": false
+        },
+        {
+          "path": "references/contract-changes.md",
+          "sha256": "257b46c31adcee4c494b00ce17db3045fd60164e8b3d38e8cc7a8f64555ffc2b",
+          "executable": false
+        },
+        {
+          "path": "references/deep-detail.md",
+          "sha256": "91a17479023973cf674092875bec55090e048f10643fe92e6a50c15ed87a024c",
+          "executable": false
+        },
+        {
+          "path": "references/mailbox-and-board.md",
+          "sha256": "b740c48e4fdacf168095f184c2d04d0bbdb2c0cafdb667ebb9ccfe8a8d4ed9fc",
           "executable": false
         }
       ]
@@ -28,11 +63,26 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "a71ef385f8c8eed0e41687d2c3e7d039a7b9c73f885d89ea7d7a4f893da5e95d",
+      "tree-sha256": "ab3b19ce4c1e9bf574656b0eb64997413f5ddd02ede2b9e0d3e4701609647b25",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "3a68a84816b3a30f7b640aeefa037873b74c179a033a881c3c56f1dd6a1baeae",
+          "sha256": "7bee25b83b422cf0654178a741de4e90a424c24931ae119004843c5fc74b784f",
+          "executable": false
+        },
+        {
+          "path": "references/deep-detail.md",
+          "sha256": "22c091812ae18bdccea853ce582734297954552c24a3e781c1e73a28844ec5ae",
+          "executable": false
+        },
+        {
+          "path": "references/protocol-facts.md",
+          "sha256": "42295214f6405b9f35f028c0441af7cdc218ea13d29980272fbf34b796b852b2",
+          "executable": false
+        },
+        {
+          "path": "references/worktrees-and-overlap.md",
+          "sha256": "279700f68c4362f4d907aaaf165f6270971b5cb39c38f1e003f4916b3d8144d2",
           "executable": false
         }
       ]
@@ -40,11 +90,31 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "176495ae49118f270d9bf5d2eed40e2191e352b74eebaa2612c0cf413f8b32f5",
+      "tree-sha256": "0b8ee262d7b2416e77ad01cd93b2044272ef5b1c70fdc6c32f335fb285c30e8b",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "3d68ceca602d186d875c905eab06f1627ea2b4c4b680aa185cc51d68f9c596d1",
+          "sha256": "107c998b5946ed8b50ccaffd1aa972b038f136488d6a583e8b09f211b11c02ac",
+          "executable": false
+        },
+        {
+          "path": "references/command-contracts.md",
+          "sha256": "a8b372985cac3693b616f12778e27565fcef8327d310783096912504dbaf33de",
+          "executable": false
+        },
+        {
+          "path": "references/deep-detail.md",
+          "sha256": "b359bf58ac04fdc563546bce9da5ccfcdd2923aa1745ac6a072f6bc4bf3d44ec",
+          "executable": false
+        },
+        {
+          "path": "references/findings-and-filing.md",
+          "sha256": "aff339addb5fe797dab2e34bcfc0da05e6dc83c6c649dbf1285410c563d82d1a",
+          "executable": false
+        },
+        {
+          "path": "references/merge-and-release.md",
+          "sha256": "5cfbe9ea9983faf2832b3c714c70cb8d5bff9a525171222f8a19a70d94df1082",
           "executable": false
         }
       ]
