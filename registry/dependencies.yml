@@ -563,7 +563,7 @@ contracts:
       (Rendering's template/skill-manifest/skill-manifest.json; SDD's emitted process manifest
       .agents/skills/skill-manifest.json — SDD#111 closing #109; and, since ADR-0054, `.github`'s OWN
       driver manifest registry/driver-skill-manifest.json — emitted by scripts/generate-driver-manifest
-      for the `.github`-authored `scope: driver` (product-materialized, e.g. workRoadmap) AND, since
+      for the `.github`-authored `scope: driver` (product-materialized, e.g. work-roadmap) AND, since
       ADR-0057, `scope: operator` (never-materialized, e.g. drive-board) classes), never
       hand-authored bytes. `materializes-when` is the ADR-0017
       predicate grammar the union gate (scripts/skill-union-assert.sh --params) evaluates against a

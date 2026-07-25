@@ -1,9 +1,9 @@
 ---
-name: workBoard
-description: Drive a single product workspace's own wired project board to completion, fanning work out to fresh disposable subagents and re-planning after each wave — the board-ledger sibling of workRoadmap and the single-repo sibling of drive-board. Use inside a coordination-wired scaffolded workspace when you want its board burned down without babysitting it: the host reconciles the board (check-board), sizes a touch-set-disjoint wave against this one repo, spawns one fresh subagent per slot to run pnext-item, checkpoints and finalizes schema-v2 development feedback per item, verifies each claimed result against ground truth (never the subagent's word), despawns it, and loops until the board is genuinely empty. A simple item is implemented directly; a complex one (Effort L/XL or a needs-sdd signal) runs the full fs-gg-sdd-* lifecycle inside the same claim/merge/done-stamp envelope. Refuses to run — cleanly, naming the fix — when the workspace has no board (scaffolded --no-coordination), no fsgg-coord engine, or no coordination kit. Composes check-board (analyze), pnext-item (the worker), fs-gg-feedback-report (checkpoint/synthesis), and intra-repo-parallel-work (the claim/worktree/touch-set protocol) the workspace already carries. Canonized by ADR-0064; see also ADR-0053, ADR-0054, ADR-0057, ADR-0063.
+name: work-board
+description: Use when explicitly asked to burn down one coordination-wired product workspace's board. Reconcile locally, fan out isolated item workers, verify merges and feedback, and re-plan until the board is empty.
 ---
 
-# workBoard
+# work-board
 
 One command's worth of intent: **"take this workspace's own project board and burn it down, as
 parallel as it is safe to be inside one tree — and don't make me drive."** The board is the plan and
@@ -18,10 +18,10 @@ repo × board ledger**:
 
 | | markdown ledger | board ledger |
 |---|---|---|
-| **single repo** | [workRoadmap](../workRoadmap/SKILL.md) — `driver`, always materialized | **`workBoard` — this file** |
+| **single repo** | [work-roadmap](../work-roadmap/SKILL.md) — `driver`, always materialized | **`work-board` — this file** |
 | **cross-repo** | (n/a) | [drive-board](../drive-board/SKILL.md) — `operator`, never materialized |
 
-So it is the **board-ledger sibling of [workRoadmap](../workRoadmap/SKILL.md)** (same parent-loop-of-
+So it is the **board-ledger sibling of [work-roadmap](../work-roadmap/SKILL.md)** (same parent-loop-of-
 disposable-subagents shape, but the ledger is the wired board rather than a markdown file) and the
 **single-repo sibling of [drive-board](../drive-board/SKILL.md)** (same reconcile → size-wave → spawn →
 verify-against-ground-truth → re-plan shape, but the fan-out is *one repo* instead of every repo).
@@ -37,7 +37,7 @@ Everything else it delegates and does not re-teach:
   isolates in a worktree, opens a PR, and merges on green.
 - **The claim/worktree/touch-set protocol** is
   [intra-repo-parallel-work](../intra-repo-parallel-work/SKILL.md)'s. Here it is **load-bearing in a way
-  it is not for drive-board**: all of workBoard's workers share **one working tree**, so the `Paths:`
+  it is not for drive-board**: all of work-board's workers share **one working tree**, so the `Paths:`
   disjointness `take` already enforces is what keeps a wave from colliding. The host leans on it; it
   does not re-implement it.
 
@@ -47,13 +47,13 @@ A **coordination-wired scaffolded product workspace** — one that `new-sdd-work
 scaffold`) built with coordination wiring ON (the default). That wiring, and nothing this skill ships,
 is what makes the loop possible: it records the board identity as `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT`
 env in `.claude/settings.json`, vendors the `scripts/fsgg-coord` shim + engine, and materializes
-`check-board`, `pnext-item`, and `intra-repo-parallel-work`. workBoard **composes what is already
+`check-board`, `pnext-item`, and `intra-repo-parallel-work`. work-board **composes what is already
 there**; it needs no new tooling. Its absence — a workspace scaffolded `--no-coordination` — is exactly
 the "fail gracefully" boundary below.
 
 ### The graceful-fail preconditions (ADR-0064 §4.1)
 
-workBoard is **always materialized** into a scaffold — the coordination kit is wired *after* the scaffold
+work-board is **always materialized** into a scaffold — the coordination kit is wired *after* the scaffold
 materializer runs, so no scaffold-time predicate could see it (ADR-0063), which is why "fail gracefully"
 is a **runtime** property, not a materialization gate. So before the loop, check these **in order** and
 **stop cleanly on the first miss** — print one clear line that names the cause *and* the alternative, and
@@ -61,7 +61,7 @@ is a **runtime** property, not a materialization gate. So before the loop, check
 
 1. **The board is wired.** `FSGG_COORD_OWNER` and `FSGG_COORD_PROJECT` are set (read them from the
    environment / `.claude/settings.json`). Absent → *"this workspace has no coordination board (scaffolded
-   `--no-coordination`?). Use [workRoadmap](../workRoadmap/SKILL.md) for a markdown roadmap, or **retrofit**
+   `--no-coordination`?). Use [work-roadmap](../work-roadmap/SKILL.md) for a markdown roadmap, or **retrofit**
    the coordination kit + board onto it with `new-sdd-workspace retrofit <workspace>` (add `--board
    owner/title` for a non-default board) — the idempotent inverse of the scaffold-time wiring, which is
    exactly what `--no-coordination` left off (#1343)."*
@@ -86,12 +86,12 @@ Preconditions, once you know you *are* board-capable:
   from `origin/main`, and a stale base manufactures fresh evidence for bugs already fixed (pnext-item §2).
 - Board writes are authorised: `gh auth refresh -s project,read:project`, `issues: write`.
 - You are **not** going to push to `main`. Every change is a PR; the merge guard blocks direct pushes,
-  and an agent may *merge* only a green, reviewed PR — the same rule workRoadmap, drive-board and
+  and an agent may *merge* only a green, reviewed PR — the same rule work-roadmap, drive-board and
   pnext-item hold.
 
 ## 1. The landmine: N subagents collapse onto ONE worker id (ADR-0064 §4.4)
 
-Read this before anything else, because a workBoard that skips it *looks* like it works and quietly
+Read this before anything else, because a work-board that skips it *looks* like it works and quietly
 double-works items — and here, where every worker is in the **same tree**, that is worse than cross-repo.
 
 `fsgg-coord whoami` resolves a worker id in this order (pnext-item §0, and it is the **engine's**, not
@@ -123,7 +123,7 @@ see inside their trees), so it verifies the **outcome** instead (§4).
 
 ## 2. The loop (what the HOST does)
 
-The host is the agent that invoked `/workBoard`. It **schedules; it never implements.** `<this-repo>` is
+The host is the agent that invoked `/work-board`. It **schedules; it never implements.** `<this-repo>` is
 this one workspace's repo, resolved from the git remote — every `fsgg-coord` read below is scoped to it.
 Repeat until §5 says the board is genuinely done:
 
@@ -225,7 +225,7 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 
 ## 4. Verify against ground truth — never the subagent's word
 
-This is drive-board §5 and workRoadmap step 5, and it is the failure mode most worth catching: **a
+This is drive-board §5 and work-roadmap step 5, and it is the failure mode most worth catching: **a
 subagent that reports "merged" on a PR that did not merge.** The host cannot see inside a dead subagent's
 context, so it checks the world the subagent claims to have changed. For each returned worker:
 
@@ -275,7 +275,7 @@ per request, un-batchable — and **five workers looping `take` drained GraphQL 
 (#418). So concurrency is a cap, and the cap is a rate-limit decision. Three rules keep the fan-out from
 taking the board down (identical discipline to drive-board §3):
 
-- **Cap in-flight workers conservatively** (`/workBoard --workers N`, default low). A board with 40
+- **Cap in-flight workers conservatively** (`/work-board --workers N`, default low). A board with 40
   schedulable items does not mean 40 workers; it means the cap's worth, then the next wave.
 - **Let the workers share the 90s scan cache.** The host's own planning reads (`check-board`, `batch`)
   scan **fresh** — a reconciler on a stale board invents drift — but the *workers'* `take`/`next` reads
@@ -292,7 +292,7 @@ taking the board down (identical discipline to drive-board §3):
 ## 7. The completion report
 
 When §5 says done, the host — **itself, not a subagent** — writes a report and lands it, the same close-out
-[workRoadmap](../workRoadmap/SKILL.md) and [drive-board](../drive-board/SKILL.md) use. Write
+[work-roadmap](../work-roadmap/SKILL.md) and [drive-board](../drive-board/SKILL.md) use. Write
 `docs/reports/<YYYY-MM-DD>-workboard.md`, timestamped for today: what shipped this run (items, merged PRs,
 done-stamps), the blockers workers discovered and where they were filed, the follow-ups they queued, every
 rate-limit back-off, and the outstanding human-blocked items check-board named. Follow the house report
@@ -316,7 +316,7 @@ the list of items still parked on a human.
 - **`EX_RATE` (75) from any worker** is a fleet stop (§6): drain, back off to the named reset, `flush`,
   resume. Never loop into the limit.
 - **The workspace is not board-capable** is not a failure — it is the graceful-fail path (§4.1 above under
-  *Where this runs*). Print the one line naming `workRoadmap`/`new-sdd-workspace --board` and stop; do not
+  *Where this runs*). Print the one line naming `work-roadmap`/`new-sdd-workspace --board` and stop; do not
   degrade into a plain edit loop.
 - **Never bypass the merge guard.** No direct push to `main`, no local `git merge` into `main`. Every
   change is a PR; the only allowance is that a worker may *merge* a green, reviewed one.
@@ -331,7 +331,7 @@ the list of items still parked on a human.
 - [drive-board](../drive-board/SKILL.md) — the cross-repo sibling. Same loop; it fans across sibling repos
   where this fans inside one tree, so its workers cannot collide on files and this skill's must not.
   ADR-0057 (why drive-board is `operator` and never materialized — the reason this skill exists).
-- [workRoadmap](../workRoadmap/SKILL.md) — the markdown-ledger sibling; the close-out (§7) is the same.
+- [work-roadmap](../work-roadmap/SKILL.md) — the markdown-ledger sibling; the close-out (§7) is the same.
 - [check-board](../check-board/SKILL.md) — the analysis pass the host runs every wave; the authority on
   board truth, stale blockers, and rollup-ready epics.
 - [pnext-item](../pnext-item/SKILL.md) — the worker loop each subagent runs, the SDD-escalation branch

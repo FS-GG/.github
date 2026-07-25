@@ -1,0 +1,79 @@
+{
+  "check-board": {
+    "positive": "Reconcile the Coordination board before we plan the next wave.",
+    "indirect": "The blockers on the org board look stale; tell me what is actually ready.",
+    "incomplete": "Check whether the board still matches",
+    "negative": "Implement issue #42 in this repository.",
+    "boundary": "Audit the org board for stale state, but do not start any work."
+  },
+  "cross-repo-coordination": {
+    "positive": "Coordinate this contract change across Rendering and Game.",
+    "indirect": "SDD needs a new API from Net before its consumer can move.",
+    "incomplete": "We need something from another FS-GG repo",
+    "negative": "Refactor this private helper without changing any contract.",
+    "boundary": "Record and sequence a shared decision, but do not implement either side."
+  },
+  "cut-nuget-release": {
+    "positive": "Release every stale FS-GG NuGet package.",
+    "indirect": "Find all producers with package-affecting commits since their last published version and ship them.",
+    "incomplete": "Run the package release train",
+    "negative": "Build this one project locally without publishing it.",
+    "boundary": "Audit which packages are owed, but stop before publishing."
+  },
+  "drive-board": {
+    "positive": "Burn down the entire FS-GG Coordination board autonomously.",
+    "indirect": "Keep fanning out workers across every repo until the org board is empty.",
+    "incomplete": "Drive the org board",
+    "negative": "Complete this single repository's local project board.",
+    "boundary": "Plan capacity across the org board, but do not claim any item."
+  },
+  "intra-repo-parallel-work": {
+    "positive": "Coordinate three workers on separate issues in this repository.",
+    "indirect": "Give each concurrent agent an isolated worktree and prevent overlapping touch-sets.",
+    "incomplete": "Parallelize work inside this repo",
+    "negative": "Coordinate a dependency that spans two repositories.",
+    "boundary": "Show the safe lanes in this repository without claiming them."
+  },
+  "lane-steward": {
+    "positive": "Propose narrower Paths declarations so this full board exposes more lanes.",
+    "indirect": "Workers report nothing schedulable even though several independent items are open.",
+    "incomplete": "Why is the lane ceiling so low?",
+    "negative": "Claim the next schedulable issue and implement it.",
+    "boundary": "Diagnose path overlap and propose changes, but do not edit issue declarations."
+  },
+  "pnext-item": {
+    "positive": "Claim the next schedulable item for this repo and take it through merge.",
+    "indirect": "Act as one worker in this repository and keep the board protocol coherent through the done stamp.",
+    "incomplete": "Pick up the next item",
+    "negative": "Triage the entire cross-repository Coordination board.",
+    "boundary": "Show the next schedulable item, but do not claim it."
+  },
+  "publishing-and-deployment": {
+    "positive": "Publish this FS-GG package to both NuGet feeds and verify it.",
+    "indirect": "Cut a coherent stable version and make downstream registry state converge.",
+    "incomplete": "Ship the package",
+    "negative": "Compile and test the package without releasing it.",
+    "boundary": "Prepare and validate the release artifacts, but stop before publication."
+  },
+  "spectre-console": {
+    "positive": "Build a deterministic Spectre.Console table with matching rich and plain output.",
+    "indirect": "The ANSI snapshot wraps differently in CI; diagnose the rendering profile.",
+    "incomplete": "Fix the terminal rendering",
+    "negative": "Change this JSON API contract without touching terminal presentation.",
+    "boundary": "Design the widget projection and snapshots, but do not change the command behavior."
+  },
+  "work-board": {
+    "positive": "Burn down this product workspace's wired project board.",
+    "indirect": "Keep spawning isolated item workers for this one workspace until its board is empty.",
+    "incomplete": "Drive this workspace board",
+    "negative": "Burn down the org-wide FS-GG Coordination board across all repositories.",
+    "boundary": "Reconcile the local board and propose a wave, but do not claim items."
+  },
+  "work-roadmap": {
+    "positive": "Complete this markdown roadmap milestone by milestone.",
+    "indirect": "Use a fresh worker for each unchecked milestone, merge it, and update the roadmap.",
+    "incomplete": "Work through the roadmap",
+    "negative": "Triage a GitHub project board with no markdown roadmap.",
+    "boundary": "Identify the next unchecked milestone, but do not start implementation."
+  }
+}

@@ -3,7 +3,7 @@
 packs from (ADR-0054 §Byte-transport, resolving .github#1300; ADR-0062 generalized one consumer over).
 
 WHAT THIS IS. `.github` authors a third `skill-registry` class — a `.github`-authored,
-product-materialized `scope: driver` skill (ADR-0054; the first is `workRoadmap`, ADR-0053/#1224). The
+product-materialized `scope: driver` skill (ADR-0054; the first is `work-roadmap`, ADR-0053/#1224). The
 scaffold-time materializer in the SDD CLI cannot reach `.github` (the `fsgg-sdd scaffold` inner loop is
 OFFLINE and generic SDD is barred from embedding a cross-repo source — FS.GG.SDD/CLAUDE.md, scaffold
 FR-002/SC-005), so `.github` PUBLISHES the driver bytes as a versioned package the CLI pins, restores at

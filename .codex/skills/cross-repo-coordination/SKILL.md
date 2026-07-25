@@ -1,6 +1,6 @@
 ---
 name: cross-repo-coordination
-description: Coordinate work across the FS-GG repos (FS.GG.SDD, FS.GG.Rendering, FS.GG.Governance, FS.GG.Templates, FS.GG.Game, FS.GG.Audio, FS.GG.Net). Use when you need something from another FS-GG repo, are changing a versioned cross-repo contract, hit a cross-repo version/API incoherence, or need to place/sequence work on the org-level "Coordination" Projects v2 roadmap. File and answer requests as GitHub issues, track sequencing on the Coordination board, keep the contract/compatibility registry coherent, and record cross-repo decisions as ADRs. Canonical protocol lives in FS-GG/.github.
+description: Use when work crosses FS-GG repositories: request another repo, sequence a contract change, reconcile version drift, or record a shared decision on the Coordination board.
 ---
 
 # Cross-repo coordination (FS-GG)

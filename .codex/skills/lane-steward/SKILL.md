@@ -1,6 +1,6 @@
 ---
 name: lane-steward
-description: A helping chore, not a scheduler. Find the over-broad `Paths:` declarations that are gluing an FS-GG board into one lane, and PROPOSE narrower ones — so the board can absorb the workers it looks like it can. Use when `fsgg-coord scan | fsgg-coord lanes` shows a ceiling far below the number of open items, when a fan-out keeps reporting "nothing schedulable" over a full board, or as a periodic tidy. It never decides that two items are safe to run together: that is computed. Canonical protocol lives in FS-GG/.github. See ADR-0021, ADR-0027, ADR-0034.
+description: Use when a full FS-GG board exposes too few parallel lanes or workers report nothing schedulable. Diagnose over-broad touch-sets and propose narrower declarations without scheduling work.
 ---
 
 # lane-steward

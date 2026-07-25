@@ -21,6 +21,8 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOOL="$HERE/../../scripts/fsgg-skill-registry-check"
 
+python3 "$HERE/catalog-metadata.py"
+
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/skill-registry-fixture.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -1441,12 +1443,12 @@ echo "== 60. a .github-authored DRIVER row reconciles from .github's OWN manifes
 # `-github` the FS.GG.* dot->dash rule would give — the owner_of special-case), and its source
 # resolves under the producer checkout like any other. Isolated in its own --repos-root.
 DROOT="$WORK/driver-repos"
-mkdir -p "$DROOT/.github/.claude/skills/workRoadmap" "$DROOT/.github/registry"
-printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/workRoadmap/SKILL.md"
-DRIVER="$(sha "$DROOT/.github/.claude/skills/workRoadmap/SKILL.md")"
+mkdir -p "$DROOT/.github/.claude/skills/work-roadmap" "$DROOT/.github/registry"
+printf 'roadmap driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md"
+DRIVER="$(sha "$DROOT/.github/.claude/skills/work-roadmap/SKILL.md")"
 cat > "$DROOT/.github/registry/driver-skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
-  { "id": "workRoadmap", "scope": "driver", "sha256": "$DRIVER", "supplied-by": ".claude/skills/workRoadmap", "materializes-when": "feedback == true and lifecycle == spec-kit" }
+  { "id": "work-roadmap", "scope": "driver", "sha256": "$DRIVER", "supplied-by": ".claude/skills/work-roadmap", "materializes-when": "feedback == true and lifecycle == spec-kit" }
 ] }
 JSON
 DREG="$WORK/driver-skills.yml"
@@ -1454,7 +1456,7 @@ cat > "$DREG" <<YAML
 schemaVersion: 2
 updated: "2026-07-19"
 skills:
-  - { id: workRoadmap, scope: driver, owner: .github, source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: $DRIVER, materializes-when: "feedback == true and lifecycle == spec-kit" }
+  - { id: work-roadmap, scope: driver, owner: .github, source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: $DRIVER, materializes-when: "feedback == true and lifecycle == spec-kit" }
 YAML
 run --registry "$DREG" --repos-root "$DROOT" >/dev/null \
   || { echo "FAIL: a coherent .github driver row was not accepted"; run --registry "$DREG" --repos-root "$DROOT" || true; exit 1; }
@@ -1462,26 +1464,26 @@ run --registry "$DREG" --repos-root "$DROOT" >/dev/null \
 # Discovery + digest actually RUN for the driver class — a wrong digest is caught, not silently passed.
 sed -i "s|sha256: $DRIVER|sha256: $WRONG|" "$DREG"
 out="$(run --registry "$DREG" --repos-root "$DROOT" || true)"
-grep -q "\[digest-matches\] workRoadmap" <<<"$out" || { echo "FAIL: a stale driver digest was not caught"; echo "$out"; exit 1; }
+grep -q "\[digest-matches\] work-roadmap" <<<"$out" || { echo "FAIL: a stale driver digest was not caught"; echo "$out"; exit 1; }
 
 # --write APPENDS a NEW driver the manifest declares: owner `.github` (a `-github` here would be the
 # dot->dash bug owner_of guards), source derived from `supplied-by`. A second driver is declared so the
 # append has a coherent sibling row to home beside (the tool homes relative to existing rows, ADR #857).
-mkdir -p "$DROOT/.github/.claude/skills/workRoadmapTwo"
-printf 'second driver body\n' > "$DROOT/.github/.claude/skills/workRoadmapTwo/SKILL.md"
-DRIVER2="$(sha "$DROOT/.github/.claude/skills/workRoadmapTwo/SKILL.md")"
+mkdir -p "$DROOT/.github/.claude/skills/work-roadmap-two"
+printf 'second driver body\n' > "$DROOT/.github/.claude/skills/work-roadmap-two/SKILL.md"
+DRIVER2="$(sha "$DROOT/.github/.claude/skills/work-roadmap-two/SKILL.md")"
 sed -i "s|sha256: $WRONG|sha256: $DRIVER|" "$DREG"   # restore the anchor row's digest to coherent
 cat > "$DROOT/.github/registry/driver-skill-manifest.json" <<JSON
 { "schemaVersion": 1, "skills": [
-  { "id": "workRoadmap",    "scope": "driver", "sha256": "$DRIVER",  "supplied-by": ".claude/skills/workRoadmap",    "materializes-when": "feedback == true and lifecycle == spec-kit" },
-  { "id": "workRoadmapTwo", "scope": "driver", "sha256": "$DRIVER2", "supplied-by": ".claude/skills/workRoadmapTwo", "materializes-when": "feedback == true and lifecycle == spec-kit" }
+  { "id": "work-roadmap",    "scope": "driver", "sha256": "$DRIVER",  "supplied-by": ".claude/skills/work-roadmap",    "materializes-when": "feedback == true and lifecycle == spec-kit" },
+  { "id": "work-roadmap-two", "scope": "driver", "sha256": "$DRIVER2", "supplied-by": ".claude/skills/work-roadmap-two", "materializes-when": "feedback == true and lifecycle == spec-kit" }
 ] }
 JSON
 run --registry "$DREG" --repos-root "$DROOT" --write >/dev/null 2>&1 || true
-grep -qF "id: workRoadmapTwo," "$DREG" || { echo "FAIL: --write did not append the second driver row"; cat "$DREG"; exit 1; }
-grep -F "id: workRoadmapTwo," "$DREG" | grep -qF "owner: .github," || { echo "FAIL: appended driver row lacks owner .github"; cat "$DREG"; exit 1; }
+grep -qF "id: work-roadmap-two," "$DREG" || { echo "FAIL: --write did not append the second driver row"; cat "$DREG"; exit 1; }
+grep -F "id: work-roadmap-two," "$DREG" | grep -qF "owner: .github," || { echo "FAIL: appended driver row lacks owner .github"; cat "$DREG"; exit 1; }
 grep -qF "owner: -github" "$DREG" && { echo "FAIL: owner_of(.github) produced the -github dot->dash bug"; cat "$DREG"; exit 1; }
-grep -qF "source: .github/.claude/skills/workRoadmapTwo/SKILL.md" "$DREG" || { echo "FAIL: driver source not derived from supplied-by"; cat "$DREG"; exit 1; }
+grep -qF "source: .github/.claude/skills/work-roadmap-two/SKILL.md" "$DREG" || { echo "FAIL: driver source not derived from supplied-by"; cat "$DREG"; exit 1; }
 echo "   ok"
 
 echo "skill-registry fixture: all checks passed"

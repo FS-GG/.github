@@ -218,7 +218,7 @@ FROZEN_MIRROR_PATH = "template/product-skills/{id}/SKILL.md"
 # Where a producer publishes its `skill-manifest` (schema v1). SDD EMITS its process manifest into
 # the agent-skill root; Rendering and Game publish theirs from the template tree; `.github` emits its
 # DRIVER manifest into the registry dir it owns (ADR-0054 — `.github` authors its own product-
-# materialized `scope: driver` skills, e.g. workRoadmap). Probed in order; the first hit wins.
+# materialized `scope: driver` skills, e.g. work-roadmap). Probed in order; the first hit wins.
 # Locations, not repo names -- the producer SET is derived (see producers()).
 MANIFEST_CANDIDATES = (
     ".agents/skills/skill-manifest.json",

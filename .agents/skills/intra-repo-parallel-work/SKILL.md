@@ -1,6 +1,6 @@
 ---
 name: intra-repo-parallel-work
-description: Coordinate multiple workers (agents or people) running in parallel on different items INSIDE one FS-GG repo. Use when you want to fan work out across concurrent workers without them grabbing the same item, stomping a shared working tree, or colliding on the same files. Gives each worker an id, locks items with a comment-order CAS (the assignee CANNOT lock, because N agents share one GitHub account), isolates work in per-item git worktrees, schedules disjoint `Paths:` touch-sets, and gives workers a channel to talk when their work overlaps. Canonical protocol lives in FS-GG/.github. See ADR-0021 and ADR-0027.
+description: Use when multiple workers must operate concurrently inside one FS-GG repository. Coordinate minted identities, claim locks, isolated worktrees, disjoint touch-sets, leases, and overlap messages.
 ---
 
 # Intra-repo parallel work (FS-GG)

@@ -1,13 +1,13 @@
 ---
 name: drive-board
-description: Drive the org-level FS-GG "Coordination" board to completion across every repo, fanning work out to fresh disposable subagents and re-planning after each wave. Use when you want the board burned down without babysitting it — the host reconciles the board (check-board), decides how many workers each repo can absorb right now, spawns one fresh subagent per slot to run /pnext-item, verifies each claimed result against ground truth (never the subagent's word), despawns it, and loops until the board is genuinely empty. Handles blockers that only appear after some work: a worker that discovers one files it and sets Blocked by, and the next planning pass schedules around the new edge. Runs where every rostered repo is checked out as a sibling. Composes check-board (analyze), pnext-item (the worker), and intra-repo-parallel-work (the claim/worktree/touch-set protocol). Canonical protocol lives in FS-GG/.github. See ADR-0001, ADR-0021, ADR-0027, ADR-0053.
+description: Use when explicitly asked to burn down the org-wide FS-GG Coordination board. Reconcile first, fan out disposable repo workers within safe lanes, verify results, and re-plan until empty.
 ---
 
 # drive-board (FS-GG)
 
 One command's worth of intent: **"take the whole Coordination board and burn it down — across every
 repo, as parallel as it is safe to be — and don't make me drive."** This skill is the **cross-repo
-sibling of [workRoadmap](../workRoadmap/SKILL.md)**: same parent-loop-of-disposable-subagents shape,
+sibling of [work-roadmap](../work-roadmap/SKILL.md)**: same parent-loop-of-disposable-subagents shape,
 but the ledger is the **board**, not a markdown file, and the workers fan out **across repos** instead
 of running one milestone at a time in one repo.
 
@@ -43,7 +43,7 @@ Preconditions, checked once:
   *workers'* ids are where this breaks.
 - Board writes are authorised: `gh auth refresh -s project,read:project`, `issues: write`.
 - You are NOT going to push to `main` in any repo. Every change is a PR; the merge guard blocks direct
-  pushes, and agent PR *merges* are allowed only on a green, reviewed PR — the same rule workRoadmap
+  pushes, and agent PR *merges* are allowed only on a green, reviewed PR — the same rule work-roadmap
   and pnext-item hold.
 
 ## 1. The landmine: N subagents collapse onto ONE worker id
@@ -207,7 +207,7 @@ The host hands each subagent essentially this, with `<REPO>` (a registry short-i
 
 ## 5. Verify against ground truth — never the subagent's word
 
-This is workRoadmap step 5, and it is the failure mode most worth catching: **a subagent that reports
+This is work-roadmap step 5, and it is the failure mode most worth catching: **a subagent that reports
 "merged" on a PR that did not merge.** The host cannot see inside a dead subagent's context, so it
 checks the world the subagent claims to have changed. For each returned worker:
 
@@ -263,7 +263,7 @@ stop — driving it yourself would make the machine answer the decision the item
 ## 7. The completion report
 
 When §6 says done, the host — **itself, not a subagent** — writes a report and lands it, the same way
-workRoadmap does. `docs/reports/<YYYY-MM-DD>-drive-board.md`: per repo, what shipped this run (items,
+work-roadmap does. `docs/reports/<YYYY-MM-DD>-drive-board.md`: per repo, what shipped this run (items,
 merged PRs, done-stamps), the blockers workers discovered and where they were filed, the follow-ups
 they queued, every rate-limit back-off, and the outstanding human-blocked items check-board named.
 Close with a roll-up and land it as its own reviewed PR — the last thing to merge. Then report to the
@@ -285,7 +285,7 @@ operator: board burned down, report PR number, and the list of items still parke
 
 ## See also
 
-- **ADR-0053** — the loop workRoadmap canonizes; this skill is its cross-repo generalization, and the
+- **ADR-0053** — the loop work-roadmap canonizes; this skill is its cross-repo generalization, and the
   *why* of "fresh disposable subagent per unit, verify against ground truth, despawn, re-plan" lives
   there.
 - [check-board](../check-board/SKILL.md) — the analysis pass the host runs every wave; the authority on

@@ -3,7 +3,7 @@
   §Byte-transport, resolving .github#1300; the ADR-0062 FS.GG.Kit pattern, one consumer over).
 
   WHAT THIS DELIVERS. `.github` authors a `scope: driver` skill class (ADR-0054) — a `.github`-authored,
-  PRODUCT-materialized skill (the first is `workRoadmap`, ADR-0053/#1224). The scaffold-time materializer
+  PRODUCT-materialized skill (the first is `work-roadmap`, ADR-0053/#1224). The scaffold-time materializer
   in the SDD CLI cannot reach `.github`: `fsgg-sdd scaffold` runs on an OFFLINE inner loop and generic SDD
   is barred from embedding a cross-repo source (FS.GG.SDD/CLAUDE.md, scaffold FR-002/SC-005). So `.github`
   PUBLISHES the driver bytes as a versioned package the CLI pins, restores at build/publish time (online),
@@ -46,7 +46,7 @@
     <PackageId>FS.GG.Drivers</PackageId>
     <Version>0.3.0</Version>
 
-    <Description>The .github-authored driver skill bytes (scope: driver, e.g. workRoadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
+    <Description>The .github-authored driver skill bytes (scope: driver, e.g. work-roadmap) as one versioned artifact, with registry/driver-skill-manifest.json as the content-addressed record. The SDD CLI pins it, restores it at build time, and materializes the driver into a scaffold's skill roots at scaffold time (ADR-0054, ADR-0062, ADR-0063; ADR-0014 verify).</Description>
     <Authors>FS-GG</Authors>
     <Company>FS-GG</Company>
     <PackageTags>fsgg;driver;skills;workroadmap;scaffold;dotnet</PackageTags>
@@ -90,7 +90,7 @@
     <ItemGroup>
       <_DriversStaged Include="$(DriversStagingDir)/**/*" />
       <!-- Constant folder PackagePath: NuGet appends each glob item's RecursiveDir-relative path
-           (driver-skill-manifest.json, skills/workRoadmap/SKILL.md, …) under drivers/. -->
+           (driver-skill-manifest.json, skills/work-roadmap/SKILL.md, …) under drivers/. -->
       <TfmSpecificPackageFile Include="@(_DriversStaged)">
         <PackagePath>drivers/</PackagePath>
       </TfmSpecificPackageFile>

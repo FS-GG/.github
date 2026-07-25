@@ -22,7 +22,7 @@
 /// It also carries a `retrofit <target>` subcommand — the INVERSE of step 5's scaffold-time wiring:
 /// run inside an ALREADY-scaffolded workspace (one made --no-coordination, or before the wiring
 /// existed), it idempotently materializes the coordination kit + board env onto it, re-emitting only
-/// what drifted and recording the event in scaffold-provenance.json. It is the precondition workBoard
+/// what drifted and recording the event in scaffold-provenance.json. It is the precondition work-board
 /// (ADR-0064) documents but cannot itself satisfy.
 module NewSddWorkspace.Program
 
@@ -422,7 +422,7 @@ let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
 // writes unconditionally. `retrofit` runs LATER, INSIDE an already-scaffolded workspace that was
 // created `--no-coordination` (or before #1142 landed), and must be IDEMPOTENT: it materializes only
 // what is missing or has drifted, leaves a coherent kit untouched, and records the event in
-// `scaffold-provenance.json`. It is the precondition `workBoard` (ADR-0064) documents but cannot
+// `scaffold-provenance.json`. It is the precondition `work-board` (ADR-0064) documents but cannot
 // itself satisfy. Same kit, same board env, same HTTP fetch (no checkout) as the scaffold path.
 
 /// The retrofit invocation surface. A subset of `Options` — only the coordination inputs are

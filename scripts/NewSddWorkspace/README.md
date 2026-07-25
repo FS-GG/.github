@@ -68,7 +68,7 @@ scaffolder surfaces the caveat only when you retarget the board.
 
 The scaffold-time coordination step (above) only fires when you *create* a workspace. A workspace made
 with `--no-coordination` — or before that step existed — has its `.fsgg/` config but **no** coordination
-kit, no `fsgg-coord` shim, and no `FSGG_COORD_*` env, so `workBoard` (ADR-0064) refuses to drive its
+kit, no `fsgg-coord` shim, and no `FSGG_COORD_*` env, so `work-board` (ADR-0064) refuses to drive its
 board. The **`retrofit`** subcommand wires coordination **onto** such a workspace — the exact inverse of
 the scaffold-time wiring:
 

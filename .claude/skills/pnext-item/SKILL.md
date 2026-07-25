@@ -1,6 +1,6 @@
 ---
 name: pnext-item
-description: Claim the next schedulable item assigned to THIS FS-GG repo and take it all the way to merged and done-stamped, then keep going. Use when you are a worker (agent or person) picking up work in a repo, especially one of several running in parallel. Wraps the intra-repo-parallel-work protocol — worker id, comment-order claim lock, per-item git worktree, disjoint `Paths:` touch-set — then implements, opens a PR, reviews it, merges on green, and earns the done-stamp. A problem it finds along the way is FIXED, in the same PR when that keeps the change reviewable; what it files, it files at the ROOT CAUSE rather than the surface, and then TAKES — landing the current item first, then popping its own follow-up by number, recursively, until the queue drains. It files-and-leaves only when the finding is genuinely not fixable from here — another repo owns it, or it needs a decision a human has to make. Canonical protocol lives in FS-GG/.github. See ADR-0001, ADR-0021 and ADR-0027.
+description: Use when a worker should claim the next schedulable item in one FS-GG repository and carry it through implementation, review, green merge, post-merge obligations, and a verified done stamp.
 ---
 
 # pnext-item (FS-GG)

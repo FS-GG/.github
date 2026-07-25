@@ -4,7 +4,7 @@ The `.github`-authored **driver** skill bytes (`scope: driver`) as one versioned
 
 `.github` authors a product-materialized skill class (ADR-0054) — a skill that runs inside a
 **scaffolded product tree**, not in `.github` itself. The first is
-[`workRoadmap`](https://github.com/FS-GG/.github/tree/main/.claude/skills/workRoadmap)
+[`work-roadmap`](https://github.com/FS-GG/.github/tree/main/.claude/skills/work-roadmap)
 (ADR-0053/#1224). This package is how those bytes reach a scaffold.
 
 ## Why a package
@@ -29,7 +29,7 @@ directs owner-authored skills onto.
 
 ```
 drivers/driver-skill-manifest.json     the delivered set + per-skill sha256 (the ADR-0014 record)
-drivers/skills/<id>/SKILL.md           the bytes for each `scope: driver` row (e.g. workRoadmap)
+drivers/skills/<id>/SKILL.md           the bytes for each `scope: driver` row (e.g. work-roadmap)
 build/FS.GG.Drivers.props              a consumer handle: $(FsggDriversContentDir) → the content root
 ```
 

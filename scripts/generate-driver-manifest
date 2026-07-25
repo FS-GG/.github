@@ -2,7 +2,7 @@
 """Emit `.github`'s producer skill-manifest for its own authored DRIVER skills (ADR-0054).
 
 `.github` is a producer — of the third `skill-registry` class ADR-0054 names: a `.github`-authored,
-product-materialized `scope: driver` skill (the first is `workRoadmap`, ADR-0053/#1224). Every other
+product-materialized `scope: driver` skill (the first is `work-roadmap`, ADR-0053/#1224). Every other
 row in `registry/skills.yml` is reconciled from a *producer* repo's `skill-manifest.json` (SDD's
 emitted process manifest, Rendering's/Game's template manifests); this is the emitter that gives
 `.github` its own, so a `scope: driver` row is reconciled the same way — `registry = manifest = bytes`
@@ -19,7 +19,7 @@ never drift. `supplied-by` is the authored skill dir under the repo root, so the
 
 THE DRIVER DECLARATIONS below are this emitter's only authored data — the id, scope, source dir and
 materializes-when predicate of each `.github`-authored driver. The predicate is authored, not derived:
-`workRoadmap` runs only where the composed producers' skills are materialized (ADR-0053 §6, as amended
+`work-roadmap` runs only where the composed producers' skills are materialized (ADR-0053 §6, as amended
 by ADR-0056) — `fs-gg-sdd-*` (all `always`) AND `fs-gg-feedback-report` (`always`). `fs-gg-feedback-capture`
 was the one binding clause (`feedback == true and lifecycle == spec-kit`); ADR-0056 D3 freezes it and
 schedules its removal, so the driver no longer ANDs against a skill that is going away, and step 4 is
@@ -39,6 +39,8 @@ Usage:
   scripts/generate-driver-manifest --list     # print the repo-relative path(s) this emits, one per
                                               #   line — the scripts/generated-paths roster contract
                                               #   (ADR-0044), so verify-paths subtracts the artifact
+  scripts/generate-driver-manifest --catalog-report
+                                              # validate routing metadata and print catalog budgets
   scripts/generate-driver-manifest            # default: --check
 
 Pure stdlib; no network, no tokens.
@@ -49,6 +51,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sys
 
 # Repo root = the parent of scripts/ (this file lives at scripts/generate-driver-manifest).
@@ -57,6 +60,18 @@ MANIFEST_PATH = os.path.join("registry", "driver-skill-manifest.json")
 
 # skill-manifest schema version (the MANIFEST document's schema — NOT skills.yml's schemaVersion).
 MANIFEST_SCHEMA_VERSION = 1
+
+SKILL_ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
+CODEX_SKILL_ROOTS = (".codex/skills", ".agents/skills")
+SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+SKILL_NAME_MAX = 64
+DESCRIPTION_MIN = 120
+DESCRIPTION_MAX = 220
+DESCRIPTION_CEILING = 2500
+ROOT_CATALOG_CEILING = 3000
+CODEX_EFFECTIVE_CEILING = 6000
+TRIGGER_FIXTURES = os.path.join("tests", "skill-registry", "catalog-triggers.json")
+TRIGGER_KINDS = ("positive", "indirect", "incomplete", "negative", "boundary")
 
 # The `.github`-authored non-kit skills this repo emits into registry/skills.yml — two scopes:
 #   * `scope: driver`   (ADR-0054) — product-materialized; runs in a scaffolded product tree.
@@ -67,15 +82,15 @@ MANIFEST_SCHEMA_VERSION = 1
 # dir under the repo root; the SKILL.md under it is digested.
 DRIVERS = [
     {
-        "id": "workRoadmap",
+        "id": "work-roadmap",
         "scope": "driver",
-        "supplied-by": ".claude/skills/workRoadmap",
+        "supplied-by": ".claude/skills/work-roadmap",
         "materializes-when": "always",
     },
     {
-        "id": "workBoard",
+        "id": "work-board",
         "scope": "driver",
-        "supplied-by": ".claude/skills/workBoard",
+        "supplied-by": ".claude/skills/work-board",
         "materializes-when": "always",
     },
     {
@@ -93,6 +108,207 @@ DRIVERS = [
 ]
 
 
+def frontmatter(path: str) -> tuple[dict[str, str], list[str]]:
+    """Read the small scalar-only YAML frontmatter contract used by SKILL.md."""
+    errors: list[str] = []
+    try:
+        text = open(path, encoding="utf-8-sig").read()
+    except OSError as exc:
+        return {}, [f"{path}: cannot read: {exc}"]
+    lines = text.splitlines()
+    if len(lines) < 3 or lines[0].strip() != "---":
+        return {}, [f"{path}: missing opening YAML frontmatter delimiter"]
+    try:
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration:
+        return {}, [f"{path}: missing closing YAML frontmatter delimiter"]
+
+    values: dict[str, str] = {}
+    for line in lines[1:end]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if ":" not in line:
+            errors.append(f"{path}: malformed frontmatter line: {line!r}")
+            continue
+        key, raw = line.split(":", 1)
+        key, raw = key.strip(), raw.strip()
+        if key not in ("name", "description"):
+            continue
+        if not raw or raw[0] in "|>[]{}" or raw in ("null", "~"):
+            errors.append(f"{path}: {key} must be a non-empty scalar string")
+            continue
+        if raw.startswith('"'):
+            try:
+                value = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                errors.append(f"{path}: {key} is not a valid quoted string")
+                continue
+        elif raw.startswith("'"):
+            if not raw.endswith("'") or len(raw) < 2:
+                errors.append(f"{path}: {key} is not a valid quoted string")
+                continue
+            value = raw[1:-1].replace("''", "'")
+        else:
+            if raw.lower() in ("true", "false", "null", "~") or re.fullmatch(
+                r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", raw
+            ):
+                errors.append(f"{path}: {key} must be a string, not a YAML scalar of another type")
+                continue
+            value = raw
+        if not isinstance(value, str):
+            errors.append(f"{path}: {key} must be a string")
+            continue
+        values[key] = value
+    return values, errors
+
+
+def validate_catalog(catalog_root: str) -> tuple[dict[str, object], list[str]]:
+    """Validate the mirrored skill catalog and calculate authored/exposed budgets."""
+    errors: list[str] = []
+    root_rows: dict[str, list[dict[str, object]]] = {}
+    root_names: dict[str, set[str]] = {}
+
+    for root in SKILL_ROOTS:
+        full_root = os.path.join(catalog_root, root)
+        try:
+            names = sorted(
+                name
+                for name in os.listdir(full_root)
+                if os.path.isdir(os.path.join(full_root, name))
+            )
+        except OSError as exc:
+            errors.append(f"{root}: cannot enumerate skill root: {exc}")
+            names = []
+        root_names[root] = set(names)
+        rows: list[dict[str, object]] = []
+        for dirname in names:
+            rel_path = os.path.join(root, dirname, "SKILL.md")
+            path = os.path.join(catalog_root, rel_path)
+            metadata, metadata_errors = frontmatter(path)
+            errors.extend(metadata_errors)
+            name = metadata.get("name", "")
+            description = metadata.get("description", "")
+            if not SKILL_NAME.fullmatch(dirname):
+                errors.append(f"{rel_path}: directory name must be lower-kebab-case")
+            if len(dirname) > SKILL_NAME_MAX:
+                errors.append(
+                    f"{rel_path}: directory/name length {len(dirname)} exceeds {SKILL_NAME_MAX}"
+                )
+            if not name:
+                errors.append(f"{rel_path}: missing name")
+            elif name != dirname:
+                errors.append(f"{rel_path}: name {name!r} must match directory {dirname!r}")
+            if not description:
+                errors.append(f"{rel_path}: missing description")
+            else:
+                length = len(description)
+                if not DESCRIPTION_MIN <= length <= DESCRIPTION_MAX:
+                    errors.append(
+                        f"{rel_path}: description length {length} is outside "
+                        f"{DESCRIPTION_MIN}..{DESCRIPTION_MAX}"
+                    )
+                lowered = description.strip().lower()
+                if lowered in ("todo", "tbd", "placeholder", "...") or "placeholder" in lowered:
+                    errors.append(f"{rel_path}: description is placeholder text")
+            rows.append(
+                {
+                    "name": name or dirname,
+                    "description": description,
+                    "path": rel_path.replace(os.sep, "/"),
+                }
+            )
+        root_rows[root] = rows
+
+    canonical_names = root_names[SKILL_ROOTS[0]]
+    for root in SKILL_ROOTS[1:]:
+        if root_names[root] != canonical_names:
+            missing = sorted(canonical_names - root_names[root])
+            extra = sorted(root_names[root] - canonical_names)
+            errors.append(f"{root}: root set differs; missing={missing}, extra={extra}")
+    for name in sorted(set().union(*root_names.values())):
+        copies: list[tuple[str, bytes]] = []
+        for root in SKILL_ROOTS:
+            path = os.path.join(catalog_root, root, name, "SKILL.md")
+            try:
+                copies.append((root, open(path, "rb").read()))
+            except OSError:
+                pass
+        if len(copies) == len(SKILL_ROOTS) and any(raw != copies[0][1] for _, raw in copies[1:]):
+            errors.append(f"{name}: SKILL.md is not byte-identical across all three roots")
+
+    fixture_path = os.path.join(catalog_root, TRIGGER_FIXTURES)
+    try:
+        fixtures = json.load(open(fixture_path, encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"{TRIGGER_FIXTURES}: cannot read valid JSON: {exc}")
+        fixtures = {}
+    if not isinstance(fixtures, dict):
+        errors.append(f"{TRIGGER_FIXTURES}: top level must be an object")
+        fixtures = {}
+    fixture_names = set(fixtures)
+    if fixture_names != canonical_names:
+        errors.append(
+            f"{TRIGGER_FIXTURES}: fixture set differs; "
+            f"missing={sorted(canonical_names - fixture_names)}, "
+            f"extra={sorted(fixture_names - canonical_names)}"
+        )
+    for name, cases in fixtures.items():
+        if not isinstance(cases, dict):
+            errors.append(f"{TRIGGER_FIXTURES}: {name} fixtures must be an object")
+            continue
+        for kind in TRIGGER_KINDS:
+            prompt = cases.get(kind)
+            if not isinstance(prompt, str) or not prompt.strip():
+                errors.append(f"{TRIGGER_FIXTURES}: {name}.{kind} must be a non-empty string")
+
+    budgets: dict[str, dict[str, int]] = {}
+    for root, rows in root_rows.items():
+        description_chars = sum(len(str(row["description"])) for row in rows)
+        authored_chars = sum(
+            len(str(row["name"])) + len(str(row["description"])) + len(str(row["path"]))
+            for row in rows
+        )
+        budgets[root] = {
+            "skills": len(rows),
+            "descriptionChars": description_chars,
+            "descriptionCeiling": DESCRIPTION_CEILING,
+            "descriptionHeadroom": DESCRIPTION_CEILING - description_chars,
+            "authoredChars": authored_chars,
+            "authoredCeiling": ROOT_CATALOG_CEILING,
+            "authoredHeadroom": ROOT_CATALOG_CEILING - authored_chars,
+        }
+        if description_chars > DESCRIPTION_CEILING:
+            errors.append(
+                f"{root}: descriptions cost {description_chars}, ceiling is {DESCRIPTION_CEILING}"
+            )
+        if authored_chars > ROOT_CATALOG_CEILING:
+            errors.append(
+                f"{root}: names + descriptions + paths cost {authored_chars}, "
+                f"ceiling is {ROOT_CATALOG_CEILING}"
+            )
+
+    effective = sum(budgets[root]["authoredChars"] for root in CODEX_SKILL_ROOTS)
+    if effective > CODEX_EFFECTIVE_CEILING:
+        errors.append(
+            f"Codex effective exposure costs {effective} across {CODEX_SKILL_ROOTS}, "
+            f"ceiling is {CODEX_EFFECTIVE_CEILING}"
+        )
+    report: dict[str, object] = {
+        "roots": budgets,
+        "codexEffective": {
+            "roots": list(CODEX_SKILL_ROOTS),
+            "authoredChars": effective,
+            "ceiling": CODEX_EFFECTIVE_CEILING,
+            "headroom": CODEX_EFFECTIVE_CEILING - effective,
+        },
+    }
+    return report, errors
+
+
+def print_catalog_report(report: dict[str, object]) -> None:
+    sys.stdout.write(json.dumps(report, indent=2) + "\n")
+
+
 def canonical_digest(raw: bytes) -> str:
     """sha256 over the body text's UTF-8 bytes, BOM-free (Fsgg.SkillMirror.sha256)."""
     if raw.startswith(b"\xef\xbb\xbf"):
@@ -100,11 +316,11 @@ def canonical_digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def build_manifest() -> str:
+def build_manifest(repo_root: str = REPO_ROOT) -> str:
     """Render the manifest JSON text (with trailing newline) from the authored SKILL.md bodies."""
     skills = []
     for driver in DRIVERS:
-        skill_md = os.path.join(REPO_ROOT, driver["supplied-by"], "SKILL.md")
+        skill_md = os.path.join(repo_root, driver["supplied-by"], "SKILL.md")
         try:
             with open(skill_md, "rb") as handle:
                 raw = handle.read()
@@ -126,15 +342,25 @@ def build_manifest() -> str:
 
 def main(argv: list[str]) -> int:
     mode = "check"
-    for arg in argv:
-        if arg in ("--check", "--write", "--list"):
+    catalog_root = REPO_ROOT
+    index = 0
+    while index < len(argv):
+        arg = argv[index]
+        if arg in ("--check", "--write", "--list", "--catalog-report"):
             mode = arg[2:]
+        elif arg == "--catalog-root":
+            index += 1
+            if index >= len(argv):
+                sys.stderr.write("generate-driver-manifest: --catalog-root requires a path\n")
+                return 1
+            catalog_root = os.path.abspath(argv[index])
         elif arg in ("-h", "--help"):
             sys.stdout.write(__doc__ or "")
             return 0
         else:
             sys.stderr.write(f"generate-driver-manifest: unknown argument: {arg}\n")
             return 1
+        index += 1
 
     # --list is the generated-paths roster contract (ADR-0044): one `kind<TAB>path<TAB>marker` row per
     # emitted artifact, touch nothing, exit 0. The manifest is a WHOLE generated file (no embedded
@@ -145,7 +371,17 @@ def main(argv: list[str]) -> int:
         sys.stdout.write(f"driver-skill-manifest\t{MANIFEST_PATH}\t\n")
         return 0
 
-    generated = build_manifest()
+    report, catalog_errors = validate_catalog(catalog_root)
+    if mode == "catalog-report":
+        print_catalog_report(report)
+    if catalog_errors:
+        for error in catalog_errors:
+            sys.stderr.write(f"::error::skill-catalog: {error}\n")
+        return 1
+    if mode == "catalog-report":
+        return 0
+
+    generated = build_manifest(catalog_root)
     target = os.path.join(REPO_ROOT, MANIFEST_PATH)
 
     if mode == "write":
