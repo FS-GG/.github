@@ -24,6 +24,7 @@
     <Compile Include="EpicVerdictTests.fs" />
     <Compile Include="ChoresTests.fs" />
     <Compile Include="FollowupsTests.fs" />
+    <Compile Include="ApplicationServiceTests.fs" />
   </ItemGroup>
 
   <ItemGroup>
