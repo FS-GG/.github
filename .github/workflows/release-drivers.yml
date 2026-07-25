@@ -157,14 +157,14 @@ jobs:
             <Target Name="AssertDriverBytes" AfterTargets="Build">
               <Error Condition="'$(FsggDriversContentDir)' == ''" Text="build/FS.GG.Drivers.props did not import — FsggDriversContentDir is empty" />
               <Error Condition="!Exists('$(FsggDriversContentDir)/driver-skill-manifest.json')" Text="restored package has no drivers/driver-skill-manifest.json at $(FsggDriversContentDir)" />
-              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/workRoadmap/SKILL.md')" Text="restored package has no workRoadmap SKILL.md at $(FsggDriversContentDir)" />
+              <Error Condition="!Exists('$(FsggDriversContentDir)/skills/work-roadmap/SKILL.md')" Text="restored package has no work-roadmap SKILL.md at $(FsggDriversContentDir)" />
               <Message Importance="high" Text="FS.GG.Drivers: driver bytes reachable at $(FsggDriversContentDir)" />
             </Target>
           </Project>
           CSPROJ
           dotnet restore "$work/Consumer.csproj" --configfile "$work/isolated.config"
           dotnet build   "$work/Consumer.csproj" -c Release --no-restore
-          echo "packaged driver: a real consumer restore reached driver-skill-manifest.json + workRoadmap SKILL.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "packaged driver: a real consumer restore reached driver-skill-manifest.json + work-roadmap SKILL.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push to org GitHub Packages feed
         if: steps.v.outputs.push == 'true'
