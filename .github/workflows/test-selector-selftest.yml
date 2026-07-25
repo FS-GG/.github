@@ -57,12 +57,7 @@ jobs:
       # real history-less checkout only — no fetch-depth games.
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
 
       - name: Run the test-selector fixture
         run: bash tests/test-selector/run.sh

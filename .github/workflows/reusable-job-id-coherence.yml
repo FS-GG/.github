@@ -50,11 +50,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the reusable-job-ids fixture (no network)
         run: bash tests/reusable-job-ids/run.sh
 
@@ -66,11 +62,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0     # the merge-base must be reachable
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
 
       - name: Assert no reusable workflow lost a context name it used to publish
         id: check

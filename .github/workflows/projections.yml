@@ -81,8 +81,7 @@ jobs:
 
       # The `versions` region is emitted from registry/dependencies.yml, so the generator reads YAML.
       # Without this the generator dies on `import yaml` — loudly, and before it renders anything.
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
 
       - name: Every projection is current
         run: bash scripts/generate-projections --check

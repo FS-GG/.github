@@ -50,8 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
 
       # The producer repos, at `main` — the bodies whose digests the registry declares. Public, so
       # the default GITHUB_TOKEN suffices. Paths mirror the `source:` prefixes in skills.yml.
@@ -151,7 +150,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
       - name: Run the skill-registry fixture
         run: bash tests/skill-registry/run.sh

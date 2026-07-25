@@ -43,15 +43,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
-
       # The fixture parses the real lockfile-sync.yml rather than a re-typed copy of it — a copy
       # would keep passing after someone edits the workflow, which is the very fails-open shape this
       # gate exists to close.
-      - name: Install PyYAML
-        run: python -m pip install --disable-pip-version-check pyyaml
+      - uses: ./.github/actions/setup-policy-python
 
       - name: Run the dispatch-preflight failure-leg fixture
         run: bash tests/dispatch-preflight/run.sh
