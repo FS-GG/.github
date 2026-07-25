@@ -540,7 +540,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `game-sim-core` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `game-scene-adapter` | FS.GG.Game | `0.9.0` | `0.9.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.4.0` | `0.4.0` |
-| `fs-gg-net` | FS.GG.Net | `0.2.0` | `0.2.0` |
+| `fs-gg-net` | FS.GG.Net | `0.3.0` | `0.3.0` |
 | `coord-engine` | FS-GG/.github | `0.10.0` | `0.10.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.6.0` | `0.6.0` |
 

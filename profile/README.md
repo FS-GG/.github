@@ -245,7 +245,7 @@ authored beside this table — package IDs are stable identity, versions are not
 | [**FS.GG.Templates**](https://github.com/FS-GG/FS.GG.Templates) | Wires SDD, Rendering and Governance into one ready-to-run workspace at scaffold time | — |
 | [**FS.GG.Game**](https://github.com/FS-GG/FS.GG.Game) | Game-simulation libraries — a render-independent simulation core with a companion renderer, usable as plain F# libraries | `0.9.0` |
 | [**FS.GG.Audio**](https://github.com/FS-GG/FS.GG.Audio) | Audio-engine libraries — synthesis, playback and mixing (buses, fades, ducking, 3D), with an optional Elmish adapter | `0.4.0` |
-| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | Networking/transport libraries — protobuf messaging over WebSocket or gRPC, render-independent, with an optional Elmish adapter | `0.2.0` |
+| [**FS.GG.Net**](https://github.com/FS-GG/FS.GG.Net) | Networking/transport libraries — protobuf messaging over WebSocket or gRPC, render-independent, with an optional Elmish adapter | `0.3.0` |
 
 <!-- END GENERATED: fsgg-component-inventory -->
 
