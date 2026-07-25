@@ -743,6 +743,135 @@ module Client =
 
                 ExitGreen
 
+    /// Reconcile the board projection from the same typed mechanical rules used by the deferred chore
+    /// queue. The bare command is a dry run. `--apply` may perform only remedies represented by
+    /// `ChoreKind`; findings that require judgement remain report-only in `lint`.
+    let reconcile (ctx: Context) (opts: Options) : int =
+        match scanAndDecide ctx { opts with Limit = None } Cache.Reconciling with
+        | Error e -> fail e
+        | Ok(_, doc, receipt) ->
+            receipt.RepoAdvisory |> Option.iter eprint
+
+            match Snapshot.parse doc with
+            | Error errors ->
+                for e in errors do
+                    eprint $"fsgg-coord-engine: %s{e.Path}: %s{e.Message}"
+
+                ExitError
+            | Ok request ->
+                let items =
+                    request
+                    |> enrichPredicates
+                    |> fun r -> r.Candidates
+                    |> List.map (fun c -> c.Item)
+
+                let chores = Chore.derive items
+
+                let target (chore: Chore.Chore) =
+                    match chore.Kind with
+                    | Chore.StaleClaim _ -> "reap expired claim and restore its previous Status"
+                    | Chore.ClaimStatusLag _ -> "Status=In progress"
+                    | Chore.ClosedIssueNotDone _ -> "Status=Done"
+                    | Chore.BlockerCleared _ -> "Status=Ready"
+                    | Chore.StatusNotBlocked _ -> "Status=Blocked"
+
+                match opts.Render with
+                | Json ->
+                    let rows =
+                        chores
+                        |> List.map (fun chore ->
+                            {| id = chore.Id
+                               rule = chore.Kind.RuleId
+                               subject = chore.Subject.Short
+                               size = chore.Size.Label
+                               remedy = target chore
+                               statement = chore.Statement |})
+
+                    printfn "%s" (JsonSerializer.Serialize rows)
+                | Text ->
+                    if List.isEmpty chores then
+                        printfn "clean — no mechanical board repairs"
+                    else
+                        printfn "%s (%d mechanical finding(s))" (if opts.Apply then "applying" else "dry-run") chores.Length
+
+                        for chore in chores do
+                            printfn "  %-24s %-24s %s" chore.Kind.RuleId chore.Subject.Short (target chore)
+
+                    printfn "judgement findings are report-only: scripts/fsgg-coord lint%s" (if opts.Repo.IsSome then " --repo " + opts.Repo.Value else "")
+
+                if not opts.Apply || List.isEmpty chores then
+                    ExitGreen
+                else
+                    match worker opts, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
+                    | Error code, _ -> code
+                    | _, Error e -> fail e
+                    | Ok w, Ok board ->
+                        let mutable failed = false
+
+                        // `reap` owns the marker CAS and its column-restore rule. Run it once per affected
+                        // repo; the same fresh derivation means every additional stale marker it safely
+                        // collects there is another typed STALE-CLAIM remedy, never a broader judgement.
+                        chores
+                        |> List.choose (fun c ->
+                            match c.Kind with
+                            | Chore.StaleClaim _ -> Some c.Subject.Repo
+                            | _ -> None)
+                        |> List.distinct
+                        |> List.iter (fun repo ->
+                            // Re-enter the executable's typed `reap` verb rather than duplicating its
+                            // marker CAS, renewed-since-scan check, and PreviousStatus restore here.
+                            // `Environment.ProcessPath` is this exact packaged client, so this does not
+                            // depend on a checkout wrapper or PATH.
+                            let psi = ProcessStartInfo(Environment.ProcessPath)
+                            psi.UseShellExecute <- false
+                            psi.ArgumentList.Add "reap"
+                            psi.ArgumentList.Add "--repo"
+                            psi.ArgumentList.Add repo
+                            psi.ArgumentList.Add "--apply"
+                            psi.ArgumentList.Add "--worker"
+                            psi.ArgumentList.Add w.Id
+                            use child = Process.Start psi
+                            child.WaitForExit()
+
+                            if child.ExitCode <> ExitGreen then failed <- true)
+
+                        for chore in chores do
+                            let status =
+                                match chore.Kind with
+                                | Chore.StaleClaim _ -> None
+                                | Chore.ClaimStatusLag _ -> Some "In progress"
+                                | Chore.ClosedIssueNotDone _ -> Some "Done"
+                                | Chore.BlockerCleared _ -> Some "Ready"
+                                | Chore.StatusNotBlocked _ -> Some "Blocked"
+
+                            match status with
+                            | None -> ()
+                            | Some value ->
+                                match
+                                    Board.boardWrite
+                                        ctx.Transport
+                                        board
+                                        chore.Subject.Owner
+                                        chore.Subject.Repo
+                                        chore.Subject.Number
+                                        "Status"
+                                        (Board.Set value)
+                                        w.Id
+                                with
+                                | Ok Board.Written -> printfn "applied  %s  Status=%s" chore.Subject.Short value
+                                | Ok Board.Deferred ->
+                                    printfn "queued   %s  Status=%s (run scripts/fsgg-coord flush)" chore.Subject.Short value
+                                | Ok Board.NotOnBoard ->
+                                    eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} left the board before apply."
+                                    failed <- true
+                                | Error e ->
+                                    eprint
+                                        $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} failed: %s{Errors.explain e}"
+
+                                    failed <- true
+
+                        if failed then ExitError else ExitGreen
+
 
 
     /// The touch-set a claim reserves (or an In-progress item declares) — the `paths` a consumer keys on
@@ -4507,6 +4636,7 @@ module Client =
             | Next -> next ctx opts
             | BatchCmd -> batch ctx opts
             | Ready -> ready ctx opts
+            | Reconcile -> reconcile ctx opts
             | Who -> who ctx opts
             | Reap -> reap ctx opts
             | Budget -> budget ctx opts

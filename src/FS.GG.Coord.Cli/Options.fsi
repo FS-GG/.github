@@ -34,6 +34,8 @@ module Options =
         | BatchCmd
         /// The board, as a reconciler sees it — always fresh (`ready [--repo]`).
         | Ready
+        /// Derive typed mechanical repairs from a fresh board read; dry-run unless `--apply`.
+        | Reconcile
         /// Who holds what, right now — held/stale/unclaimed (`who [--repo] [--json]`).
         | Who
         /// Collect expired claims whose work is dead — refusing any with an open `item/<n>-*` PR

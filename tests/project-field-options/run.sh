@@ -7,7 +7,7 @@ FAKE="$ROOT/tests/project-field-options/fake-gh"
 ROSTER="$ROOT/tests/project-field-options/roster.yml"
 RESOLVER="$ROOT/tests/project-field-options/resolver.fs"
 SCHEMA="$ROOT/docs/coordination/board-schema.md"
-SKILL="$ROOT/.claude/skills/cross-repo-coordination/SKILL.md"
+SKILL="$ROOT/.claude/skills/cross-repo-coordination"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -77,8 +77,8 @@ else
 fi
 
 if grep -Fq '| `net` | `P8 Net` |' "$SCHEMA" \
-  && grep -Fq 'a `net` item `P8 Net`' "$SKILL" \
-  && grep -Fq '`P8 Net`' "$SKILL"; then
+  && grep -FRq 'a `net` item `P8 Net`' "$SKILL" \
+  && grep -FRq '`P8 Net`' "$SKILL"; then
   pass "documented Repo Scope net maps to P8 Net"
 else
   fail "net phase projection" "board schema and coordination skill must both map net to P8 Net"
