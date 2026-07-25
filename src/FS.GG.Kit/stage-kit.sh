@@ -14,11 +14,11 @@
 # the materialize target (build/FS.GG.Kit.targets) is a table-driven copy, not a path convention it
 # could silently diverge from:
 #
-#   skills/<name>/SKILL.md        one per `kind: skill` row (name = basename of the row's source)
+#   skills/<name>/<relative file> every regular file in each `kind: skill` source directory
 #   client/<name>                 one per `kind: client` row (name = basename of source)
 #   config/<name>                 one per `kind: config` row (name = basename of the row's dest)
 #   build-config/<rel>            one per sync-build-config.sh FILES member (the build-config capability)
-#   kit-manifest.tsv              kind <TAB> package-rel path <TAB> receiver dest <TAB> sha256
+#   kit-manifest.tsv              kind <TAB> package-rel <TAB> receiver dest <TAB> sha256 <TAB> executable
 #
 # The sha256 column is the content-addressed record, so a materialized file that does not match is a
 # loud failure at restore, never a silently missing or stale file. For the coordination kit
@@ -55,15 +55,21 @@ digest() { bash "$REPOS" digest "$1"; }
 
 read_kit() { bash "$REPOS" kit --field "$1" --kind "$2" --registry "$REG"; }
 
-# --- skills: <source>/SKILL.md -> skills/<name>/SKILL.md ; materialized at <root>/<name>/SKILL.md ---
+# --- skills: complete source directory -> skills/<name>/ ; materialized at every root/<name>/ ---
 while IFS= read -r src; do
   [ -n "$src" ] || continue
   name="${src##*/}"
-  from="$SRC_ROOT/$src/SKILL.md"
-  [ -f "$from" ] || die "canonical kit skill source missing: $src/SKILL.md"
-  mkdir -p "$OUT/skills/$name"
-  cp "$from" "$OUT/skills/$name/SKILL.md"
-  printf 'skill\tskills/%s/SKILL.md\t%s/SKILL.md\t%s\n' "$name" "$name" "$(digest "$from")" >> "$MANIFEST"
+  [ -f "$SRC_ROOT/$src/SKILL.md" ] || die "canonical kit skill source missing: $src/SKILL.md"
+  find "$SRC_ROOT/$src" -mindepth 1 ! -type d ! -type f -print -quit | grep -q . \
+    && die "canonical kit skill source contains a non-regular file: $src"
+  while IFS= read -r -d '' from; do
+    rel="${from#"$SRC_ROOT/$src/"}"
+    mkdir -p "$OUT/skills/$name/$(dirname "$rel")"
+    cp "$from" "$OUT/skills/$name/$rel"
+    [ -x "$from" ] && executable=true || executable=false
+    printf 'skill\tskills/%s/%s\t%s/%s\t%s\t%s\n' \
+      "$name" "$rel" "$name" "$rel" "$(digest "$from")" "$executable" >> "$MANIFEST"
+  done < <(find "$SRC_ROOT/$src" -type f -print0 | LC_ALL=C sort -z)
 done < <(read_kit source skill)
 
 # --- client: <source> -> client/<name> ; materialized at scripts/<name> (executable) ---
@@ -74,7 +80,7 @@ while IFS= read -r src; do
   [ -f "$from" ] || die "canonical kit client source missing: $src"
   mkdir -p "$OUT/client"
   cp "$from" "$OUT/client/$name"
-  printf 'client\tclient/%s\tscripts/%s\t%s\n' "$name" "$name" "$(digest "$from")" >> "$MANIFEST"
+  printf 'client\tclient/%s\tscripts/%s\t%s\ttrue\n' "$name" "$name" "$(digest "$from")" >> "$MANIFEST"
 done < <(read_kit source client)
 
 # --- config: a `kind: config` row NAMES its own receiver dest (source path != dest) ---
@@ -86,7 +92,8 @@ paste <(read_kit source config) <(read_kit dest config) | while IFS=$'\t' read -
   [ -f "$from" ] || die "canonical kit config source missing: $src"
   mkdir -p "$OUT/config"
   cp "$from" "$OUT/config/$name"
-  printf 'config\tconfig/%s\t%s\t%s\n' "$name" "$dest" "$(digest "$from")" >> "$MANIFEST"
+  [ -x "$from" ] && executable=true || executable=false
+  printf 'config\tconfig/%s\t%s\t%s\t%s\n' "$name" "$dest" "$(digest "$from")" "$executable" >> "$MANIFEST"
 done
 
 # --- build-config: the sync-build-config.sh FILES set, materialized at the receiver ROOT (opt-in) ---
@@ -105,7 +112,8 @@ for rel in "${bc_files[@]}"; do
   [ -f "$from" ] || die "canonical build-config source missing: dist/dotnet/$rel"
   mkdir -p "$OUT/build-config/$(dirname "$rel")"
   cp "$from" "$OUT/build-config/$rel"
-  printf 'build-config\tbuild-config/%s\t%s\t%s\n' "$rel" "$rel" "$(digest "$from")" >> "$MANIFEST"
+  [ -x "$from" ] && executable=true || executable=false
+  printf 'build-config\tbuild-config/%s\t%s\t%s\t%s\n' "$rel" "$rel" "$(digest "$from")" "$executable" >> "$MANIFEST"
 done
 
 [ -s "$MANIFEST" ] || die "manifest is empty — the kit reader returned no rows (run: scripts/repos.sh validate)"

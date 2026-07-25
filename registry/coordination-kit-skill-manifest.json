@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "skills": [
+    {
+      "id": "check-board",
+      "supplied-by": ".claude/skills/check-board",
+      "tree-sha256": "c5cfd92b547ba7acdd2a0fcfaaa48cf0c2c460e19b1e4a9f898dffce1af8b131",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "c61c9a8ff53b7d586a064e079b5d7cdf596202d55eba22b5134b64ea375e0fff",
+          "executable": false
+        }
+      ]
+    },
+    {
+      "id": "cross-repo-coordination",
+      "supplied-by": ".claude/skills/cross-repo-coordination",
+      "tree-sha256": "1826b9551a77129188e4c06f11f61f81409f170fc03fc15b6001185c128eb55d",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "28e27a82efe67040a985b136f9720737c317d7196ea4a09dc9d4f6765188d8e5",
+          "executable": false
+        }
+      ]
+    },
+    {
+      "id": "intra-repo-parallel-work",
+      "supplied-by": ".claude/skills/intra-repo-parallel-work",
+      "tree-sha256": "a71ef385f8c8eed0e41687d2c3e7d039a7b9c73f885d89ea7d7a4f893da5e95d",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "3a68a84816b3a30f7b640aeefa037873b74c179a033a881c3c56f1dd6a1baeae",
+          "executable": false
+        }
+      ]
+    },
+    {
+      "id": "pnext-item",
+      "supplied-by": ".claude/skills/pnext-item",
+      "tree-sha256": "176495ae49118f270d9bf5d2eed40e2191e352b74eebaa2612c0cf413f8b32f5",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "3d68ceca602d186d875c905eab06f1627ea2b4c4b680aa185cc51d68f9c596d1",
+          "executable": false
+        }
+      ]
+    }
+  ]
+}

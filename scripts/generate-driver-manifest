@@ -8,13 +8,15 @@ emitted process manifest, Rendering's/Game's template manifests); this is the em
 `.github` its own, so a `scope: driver` row is reconciled the same way — `registry = manifest = bytes`
 rather than hand-authored.
 
-WHAT IT EMITS: `registry/driver-skill-manifest.json`, the `skill-manifest` v1 shape the reconcile
+WHAT IT EMITS: `registry/driver-skill-manifest.json`, the additive `skill-manifest` v2 shape the reconcile
 (`scripts/fsgg-skill-registry-check`) and the union gate (`scripts/skill-union-assert.sh`) already
-read — `{ "schemaVersion": 1, "skills": [ {id, scope, sha256, supplied-by, materializes-when} ] }`.
-`sha256` is the `Fsgg.SkillMirror` canonical-body digest of the authored SKILL.md (BOM stripped, then
+read — `{ "schemaVersion": 2, "skills": [ {id, scope, sha256, tree-sha256, files, ...} ] }`.
+The legacy `sha256` remains the `Fsgg.SkillMirror` canonical-body digest of the authored SKILL.md (BOM stripped, then
 sha256 over the UTF-8 bytes) — byte-equal to `sha256sum SKILL.md` for a BOM-free body, and equal to
 what `scripts/skill-union-assert.sh --digest` and `fsgg-skill-registry-check` compute, so the three
-never drift. `supplied-by` is the authored skill dir under the repo root, so the reconcile derives
+never drift. New readers use `files` (normalized relative path, raw content digest, executable bit)
+and `tree-sha256`; old readers safely ignore those additive fields during the publish-before-flip
+window. `supplied-by` is the authored skill dir under the repo root, so the reconcile derives
 `source: .github/<supplied-by>/SKILL.md` (completeness() in fsgg-skill-registry-check).
 
 THE DRIVER DECLARATIONS below are this emitter's only authored data — the id, scope, source dir and
@@ -57,9 +59,10 @@ import sys
 # Repo root = the parent of scripts/ (this file lives at scripts/generate-driver-manifest).
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MANIFEST_PATH = os.path.join("registry", "driver-skill-manifest.json")
+KIT_MANIFEST_PATH = os.path.join("registry", "coordination-kit-skill-manifest.json")
 
 # skill-manifest schema version (the MANIFEST document's schema — NOT skills.yml's schemaVersion).
-MANIFEST_SCHEMA_VERSION = 1
+MANIFEST_SCHEMA_VERSION = 2
 
 SKILL_ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
 CODEX_SKILL_ROOTS = (".codex/skills", ".agents/skills")
@@ -226,15 +229,16 @@ def validate_catalog(catalog_root: str) -> tuple[dict[str, object], list[str]]:
             extra = sorted(root_names[root] - canonical_names)
             errors.append(f"{root}: root set differs; missing={missing}, extra={extra}")
     for name in sorted(set().union(*root_names.values())):
-        copies: list[tuple[str, bytes]] = []
+        copies: list[tuple[str, list[dict[str, object]]]] = []
         for root in SKILL_ROOTS:
-            path = os.path.join(catalog_root, root, name, "SKILL.md")
+            path = os.path.join(catalog_root, root, name)
             try:
-                copies.append((root, open(path, "rb").read()))
-            except OSError:
+                files, _ = directory_manifest(path)
+                copies.append((root, files))
+            except (OSError, ValueError):
                 pass
-        if len(copies) == len(SKILL_ROOTS) and any(raw != copies[0][1] for _, raw in copies[1:]):
-            errors.append(f"{name}: SKILL.md is not byte-identical across all three roots")
+        if len(copies) == len(SKILL_ROOTS) and any(files != copies[0][1] for _, files in copies[1:]):
+            errors.append(f"{name}: directory files, bytes, or executable modes differ across roots")
 
     fixture_path = os.path.join(catalog_root, TRIGGER_FIXTURES)
     try:
@@ -315,9 +319,37 @@ def canonical_digest(raw: bytes) -> str:
         raw = raw[3:]
     return hashlib.sha256(raw).hexdigest()
 
+def directory_manifest(path: str) -> tuple[list[dict[str, object]], str]:
+    """Return a deterministic, symlink-free manifest and its aggregate digest."""
+    files: list[dict[str, object]] = []
+    for current, dirs, names in os.walk(path, followlinks=False):
+        dirs.sort()
+        names.sort()
+        for name in names:
+            full = os.path.join(current, name)
+            if os.path.islink(full) or not os.path.isfile(full):
+                raise ValueError(f"managed skill contains a non-regular file: {full}")
+            rel = os.path.relpath(full, path).replace(os.sep, "/")
+            if "\t" in rel or "\n" in rel or rel.startswith("../"):
+                raise ValueError(f"managed skill has an unsafe relative path: {rel!r}")
+            with open(full, "rb") as handle:
+                raw = handle.read()
+            files.append(
+                {
+                    "path": rel,
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "executable": bool(os.stat(full).st_mode & 0o111),
+                }
+            )
+    files.sort(key=lambda row: str(row["path"]))
+    if not any(row["path"] == "SKILL.md" for row in files):
+        raise ValueError(f"managed skill has no SKILL.md: {path}")
+    encoded = json.dumps(files, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return files, hashlib.sha256(encoded).hexdigest()
+
 
 def build_manifest(repo_root: str = REPO_ROOT) -> str:
-    """Render the manifest JSON text (with trailing newline) from the authored SKILL.md bodies."""
+    """Render the manifest from every regular file in each authored skill directory."""
     skills = []
     for driver in DRIVERS:
         skill_md = os.path.join(repo_root, driver["supplied-by"], "SKILL.md")
@@ -327,17 +359,56 @@ def build_manifest(repo_root: str = REPO_ROOT) -> str:
         except OSError as exc:
             sys.stderr.write(f"generate-driver-manifest: cannot read {skill_md}: {exc}\n")
             raise SystemExit(2)
+        try:
+            files, tree_sha = directory_manifest(os.path.dirname(skill_md))
+        except (OSError, ValueError) as exc:
+            sys.stderr.write(f"generate-driver-manifest: cannot manifest {skill_md}: {exc}\n")
+            raise SystemExit(2)
         skills.append(
             {
                 "id": driver["id"],
                 "scope": driver["scope"],
                 "sha256": canonical_digest(raw),
+                "tree-sha256": tree_sha,
+                "files": files,
                 "supplied-by": driver["supplied-by"],
                 "materializes-when": driver["materializes-when"],
             }
         )
     doc = {"schemaVersion": MANIFEST_SCHEMA_VERSION, "skills": skills}
     return json.dumps(doc, indent=2) + "\n"
+
+def build_kit_manifest(repo_root: str = REPO_ROOT) -> str:
+    """Render the coordination-kit directory index from repos.yml's skill rows."""
+    roster = os.path.join(repo_root, "registry", "repos.yml")
+    try:
+        roster_text = open(roster, encoding="utf-8").read()
+    except OSError as exc:
+        sys.stderr.write(f"generate-driver-manifest: cannot read {roster}: {exc}\n")
+        raise SystemExit(2)
+    if "\nkit:\n" not in roster_text:
+        sys.stderr.write(f"generate-driver-manifest: {roster} has no top-level kit section\n")
+        raise SystemExit(2)
+    kit_text = roster_text.split("\nkit:\n", 1)[1]
+    sources = re.findall(
+        r"(?m)^\s+- \{[^}\n]*\bkind:\s*skill\s*,[^}\n]*\bsource:\s*([^, }\n]+)",
+        kit_text,
+    )
+    rows = []
+    for source in sorted(sources):
+        files, tree_sha = directory_manifest(os.path.join(repo_root, source))
+        rows.append(
+            {
+                "id": os.path.basename(source),
+                "supplied-by": source.replace(os.sep, "/"),
+                "tree-sha256": tree_sha,
+                "files": files,
+            }
+        )
+    if not rows:
+        sys.stderr.write("generate-driver-manifest: repos.yml declared no kit skill sources\n")
+        raise SystemExit(2)
+    return json.dumps({"schemaVersion": MANIFEST_SCHEMA_VERSION, "skills": rows}, indent=2) + "\n"
 
 
 def main(argv: list[str]) -> int:
@@ -369,6 +440,7 @@ def main(argv: list[str]) -> int:
     # that cannot read its sources still names what it owns.
     if mode == "list":
         sys.stdout.write(f"driver-skill-manifest\t{MANIFEST_PATH}\t\n")
+        sys.stdout.write(f"coordination-kit-skill-manifest\t{KIT_MANIFEST_PATH}\t\n")
         return 0
 
     report, catalog_errors = validate_catalog(catalog_root)
@@ -382,12 +454,16 @@ def main(argv: list[str]) -> int:
         return 0
 
     generated = build_manifest(catalog_root)
+    kit_generated = build_kit_manifest(catalog_root)
     target = os.path.join(REPO_ROOT, MANIFEST_PATH)
+    kit_target = os.path.join(REPO_ROOT, KIT_MANIFEST_PATH)
 
     if mode == "write":
         with open(target, "w") as handle:
             handle.write(generated)
-        sys.stdout.write(f"generate-driver-manifest: wrote {MANIFEST_PATH}\n")
+        with open(kit_target, "w") as handle:
+            handle.write(kit_generated)
+        sys.stdout.write(f"generate-driver-manifest: wrote {MANIFEST_PATH} and {KIT_MANIFEST_PATH}\n")
         return 0
 
     # check
@@ -396,13 +472,18 @@ def main(argv: list[str]) -> int:
             committed = handle.read()
     except OSError:
         committed = None
-    if committed != generated:
+    try:
+        with open(kit_target) as handle:
+            kit_committed = handle.read()
+    except OSError:
+        kit_committed = None
+    if committed != generated or kit_committed != kit_generated:
         sys.stderr.write(
-            f"::error::generate-driver-manifest: {MANIFEST_PATH} is stale — "
+            f"::error::generate-driver-manifest: {MANIFEST_PATH} or {KIT_MANIFEST_PATH} is stale — "
             "run `scripts/generate-driver-manifest --write` and commit.\n"
         )
         return 1
-    sys.stdout.write(f"generate-driver-manifest: {MANIFEST_PATH} is current.\n")
+    sys.stdout.write(f"generate-driver-manifest: {MANIFEST_PATH} and {KIT_MANIFEST_PATH} are current.\n")
     return 0
 
 

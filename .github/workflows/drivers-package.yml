@@ -19,6 +19,7 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "registry/driver-skill-manifest.json"
+      - "registry/coordination-kit-skill-manifest.json"
       - "scripts/generate-driver-manifest"
       - ".github/workflows/drivers-package.yml"
   push:
@@ -28,6 +29,7 @@ on:
       - ".claude/skills/**"
       - ".agents/skills/**"
       - "registry/driver-skill-manifest.json"
+      - "registry/coordination-kit-skill-manifest.json"
       - "scripts/generate-driver-manifest"
       - ".github/workflows/drivers-package.yml"
   workflow_dispatch:

@@ -68,6 +68,15 @@ for row in "${DRIVER_ROWS[@]}"; do
   got="$(digest "$f")"
   [ "$got" = "$want" ] || fail "driver '$id' staged sha256 $got != manifest $want"
 done
+# Every v2 directory member is staged with its raw digest and executable mode.
+while IFS=$'\t' read -r id rel want executable; do
+  f="$WORK/stage/skills/$id/$rel"
+  [ -f "$f" ] || fail "driver '$id' file not staged: $rel"
+  [ "$(sha256sum "$f" | cut -d' ' -f1)" = "$want" ] || fail "driver '$id/$rel' raw digest mismatch"
+  [ -x "$f" ] && got_exec=true || got_exec=false
+  [ "$got_exec" = "$executable" ] || fail "driver '$id/$rel' executable=$got_exec != $executable"
+done < <(jq -r '.skills[] | select(.scope == "driver" and (.files | type) == "array")
+  | .id as $id | .files[] | [$id, .path, .sha256, (.executable | tostring)] | @tsv' "$MANIFEST")
 # Every operator row: NOT staged (delivered nowhere, ADR-0057).
 for id in "${OPERATOR_IDS[@]}"; do
   [ -n "$id" ] || continue
@@ -87,6 +96,10 @@ for row in "${DRIVER_ROWS[@]}"; do
   id="${row%%$'\t'*}"
   grep -qx "drivers/skills/$id/SKILL.md" <<<"$entries" || fail "nupkg is missing drivers/skills/$id/SKILL.md"
 done
+while IFS=$'\t' read -r id rel; do
+  grep -qx "drivers/skills/$id/$rel" <<<"$entries" || fail "nupkg is missing drivers/skills/$id/$rel"
+done < <(jq -r '.skills[] | select(.scope == "driver" and (.files | type) == "array")
+  | .id as $id | .files[] | [$id, .path] | @tsv' "$MANIFEST")
 echo "   nupkg carries the manifest + every driver SKILL.md + the consumer handle + README"
 
 # content_addressed_ok <drivers-dir>: returns 0 iff every `scope: driver` SKILL.md under
@@ -96,12 +109,16 @@ echo "   nupkg carries the manifest + every driver SKILL.md + the consumer handl
 # (step 4). Asserting the digest merely "changed" would be tautological (any appended byte changes a
 # sha256); asserting this function's VERDICT flips is what proves the verify.
 content_addressed_ok() {
-  local dir="$1" row id want got
-  for row in "${DRIVER_ROWS[@]}"; do
-    id="${row%%$'\t'*}"; want="${row##*$'\t'}"
-    got="$(digest "$dir/skills/$id/SKILL.md")" || return 1
-    [ "$got" = "$want" ] || { echo "      content-address mismatch: $id sha256 $got != manifest $want" >&2; return 1; }
-  done
+  local dir="$1" id rel want executable got got_exec
+  while IFS=$'\t' read -r id rel want executable; do
+    [ -f "$dir/skills/$id/$rel" ] || return 1
+    got="$(sha256sum "$dir/skills/$id/$rel" | cut -d' ' -f1)" || return 1
+    [ -x "$dir/skills/$id/$rel" ] && got_exec=true || got_exec=false
+    [ "$got" = "$want" ] && [ "$got_exec" = "$executable" ] \
+      || { echo "      content-address mismatch: $id/$rel sha256/mode differs from manifest" >&2; return 1; }
+  done < <(jq -r '.skills[] | select(.scope == "driver")
+    | .id as $id | (.files // [{path:"SKILL.md", sha256:.sha256, executable:false}])[]
+    | [$id, .path, .sha256, (.executable | tostring)] | @tsv' "$dir/driver-skill-manifest.json")
   return 0
 }
 

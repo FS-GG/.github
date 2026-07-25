@@ -182,12 +182,13 @@ def coordination_digests(manifest_tsv: str) -> dict[str, str]:
         if not raw.strip():
             continue
         parts = raw.split("\t")
-        if len(parts) != 4:
+        if len(parts) not in (4, 5):
             raise GateError(
-                f"kit-manifest.tsv line {lineno} is not the 4-field kind<TAB>pkgrel<TAB>dest<TAB>sha "
+                f"kit-manifest.tsv line {lineno} is not the 4-field legacy or 5-field v2 "
+                "kind<TAB>pkgrel<TAB>dest<TAB>sha[<TAB>executable] "
                 f"shape (got {len(parts)} field(s)): {raw!r}"
             )
-        kind, _pkgrel, dest, sha = parts
+        kind, _pkgrel, dest, sha = parts[:4]
         if kind not in COORDINATION_KINDS:
             continue  # build-config etc. — no repos.lock row to match against (verify-package.sh §1)
         sha = sha.strip().lower()

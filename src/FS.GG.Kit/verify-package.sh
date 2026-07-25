@@ -22,16 +22,19 @@ fail() { echo "verify-package: FAIL — $*" >&2; exit 1; }
 
 echo "== 1. stage + derive parity (coordination kit vs repos.lock; build-config vs sync-build-config) =="
 bash "$HERE/stage-kit.sh" "$WORK/stage" >/dev/null
-n_ck=0; n_bc=0
-while IFS=$'\t' read -r kind pkgrel _dest sha; do
+n_ck=0; n_bc=0; n_skill_files=0
+while IFS=$'\t' read -r kind pkgrel dest sha _executable; do
   if [ "$kind" = "build-config" ]; then
     # build-config has no repos.lock row (ADR-0036 pin model): its sha256 is a self-consistent
     # integrity record, checked at materialize, not a cross-check against repos.lock.
     n_bc=$((n_bc + 1))
-  else
+  elif [ "$kind" != "skill" ] || [[ "$dest" == */SKILL.md ]]; then
+    # repos.lock remains the legacy SKILL.md/file pin during publish-before-flip. Additional files
+    # are content-addressed by their v2 manifest row and the directory tree digest.
     grep -qi "^$sha  " "$LOCK" || fail "staged digest $sha ($pkgrel) is not in registry/repos.lock (derive-don't-restate broken)"
     n_ck=$((n_ck + 1))
   fi
+  [ "$kind" != "skill" ] || n_skill_files=$((n_skill_files + 1))
 done < "$WORK/stage/kit-manifest.tsv"
 # COUNT parity, not just subset: the manifest must carry EVERY row of each capability, derived from the
 # same source, so a member added/removed never needs an edit here (ADR-0058) — a truncated manifest (a
@@ -56,7 +59,7 @@ for want in "build/FS.GG.Kit.props" "build/FS.GG.Kit.targets" "README.md" "kit/k
   grep -qx "$want" <<<"$entries" || fail "nupkg is missing $want"
 done
 # ...and EVERY member the manifest names, derived — not a restated list of skill names (ADR-0058).
-while IFS=$'\t' read -r _kind pkgrel _dest _sha; do
+while IFS=$'\t' read -r _kind pkgrel _dest _sha _executable; do
   grep -qx "kit/$pkgrel" <<<"$entries" || fail "nupkg is missing kit/$pkgrel (named by the manifest)"
 done < "$WORK/stage/kit-manifest.tsv"
 echo "   nupkg carries every kit member + manifest + build logic"
@@ -161,6 +164,24 @@ grep -q "Source of truth: FS-GG/.github" "$recv3/Directory.Build.props" \
 dotnet msbuild "$WORK/adopt.proj" -t:FsggKitMaterialize -nologo >/dev/null \
   || fail "materialize refused a canonical (marked) .props — the marker check is too strict"
 echo "   unmarked .props refused (and left intact); adopt moved it to *.local.props; marked .props overwritten freely"
+
+echo "== 3d. a multi-file skill transports bytes, mode, and a closed file set =="
+mkdir -p "$WORK/unpacked/kit/skills/check-board/references"
+printf '# packaged reference\n' > "$WORK/unpacked/kit/skills/check-board/references/transport.md"
+chmod a+x "$WORK/unpacked/kit/skills/check-board/references/transport.md"
+ref_sha="$(sha256sum "$WORK/unpacked/kit/skills/check-board/references/transport.md" | cut -d' ' -f1)"
+printf 'skill\tskills/check-board/references/transport.md\tcheck-board/references/transport.md\t%s\ttrue\n' \
+  "$ref_sha" >> "$WORK/unpacked/kit/kit-manifest.tsv"
+mkdir -p "$recv/.claude/skills/check-board"
+printf 'stale\n' > "$recv/.claude/skills/check-board/undeclared.txt"
+dotnet msbuild "$WORK/materialize.proj" -t:FsggKitMaterialize -nologo >/dev/null
+for root in .claude/skills .codex/skills .agents/skills; do
+  [ -x "$recv/$root/check-board/references/transport.md" ] \
+    || fail "multi-file skill reference was not materialized executable: $root"
+done
+[ ! -e "$recv/.claude/skills/check-board/undeclared.txt" ] \
+  || fail "extra undeclared file survived closed-set skill materialization"
+echo "   auxiliary reference reached all roots with its mode; stale undeclared file removed"
 
 echo "== 4. a tampered kit file is a LOUD failure =="
 cp -r "$WORK/unpacked/kit" "$WORK/tampered"

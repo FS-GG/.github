@@ -278,11 +278,9 @@ let private fetchDescriptor (gitRef: string) (dest: string) : Result<string opti
 
 // ── Coordination wiring (the kit + board env into the workspace) ──────────────
 
-/// The four coordination skills (the `coordination-kit` rows of `registry/repos.yml`). Each lands in
-/// BOTH agent-skill roots byte-identical (ADR-0011/0014); the shim and the engine tool manifest
-/// complete the kit. Fetched from FS-GG/.github at scaffold time — the packaged tool has no checkout,
-/// so it pulls the bytes over HTTP exactly as it fetches the rendering descriptor (no `coordination-sync`).
-let private coordinationSkills =
+/// Legacy fallback for refs predating the v2 directory manifest. Once all supported refs publish
+/// `coordination-kit-skill-manifest.json`, this list can retire in the reader-removal phase.
+let private legacyCoordinationSkills =
     [ "cross-repo-coordination"; "intra-repo-parallel-work"; "check-board"; "pnext-item" ]
 
 /// `owner/title` → (owner, title). No `/` ⇒ that owner's default `Coordination` board.
@@ -321,6 +319,38 @@ let private setExecutable (dest: string) =
         ||| UnixFileMode.GroupExecute
         ||| UnixFileMode.OtherExecute
     )
+
+let private setExecutableState (dest: string) (executable: bool) =
+    if not (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) then
+        let current = File.GetUnixFileMode dest
+        let executeBits =
+            UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute
+        File.SetUnixFileMode(dest, (if executable then current ||| executeBits else current &&& ~~~executeBits))
+
+let private isExecutable (dest: string) =
+    if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then false
+    else
+        let executeBits =
+            UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute
+        (File.GetUnixFileMode(dest) &&& executeBits) <> enum<UnixFileMode> 0
+
+/// Fetch the generated closed-set directory index. Old refs have no index, so they retain the
+/// SKILL.md-only reader during publish-before-flip.
+let private coordinationSkillFiles (raw: string -> string) =
+    match fetchText (raw "registry/coordination-kit-skill-manifest.json") with
+    | Error _ ->
+        false, (legacyCoordinationSkills |> List.map (fun id -> id, "SKILL.md", false))
+    | Ok json ->
+        true,
+        (JsonNode.Parse(json).AsObject().["skills"].AsArray()
+         |> Seq.collect (fun skill ->
+             let row = skill.AsObject()
+             let id = row.["id"].GetValue<string>()
+             row.["files"].AsArray()
+             |> Seq.map (fun file ->
+                 let f = file.AsObject()
+                 id, f.["path"].GetValue<string>(), f.["executable"].GetValue<bool>()))
+         |> List.ofSeq)
 
 /// Merge the `fs.gg.coord.cli` tool into the workspace's `.config/dotnet-tools.json`, preserving any
 /// tools already there (the SDD scaffold may have written one). `manifestJson` is the fetched
@@ -381,14 +411,17 @@ let private writeCoordinationEnv (target: string) (owner: string) (title: string
 let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
     let raw p = sprintf "https://raw.githubusercontent.com/FS-GG/.github/%s/%s" kitRef p
     let problems = ResizeArray<string>()
-    // 1 · the four skills → every agent-skill root, byte-identical. The SDD scaffold fans its own
+    let _, skillFiles = coordinationSkillFiles raw
+    // 1 · complete skill directories → every agent-skill root, byte- and mode-identical.
     //     union into .claude/.agents/.codex (ADR-0011), so the coordination kit joins all three —
     //     a codex-driven agent in the workspace sees the same skills a Claude one does.
-    for s in coordinationSkills do
-        match fetchText (raw (sprintf ".claude/skills/%s/SKILL.md" s)) with
+    for s, rel, executable in skillFiles do
+        match fetchText (raw (sprintf ".claude/skills/%s/%s" s rel)) with
         | Ok content ->
             for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
-                writeUnder opts.Target (sprintf "%s/%s/SKILL.md" root s) content
+                let destRel = sprintf "%s/%s/%s" root s rel
+                writeUnder opts.Target destRel content
+                try setExecutableState (Path.Combine(opts.Target, destRel)) executable with _ -> ()
         | Error e -> problems.Add e
     // 2 · the fsgg-coord shim (executable)
     (match fetchText (raw "scripts/fsgg-coord") with
@@ -451,12 +484,16 @@ type private DriftAction =
 let private reconcileFile (target: string) (rel: string) (desired: string) (makeExec: bool) : DriftAction =
     let dest = Path.Combine(target, rel)
     let existing = if File.Exists dest then Some(File.ReadAllText dest) else None
+    let modeMatches =
+        not (File.Exists dest)
+        || RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        || isExecutable dest = makeExec
     match existing with
-    | Some cur when cur = desired -> Kept rel
+    | Some cur when cur = desired && modeMatches -> Kept rel
     | _ ->
         try
             writeUnder target rel desired
-            if makeExec then (try setExecutable dest with _ -> ())
+            try setExecutableState dest makeExec with _ -> ()
             Wrote(rel, existing.IsNone)
         with ex ->
             Errored ex.Message
@@ -557,18 +594,32 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
     let wrote = ResizeArray<string * bool>()
     let kept = ResizeArray<string>()
     let problems = ResizeArray<string>()
+    let hasDirectoryManifest, skillFiles = coordinationSkillFiles raw
     let record =
         function
         | Wrote(rel, m) -> wrote.Add(rel, m)
         | Kept rel -> kept.Add rel
         | Errored d -> problems.Add d
-    // 1 · the four skills → every agent-skill root, byte-identical (reconciled per root file).
-    for s in coordinationSkills do
-        match fetchText (raw (sprintf ".claude/skills/%s/SKILL.md" s)) with
+    // 1 · complete skill directories → every agent-skill root (reconciled per file and mode).
+    for s, rel, executable in skillFiles do
+        match fetchText (raw (sprintf ".claude/skills/%s/%s" s rel)) with
         | Ok content ->
             for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
-                record (reconcileFile opts.Target (sprintf "%s/%s/SKILL.md" root s) content false)
+                record (reconcileFile opts.Target (sprintf "%s/%s/%s" root s rel) content executable)
         | Error e -> problems.Add e
+    if hasDirectoryManifest then
+        let expected = skillFiles |> Seq.map (fun (id, rel, _) -> id, rel) |> Set.ofSeq
+        for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
+            for id in skillFiles |> Seq.map (fun (id, _, _) -> id) |> Seq.distinct do
+                let dir = Path.Combine(opts.Target, root, id)
+                if Directory.Exists dir then
+                    for file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories) do
+                        let rel = Path.GetRelativePath(dir, file).Replace(Path.DirectorySeparatorChar, '/')
+                        if not (Set.contains (id, rel) expected) then
+                            try
+                                File.Delete file
+                                wrote.Add(sprintf "%s/%s/%s" root id rel, false)
+                            with ex -> problems.Add ex.Message
     // 2 · the fsgg-coord shim (executable)
     (match fetchText (raw "scripts/fsgg-coord") with
      | Ok content -> record (reconcileFile opts.Target "scripts/fsgg-coord" content true)

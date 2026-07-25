@@ -28,8 +28,8 @@ directs owner-authored skills onto.
 ## What it ships
 
 ```
-drivers/driver-skill-manifest.json     the delivered set + per-skill sha256 (the ADR-0014 record)
-drivers/skills/<id>/SKILL.md           the bytes for each `scope: driver` row (e.g. work-roadmap)
+drivers/driver-skill-manifest.json     the delivered set + whole-directory manifests
+drivers/skills/<id>/<relative-path>    every file for each `scope: driver` row (e.g. work-roadmap)
 build/FS.GG.Drivers.props              a consumer handle: $(FsggDriversContentDir) → the content root
 ```
 
@@ -44,7 +44,8 @@ gates it out of every tree.
 There is **no consumer materialize target** in this package, by design: the materialize is the SDD CLI's,
 at scaffold time. `build/FS.GG.Drivers.props` exposes `$(FsggDriversContentDir)` so the CLI's build can
 locate the packed bytes; the CLI reads `driver-skill-manifest.json`, and for each row whose
-`materializes-when` holds, lays `skills/<id>/SKILL.md` into the scaffold's skill roots and verifies it
+`materializes-when` holds, lays the complete `skills/<id>/` directory into the scaffold's skill roots
+and verifies its file set, bytes, and executable modes
 against the recorded `sha256`. See ADR-0063 for the materializer design.
 
 ## Deriving, not restating
