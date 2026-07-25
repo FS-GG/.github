@@ -1,6 +1,6 @@
 ---
 name: spectre-console
-description: Work with Spectre.Console rich-terminal output in this project — the capability/Profile mental model, the widget tour (markup, tables, panels, rules/trees, prompts, live/status), and the FS-GG rendering conventions (the HumanRender/HumanText presentation edge, the Json-is-contract / Plain+Rich-are-projections rule, degrade-to-zero-ANSI, deterministic fixed-width test rendering). Also use when a Spectre.Console render behaves correctly locally but differs or fails in CI (GitHub Actions) — width/wrap assertions, plain / no-color output, or snapshots that go red only on the runner — covering reproducing the divergence locally, classifying invisible-byte artifact vs genuine display overflow, and the matching fix.
+description: Work with Spectre.Console rich-terminal output in this project — the capability/Profile mental model, the widget tour (markup, tables, panels, rules/trees, prompts, live/status), and the FS-GG rendering conventions (the HumanRender/HumanText presentation edge, the Json-is-contract / Plain+Rich-are-projections rule, degrade-to-zero-ANSI, deterministic fixed-width test rendering). Also use when a Spectre.Console render behaves correctly locally but differs or fails in CI (GitHub Actions) — width/wrap assertions, plain / no-color output, or snapshots that go red only on the runner — covering reproducing the divergence locally, classifying invisible ANSI characters vs genuine display overflow, and the matching fix.
 metadata:
   source: FS.GG.Governance spec 091 / #32 / #34 / #37 (2026-06-29); evolved to a first-class skill by spec 093 (2026-06-29)
 ---
@@ -262,11 +262,11 @@ render test; don't hand-roll a console that trusts host detection.
 
 ## Headless-fidelity pitfall (absorbed from spec 091)
 
-A rich-render surface that is **correct locally but wrong (or red) in headless CI** is almost always
-an *invisible-byte* problem, not a layout problem. Spectre re-detects terminal capabilities on the CI
-host, force-enables ANSI, and leaks SGR escape bytes (`ESC[1m…`) into output you believe is plain.
-Those bytes are invisible on screen but counted by `String.Length`, so a length-based width/wrap
-assertion fails on the runner only.
+A rich-render surface that is **correct locally but wrong (or red) in headless CI** is often an
+*invisible-ANSI-character* problem, not a layout problem. Spectre re-detects terminal capabilities
+on the CI host, force-enables ANSI, and leaks SGR escape characters (`ESC[1m…`) into output you
+believe is plain. Those characters occupy zero display cells but still contribute UTF-16 code units
+to `.NET String.Length`, so a length-based width/wrap assertion fails on the runner only.
 
 ### When this applies
 
@@ -285,17 +285,18 @@ Spectre derives a `Profile` (ANSI support, color system, width, encoding, Unicod
 call `AnsiConsole.Create`. Even when you pass `AnsiConsoleSettings.Ansi <- AnsiSupport.No`, `Create`
 **re-detects ANSI from the host environment afterward**. Under `GITHUB_ACTIONS=true` Spectre
 force-enables ANSI, so `Markup` writes emit SGR escapes (`ESC[1m`, `ESC[0m`, …) into the output you
-intended to be plain. The escapes render as zero visible columns but are real characters in the
+intended to be plain. The escapes render as zero display cells but are real characters in the
 string, so on the CI host:
 
 ```
-cells (what the user sees)  ≠  String.Length (bytes in the buffer)
+display cells (what the user sees)  ≠  String.Length (UTF-16 code units)
 ```
 
-A naive `Expect.isLessThanOrEqual line.Length bound` measures **bytes**, while the folding contract it
-means to check is about **display cells**. The invisible escapes inflate `String.Length` past
-`bound`, so the assertion misjudges a perfectly-folded line as overflowing — but only where ANSI was
-force-enabled, i.e. only on the runner.
+A naive `Expect.isLessThanOrEqual line.Length bound` measures **UTF-16 code units**, while the
+folding contract it means to check is about **display cells**. ASCII ANSI sequences contribute one
+code unit per character despite occupying zero cells; combining marks and wide glyphs create other
+code-unit/cell differences. The leaked sequences inflate `String.Length` past `bound`, so the
+assertion misjudges a perfectly-folded line as overflowing — but only where ANSI was force-enabled.
 
 ### Reproduce locally (no CI round-trip)
 
@@ -313,7 +314,7 @@ GITHUB_ACTIONS=true dotnet test tests/FS.GG.Governance.Cli.Tests -c Release --fi
 Run it once with the variable and once without. If it fails **only** with `GITHUB_ACTIONS=true`, you
 have reproduced the headless divergence locally and confirmed it is environment-driven.
 
-### Classify — cells vs bytes (opposite fixes)
+### Classify — display cells vs code units (opposite fixes)
 
 Decide which of two opposite problems you have by printing **both** measures per rendered line:
 
@@ -327,7 +328,7 @@ for line in out.Replace("\r\n", "\n").Split('\n') do
 
 | Observation | Meaning | Fix |
 |---|---|---|
-| `cells ≤ bound` **but** `len > bound` | **Invisible-byte artifact** (this incident): the line folds correctly; only leaked escapes inflate the byte count. | Force ANSI/color off on the plain surface (below), or assert on `cells`. |
+| `cells ≤ bound` **but** `len > bound` | **Invisible-ANSI-character artifact** (this incident): the line folds correctly; leaked escapes inflate the UTF-16 code-unit count. | Force ANSI/color off on the plain surface (below), or assert on `cells`. |
 | `cells > bound` | **Genuine display overflow**: the visible text really is too wide. | A real layout fix (narrower content, different wrap/truncation) — **not** the ANSI fix. |
 
 If `len == cells` everywhere and the line still overflows, there are no leaked escapes — true
@@ -336,7 +337,7 @@ anything.
 
 ### Fix — pin the capability on the plain surface
 
-For the **invisible-byte artifact**, force the capabilities off immediately after
+For the **invisible-ANSI-character artifact**, force the capabilities off immediately after
 `AnsiConsole.Create`, so re-detection can't re-enable ANSI behind your back:
 
 ```fsharp
@@ -354,7 +355,7 @@ snapshot). Do **not** apply it to intentional, human-facing product output — d
 terminal's colors to "fix" a test is the wrong trade. Product rendering should stay colored in a real
 terminal; only the deterministic surface is pinned.
 
-Alternatively (or additionally), assert against **cells**, not bytes: strip the SGR escapes (as in
+Alternatively (or additionally), assert against **display cells**, not code units: strip the SGR escapes (as in
 Classify) before comparing to `bound`. Pinning the capability is the more robust fix because it keeps
 the plain surface genuinely plain for every consumer, not just the one assertion.
 
@@ -367,9 +368,9 @@ of these signals is fragile; pin the capability rather than trusting the environ
 lesson outlives this variable and library version:
 
 > **Assert against the same measure the system actually uses.** A width/wrap contract is about
-> display **cells**; do not check it with **byte length** unless you have guaranteed the two are
-> equal. When they can diverge (ANSI, combining marks, wide glyphs, encoding), measure the thing the
-> user sees.
+> display **cells**; do not check it with `.NET String.Length` unless you have guaranteed its UTF-16
+> code-unit count equals the display-cell width. ANSI sequences, combining marks, and wide glyphs
+> break that equality; encoding bytes are a separate measure again.
 
 ## Version scope
 
@@ -389,10 +390,10 @@ Every Part B claim traces to this repo's live code or a verified incident — no
   (`senseCapability`), `RenderSupport.fs` (`plainConsole`/`colorConsole`), `WidthResilienceTests.fs`.
 - **Spec**: FS.GG.Governance `091` (headless render determinism).
 - **Issues**: `#32` (the test-fidelity gap), `#34` (the publish it blocked), `#37` (the fix).
-- **Evidence runs**: `28376202121` (the diagnostic cell-vs-byte dump that identified leaked escapes)
+- **Evidence runs**: `28376202121` (the diagnostic cell-vs-code-unit dump that identified leaked escapes)
   and `28377734248` (the green `FS.GG.Governance.Cli@1.2.0` publish after the fix).
 - **Date stamped**: 2026-06-29.
-- **Corrected root cause**: `AnsiSupport.No` overridden under `GITHUB_ACTIONS` (leaked SGR bytes),
+- **Corrected root cause**: `AnsiSupport.No` overridden under `GITHUB_ACTIONS` (leaked SGR characters),
   **not** glyph/width measurement — an earlier hypothesis the diagnostic dump disproved.
 
 ---
@@ -402,14 +403,15 @@ Every Part B claim traces to this repo's live code or a verified incident — no
 This skill is **advisory** — it gates nothing. No build/test/publish/merge workflow references it;
 deleting it changes no CI outcome.
 
-- **Canonical source**: `FS-GG/.github` → `.claude/skills/spectre-console/SKILL.md`.
-- **Installed (Spectre-using repos)**: FS.GG.Governance (0.57.1), FS.GG.SDD (0.57.0). Each carries a
-  byte-identical copy plus an `AGENTS.md` entrypoint that *references* this body (no second copy).
+- **Canonical capability**: `FS-GG/.github` ships byte-identical
+  `spectre-console/SKILL.md` bodies under `.claude/skills`, `.codex/skills`, and `.agents/skills`.
+- **Installed (Spectre-using repos)**: FS.GG.Governance (0.57.1), FS.GG.SDD (0.57.0). Route to the
+  installed `spectre-console` skill by name through the host's skill/resource mechanism; do not link
+  to one source-tree runtime root, because receivers materialize only their declared roots.
 - **Excluded**: FS.GG.Rendering and FS.GG.Templates — they do not render with Spectre.Console, so the
   skill does not apply.
 
-To install in another Spectre-using repo, copy this file to that repo's
-`.claude/skills/spectre-console/SKILL.md` and add the `AGENTS.md` entrypoint marker. This skill
-evolved from the narrower `spectre-console-headless-fidelity` skill (spec 092) into a first-class
-`spectre-console` skill by spec 093; the headless-fidelity diagnostic is preserved verbatim-in-
-substance as the *Headless-fidelity pitfall* section of Part B.
+To install in another Spectre-using repo, use the coordination-kit materializer for the receiver's
+declared skill roots and add its `AGENTS.md` entrypoint marker. This skill evolved from the narrower
+`spectre-console-headless-fidelity` skill (spec 092) into a first-class `spectre-console` skill by
+spec 093; the headless-fidelity diagnostic remains in the *Headless-fidelity pitfall* section.

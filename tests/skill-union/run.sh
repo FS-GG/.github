@@ -438,6 +438,13 @@ else
   echo "FAIL  materializes-when cross-impl conformance diverged (see above)"; failcount=$((failcount+1))
 fi
 
+echo "--- skill guidance current-truth regression (.github#1410) ---"
+if bash "$HERE/current-truth.sh"; then
+  echo "PASS  lane narrowing and publishing current-truth semantics stay coherent"; pass=$((pass+1))
+else
+  echo "FAIL  skill guidance current-truth regression (see above)"; failcount=$((failcount+1))
+fi
+
 echo "--------------------------------------------"
 echo "skill-union fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1

@@ -1,6 +1,6 @@
 ---
 name: publishing-and-deployment
-description: How FS-GG packages, tools, and templates get built, versioned, and published — the GitHub Packages NuGet feed, the -preview channel, `dotnet pack` + the local-feed fallback, version-derivation and coherent-set rules, the publish gates (ApiCompat, reference-gate-set guard), the producer-release → dispatch + Renovate auto-update fabric, and package-identity rules. Use when publishing/releasing an FS-GG artifact, wiring or debugging a release workflow, adding a new package to a feed, deciding a package version, or extending publishing to a new feed (e.g. nuget.org). Authoritative status lives in `registry/dependencies.yml` (projection: `docs/registry/compatibility.md`) — always confirm coherence flags there before acting.
+description: Publish FS-GG packages, tools, and templates on the stable channel to GitHub Packages and nuget.org, with coherent-set versioning, release gates, and downstream updates. Use for releases, package versions, feeds, or release workflows.
 ---
 
 # Publishing & deployment (FS-GG)
@@ -47,19 +47,21 @@ gates* a publish, and *how* a release propagates. That's what this skill holds.
   `FS.GG.*` producer is now stable and the Renovate preset pins to stable
   (`ignoreUnstable: true`, `respectLatest: true`). The org stays on the **0.x** line;
   "stable" here means *no `-preview` suffix*, not 1.0.
-- **Feed provisioning** (`.github#21`) is **done + verified**: ~19 `FS.GG.*` packages
+- **Feed provisioning** (`.github#21`) is **done + verified**: registered package versions
   resolve on the feed, `read:packages` auth works. (Older text in `default.json` /
   ADR-0007 that calls the feed "dormant/deferred" predates provisioning — trust the
   registry.)
 
 ## How a package gets published
 
-Each **producer owns its release workflow** — the six components, **and `.github` itself** for its
-two org-level tools (ADR-0039 §5). The shape is:
+Each **producer owns its release workflow**, including `.github` for its two org-level tools
+(ADR-0039 §5). The shape is:
 
-1. **Tag** the coherent set (e.g. `fs-gg-ui-template/v0.1.58-preview.1`).
+1. **Tag** the coherent set with its stable version (for example `v0.1.0` or the producer's
+   component-qualified stable tag).
 2. **`dotnet pack`** the packables → `.nupkg`.
-3. **Push** to the org feed: `dotnet nuget push *.nupkg --source https://nuget.pkg.github.com/FS-GG/index.json --api-key <token>` (a GitHub token with `write:packages`).
+3. **Push the gate-verified bytes to both feeds**, in order: GitHub Packages first, then the
+   byte-identical `.nupkg` to nuget.org through Trusted Publishing. Never re-pack between pushes.
 4. **Announce** downstream via the dispatch-sender job (see *Auto-update fabric*).
 
 Publish gates run **before** the push (see *Gates*). A release publishes the whole
@@ -86,7 +88,7 @@ of the fleet.
 
 - **Coherent sets move as one.** The `FS.GG.UI.*` set shares one version; bump and
   publish them together (Renovate groups them into a single PR).
-- **`-preview` always.** No stable pins — consumers pin the exact preview
+- **Stable channel.** Do not add a `-preview` suffix. Consumers pin the exact stable version
   (`dotnet-tools.json` for tools, `Directory.Packages.props` for packages).
 - **Schema-derived versions** (ADR-0007): `FS.GG.Governance.ReferenceGateSet`'s
   version is the 4 contained `schemaVersion`s composed in fixed file order —
@@ -109,7 +111,7 @@ IDs belong to Governance — never share identity across products by accident.
 
 | Gate | What it enforces | Where |
 |---|---|---|
-| **ApiCompat / Package Validation** (`apicompat-publicapi-gate`, ✅ live) | a removed/changed public member fails CI ⇒ forces a SemVer major. F# packages, so this is the SDK's language-agnostic ApiCompat — **not** the C#-only `PublicApiAnalyzers`. Runs at pack vs the published-feed baseline. | Rendering (17 `FS.GG.UI.*` vs `0.1.52-preview.1`), SDD (`FS.GG.Contracts` vs `1.0.1`) |
+| **ApiCompat / Package Validation** (`apicompat-publicapi-gate`, ✅ live) | a removed/changed public member fails CI ⇒ forces a SemVer major. F# packages, so this is the SDK's language-agnostic ApiCompat — **not** the C#-only `PublicApiAnalyzers`. Runs at pack vs the published-feed baseline. | Rendering (`FS.GG.UI.*` coherent set), SDD (`FS.GG.Contracts`) |
 | **Reference-gate-set guard** (G1–G7) | `FS.GG.Governance.ReferenceGateSet` can't be produced unless the reference set is valid ⇒ shipped == tested; guard asserts byte-identity + content-only + derived version on the real `.nupkg`. | Governance CI (`reference-gate-set-pack`) |
 | **Contract-coherence gate** | a version/API bump that breaks a registry range fails the consumer's CI. | consumer repos (see `docs/coordination/contract-coherence-gate.md`) |
 
@@ -121,14 +123,14 @@ the merge button, add the job to the repo's required checks.
 Two complementary halves, both owned by `.github` (`docs/coordination/auto-update-fabric.md`):
 
 - **Push (immediate, targeted):** the producer's release workflow calls the reusable
-  [`dispatch-sender.yml`](../../.github/workflows/dispatch-sender.yml) (`workflow_call`).
+  [`dispatch-sender.yml`](../../../.github/workflows/dispatch-sender.yml) (`workflow_call`).
   It mints a **GitHub App token scoped to the target repo** (a `GITHUB_TOKEN` can't
   dispatch cross-repo) and POSTs `repository_dispatch {event_type,
   client_payload:{version,source_repo,source_sha,…}}`. The consumer handles it with
   `on: repository_dispatch` and opens a bump PR. App id/key are org secrets
   (`FSGG_DISPATCH_APP_ID` / `FSGG_DISPATCH_APP_PRIVATE_KEY`).
 - **Pull (drift-catching backstop):** the org-shared Renovate preset
-  [`default.json`](../../default.json) — consumers add
+  [`default.json`](../../../default.json) — consumers add
   `"extends": ["github>FS-GG/.github"]`. Custom managers catch embedded pins the
   standard `nuget` manager misses (the `FsGgUiVersion` MSBuild property →
   `FS.GG.UI.Template`; annotation-driven `# renovate: datasource=nuget depName=…`).
@@ -168,55 +170,11 @@ those are gated by `projection` and `architecture-map` respectively, and only in
 - **Consumer-facing install/update:** `docs/consumer/versioning-and-updates.md`, `docs/consumer/getting-started.md`
 - **Fabric & gates:** `docs/coordination/auto-update-fabric.md`, `docs/coordination/contract-coherence-gate.md`
 
-## Public nuget.org (decided, wiring pending — ADR-0012 + ADR-0013)
+## Historical rollout record
 
-Everything above targets the **org GitHub Packages** feed. **[ADR-0012](../../../docs/adr/0012-dual-publish-to-nuget-org.md)**
-adds **dual-publish to public nuget.org** for **all** currently-published packages (both
-`.Cli` tools, `FS.GG.Contracts`, the `FS.GG.UI.*` set + BOM + Template,
-`FS.GG.Governance.ReferenceGateSet`) — **additive**: the org feed stays the coherence
-source of truth (Renovate / contract-coherence gate / registry `package-version` keep
-reading it), nuget.org is a public distribution target. Registry coherence id:
-**`nuget-org-published`** (`coherent: false` until wired).
-
-**Auth = Trusted Publishing (OIDC), not a stored key** — [ADR-0013](../../../docs/adr/0013-trusted-publishing-oidc-for-nuget-org.md)
-supersedes ADR-0012 §6. There is **no `NUGET_ORG_API_KEY` secret**: each producer's release
-job requests an OIDC token (`id-token: write`), `NuGet/login@v1` exchanges it at nuget.org
-for a **single-use key valid ~1 hour**, and the push uses that. Login+push live in **each
-producer's own `release.yml`** — a cross-repo reusable workflow trips the OIDC policy match
-([NuGet/login#6](https://github.com/NuGet/login/issues/6)), so there is **no** shared
-`.github` push workflow for this (the earlier `nuget-org-push.yml` from `.github#104` was
-retired). Wire it inline, **after** the org-feed push + all gates (ApiCompat, G1–G7 guard)
-are green (ADR-0012 §4 gated ordering):
-
-```yaml
-# in the producer's release.yml — the job that already holds the gated .nupkg set:
-    permissions:
-      id-token: write      # mint the GitHub OIDC token
-      contents: read
-    steps:
-      # ... org-feed push + gates already green ...
-      - name: NuGet login (OIDC → short-lived key)
-        uses: NuGet/login@v1
-        id: login
-        with:
-          user: ${{ secrets.NUGET_USER }}    # nuget.org PROFILE name (not email); non-sensitive
-      - name: Push byte-identical set to nuget.org
-        run: >
-          dotnet nuget push "**/*.nupkg"
-          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
-          --source https://api.nuget.org/v3/index.json --skip-duplicate
-```
-
-Push the **byte-identical** gate-verified `.nupkg` (no re-pack — ADR-0012 §3). Each packable
-also needs listing metadata (`PackageLicenseExpression`, `PackageReadmeFile`, `RepositoryUrl`,
-icon — ADR-0012 §5).
-
-**Blocked on an admin gate** — now **Trusted Publishing policies**, not a secret (ADR-0013 §4).
-An org-admin signed in to nuget.org as the FS-GG-org owner creates **one policy per producer
-repo** (Repository Owner `FS-GG`; Repository `FS.GG.SDD` / `FS.GG.Rendering` /
-`FS.GG.Governance`; Workflow File = that repo's release workflow filename only, e.g.
-`release.yml`), reserves the `FS.GG.` **ID prefix** (anti-squat — still required), and
-optionally sets `NUGET_USER`. **Fail-closed is intrinsic:** until a matching policy exists,
-`NuGet/login` returns `401` and the release fails loud — never a silent no-op, never a
-half-published set. **Permanence:** a nuget.org ID is claimed forever (unlist ≠ delete), so
-the current `FS.GG.*` IDs are frozen as the public identities (no rename — ADR-0003).
+The migration from org-feed-only publishing to stable, byte-identical dual publishing is complete.
+Its superseded rollout states, administrative prerequisites, and OIDC decision history remain in
+[ADR-0012](../../../docs/adr/0012-dual-publish-to-nuget-org.md) and
+[ADR-0013](../../../docs/adr/0013-trusted-publishing-oidc-for-nuget-org.md). They are historical
+records, not operating instructions. For current package versions and coherence, read
+`registry/dependencies.yml`.
