@@ -667,7 +667,9 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     | Only readers when List.contains o.Command readers -> None
                     | Only readers -> Some(spelling, readers))
 
-            if o.AllRepos && o.Repo.IsSome then
+            if o.Command = Reconcile && o.Apply && o.Render = Json then
+                Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode."
+            elif o.AllRepos && o.Repo.IsSome then
                 Error "who: --repo and --all-repos are mutually exclusive — choose the repository slice or the whole board."
             else
                 match residue with

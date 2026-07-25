@@ -822,8 +822,31 @@ module Client =
                             // marker CAS, renewed-since-scan check, and PreviousStatus restore here.
                             // `Environment.ProcessPath` is this exact packaged client, so this does not
                             // depend on a checkout wrapper or PATH.
-                            let psi = ProcessStartInfo(Environment.ProcessPath)
+                            let processPath =
+                                Environment.ProcessPath
+                                |> Option.ofObj
+                                |> Option.defaultWith (fun () -> invalidOp "reconcile: current executable path is unavailable")
+
+                            let psi = ProcessStartInfo(processPath)
                             psi.UseShellExecute <- false
+
+                            // A packaged apphost is directly executable. Under `dotnet <assembly>.dll`
+                            // (including a framework-dependent tool install), ProcessPath is `dotnet`;
+                            // preserve that host and name the entry assembly before the typed verb.
+                            if
+                                String.Equals(
+                                    Path.GetFileNameWithoutExtension processPath,
+                                    "dotnet",
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            then
+                                let entryAssembly = Reflection.Assembly.GetEntryAssembly()
+
+                                if isNull entryAssembly || String.IsNullOrWhiteSpace entryAssembly.Location then
+                                    invalidOp "reconcile: current entry assembly path is unavailable"
+
+                                psi.ArgumentList.Add entryAssembly.Location
+
                             psi.ArgumentList.Add "reap"
                             psi.ArgumentList.Add "--repo"
                             psi.ArgumentList.Add repo

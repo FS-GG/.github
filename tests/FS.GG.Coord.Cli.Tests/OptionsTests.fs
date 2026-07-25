@@ -116,9 +116,15 @@ module OptionsTests =
         Assert.Equal(Text, dry.Render)
         Assert.False(dry.Apply)
 
-        let apply = parse [ "reconcile"; "--apply"; "--json" ] |> ok
+        let apply = parse [ "reconcile"; "--apply" ] |> ok
         Assert.True(apply.Apply)
-        Assert.Equal(Json, apply.Render)
+        Assert.Equal(Text, apply.Render)
+
+        let mixed = parse [ "reconcile"; "--apply"; "--json" ]
+        Assert.Equal(
+            Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode.",
+            mixed
+        )
 
     // ================================================================================================
     // #991 — THE RESIDUE RULE, GENERALISED. The rule was always general; its enforcement was one arm.

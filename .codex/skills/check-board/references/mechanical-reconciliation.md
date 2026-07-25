@@ -5,7 +5,8 @@ The five typed chores are stale-claim collection, claim/Status lag, closed issue
 cleared-blocker/Ready lag, and open-blocker/Blocked lag. `--apply` performs only those remedies.
 
 Use `--repo NAME` to narrow the reported and applied subjects; omit it for the org-wide pass.
-Use `--json` when another tool consumes the result. A bare run is human-readable and still dry.
+Use `--json` when another tool consumes the dry-run result. Apply after inspecting that result;
+`--apply` is deliberately human-readable so mutation output cannot corrupt a JSON document.
 
 <!-- BEGIN GENERATED: fsgg-protocol:reconcile-rules -->
 <!--
