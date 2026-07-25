@@ -73,4 +73,23 @@ with tempfile.TemporaryDirectory(prefix="skill-catalog-") as raw:
     skill.write_text("---\nname: sample-skill\ndescription: 123\n---\n")
     assert any("must be a string" in item for item in findings(root))
 
+    budget_root = root / "budget"
+    budget_fixtures = {}
+    for index in range(12):
+        name = f"budget-skill-{index}"
+        for runtime in module.SKILL_ROOTS:
+            path = budget_root / runtime / name / "SKILL.md"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(skill_text(name, "x" * module.DESCRIPTION_MAX))
+        budget_fixtures[name] = {
+            kind: f"{kind} routing prompt" for kind in module.TRIGGER_KINDS
+        }
+    budget_fixture_path = budget_root / module.TRIGGER_FIXTURES
+    budget_fixture_path.parent.mkdir(parents=True)
+    budget_fixture_path.write_text(json.dumps(budget_fixtures))
+    budget_errors = findings(budget_root)
+    assert any("descriptions cost" in item for item in budget_errors)
+    assert any("names + descriptions + paths cost" in item for item in budget_errors)
+    assert any("Codex effective exposure costs" in item for item in budget_errors)
+
 print("catalog metadata boundaries: ok")
