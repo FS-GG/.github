@@ -35,24 +35,7 @@ module Client =
     /// and arrives as an argument; only the WORDS are lint's. Taking `Usability` rather than a touch-set
     /// is what makes that true by construction: there is no threshold left in here to get wrong, and the
     /// test can drive every case the core can produce.
-    let badTouchSetDetail (status: string) (usability: TouchSet.Usability) : string option =
-        match usability with
-        | TouchSet.Usable -> None
-        | TouchSet.AllUnmatchable bad ->
-            let bad = bad |> String.concat ", "
-
-            Some
-                $"%s{status}, and EVERY declared `Paths:` token is unmatchable: %s{bad}. A token that matches no file conflicts with nothing, so `batch` refuses it and no worker can ever pick this up — the item is as dead as one with no touch-set at all. Not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
-        | TouchSet.SomeUnmatchable bad ->
-            // #646 — the PARTIAL case, and it is worse than the whole being dead: the item looks declared
-            // and its matchable tokens reserve something, but each unmatchable token silently reserves
-            // NOTHING, so the files it names are invisible to every other worker's overlap check — two
-            // workers can be handed them at once. `batch` already refuses the item (#273); lint must catch
-            // it at filing time, not leave it to be discovered by a double-book.
-            let bad = bad |> String.concat ", "
-
-            Some
-                $"%s{status}, and at least one of its `Paths:` tokens is unmatchable: %s{bad}. This is WORSE than every token being so: the item looks declared and its other tokens reserve work, but an unmatchable token silently reserves NOTHING — the files it names are invisible to every other worker's overlap check, so two workers can be handed them at once. Spell the path(s) out — not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
+    let badTouchSetDetail = LintApplication.badTouchSetDetail
 
     [<Literal>]
     let ExitGreen = 0
@@ -740,28 +723,17 @@ module Client =
                 // projection the reconciler exists to reconcile, and hiding a closed-but-Ready row by its
                 // state is exactly the disagreement `/check-board` is run to find. A PR is not an item of
                 // work (#641), so it is the one thing dropped unconditionally.
-                let scoped = rows |> List.filter (fun r -> not r.IsPullRequest) |> Scan.scope opts.Repo
+                let scoped = ReadyApplication.select opts.Repo opts.Status opts.All rows
 
                 // #979 — SAY IT, do not imply it. `ready --repo <typo>` used to print `[]` and exit 0,
                 // which is indistinguishable from a repo that genuinely has no items. The exit is
                 // deliberately unchanged: `ready` is a truth read, and an empty board is a real answer.
                 scoped.Advisory |> Option.iter eprint
 
-                let wanted =
-                    scoped.Rows
-                    |> List.filter (fun r ->
-                        // The DEFAULT excludes Done and nothing else (bash's `board_filter` xd=1). Naming a
-                        // column (`--status S`) or `--all` widens past it — asking for a column, Done
-                        // included, is asking to SEE it. `--status` matches the column NAME, case-insensitive,
-                        // the way bash matches it.
-                        match opts.Status with
-                        | Some s -> String.Equals(statusWireName r.Status, s, StringComparison.OrdinalIgnoreCase)
-                        | None -> opts.All || r.Status <> BoardStatus.Done)
-
                 match opts.Render with
-                | Json -> printfn "%s" (renderReadyJson wanted)
+                | Json -> printfn "%s" (renderReadyJson scoped.Rows)
                 | Text ->
-                    for row in wanted do
+                    for row in scoped.Rows do
                         let status =
                             match statusWireName row.Status with
                             | "" -> "(no status)"
@@ -4203,159 +4175,11 @@ module Client =
     // or stated nowhere) — each is a defect with a mechanical remedy. `EPIC-ROLLUP-READY` is a `note` naming
     // the opposite: every mechanical precondition holds. It is still not a verdict that the epic is done,
     // because that verdict is `Discharge` (#614) and no read can reach it.
+    // Compatibility seams retained for existing callers while the lint command delegates its
+    // deterministic verdicts to the extracted application service.
+    type EpicFinding = LintApplication.EpicFinding
 
-
-
-    // Strip the owner from a `owner/repo#n` ref → `repo#n` (bash's `sub("^[^/]+/";"")`), the form a finding
-    // NAMES a ref in.
-    let private shortRef (ref: string) =
-        match ref.IndexOf '/' with
-        | i when i >= 0 -> ref.Substring(i + 1)
-        | _ -> ref
-
-    /// One epic roll-up-graph finding, before `lint` wraps it with a row's presentation fields (Id, Url,
-    /// …). `epicVerdict` returns these; `lint`'s `mk` turns each into a `LintFinding`.
-    type EpicFinding =
-        { Code: string
-          Severity: string
-          Detail: string }
-
-    /// The epic ROLL-UP-graph rules, as a PURE verdict over already-read inputs — `state`, `status`, the
-    /// body, the sub-issue `graph`, and the resolved EPIC-UNLINKED-CHILD set — returning which findings
-    /// fire and which suppress `EPIC-ROLLUP-READY`.
-    ///
-    /// MODULE-LEVEL, AND THAT IS THE POINT (#1050, on #945's precedent). This lived as a closure inside
-    /// `let lint`, closing over `ctx.Transport` — not private-but-reachable, but unreachable at all, so
-    /// "lint composes its seven epic codes correctly" was a claim no unit test could make. That is exactly
-    /// what `badTouchSetDetail` fixed for the touch-set rule: the reads are the caller's, the VERDICT is a
-    /// pure function of their results, and the test drives every case without a transport or a fake.
-    ///
-    /// THE TWO VACUOUS TRUTHS this gate defends are the reason it is worth a seam (#266): `graph.Children
-    /// |> List.forall (not << .Open)` is `true` over an EMPTY child list, and over a TRUNCATED graph whose
-    /// visible children all happen to be closed. `EPIC-NO-CHILDREN` and `EPIC-CHILDREN-TRUNCATED` land in
-    /// `refusals`, and `EPIC-ROLLUP-READY` is gated on `List.isEmpty refusals` — so the suppression is the
-    /// only thing standing between a human and a "close this epic?" question about children nobody read
-    /// (`/check-board` §4). Nothing red-lit a reorder of that gate until it could be named in a test.
-    ///
-    /// EPIC-UNLINKED-CHILD is gated on the graph being WHOLE (`Total = visible`) here too, not only in the
-    /// caller: a truncated graph makes "this declared child is unlinked" a claim about a set already known
-    /// short (#266), so the verdict stays sound even if a caller passes a non-empty `unlinked` for a
-    /// truncated graph. The caller reads `bodyUnlinkedChildren` only when whole; this gate is the belt to
-    /// that suspenders.
-    let epicVerdict
-        (state: IssueState)
-        (status: BoardStatus)
-        (body: string)
-        (graph: Reads.SubIssueSet)
-        (unlinked: string list)
-        : EpicFinding list =
-        let mk code severity detail =
-            { Code = code
-              Severity = severity
-              Detail = detail }
-
-        let visible = List.length graph.Children
-
-        let noChildren =
-            if state = IssueState.Open && graph.Total = 0 then
-                [ mk "EPIC-NO-CHILDREN" "error" "open [epic] with zero sub-issues — nothing rolls up" ]
-            else
-                []
-
-        let truncated =
-            if graph.Total > visible then
-                [ mk "EPIC-CHILDREN-TRUNCATED" "error" $"%d{graph.Total} sub-issues, only %d{visible} visible — cannot verify rollup" ]
-            else
-                []
-
-        let doneOpenChild =
-            if status = BoardStatus.Done && graph.Children |> List.exists (fun c -> c.Open) then
-                let openRefs =
-                    graph.Children
-                    |> List.filter (fun c -> c.Open)
-                    |> List.map (fun c -> shortRef c.Ref)
-                    |> String.concat ", "
-
-                [ mk "EPIC-DONE-OPEN-CHILD" "error" $"board says Done, but open child: %s{openRefs}" ]
-            else
-                []
-
-        // EPIC-UNDELEGATED-ACCEPTANCE (#965). An acceptance line naming no child is a criterion nothing
-        // can ever discharge. It is a property of the BODY alone — not gated on the graph being whole —
-        // so a truncated read cannot make it unsound. Open epics only: a closed epic's un-delegated
-        // acceptance is history, not a defect a worker can act on.
-        let undelegated =
-            if state <> IssueState.Open then
-                []
-            else
-                match FS.GG.Coord.EpicBody.undelegatedAcceptance body with
-                | [] -> []
-                | lines ->
-                    let named =
-                        lines
-                        |> List.map (fun l ->
-                            if l.Length <= 90 then
-                                $"\"%s{l}\""
-                            else
-                                $"\"%s{l.Substring(0, 90)}…\"")
-                        |> String.concat "; "
-
-                    [ mk
-                          "EPIC-UNDELEGATED-ACCEPTANCE"
-                          "error"
-                          $"%d{List.length lines} acceptance line(s) delegate to no child, so no child can ever discharge them and the rollup would close them unread: %s{named}. An epic's acceptance IS its children (#965) — make each one a child, or drop it from the body." ]
-
-        // EPIC-NO-STATED-ACCEPTANCE (#1003). The half `EPIC-UNDELEGATED-ACCEPTANCE` cannot see: a body
-        // with NO task lines has nothing un-delegated, so the partition reports itself satisfied over
-        // prose nobody checked. MUTUALLY EXCLUSIVE with the rule above by construction — `statesAcceptance`
-        // is false only when there are no task lines, `undelegatedAcceptance` non-empty only when there
-        // are. Open epics only, for the same reason.
-        let noAcceptance =
-            if state = IssueState.Open && not (FS.GG.Coord.EpicBody.statesAcceptance body) then
-                [ mk
-                      "EPIC-NO-STATED-ACCEPTANCE"
-                      "error"
-                      "body states NO task-line acceptance, so nothing in it can be checked against the sub-issue graph and this epic can never roll up — closing it on the strength of that graph would close an unread body (#1003). State each criterion as a task line naming its child — `- [ ] #123 the thing` — and link it with `child`." ]
-            else
-                []
-
-        // EPIC-UNLINKED-CHILD may only reason when the graph is WHOLE (Total == visible) — a truncated
-        // graph makes "this declared child is unlinked" a claim about a set already known to be short
-        // (#266); EPIC-CHILDREN-TRUNCATED covers that case instead. The caller resolves `unlinked` only
-        // when whole; this gate keeps the verdict sound regardless of what it is handed.
-        let unlinkedFinding =
-            match unlinked with
-            | _ when graph.Total <> visible -> []
-            | [] -> []
-            | kept ->
-                let named = kept |> List.map shortRef |> String.concat ", "
-
-                [ mk
-                      "EPIC-UNLINKED-CHILD"
-                      "error"
-                      $"body declares child(ren) absent from the sub-issue graph, so rollup cannot see them: %s{named}" ]
-
-        let refusals =
-            noChildren @ truncated @ doneOpenChild @ undelegated @ noAcceptance @ unlinkedFinding
-
-        // EPIC-ROLLUP-READY — a NOTE, not an error, and it closes nothing (#614): every MECHANICAL
-        // precondition holds, but whether the children DISCHARGE the parent is an argument only a human
-        // can make. GATED ON EVERY REFUSAL BEING EMPTY, reusing them rather than re-deriving — a second
-        // spelling of "can this roll up?" is the drift #485/#864 name, and it would drift toward optimism.
-        let rollupReady =
-            if
-                List.isEmpty refusals
-                && state = IssueState.Open
-                && graph.Children |> List.forall (fun c -> not c.Open)
-            then
-                [ mk
-                      "EPIC-ROLLUP-READY"
-                      "note"
-                      $"all %d{visible} child(ren) are resolved, the graph is whole, and the body's acceptance is fully delegated — every mechanical precondition to roll up holds, and this epic is still OPEN. Nothing has asked it to: the roll-up climbs only when a worker stamps a child. Whether those children DISCHARGE this epic is an argument only a human can make (#614) — decide it, do not infer it." ]
-            else
-                []
-
-        refusals @ rollupReady
+    let epicVerdict = LintApplication.epicVerdict
 
     let lint (ctx: Context) (opts: Options) : int =
         match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
@@ -4551,8 +4375,10 @@ module Client =
                 | Error e -> fail e
                 | Ok perItemFindings ->
                     let findings = perItemFindings @ cycleFindings
-                    let errors = findings |> List.filter (fun f -> f.Severity = "error") |> List.length
-                    let notes = findings |> List.filter (fun f -> f.Severity = "note") |> List.length
+                    let summary =
+                        findings
+                        |> List.map (fun finding -> finding.Severity)
+                        |> LintApplication.summarize opts.Strict
 
                     match opts.Render with
                     | Json -> printfn "%s" (renderLintJson findings)
@@ -4567,7 +4393,8 @@ module Client =
                             | Some r -> $" for repo '%s{r}'"
                             | None -> ""
 
-                        eprint $"fsgg-coord-engine: %d{errors} error(s), %d{notes} note(s)%s{repoSuffix}"
+                        eprint
+                            $"fsgg-coord-engine: %d{summary.Errors} error(s), %d{summary.Notes} note(s)%s{repoSuffix}"
 
                     // A gate: any error fails it; `--strict` makes a note fatal too.
                     //
@@ -4577,7 +4404,7 @@ module Client =
                     // tell a discharged epic from #614's partial fix. Reddening a gate on a question nobody has
                     // been asked yet teaches the lesson #698 names: the gate is noise, merge anyway. `--strict` is
                     // for the caller who wants to be stopped by one.
-                    if errors > 0 || (opts.Strict && notes > 0) then
+                    if summary.Fails then
                         ExitError
                     else
                         ExitGreen
