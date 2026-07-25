@@ -1,6 +1,6 @@
 ---
 name: cut-nuget-release
-description: Cut every currently owed FS-GG NuGet release across the org, including repositories with source work since their last package even when project versions or the central registry still look current. Use when asked to cut NuGet releases, release all stale FS-GG packages, run a package release train, or determine and publish every unreleased producer. Audits package-affecting commits, chooses coherent SemVer bumps, lands producer release PRs in dependency order, invokes each repository's own release machinery, verifies byte-identical packages on GitHub Packages and nuget.org, and reconciles the central dependency registry. Runs from the FS-GG operator workspace where all rostered repositories are sibling checkouts.
+description: Use when asked to release every stale FS-GG NuGet producer. Audit package-affecting changes, choose coherent versions, publish in dependency order, verify both feeds, and reconcile the registry.
 ---
 
 # cut-nuget-release (FS-GG)

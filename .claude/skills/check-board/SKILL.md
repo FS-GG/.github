@@ -1,6 +1,6 @@
 ---
 name: check-board
-description: Reconcile the org-level FS-GG "Coordination" Projects v2 board against the repos' real issue state, re-verify that every recorded blocker still holds, and find the epics that are sitting open with all their work finished. Use when the board looks wrong or stale, before a planning pass, before fanning workers out with intra-repo-parallel-work, or when `next`/`take` says "nothing to do" and you doubt it. Reports every discrepancy; with --apply it fixes the board-side ones. Gathers the judgements it cannot make — should this epic close, was this flip premature — puts them to a human in one batch, and writes the answers back. Never edits an issue unprompted. Canonical protocol lives in FS-GG/.github.
+description: Use when the FS-GG Coordination board looks stale, blockers may have cleared, or planning needs ground truth. Reconcile project fields against live issues and surface judgement calls.
 ---
 
 # check-board (FS-GG)

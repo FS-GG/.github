@@ -1,6 +1,6 @@
 ---
 name: spectre-console
-description: Work with Spectre.Console rich-terminal output in this project — the capability/Profile mental model, the widget tour (markup, tables, panels, rules/trees, prompts, live/status), and the FS-GG rendering conventions (the HumanRender/HumanText presentation edge, the Json-is-contract / Plain+Rich-are-projections rule, degrade-to-zero-ANSI, deterministic fixed-width test rendering). Also use when a Spectre.Console render behaves correctly locally but differs or fails in CI (GitHub Actions) — width/wrap assertions, plain / no-color output, or snapshots that go red only on the runner — covering reproducing the divergence locally, classifying invisible ANSI characters vs genuine display overflow, and the matching fix.
+description: Use when building or diagnosing Spectre.Console output, including rich/plain projections, deterministic widths, ANSI degradation, widgets, prompts, live displays, snapshots, or CI-only rendering failures.
 metadata:
   source: FS.GG.Governance spec 091 / #32 / #34 / #37 (2026-06-29); evolved to a first-class skill by spec 093 (2026-06-29)
 ---

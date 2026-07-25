@@ -1,6 +1,6 @@
 ---
 name: publishing-and-deployment
-description: Publish FS-GG packages, tools, and templates on the stable channel to GitHub Packages and nuget.org, with coherent-set versioning, release gates, and downstream updates. Use for releases, package versions, feeds, or release workflows.
+description: Use when publishing an FS-GG package, tool, template, or stable channel release. Apply coherent-set versioning, run release gates, publish byte-identical artifacts to both feeds, and verify downstream updates.
 ---
 
 # Publishing & deployment (FS-GG)

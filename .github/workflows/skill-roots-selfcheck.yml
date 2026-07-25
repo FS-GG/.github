@@ -17,6 +17,8 @@ on:
       - ".agents/skills/**"
       - ".agent-skill-roots"
       - "scripts/skill-union-assert.sh"
+      - "scripts/generate-driver-manifest"
+      - "tests/skill-registry/catalog-triggers.json"
       - ".github/workflows/skill-roots-selfcheck.yml"
   push:
     branches: [main]
@@ -26,6 +28,8 @@ on:
       - ".agents/skills/**"
       - ".agent-skill-roots"
       - "scripts/skill-union-assert.sh"
+      - "scripts/generate-driver-manifest"
+      - "tests/skill-registry/catalog-triggers.json"
       - ".github/workflows/skill-roots-selfcheck.yml"
   workflow_dispatch:
 
@@ -38,6 +42,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Validate routing metadata and catalog budget
+        run: python3 scripts/generate-driver-manifest --catalog-report
       # No --roots, no --product: exactly what a worker types. The roots come from .agent-skill-roots.
       - name: Assert own skill roots are the byte-identical union
         run: bash scripts/skill-union-assert.sh

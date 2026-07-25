@@ -1,9 +1,9 @@
 ---
-name: workRoadmap
-description: Drive a markdown roadmap to completion, one milestone at a time, each in a fresh disposable subagent. Use when a repo has a roadmap doc whose checklist items are milestones and you want them worked end-to-end without babysitting. For each unchecked milestone the parent spawns a NEW subagent that takes it to done via the SDD lifecycle (fs-gg-sdd-* — charter/specify through ship), checkpoints development feedback at bounded phase transitions, ticks the roadmap with a progress note, finalizes and validates fs-gg-feedback-report, and opens/reviews/merges its own PR on green — then the subagent dies and the parent spawns the next one against updated main. When the roadmap is fully checked, the parent writes a detailed cross-cycle report to docs/reports/ and lands that as its own PR. Runs in a scaffolded fsgg-sdd product repo where the fs-gg-sdd-* and schema-v2 fs-gg-feedback-report skills are materialized. Canonized by ADR-0053 (§6 as amended by ADR-0056); see also the fs-gg-sdd-lifecycle and pnext-item skills.
+name: work-roadmap
+description: Use when explicitly asked to complete a markdown roadmap milestone by milestone. Run each milestone in a fresh disposable worker through the SDD lifecycle, merge it, update the roadmap, and finish with a report.
 ---
 
-# workRoadmap
+# work-roadmap
 
 One command's worth of intent: **"take this roadmap and burn it down, milestone by milestone, and
 don't make me drive."** The roadmap is the plan and the ledger both — the parent reads it to find
@@ -36,7 +36,7 @@ Preconditions, checked once before the loop:
 
 ## The roadmap contract
 
-**Locating the roadmap.** If `/workRoadmap <path>` was given an argument, that is the roadmap. With
+**Locating the roadmap.** If `/work-roadmap <path>` was given an argument, that is the roadmap. With
 no argument, auto-locate in this order and take the first hit: `docs/roadmap.md`, then any
 `docs/**/*roadmap*.md`, then `ROADMAP.md` at the repo root. If two or more match and it is not
 obvious which is live, **ask** rather than guess.
@@ -73,7 +73,7 @@ The tick is what the parent reads next round; the note is the audit trail the fi
 
 ## The loop (what the PARENT does)
 
-The parent is the agent that invoked `/workRoadmap`. It does **not** implement milestones itself — it
+The parent is the agent that invoked `/work-roadmap`. It does **not** implement milestones itself — it
 schedules them. The loop is **strictly sequential**: milestone N+1's subagent does not start until
 milestone N's PR is merged, because N+1 must branch from a `main` that already contains N, and because
 each subagent deserves a fresh, uncluttered context.

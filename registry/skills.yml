@@ -26,7 +26,7 @@
 #     and `fs-gg-model-swap` 68edbe46…→a48df195…. Registry = manifest = bytes for the current set.
 #     2026-07-23 accepted-removal reconcile (.github#1393, Rendering#951/PR #952): retired
 #     `fs-gg-feedback-capture` after Rendering removed its source and manifest entry under ADR-0056 D3.
-#     `fs-gg-feedback-report` remains an `always` row, and the `workRoadmap` driver remains `always`
+#     `fs-gg-feedback-report` remains an `always` row, and the `work-roadmap` driver remains `always`
 #     and report-only; neither depends on the retired capture skill.
 #     2026-07-10 completeness reconcile (.github#298, epic #266): the product set grew 20→21 —
 #     `fs-gg-feedback-report` was vendored into Rendering on 2026-07-10 (Rendering#248, PR #251) and
@@ -299,11 +299,11 @@ skills:
   # it was built for. registry = manifest = bytes: sha256 is the canonical-body digest of the authored
   # SKILL.md, reconciled from the driver manifest (predicate flip + re-digest: .github#1247).
   # ------------------------------------------------------------------------------------------------
-  - { id: workRoadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/workRoadmap/SKILL.md, sha256: 9d3492594e8c56f1ca7aa570ab90568c40b6c78950772987ac297406a29ce416, materializes-when: "always" }
-  # workBoard — homed beside its owner+predicate siblings and reconciled verbatim from
+  - { id: work-roadmap,            scope: driver,  owner: .github,        source: .github/.claude/skills/work-roadmap/SKILL.md, sha256: 333a84311d558956339784bf6deee0512c6de07fd8950cb6fb0bdb3625805212, materializes-when: "always" }
+  # work-board — homed beside its owner+predicate siblings and reconciled verbatim from
   # .github's producer manifest by `--write` (.github#299/.github#1200). The position
   # and this annotation are generated; the row's bytes are the manifest's.
-  - { id: workBoard,              scope: driver,  owner: .github,         source: .github/.claude/skills/workBoard/SKILL.md, sha256: c152811f08d5ba67f318feeb6234458fdccbd38e86e7e7a6d0c19651431093c4, materializes-when: always }
+  - { id: work-board,              scope: driver,  owner: .github,         source: .github/.claude/skills/work-board/SKILL.md, sha256: 8daeebc295cff0831e1a34383984f504d01cc4a94cd7789a749cc040c3640bc5, materializes-when: always }
 
   # OPERATOR skills — `.github`-AUTHORED, materialized NOWHERE (ADR-0057, amends ADR-0054).
   #
@@ -316,5 +316,5 @@ skills:
   # justified downstream omission` — no gate change. The scope value's job is the CATALOG; the
   # never-materialize behaviour rides the predicate. Schema growth ADR-0057 pays for (schemaVersion 2→3
   # below), publish-before-flip, SDD first (ADR-0037).
-  - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: ad567d9e125811b07f29691bca931dc2e0e17e79f8c7ae4a4bbb0208e38fdd6d, materializes-when: "false" }
-  - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: b5b9d1b23ff2a3e98b03780d2613146dd7e8d7b185ea3ca1cae349de1e732dbc, materializes-when: "false" }
+  - { id: drive-board,            scope: operator, owner: .github,       source: .github/.claude/skills/drive-board/SKILL.md, sha256: dde08a925b8354ce37fa39c9b9b2a27321bf14f017b2687186ae415ca8db9aa7, materializes-when: "false" }
+  - { id: cut-nuget-release,      scope: operator, owner: .github,       source: .github/.claude/skills/cut-nuget-release/SKILL.md, sha256: 1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df, materializes-when: "false" }

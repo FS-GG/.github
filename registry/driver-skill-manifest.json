@@ -2,30 +2,30 @@
   "schemaVersion": 1,
   "skills": [
     {
-      "id": "workRoadmap",
+      "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "9d3492594e8c56f1ca7aa570ab90568c40b6c78950772987ac297406a29ce416",
-      "supplied-by": ".claude/skills/workRoadmap",
+      "sha256": "333a84311d558956339784bf6deee0512c6de07fd8950cb6fb0bdb3625805212",
+      "supplied-by": ".claude/skills/work-roadmap",
       "materializes-when": "always"
     },
     {
-      "id": "workBoard",
+      "id": "work-board",
       "scope": "driver",
-      "sha256": "c152811f08d5ba67f318feeb6234458fdccbd38e86e7e7a6d0c19651431093c4",
-      "supplied-by": ".claude/skills/workBoard",
+      "sha256": "8daeebc295cff0831e1a34383984f504d01cc4a94cd7789a749cc040c3640bc5",
+      "supplied-by": ".claude/skills/work-board",
       "materializes-when": "always"
     },
     {
       "id": "drive-board",
       "scope": "operator",
-      "sha256": "ad567d9e125811b07f29691bca931dc2e0e17e79f8c7ae4a4bbb0208e38fdd6d",
+      "sha256": "dde08a925b8354ce37fa39c9b9b2a27321bf14f017b2687186ae415ca8db9aa7",
       "supplied-by": ".claude/skills/drive-board",
       "materializes-when": "false"
     },
     {
       "id": "cut-nuget-release",
       "scope": "operator",
-      "sha256": "b5b9d1b23ff2a3e98b03780d2613146dd7e8d7b185ea3ca1cae349de1e732dbc",
+      "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",
       "supplied-by": ".claude/skills/cut-nuget-release",
       "materializes-when": "false"
     }
