@@ -213,7 +213,7 @@ skills:
   # `materializes-when` already in the ADR-0017 canonical grammar (unchanged) — so unlike the 18 rows
   # still owned by fs-gg-rendering, these four never depended on the Rendering#77 grammar alignment
   # (which has since landed for those rows too, .github#290).
-  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: 133907e6f0cabb3106817a9dd21b404ab9c4e1caced5207b804d524e4c9a73aa, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-game-core,        scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-game-core/SKILL.md,       sha256: de45c8fcfb5510d6afa5ef584516b4938011a8207844b7eb81112119d0d02e45, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-audio's predicate is DELIBERATELY WIDER than its three block-mates: it carries `app`, which
   # game-core/persistence/model-swap do not. Audio rides the APP family too — FS.GG.Game compiled the
   # app-family launcher (Game#232, and #240 which found the silent launchers were table-only), so the
@@ -242,7 +242,7 @@ skills:
   # manifest and never flipped here at all — the `declared-completeness` arm (.github#289) caught all
   # four. All reconciled verbatim from FS.GG.Game's producer manifest by `--write`, never hand-authored.
   - { id: fs-gg-ballistics,       scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ballistics/SKILL.md, sha256: 01620e43423d429c1332de30e3d69358c2bf5e2f8fa4fb92d8c7d67ea3de2f77, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-ai,               scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ai/SKILL.md,         sha256: 07d9adfa2eef0d04d3da6adac500191d952ab350b16221ee0fdec0768acefa38, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-ai,               scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-ai/SKILL.md,         sha256: 612e642ed57a2ea6857d68236c91219698674e1467a09d22bd00ae0e3abf6098, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-effects,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-effects/SKILL.md,    sha256: 85816888a88eb7f073ea02cfe3ff3be2d075eae8f77356b2772de20a6b113d87, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   - { id: fs-gg-physics,          scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-physics/SKILL.md,    sha256: cabeed0641815e23776045a57d923d79f52fdc5ba51a2377d26efe97f9581724, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-playtest — the SAME game-originated class as the four above: authored in FS.GG.Game (WI-2,
@@ -252,7 +252,7 @@ skills:
   # as `mirrored: true`; that is REFUSED — the owner's manifest declares no obligation, and hand-forging
   # one is exactly the FS.GG.Rendering#505 trap. If #923 ships a body it must declare it `NoCounterpart`
   # in scripts/FrozenMirrorVerdict.fs (as it does for ballistics/ai/effects/physics), not flip this byte.
-  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: 0541a9f30328732d998dfd0bb5a1e79d8887d7cf2f3b42cc03324f0de5adbb41, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: f60aa51e41db3fdff0e45f72c2499ea26352edac51297058cc2930ee9574650d, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-mapcraft supersedes the short-lived fs-gg-mapgen id, which was retired before release.
   # Reconciled verbatim from fs-gg-game's producer manifest by `--write`
   # (.github#299/.github#1200); `mirrored: false` is the manifest's declared verdict.
