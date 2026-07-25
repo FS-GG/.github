@@ -130,6 +130,26 @@ cat > "$MANIFEST" <<EOF
   ] }
 EOF
 
+# Additive v2 shape: the legacy sha256 remains for old readers while new readers close over the
+# complete directory, including reference bytes and executable mode.
+V2_MANIFEST="$WORK/manifest-v2.json"
+alpha_skill="$(sha256sum "$GOOD/.claude/skills/alpha/SKILL.md" | cut -d' ' -f1)"
+alpha_ref="$(sha256sum "$GOOD/.claude/skills/alpha/references/notes.md" | cut -d' ' -f1)"
+beta_skill="$(sha256sum "$GOOD/.claude/skills/beta/SKILL.md" | cut -d' ' -f1)"
+beta_ref="$(sha256sum "$GOOD/.claude/skills/beta/references/notes.md" | cut -d' ' -f1)"
+cat > "$V2_MANIFEST" <<EOF
+{ "schemaVersion": 2, "skills": [
+  { "id": "alpha", "sha256": "$alpha_skill", "files": [
+    { "path": "SKILL.md", "sha256": "$alpha_skill", "executable": false },
+    { "path": "references/notes.md", "sha256": "$alpha_ref", "executable": false }
+  ] },
+  { "id": "beta", "sha256": "$beta_skill", "files": [
+    { "path": "SKILL.md", "sha256": "$beta_skill", "executable": false },
+    { "path": "references/notes.md", "sha256": "$beta_ref", "executable": false }
+  ] }
+] }
+EOF
+
 # The canonical digest must equal raw `sha256sum SKILL.md` — the producers' shipped algorithm
 # (Fsgg.SkillMirror / fs-gg-ui manifest, verified byte-for-byte in .github#120).
 want_raw="$(sha256sum "$GOOD/.claude/skills/alpha/SKILL.md" | cut -d' ' -f1)"
@@ -159,6 +179,7 @@ expect_pass "coherent union (content-equality only)" "$GOOD"
 
 # --- 2. coherent union WITH manifest (incl. declared-but-absent 'omega') → PASS ---
 expect_pass "coherent union (+ superset-catalog manifest)" "$GOOD" --manifest "$MANIFEST"
+expect_pass "coherent union (+ v2 whole-directory manifest)" "$GOOD" --manifest "$V2_MANIFEST"
 
 # --- 3. divergent bytes: one root's skill body differs → FAIL ---
 DIV="$WORK/divergent"; build_good "$DIV"
@@ -170,6 +191,24 @@ expect_fail "divergent root (bytes differ across roots)" divergent "$DIV"
 DIVREF="$WORK/divergent-ref"; build_good "$DIVREF"
 printf 'tampered reference\n' > "$DIVREF/.codex/skills/alpha/references/notes.md"
 expect_fail "divergent root (references/** differ, SKILL.md identical)" divergent "$DIVREF" --manifest "$MANIFEST"
+
+# --- v2 closed-directory fixtures ---------------------------------------------------------------
+MISSING_REF="$WORK/missing-ref"; build_good "$MISSING_REF"
+for r in $ROOTS; do rm "$MISSING_REF/$r/alpha/references/notes.md"; done
+expect_fail "v2 manifest: missing declared reference in every root" drifted "$MISSING_REF" --manifest "$V2_MANIFEST"
+
+STALE_MODE="$WORK/stale-mode"; build_good "$STALE_MODE"
+for r in $ROOTS; do chmod a+x "$STALE_MODE/$r/alpha/references/notes.md"; done
+expect_fail "v2 manifest: stale executable mode in every root" drifted "$STALE_MODE" --manifest "$V2_MANIFEST"
+
+EXTRA_FILE="$WORK/extra-file"; build_good "$EXTRA_FILE"
+for r in $ROOTS; do printf 'undeclared\n' > "$EXTRA_FILE/$r/alpha/extra.txt"; done
+expect_fail "v2 manifest: extra undeclared file in every root" drifted "$EXTRA_FILE" --manifest "$V2_MANIFEST"
+
+ONE_ROOT_META="$WORK/one-root-metadata"; build_good "$ONE_ROOT_META"
+mkdir -p "$ONE_ROOT_META/.agents/skills/alpha/agents"
+printf 'interface:\n  display_name: Alpha\n' > "$ONE_ROOT_META/.agents/skills/alpha/agents/openai.yaml"
+expect_fail "one-root-only agents/openai.yaml partitions directory bytes" divergent "$ONE_ROOT_META" --manifest "$V2_MANIFEST"
 
 # --- 4. partitioned: a skill missing from one root → FAIL (with the manifest supplied:
 #        declared∧present-in-SOME-roots is still a partition, not a catalog skip) ---

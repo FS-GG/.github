@@ -8,7 +8,7 @@
     loud sync PR for a SILENTLY missing skill, so the materialize is content-addressed and fails LOUD.
 
     The packed kit sits beside this file at ../kit/, described by ../kit/kit-manifest.tsv
-    (kind <TAB> package-rel path <TAB> receiver dest <TAB> sha256). MaterializeKit copies each entry to
+    (kind <TAB> package-rel path <TAB> receiver dest <TAB> sha256 [<TAB> executable]). MaterializeKit copies each entry to
     its receiver destination(s), verifies the bytes against the recorded sha256, and ERRORS on a missing
     or mismatched file rather than skipping it. The coordination kit (skill/client/config) always
     materializes; the build-config capability is opt-in (IncludeBuildConfig).
@@ -85,6 +85,7 @@
 
                 var clients = new List<ITaskItem>();
                 var nonClients = new List<ITaskItem>();
+                var managedSkillDirs = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
                 int copied = 0, verified = 0;
 
                 foreach (var raw in File.ReadAllLines(manifest))
@@ -92,12 +93,20 @@
                     var line = raw.Trim();
                     if (line.Length == 0) continue;
                     var f = line.Split('\t');
-                    if (f.Length != 4)
+                    if (f.Length != 4 && f.Length != 5)
                     {
-                        Log.LogError("FS.GG.Kit: malformed manifest row (want 4 tab-separated fields): " + line);
+                        Log.LogError("FS.GG.Kit: malformed manifest row (want 4 legacy or 5 v2 tab-separated fields): " + line);
                         continue;
                     }
                     string kind = f[0], pkgRel = f[1], receiverDest = f[2], want = f[3].ToLowerInvariant();
+                    bool executable;
+                    if (f.Length == 4)
+                        executable = kind == "client"; // v1 compatibility during publish-before-flip.
+                    else if (!Boolean.TryParse(f[4], out executable))
+                    {
+                        Log.LogError("FS.GG.Kit: malformed executable field in manifest row: " + line);
+                        continue;
+                    }
 
                     // build-config is opt-in (see IncludeBuildConfig): skip it unless the consumer asked.
                     if (kind == "build-config" && !IncludeBuildConfig) continue;
@@ -125,6 +134,23 @@
                     foreach (var dest in dests)
                     {
                         Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                        if (kind == "skill")
+                        {
+                            var normalized = receiverDest.Replace('/', Path.DirectorySeparatorChar);
+                            var firstSeparator = normalized.IndexOf(Path.DirectorySeparatorChar);
+                            var skillDir = dest;
+                            var relativeWithinSkill = firstSeparator < 0 ? "" : normalized.Substring(firstSeparator + 1);
+                            foreach (var ignored in relativeWithinSkill.Split(
+                                new[] { Path.DirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
+                                skillDir = Path.GetDirectoryName(skillDir);
+                            HashSet<string> expected;
+                            if (!managedSkillDirs.TryGetValue(skillDir, out expected))
+                            {
+                                expected = new HashSet<string>(StringComparer.Ordinal);
+                                managedSkillDirs.Add(skillDir, expected);
+                            }
+                            expected.Add(Path.GetFullPath(dest));
+                        }
 
                         // Hand-authored-file safety (.github#387) — build-config .props only. An existing
                         // dest that does NOT carry the marker was written by the receiver, not by a prior
@@ -169,8 +195,22 @@
                             continue;
                         }
                         verified++;
-                        if (kind == "client") clients.Add(new TaskItem(dest));
+                        if (executable) clients.Add(new TaskItem(dest));
                         else nonClients.Add(new TaskItem(dest));
+                    }
+                }
+
+                // A skill directory is a closed transport unit. Remove stale files left by an older
+                // package so a deleted reference or metadata file cannot survive a successful restore.
+                foreach (var pair in managedSkillDirs)
+                {
+                    if (!Directory.Exists(pair.Key)) continue;
+                    foreach (var existing in Directory.GetFiles(pair.Key, "*", SearchOption.AllDirectories))
+                    {
+                        if (pair.Value.Contains(Path.GetFullPath(existing))) continue;
+                        File.Delete(existing);
+                        copied++;
+                        Log.LogMessage(MessageImportance.High, "FS.GG.Kit: removed undeclared skill file " + existing + ".");
                     }
                 }
 

@@ -78,6 +78,19 @@ done
 # --- check passes when coherent ---
 expect_rc "check: coherent receiver passes (rc 0)" 0 bash "$SYNC" --check "$RECV"
 
+# Directory transport is a closed set and mode parity is bidirectional: unexpected +x and an
+# undeclared leftover file are drift, and apply repairs both.
+chmod a+x "$RECV/.claude/skills/${SKILLS[0]}/SKILL.md"
+expect_rc "check: unexpected executable bit on skill data fails (rc 1)" 1 bash "$SYNC" --check "$RECV"
+bash "$SYNC" "$RECV" >/dev/null
+[ ! -x "$RECV/.claude/skills/${SKILLS[0]}/SKILL.md" ] \
+  && ok "apply: normalizes an unexpected executable bit" || bad "apply: did not normalize skill mode"
+printf 'stale\n' > "$RECV/.claude/skills/${SKILLS[0]}/undeclared.txt"
+expect_rc "check: extra undeclared skill file fails (rc 1)" 1 bash "$SYNC" --check "$RECV"
+bash "$SYNC" "$RECV" >/dev/null
+[ ! -e "$RECV/.claude/skills/${SKILLS[0]}/undeclared.txt" ] \
+  && ok "apply: removes an extra undeclared skill file" || bad "apply: did not close the skill file set"
+
 # --- check fails on drift and on a missing file ---
 # Drift in ANY registered skill must fail, not just the first one the fixture happens to know about.
 for s in "${SKILLS[@]}"; do

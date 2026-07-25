@@ -1,10 +1,18 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "skills": [
     {
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "333a84311d558956339784bf6deee0512c6de07fd8950cb6fb0bdb3625805212",
+      "tree-sha256": "d8e668c687e3ecfa4f876c868c7f7bbfdeeb701f27b81ca0ac9355eeaa0e34c4",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "333a84311d558956339784bf6deee0512c6de07fd8950cb6fb0bdb3625805212",
+          "executable": false
+        }
+      ],
       "supplied-by": ".claude/skills/work-roadmap",
       "materializes-when": "always"
     },
@@ -12,6 +20,14 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "8daeebc295cff0831e1a34383984f504d01cc4a94cd7789a749cc040c3640bc5",
+      "tree-sha256": "31fa7cdbe26ea4e887df9dc61a490d1df34ebbac7f942e3965bcc78b6be87b91",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "8daeebc295cff0831e1a34383984f504d01cc4a94cd7789a749cc040c3640bc5",
+          "executable": false
+        }
+      ],
       "supplied-by": ".claude/skills/work-board",
       "materializes-when": "always"
     },
@@ -19,6 +35,14 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "dde08a925b8354ce37fa39c9b9b2a27321bf14f017b2687186ae415ca8db9aa7",
+      "tree-sha256": "8878e6ddd013d140a562f2216e3ee54cac08dae59b40a229d686dd2079fbce74",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "dde08a925b8354ce37fa39c9b9b2a27321bf14f017b2687186ae415ca8db9aa7",
+          "executable": false
+        }
+      ],
       "supplied-by": ".claude/skills/drive-board",
       "materializes-when": "false"
     },
@@ -26,6 +50,14 @@
       "id": "cut-nuget-release",
       "scope": "operator",
       "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",
+      "tree-sha256": "dca2d338998f4c32a4bd4ae62368f9f3ecfbb1a521bbb14434fb9e5be467f547",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",
+          "executable": false
+        }
+      ],
       "supplied-by": ".claude/skills/cut-nuget-release",
       "materializes-when": "false"
     }

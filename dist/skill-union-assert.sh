@@ -31,7 +31,8 @@
 # `Option.isSome`). For every skill present under any root it asserts:
 #   1. present        — the skill directory exists in EVERY configured root (else: partitioned);
 #   2. byte-identical — its bytes are identical across all roots (else: divergent);
-#   3. matches-manifest (only when --manifest is given) — its SKILL.md digest equals the digest
+#   3. matches-manifest (only when --manifest is given) — every declared file, digest, and executable
+#      bit matches. Legacy v1 rows that have no `files` retain the SKILL.md-only check.
 #      the producer's skill-manifest declares (else: drifted), and every root skill is either
 #      declared by the manifest or matches a --co-tenants pattern (else: dangling).
 #
@@ -447,6 +448,8 @@ done
 # supplied. `materializes-when` defaults to `always` (ADR-0017: absent ⇒ always emitted).
 declare -A MANIFEST_SHA=()
 declare -A MANIFEST_WHEN=()
+declare -A MANIFEST_HAS_FILES=()
+declare -A MANIFEST_TREE=()
 MANIFEST_IDS=""
 if [ -n "$MANIFEST" ]; then
   [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
@@ -459,6 +462,11 @@ if [ -n "$MANIFEST" ]; then
     MANIFEST_WHEN["$id"]="$when"
     MANIFEST_IDS="$MANIFEST_IDS $id"
   done < <(jq -r '.skills[] | [.id, (.sha256 // ""), (.["materializes-when"] // "always")] | @tsv' "$MANIFEST")
+  while IFS=$'\t' read -r id has_files tree_sha; do
+    [ -n "$id" ] || continue
+    MANIFEST_HAS_FILES["$id"]="$has_files"
+    MANIFEST_TREE["$id"]="$tree_sha"
+  done < <(jq -r '.skills[] | [.id, ((.files | type) == "array" | tostring), (.["tree-sha256"] // "")] | @tsv' "$MANIFEST")
 fi
 
 # Scaffold parameters (scaffold-provenance.json → .effectiveParameters), read only with --params.
@@ -539,7 +547,62 @@ while IFS= read -r id; do
       continue
     fi
     want="${MANIFEST_SHA[$id]}"
-    if [ -n "$want" ]; then
+    if [ "${MANIFEST_HAS_FILES[$id]-false}" = "true" ]; then
+      # v2: compare the directory as a closed transport unit. This catches missing and extra files,
+      # divergent bytes, and both directions of executable-mode drift.
+      if [ -n "${MANIFEST_TREE[$id]-}" ]; then
+        tree_got="$(jq -c --arg id "$id" '.skills[] | select(.id == $id) | .files' "$MANIFEST" \
+          | tr -d '\n' | sha256sum | cut -d' ' -f1)"
+        if [ "$tree_got" != "${MANIFEST_TREE[$id]}" ]; then
+          echo "::error::[drifted] skill '$id' file manifest digest $tree_got != tree-sha256 ${MANIFEST_TREE[$id]}"
+          fail=1
+        fi
+      fi
+      declare -A expected=()
+      expected_count=0
+      while IFS=$'\t' read -r path sha executable; do
+        if [ -z "$path" ] || [[ "$path" = /* ]] || [[ "$path" == ../* ]] || [[ "$path" == */../* ]]; then
+          echo "::error::[drifted] skill '$id' manifest contains unsafe file path '$path'"
+          fail=1
+          continue
+        fi
+        expected["$path"]="$sha	$executable"
+        expected_count=$((expected_count + 1))
+      done < <(jq -r --arg id "$id" '.skills[] | select(.id == $id) | .files[] | [.path, .sha256, (.executable | tostring)] | @tsv' "$MANIFEST")
+      actual_count=0
+      while IFS= read -r -d '' full; do
+        path="${full#"$PRODUCT/$ref/$id/"}"
+        actual_count=$((actual_count + 1))
+        if [ -z "${expected[$path]+x}" ]; then
+          echo "::error::[drifted] skill '$id' has extra undeclared file '$path'"
+          fail=1
+          continue
+        fi
+        IFS=$'\t' read -r file_want exec_want <<< "${expected[$path]}"
+        if [ ! -f "$full" ] || [ -L "$full" ]; then
+          echo "::error::[drifted] skill '$id' path '$path' is not a regular file"
+          fail=1
+          continue
+        fi
+        file_got="$(sha256sum "$full" | cut -d' ' -f1)"
+        [ -x "$full" ] && exec_got=true || exec_got=false
+        if [ "$file_got" != "$file_want" ]; then
+          echo "::error::[drifted] skill '$id' file '$path' digest $file_got != manifest $file_want"
+          fail=1
+        elif [ "$exec_got" != "$exec_want" ]; then
+          echo "::error::[drifted] skill '$id' file '$path' executable=$exec_got != manifest $exec_want"
+          fail=1
+        fi
+        unset 'expected[$path]'
+      done < <(find "$PRODUCT/$ref/$id" -mindepth 1 ! -type d -print0 | LC_ALL=C sort -z)
+      for path in "${!expected[@]}"; do
+        echo "::error::[drifted] skill '$id' is missing declared file '$path'"
+        fail=1
+      done
+      if [ "$actual_count" -ne "$expected_count" ]; then
+        : # individual diagnostics above carry the actionable difference.
+      fi
+    elif [ -n "$want" ]; then
       if ! got="$(skill_digest "$PRODUCT/$ref/$id")"; then
         echo "::error::[drifted] skill '$id' has no SKILL.md to digest (manifest declares $want)"
         fail=1

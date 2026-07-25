@@ -20,7 +20,7 @@ no list of driver names, so a driver added/retired in the emitter needs no edit 
 WHAT IT STAGES, under <out-dir> (the package packs it under `drivers/`):
 
   driver-skill-manifest.json          the manifest VERBATIM — the delivered set's authority + sha256s
-  skills/<id>/SKILL.md                one per `scope: driver` row (id = the row's `id`)
+  skills/<id>/<relative file>         the complete directory for each `scope: driver` row
 
 Only `scope: driver` rows are staged. A `scope: operator` row (ADR-0057, e.g. `drive-board`) is
 `.github`-authored but materialized NOWHERE — it runs only in the operator checkout where every repo is a
@@ -29,9 +29,9 @@ still lists it (it is the emitter's single output); the consumer materializes by
 operator row's `materializes-when: false` gates it out of every tree, so carrying the full manifest is
 safe and un-restated.
 
-INTEGRITY AT STAGE TIME. Each staged SKILL.md's canonical digest (BOM-stripped body sha256 —
-`Fsgg.SkillMirror.sha256`, the exact digest the emitter recorded) is re-checked against the manifest's
-recorded `sha256`. A drift here is a build FAILURE, never a silently mis-staged byte — the same fail-loud
+INTEGRITY AT STAGE TIME. V2 verifies every file's raw digest and executable bit plus the deterministic
+tree digest; v1 retains the canonical SKILL.md check during publish-before-flip. Drift is a build
+FAILURE, never a silently mis-staged byte — the same fail-loud
 contract stage-kit.sh holds for the coordination kit.
 
   stage-drivers.py <out-dir>
@@ -108,22 +108,48 @@ def main(argv: list) -> int:
         if not skill_id or not supplied_by or not want_sha:
             die(f"driver row is missing id/supplied-by/sha256: {row!r}")
 
-        src = os.path.join(REPO_ROOT, supplied_by, "SKILL.md")
-        try:
-            with open(src, "rb") as handle:
-                raw = handle.read()
-        except OSError as exc:
-            die(f"driver skill source missing: {supplied_by}/SKILL.md ({exc})")
-
-        got_sha = canonical_digest(raw)
-        if got_sha != want_sha:
-            die(f"driver skill {skill_id}: staged bytes sha256 {got_sha} != manifest {want_sha} — "
-                "the manifest is stale (run scripts/generate-driver-manifest --write and commit).")
-
         dest_dir = os.path.join(out, "skills", skill_id)
-        os.makedirs(dest_dir, exist_ok=True)
-        with open(os.path.join(dest_dir, "SKILL.md"), "wb") as handle:
-            handle.write(raw)
+        file_rows = row.get("files")
+        v2 = isinstance(file_rows, list)
+        if not v2:
+            file_rows = [{"path": "SKILL.md", "sha256": want_sha, "executable": False}]
+        tree_sha = row.get("tree-sha256")
+        if tree_sha:
+            got_tree = hashlib.sha256(
+                json.dumps(file_rows, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            if got_tree != tree_sha:
+                die(f"driver skill {skill_id}: files manifest digest {got_tree} != tree-sha256 {tree_sha}")
+        for file_row in file_rows:
+            rel = file_row.get("path")
+            file_want = file_row.get("sha256")
+            executable = file_row.get("executable")
+            if (
+                not isinstance(rel, str)
+                or not rel
+                or os.path.isabs(rel)
+                or ".." in rel.split("/")
+                or not isinstance(file_want, str)
+                or not isinstance(executable, bool)
+            ):
+                die(f"driver skill {skill_id}: malformed file row: {file_row!r}")
+            src = os.path.join(REPO_ROOT, supplied_by, *rel.split("/"))
+            try:
+                with open(src, "rb") as handle:
+                    raw = handle.read()
+            except OSError as exc:
+                die(f"driver skill source missing: {supplied_by}/{rel} ({exc})")
+            got_sha = hashlib.sha256(raw).hexdigest() if v2 else canonical_digest(raw)
+            # The legacy SKILL.md field is BOM-canonical; v2's file digest is deliberately raw.
+            if file_want != got_sha:
+                die(f"driver skill {skill_id}/{rel}: sha256 {got_sha} != manifest {file_want}")
+            if bool(os.stat(src).st_mode & 0o111) != executable:
+                die(f"driver skill {skill_id}/{rel}: executable mode differs from manifest")
+            dest = os.path.join(dest_dir, *rel.split("/"))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with open(dest, "wb") as handle:
+                handle.write(raw)
+            os.chmod(dest, 0o755 if executable else 0o644)
         staged += 1
 
     if staged == 0:

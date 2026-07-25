@@ -35,12 +35,11 @@
 #
 # Managed kit files (source here -> path in the receiver):
 #   scripts/fsgg-coord                                          -> scripts/fsgg-coord              (chmod +x)
-#   <kit row's `source`>/SKILL.md                               -> <root>/<basename source>/SKILL.md
+#   <kit row's `source`>/<relative file>                        -> <root>/<basename source>/<relative file>
 #     ...for each `kind: skill` row in repos.yml and each root in AGENT_SKILL_ROOTS (default roots:
 #        ".claude/skills .codex/skills .agents/skills"). The skill list is READ from the registry,
 #        never copied.
-# Each skill's SKILL.md is the content-addressed unit (its sha256 is the repos.yml kit digest); a
-# multi-file skill's remainder would be added here alongside it.
+# Each skill DIRECTORY is the transport unit: every regular file and its executable bit is managed.
 #
 # Env: AGENT_SKILL_ROOTS  skill roots to materialize the skill into (default
 #                         ".claude/skills .codex/skills .agents/skills").
@@ -175,11 +174,18 @@ done <<< "$KIT_CONFIG_PAIRS"
 # Build the managed source::dest list (dest is relative to the receiver root).
 managed() {
   printf '%s::%s\n' "scripts/fsgg-coord" "scripts/fsgg-coord"
-  local r src name s d
+  local r src name s d full rel
   for src in $KIT_SKILL_SRCS; do
-    name="${src##*/}"                    # the receiver materializes it at <root>/<name>/SKILL.md
+    name="${src##*/}"
+    [ -d "$SRC_ROOT/$src" ] || die "canonical kit skill source missing: $src"
+    if find "$SRC_ROOT/$src" -mindepth 1 ! -type d ! -type f -print -quit | grep -q .; then
+      die "canonical kit skill source contains a non-regular file: $src"
+    fi
     for r in $ROOTS; do
-      printf '%s::%s\n' "$src/SKILL.md" "$r/$name/SKILL.md"
+      while IFS= read -r -d '' full; do
+        rel="${full#"$SRC_ROOT/$src/"}"
+        printf '%s::%s\n' "$src/$rel" "$r/$name/$rel"
+      done < <(find "$SRC_ROOT/$src" -type f -print0 | LC_ALL=C sort -z)
     done
   done
   [ -z "$KIT_CONFIG_PAIRS" ] || while IFS=$'\t' read -r s d; do
@@ -229,13 +235,25 @@ wants_exec() { [ -x "$SRC_ROOT/$1" ]; }        # $1 = rel_src
   || die "canonical scripts/fsgg-coord is not executable in $SRC_ROOT — refusing to distribute or certify a kit whose client cannot run ('chmod +x scripts/fsgg-coord')."
 
 if [ "$mode" = "apply" ]; then
+  # Managed skill directories are closed sets. Remove files a prior kit version declared but the
+  # current source no longer does, then copy the current deterministic set.
+  for src in $KIT_SKILL_SRCS; do
+    name="${src##*/}"
+    for r in $ROOTS; do
+      dst_dir="$target/$r/$name"
+      [ ! -d "$dst_dir" ] || while IFS= read -r -d '' old; do
+        rel="${old#"$dst_dir/"}"
+        [ -f "$SRC_ROOT/$src/$rel" ] || { rm -f "$old"; echo "removed: $r/$name/$rel"; }
+      done < <(find "$dst_dir" -mindepth 1 ! -type d -print0)
+    done
+  done
   while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     rel_src="${entry%%::*}"; rel_dst="${entry##*::}"
     dst="$target/$rel_dst"
     mkdir -p "$(dirname "$dst")"
     cp "$SRC_ROOT/$rel_src" "$dst"
-    if wants_exec "$rel_src"; then chmod +x "$dst"; fi
+    if wants_exec "$rel_src"; then chmod a+x "$dst"; else chmod a-x "$dst"; fi
     echo "wrote: $rel_dst"
   done < <(managed)
   echo "coordination-sync: kit written into $target"
@@ -255,6 +273,7 @@ tree_status() {   # tree_status [<ref>]
       if   [ ! -f "$target/$rel_dst" ];                                   then printf 'missing\t%s\n' "$rel_dst"
       elif ! diff -q "$src" "$target/$rel_dst" >/dev/null 2>&1;           then printf 'differs\t%s\n' "$rel_dst"
       elif wants_exec "$rel_src" && [ ! -x "$target/$rel_dst" ];          then printf 'not executable\t%s\n' "$rel_dst"
+      elif ! wants_exec "$rel_src" && [ -x "$target/$rel_dst" ];          then printf 'unexpected executable\t%s\n' "$rel_dst"
       else                                                                     printf 'ok\t%s\n'      "$rel_dst"; fi
     else
       # `<rev>:./<path>` resolves the path relative to the CWD (here: $target). Plain `<rev>:<path>` is
@@ -274,6 +293,20 @@ tree_status() {   # tree_status [<ref>]
       else                                                                     printf 'ok\t%s\n'      "$rel_dst"; fi
     fi
   done < <(managed)
+  if [ -z "$ref" ]; then
+    local_src=""
+    for local_src in $KIT_SKILL_SRCS; do
+      local_name="${local_src##*/}"
+      for local_root in $ROOTS; do
+        local_dir="$target/$local_root/$local_name"
+        [ ! -d "$local_dir" ] || while IFS= read -r -d '' local_file; do
+          local_rel="${local_file#"$local_dir/"}"
+          [ -f "$SRC_ROOT/$local_src/$local_rel" ] \
+            || printf 'extra\t%s\n' "$local_root/$local_name/$local_rel"
+        done < <(find "$local_dir" -mindepth 1 ! -type d -print0 | LC_ALL=C sort -z)
+      done
+    done
+  fi
 }
 drifted() { printf '%s\n' "$1" | grep -v '^ok	' || true; }   # the non-ok lines of a tree_status block
 # `if`, not `[ x ] && echo` — under `set -e` a trailing `&&` list that goes false makes the while body,

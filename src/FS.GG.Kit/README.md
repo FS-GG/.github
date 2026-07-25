@@ -25,12 +25,13 @@ skills as real files — ADR-0011 — and the client must be executable):
 
 | kit member | materialized to |
 |---|---|
-| each skill's `SKILL.md` | `<skill-root>/<name>/SKILL.md`, for each root in `FsggKitSkillRoots` |
+| every file in each skill directory | `<skill-root>/<name>/<relative-path>`, for each root in `FsggKitSkillRoots` |
 | `fsgg-coord` client | `scripts/fsgg-coord` (made executable) |
 | engine tool manifest | `.config/dotnet-tools.json` |
 
-Every copy is **content-addressed**: the materialize verifies each file's SHA-256 against the digest
-recorded in the package (`kit/kit-manifest.tsv`) and **fails the build** on a missing or mismatched
+Every copy is **content-addressed and mode-addressed**: the materialize verifies each file's SHA-256
+and executable bit against the package (`kit/kit-manifest.tsv`), removes undeclared files from managed
+skill directories, and **fails the build** on a missing or mismatched
 file (ADR-0014). A silently missing skill — the one failure mode worse than a loud sync PR — cannot
 happen. For the coordination kit the digest is the same one that writes `registry/repos.lock`, so the
 package and the byte-copy fabric cannot diverge.
