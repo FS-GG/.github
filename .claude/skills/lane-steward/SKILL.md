@@ -45,9 +45,11 @@ So your job is the **input**, never the output:
 
 > **You propose a `Paths:` declaration. The tool proves what it implies.**
 
-Every proposal you make goes through `fsgg-coord widen`, which re-checks the touch-set against every
-live claim and **refuses on collision**. If you propose something unsafe, it is refused. If you propose
-something safe-but-wrong, the section below is about why that is the dangerous one.
+Every narrowing you apply goes through `fsgg-coord set-paths`, which replaces the old declaration
+with the exact narrower set and re-checks it against every live claim. `widen` is only for additive
+expansion when work grows into a path the current declaration does not reserve. If a proposed set is
+unsafe, the command refuses it. If it is safe-but-wrong, the section below explains why that is the
+dangerous case.
 
 ## What you are actually looking for
 
@@ -114,12 +116,16 @@ When in doubt, **leave it alone and say so.** A lane you did not split is a cost
 caused is a defect.
 
 ```sh
-# The item is unclaimed: propose on the issue, for its eventual claimant to apply.
-fsgg-coord say <issue> --to <worker> '...'          # if somebody holds it
+# The item is yours: replace the broad declaration with the exact narrower set.
+scripts/fsgg-coord set-paths <issue> --paths "docs/coordination/parallel-work.md, .claude/skills/pnext-item/, .agents/skills/pnext-item/"
+
+# The work later grows into another path: additive expansion only.
+scripts/fsgg-coord widen <issue> --paths "tests/new-surface/"
 ```
 
-Post the proposal as a comment on the issue, in this shape, so the next worker can act on it without
-re-deriving anything:
+If the item is unclaimed, post the proposal as a normal issue comment so its eventual claimant can
+act on it without re-deriving anything. If somebody holds it, address the proposal to that holder
+with `fsgg-coord say <issue> --to <worker> '…'`. Use this shape:
 
 > **lane-steward:** this item declares `scripts/fsgg-coord`, which 31 items declare and which is gluing
 > this lane into one. Reading the issue, the work is in `docs/coordination/parallel-work.md` and the two
@@ -127,14 +133,18 @@ re-deriving anything:
 >
 > Proposed: `Paths: docs/coordination/parallel-work.md, .claude/skills/pnext-item/, .agents/skills/pnext-item/`
 >
-> If that is right, `fsgg-coord widen <issue> --paths "<the above>"` — which will re-check it against
-> every live claim and refuse if it collides. If the work *does* touch the tool, say so and leave it.
+> If that is right, the holder should run
+> `scripts/fsgg-coord set-paths <issue> --paths "<the above>"`. This replaces the broad declaration;
+> `widen` would preserve the glue token and cannot perform this narrowing. If the work *does* touch
+> the tool, say so and leave it.
 
-**Do not `widen` an item you do not hold.** The claim marker is the lock; the issue body is not. Editing
-a declaration you have not claimed races the worker who has, and last-write-wins silently clobbers theirs
-(this is the rule `pnext-item` §1 already states).
+**Do not change an item you do not hold.** The claim marker is the lock; the issue body is not.
+Editing a declaration you have not claimed races the worker who has, and last-write-wins silently
+clobbers theirs (this is the rule `pnext-item` §1 already states).
 
-For an item **you** hold, or one nobody holds and you are about to work: claim it first, then `widen`.
+For an item **you** hold, or one nobody holds and you are about to work: claim it first, then
+`set-paths` to the exact replacement. Use `widen` later only when the implementation expands beyond
+that declared set.
 
 ## Splitting an item
 
