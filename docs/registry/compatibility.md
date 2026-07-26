@@ -39,6 +39,12 @@ PR #1032 (merge `4ea58be5`, release run `29977189289`). Both releases were verif
 org feed and nuget.org before the registry flip. The detailed historical cells below retain
 the prior-release narrative; the registry and generated version regions are authoritative.
 
+Current release evidence (2026-07-26): `fsgg-contracts` is 6.0.0 on both its source and
+published axes. SDD PR #699 merged as `ca60cf57f522462259aa73a682f0f719cab0d0ec`;
+release run 30186060627 published package record 1067036038, and independent downloads from
+GitHub Packages and nuget.org have identical payload bytes after excluding only the public
+feed's `.signature.p7s`.
+
 | Contract | Version | Owner | Surface | Consumers |
 |---|---|---|---|---|
 | `scaffold-provider` | 1.1.0 | SDD | `.fsgg/providers.yml` + invocation protocol (canonical product-name param `name`, ADR-0005). **1.1.0** (2026-07-05, additive; SDD feature 080, [Rendering#142](https://github.com/FS-GG/FS.GG.Rendering/issues/142)): optional **`identifierParameter`** sink — a descriptor can name the param that receives an SDD-derived valid-F# identifier, so a product whose name is an illegal F# identifier (hyphenated `Roquelike-DungeonCrawler`) compiles; `None` ⇒ identical to 1.0.0. Rendering declares `identifierParameter: rootNamespace`. Released in `FS.GG.UI.Template 0.1.66-preview.1` (2026-07-05) — see coherence `scaffold-provider-identifier`. | Templates, Rendering |
