@@ -85,8 +85,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
+      # The live path invokes scripts/repos.sh validate before staging canonical. That validator reads
+      # registry/repos.yml with yq or PyYAML; declare the pinned dependency rather than inheriting a
+      # runner-image accident. The fixture stays pure stdlib.
+      - uses: ./.github/actions/setup-policy-python
       - name: Is the newest published FS.GG.Kit coherent with canonical?
         run: python scripts/check-kit-published-coherence.py

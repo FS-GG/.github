@@ -159,6 +159,25 @@ rc=$?
 set -e
 must_fail "a fixture without a canonical comparison is refused" "requires --canonical-manifest"
 
+# The live job must declare the YAML reader required by `scripts/repos.sh validate`. A bare
+# setup-python step made the fixed gate deterministically red on a clean runner (#1469 review).
+if python3 - "$HERE/../../.github/workflows/kit-published-coherence.yml" <<'PY'
+import re
+import sys
+
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(r"(?ms)^  published:\n(.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
+assert match, "published job missing"
+assert "uses: ./.github/actions/setup-policy-python" in match.group(1), (
+    "published job does not install the pinned YAML policy dependency"
+)
+PY
+then
+  ok "the live job declares its pinned YAML dependency"
+else
+  bad "the live job declares its pinned YAML dependency"
+fi
+
 echo
 echo "kit-published-coherence fixture: $pass passed, $failcount failed"
 [ "$failcount" -eq 0 ] || exit 1
