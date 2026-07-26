@@ -1,0 +1,70 @@
+# Unified semantic gate for the synchronized FS-GG skill catalog (.github#1415).
+name: skill-quality
+
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "registry/skills.yml"
+      - "registry/*skill-manifest.json"
+      - "requirements-test.txt"
+      - "scripts/check-skill-quality"
+      - "scripts/check-skill-quality.py"
+      - "scripts/generate-driver-manifest"
+      - "scripts/generate-projections"
+      - "scripts/test"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/skill-quality/**"
+      - "tests/skill-registry/catalog-triggers.json"
+      - ".github/workflows/skill-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - "docs/coordination/**"
+      - "registry/skills.yml"
+      - "registry/*skill-manifest.json"
+      - "requirements-test.txt"
+      - "scripts/check-skill-quality"
+      - "scripts/check-skill-quality.py"
+      - "scripts/generate-driver-manifest"
+      - "scripts/generate-projections"
+      - "scripts/test"
+      - "src/FS.GG.Coord.Core/**"
+      - "src/FS.GG.Coord.Cli/**"
+      - "src/FS.GG.Coord.GitHub/**"
+      - "tests/FS.GG.Coord.Cli.Tests/**"
+      - "tests/skill-quality/**"
+      - "tests/skill-registry/catalog-triggers.json"
+      - ".github/workflows/skill-quality.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-skill-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+          cache: pip
+          cache-dependency-path: requirements-test.txt
+      - name: Provision pinned test dependencies
+        run: python3 -m pip install -r requirements-test.txt
+      - name: Validate semantic skill quality and its rejection paths
+        run: bash tests/skill-quality/run.sh

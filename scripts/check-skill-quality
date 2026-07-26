@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# One local/CI entry point for the complete synchronized-skill quality contract (.github#1415).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+if ! python3 -c 'import yaml' >/dev/null 2>&1; then
+  echo "check-skill-quality: PyYAML is required. Provision the pinned test dependency with:" >&2
+  echo "  python3 -m pip install -r $ROOT/requirements-test.txt" >&2
+  exit 3
+fi
+
+dotnet build "$ROOT/src/FS.GG.Coord.Cli/FS.GG.Coord.Cli.fsproj" -c Release --nologo >/dev/null
+ENGINE="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
+CONTRACT="$(mktemp "${TMPDIR:-/tmp}/fsgg-command-contract.XXXXXX.json")"
+trap 'rm -f "$CONTRACT"' EXIT
+
+"$ENGINE" command-contract --json > "$CONTRACT"
+python3 "$ROOT/scripts/check-skill-quality.py" --root "$ROOT" --contract "$CONTRACT"
+bash "$ROOT/scripts/generate-projections" --check

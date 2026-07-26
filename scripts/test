@@ -88,7 +88,11 @@ from pathlib import Path
 try:
     import yaml
 except ImportError:
-    print("scripts/test: PyYAML is required (python -m pip install pyyaml)", file=sys.stderr)
+    print(
+        "scripts/test: PyYAML is required "
+        "(python3 -m pip install -r requirements-test.txt)",
+        file=sys.stderr,
+    )
     sys.exit(3)
 
 EX_OK, EX_FAIL, EX_NOVERDICT = 0, 1, 3
