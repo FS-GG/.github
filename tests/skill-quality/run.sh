@@ -97,6 +97,19 @@ expect_rejection "drive-board cannot terminate over actionable backlog" \
   "backlog planning contract lost 'An empty Ready batch is not completion'"
 
 seed
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for runtime in (".claude", ".codex", ".agents"):
+    path = root / runtime / "skills/p-add/SKILL.md"
+    path.write_text(path.read_text().replace("reuse an existing matching issue", "always create a new issue"))
+PY
+expect_rejection "p-add cannot duplicate an existing matching issue" \
+  "p-add: filing contract lost 'reuse an existing matching issue'"
+
+seed
 mutate_workboard_phrase "without mutating the board" "after attempting a board write"
 expect_rejection "work-board missing wiring fails without mutation" \
   "work-board: backlog planning contract lost 'without mutating the board'"
