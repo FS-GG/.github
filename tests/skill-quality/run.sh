@@ -69,6 +69,19 @@ PY
 expect_rejection "a missing forward trigger class is rejected" "forward trigger classes differ"
 
 seed
+python3 - "$WORK/tree" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for runtime in (".claude", ".codex", ".agents"):
+    path = root / runtime / "skills/drive-board/references/backlog-triage.md"
+    path.write_text(path.read_text().replace("An empty Ready batch is not completion", "A dry wave may stop"))
+PY
+expect_rejection "drive-board cannot terminate over actionable backlog" \
+  "backlog planning contract lost 'An empty Ready batch is not completion'"
+
+seed
 sed -i '/GENERATED: fsgg-versions/{n;s/^/STALE /;}' "$WORK/tree/docs/architecture.md"
 rc=0
 bash "$WORK/tree/scripts/generate-projections" --check >"$WORK/out" 2>&1 || rc=$?
