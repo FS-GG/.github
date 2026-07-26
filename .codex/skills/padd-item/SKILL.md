@@ -24,7 +24,7 @@ readable board, stop non-zero without mutation and name the `new-sdd-workspace r
 
 ## 2. Clean and triage this workspace
 
-Run the workspace-scoped [check-board](../check-board/SKILL.md) pass:
+Run the workspace-scoped `check-board` pass:
 
 ```bash
 scripts/fsgg-coord budget
@@ -51,7 +51,7 @@ scripts/fsgg-coord issues <this-repo> --state open --refresh
 
 Use GitHub issue/PR search when needed. Reuse an existing semantic match instead of creating a duplicate.
 If evidence says another repository owns the behavior, route a request through
-[cross-repo-coordination](../cross-repo-coordination/SKILL.md); do not edit another checkout or put its
+`cross-repo-coordination`; do not edit another checkout or put its
 implementation onto this repo's local scheduling lane.
 
 Decide autonomously when evidence selects one scope. Ask one concise question before mutation only when
