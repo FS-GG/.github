@@ -3,11 +3,14 @@
 # registry/repos.yml declares who SHOULD participate in each fabric (`receives: <cap>`); the fabrics
 # themselves are opt-in receiver contracts. This runs scripts/repos-audit.sh on a schedule to verify
 # every declared receiver ACTUALLY wired its capability's detector: a reusable workflow call, an
-# authority script call, or a package-materializer opt-in plus CI drift enforcement. For example,
-# `coordination-kit` calls coordination-coherence.yml, while `build-config` opts into the FS.GG.Kit
-# materializer and reruns it under a managed-props diff gate. A declared-but-unwired repo fails the
-# audit. Complements the per-receiver pull coherence gate: this is .github auditing the whole roster
-# centrally. Reads the (public) FS-GG repos with the run-scoped token.
+# authority script call, a package-materializer opt-in plus CI drift enforcement, or a receiver-caller
+# contract aimed at a particular subject. For example, `coordination-kit` calls
+# coordination-coherence.yml; `build-config` opts into the FS.GG.Kit materializer and reruns it under a
+# managed-props diff gate; `skill-union` calls skill-union-assert.yml against the receiver's OWN
+# committed skill roots, on a trigger that fires when any of them changes (#1504 — a bare `uses:` cannot
+# tell that call from one aimed at a generated product). A declared-but-unwired repo fails the audit.
+# Complements the per-receiver pull coherence gate: this is .github auditing the whole roster centrally.
+# Reads the (public) FS-GG repos with the run-scoped token.
 #
 # The script distinguishes four outcomes, and this workflow must not collapse them (#327, #335):
 #   0  every declared receiver is wired

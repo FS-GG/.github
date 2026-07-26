@@ -15,11 +15,11 @@
 #                                                           # takes the kit (absent row == byte-copy).
 #                                                           # roster query for consumers (apply-labels …).
 #                                                           # --all: every rostered repo, receives or not.
-#   repos.sh caps [--field id|workflow|script|push|receivers|reason] [--registry <file>]
+#   repos.sh caps [--field id|workflow|script|materializer|caller|push|receivers|reason] [--registry <file>]
 #                                                           # the AUDITED capabilities (repos-audit.sh).
 #                                                           # No --field: a TSV row per capability —
-#                                                           # id, workflow, script, materializer, push,
-#                                                           # receivers, reason.
+#                                                           # id, workflow, script, materializer, caller,
+#                                                           # push, receivers, reason.
 #   repos.sh received [--registry <file>]                   # cap<TAB>the repos that receive it, for
 #                                                           # EVERY capability the roster claims —
 #                                                           # including one with no `capabilities:` row.
@@ -48,7 +48,7 @@ REG_DEFAULT="$ROOT_DEFAULT/registry/repos.yml"
 
 # The controlled set of capabilities a repo may `receive`. A `receives` value outside this set is a
 # validation error — so a typo can't silently exclude a repo from a fabric. Grow it deliberately.
-KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contract-coherence"]'
+KNOWN_CAPS='["labels","coordination-kit","build-config","lockfile-sync","contract-coherence","skill-union"]'
 
 die() { echo "::error::repos-registry: $*" >&2; exit 2; }
 
@@ -293,8 +293,8 @@ cmd_caps() {
       *)          die "caps: unknown arg '$1'." ;;
     esac
   done
-  case "$field" in ""|id|workflow|script|materializer|push|receivers|reason) ;;
-    *) die "caps: --field must be id, workflow, script, materializer, push, receivers or reason." ;; esac
+  case "$field" in ""|id|workflow|script|materializer|caller|push|receivers|reason) ;;
+    *) die "caps: --field must be id, workflow, script, materializer, caller, push, receivers or reason." ;; esac
   [ -f "$reg" ] || die "registry not found: $reg"
   # `push` is a BOOLEAN in YAML, so `// ""` cannot blank it — `false // ""` is `false`, not "".
   # Normalize it to the string the shell readers compare against ("true" or empty), or a `push: false`
@@ -306,7 +306,7 @@ cmd_caps() {
     yaml2json "$reg" | jq -r \
       '(.capabilities // [])[]
        | [ .id, (.workflow // ""), (.script // ""),
-           (.materializer // ""),
+           (.materializer // ""), (.caller // ""),
            (if .push == true then "true" else "" end),
            (.receivers // ""), (.reason // "") ] | @tsv'
   fi
@@ -432,10 +432,10 @@ cmd_validate() {
   # detectors has one on almost every line. Re-delimit with a unit separator, which is NOT IFS
   # whitespace and therefore preserves empties. (jq's @tsv escapes any literal tab in a value, so the
   # substitution cannot corrupt a `reason:`.)
-  local cid cwf cscript cmaterializer cpush crecv creason line
+  local cid cwf cscript cmaterializer ccaller cpush crecv creason line
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    IFS=$'\x1f' read -r cid cwf cscript cmaterializer cpush crecv creason <<< "${line//$'\t'/$'\x1f'}"
+    IFS=$'\x1f' read -r cid cwf cscript cmaterializer ccaller cpush crecv creason <<< "${line//$'\t'/$'\x1f'}"
     [ -n "$cid" ] || continue
     echo "$KNOWN_CAPS" | jq -e --arg c "$cid" 'index($c)' >/dev/null \
       || err "capability '$cid' is not in the receives vocabulary (known: $(echo "$KNOWN_CAPS" | jq -r 'join(", ")'))."
@@ -449,11 +449,12 @@ cmd_validate() {
     [ -n "$cwf" ]          && ndet=$((ndet + 1))
     [ -n "$cscript" ]      && ndet=$((ndet + 1))
     [ -n "$cmaterializer" ] && ndet=$((ndet + 1))
+    [ -n "$ccaller" ]      && ndet=$((ndet + 1))
     [ "$cpush" = true ]    && ndet=$((ndet + 1))
     if [ "$ndet" -eq 0 ]; then
-      err "capability '$cid' declares no detector — set 'workflow:' (a reusable workflow the receiver calls), 'script:' (an authority script the receiver runs from an inlined job), 'materializer:' (an explicit package-materializer opt-in plus CI drift enforcement), or 'push: true' with a reason (the authority writes it INTO the receiver; nothing is detectable receiver-side). A capability with no detector is audited in NEITHER direction while still being a legal 'receives' word, which is exactly how build-config came to be received by four repos and checked by nothing (#628)."
+      err "capability '$cid' declares no detector — set 'workflow:' (a reusable workflow the receiver calls), 'script:' (an authority script the receiver runs from an inlined job), 'materializer:' (an explicit package-materializer opt-in plus CI drift enforcement), 'caller:' (a compound receiver-caller contract — the receiver calls a reusable workflow AGAINST A PARTICULAR SUBJECT, and a bare 'uses:' cannot tell that subject from another), or 'push: true' with a reason (the authority writes it INTO the receiver; nothing is detectable receiver-side). A capability with no detector is audited in NEITHER direction while still being a legal 'receives' word, which is exactly how build-config came to be received by four repos and checked by nothing (#628)."
     elif [ "$ndet" -gt 1 ]; then
-      err "capability '$cid' declares more than one detector (workflow/script/materializer/push) — a capability is verified ONE way; two lets a receiver satisfy the loose one and mask a gap in the strict one."
+      err "capability '$cid' declares more than one detector (workflow/script/materializer/caller/push) — a capability is verified ONE way; two lets a receiver satisfy the loose one and mask a gap in the strict one."
     fi
 
     if [ -n "$cwf" ]; then
@@ -496,6 +497,29 @@ cmd_validate() {
       *) err "capability '$cid' names unsupported materializer detector '$cmaterializer' (supported: build-config)." ;;
     esac
 
+    # The CALLER detector (#1504). Same closed-vocabulary rule as `materializer:` and, on top of it,
+    # the same SUBJECT-EXISTS rule as `workflow:`/`script:` — because a caller detector greps receivers
+    # for a `uses:` of a named reusable workflow, so a subject that is missing or not `workflow_call`-able
+    # reports every receiver unwired forever, which is the fail-open these checks exist to close.
+    #
+    # WHY `caller:` IS NOT JUST `workflow: skill-union-assert.yml`. The reusable assertion is
+    # subject-parameterised: `skill-union-assert.yml` audits whatever `product-path:` names, and
+    # FS.GG.Templates legitimately calls it against GENERATED composition products. A bare `uses:`
+    # detector cannot tell "this repo gates its OWN committed skill roots" from "this repo gates a
+    # scaffolded artifact it produced" — so it would certify the full-union capability off a call that
+    # never looks at the receiver's committed roots. That is a green nobody earned (#628), one layer in:
+    # the detector's subject is not the workflow, it is what the workflow was pointed at.
+    case "$ccaller" in
+      "") ;;
+      skill-union)
+        if [ ! -f "$root/.github/workflows/skill-union-assert.yml" ]; then
+          err "capability '$cid' names caller detector 'skill-union', whose subject .github/workflows/skill-union-assert.yml is not in .github/workflows/ — the audit greps receivers for a 'uses:' of it, so a subject that does not exist reports every receiver unwired."
+        elif ! grep -qE '^[[:space:]]*workflow_call:' "$root/.github/workflows/skill-union-assert.yml"; then
+          err "capability '$cid' names caller detector 'skill-union', but .github/workflows/skill-union-assert.yml has no 'workflow_call:' trigger — it is not reusable, so no repo can wire it."
+        fi ;;
+      *) err "capability '$cid' names unsupported caller detector '$ccaller' (supported: skill-union)." ;;
+    esac
+
     if [ "$cpush" = true ]; then
       [ -n "$creason" ] \
         || err "capability '$cid' declares 'push: true' with no 'reason' — a capability that is not verifiable at the receiver is the one place this roster can be unfalsifiable, so it must be a reviewed claim, not a blank."
@@ -515,7 +539,7 @@ cmd_validate() {
         ;;
       *) err "capability '$cid' receivers '$crecv' is invalid (omit it, or set it to 'none')." ;;
     esac
-  done < <(echo "$json" | jq -r '(.capabilities // [])[] | [.id, (.workflow // ""), (.script // ""), (.materializer // ""), (if .push == true then "true" else "" end), (.receivers // ""), (.reason // "")] | @tsv')
+  done < <(echo "$json" | jq -r '(.capabilities // [])[] | [.id, (.workflow // ""), (.script // ""), (.materializer // ""), (.caller // ""), (if .push == true then "true" else "" end), (.receivers // ""), (.reason // "")] | @tsv')
 
   # --- CLOSURE: a capability a repo RECEIVES must be one the audit can detect (#628) ---------------
   #

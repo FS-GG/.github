@@ -28,6 +28,11 @@
 #   materializer: <id>  the receiver explicitly opts into a package materializer AND CI reruns it and
 #                       fails on drift. `build-config` requires both the FS.GG.Kit receiver-project
 #                       opt-in and workflow enforcement; either half alone is incomplete adoption.
+#   caller:   <id>      the receiver calls one of the authority's reusable workflows AGAINST A
+#                       PARTICULAR SUBJECT, and the `uses:` alone cannot say which subject. Compound:
+#                       `skill-union` requires a call pointed at the receiver's OWN repository root
+#                       over all three ADR-0011 roots, AND a trigger that fires when any of those
+#                       roots changes. Either half alone is not a gate on the committed roots (#1504).
 #   push:     true      the AUTHORITY writes it into the receiver (apply-labels.sh reads this roster
 #                       and pushes the labels in). Nothing is wired at the receiver, so there is
 #                       nothing to detect there and this sweep skips it.
@@ -265,6 +270,184 @@ workflow_enforces_build_config() {
     }'
 }
 
+# --- the CALLER detector: skill-union (#1504) -----------------------------------------------------
+#
+# `skill-union-assert.yml` is SUBJECT-PARAMETERISED, and that is what makes a bare `uses:` detector
+# fail open here. The reusable assertion audits whatever `product-path:` names: FS.GG.Templates
+# legitimately calls it against GENERATED composition products (FS.GG.Templates#49), and that call
+# says nothing at all about Templates' own committed `.claude/.codex/.agents` roots. A `wf:` token
+# would count it anyway — certifying the full-union capability off a call that never looks at the
+# repository's own roots. That is #628's "a green nobody earned", one layer in: for this capability the
+# detector's subject is not the workflow, it is what the workflow was POINTED AT.
+#
+# So the receiver contract is compound, and both halves must live in ONE workflow file:
+#
+#   1. THE CALL is aimed at the receiver's own repository root, over all three ADR-0011 roots.
+#      `product-path:` absent (the input's default is ".") or exactly "."; `roots:` absent (the
+#      workflow's default is ADR-0011's three) or naming all three. A narrowed `roots:` is a smaller
+#      audit than the capability claims — a tree that intentionally supports fewer runtimes is a
+#      different, declared thing (docs/coordination/skill-union-assertion.md), not this capability.
+#   2. THE TRIGGER fires when any committed root changes. A gate that never runs is not a gate, and
+#      #332/#334/#880 are four hand-repairs of exactly that shape in this repo alone: the check is
+#      fine and its `paths:` filter is what fails open.
+#
+# Half 1: does this ONE workflow file call the assertion against the receiver's own root?
+workflow_calls_own_skill_union() {
+  awk '
+    function indentation(s,    n) {
+      match(s, /[^ ]/)
+      n = RSTART
+      return n == 0 ? length(s) : n - 1
+    }
+    # Strip a trailing inline comment, surrounding quotes, and outer whitespace from a YAML scalar.
+    # Whole-line comments are already blanked by the caller; an INLINE one is not, and
+    # `product-path: "." # the repo root` must read as "." rather than as a longer string that then
+    # fails to equal ".". A comment inside a quoted scalar is not a comment, so quotes come off last.
+    function scalar(s,    v) {
+      v = s
+      sub(/[[:space:]]+#.*$/, "", v)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (v ~ /^".*"$/ || v ~ /^'"'"'.*'"'"'$/) v = substr(v, 2, length(v) - 2)
+      return v
+    }
+    function reset_block() { product = ""; roots = ""; seen_product = 0; seen_roots = 0 }
+    function roots_ok(    r) {
+      if (!seen_roots) return 1                       # absent: the workflow default IS the three
+      r = roots
+      return (r ~ /\.claude\/skills/ && r ~ /\.codex\/skills/ && r ~ /\.agents\/skills/)
+    }
+    function product_ok() { return (!seen_product || product == "." || product == "./") }
+    function finish_block() {
+      if (product_ok() && roots_ok()) found = 1
+      in_block = 0
+      reset_block()
+    }
+    BEGIN { in_block = 0; found = 0; reset_block() }
+    {
+      # A `uses:` of the AUTHORITY copy only. A receiver running its OWN local workflow
+      # (`uses: ./.github/workflows/…`) is not participating in somebody else`s fabric — the same rule
+      # the `wf:` grep states, and the reason the authority is not a phantom adopter of what it hosts.
+      if ($0 ~ /uses:[[:space:]]*["'"'"']?FS-GG\/\.github\/\.github\/workflows\/skill-union-assert\.ya?ml/) {
+        if (in_block) finish_block()
+        in_block = 1
+        blk_indent = indentation($0)
+        reset_block()
+        next
+      }
+      if (!in_block) next
+      if ($0 ~ /^[[:space:]]*$/) next
+      # The `uses:` line sits in the job BODY, so its siblings (`with:`) share its indentation and the
+      # inputs are deeper. Anything at or left of that job-body indentation has left the job.
+      if (indentation($0) < blk_indent) { finish_block(); next }
+      if ($0 ~ /^[[:space:]]*product-path:/) {
+        seen_product = 1
+        product = scalar(substr($0, index($0, ":") + 1))
+      }
+      if ($0 ~ /^[[:space:]]*roots:/) {
+        seen_roots = 1
+        roots = scalar(substr($0, index($0, ":") + 1))
+      }
+    }
+    END {
+      if (in_block) finish_block()
+      exit(found ? 0 : 1)
+    }'
+}
+
+# Half 2: does this ONE workflow file RUN when any committed skill root changes?
+#
+# Keyed on `pull_request`, deliberately. A receiver check that a branch can REQUIRE has to report on a
+# pull request; a `push`-only workflow reports nothing there, so it can never be the required gate this
+# capability claims (check-required-contexts.py states the same rule for the same reason).
+#
+# Unfiltered is WIDER than covered, so it passes: a workflow with no `paths:` runs on every PR, which
+# includes every root change. `paths-ignore:` is the one form that can subtract a root, so it fails
+# only when an entry actually names one — a filter that excludes something else is not this gate's
+# business.
+workflow_triggers_on_skill_roots() {
+  awk '
+    function indentation(s,    n) {
+      match(s, /[^ ]/)
+      n = RSTART
+      return n == 0 ? length(s) : n - 1
+    }
+    function scalar(s,    v) {
+      v = s
+      sub(/[[:space:]]+#.*$/, "", v)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (v ~ /^".*"$/ || v ~ /^'"'"'.*'"'"'$/) v = substr(v, 2, length(v) - 2)
+      return v
+    }
+    # Does one `paths:` entry arm this root? A GitHub filter entry either IS the root prefix (with or
+    # without a trailing glob) or is a whole-tree wildcard. Matching on the prefix rather than on an
+    # exact spelling is deliberate: `.claude/skills/**`, `.claude/skills/*` and `.claude/skills/` are
+    # the same claim, and pinning one spelling would report the other two as gaps.
+    function arms(entry, root) {
+      return (entry == "**" || entry == "*" || index(entry, root) == 1)
+    }
+    BEGIN {
+      in_on = 0; in_pr = 0; in_list = 0
+      pr_seen = 0; filtered = 0; ignored_root = 0
+      c = 0; x = 0; g = 0
+    }
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*$/) next
+      ind = indentation(line)
+
+      if (!in_on) {
+        if (line ~ /^(on|"on"|'"'"'on'"'"'):/) {
+          in_on = 1; on_indent = ind
+          # Inline forms carry no `paths:` at all, so naming pull_request there is a full pass:
+          #   on: pull_request        on: [pull_request, push]
+          rest = scalar(substr(line, index(line, ":") + 1))
+          if (rest ~ /pull_request/) { pr_seen = 1; in_on = 0 }
+        }
+        next
+      }
+
+      if (ind <= on_indent) { in_on = 0; in_pr = 0; in_list = 0; next }
+
+      if (!in_pr) {
+        if (line ~ /^[[:space:]]*pull_request:/) {
+          in_pr = 1; pr_indent = ind; pr_seen = 1
+        }
+        next
+      }
+
+      if (ind <= pr_indent) {                       # left the pull_request block
+        in_pr = 0; in_list = 0
+        if (line ~ /^[[:space:]]*pull_request:/) { in_pr = 1; pr_indent = ind; pr_seen = 1 }
+        next
+      }
+
+      if (line ~ /^[[:space:]]*paths:/)        { filtered = 1; in_list = 1; list_kind = "paths";  list_indent = ind; next }
+      if (line ~ /^[[:space:]]*paths-ignore:/) { filtered = 1; in_list = 1; list_kind = "ignore"; list_indent = ind; next }
+
+      if (in_list) {
+        if (ind <= list_indent) { in_list = 0 }
+        else if (line ~ /^[[:space:]]*-[[:space:]]*/) {
+          entry = scalar(substr(line, index(line, "-") + 1))
+          if (list_kind == "paths") {
+            if (arms(entry, ".claude/skills")) c = 1
+            if (arms(entry, ".codex/skills"))  x = 1
+            if (arms(entry, ".agents/skills")) g = 1
+          } else if (index(entry, ".claude/skills") == 1 \
+                  || index(entry, ".codex/skills")  == 1 \
+                  || index(entry, ".agents/skills") == 1) {
+            ignored_root = 1
+          }
+        }
+      }
+    }
+    END {
+      if (!pr_seen)     exit 1                      # never reports on a pull request
+      if (ignored_root) exit 1                      # a root is explicitly excluded
+      if (!filtered)    exit 0                      # unfiltered runs on everything, roots included
+      exit((c && x && g) ? 0 : 1)
+    }'
+}
+
 # Which of the AUTHORITY's reusable workflows does <repo> call? Prints one filename per line (the set
 # may legitimately be empty). 0 = read it, 2 = could not determine (reason in $CALLS_ERR_FILE).
 #
@@ -280,6 +463,7 @@ workflow_enforces_build_config() {
 #   wf:<file>.yml      a `uses:` of the AUTHORITY's reusable workflow  (the `workflow:` detector)
 #   script:<file>.sh   a reference to one of the AUTHORITY's scripts   (the `script:` detector)
 #   materializer:<id>  BOTH package opt-in and CI enforcement          (the `materializer:` detector)
+#   caller:<id>        BOTH an own-subject call and a trigger over it  (the `caller:` detector)
 #
 # One pass, all kinds. Re-walking a repo's workflows once per detector kind would multiply the API
 # traffic against the rate limit this script already treats as its main adversary — the same reasoning
@@ -287,6 +471,7 @@ workflow_enforces_build_config() {
 repo_calls() {
   local repo="$1" f rc=0 frc files text
   local build_config_enforced=0 build_config_opted_in=0 project prc=0 project_code
+  local su_call su_trigger su_any_call=0 su_both=0
   : > "$CALLS_ERR_FILE"
 
   files="$(list_workflows "$repo")" || rc=$?
@@ -407,8 +592,34 @@ repo_calls() {
       if workflow_enforces_build_config <<< "$text"; then
         build_config_enforced=1
       fi
+
+      # The CALLER detector (#1504). BOTH halves are evaluated on THIS file, because a trigger in one
+      # workflow cannot arm a call in another: a partitioned root that changes must re-run the workflow
+      # that AUDITS it. Only a file carrying both counts as the gate; a file carrying one is reported as
+      # the half it has, so the diagnostic can name what is missing instead of "not wired".
+      #
+      # Comments are stripped ($body, computed above) for the reason the script detector states: a
+      # commented-out `uses:` is prose ABOUT calling, and a check whose subject is "does this really
+      # run?" must not be satisfiable by prose about running.
+      if [ "${NEEDS_SKILL_UNION_CALLER:-0}" -eq 1 ]; then
+        su_call=0; su_trigger=0
+        if workflow_calls_own_skill_union   <<< "$body"; then su_call=1;    fi
+        if workflow_triggers_on_skill_roots <<< "$body"; then su_trigger=1; fi
+        [ "$su_call" -eq 0 ] || su_any_call=1
+        if [ "$su_call" -eq 1 ] && [ "$su_trigger" -eq 1 ]; then su_both=1; fi
+      fi
     fi
   done <<< "$files"
+
+  # A trigger on its own is NOT reported. Half 2 is satisfied by any unfiltered `pull_request:`
+  # workflow, which nearly every repo has — so emitting it alone would make every repo in the org an
+  # apparent partial adopter of this capability, and the reverse-direction sweep would report the whole
+  # roster as drift. The CALL is what makes a repo an adopter at all; the trigger only says whether the
+  # call is armed. So the partial token is the call, and a call with no trigger is the reportable half.
+  if [ "${NEEDS_SKILL_UNION_CALLER:-0}" -eq 1 ] && [ "$repo" != "$AUTHORITY" ]; then
+    [ "$su_any_call" -eq 0 ] || echo "caller-call:skill-union"
+    [ "$su_both" -eq 0 ]     || echo "caller:skill-union"
+  fi
 
   # The opt-in is not a workflow fact: it lives in the package receiver project. Read the project
   # directly rather than grepping the whole repository (which the contents API cannot do and which
@@ -470,10 +681,11 @@ caps="$(caps_list)" \
 [ -n "$caps" ] \
   || die "the roster declares no audited capabilities (registry 'capabilities:' is missing or empty). This audit's entire mandate comes from there, so it would examine nothing. Examining nothing is a failure to audit, not a clean audit."
 
-declare -A CAP_TOKEN CAP_SUBJ CAP_KIND CAP_MATERIALIZER CAP_PUSH CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS CAP_UNDET
+declare -A CAP_TOKEN CAP_SUBJ CAP_KIND CAP_MATERIALIZER CAP_CALLER CAP_PUSH CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS CAP_UNDET
 CAPS_ORDER=""
 rostered_total=0
 NEEDS_BUILD_CONFIG_MATERIALIZER=0
+NEEDS_SKILL_UNION_CALLER=0
 # TAB IS IFS-*WHITESPACE* IN BASH: `IFS=$'\t' read` collapses runs of tabs and DROPS empty fields, so
 # a capability with an empty `workflow` (every script:/push: row) would shift its `script` left into
 # `wf` and be audited as a reusable workflow that does not exist. Re-delimit with a unit separator,
@@ -481,7 +693,7 @@ NEEDS_BUILD_CONFIG_MATERIALIZER=0
 # substitution cannot corrupt a `reason:`.
 while IFS= read -r capline; do
   [ -n "$capline" ] || continue
-  IFS=$'\x1f' read -r cap wf script materializer push recv reason <<< "${capline//$'\t'/$'\x1f'}"
+  IFS=$'\x1f' read -r cap wf script materializer caller push recv reason <<< "${capline//$'\t'/$'\x1f'}"
   [ -n "$cap" ] || continue
   # `repos.sh validate` already enforces exactly-one-detector, and CI runs it — but this script must
   # not INFER that it ran. An unvalidated roster reaching a gate that assumes validation is how a
@@ -505,6 +717,14 @@ while IFS= read -r capline; do
     CAP_TOKEN["$cap"]="materializer:$materializer"
     CAP_SUBJ["$cap"]="FS.GG.Kit '$materializer' materializer opt-in plus CI regeneration/diff enforcement"
     NEEDS_BUILD_CONFIG_MATERIALIZER=1
+  elif [ -n "$caller" ]; then
+    [ "$caller" = skill-union ] \
+      || die "capability '$cap' names unsupported caller detector '$caller' (supported: skill-union; repos.sh validate catches this)."
+    CAP_KIND["$cap"]="caller"
+    CAP_CALLER["$cap"]="$caller"
+    CAP_TOKEN["$cap"]="caller:$caller"
+    CAP_SUBJ["$cap"]="a $AUTHORITY/.github/workflows/skill-union-assert.yml caller aimed at this repo's OWN committed .claude/.codex/.agents skill roots, on a trigger that fires when any of them changes"
+    NEEDS_SKILL_UNION_CALLER=1
   elif [ "$push" = true ]; then
     # PUSH: the authority writes this INTO the receiver, so there is NOTHING receiver-side to detect
     # and both sweep directions are meaningless for it. This is the one honest way to be unauditable,
@@ -515,7 +735,7 @@ while IFS= read -r capline; do
     CAP_TOKEN["$cap"]=""
     CAP_SUBJ["$cap"]="(pushed by the authority — nothing to detect at the receiver)"
   else
-    die "capability '$cap' declares no detector (workflow:/script:/materializer:/push:) — there is nothing to audit it by, so it would be swept in NEITHER direction while remaining a legal 'receives' word. That is #628 exactly. Fix registry/repos.yml (repos.sh validate catches this)."
+    die "capability '$cap' declares no detector (workflow:/script:/materializer:/caller:/push:) — there is nothing to audit it by, so it would be swept in NEITHER direction while remaining a legal 'receives' word. That is #628 exactly. Fix registry/repos.yml (repos.sh validate catches this)."
   fi
   CAPS_ORDER="$CAPS_ORDER $cap"
   CAP_WIRED["$cap"]=0; CAP_GAPS["$cap"]=0; CAP_UNDET["$cap"]=0
@@ -588,7 +808,7 @@ while IFS= read -r recvline; do
   [ -n "$cap" ] || continue
   case " $CAPS_ORDER " in
     *" $cap "*) ;;
-    *) die "repo(s) [$by] receive '$cap', but the roster declares no 'capabilities:' row for it — so this audit has no detector for it and sweeps it in NEITHER direction: it can be found neither unwired nor adopted-but-unrostered. A capability that is legal to receive and impossible to check is a green nobody earned (#628). Give '$cap' a detector row (workflow:/script:/materializer:/push:) in registry/repos.yml." ;;
+    *) die "repo(s) [$by] receive '$cap', but the roster declares no 'capabilities:' row for it — so this audit has no detector for it and sweeps it in NEITHER direction: it can be found neither unwired nor adopted-but-unrostered. A capability that is legal to receive and impossible to check is a green nobody earned (#628). Give '$cap' a detector row (workflow:/script:/materializer:/caller:/push:) in registry/repos.yml." ;;
   esac
 done <<< "$received"
 
@@ -640,6 +860,11 @@ while IFS= read -r repo; do
              || grep -qxF "materializer-enforcement:$materializer" <<< "$calls"; }; then
       partial_it=1
     fi
+    detector_caller="${CAP_CALLER[$cap]:-}"
+    if [ "${CAP_KIND[$cap]:-}" = caller ] \
+        && grep -qxF "caller-call:$detector_caller" <<< "$calls"; then
+      partial_it=1
+    fi
 
     if [ "$declared" -eq 1 ] && [ "$calls_it" -eq 1 ]; then
       echo "ok: $repo wires $subj (receives: $cap)"
@@ -652,6 +877,15 @@ while IFS= read -r repo; do
         grep -qxF "materializer-enforcement:$materializer" <<< "$calls" \
           || missing="${missing} CI FsggKitMaterialize + managed-props diff enforcement;"
         echo "::error::repos-audit: $repo receives '$cap' but is missing:${missing}"
+      elif [ "${CAP_KIND[$cap]:-}" = caller ]; then
+        # Name the half. "Not wired" is the wrong diagnostic for a repo that DOES call the assertion and
+        # merely points it somewhere else, or arms it on nothing — the remedy is different in each case,
+        # and #327/#335's rule is that a red must name its own subject.
+        if grep -qxF "caller-call:$detector_caller" <<< "$calls"; then
+          echo "::error::repos-audit: $repo receives '$cap' and calls skill-union-assert.yml against its own roots, but that workflow does not RUN when a committed skill root changes — add a pull_request trigger covering .claude/skills/**, .codex/skills/** and .agents/skills/** (or drop the paths: filter). An unarmed gate is not a gate."
+        else
+          echo "::error::repos-audit: $repo receives '$cap' but nothing in its workflows calls ${CAP_SUBJ[$cap]}. A call aimed at a GENERATED product (product-path: <subdir>) or narrowed with roots: is a different subject and deliberately does not count."
+        fi
       else
         echo "::error::repos-audit: $repo receives '$cap' but nothing in its workflows references $subj"
       fi
@@ -665,18 +899,18 @@ while IFS= read -r repo; do
       # This is the direction that would have caught #628 the day it started: `build-config` was
       # enforced by four repos and rostered by none. It could not fire, because a capability with no
       # detector row was not swept at all.
+      # A compound detector is ADOPTED, not merely REFERENCED: the receiver enabled something, rather
+      # than naming a file the authority owns. The verb is chosen off the kind so a new compound kind
+      # cannot silently fall back to the wrong one, which is what a second `= materializer` test would
+      # have kept inviting.
+      case "${CAP_KIND[$cap]:-}" in
+        materializer|caller) verb="adopts" ;;
+        *)                   verb="references" ;;
+      esac
       if [ -n "${CAP_NONE[$cap]:-}" ]; then
-        if [ "${CAP_KIND[$cap]:-}" = materializer ]; then
-          echo "::error::repos-audit: $repo adopts $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
-        else
-          echo "::error::repos-audit: $repo references $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
-        fi
+        echo "::error::repos-audit: $repo $verb $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
       else
-        if [ "${CAP_KIND[$cap]:-}" = materializer ]; then
-          echo "::error::repos-audit: $repo adopts $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
-        else
-          echo "::error::repos-audit: $repo references $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
-        fi
+        echo "::error::repos-audit: $repo $verb $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
       fi
       drift=$((drift + 1))
     fi
