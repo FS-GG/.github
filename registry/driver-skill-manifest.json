@@ -159,12 +159,12 @@
     {
       "id": "cut-nuget-release",
       "scope": "operator",
-      "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",
-      "tree-sha256": "61a0d4272e54eb057222fe935979013e635ba309c82e546a6fd90fe3465d2330",
+      "sha256": "fd639d56393465bef55b837aee6c861f96f980671dc3998895c7e95edde12259",
+      "tree-sha256": "64bdfeba93535e7e45388c8fe46040302f679d8d59507d2ef9ccc9bf4cf8718e",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",
+          "sha256": "fd639d56393465bef55b837aee6c861f96f980671dc3998895c7e95edde12259",
           "executable": false
         },
         {

@@ -13,6 +13,31 @@ Read [publishing-and-deployment](../publishing-and-deployment/SKILL.md) before a
 coherent-set, versioning, gate, and registry rules; this skill owns the cross-repo audit and execution
 loop.
 
+## Operator tooling
+
+Use the repository-owned F# scripts for repeatable evidence:
+
+- `dotnet fsi scripts/release-train-audit.fsx -- --root . --fetch --output <audit.json>` discovers
+  rostered checkouts, evaluated packable projects, package references, release workflows, repository
+  state, a candidate baseline tag, and changed files. Pass `--siblings-root` when `.github` is an
+  isolated worktree. Exit 1 means reviewable findings; exit 3 means no verdict.
+- `dotnet fsi scripts/release-train-workflows.fsx -- --root . --output <workflows.json>` checks
+  release workflows before tags exist. It catches checkout-free `gh release` calls without repository
+  context, missing NuGet OIDC permission, feed-order inversions, and repacking after publication starts.
+- `dotnet fsi scripts/release-train-verify.fsx -- --manifest <plan.json> --output <verify.json>`
+  polls both feeds, downloads each expected package, compares payload entries while excluding
+  nuget.org's `.signature.p7s`, and verifies the tag commit. Its manifest requires `name`,
+  `repositoryPath`, `tag`, `commit`, and `packages: [{ "id": ..., "version": ... }]`.
+- `release-train-status.fsx` summarizes `--audit`, `--workflows`, and repeated `--verification`
+  evidence files. Repeat `--verification` for each coherent set; pass `--registry complete` only
+  after merged canonical truth is verified.
+
+Keep the JSON files as the resumable run ledger. Rerun commands to refresh live evidence. These scripts
+are accelerators, not policy authorities: inspect and improve them when repository-specific behavior
+warrants it. In particular, the audit's newest reachable tag is only a baseline candidate; select the
+latest successful tag separately for every coherent set and override the candidate in the human audit.
+Never weaken a failed check merely to make the train proceed.
+
 ## Definition of done
 
 The run is complete only when:
@@ -30,8 +55,10 @@ registry says the old version is coherent.
 
 ## 1. Establish ground truth
 
-1. From `.github`, read the live roster with `scripts/repos.sh list --all`; fail loudly if a rostered
-   sibling checkout is missing. Include `.github` itself: it is a package producer.
+1. Run `release-train-audit.fsx`, retain its JSON, and cross-check its roster against
+   `scripts/repos.sh list --all`. Fail loudly if a rostered sibling checkout is missing. Include
+   `.github` itself: it is a package producer. The F# auditor parses the authoritative roster without
+   depending on ambient PyYAML, but it does not replace `repos.sh validate`.
 2. Fetch `main`, tags, and release workflow state in every checkout without discarding local changes.
    Work in fresh branches/worktrees; never release unmerged working-tree bytes.
 3. Discover packable projects, package IDs, coherent sets, current project versions, release workflows,
@@ -90,14 +117,16 @@ For each owed producer, in dependency order:
    `dotnet pack` alone is insufficient.
 3. Push the PR, wait for all required checks, review failures from their logs, fix them, and merge only
    when green. Re-read merged `main` before tagging.
-4. Use the producer's own release machinery. Inspect its workflow before acting:
+4. Run `release-train-workflows.fsx` across the train and resolve every error before creating tags.
+   Warnings name manual inspection boundaries and remain part of the evidence.
+5. Use the producer's own release machinery. Inspect its workflow before acting:
    - if release-tag automation owns tag creation, dispatch it and let it create the ordered tags;
    - otherwise create the exact annotated/lightweight tag form the repository already uses and push it;
    - for multiple tag namespaces, preserve the workflow's required order and version relationships.
-5. Confirm that each expected tag caused a release run. GitHub suppresses push events when more than
+6. Confirm that each expected tag caused a release run. GitHub suppresses push events when more than
    three tags are pushed at once; dispatch any missing workflow runs explicitly where supported rather
    than assuming tags imply publication.
-6. Wait for the complete publish job, including producer gates, org-feed push, nuget.org OIDC login and
+7. Wait for the complete publish job, including producer gates, org-feed push, nuget.org OIDC login and
    push, and downstream dispatch. Stop the train on a failed or partial coherent-set publication and
    repair it before releasing dependants.
 
@@ -106,13 +135,15 @@ gate-verified `.nupkg` is the release artifact for both feeds.
 
 ## 4. Verify publication
 
-For every expected package ID/version:
+Create the verifier manifest from the reviewed coherent-set inventory, then run
+`release-train-verify.fsx`. For every expected package ID/version:
 
 1. Verify GitHub Packages resolves it.
 2. Poll nuget.org until it resolves or a bounded timeout establishes a real indexing/publish failure.
-3. Confirm the workflow pushed the same artifact set to both feeds. Where feed downloads are available,
-   compare package hashes; otherwise use the workflow's byte-identical single-pack evidence and report
-   that verification boundary explicitly.
+3. Confirm the workflow pushed the same artifact set to both feeds. Compare payload-entry hashes, not
+   whole-archive hashes: nuget.org adds `.signature.p7s`, so signed and unsigned archive hashes normally
+   differ even when their package payloads are byte-identical. If feed downloads are unavailable, use
+   the workflow's byte-identical single-pack evidence and report that verification boundary explicitly.
 4. Record the successful workflow URL/run id and tag SHA. Tag SHA must be the merged release commit.
 
 Count expected versus observed packages for each coherent set. A green run that published 17 of an
