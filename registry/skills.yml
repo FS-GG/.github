@@ -167,10 +167,10 @@ skills:
   # fs-gg-rendering. `sha256` + condition authoritative (from the published skill-manifest.json).
   # `source` is the in-template canonical path (the manifest's supplied-by).
   # ------------------------------------------------------------------------------------------------
-  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: 7433f2427df97a7b17bee7ab8c2f2dcdc6973ae373e3dd08c093d5f22983c891, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: 3c3afaa6a4293435771b18acd9aea06e807a0b62430796236d4d70249a3fcc07, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: d927539dd50df2e04a56945cd39e7bb87349cdc8976edfe2b0a4304377c91262, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: de59b399f60ce62b34f128c17b39f69c1c9783f0be790de201051de74ebbb9c1, materializes-when: "profile in [app, sample-pack, game]" }
-  - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: 02173b2780728d5db459f82aa20584056ad78afba8c7082b778765046f396565, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: b4234ede69d626710966960cd390ef2d4fd99dcf27c70925589d5ef0b940cf9c, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-layout,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-layout/SKILL.md,    sha256: 85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-keyboard-input,   scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-keyboard-input/SKILL.md, sha256: 48378dd80c74e2484af5b5f284b4aa2b57b24b3d0359303d53f9032c26a9c988, materializes-when: "profile in [app, game]" }
   - { id: fs-gg-styling,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-styling/SKILL.md,   sha256: 24754ec5cb931deb6fcaf7d4b9e5926c42f4325dc4f67cb4852295de8b405ac9, materializes-when: "profile in [app, game]" }
@@ -257,7 +257,7 @@ skills:
   # Reconciled verbatim from fs-gg-game's producer manifest by `--write`
   # (.github#299/.github#1200); `mirrored: false` is the manifest's declared verdict.
   - { id: fs-gg-mapcraft,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-mapcraft/SKILL.md, sha256: 73725ff9b9e8958d053842a895777704ac74092a28a600836495d12512fdd049, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
-  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: a307aa3fc3a1f5e116abcd0ff37db34f7277c5f1dcc2fb9e59d8f6dbb1285e0d, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-testing,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-testing/SKILL.md,   sha256: 8e35f29eff51fca7886d4a3bc88cf6d2ab7a2c7108161476d04a54a0d4521510, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
   - { id: fs-gg-samples,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/fragments/samples/skill/SKILL.md,        sha256: 5fb78dd43379d13f84526a70dfd01000544e6c99bbf164c510d160da06b1ce31, materializes-when: "profile == sample-pack" }
   # `fs-gg-feedback-report` is the retained report-only half of the former feedback pair. Its predicate
   # is `always` (Rendering#434): a reporter must ride EVERY lane. Rendering#951 / PR #952 removed
@@ -276,7 +276,7 @@ skills:
   # an ordinary profile-gated product skill (same predicate as fs-gg-scene above); SDD's SeededSkills
   # exclusion is moot for the orientation-skill gap. sha256 + source (manifest supplied-by path)
   # unchanged; registry = manifest = bytes preserved.
-  - { id: fs-gg-project,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/base/.agents/skills/fs-gg-project/SKILL.md, sha256: 222f3889055c56419e478131b9ec724ffe683902afa06c28aa365f91675ab19b, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
+  - { id: fs-gg-project,          scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/base/.agents/skills/fs-gg-project/SKILL.md, sha256: c9fac83fb4ebb1f29f666cd206e4f47a88c0686a0245f21f5fa48dc2209a54a0, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
 
   # ------------------------------------------------------------------------------------------------
   # DRIVER skills — `.github`-AUTHORED, product-materialized (ADR-0054, resolves #1224; ADR-0053).
