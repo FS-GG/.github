@@ -5,7 +5,7 @@ triaged the board between waves, dispatched bounded workers with distinct identi
 and independently verified merge reachability, required checks, review, releases, done stamps,
 claim cleanup, and board writes.
 
-**Outcome:** the delivery queue is exhausted. Twenty-one coordination items reached exact `Done`,
+**Outcome:** the delivery queue is exhausted. Twenty-two coordination items reached exact `Done`,
 including the full `.github#1482` producer-to-adopter chain. The final fresh snapshot has no live
 claims, no schedulable items, no reconciliation or lint findings, and no pending board writes.
 
@@ -14,10 +14,10 @@ claims, no schedulable items, no reconciliation or lint findings, and no pending
 | Area | Coordination items | Result |
 |---|---|---|
 | Driver and SDD contracts | `.github#1482`, `.github#1495`, SDD #709, SDD #710 | Published Drivers 0.8.2 and corrective 0.8.3, then SDD 0.31.1. Public-feed verification covered 51/51 digests, 17/17 cross-root byte comparisons, and 69/69 package links. |
-| Rendering evidence and activation | Rendering #1067, #1069, #1072, #1074, #1076 | Added zero-event activation receipts, recovered the blocked delivery lane, and published the 18-package UI/template 0.21.1 coherent set plus template 0.23.0. The activation release produced 1,870 dual-feed payloads and passed a public-package smoke test. |
+| Rendering evidence and activation | Rendering #1067, #1069, #1071, #1072, #1074, #1076, `.github#1501` | Added zero-event activation receipts, recovered the blocked delivery lane, and published the 18-package UI/template 0.21.1 coherent set plus template 0.23.0. Verification found 1,870 non-signature payload files byte-identical between the two feed archives, and the public package passed an activation smoke test. |
 | Feedback critic | Rendering #1066, `.github#1499` | Added the feedback critic, published template 0.22.0, and advanced the central registry only after public availability was verified. |
-| Governance journey gate | Governance #324, `.github#1492`, Templates #305, Rogue2 #2 | Added the journey gate, published ReferenceGateSet 1.5.0 and Templates 0.7.0, updated the registry, and proved the contract in a real adopter. |
-| Game and registry integration | Game #507, Game #509, `.github#1484`, `.github#1487`, `.github#1501` | Landed the consumer work and corrective integration, then reconciled the registry to the verified producer bytes. |
+| Governance journey gate | Governance #324, `.github#1492`, Templates #305, `EHotwagner/Rogue2#2` | Added the journey gate, published ReferenceGateSet 1.5.0 and Templates 0.7.0, updated the registry, and proved the contract in a real adopter. |
+| Game and registry integration | Game #507, Game #509, `.github#1484`, `.github#1487` | Landed the consumer work and corrective integration, then reconciled the registry to the verified producer bytes. |
 | Human pin decision | Templates #307 | After the maintainer chose to move the pin, merged Templates PR #304 and closed the corresponding coordination item. |
 
 Every shipped item was checked against its exact merged head and ended with a green done stamp,
@@ -49,7 +49,7 @@ indefinitely if no such major is planned.
 
 ## Tally
 
-- **21 coordination items completed**
+- **22 coordination items completed**
 - **0 live claims**
 - **0 schedulable items**
 - **0 reconciliation or lint findings**
