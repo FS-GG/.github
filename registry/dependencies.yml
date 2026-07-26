@@ -1215,8 +1215,9 @@ coherence:
       Consumer-side verification of governance-handoff@1.0.0 (CONTRACT entry unchanged — this is a
       coherence assertion, not a contract surface bump). FS.GG.Governance.Cli was FIRST published at
       @1.1.0 to the org GitHub Packages feed (it had been 404; that publish made it resolve at
-      https://nuget.pkg.github.com/FS-GG) — the CLI feed has since ADVANCED and now serves 1.4.0 as its
-      newest (2026-07-11 coordinated full-platform release). At 1.1.0 its PackAsTool closure bundled
+      https://nuget.pkg.github.com/FS-GG) — the CLI feed has since ADVANCED and now serves 1.11.0 as
+      its newest (2026-07-26 interactive-performance release, Governance#306). At 1.1.0 its
+      PackAsTool closure bundled
       FS.GG.Governance.Adapters.SddHandoff.dll, so a fresh
       `dotnet tool install FS.GG.Governance.Cli --version 1.1.0` yielded an `fsgg-governance` whose
       `route --mode gate` is DRIVEN by a produced readiness/<id>/governance-handoff.json: a failing
@@ -1224,6 +1225,10 @@ coherence:
       mode does not block (exit 0). Verified end-to-end against the published artifact (FS.GG.Governance
       spec 089, ADR-0004). The publish is gated by a real-evidence green-by-omission smoke (pack →
       install → run vs committed fixtures) so a consumer-less build cannot ship under this identity.
+      Version 1.11.0 consumes governance-handoff@2.0.0 / FS.GG.Contracts 7.0.0 and independently
+      recomputes interactive/render-loop p95, p99, and sustained-catch-up verdicts from bound raw
+      samples; it rejects stale, cross-host, malformed, self-attested-only, and environment-overclaim
+      evidence rather than trusting a producer-authored pass flag.
     note: >
       089 closed a code gap (the CLI `route` previously never read the handoff → exited 0 on a failing
       one); 1.1.0 folds the SddHandoff consumer into the route verdict, and 1.2.0 makes it PROFILE-AWARE
@@ -1237,9 +1242,9 @@ coherence:
       the SDD-owned `.fsgg/project.yml`, so the CLI never read `defaultProfile` and fell back to the Strict
       fail-safe, over-blocking every profile — see the governance-descriptor contract entry). The stage keeps
       independent SKIP probes (consumer-absent / older profile-unaware CLI) so it never green-by-omits.
-    resolved_by: "FS-GG/FS.GG.Governance#29 (route-exit wiring) + #33 (publish gate) + tag v1.1.0 (publish) + FS.GG.Governance#34 (profile-aware, 1.2.0) + FS.GG.Templates#29 (descriptor slot, closes #28/#25)"
-    impact: "FS.GG.Templates#25 composition stage asserts the full matrix (strict blocks / strict passes / light relaxes) against the installed fsgg-governance — green-by-omission eliminated end-to-end through the composed product."
-    tracking: "https://github.com/FS-GG/FS.GG.Templates/pull/29"
+    resolved_by: "FS-GG/FS.GG.Governance#29 (route-exit wiring) + #33 (publish gate) + tag v1.1.0 (publish) + FS.GG.Governance#34 (profile-aware, 1.2.0) + FS.GG.Templates#29 (descriptor slot, closes #28/#25) + FS.GG.Governance#306 / PRs #318 and #320 + tag v1.11.0 / release run 30190043566"
+    impact: "FS.GG.Templates#25 composition stage asserts the strict/light handoff matrix; FS.GG.Governance.Cli 1.11.0 additionally enforces typed governance-handoff@2 performance intent/evidence with independent percentile and catch-up recomputation. Both feed artifacts were independently verified byte-identical after excluding only nuget.org signing."
+    tracking: "https://github.com/FS-GG/FS.GG.Governance/issues/306"
   - id: governance-handoff-emitted-version
     coherent: true
     owner: sdd

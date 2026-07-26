@@ -45,6 +45,17 @@ release run 30186060627 published package record 1067036038, and independent dow
 GitHub Packages and nuget.org have identical payload bytes after excluding only the public
 feed's `.signature.p7s`.
 
+Governance runtime release evidence (2026-07-26): `FS.GG.Governance.Cli` **1.11.0**
+adopts `governance-handoff@2.0.0` / `FS.GG.Contracts` 7.0.0 and independently recomputes
+interactive/render-loop performance verdicts from workload-bound raw samples. Governance
+PR #318 merged as `c4baba2e`; release-only fixture cleanup PR #320 merged as `e20627af`,
+which is the target of tag `v1.11.0`. Guarded release run 30190043566 published GitHub
+Packages first and nuget.org second after the packed-tool enforcement smoke passed.
+Independent downloads contain 168 byte-identical non-signature payload files, and the public
+tool installs and passes the real handoff smoke. `FS.GG.Governance.ReferenceGateSet` remains
+1.4.0: the performance gate is runtime handoff-derived and #318 changed no packed `.fsgg/**`
+bytes.
+
 The same SDD merge advances the emitted `governance-handoff` contract from 1.1.0 to
 1.2.0. The registry and the emitter's single `governanceHandoffContractVersion` literal
 now agree at 1.2.0; source-coherence run 30186679362 first exposed the inseparable drift,
