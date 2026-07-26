@@ -167,7 +167,8 @@ def assert_performance_first_contract() -> None:
         )
         text = " ".join(driver_bodies[0].decode().split())
         assert "During worker setup, interactive/game work must explicitly invoke" in text
-        assert "../pnext-item/references/performance-first.md" in text
+        assert "`pnext-item` performance-first planning gate" in text
+        assert "../pnext-item/" not in text
         assert text.index("performance-first planning") < text.index(
             "before implementation begins"
         )

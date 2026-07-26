@@ -10,7 +10,7 @@ roadmap has no unchecked milestone left, and then the parent writes the report a
 
 This skill is the **loop and its contract**. It does not re-teach the SDD lifecycle — that is
 [fs-gg-sdd-lifecycle](../../fs-gg-sdd-lifecycle/SKILL.md)'s, and each subagent runs it. It does not
-re-teach PR-to-merge discipline — that is [pnext-item](../../pnext-item/SKILL.md) §5–6's, and each
+re-teach PR-to-merge discipline — that is `pnext-item` §5–6's, and each
 subagent follows it. It owns the thing neither of those does: **the sequencing of many milestones
 across many disposable workers, driven off one markdown file.**
 
@@ -122,7 +122,7 @@ The parent hands each subagent essentially this, with `<MILESTONE>` and `<ROADMA
 >    filing; add recurrence evidence to an existing issue instead of duplicating it. Run the bundled
 >    report validator and fix every error. File new actionable findings at their root owner and put
 >    issue numbers in the roadmap progress note.
-> 6. **Open a PR, review it, merge on green** — the [pnext-item](../../pnext-item/SKILL.md) §5–6 way:
+> 6. **Open a PR, review it, merge on green** — the `pnext-item` §5–6 way:
 >    open the PR, give it a real review, wait for required checks, and merge once green. A problem you
 >    find on the way you FIX in this PR when that keeps it reviewable, or file at its root cause when
 >    it does not belong here. Backfill the PR number into the roadmap note before you merge (or in an
@@ -168,7 +168,7 @@ a detailed report and lands it:
   taken. This file is the protocol; that record is the *why*.
 - [fs-gg-sdd-lifecycle](../../fs-gg-sdd-lifecycle/SKILL.md) — the SDD workflow each subagent runs; the
   authority on stage order, not this file.
-- [pnext-item](../../pnext-item/SKILL.md) — the open-PR → review → merge-on-green loop each subagent
+- `pnext-item` — the open-PR → review → merge-on-green loop each subagent
   reuses, and the "fix the cause, then take it" discipline for problems found mid-milestone.
 - `fs-gg-feedback-report` — the lifecycle-independent checkpoint and schema-v2 synthesis skill the
   driver invokes during each milestone and validates before handoff.

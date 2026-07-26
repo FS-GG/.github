@@ -25,14 +25,14 @@ verify-against-ground-truth → re-plan shape, but the fan-out is *one repo* ins
 It owns exactly one thing neither of its parts does: **the single-repo, board-driven scheduling loop**.
 Everything else it delegates and does not re-teach:
 
-- **Analysis** is [check-board](../../check-board/SKILL.md)'s. The host does not hand-roll board truth — it
+- **Analysis** is `check-board`'s. The host does not hand-roll board truth — it
   runs the reconcile pass and reads its findings. That is also where **blockers that emerge mid-work**
   are caught: nothing re-checks a `Blocked by` when its blocker clears, so each planning pass re-runs it.
-- **The worker** is [pnext-item](../../pnext-item/SKILL.md). Each subagent runs it start to done-stamp; the
+- **The worker** is `pnext-item`. Each subagent runs it start to done-stamp; the
   host never implements an item itself. Every item goes through a worker that claims with the lock,
   isolates in a worktree, opens a PR, and merges on green.
 - **The claim/worktree/touch-set protocol** is
-  [intra-repo-parallel-work](../../intra-repo-parallel-work/SKILL.md)'s. Here it is **load-bearing in a way
+  `intra-repo-parallel-work`'s. Here it is **load-bearing in a way
   it is not for drive-board**: all of work-board's workers share **one working tree**, so the `Paths:`
   disjointness `take` already enforces is what keeps a wave from colliding. The host leans on it; it
   does not re-implement it.
@@ -123,7 +123,7 @@ The host is the agent that invoked `$work-board`. It **schedules; it never imple
 this one workspace's repo, resolved from the git remote — every `fsgg-coord` read below is scoped to it.
 Repeat until §5 says the board is genuinely done:
 
-1. **Reconcile first.** Run workspace-scoped [check-board](../../check-board/SKILL.md) (dry run, then `--apply` for the
+1. **Reconcile first.** Run workspace-scoped `check-board` (dry run, then `--apply` for the
    mechanical fixes if you are driving unattended and trust the pass). This clears stale claims, flips
    `BLOCKER-CLEARED` items back to `Ready`, and — critically for blockers that appear *after* some work —
    **re-verifies every `Blocked by` edge**, so work a previous wave unblocked becomes visible. Read its
@@ -143,7 +143,7 @@ Repeat until §5 says the board is genuinely done:
    `batch` returns items that are `Ready`, unblocked, and **disjoint from each other and from everything
    in flight**. **Touch-set disjointness is load-bearing here** in a way it never is for drive-board: all
    workers share one working tree, so items must be file-disjoint or a wave stomps itself — which is
-   exactly what `take` + [intra-repo-parallel-work](../../intra-repo-parallel-work/SKILL.md) enforce. The
+   exactly what `take` + `intra-repo-parallel-work` enforce. The
    **size** of that set is how many parallel `take`-workers to spawn this instant; cap it against the
    shared rate budget (§6). Do **not** pass the item numbers to the workers — `batch` is the host's
    *sizing* read and `take` is the worker's *claiming* read, and keeping them separate is what preserves
@@ -165,7 +165,7 @@ no touch-set reservation, in the one tree every worker shares.
 
 ## 3. The worker: a pnext-item envelope, SDD-lifecycle escalation *by complexity* (ADR-0064 §4.3)
 
-The invariant per-item harness is **[pnext-item](../../pnext-item/SKILL.md)** (already materialized): mint a
+The invariant per-item harness is **`pnext-item`** (already materialized): mint a
 distinct worker id, `take` (gate on exit code 0), read the item's comments, worktree from `origin/main`,
 implement within the declared `Paths:`, open a PR, review, merge on green, `done --flip`. Inside that one
 claim/merge/done-stamp envelope, **the depth of the implementation scales with the item's complexity** —
@@ -192,7 +192,7 @@ The host hands each subagent essentially this, with `<REPO>` (this workspace's r
 >    `eval "$(scripts/fsgg-coord whoami --mint)"`. If `whoami` warns that your id came from the session,
 >    **stop and report it** — you hold no lock, and working anyway puts two workers on one item in the one
 >    tree we all share. Do not invent or copy an id.
-> 2. **Run [pnext-item](../../pnext-item/SKILL.md) for `<REPO>`**: `take` (gate on the
+> 2. **Run `pnext-item` for `<REPO>`**: `take` (gate on the
 >    exit code — 0 is the *only* code that means you hold an item, #585), read the item's **comments**
 >    before you start (a prior worker's "do not do this" is the highest-signal thing on the board),
 >    `git fetch` then worktree from `origin/main` by name, implement **inside your declared `Paths:`** (in
@@ -253,7 +253,7 @@ Do not take a merge you can check on the worker's say-so. Read `ready`, not the 
 ## 5. Termination — via check-board, not via an empty `take`
 
 The loop ends when the board is **genuinely** done, and the trap is that a **drifted board looks done
-when it is not** — the entire reason [check-board](../../check-board/SKILL.md) exists. So do not stop because
+when it is not** — the entire reason `check-board` exists. So do not stop because
 a `take` returned 5, or because one `batch` came back empty. Stop only when a **fresh** reconcile and
 [backlog-triage](backlog-triage.md) pass show all of:
 
@@ -338,11 +338,11 @@ the list of items still parked on a human.
   where this fans inside one tree, so its workers cannot collide on files and this skill's must not.
   ADR-0057 (why drive-board is `operator` and never materialized — the reason this skill exists).
 - [work-roadmap](../../work-roadmap/SKILL.md) — the markdown-ledger sibling; the close-out (§7) is the same.
-- [check-board](../../check-board/SKILL.md) — the analysis pass the host runs every wave; the authority on
+- `check-board` — the analysis pass the host runs every wave; the authority on
   board truth, stale blockers, and rollup-ready epics.
-- [pnext-item](../../pnext-item/SKILL.md) — the worker loop each subagent runs, the SDD-escalation branch
+- `pnext-item` — the worker loop each subagent runs, the SDD-escalation branch
   (§3), and the "fix the cause, then take it" discipline for what a worker finds mid-item.
-- [intra-repo-parallel-work](../../intra-repo-parallel-work/SKILL.md) — the claim/worktree/touch-set protocol
+- `intra-repo-parallel-work` — the claim/worktree/touch-set protocol
   underneath, load-bearing here because the wave shares one tree. ADR-0021, ADR-0027.
 - **ADR-0054 / ADR-0063** — the `FS.GG.Drivers` delivery fabric this skill rides into scaffolded
   workspaces, and the owner-sourced driver bytes that make it a row-plus-bytes addition. ADR-0056 — SDD as

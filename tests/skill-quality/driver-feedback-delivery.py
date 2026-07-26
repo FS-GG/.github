@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RUNTIMES = (".claude", ".codex", ".agents")
-DRIVERS = ("work-roadmap", "work-board")
+DRIVERS = ("work-roadmap", "work-board", "padd-item")
 LINK = re.compile(r"\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)")
 
 
@@ -99,15 +99,9 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="driver-feedback-delivery-") as temp:
         workspace = Path(temp)
         for runtime in RUNTIMES:
-            # The coordination kit is a separate delivered prerequisite. Seed the one cross-skill path
-            # these driver bodies reference so this fixture checks the composed workspace, not a package
-            # in isolation.
-            for prerequisite in ("check-board", "intra-repo-parallel-work", "pnext-item"):
-                shutil.copytree(
-                    ROOT / runtime / "skills" / prerequisite,
-                    workspace / runtime / "skills" / prerequisite,
-                )
-
+            # The SDD lifecycle is guaranteed in a product scaffold. Coordination-kit skills are not:
+            # a board driver may require them textually when the workspace is wired, but must not
+            # advertise their conditional presence as a filesystem link.
             lifecycle = workspace / runtime / "skills" / "fs-gg-sdd-lifecycle" / "SKILL.md"
             lifecycle.parent.mkdir(parents=True, exist_ok=True)
             lifecycle.write_text("# fixture lifecycle skill\n")

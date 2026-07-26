@@ -13,7 +13,7 @@ an empty workspace.
 
 For every board-capable wave, in this order:
 
-1. Run workspace-scoped [check-board](../../check-board/SKILL.md) and consume its complete four-part
+1. Run workspace-scoped `check-board` and consume its complete four-part
    result: mechanical changes; queued or failed writes; judgement findings; and the fresh post-apply
    result. Flush queued writes and repeat the fresh pass. An unreadable part stops planning.
 2. Read the current inventory with

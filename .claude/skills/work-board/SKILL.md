@@ -14,8 +14,8 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 4. Spawn one fresh disposable worker per lane; give each a stable feedback cycle id. Each owns one item
    through claim, implementation, review, green merge, obligations, verified feedback, and done. During
    worker setup, interactive/game work
-   must explicitly invoke the [performance-first planning
-   gate](../pnext-item/references/performance-first.md) before implementation begins.
+   must explicitly invoke the `pnext-item` performance-first planning gate before implementation
+   begins.
 5. Report live item state immediately. Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:

@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "c629a3e5d4948dc2c33ae87196ff5aa2a96208d634e54255ebfd64ad9b204cfc",
-      "tree-sha256": "a8c177a13c1a3781348a824c0627b96a44a62441d2391f35d25ba0d6bf4741f5",
+      "sha256": "7eb9f056104bdbcfdcbd6a73cc82199f481b46864f762a8f0f041d6757529c4f",
+      "tree-sha256": "1af0e118aaabd0757fa3d96ffe5f24656f60f19d4df8943bbb413519e7588577",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "c629a3e5d4948dc2c33ae87196ff5aa2a96208d634e54255ebfd64ad9b204cfc",
+          "sha256": "7eb9f056104bdbcfdcbd6a73cc82199f481b46864f762a8f0f041d6757529c4f",
           "executable": false
         },
         {
@@ -19,7 +19,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "fd99ef955c353a68105433795267a12b26adfab8f41d52cb721de91b8b4b00bf",
+          "sha256": "b0d8ebf3ae0a3209b4879f88396f17871a6b3dd702b87e2df82659a835565b11",
           "executable": false
         },
         {
@@ -49,12 +49,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "de7ff457f24482bcbb58aa6e97c8286225bc67b0c1df8c79ef5a495cf034eb86",
-      "tree-sha256": "feb831eb676f2ac98a154472686abf90dd17a7f77fa9e28439fdd4c6e5023a3d",
+      "sha256": "0e44ecccfb46537cdb40296c7351dd08a0e5494ea6144ff13ceefd27872a8855",
+      "tree-sha256": "c9b4f4f20a9ae5fd398981c07b7696c44fbfbfe870f3c10101d5deec5589e0cc",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "de7ff457f24482bcbb58aa6e97c8286225bc67b0c1df8c79ef5a495cf034eb86",
+          "sha256": "0e44ecccfb46537cdb40296c7351dd08a0e5494ea6144ff13ceefd27872a8855",
           "executable": false
         },
         {
@@ -64,12 +64,12 @@
         },
         {
           "path": "references/backlog-triage.md",
-          "sha256": "d7f44235cdc31b0a4b4bec78a687c137242a2a763a90e0e8ca9fed1fdb25c520",
+          "sha256": "6e9601d6e752be4ca3f3e5f5a2a5837b6fb5e0b6f4a1722aac8a6731ad0ebc44",
           "executable": false
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "9fc5fe209d9ba94d606db690be247e317b09e3551d7e0e1d92210f382d965b17",
+          "sha256": "4fb060eef5a291f53118aefa546b187d4b1c929703ce56910030af0f066180ad",
           "executable": false
         },
         {
@@ -99,12 +99,12 @@
     {
       "id": "padd-item",
       "scope": "driver",
-      "sha256": "4daf167ef061d9a27504ad212e4c9c42321f597c64143953b0c666f072092d9e",
-      "tree-sha256": "1e2c4f374467aed1ace430ea64d852bf9fb88b3c546956dc0e00a05deeed986d",
+      "sha256": "028316b22d32384d3b7c3f0bccac4191e0b16dfc7595f769a1a93510218277af",
+      "tree-sha256": "2ff7b0ac18c8d90562aae954616eaec124545bbd363dcc85258921c9ae590ee0",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "4daf167ef061d9a27504ad212e4c9c42321f597c64143953b0c666f072092d9e",
+          "sha256": "028316b22d32384d3b7c3f0bccac4191e0b16dfc7595f769a1a93510218277af",
           "executable": false
         },
         {
