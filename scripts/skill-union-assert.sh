@@ -13,7 +13,7 @@
 # It checks CONTENT, not presence — the gap ADR-0014 F2 found (doctor/composition asserted only
 # `Option.isSome`). For every skill present under any root it asserts:
 #   1. present        — the skill directory exists in EVERY configured root (else: partitioned);
-#   2. byte-identical — its bytes are identical across all roots (else: divergent);
+#   2. byte-identical — its bytes are identical across every root it IS PRESENT IN (else: divergent);
 #   3. matches-manifest (only when --manifest is given) — every declared file, digest, and executable
 #      bit matches. Legacy v1 rows that have no `files` retain the SKILL.md-only check.
 #      the producer's skill-manifest declares (else: drifted), and every root skill is either
@@ -31,8 +31,17 @@
 #     conditioned, so declared∧present ⇒ digest must match; declared∧absent-everywhere ⇒ fine
 #     (skipped, counted); present∧undeclared ⇒ dangling UNLESS the id matches a --co-tenants
 #     glob (process skills from a co-tenant producer, e.g. "fs-gg-sdd-* speckit-*").
-# A skill declared and present in SOME roots but not all still fails check 1 ([partitioned]).
-# See docs/coordination/skill-union-assertion.md.
+# CHECKS 1 AND 2 ARE INDEPENDENT QUESTIONS, AND BOTH ARE ALWAYS ASKED (.github#1506). Check 1 used to
+# SHORT-CIRCUIT — a [partitioned] id was `continue`d past the byte comparison — so the bytes of a skill
+# that WAS in two roots were never compared, and `byte-identical=` in the summary silently counted only
+# the ids that survived to the comparison. A skill declared and present in SOME roots but not all still
+# fails check 1 ([partitioned]) AND is now byte-compared across the roots it does occupy; it can be both
+# [partitioned] and [divergent], and it is reported as both. See docs/coordination/skill-union-assertion.md.
+#
+# THE SUMMARY REPORTS EVERY COUNT WITH THE POPULATION IT WAS TAKEN OVER, for the same reason: a count
+# whose denominator is invisible is a claim about coverage the reader supplies for themselves, and they
+# supply the generous one. `byte-identical=4` over a 50-id union read as "the union is byte-coherent"
+# and two downstream issues were sized against it while 30 comparable pairs differed, uncompared.
 #
 # (4) condition-aware — only when BOTH --manifest and --params <scaffold-provenance.json> are given
 # (ADR-0017). The manifest entry may carry a `materializes-when` predicate over the scaffold
@@ -376,6 +385,10 @@ absent_everywhere() {
 
 fail=0
 present_ct=0; identical_ct=0; manifest_ct=0; cotenant_ct=0; skill_ct=0
+# The populations the byte comparison is reported OVER (.github#1506). `comparable` = ids present in at
+# least two roots (there is a pair to diff); `compared` = ids this run actually diffed. They must be
+# EQUAL, and printing both is what makes a re-introduced short-circuit visible instead of silent.
+partitioned_ct=0; comparable_ct=0; compared_ct=0; differing_ct=0; single_root_ct=0
 
 echo "skill-union-assert: product='$PRODUCT' roots='${ROOT_ARR[*]}' (from $ROOTS_SRC)${MANIFEST:+ manifest='$MANIFEST'}${CO_TENANTS:+ co-tenants='$CO_TENANTS'}"
 
@@ -383,32 +396,71 @@ while IFS= read -r id; do
   [ -n "$id" ] || continue
   skill_ct=$((skill_ct + 1))
 
-  # (1) present in EVERY root
-  missing=""
+  # Which roots HAVE this skill and which lack it — collected ONCE, because checks 1 and 2 ask
+  # independent questions of the same id and each needs a different half of this answer.
+  present_roots=(); missing=""
   for r in "${ROOT_ARR[@]}"; do
-    [ -d "$PRODUCT/$r/$id" ] || missing="$missing $r"
+    if [ -d "$PRODUCT/$r/$id" ]; then present_roots+=("$r"); else missing="$missing $r"; fi
   done
+
+  # (1) present in EVERY root
+  partitioned=""
   if [ -n "$missing" ]; then
     echo "::error::[partitioned] skill '$id' is absent from root(s):$missing"
     fail=1
-    continue
+    partitioned=1
+    partitioned_ct=$((partitioned_ct + 1))
+  else
+    present_ct=$((present_ct + 1))
   fi
-  present_ct=$((present_ct + 1))
 
-  # (2) byte-identical across roots (reference = first root)
-  ref="${ROOT_ARR[0]}"
-  divergent=""
-  for r in "${ROOT_ARR[@]:1}"; do
-    if ! diff -r "$PRODUCT/$ref/$id" "$PRODUCT/$r/$id" >/dev/null 2>&1; then
-      divergent="$divergent $r"
+  # (2) byte-identical across the roots the skill IS PRESENT IN — asked of a [partitioned] id TOO, and
+  # that is the whole of .github#1506. Check 1 used to `continue` here, so a partition suppressed the
+  # comparison and then the summary counted `byte-identical` over only the survivors. On
+  # FS.GG.Rendering@main that printed `present=4 byte-identical=4` next to 46 [partitioned] ids while 30
+  # of those 46 DIFFERED between the two roots that both held them — bytes the gate had in hand and never
+  # diffed. Absence and drift are independent facts about an id; an id can be BOTH, and both are reported.
+  #
+  # The reference is the first root that HAS the skill, not ROOT_ARR[0] (which a partitioned id may be
+  # absent from). For a whole id the two are the same root, so the [divergent] message is unchanged.
+  #
+  # An id present in exactly ONE root is genuinely NOT comparable — there is no second copy — and it is
+  # counted as `single-root`, never as `byte-identical`. "There was nothing to compare" must never render
+  # as "compared, and identical" (#266). Note this also fixes the single-root ROOT SET: with one
+  # configured root the old `${ROOT_ARR[@]:1}` loop was empty, fell through, and incremented
+  # `byte-identical` for every id — byte-identity asserted over a comparison that never happened.
+  # `${...[0]-}`, not `${...[0]}`: an id came out of `union_ids` because some root HAS it, so this
+  # array is never empty — but an unguarded index under `set -u` turns any future violation of that
+  # assumption into an `unbound variable` abort with exit 1, which is the code reserved for "the union
+  # is violated". A crash must not be able to render as a verdict (#266).
+  ref="${present_roots[0]-}"
+  differing=""
+  if [ "${#present_roots[@]}" -ge 2 ]; then
+    comparable_ct=$((comparable_ct + 1))
+    for r in "${present_roots[@]:1}"; do
+      if ! diff -r "$PRODUCT/$ref/$id" "$PRODUCT/$r/$id" >/dev/null 2>&1; then
+        differing="$differing $r"
+      fi
+    done
+    compared_ct=$((compared_ct + 1))
+    if [ -n "$differing" ]; then
+      echo "::error::[divergent] skill '$id' differs between root '$ref' and root(s):$differing"
+      fail=1
+      differing_ct=$((differing_ct + 1))
+    else
+      identical_ct=$((identical_ct + 1))
     fi
-  done
-  if [ -n "$divergent" ]; then
-    echo "::error::[divergent] skill '$id' differs between root '$ref' and root(s):$divergent"
-    fail=1
+  else
+    single_root_ct=$((single_root_ct + 1))
+  fi
+
+  # Checks 3-4 read ONE root's copy as representative of the id, so they are only meaningful for an id
+  # that is whole AND coherent across the roots. Unchanged from before: a partitioned or divergent id
+  # stops here, having already been reported. Spelled as an `if` rather than `A && B || continue` —
+  # that idiom is correct here and reads like it might not be, which is the wrong trade in a gate.
+  if [ -n "$partitioned" ] || [ -n "$differing" ]; then
     continue
   fi
-  identical_ct=$((identical_ct + 1))
 
   # (3) matches-manifest — only when a manifest is supplied. Producer semantics (.github#120):
   # declared∧present ⇒ SKILL.md digest must match; undeclared ⇒ dangling unless co-tenant.
@@ -527,7 +579,26 @@ if [ "$skill_ct" -eq 0 ] && [ "$fail" -eq 0 ]; then
   die "no skills found under any root — expected at least one skill in the union."
 fi
 
-echo "skill-union-assert: $skill_ct skill(s) — present=$present_ct byte-identical=$identical_ct${MANIFEST:+ manifest-matched=$manifest_ct co-tenant=$cotenant_ct declared-absent=$declared_absent_ct${PARAMS:+ (justified) missing=$missing_ct}}"
+# NON-VACUITY, ASSERTED RATHER THAN COMMENTED (.github#1506, #266). Every id with a pair of copies must
+# have been diffed. If these two counts ever part company again, the summary below is overstating what it
+# examined — which is the defect itself, not a cosmetic one — so it is a FAILURE, loudly, and not a note.
+if [ "$compared_ct" -ne "$comparable_ct" ]; then
+  echo "::error::skill-union-assert: $comparable_ct skill(s) had copies in 2+ roots but only $compared_ct were byte-compared — the summary below would overstate its own coverage (.github#1506)."
+  fail=1
+fi
+
+# EVERY COUNT CARRIES THE POPULATION IT WAS TAKEN OVER. This line was
+# `present=$present_ct byte-identical=$identical_ct`, and it was true and misread every time it mattered:
+# `present=4 byte-identical=4` over a 50-id union is a statement about 4 skills that an operator who does
+# not open the log reads as "the union was byte-checked and nothing is divergent". Two whole downstream
+# issues were written on that reading. A bare count invites the reader to supply the denominator, and they
+# supply the generous one — so `byte-identical=20/50` says what was examined, and `byte-comparable` beside
+# `byte-compared` says whether anything comparable went unexamined.
+#
+# The differing count is spelled `byte-differing`, deliberately NOT the class word: `[divergent]` names a
+# DIAGNOSTIC line, and a fixture asserting that no such diagnostic was emitted must not be tripped by a
+# zero in a summary.
+echo "skill-union-assert: $skill_ct skill(s) — in-every-root=$present_ct/$skill_ct partitioned=$partitioned_ct | byte-comparable=$comparable_ct byte-compared=$compared_ct byte-identical=$identical_ct/$compared_ct byte-differing=$differing_ct single-root=$single_root_ct${MANIFEST:+ | manifest-matched=$manifest_ct co-tenant=$cotenant_ct declared-absent=$declared_absent_ct${PARAMS:+ (justified) missing=$missing_ct}}"
 if [ "$fail" -ne 0 ]; then
   echo "::error::skill-union-assert: FAILED — the roots are not the byte-identical union (see above)."
   exit 1
