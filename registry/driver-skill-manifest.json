@@ -5,7 +5,7 @@
       "id": "work-roadmap",
       "scope": "driver",
       "sha256": "b2aa52fa48405a3a4561fcf6808c32c08a66ff39011fdd8ce40af860f1d902f6",
-      "tree-sha256": "cab732068679812ac5ad9b2501a914cb1a3f538c1a38769107887e08de1d1c32",
+      "tree-sha256": "ca869d89480accc4d04d72148baca114234cf9ef7a8256acb8dccf9c53962bbe",
       "files": [
         {
           "path": "SKILL.md",
@@ -13,13 +13,18 @@
           "executable": false
         },
         {
+          "path": "agents/openai.yaml",
+          "sha256": "d15ec5205fcd2d3698bcfb5b82237036ed115c1a28bf4acd03aa4a8dd55def22",
+          "executable": false
+        },
+        {
           "path": "references/deep-detail.md",
-          "sha256": "631f2077e48ed1fb7d418911bc881aead59b499bb82eacdd19a584988efa7382",
+          "sha256": "fd99ef955c353a68105433795267a12b26adfab8f41d52cb721de91b8b4b00bf",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "6905df5adce84b10c39fcd537d8b64a9ad67c0cf5f067af55d8760b687126c16",
+          "sha256": "5df9da3afcdbb7f1242e9e5a28b1ea7bd7366a428143834ee06807138844b6b8",
           "executable": false
         },
         {
@@ -35,7 +40,7 @@
       "id": "work-board",
       "scope": "driver",
       "sha256": "9e7d13b6f5ad9c37c1b32d40d0ac9babaac5dc00cca0c2fdd4e4995653c8a5ea",
-      "tree-sha256": "deb56894e3399d970cf763586e5d3fcd0d2299aaf1faf2f1ae0b1de7fe45a77e",
+      "tree-sha256": "772c64d04f70e8f96582f25e4875f38b1d80de6039da5251ee8aee65ebfa4dd0",
       "files": [
         {
           "path": "SKILL.md",
@@ -43,13 +48,18 @@
           "executable": false
         },
         {
+          "path": "agents/openai.yaml",
+          "sha256": "a4d2b19cde3fd490c669da9a007b16620a106586efc30c32a02efd92f58d0433",
+          "executable": false
+        },
+        {
           "path": "references/deep-detail.md",
-          "sha256": "7d0620d85edbe7195e93846552704ac7a84a7877ae12980f593a651b492ee4a4",
+          "sha256": "c8bbf857ce32f55df4fb4e37fb1caacf0e2b89c7339aaeaea5fdd842f5a26366",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "1f14f56006be89f3ec3a8704903c5417775a7339fb12eb1ffb8ba4b93e80c6f0",
+          "sha256": "e42c0af55a87fbe803681136affa5e244f18d3543ef014a72ad1189e81e51e8e",
           "executable": false
         },
         {
@@ -65,7 +75,7 @@
       "id": "drive-board",
       "scope": "operator",
       "sha256": "3be3a5df754c152f11a077acf657164b6c7756b24244b2af093944f378e33db6",
-      "tree-sha256": "bb67c1eab2004f42edae174559e819b505c8baa5e7a92bf551e4a178747e1461",
+      "tree-sha256": "0bd89040cfa8c22fdc2101910ee1a2c3233d4bda76d45cd2f4e1dceeaaae09ba",
       "files": [
         {
           "path": "SKILL.md",
@@ -73,13 +83,18 @@
           "executable": false
         },
         {
+          "path": "agents/openai.yaml",
+          "sha256": "1cf43ace7aa3c1ccfec7203f27eac581071f84a88242100ef02cf3bce41f0ad3",
+          "executable": false
+        },
+        {
           "path": "references/deep-detail.md",
-          "sha256": "67a76b5d6378bc04ca4dcbda2fe06ee9abff161d635c90940d6da4d91de46ab8",
+          "sha256": "802b27b734b9b6c9a9fae4ecd5ec6bcba7cde7a68ab98e4b1f643b97ec9949dc",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "68495a51b3c06ac6c46e576a1c97b90ff1492616ccadeebb8fa5933cc631d6a8",
+          "sha256": "b2a458d90ace625a56f184e6121c68acf9efbe35a1980459aeca0cffc6c1cf61",
           "executable": false
         },
         {
@@ -95,11 +110,16 @@
       "id": "cut-nuget-release",
       "scope": "operator",
       "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",
-      "tree-sha256": "dca2d338998f4c32a4bd4ae62368f9f3ecfbb1a521bbb14434fb9e5be467f547",
+      "tree-sha256": "61a0d4272e54eb057222fe935979013e635ba309c82e546a6fd90fe3465d2330",
       "files": [
         {
           "path": "SKILL.md",
           "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "b2028a180680809e37f9fceb2d1e11f09df69f1def808e1dbe7997f5743fc12d",
           "executable": false
         }
       ],

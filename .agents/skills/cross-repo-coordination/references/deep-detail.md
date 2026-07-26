@@ -215,7 +215,7 @@ the budget model, executable. Reach for raw `gh` on the board and you are opting
 | Set a board field | `fsgg-coord set-field <issue> <Field> <Value>` | 1 mutation, ids from cache |
 | Read issues / labels / PRs | `fsgg-coord issues <repo> --label …` | **0** — REST + ETag (304s are free) |
 | Am I about to run out? | `fsgg-coord budget` | **0** — free, so *check it before a fan-out* |
-| Claim → work → done | `/pnext-item`, `/check-board` | they already batch their reads — don't hand-roll |
+| Claim → work → done | `$pnext-item`, `$check-board` | they already batch their reads — don't hand-roll |
 
 **Four habits, in the order they save you the most:**
 

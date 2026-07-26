@@ -61,7 +61,7 @@ engine dropped it, so "each worker gets its own worktree" does **not** by itself
 The id must be made distinct deliberately. Two ways, and this skill uses the first:
 
 - **Each worker mints its own id, inside its own isolated worktree.** The host spawns each subagent
-  with `isolation: "worktree"` (a fresh tree, so the per-checkout mint persists to *that* tree, not
+  with the host's isolated-worktree option when supported (a fresh tree, so the per-checkout mint persists to *that* tree, not
   the shared one) and the worker's very first act is the one mint idiom:
 
   ```sh
@@ -118,7 +118,7 @@ Three rules the host holds so a fan-out scales instead of taking the board down:
 
 - **Cap total in-flight workers across all repos** — start conservative (a handful), not one-per-item.
   The board having 200 schedulable items does not mean 200 workers; it means the cap's worth, then the
-  next wave. Make the cap a knob (`/drive-board --workers N`), default it low.
+  next wave. Make the cap a knob (`$drive-board --workers N`), default it low.
 - **Let workers share the 90s scan cache.** The host's own planning reads (`check-board`, `batch`)
   scan **fresh** — a reconciler on a stale board invents drift (check-board §1) — but the *workers'*
   `take`/`next` reads must **not** add `--fresh`, or N workers cost N board reads instead of one.
@@ -133,7 +133,7 @@ Three rules the host holds so a fan-out scales instead of taking the board down:
 
 ## 4. The loop (what the HOST does)
 
-The host is the agent that invoked `/drive-board`. It schedules; it never implements. Repeat until §6
+The host is the agent that invoked `$drive-board`. It schedules; it never implements. Repeat until §6
 says the board is genuinely done:
 
 1. **Reconcile first.** Run [check-board](../../check-board/SKILL.md) (dry run, then `--apply` for the
@@ -145,7 +145,7 @@ says the board is genuinely done:
 2. **Size the wave.** For each repo with `Ready` work, `batch --repo <r> -n <cap> --json` to learn how
    many workers it can absorb. Sum against the concurrency cap (§3) to get a per-repo worker count for
    this wave.
-3. **Spawn a fresh subagent per slot** (Agent tool, `isolation: "worktree"`), handing each the
+3. **Spawn a fresh subagent per slot** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), handing each the
    per-worker brief below with `<REPO>` substituted. One subagent, one `take`-loop-of-one — it takes an
    item, works it to done-stamp, and returns. Spawn the wave **concurrently** across repos (separate
    checkouts cannot collide) up to the cap.

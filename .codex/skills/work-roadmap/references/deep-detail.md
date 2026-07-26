@@ -32,7 +32,7 @@ Preconditions, checked once before the loop:
 
 ## The roadmap contract
 
-**Locating the roadmap.** If `/work-roadmap <path>` was given an argument, that is the roadmap. With
+**Locating the roadmap.** If `$work-roadmap <path>` was given an argument, that is the roadmap. With
 no argument, auto-locate in this order and take the first hit: `docs/roadmap.md`, then any
 `docs/**/*roadmap*.md`, then `ROADMAP.md` at the repo root. If two or more match and it is not
 obvious which is live, **ask** rather than guess.
@@ -69,7 +69,7 @@ The tick is what the parent reads next round; the note is the audit trail the fi
 
 ## The loop (what the PARENT does)
 
-The parent is the agent that invoked `/work-roadmap`. It does **not** implement milestones itself — it
+The parent is the agent that invoked `$work-roadmap`. It does **not** implement milestones itself — it
 schedules them. The loop is **strictly sequential**: milestone N+1's subagent does not start until
 milestone N's PR is merged, because N+1 must branch from a `main` that already contains N, and because
 each subagent deserves a fresh, uncluttered context.
@@ -80,7 +80,7 @@ Repeat until the roadmap has no unchecked milestone:
    break to the report step.
 2. **`git fetch` and confirm `main` is current** (the previous PR merged into it). Each milestone
    branches from up-to-date `main`.
-3. **Spawn a fresh subagent** (Agent tool) and hand it the per-milestone brief below, filled in with
+3. **Spawn a fresh subagent** (using the host's available worker/subagent mechanism) and hand it the per-milestone brief below, filled in with
    this milestone's heading text and the roadmap path. One subagent, one milestone.
 4. **Wait for it to return.** On success it reports the merged PR number and the roadmap edit. The
    subagent is now dead; its context does not carry forward — that is deliberate.
