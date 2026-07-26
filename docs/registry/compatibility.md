@@ -30,14 +30,17 @@ FS.GG.Rendering ──(depends on no FS-GG component; never depends on Governanc
 
 ## Versioned contracts
 
-Current release amendments (2026-07-23): `governance-reference-gate-set` is source/package
-**1.4.0**, published from Governance PR #305 (merge `e29b057`, release run `29977440772`);
-the minor adds typed controlled-directory imports and fail-closed tree verification.
-`fs-gg-ui-template` is framework pin **0.18.6** / template package **0.18.7**, a
-template-only `--view-image` explicit-dimensions and safe-allocation release from Rendering
-PR #1032 (merge `4ea58be5`, release run `29977189289`). Both releases were verified on the
-org feed and nuget.org before the registry flip. The detailed historical cells below retain
-the prior-release narrative; the registry and generated version regions are authoritative.
+Current release amendments (2026-07-26): `governance-reference-gate-set` is source/package
+**1.5.0**, published from Governance PR #325 (merge `9243c07`, release run `30215484433`);
+the minor adds the canonical fail-closed production-journey evidence floor. GitHub Packages
+record `1068393740` and nuget.org serve matching 13-entry non-signature payloads. Templates
+remains on its existing real pin until the downstream adoption in Templates#305.
+`fs-gg-ui-template` is framework/package **0.21.1**, released from Rendering PR #1077
+(merge `9b1824e1`, release run `30215060187`). It binds representative performance evidence
+to opaque Game runner receipts and emits a separately bound critic request. The ordered
+framework/template/release tags resolve to that merge; the org feed and nuget.org serve
+0.21.1. The detailed historical cells below retain the prior-release narrative; the registry
+and generated version regions are authoritative.
 
 Current release evidence (2026-07-26): `fsgg-contracts` is 6.0.0 on both its source and
 published axes. SDD PR #699 merged as `ca60cf57f522462259aa73a682f0f719cab0d0ec`;
@@ -52,9 +55,10 @@ PR #318 merged as `c4baba2e`; release-only fixture cleanup PR #320 merged as `e2
 which is the target of tag `v1.11.0`. Guarded release run 30190043566 published GitHub
 Packages first and nuget.org second after the packed-tool enforcement smoke passed.
 Independent downloads contain 168 byte-identical non-signature payload files, and the public
-tool installs and passes the real handoff smoke. `FS.GG.Governance.ReferenceGateSet` remains
-1.4.0: the performance gate is runtime handoff-derived and #318 changed no packed `.fsgg/**`
-bytes.
+tool installs and passes the real handoff smoke. That runtime release left
+`FS.GG.Governance.ReferenceGateSet` at 1.4.0 because #318 changed no packed `.fsgg/**` bytes;
+Governance#324 subsequently advanced the content package to 1.5.0 for the production-journey
+evidence floor described above.
 
 The same SDD merge advances the emitted `governance-handoff` contract from 1.1.0 to
 1.2.0. The registry and the emitter's single `governanceHandoffContractVersion` literal
@@ -113,8 +117,8 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-capabilities` | FS.GG.Governance | `2` | — |
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
-| `governance-reference-gate-set` | FS.GG.Governance | `1.4.0` | `1.4.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.21.0` | `0.21.0` |
+| `governance-reference-gate-set` | FS.GG.Governance | `1.5.0` | `1.5.0` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.21.1` | `0.21.1` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |
