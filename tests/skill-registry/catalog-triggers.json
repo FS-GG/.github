@@ -21,11 +21,11 @@
     "boundary": "Audit which packages are owed, but stop before publishing."
   },
   "drive-board": {
-    "positive": "Burn down the entire FS-GG Coordination board autonomously.",
-    "indirect": "Keep fanning out workers across every repo until the org board is empty.",
+    "positive": "Burn down the entire FS-GG Coordination board autonomously, including triage of actionable backlog before each wave.",
+    "indirect": "Reconcile the ledger, classify parked follow-ups, and keep fanning out workers across every repo until no safe lane remains.",
     "incomplete": "Drive the org board",
     "negative": "Complete this single repository's local project board.",
-    "boundary": "Plan capacity across the org board, but do not claim any item."
+    "boundary": "Reconcile and classify the org backlog for a proposed wave, but do not claim any item."
   },
   "intra-repo-parallel-work": {
     "positive": "Coordinate three workers on separate issues in this repository.",

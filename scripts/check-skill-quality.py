@@ -247,6 +247,29 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if required not in publishing:
             fail(errors, f"publishing-and-deployment: missing current-truth statement: {required}")
 
+    drive_root = root / ROOTS[0] / "drive-board"
+    drive = (drive_root / "SKILL.md").read_text(encoding="utf-8")
+    host_loop = (drive_root / "references/host-loop.md").read_text(encoding="utf-8")
+    triage = (drive_root / "references/backlog-triage.md").read_text(encoding="utf-8")
+    if "backlog-triage" not in drive:
+        fail(errors, "drive-board: triggered body does not route through backlog triage")
+    planning_order = ("four-part `check-board` result", "backlog-triage", "batch")
+    positions = [host_loop.find(term) for term in planning_order]
+    if any(position < 0 for position in positions) or positions != sorted(positions):
+        fail(errors, "drive-board: host loop must order check-board result, backlog triage, then batch")
+    for required in (
+        "Promote to Ready",
+        "Retain in Backlog",
+        "Set Blocked",
+        "Await human judgement",
+        "follow-up filed by the preceding wave",
+        "An empty Ready batch is not completion",
+        "never use",
+        "`--include-backlog`",
+    ):
+        if required not in triage:
+            fail(errors, f"drive-board: backlog planning contract lost {required!r}")
+
 
 def validate_forward_corpus(root: Path, names: set[str], errors: list[str]) -> None:
     path = root / "tests/skill-quality/forward-triggers.json"

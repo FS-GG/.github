@@ -12,7 +12,7 @@
     },
     {
       "class": "parallel-fanout",
-      "prompt": "Fan out isolated workers across the organization until every safe lane is exhausted.",
+      "prompt": "Reconcile the organization ledger, triage parked actionable work, then fan out isolated workers until every safe lane is exhausted.",
       "expected": "drive-board",
       "selector": "$drive-board"
     },

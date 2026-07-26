@@ -1,6 +1,6 @@
 ---
 name: drive-board
-description: Use when explicitly asked to burn down the org-wide FS-GG Coordination board. Reconcile first, fan out disposable repo workers within safe lanes, verify results, and re-plan until empty.
+description: Use when explicitly asked to burn down the org-wide FS-GG Coordination board. Reconcile and triage backlog first, fan out disposable repo workers through safe scheduler lanes, verify, and re-plan.
 ---
 
 # drive-board (FS-GG)
@@ -8,16 +8,21 @@ description: Use when explicitly asked to burn down the org-wide FS-GG Coordinat
 Burn down the org-wide Coordination board across repositories. The board is the ledger; this skill owns
 cross-repo allocation, not item implementation.
 
-1. Run [check-board](../check-board/SKILL.md), apply mechanical repairs, and surface judgement blockers.
-2. Read typed lanes and active claims; choose bounded per-repo concurrency that respects touch-sets and
+1. Run [check-board](../check-board/SKILL.md), apply mechanical repairs, and consume its complete
+   four-part result before making a scheduling decision.
+2. Run the [backlog-triage](references/backlog-triage.md) stage. Classify every relevant `Backlog`
+   row without guessing human judgement, and promote only evidenced actionable work to `Ready`.
+3. Read typed lanes and active claims; choose bounded per-repo concurrency that respects touch-sets and
    available agent slots.
-3. Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
+4. Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
    [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo.
-4. Verify each worker's PR, merge, publication/registry obligations, exact done stamp, released claim,
+5. Verify each worker's PR, merge, publication/registry obligations, exact done stamp, released claim,
    and follow-up items against GitHub—not its narrative.
-5. Despawn completed workers, reconcile again, and allocate the newly exposed lanes.
-6. Stop only when a fresh org-wide reconcile has no startable item, live claim, unresolved mechanical
-   repair, queued write, or actionable follow-up. Distinguish a genuinely empty board from blocked work.
+6. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly
+   parked rows from that wave enter the next plan.
+7. Stop only when a fresh reconcile and backlog triage have no startable item, untriaged/actionable
+   backlog, live claim, unresolved repair, queued write, or actionable follow-up. Surface deliberately
+   parked and human-blocked backlog instead of spinning or declaring it completed.
 
 Load [host-loop](references/host-loop.md) for the shared concurrency, verification, and termination
 contract. Load [org-scope](references/org-scope.md) for the ledger/scope rules unique to this driver.
