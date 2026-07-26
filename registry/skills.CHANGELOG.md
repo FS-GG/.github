@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-26** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 3 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-07-26** — **`fs-gg-playtest` production-journey digest and Skills 0.5.0 publication** (owner `fs-gg-game`; refs [Game#507](https://github.com/FS-GG/FS.GG.Game/issues/507)/[PR#508](https://github.com/FS-GG/FS.GG.Game/pull/508), [.github#1484](https://github.com/FS-GG/.github/issues/1484)). The Game producer manifest at merge `71d5fc53302cdac28d02e6c885f5e14e8b690da2` declares `fs-gg-playtest` digest `7696eaf6020f47606828a65942e5b5f7b74dd970bfe7261e022b21879f4918a6`, already reconciled mechanically by [.github#1485](https://github.com/FS-GG/.github/pull/1485). Tag `skills/v0.5.0` and green release run [30208622225](https://github.com/FS-GG/FS.GG.Game/actions/runs/30208622225) published `FS.GG.Game.Skills` 0.5.0 to both feeds; independently downloaded archives (`98638fcd6cbd…` org / `81ee9c2493fa…` public) have byte-identical extracted payloads after excluding only nuget.org's signature. registry = manifest = bytes.
 
 - **2026-07-26** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
