@@ -84,7 +84,7 @@ one level below `SKILL.md`; the body says exactly when to read each one.
 The milestones are ordered so correctness and catalog relief land before the larger transport
 migration. Each top-level checkbox is independently reviewable and has an explicit exit condition.
 
-- [ ] **M0 — Correct unsafe and invalid guidance**
+- [x] **M0 — Correct unsafe and invalid guidance**
 
   - Replace `lane-steward`'s narrowing recipe with `scripts/fsgg-coord set-paths`; keep `widen` only
     for additive expansion.
@@ -99,7 +99,7 @@ migration. Each top-level checkbox is independently reviewable and has an explic
   - **Exit:** no known instruction contradicts the shipped command contract or live registry state;
     every correction is byte-identical in all three roots.
 
-- [ ] **M1 — Make routing metadata concise, valid, and measurable**
+- [x] **M1 — Make routing metadata concise, valid, and measurable**
 
   - Replace all 11 descriptions with 120–220-character, trigger-first descriptions. Target no more
     than 2,500 aggregate description characters per root.
@@ -119,7 +119,7 @@ migration. Each top-level checkbox is independently reviewable and has an explic
   - **Exit:** all metadata validates; the three roots are identical; the effective catalog stays below
     the chosen ceiling without Codex shortening any FS-GG description.
 
-- [ ] **M2 — Promote the skill directory to the transport and digest unit**
+- [x] **M2 — Promote the skill directory to the transport and digest unit**
 
   - Extend the kit/driver manifest shape from one `SKILL.md` digest to a deterministic whole-directory
     manifest: normalized relative path, content digest, and executable-mode bit for every managed file.
@@ -135,7 +135,7 @@ migration. Each top-level checkbox is independently reviewable and has an explic
   - **Exit:** changing any managed file under one skill changes its declared digest; all three roots
     receive and verify the complete, byte-equivalent directory.
 
-- [ ] **M3 — Refactor the coordination skills for progressive disclosure**
+- [x] **M3 — Refactor the coordination skills for progressive disclosure**
 
   - `check-board`: implement or expose a typed `fsgg-coord reconcile`/chore operation for mechanical
     findings; retain dry-run/apply policy and human-judgement boundaries in a short `SKILL.md`.
@@ -154,7 +154,7 @@ migration. Each top-level checkbox is independently reviewable and has an explic
   - **Exit:** representative tasks load only the body plus the references needed for that path, and
     forward tests produce behavior equivalent to the pre-split workflows.
 
-- [ ] **M4 — Make synchronized skills host-portable and policy-aware**
+- [x] **M4 — Make synchronized skills host-portable and policy-aware**
 
   - Replace hard-coded Claude/Codex orchestration syntax with a host-capability branch: use the
     available subagent mechanism, request isolated worktrees when supported, and preserve the distinct
@@ -173,7 +173,7 @@ migration. Each top-level checkbox is independently reviewable and has an explic
     workflows do not activate merely because a prompt contains a broad word such as “release” or
     “roadmap.”
 
-- [ ] **M5 — Add semantic skill quality gates**
+- [x] **M5 — Add semantic skill quality gates**
 
   - Validate frontmatter, directory names, whole-tree parity, relative resource links, executable
     modes, catalog budget, and optional metadata in one local/CI entry point.
@@ -191,7 +191,7 @@ migration. Each top-level checkbox is independently reviewable and has an explic
   - **Exit:** a duplicate/oversized description, invalid name, missing resource, semantic command
     mismatch, stale generated fact, or trigger regression fails before distribution.
 
-- [ ] **M6 — Roll out, re-pin, and prove the budget improvement**
+- [x] **M6 — Roll out, re-pin, and prove the budget improvement**
 
   - Publish the contract/materializer/Kit releases required by M2–M5 in dependency order.
   - Re-pin and re-materialize every coordination-kit receiver; regenerate producer manifests and the
