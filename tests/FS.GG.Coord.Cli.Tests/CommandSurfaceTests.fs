@@ -1,5 +1,6 @@
 namespace FS.GG.Coord.Cli.Tests
 
+open System.Text.Json
 open System.Text.RegularExpressions
 open Microsoft.FSharp.Reflection
 open Xunit
@@ -36,6 +37,7 @@ module CommandSurfaceTests =
           "scan", Scan
           "lanes", LanesView
           "facts", Facts
+          "command-contract", CommandContractCmd
 
           // IO — the client surface the shim execs in place of bash (ADR-0040 Phase D).
           "whoami", WhoAmI
@@ -167,3 +169,36 @@ module CommandSurfaceTests =
         // duplicate silently, so a botched rebase could grow the list without growing the surface.
         let verbs = surface |> List.map fst
         Assert.Equal<string list>(List.distinct verbs, verbs)
+
+    [<Fact>]
+    let ``the machine-readable command contract covers the declared surface`` () =
+        use doc = JsonDocument.Parse(renderCommandContract ())
+        Assert.Equal("fsgg.coord.commands/1", doc.RootElement.GetProperty("schema").GetString())
+
+        let emitted =
+            doc.RootElement.GetProperty("commands").EnumerateArray()
+            |> Seq.map (fun row -> row.GetProperty("name").GetString())
+            |> Set.ofSeq
+
+        Assert.Equal<Set<string>>(surface |> List.map fst |> Set.ofList, emitted)
+
+    [<Fact>]
+    let ``the machine contract preserves dangerous option polarities`` () =
+        use doc = JsonDocument.Parse(renderCommandContract ())
+
+        let flags command =
+            doc.RootElement.GetProperty("commands").EnumerateArray()
+            |> Seq.find (fun row -> row.GetProperty("name").GetString() = command)
+            |> fun row ->
+                row.GetProperty("flags").EnumerateArray()
+                |> Seq.map _.GetString()
+                |> Set.ofSeq
+
+        Assert.Contains("--paths", flags "widen")
+        Assert.Contains("--paths", flags "set-paths")
+        Assert.DoesNotContain("--apply", flags "widen")
+        Assert.DoesNotContain("--apply", flags "set-paths")
+        Assert.Contains("--apply", flags "reap")
+        Assert.DoesNotContain("--dry-run", flags "reap")
+        Assert.Contains("--dry-run", flags "flush")
+        Assert.DoesNotContain("--apply", flags "flush")

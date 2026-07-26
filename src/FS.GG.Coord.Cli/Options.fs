@@ -7,6 +7,7 @@ module Options =
         | Scan
         | LanesView
         | Facts
+        | CommandContractCmd
         | WhoAmI
         | Budget
         | Next
@@ -164,6 +165,7 @@ DECISION (pure — no board, no network):
   decide [--snapshot FILE] [--json|--text]   decide a batch from a board-state snapshot on stdin
   lanes  [--snapshot FILE] [--json|--text]   partition a snapshot's items into non-contending lanes
   facts  [--json|--text]                     emit the protocol the engine enforces (projections read this)
+  command-contract [--json]                  emit the parser's command/flag contract for tooling
 
 IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHUB_TOKEN, $FSGG_GITHUB_API_BASE):
   scan   [--repo NAME] [--fresh] [-n N] [--include-backlog] [--lease MIN]
@@ -455,6 +457,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Scan -> "scan"
         | LanesView -> "lanes"
         | Facts -> "facts"
+        | CommandContractCmd -> "command-contract"
         | WhoAmI -> "whoami"
         | Budget -> "budget"
         | Next -> "next"
@@ -492,6 +495,98 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | RoomOpen -> "room open"
         | Help -> "--help"
         | Version -> "--version"
+
+    let renderCommandContract () =
+        let commands =
+            Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Command>
+            |> Array.choose (fun case ->
+                if case.GetFields().Length <> 0 then
+                    None
+                else
+                    let command =
+                        Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> Command
+
+                    match command with
+                    | Help
+                    | Version -> None
+                    | _ -> Some command)
+            |> Array.sortBy commandName
+
+        let scopedFlags =
+            [ FSnapshot, [ "--snapshot" ]
+              FRepo, [ "--repo" ]
+              FWorker, [ "--worker" ]
+              FEvidence, [ "--evidence" ]
+              FPartial, [ "--partial" ]
+              FTo, [ "--to" ]
+              FMessage, [ "--message" ]
+              FPaths, [ "--paths" ]
+              FPr, [ "--pr" ]
+              FWarn, [ "--warn" ]
+              FIssue, [ "--issue" ]
+              FStatus, [ "--status" ]
+              FAll, [ "--all" ]
+              FBatch, [ "--batch" ]
+              FStrict, [ "--strict" ]
+              FActive, [ "--active" ]
+              FApply, [ "--apply" ]
+              FPeek, [ "--peek" ]
+              FDryRun, [ "--dry-run" ]
+              FWait, [ "--wait" ]
+              FTries, [ "--tries" ]
+              FInterval, [ "--interval" ]
+              FRequire, [ "--require" ]
+              FSha, [ "--sha" ]
+              FLabel, [ "--label" ]
+              FState, [ "--state" ]
+              FFresh, [ "--fresh"; "--refresh" ]
+              FIncludeBacklog, [ "--include-backlog" ]
+              FForce, [ "--force" ]
+              FMint, [ "--mint" ]
+              FFlip, [ "--flip" ]
+              FLimit, [ "-n" ]
+              FLocal, [ "--local" ]
+              FAllRepos, [ "--all-repos" ]
+              FOver, [ "--over" ] ]
+
+        use stream = new System.IO.MemoryStream()
+        use writer =
+            new System.Text.Json.Utf8JsonWriter(
+                stream,
+                System.Text.Json.JsonWriterOptions(Indented = true, SkipValidation = false)
+            )
+
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coord.commands/1")
+        writer.WriteStartArray("commands")
+
+        for command in commands do
+            writer.WriteStartObject()
+            writer.WriteString("name", commandName command)
+            writer.WriteStartArray("flags")
+
+            let flags =
+                [ "--json"; "--lease"; "--text" ]
+                @
+                (scopedFlags
+                 |> List.collect (fun (flag, spellings) ->
+                     match scopeOf flag with
+                     | Global -> spellings
+                     | Only readers when List.contains command readers -> spellings
+                     | Only _ -> []))
+                |> List.distinct
+                |> List.sort
+
+            for flag in flags do
+                writer.WriteStringValue flag
+
+            writer.WriteEndArray()
+            writer.WriteEndObject()
+
+        writer.WriteEndArray()
+        writer.WriteEndObject()
+        writer.Flush()
+        System.Text.Encoding.UTF8.GetString(stream.ToArray())
 
     /// A `--repo` token → the repo NAME board rows carry. A registry short-id maps, an `owner/repo` keeps its
     /// repo part, a literal name passes through — so `--repo sdd`, `--repo FS-GG/FS.GG.SDD` and
@@ -908,6 +1003,7 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | "decide" :: rest -> flags { defaults with Command = Decide } rest
         | "lanes" :: rest -> flags { defaults with Command = LanesView } rest
         | "facts" :: rest -> flags { defaults with Command = Facts } rest
+        | "command-contract" :: rest -> flags { defaults with Command = CommandContractCmd } rest
 
         | "whoami" :: rest -> flags { defaults with Command = WhoAmI } rest
         // `budget` reports as text — the operator's free pre-flight read — and `--json` opts into the

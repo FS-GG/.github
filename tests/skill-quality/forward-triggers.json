@@ -1,0 +1,37 @@
+{
+  "cases": [
+    {
+      "class": "coordination-diagnosis",
+      "prompt": "Several blockers on the FS-GG project look stale. Reconcile the ledger against live issues without starting work.",
+      "expected": "check-board"
+    },
+    {
+      "class": "one-worker-loop",
+      "prompt": "Claim the next schedulable issue in this repository and carry it through a verified merge and done stamp.",
+      "expected": "pnext-item"
+    },
+    {
+      "class": "parallel-fanout",
+      "prompt": "Fan out isolated workers across the organization until every safe lane is exhausted.",
+      "expected": "drive-board",
+      "selector": "$drive-board"
+    },
+    {
+      "class": "release-train",
+      "prompt": "Publish every stale producer in dependency order and verify both feeds.",
+      "expected": "cut-nuget-release",
+      "selector": "$cut-nuget-release"
+    },
+    {
+      "class": "markdown-roadmap",
+      "prompt": "Complete each unchecked milestone with a fresh worker and update the markdown ledger.",
+      "expected": "work-roadmap",
+      "selector": "$work-roadmap"
+    },
+    {
+      "class": "spectre-ci",
+      "prompt": "The terminal snapshot wraps differently only in CI; diagnose width, ANSI degradation, and plain projection behavior.",
+      "expected": "spectre-console"
+    }
+  ]
+}

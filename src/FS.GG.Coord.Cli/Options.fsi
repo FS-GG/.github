@@ -21,6 +21,8 @@ module Options =
         | Scan
         | LanesView
         | Facts
+        /// Emit the parser's command/flag surface as JSON for documentation and tooling gates.
+        | CommandContractCmd
 
         // ---- the client command surface (ADR-0040 Phase D — wired to the IO layer) --------------------
 
@@ -267,5 +269,9 @@ module Options =
 
     /// Parse argv. `Error` carries a message already fit to print.
     val parse: args: string list -> Result<Options, string>
+
+    /// The parser's accepted command/flag surface, emitted from the same `scopeOf` table that enforces
+    /// the residue rule. This is machine input; documentation validators must not scrape `usage`.
+    val renderCommandContract: unit -> string
 
     val usage: string

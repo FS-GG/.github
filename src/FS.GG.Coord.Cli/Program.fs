@@ -325,6 +325,10 @@ let main argv =
 
             | Facts -> facts opts
 
+            | CommandContractCmd ->
+                printfn "%s" (Options.renderCommandContract ())
+                ExitGreen
+
             // `whoami` reads no board — identity is local, and `--mint` needs no token.
             | WhoAmI -> Client.whoami opts
 

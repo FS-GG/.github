@@ -251,7 +251,7 @@ jq '[.[] | select(.blocked)] | length' /tmp/board.json # ...like this — a jq q
 fsgg-coord set-field FS.GG.SDD#84 Phase  "P2 SDD"     # cache-resolved ids, one mutation
 fsgg-coord set-field FS.GG.SDD#84 Status "In progress"
 fsgg-coord issues rendering --label cross-repo \
-  --jq '.[] | "\(.number)\t\(.title)"'                # REST + ETag; 304 on repeat
+  | jq -r '.[] | "\(.number)\t\(.title)"'             # REST + ETag; 304 on repeat
 ```
 
 > **Don't reach for raw `gh project item-list` to find the next item.** It nests
