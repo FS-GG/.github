@@ -429,7 +429,11 @@ while IFS= read -r id; do
   # as "compared, and identical" (#266). Note this also fixes the single-root ROOT SET: with one
   # configured root the old `${ROOT_ARR[@]:1}` loop was empty, fell through, and incremented
   # `byte-identical` for every id — byte-identity asserted over a comparison that never happened.
-  ref="${present_roots[0]}"
+  # `${...[0]-}`, not `${...[0]}`: an id came out of `union_ids` because some root HAS it, so this
+  # array is never empty — but an unguarded index under `set -u` turns any future violation of that
+  # assumption into an `unbound variable` abort with exit 1, which is the code reserved for "the union
+  # is violated". A crash must not be able to render as a verdict (#266).
+  ref="${present_roots[0]-}"
   differing=""
   if [ "${#present_roots[@]}" -ge 2 ]; then
     comparable_ct=$((comparable_ct + 1))
@@ -452,8 +456,11 @@ while IFS= read -r id; do
 
   # Checks 3-4 read ONE root's copy as representative of the id, so they are only meaningful for an id
   # that is whole AND coherent across the roots. Unchanged from before: a partitioned or divergent id
-  # stops here, having already been reported.
-  [ -z "$partitioned" ] && [ -z "$differing" ] || continue
+  # stops here, having already been reported. Spelled as an `if` rather than `A && B || continue` —
+  # that idiom is correct here and reads like it might not be, which is the wrong trade in a gate.
+  if [ -n "$partitioned" ] || [ -n "$differing" ]; then
+    continue
+  fi
 
   # (3) matches-manifest — only when a manifest is supplied. Producer semantics (.github#120):
   # declared∧present ⇒ SKILL.md digest must match; undeclared ⇒ dangling unless co-tenant.

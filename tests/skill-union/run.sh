@@ -375,6 +375,24 @@ else
   echo "FAIL  one-root accounting (rc=$rc)"; echo "    | want: … — $want_sum"; echo "    | got:  $sumline"; failcount=$((failcount+1))
 fi
 
+# ...and the same thing one level up, for a SINGLE-ROOT ROOT SET — the intentional single-runtime tree
+# the missing-root hint itself suggests declaring. With one configured root there is no second copy of
+# ANYTHING, so the honest byte-identity count is `0/0`. Pre-fix the "compare against roots 2..n" loop was
+# empty here, fell through, and printed `byte-identical=2` — a byte-identity claim for every skill in a
+# tree where no comparison was possible at all. Asserted rather than described, because the script's own
+# comment and the docs both now claim this is fixed.
+SOLO="$WORK/solo-root"
+mk_skill "$SOLO/.claude/skills" alpha "# alpha skill"
+mk_skill "$SOLO/.claude/skills" beta  "# beta skill"
+rc=0; bash "$ASSERT" --product "$SOLO" --roots ".claude/skills" >"$WORK/out" 2>&1 || rc=$?
+sumline="$(grep -m1 'skill(s) —' "$WORK/out" || true)"
+want_sum="in-every-root=2/2 partitioned=0 | byte-comparable=0 byte-compared=0 byte-identical=0/0 byte-differing=0 single-root=2"
+if [ "$rc" -eq 0 ] && [ "$(printf '%s' "$sumline" | sed 's/.*— //')" = "$want_sum" ]; then
+  echo "PASS  (expected pass) a single-root root set claims NO byte-identity: 0/0 compared, single-root=2 (pre-fix: byte-identical=2)"; pass=$((pass+1))
+else
+  echo "FAIL  single-root root set accounting (rc=$rc)"; echo "    | want: … — $want_sum"; echo "    | got:  $sumline"; failcount=$((failcount+1))
+fi
+
 # --- 5. dangling: an extra skill present + identical in EVERY root but not declared by the
 #        manifest → FAIL (exercises the [dangling] branch, not the earlier partition check) ---
 DANG="$WORK/dangling"; build_good "$DANG"

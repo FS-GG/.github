@@ -271,9 +271,11 @@ skill-union-assert: 50 skill(s) — in-every-root=4/50 partitioned=46 | byte-com
 comparison that never ran.
 
 `tests/skill-union/run.sh` pins all of it — a tree that is partitioned **and** divergent reporting both
-diagnostics for the same id at exit 1, all six partitioned ids compared rather than just the first, the
-summary asserted **byte-for-byte**, a regex refusing any denominator-free `byte-identical=` on any tree,
-and the single-root accounting. All six legs fail against the pre-fix script, which is what makes them a
+diagnostics for the same id at exit 1, all six of that tree's partitioned ids compared rather than just
+the first, the summary asserted **byte-for-byte**, a regex refusing any denominator-free
+`byte-identical=` on any tree, a byte-identical partition still accounted `partitioned=1
+byte-differing=0`, a one-root skill counted `single-root`, and a single-root **root set** claiming `0/0`
+rather than byte-identity. **All seven legs fail against the pre-fix script**, which is what makes them a
 regression test rather than a description.
 
 ## Adoption — wiring it into a consumer repo's CI
@@ -485,7 +487,8 @@ and manifest-drifted root, and that `--digest` equals the producers' `sha256sum 
 [#1506](https://github.com/FS-GG/.github/issues/1506): a tree that is **partitioned *and* divergent**
 reports both diagnostics for the same id, every partitioned id is compared rather than just the first,
 the summary is asserted byte-for-byte with its populations, no denominator-free `byte-identical=` may
-reach it on any tree, and a one-root skill counts `single-root` and never `byte-identical`. For the
+reach it on any tree, and both a one-root skill and a one-root **root set** count `single-root` rather
+than claiming a byte-identity nothing established. For the
 condition-aware check (ADR-0017) it additionally proves — with a `--params` provenance — a
 `[missing]` (declared ∧ true ∧ absent, the `fs-gg-project` case), an `[unexpected]` (present ∧
 false), a **justified** absence + compound-true present that **pass**, that the *same* manifest
