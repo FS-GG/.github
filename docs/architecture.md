@@ -539,7 +539,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 |---|---|---|---|
 | `fsgg-contracts` | FS.GG.SDD | `7.0.0` | `7.0.0` |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.5.0` | `1.5.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.21.1` | `0.22.0` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.21.1` | `0.23.0` |
 | `game-sim-core` | FS.GG.Game | `0.12.0` | `0.12.0` |
 | `game-scene-adapter` | FS.GG.Game | `0.12.0` | `0.12.0` |
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
