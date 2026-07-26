@@ -1,0 +1,35 @@
+name: release-train-tooling
+
+on:
+  pull_request:
+    paths:
+      - "scripts/release-train-*.fsx"
+      - "tests/release-train-tooling/**"
+      - ".claude/skills/cut-nuget-release/**"
+      - ".codex/skills/cut-nuget-release/**"
+      - ".agents/skills/cut-nuget-release/**"
+      - ".github/workflows/release-train-tooling.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/release-train-*.fsx"
+      - "tests/release-train-tooling/**"
+      - ".claude/skills/cut-nuget-release/**"
+      - ".codex/skills/cut-nuget-release/**"
+      - ".agents/skills/cut-nuget-release/**"
+      - ".github/workflows/release-train-tooling.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  release-train-tooling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Exercise release-train tools
+        run: bash tests/release-train-tooling/run.sh
