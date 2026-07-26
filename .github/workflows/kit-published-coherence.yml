@@ -3,8 +3,10 @@
 # FS.GG.Kit (ADR-0062) ships the coordination kit as one versioned package; a `kit-delivery: package`
 # receiver MATERIALIZES it onto disk from a pinned version, so the PACKAGE'S CONTENT is what the fleet
 # restores. verify-package.sh proves the kit is derived-correct at PACK time, and coordination-coherence
-# checks each RECEIVER — but nothing rechecked the PUBLISHED artifact as canonical (registry/repos.lock)
-# moved. That gap is .github#1291: fs.gg.coord.cli 0.6.0 -> 0.7.0 (#660) advanced the manifest on main,
+# checks each RECEIVER — but nothing rechecked the PUBLISHED artifact as the canonical staged tree
+# moved. `registry/repos.lock` remains the declared-source integrity gate; the staged tree manifest is
+# the exact multi-file comparison point (.github#1469). The original gap was .github#1291:
+# fs.gg.coord.cli 0.6.0 -> 0.7.0 (#660) advanced the manifest on main,
 # every pack-time gate stayed green, and the published FS.GG.Kit 0.1.0 still carried the 0.6.0 bytes, so
 # the first from-scratch materialize (FS.GG.Net) drifted and coordination-coherence red.
 #
@@ -18,10 +20,10 @@
 # (release-kit.yml), not by editing some other PR. So the live check runs on main, on a schedule, and on
 # demand; a PR runs the fixture, whose subject IS the diff.
 #
-# The gate FAILS CLOSED (epic #266): an unreadable lock, an unreachable feed, a missing manifest are
-# ERRORS, never "coherent". So this workflow must never gain a `continue-on-error` or a conditional that
-# lets the live job be skipped into green — "nothing to check" and "checked, and it's fine" must not
-# share an exit code.
+# The gate FAILS CLOSED (epic #266): an unreadable/stale lock, a canonical stage failure, an
+# unreachable feed, or a missing/malformed manifest is an ERROR, never "coherent". So this workflow
+# must never gain a `continue-on-error` or a conditional that lets the live job be skipped into green —
+# "nothing to check" and "checked, and it's fine" must not share an exit code.
 name: kit-published-coherence
 
 on:
@@ -67,7 +69,8 @@ jobs:
       - name: Run the kit-published-coherence fixture (no network)
         run: bash tests/kit-published-coherence/run.sh
 
-  # Online. The actual coherence signal: the newest published FS.GG.Kit against main's repos.lock.
+  # Online. The actual coherence signal: newest published FS.GG.Kit against main's validated lock +
+  # exact pack-time staged manifest (destinations, bytes, modes, and closed set).
   published:
     name: published
     runs-on: ubuntu-latest
@@ -82,8 +85,9 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.x"
+      # The live path invokes scripts/repos.sh validate before staging canonical. That validator reads
+      # registry/repos.yml with yq or PyYAML; declare the pinned dependency rather than inheriting a
+      # runner-image accident. The fixture stays pure stdlib.
+      - uses: ./.github/actions/setup-policy-python
       - name: Is the newest published FS.GG.Kit coherent with canonical?
         run: python scripts/check-kit-published-coherence.py

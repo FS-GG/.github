@@ -22,15 +22,12 @@ silence.
 
 WHAT IT ASSERTS.
 
-    for every coordination-kit member (skill/client/config) in the NEWEST PUBLISHED FS.GG.Kit's
-    shipped `kit/kit-manifest.tsv`:
-        its content digest is present in registry/repos.lock
-
-i.e. the kit the fleet can restore carries the SAME bytes canonical currently derives. A digest the
-published kit ships that repos.lock no longer contains is a member that changed on main without a
-republish — the published kit is stale, and a fresh materialize will drift. This mirrors
-`verify-package.sh`'s stage-vs-repos.lock parity, but against the PUBLISHED artifact instead of a
-freshly-staged one.
+The same `src/FS.GG.Kit/stage-kit.sh` used at pack time derives a canonical `kit-manifest.tsv` from
+the current kit tree. The gate compares every published coordination-kit row to that manifest by
+kind, package path, receiver destination, content digest, and executable bit. Missing, extra,
+changed, or wrong-mode members are all drift. `scripts/repos.sh validate` runs first, so
+`registry/repos.lock` remains the declared-source integrity gate; the tree manifest complements the
+scalar lock for multi-file skill auxiliaries rather than replacing or weakening it.
 
 build-config members are EXCLUDED, exactly as in `verify-package.sh`: they carry no repos.lock row
 (ADR-0036 pin model — their sha256 is a self-consistent integrity record, checked at materialize),
@@ -52,22 +49,24 @@ subject IS the diff.
 FAILS CLOSED, the whole point of epic #266. "Nothing to check" and "checked, and it's fine" must not
 share an exit code. Every one of these is an ERROR, never a skip and never "coherent":
 
-  * registry/repos.lock is unreadable or empty;
+  * registry/repos.lock is unreadable, empty, or stale against its declared sources;
+  * the canonical kit cannot be staged or its manifest is malformed/empty;
   * the feed is unreachable / unauthorised / returns an unrecognised shape, or serves zero stable
     versions (the kit ships no prerelease — the shared Renovate preset sets ignoreUnstable=true, so
     a prerelease kit would be invisible to the fabric meant to carry it);
   * the published nupkg cannot be downloaded, is not a zip, or carries no `kit/kit-manifest.tsv`;
   * that manifest is empty, malformed, or names zero coordination-kit members — the subject this
     gate measures has vanished, the #266 unwatched-subject shape;
-  * a manifest row is not the fixed 4-field `kind<TAB>pkgrel<TAB>dest<TAB>sha` shape.
+  * a manifest row is not the fixed 5-field
+    `kind<TAB>pkgrel<TAB>dest<TAB>sha<TAB>executable` shape.
 
 Comparison is by exact 64-hex digest, never by substring.
 
 Usage:  scripts/check-kit-published-coherence.py [--lock registry/repos.lock]
 
-`--fixture-manifest <tsv>` serves a canned kit-manifest.tsv instead of downloading the live package,
-and refuses to run unless FSGG_KIT_COHERENCE_FIXTURE_OK=1 — which only tests/kit-published-coherence/
-sets. A test hook that can silently turn the gate into a no-op is the very defect class above.
+`--fixture-manifest <tsv> --canonical-manifest <tsv>` compares canned manifests and refuses to run
+unless FSGG_KIT_COHERENCE_FIXTURE_OK=1 — which only tests/kit-published-coherence/ sets. A test hook
+that can silently turn the gate into a no-op is the very defect class above.
 
 Exit 0 = the newest published FS.GG.Kit carries the same coordination-kit bytes canonical derives.
 """
@@ -78,10 +77,13 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 import zipfile
+from dataclasses import dataclass
 
 # Shared feed reader + NuGet version ordering (.github#263) — one implementation of "what does the
 # feed serve", so the gates cannot drift into disagreeing about version order. `scripts/` is not a
@@ -99,6 +101,9 @@ from fsgg_feed import (  # noqa: E402  (path shim above must run first)
 # The package the fleet materializes (ADR-0062). Its content — not just its version — is the subject.
 PACKAGE = "FS.GG.Kit"
 LOCK = "registry/repos.lock"
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+STAGE_KIT = os.path.join(REPO_ROOT, "src", "FS.GG.Kit", "stage-kit.sh")
+REPOS_TOOL = os.path.join(REPO_ROOT, "scripts", "repos.sh")
 
 # coordination-kit members carry a repos.lock digest; build-config members deliberately do not
 # (ADR-0036), exactly as verify-package.sh partitions them.
@@ -107,7 +112,7 @@ _HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
 
 
 def read_lock_digests(lock_path: str) -> set[str]:
-    """Every content digest in registry/repos.lock. Any absence/emptiness is a GateError, never set()."""
+    """Every declared-source digest in repos.lock. Absence/emptiness is never a green baseline."""
     try:
         text = open(lock_path, encoding="utf-8").read()
     except OSError as e:
@@ -127,6 +132,54 @@ def read_lock_digests(lock_path: str) -> set[str]:
             f"compares against is unreadable, and an empty baseline must not read as 'coherent'."
         )
     return digests
+
+
+def validate_live_lock() -> None:
+    """Keep repos.lock authoritative before deriving the multi-file canonical manifest."""
+    try:
+        result = subprocess.run(
+            ["bash", REPOS_TOOL, "validate"],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as e:
+        raise GateError(f"cannot run the repos.lock integrity gate: {e}") from e
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+        raise GateError(
+            "registry/repos.lock is not valid against the declared kit sources"
+            + (f": {detail}" if detail else "")
+        )
+
+
+def stage_canonical_manifest() -> str:
+    """Derive the exact pack-time kit manifest from the current tree."""
+    try:
+        with tempfile.TemporaryDirectory(prefix="fsgg-kit-coherence-") as work:
+            out = os.path.join(work, "kit")
+            result = subprocess.run(
+                ["bash", STAGE_KIT, out],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout).strip()
+                raise GateError(
+                    "cannot derive the canonical kit manifest with stage-kit.sh"
+                    + (f": {detail}" if detail else "")
+                )
+            try:
+                return open(
+                    os.path.join(out, "kit-manifest.tsv"), encoding="utf-8"
+                ).read()
+            except OSError as e:
+                raise GateError(f"canonical stage emitted no readable kit-manifest.tsv: {e}") from e
+    except OSError as e:
+        raise GateError(f"cannot create the canonical staging directory: {e}") from e
 
 
 def newest_published_stable() -> str:
@@ -175,30 +228,56 @@ def manifest_from_nupkg(nupkg: bytes) -> str:
         raise GateError(f"the downloaded FS.GG.Kit is not a valid .nupkg (zip): {e}") from e
 
 
-def coordination_digests(manifest_tsv: str) -> dict[str, str]:
-    """Map `dest -> sha` for every coordination-kit member in a kit-manifest.tsv. Raises on junk/empty."""
-    out: dict[str, str] = {}
+@dataclass(frozen=True)
+class ManifestEntry:
+    kind: str
+    package_path: str
+    destination: str
+    sha256: str
+    executable: bool
+
+
+def coordination_entries(manifest_tsv: str, subject: str) -> dict[str, ManifestEntry]:
+    """Map receiver destination to each exact coordination-kit manifest row."""
+    out: dict[str, ManifestEntry] = {}
     for lineno, raw in enumerate(manifest_tsv.splitlines(), 1):
         if not raw.strip():
             continue
         parts = raw.split("\t")
-        if len(parts) not in (4, 5):
+        if len(parts) != 5:
             raise GateError(
-                f"kit-manifest.tsv line {lineno} is not the 4-field legacy or 5-field v2 "
-                "kind<TAB>pkgrel<TAB>dest<TAB>sha[<TAB>executable] "
+                f"{subject} kit-manifest.tsv line {lineno} is not the 5-field "
+                "kind<TAB>pkgrel<TAB>dest<TAB>sha<TAB>executable "
                 f"shape (got {len(parts)} field(s)): {raw!r}"
             )
-        kind, _pkgrel, dest, sha = parts[:4]
+        kind, package_path, dest, sha, executable_raw = parts
         if kind not in COORDINATION_KINDS:
             continue  # build-config etc. — no repos.lock row to match against (verify-package.sh §1)
         sha = sha.strip().lower()
         if not _HEX64.match(sha):
-            raise GateError(f"kit-manifest.tsv line {lineno} carries a non-sha256 digest {sha!r}")
-        out[dest] = sha
+            raise GateError(
+                f"{subject} kit-manifest.tsv line {lineno} carries a non-sha256 digest {sha!r}"
+            )
+        if executable_raw not in ("true", "false"):
+            raise GateError(
+                f"{subject} kit-manifest.tsv line {lineno} carries an invalid executable bit "
+                f"{executable_raw!r}"
+            )
+        if dest in out:
+            raise GateError(
+                f"{subject} kit-manifest.tsv names receiver destination {dest!r} more than once"
+            )
+        out[dest] = ManifestEntry(
+            kind=kind,
+            package_path=package_path,
+            destination=dest,
+            sha256=sha,
+            executable=executable_raw == "true",
+        )
     if not out:
         raise GateError(
-            "the published FS.GG.Kit's manifest names zero coordination-kit members (skill/client/"
-            "config) — the subject this gate measures has vanished; that is an ERROR, not 'coherent'."
+            f"the {subject} manifest names zero coordination-kit members (skill/client/config) — "
+            "the subject this gate measures has vanished; that is an ERROR, not 'coherent'."
         )
     return out
 
@@ -211,6 +290,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--fixture-manifest",
         help="read the published kit-manifest.tsv from a file (tests only, never in CI)",
+    )
+    ap.add_argument(
+        "--canonical-manifest",
+        help="read the canonical kit-manifest.tsv from a file (tests only; requires --fixture-manifest)",
     )
     args = ap.parse_args(argv)
 
@@ -237,31 +320,65 @@ def main(argv: list[str]) -> int:
                 manifest_tsv = open(args.fixture_manifest, encoding="utf-8").read()
             except OSError as e:
                 raise GateError(f"cannot read fixture manifest: {e}") from e
+            if not args.canonical_manifest:
+                raise GateError(
+                    "--fixture-manifest requires --canonical-manifest; a published manifest without "
+                    "its exact canonical comparison point is not a coherence signal"
+                )
+            try:
+                canonical_tsv = open(args.canonical_manifest, encoding="utf-8").read()
+            except OSError as e:
+                raise GateError(f"cannot read canonical fixture manifest: {e}") from e
             version = "(fixture)"
         else:
+            if args.canonical_manifest:
+                raise GateError("--canonical-manifest is test-only and requires --fixture-manifest")
+            validate_live_lock()
+            canonical_tsv = stage_canonical_manifest()
             version = newest_published_stable()
             manifest_tsv = manifest_from_nupkg(_download_nupkg(version))
 
-        shipped = coordination_digests(manifest_tsv)
+        canonical = coordination_entries(canonical_tsv, "canonical")
+        shipped = coordination_entries(manifest_tsv, "published")
+        canonical_digests = {entry.sha256 for entry in canonical.values()}
+        absent_lock_digests = lock_digests - canonical_digests
+        if absent_lock_digests:
+            raise GateError(
+                "canonical kit-manifest.tsv does not contain every declared-source digest from "
+                f"registry/repos.lock ({len(absent_lock_digests)} missing)"
+            )
     except GateError as e:
         print(f"::error::check-kit-published-coherence: {e}", file=sys.stderr)
         return 1
 
-    drifted = {dest: sha for dest, sha in shipped.items() if sha not in lock_digests}
-    if not drifted:
+    missing = sorted(set(canonical) - set(shipped))
+    extra = sorted(set(shipped) - set(canonical))
+    changed = sorted(dest for dest in set(canonical) & set(shipped) if canonical[dest] != shipped[dest])
+    if not missing and not extra and not changed:
         print(
             f"ok: the newest published {PACKAGE} ({version}) carries {len(shipped)} coordination-kit "
-            f"member(s), every one byte-identical to canonical registry/repos.lock. A fresh "
-            f"materialize is coherent."
+            "member(s), with the exact canonical destinations, bytes, modes, and closed file set. "
+            "registry/repos.lock is valid and a fresh materialize is coherent."
         )
         return 0
 
-    lines = "\n".join(f"    {dest}  (ships {sha})" for dest, sha in sorted(drifted.items()))
+    details: list[str] = []
+    details.extend(f"    missing: {dest}" for dest in missing)
+    details.extend(f"    extra: {dest}" for dest in extra)
+    for dest in changed:
+        want, got = canonical[dest], shipped[dest]
+        fields = [
+            name
+            for name in ("kind", "package_path", "sha256", "executable")
+            if getattr(want, name) != getattr(got, name)
+        ]
+        details.append(f"    changed ({', '.join(fields)}): {dest}")
+    lines = "\n".join(details)
     print(
         f"::error::check-kit-published-coherence: the newest published {PACKAGE} ({version}) is "
-        f"STALE — it carries {len(drifted)} coordination-kit member(s) whose digest is not in the "
-        f"canonical registry/repos.lock, so a receiver that materializes it drifts from canonical "
-        f"and coordination-coherence reds (.github#1291):\n{lines}\n"
+        "STALE — its coordination-kit manifest differs from the canonical staged manifest, so a "
+        "receiver that materializes it drifts from canonical and coordination-coherence reds "
+        f"(.github#1291):\n{lines}\n"
         f"A kit source changed on main without a republish. Bump <Version> in "
         f"src/FS.GG.Kit/FS.GG.Kit.csproj and release (tag kit/v<version> -> release-kit.yml), so "
         f"the published kit carries current canonical.",
