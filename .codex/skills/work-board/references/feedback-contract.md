@@ -26,19 +26,22 @@ dotnet fsi .agents/skills/fs-gg-feedback-report/scripts/feedback-tool.fsx -- \
   validate-checkpoints feedback/checkpoints/<cycle-id>.jsonl
 ```
 
-Always validate the report and its cycle activation envelope:
+Always validate the report with its exact actionability audit, then validate the cycle activation
+envelope and the same audit/report binding:
 
 ```sh
 dotnet fsi .agents/skills/fs-gg-feedback-report/scripts/feedback-tool.fsx -- \
-  validate feedback/<report>.md
+  validate feedback/<report>.md --audit feedback/audits/<report-stem>.audit.json
 python3 .agents/skills/work-board/scripts/validate-feedback-state.py \
   --root . --cycle <cycle-id> --report feedback/<report>.md \
+  --audit feedback/audits/<report-stem>.audit.json \
   --phases onboarding-first-build,lifecycle-authoring-or-not-used,implementation-test-evidence,verify-ship-pr
 ```
 
 The host repeats all applicable commands against the worker's exact merged paths before accepting the
-item. Missing, unreadable, malformed, wrong-cycle, count-mismatched, or unvalidated state fails closed
-and the host reports the exact path plus the command above that repairs or verifies it.
+item. An `incomplete` or `unsupported` audit finding is unresolved and blocks actionable handoff.
+Missing, unreadable, malformed, wrong-cycle, count-mismatched, unbound-audit, or unvalidated state fails
+closed and the host reports the exact path plus the command above that repairs or verifies it.
 
 A zero-event cycle has no checkpoint JSONL: the validated activation envelope proves capture ran at
 the named phases and explains why nothing qualified. Do not create a fake defect or positive pattern.

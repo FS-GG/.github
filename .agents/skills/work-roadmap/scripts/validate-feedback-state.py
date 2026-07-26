@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -35,16 +36,47 @@ def frontmatter(text: str) -> dict[str, str]:
 
 
 def activation_fields(text: str) -> dict[str, str]:
+    section = re.search(
+        r"(?ms)^## §1 Provenance and confidence\s*$\n(.*?)(?=^## §2\s)",
+        text,
+    )
+    if section is None:
+        fail("report must contain §1 Provenance and confidence followed by §2")
     result: dict[str, str] = {}
     for field in FIELDS:
         hit = re.findall(
             rf"(?mi)^-\s+\*\*{re.escape(field)}:\*\*\s+(.+?)\s*$",
-            text,
+            section.group(1),
         )
         if len(hit) != 1:
             fail(f"report must contain exactly one '- **{field}:** ...' activation field")
         result[field] = hit[0].strip()
     return result
+
+
+def validate_audit(path: Path, report_path: str, report_text: str) -> None:
+    try:
+        audit = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"actionability audit is missing, unreadable, or malformed: {path}: {exc}")
+    if not isinstance(audit, dict) or audit.get("auditSchema") != 1:
+        fail("actionability audit must declare auditSchema: 1")
+    if audit.get("report") != report_path.replace("\\", "/"):
+        fail(f"actionability audit does not bind report path {report_path!r}")
+    digest = hashlib.sha256(report_text.replace("\r\n", "\n").replace("\r", "\n").encode()).hexdigest()
+    if audit.get("reportSha256") != digest:
+        fail("actionability audit does not bind the current report bytes")
+    findings = audit.get("findings")
+    if not isinstance(findings, list):
+        fail("actionability audit findings must be a list")
+    unresolved = [
+        finding.get("id", "<unknown>")
+        for finding in findings
+        if not isinstance(finding, dict)
+        or finding.get("status") in {"incomplete", "unsupported"}
+    ]
+    if unresolved:
+        fail(f"actionability audit has unresolved finding(s): {', '.join(unresolved)}")
 
 
 def validate_checkpoints(path: Path, cycle: str) -> int:
@@ -75,6 +107,7 @@ def main() -> None:
     parser.add_argument("--root", default=".")
     parser.add_argument("--cycle", required=True)
     parser.add_argument("--report", required=True)
+    parser.add_argument("--audit", required=True)
     parser.add_argument("--phases", required=True)
     args = parser.parse_args()
 
@@ -90,6 +123,7 @@ def main() -> None:
         fail("report frontmatter must declare feedbackSchema: 2")
     if meta.get("cycle") != args.cycle:
         fail(f"report cycle {meta.get('cycle')!r} does not match expected {args.cycle!r}")
+    validate_audit(root / args.audit, args.report, text)
 
     fields = activation_fields(text)
     if fields["activation"].lower() != "active":

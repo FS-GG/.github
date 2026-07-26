@@ -364,7 +364,8 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         for statement in (
             "fs-gg-feedback-report",
             "schema-v2 report",
-            "Missing, unreadable, malformed, wrong-cycle, count-mismatched, or unvalidated state fails",
+            "--audit feedback/audits/<report-stem>.audit.json",
+            "unbound-audit",
             "Do not create a fake defect or positive pattern",
         ):
             if statement not in contract:
