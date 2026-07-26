@@ -271,6 +271,110 @@ else
   pass=$((pass+1))
 fi
 
+# ...and that partition's ACCOUNTING is honest in the other direction too: the byte comparison DID happen
+# over all five comparable ids and found them identical, so `byte-identical=5/5` is a claim the gate
+# actually established, while `partitioned=1` carries the failure. Pinning the summary here is what stops
+# a future "fix" from buying divergence coverage by reclassifying a partition (see 4c).
+if [ "$(grep -m1 'skill(s) —' "$WORK/out" | sed 's/.*— //')" \
+   = "in-every-root=4/5 partitioned=1 | byte-comparable=5 byte-compared=5 byte-identical=5/5 byte-differing=0 single-root=0" ]; then
+  echo "PASS  a byte-identical partition is accounted partitioned=1 byte-differing=0, over a stated population"; pass=$((pass+1))
+else
+  echo "FAIL  byte-identical-partition summary accounting"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# --- 4c. PARTITIONED **AND** DIVERGENT — BOTH FACTS, AND A SUMMARY THAT CANNOT OVERSTATE (#1506) ---
+#
+# THE DEFECT THIS PINS. Check 1 SHORT-CIRCUITED: a `[partitioned]` id was `continue`d straight past the
+# byte comparison, so its copies in the roots that DID hold it were never diffed — and `byte-identical=`
+# then counted only the ids that survived to the comparison. On FS.GG.Rendering@main the gate printed
+#
+#     skill-union-assert: 50 skill(s) — present=4 byte-identical=4
+#
+# beside 46 `[partitioned]` ids, 30 of which DIFFERED between `.claude/skills` and `.agents/skills` —
+# bytes the gate held in its hand and never compared. "Nothing is divergent; every skill present in more
+# than one root is byte-identical" was read off that line and became the stated central premise of two
+# downstream issues (FS.GG.Rendering#1080), whose whole repair plan was sized against it. This is the
+# #266 family exactly: a comparison that did not happen, rendered as a confident negative answer.
+#
+# The tree below is that one in miniature: the four kit skills coherent in all three roots, plus six
+# co-tenant ids present in `.claude` + `.agents`, ABSENT from `.codex`, and DIFFERING between the two
+# roots they do occupy. Pre-fix it printed `present=4 byte-identical=4` and ZERO [divergent] lines — so
+# this fixture fails against the original script, which is the property that makes it a regression test.
+BOTH="$WORK/partitioned-and-divergent"
+for r in $ROOTS; do
+  mk_skill "$BOTH/$r" cross-repo-coordination  "# cross-repo-coordination"
+  mk_skill "$BOTH/$r" intra-repo-parallel-work "# intra-repo-parallel-work"
+  mk_skill "$BOTH/$r" check-board              "# check-board"
+  mk_skill "$BOTH/$r" pnext-item               "# pnext-item"
+done
+for n in 1 2 3 4 5 6; do
+  mk_skill "$BOTH/.claude/skills" "fs-gg-part-$n" "# fs-gg-part-$n as .claude holds it"
+  mk_skill "$BOTH/.agents/skills" "fs-gg-part-$n" "# fs-gg-part-$n as .agents holds it — DIFFERENT BYTES"
+done
+
+rc=0; bash "$ASSERT" --product "$BOTH" --roots "$ROOTS" >"$WORK/out" 2>&1 || rc=$?
+part_n="$(grep -c "::error::\[partitioned\]" "$WORK/out" || true)"
+div_n="$(grep -c "::error::\[divergent\]" "$WORK/out" || true)"
+sumline="$(grep -m1 'skill(s) —' "$WORK/out" || true)"
+
+# (a) BOTH classes, for the SAME id — the conjunction the short-circuit made unreachable. Neither
+# diagnostic may replace the other: the partition names a projection that was never written, the
+# divergence names bytes that drifted, and a repair plan needs to know which of the two it faces.
+if [ "$rc" -eq 1 ] \
+   && grep -q "::error::\[partitioned\] skill 'fs-gg-part-1' is absent from root(s): .codex/skills" "$WORK/out" \
+   && grep -q "::error::\[divergent\] skill 'fs-gg-part-1' differs between root '.claude/skills' and root(s): .agents/skills" "$WORK/out"; then
+  echo "PASS  (expected [partitioned]+[divergent]) a partitioned skill whose present copies DIFFER reports BOTH facts, exit 1"; pass=$((pass+1))
+else
+  echo "FAIL  (want rc=1 + [partitioned] AND [divergent] on the same id) partitioned+divergent, got rc=$rc"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# (b) EVERY partitioned id is compared, not merely the first one that happens to be reached.
+if [ "$part_n" -eq 6 ] && [ "$div_n" -eq 6 ]; then
+  echo "PASS  all six partitioned ids were byte-compared: 6 [partitioned] + 6 [divergent] (pre-fix: 6 + 0)"; pass=$((pass+1))
+else
+  echo "FAIL  want 6 [partitioned] + 6 [divergent], got $part_n + $div_n"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# (c) THE SUMMARY'S HONESTY, which is the defect — not merely the ordering of the two checks. Every count
+# carries the population it was taken over, so a partial comparison cannot be read as a complete one.
+# Asserted on the exact bytes, because the reader who trusted `present=4 byte-identical=4` never opened
+# the log: `byte-comparable` beside `byte-compared` says whether anything comparable went unexamined, and
+# `byte-identical=4/10` cannot be read as covering ten ids.
+want_sum="in-every-root=4/10 partitioned=6 | byte-comparable=10 byte-compared=10 byte-identical=4/10 byte-differing=6 single-root=0"
+if [ "$(printf '%s' "$sumline" | sed 's/.*— //')" = "$want_sum" ]; then
+  echo "PASS  summary states examined-vs-total: $want_sum"; pass=$((pass+1))
+else
+  echo "FAIL  summary must state examined-vs-total"; echo "    | want: … — $want_sum"; echo "    | got:  $sumline"; failcount=$((failcount+1))
+fi
+
+# (d) ...and a DENOMINATOR-FREE byte-identity count must never reach the summary again, on any tree. A
+# bare `byte-identical=4` invites the reader to supply the population themselves, and they supply the
+# generous one; that string is what two downstream issues were written off.
+if printf '%s' "$sumline" | grep -qE 'byte-identical=[0-9]+([^0-9/]|$)'; then
+  echo "FAIL  summary printed a denominator-free byte-identity count — the #1506 misreading"; echo "    | $sumline"; failcount=$((failcount+1))
+else
+  echo "PASS  no denominator-free byte-identity count can reach the summary"; pass=$((pass+1))
+fi
+
+# --- 4d. "NOTHING TO COMPARE" MUST NOT RENDER AS "COMPARED, AND IDENTICAL" (#1506 / #266) ----------
+# A skill in exactly ONE of three roots has no second copy, so NO byte claim about it is possible. It is
+# `[partitioned]`, and it must be counted as `single-root` — never folded into `byte-identical`, which is
+# the same substitution of an unmade check for a passed one, one root further down. (This also pins the
+# single-root ROOT SET, where the old `${ROOT_ARR[@]:1}` loop was empty and every id was counted
+# byte-identical over a comparison that never ran.)
+LONE="$WORK/single-root"
+for r in $ROOTS; do mk_skill "$LONE/$r" alpha "# alpha skill"; done
+mk_skill "$LONE/.claude/skills" speckit-plan "# present in exactly one root — nothing to compare it with"
+rc=0; bash "$ASSERT" --product "$LONE" --roots "$ROOTS" >"$WORK/out" 2>&1 || rc=$?
+sumline="$(grep -m1 'skill(s) —' "$WORK/out" || true)"
+want_sum="in-every-root=1/2 partitioned=1 | byte-comparable=1 byte-compared=1 byte-identical=1/1 byte-differing=0 single-root=1"
+if [ "$rc" -eq 1 ] && grep -q "::error::\[partitioned\] skill 'speckit-plan'" "$WORK/out" \
+   && [ "$(printf '%s' "$sumline" | sed 's/.*— //')" = "$want_sum" ]; then
+  echo "PASS  (expected [partitioned] fail) a one-root skill counts as single-root, never as byte-identical"; pass=$((pass+1))
+else
+  echo "FAIL  one-root accounting (rc=$rc)"; echo "    | want: … — $want_sum"; echo "    | got:  $sumline"; failcount=$((failcount+1))
+fi
+
 # --- 5. dangling: an extra skill present + identical in EVERY root but not declared by the
 #        manifest → FAIL (exercises the [dangling] branch, not the earlier partition check) ---
 DANG="$WORK/dangling"; build_good "$DANG"

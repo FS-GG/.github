@@ -29,7 +29,11 @@ Over the configured `AGENT_SKILL_ROOTS` ([which roots?](#which-roots--a-tree-dec
 in the union it asserts:
 
 1. **present** — the skill directory exists in **every** root (a miss is a *partitioned* root);
-2. **byte-identical** — its bytes are identical across all roots (a diff is a *divergent* root);
+2. **byte-identical** — its bytes are identical across **every root it is present in** (a diff is a
+   *divergent* root). Checks 1 and 2 are **independent questions and both are always asked**: a skill
+   can be *partitioned* **and** *divergent*, and is then reported as both. Check 1 used to
+   short-circuit — see [a partition never suppresses the byte
+   comparison](#a-partition-never-suppresses-the-byte-comparison-1506);
 3. **matches-manifest** *(only with `--manifest`)* — if the producer's
    [skill-manifest](#the-manifest-and-the-canonical-digest) declares it, its `SKILL.md` digest
    equals the declared digest (*drifted*); if the manifest does **not** declare it, it must match
@@ -192,10 +196,16 @@ other cost the org three partitioned repositories:
 
 `coordination-coherence` cannot see a co-tenant skill: it is not in the `kit:` block, so it is not in
 that gate's subject. **Measured on `origin/main`, 2026-07-27** — Governance `.claude=15 .codex=4
-.agents=4`; Rendering `.claude=50 .codex=4 .agents=50`; SDD `.claude=32 .codex=21 .agents=4` — with
-every multi-root skill byte-identical. Nothing had *drifted*; projections were **missing**, for 11, 46
-and 28 skills. All three were green on `coordination-coherence` throughout, because the four kit skills
-really are coherent in all three of their roots.
+.agents=4`; Rendering `.claude=50 .codex=4 .agents=50`; SDD `.claude=32 .codex=21 .agents=4`.
+Projections were **missing**, for 11, 46 and 28 skills, and all three were green on
+`coordination-coherence` throughout, because the four kit skills really are coherent in all three of
+their roots.
+
+The sentence that stood here also said *"with every multi-root skill byte-identical"*, and it was
+**wrong** — read off a summary line that had not checked ([#1506](https://github.com/FS-GG/.github/issues/1506)).
+Rendering's 46 partitioned ids were present in **two** roots each and 30 of them **differ** between
+`.claude/skills` and `.agents/skills`. The gate held those bytes and never compared them, because check 1
+short-circuited; see below.
 
 [ADR-0065](../adr/0065-one-agent-skill-root-contract.md)'s receiver rollout
 ([#1016](https://github.com/FS-GG/FS.GG.Rendering/issues/1016),
@@ -210,6 +220,61 @@ evidence about four skills. Only a `skill-union` green is evidence about the tre
 passes on its own, and the *same* coherent subset plus one partitioned co-tenant (process **or**
 product) fails `[partitioned]` — including when the partitioned skill's bytes are identical wherever it
 does appear, because the defect is a missing projection and not a divergent byte.
+
+## A partition never suppresses the byte comparison (#1506)
+
+Check 1 used to **short-circuit**: a `[partitioned]` id was skipped past check 2, so the copies it *did*
+have were never diffed — and `byte-identical=` then counted only the ids that survived to the
+comparison. On `FS.GG.Rendering@main` the gate printed
+
+```
+::error::[partitioned] skill 'fs-gg-layout' is absent from root(s): .codex/skills
+  … 46 such lines …
+skill-union-assert: 50 skill(s) — present=4 byte-identical=4
+```
+
+Both numbers are true, and both are statements about **4 skills out of 50**. Read without opening the
+log, `present=4 byte-identical=4` says *"the comparable skills are fine and nothing is divergent"* — and
+that reading became the stated central premise of two downstream issues
+([FS.GG.Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080): *"Nothing is divergent.
+Every skill present in more than one root is byte-identical"*), whose entire repair plan was sized
+against it. Direct measurement: **30 of Rendering's 50 ids differ** between `.claude/skills` and
+`.agents/skills`, the two roots that both hold them. This is the [#266](https://github.com/FS-GG/.github/issues/266)
+family — *"I could not check"* rendered as *"I checked, and it is fine."*
+
+Two things changed, and the second is the one that matters:
+
+1. **Both checks always run.** Absence and drift are independent facts about an id. A partitioned skill
+   is byte-compared across the roots it *is* present in, with the first **present** root as reference, so
+   an id can report `[partitioned]` *and* `[divergent]`. Nothing is reclassified: a partition is still
+   `[partitioned]`, exit is still `1`, and a partition of byte-identical copies still emits **no**
+   `[divergent]`.
+2. **Every count in the summary carries the population it was taken over**, so a partial comparison
+   cannot masquerade as a complete one:
+
+```
+skill-union-assert: 50 skill(s) — in-every-root=4/50 partitioned=46 | byte-comparable=50 byte-compared=50 byte-identical=20/50 byte-differing=30 single-root=0
+```
+
+| field | meaning |
+| --- | --- |
+| `in-every-root=<n>/<union>` | ids that passed check 1 — the whole ones |
+| `partitioned=<n>` | ids that failed check 1 |
+| `byte-comparable=<n>` | ids with copies in **≥2 roots** — the population check 2 *can* examine |
+| `byte-compared=<n>` | ids check 2 **did** examine. Unequal to `byte-comparable` ⇒ the gate emits an `::error::` and **fails**: a summary that overstates its own coverage is the defect, not a cosmetic flaw |
+| `byte-identical=<n>/<compared>` | never a bare count. `20/50` cannot be read as covering 50 |
+| `byte-differing=<n>` | ids whose copies differ (each also printed as `[divergent]`) |
+| `single-root=<n>` | ids present in exactly **one** root — genuinely **not comparable**, and never folded into `byte-identical`. *"Nothing to compare"* must not render as *"compared, and identical"* |
+
+`single-root` also closes the same hole one root down: with a **single-root** root set the old code's
+"compare against roots 2..n" loop was empty, fell through, and counted every id `byte-identical` over a
+comparison that never ran.
+
+`tests/skill-union/run.sh` pins all of it — a tree that is partitioned **and** divergent reporting both
+diagnostics for the same id at exit 1, all six partitioned ids compared rather than just the first, the
+summary asserted **byte-for-byte**, a regex refusing any denominator-free `byte-identical=` on any tree,
+and the single-root accounting. All six legs fail against the pre-fix script, which is what makes them a
+regression test rather than a description.
 
 ## Adoption — wiring it into a consumer repo's CI
 
@@ -327,10 +392,26 @@ roots:
 | `FS.GG.Net` | 4 | 4 / 4 / 4 | coherent |
 | `FS.GG.Governance` | 15 | 15 / 4 / 4 | **11 partitioned** (the `speckit-*` set) |
 | `FS.GG.SDD` | 32 | 32 / 21 / 4 | **28 partitioned** (`fs-gg-sdd-*` + `speckit-*`) |
-| `FS.GG.Rendering` | 50 | 50 / 4 / 50 | **46 partitioned** (the product/Speckit set, absent from `.codex`) |
+| `FS.GG.Rendering` | 50 | 50 / 4 / 50 | **46 partitioned** *and* **30 divergent** — see below |
 
-Nothing is `[divergent]`: every skill present in more than one root is byte-identical. The defect is
-**missing projections**, which is why a byte-comparison-only checker sees nothing wrong.
+**This table used to end "Nothing is `[divergent]`: every skill present in more than one root is
+byte-identical." That was false, and it was false because the gate had not looked**
+([#1506](https://github.com/FS-GG/.github/issues/1506) — a `[partitioned]` id short-circuited past the
+byte comparison, and `byte-identical=4` then counted only the 4 ids that reached it). Measured directly
+on `origin/main`, 2026-07-27, over the roots each id **is** present in:
+
+| tree | comparable (≥2 roots) | identical | **differing** | single-root (not comparable) |
+| --- | --- | --- | --- | --- |
+| `FS.GG.Governance` | 4 of 15 | 4 | 0 | 11 |
+| `FS.GG.SDD` | 21 of 33 | 21 | 0 | 12 |
+| `FS.GG.Rendering` | 50 of 50 | 20 | **30** | 0 |
+
+So Governance and SDD really are drift-free — but over 4 and 21 ids, not 15 and 33, and the old summary
+never said which. Rendering's repair is **both** kinds: 46 missing projections *and* 30 divergent pairs.
+A byte-comparison-only checker would miss the partitions; the checker that short-circuited on partitions
+missed the drift. (SDD's union reads 33 here against 32 in the table above: its three-root
+materialization is in flight, so the two rows are different snapshots — which is itself why a coverage
+denominator belongs in the output rather than in prose that ages.)
 
 `skill-union` is rostered on all seven framework repos and wired by none of them yet, so the scheduled
 [`repos-audit`](../../.github/workflows/repos-audit.yml) reports **7 gaps** (measured: 32
@@ -400,7 +481,11 @@ a reviewable commit, and needs no network to re-run offline.
 workspace trees and proves the assertion **passes** on a coherent union (including a
 superset-catalog manifest with declared-but-absent ids and `--co-tenants`-admitted process
 skills) and **fails** on a divergent (`SKILL.md` *and* `references/**`), partitioned, dangling,
-and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md`. For the
+and manifest-drifted root, and that `--digest` equals the producers' `sha256sum SKILL.md`. It also pins
+[#1506](https://github.com/FS-GG/.github/issues/1506): a tree that is **partitioned *and* divergent**
+reports both diagnostics for the same id, every partitioned id is compared rather than just the first,
+the summary is asserted byte-for-byte with its populations, no denominator-free `byte-identical=` may
+reach it on any tree, and a one-root skill counts `single-root` and never `byte-identical`. For the
 condition-aware check (ADR-0017) it additionally proves — with a `--params` provenance — a
 `[missing]` (declared ∧ true ∧ absent, the `fs-gg-project` case), an `[unexpected]` (present ∧
 false), a **justified** absence + compound-true present that **pass**, that the *same* manifest
