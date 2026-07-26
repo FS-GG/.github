@@ -16,11 +16,19 @@ cross-repo allocation, not item implementation.
    available agent slots.
 4. Spawn fresh disposable workers with fresh identities/worktrees. Each runs exactly one
    [pnext-item](../pnext-item/SKILL.md) loop in its assigned repo.
-5. Verify each worker's PR, merge, publication/registry obligations, exact done stamp, released claim,
+5. Report live item state immediately. Whenever the host changes or observes a material transition
+   (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
+   emit exactly two concise user-facing lines:
+   - `<item> — <new status>: <work in progress or gate being awaited>`
+   - `Active: <item> — <current activity/gate>; ...` listing every currently active item and its
+     current activity or gate.
+   Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
+   item remains active, continue the host loop, and report each transition when it occurs.
+6. Verify each worker's PR, merge, publication/registry obligations, exact done stamp, released claim,
    and follow-up items against GitHub—not its narrative.
-6. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly
+7. Despawn completed workers, then reconcile and re-triage from a fresh read so follow-ups and newly
    parked rows from that wave enter the next plan.
-7. Stop only when a fresh reconcile and backlog triage have no startable item, untriaged/actionable
+8. Stop only when a fresh reconcile and backlog triage have no startable item, untriaged/actionable
    backlog, live claim, unresolved repair, queued write, or actionable follow-up. Surface deliberately
    parked and human-blocked backlog instead of spinning or declaring it completed.
 

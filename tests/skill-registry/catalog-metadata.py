@@ -93,3 +93,29 @@ with tempfile.TemporaryDirectory(prefix="skill-catalog-") as raw:
     assert any("Codex effective exposure costs" in item for item in budget_errors)
 
 print("catalog metadata boundaries: ok")
+
+
+def assert_live_status_contract(skill_name: str) -> None:
+    paths = [
+        REPO / root / skill_name / "SKILL.md"
+        for root in module.SKILL_ROOTS
+    ]
+    bodies = [path.read_bytes() for path in paths]
+    assert len(set(bodies)) == 1, f"{skill_name} must remain byte-identical across all skill roots"
+
+    text = " ".join(bodies[0].decode().split())
+    required = [
+        "Report live item state immediately.",
+        "<item> — <new status>: <work in progress or gate being awaited>",
+        "listing every currently active item and its current activity or gate.",
+        "Do not defer either line to a wave summary or final response.",
+        "Keep the driver turn alive while any item remains active",
+    ]
+    missing = [fragment for fragment in required if fragment not in text]
+    assert not missing, f"{skill_name} lost its live status reporting contract: {missing}"
+
+
+for board_driver in ("drive-board", "work-board"):
+    assert_live_status_contract(board_driver)
+
+print("board-driver live status contract: ok")

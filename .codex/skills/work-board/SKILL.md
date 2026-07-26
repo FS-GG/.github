@@ -13,10 +13,18 @@ Burn down one coordination-wired workspace's board. The local board is both plan
 3. Compute local disjoint lanes and bounded concurrency through the normal scheduler.
 4. Spawn one fresh disposable worker per lane; each owns one item through claim, implementation,
    review, green merge, obligations, and verified done.
-5. Verify the external state and schema-v2 development feedback, then discard the worker.
-6. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
+5. Report live item state immediately. Whenever the host changes or observes a material transition
+   (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
+   emit exactly two concise user-facing lines:
+   - `<item> — <new status>: <work in progress or gate being awaited>`
+   - `Active: <item> — <current activity/gate>; ...` listing every currently active item and its
+     current activity or gate.
+   Do not defer either line to a wave summary or final response. Keep the driver turn alive while any
+   item remains active, continue the host loop, and report each transition when it occurs.
+6. Verify the external state and schema-v2 development feedback, then discard the worker.
+7. Reconcile and re-triage from a fresh read after every wave so worker-filed follow-ups enter the next
    plan while the simple-versus-complex SDD lifecycle branch remains inside each item worker.
-7. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work.
+8. Stop only when fresh reconciliation and triage leave no startable or actionable/untriaged work.
    Surface deliberately parked and human-blocked backlog without spinning; then update/land the
    workspace report if its policy requires one.
 
