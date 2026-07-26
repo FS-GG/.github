@@ -70,9 +70,9 @@ SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SKILL_NAME_MAX = 64
 DESCRIPTION_MIN = 120
 DESCRIPTION_MAX = 220
-DESCRIPTION_CEILING = 2500
-ROOT_CATALOG_CEILING = 3000
-CODEX_EFFECTIVE_CEILING = 6000
+DESCRIPTION_CEILING = 2700
+ROOT_CATALOG_CEILING = 3200
+CODEX_EFFECTIVE_CEILING = 6400
 TRIGGER_FIXTURES = os.path.join("tests", "skill-registry", "catalog-triggers.json")
 TRIGGER_KINDS = ("positive", "indirect", "incomplete", "negative", "boundary")
 
@@ -94,6 +94,12 @@ DRIVERS = [
         "id": "work-board",
         "scope": "driver",
         "supplied-by": ".claude/skills/work-board",
+        "materializes-when": "always",
+    },
+    {
+        "id": "padd-item",
+        "scope": "driver",
+        "supplied-by": ".claude/skills/padd-item",
         "materializes-when": "always",
     },
     {

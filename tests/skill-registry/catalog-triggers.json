@@ -48,6 +48,13 @@
     "negative": "Implement the next Ready item and merge its pull request.",
     "boundary": "Draft a possible issue for this request, but do not create it or touch the board."
   },
+  "padd-item": {
+    "positive": "$padd-item the ball should be blue when rendered",
+    "indirect": "Clean this workspace's configured project, then file this request in the current repository.",
+    "incomplete": "Add this item to the workspace board",
+    "negative": "File this work in whichever repository owns it across the whole organization.",
+    "boundary": "Draft a local issue and paths, but do not create it or change the configured project."
+  },
   "pnext-item": {
     "positive": "Claim the next schedulable item for this repo and take it through merge.",
     "indirect": "Act as one worker in this repository and keep the board protocol coherent through the done stamp.",

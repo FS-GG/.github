@@ -75,7 +75,8 @@ with tempfile.TemporaryDirectory(prefix="skill-catalog-") as raw:
 
     budget_root = root / "budget"
     budget_fixtures = {}
-    for index in range(12):
+    budget_skill_count = module.DESCRIPTION_CEILING // module.DESCRIPTION_MAX + 2
+    for index in range(budget_skill_count):
         name = f"budget-skill-{index}"
         for runtime in module.SKILL_ROOTS:
             path = budget_root / runtime / name / "SKILL.md"

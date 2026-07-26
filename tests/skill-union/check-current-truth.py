@@ -17,13 +17,15 @@ ALL_SKILLS = (
     "drive-board",
     "intra-repo-parallel-work",
     "lane-steward",
+    "p-add",
+    "padd-item",
     "pnext-item",
     "publishing-and-deployment",
     "spectre-console",
     "work-board",
     "work-roadmap",
 )
-EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "work-board", "work-roadmap"}
+EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "padd-item", "work-board", "work-roadmap"}
 
 
 def fail(message: str) -> None:

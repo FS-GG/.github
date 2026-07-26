@@ -1,0 +1,7 @@
+interface:
+  display_name: "PAdd Item"
+  short_description: "File clean work on this workspace board"
+  default_prompt: "Use $padd-item to clean and triage this workspace board, then file the described item in the current repository."
+
+policy:
+  allow_implicit_invocation: false
