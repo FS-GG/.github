@@ -168,7 +168,7 @@ skills:
   # `source` is the in-template canonical path (the manifest's supplied-by).
   # ------------------------------------------------------------------------------------------------
   - { id: fs-gg-scene,            scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-scene/SKILL.md,     sha256: 7433f2427df97a7b17bee7ab8c2f2dcdc6973ae373e3dd08c093d5f22983c891, materializes-when: "profile in [app, headless-scene, governed, sample-pack, game]" }
-  - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: c0bb42cb5c64576c534414ef55870b4bc80a591b389f70ea7e5909e2dc36c140, materializes-when: "profile in [app, sample-pack, game]" }
+  - { id: fs-gg-symbology,        scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbology/SKILL.md, sha256: d927539dd50df2e04a56945cd39e7bb87349cdc8976edfe2b0a4304377c91262, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-elmish,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-elmish/SKILL.md,    sha256: de59b399f60ce62b34f128c17b39f69c1c9783f0be790de201051de74ebbb9c1, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-skiaviewer,       scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-skiaviewer/SKILL.md, sha256: 02173b2780728d5db459f82aa20584056ad78afba8c7082b778765046f396565, materializes-when: "profile in [app, sample-pack, game]" }
   - { id: fs-gg-layout,           scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-layout/SKILL.md,    sha256: 85c55e26ee42bd8d54533abcf6cb955d53e02651901be3c0e91bfe92dac92d62, materializes-when: "profile in [app, game]" }
@@ -199,7 +199,7 @@ skills:
   # verbatim from FS.GG.Rendering's producer manifest by `--write` (.github#299) and RE-HOMED here from
   # the appended tail. No `mirrored:` — Rendering OWNS it, so the obligation question does not arise
   # (the manifest declares none; "absent is not classified", per the `mirrored:` note above).
-  - { id: fs-gg-symbol-design,    scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbol-design/SKILL.md, sha256: 9f509aea99589cc08ebebf7918a56309685d00461ba5bc3d73233640f07bf53a, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-symbol-design,    scope: product, owner: fs-gg-rendering, source: FS.GG.Rendering/template/product-skills/fs-gg-symbol-design/SKILL.md, sha256: 1a28af97d907265344ce65a5458de2f74395c29be347fd16e5404908aa98803e, materializes-when: "profile in [game, sample-pack]" }
   # GAME product skills — MIGRATED owner fs-gg-rendering → fs-gg-game (ADR-0022 P4, epic #213/#218).
   # Reconciled from FS.GG.Game's producer manifest FS.GG.Game/template/skill-manifest/skill-manifest.json
   # (schema skill-manifest v1; regenerable via `dotnet fsi scripts/generate-skill-manifest.fsx --check`,
@@ -252,7 +252,7 @@ skills:
   # as `mirrored: true`; that is REFUSED — the owner's manifest declares no obligation, and hand-forging
   # one is exactly the FS.GG.Rendering#505 trap. If #923 ships a body it must declare it `NoCounterpart`
   # in scripts/FrozenMirrorVerdict.fs (as it does for ballistics/ai/effects/physics), not flip this byte.
-  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: 7696eaf6020f47606828a65942e5b5f7b74dd970bfe7261e022b21879f4918a6, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: f070f0719dde93b55d1a41ea8aa881b90e41cd20a20e558771d87ef3fe28f642, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-mapcraft supersedes the short-lived fs-gg-mapgen id, which was retired before release.
   # Reconciled verbatim from fs-gg-game's producer manifest by `--write`
   # (.github#299/.github#1200); `mirrored: false` is the manifest's declared verdict.
