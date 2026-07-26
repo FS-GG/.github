@@ -270,6 +270,34 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if required not in triage:
             fail(errors, f"drive-board: backlog planning contract lost {required!r}")
 
+    work_root = root / ROOTS[0] / "work-board"
+    work = (work_root / "SKILL.md").read_text(encoding="utf-8")
+    work_host_loop = (work_root / "references/host-loop.md").read_text(encoding="utf-8")
+    work_triage = (work_root / "references/backlog-triage.md").read_text(encoding="utf-8")
+    if "backlog-triage" not in work:
+        fail(errors, "work-board: triggered body does not route through backlog triage")
+    work_order = ("four-part `check-board` result", "backlog-triage", "batch")
+    work_positions = [work_host_loop.find(term) for term in work_order]
+    if any(position < 0 for position in work_positions) or work_positions != sorted(work_positions):
+        fail(errors, "work-board: host loop must order check-board result, backlog triage, then batch")
+    for required in (
+        "without mutating the board",
+        "Promote to Ready",
+        "Retain in Backlog",
+        "Set Blocked",
+        "Await human judgement",
+        "Promotion changes eligibility, not assignment",
+        "touch-set-disjoint",
+        "simple-versus-complex SDD lifecycle branch",
+        "schema-v2 development-feedback report",
+        "follow-up filed by the preceding wave",
+        "An empty Ready batch is not completion",
+        "Do not spin",
+        "`--include-backlog`",
+    ):
+        if required not in work_triage:
+            fail(errors, f"work-board: backlog planning contract lost {required!r}")
+
 
 def validate_forward_corpus(root: Path, names: set[str], errors: list[str]) -> None:
     path = root / "tests/skill-quality/forward-triggers.json"

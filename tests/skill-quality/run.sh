@@ -45,6 +45,21 @@ expect_rejection() {
   fi
 }
 
+mutate_workboard_phrase() {
+  python3 - "$WORK/tree" "$1" "$2" <<'PY'
+import sys
+from pathlib import Path
+
+root, old, new = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+for runtime in (".claude", ".codex", ".agents"):
+    path = root / runtime / "skills/work-board/references/backlog-triage.md"
+    text = path.read_text()
+    if old not in text:
+        raise SystemExit(f"fixture phrase missing: {old}")
+    path.write_text(text.replace(old, new))
+PY
+}
+
 seed
 printf '\n```sh\nscripts/fsgg-coord widen .github#1 --apply\n```\n' \
   >>"$WORK/tree/docs/coordination/semantic-regression.md"
@@ -80,6 +95,31 @@ for runtime in (".claude", ".codex", ".agents"):
 PY
 expect_rejection "drive-board cannot terminate over actionable backlog" \
   "backlog planning contract lost 'An empty Ready batch is not completion'"
+
+seed
+mutate_workboard_phrase "without mutating the board" "after attempting a board write"
+expect_rejection "work-board missing wiring fails without mutation" \
+  "work-board: backlog planning contract lost 'without mutating the board'"
+
+seed
+mutate_workboard_phrase "Promotion changes eligibility, not assignment" "Promotion assigns the chosen item"
+expect_rejection "work-board promotion remains scheduler-selected and collision-safe" \
+  "work-board: backlog planning contract lost 'Promotion changes eligibility, not assignment'"
+
+seed
+mutate_workboard_phrase "follow-up filed by the preceding wave" "follow-up already present at startup"
+expect_rejection "work-board sees worker-filed backlog on the next wave" \
+  "work-board: backlog planning contract lost 'follow-up filed by the preceding wave'"
+
+seed
+mutate_workboard_phrase "An empty Ready batch is not completion" "An empty Ready batch is completion"
+expect_rejection "work-board cannot terminate over actionable backlog" \
+  "work-board: backlog planning contract lost 'An empty Ready batch is not completion'"
+
+seed
+mutate_workboard_phrase "Do not spin" "Poll the same rows until they change"
+expect_rejection "work-board reports parked and human backlog without spinning" \
+  "work-board: backlog planning contract lost 'Do not spin'"
 
 seed
 sed -i '/GENERATED: fsgg-versions/{n;s/^/STALE /;}' "$WORK/tree/docs/architecture.md"

@@ -63,11 +63,11 @@
     "boundary": "Design the widget projection and snapshots, but do not change the command behavior."
   },
   "work-board": {
-    "positive": "Burn down this product workspace's wired project board.",
-    "indirect": "Keep spawning isolated item workers for this one workspace until its board is empty.",
+    "positive": "Burn down this product workspace's wired project board, including actionable backlog triage before each disjoint wave.",
+    "indirect": "Reconcile this workspace, classify parked follow-ups, and keep spawning isolated item workers until no safe local lane remains.",
     "incomplete": "Drive this workspace board",
     "negative": "Burn down the org-wide FS-GG Coordination board across all repositories.",
-    "boundary": "Reconcile the local board and propose a wave, but do not claim items."
+    "boundary": "Reconcile and classify this workspace's backlog for a proposed disjoint wave, but do not claim items."
   },
   "work-roadmap": {
     "positive": "Complete this markdown roadmap milestone by milestone.",

@@ -123,12 +123,18 @@ The host is the agent that invoked `$work-board`. It **schedules; it never imple
 this one workspace's repo, resolved from the git remote — every `fsgg-coord` read below is scoped to it.
 Repeat until §5 says the board is genuinely done:
 
-1. **Reconcile first.** Run [check-board](../../check-board/SKILL.md) (dry run, then `--apply` for the
+1. **Reconcile first.** Run workspace-scoped [check-board](../../check-board/SKILL.md) (dry run, then `--apply` for the
    mechanical fixes if you are driving unattended and trust the pass). This clears stale claims, flips
    `BLOCKER-CLEARED` items back to `Ready`, and — critically for blockers that appear *after* some work —
    **re-verifies every `Blocked by` edge**, so work a previous wave unblocked becomes visible. Read its
-   summary; its *asked-and-unanswered* list is work stuck on a **human**, not on you.
-2. **Size the wave.** Ask the engine how many workers this repo can absorb *right now*:
+   complete four-part result: mechanical changes, queued/failed writes, judgement findings, and the
+   fresh post-apply result. Its *asked-and-unanswered* list is work stuck on a **human**, not on you.
+   An unreadable or unflushed result stops planning; it never becomes an empty board.
+2. **Triage Backlog.** Follow [backlog-triage](backlog-triage.md) against a fresh workspace inventory.
+   Classify every relevant row as promote to `Ready`, retain with an evidenced reason, set `Blocked`
+   behind a verified issue, or awaiting human judgement. Do not infer missing paths, blocker meaning,
+   epic discharge, scope, or priority. Apply supported writes and re-read them before sizing.
+3. **Size the wave.** Ask the engine how many workers this repo can absorb *right now*:
 
    ```sh
    scripts/fsgg-coord batch --repo <this-repo> -n <cap> --json   # a maximal touch-set-disjoint set
@@ -142,15 +148,16 @@ Repeat until §5 says the board is genuinely done:
    shared rate budget (§6). Do **not** pass the item numbers to the workers — `batch` is the host's
    *sizing* read and `take` is the worker's *claiming* read, and keeping them separate is what preserves
    `take`'s lost-race guarantee (drive-board §2).
-3. **Spawn a fresh subagent per slot** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), one per slot, each running
+4. **Spawn a fresh subagent per slot** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), one per slot, each running
    the worker brief (§3). One subagent, one `take`-loop-of-one: it takes an item, works it to done-stamp,
    and returns. Concurrency is bounded — one repo, one shared account (§6).
-4. **Collect each worker as it returns, and verify — do not trust (§4).** A worker reports the item it
+5. **Collect each worker as it returns, and verify — do not trust (§4).** A worker reports the item it
    took, the PR it merged, and anything it filed or found. The subagent is now dead; its context is gone,
    which is deliberate.
-5. **Re-plan.** The board has moved — new `Blocked by` edges a worker discovered, items now `Done`,
-   follow-ups filed as new `Backlog` rows. Go back to step 1. The re-reconcile is **not** optional: it is
-   how an edge that "only appears after some work" enters the schedule.
+6. **Re-plan.** The board has moved — new `Blocked by` edges a worker discovered, items now `Done`,
+   follow-ups filed as new `Backlog` rows. Discard the prior inventory and go back to step 1.
+   Reconciliation and Backlog triage are both mandatory before another spawn: that is how an edge or
+   follow-up that appears only after work enters the very next disjoint wave.
 
 Never let the host "just finish one quickly" itself — the whole value is that every item goes through a
 worker that runs the full pnext-item loop, and a host that starts editing has no worktree, no claim, and
@@ -247,11 +254,14 @@ Do not take a merge you can check on the worker's say-so. Read `ready`, not the 
 
 The loop ends when the board is **genuinely** done, and the trap is that a **drifted board looks done
 when it is not** — the entire reason [check-board](../../check-board/SKILL.md) exists. So do not stop because
-a `take` returned 5, or because one `batch` came back empty. Stop only when a **fresh** reconcile pass
-shows all of:
+a `take` returned 5, or because one `batch` came back empty. Stop only when a **fresh** reconcile and
+[backlog-triage](backlog-triage.md) pass show all of:
 
 - **No schedulable item** — `batch --repo <this-repo>` empty, and `next` explains *why* each remaining
-  candidate is skipped (blocked, backlog, no touch-set) rather than startable.
+  candidate is skipped (blocked or no touch-set) rather than startable.
+- **No actionable or untriaged Backlog remains.** Every current row was classified: actionable rows
+  were promoted before `batch`; retained rows have a concrete evidenced reason; human judgement rows
+  are surfaced in the completion report without spinning.
 - **No live claims in flight** — `who --repo <this-repo>` shows nothing held (or only stale ones you have
   reaped/adopted).
 - **No `EPIC-ROLLUP-READY` epics and no cleared-but-still-`Blocked` items** left in check-board's
