@@ -78,6 +78,35 @@ type Options =
       /// FS-GG board, which uses the engine's embedded table. Set with `--chore-locks owner/repo#n,…`.
       ChoreLocks: string option }
 
+/// Assemble the no-argument wizard's decisions after its meaningful prompts have completed.
+/// Coordination and a current fresh scaffold are established defaults, so the wizard does not
+/// manufacture confirmation answers for them: explicit `--no-coordination` / `--upgrade` remain
+/// available only on the CLI path.
+let assembleWizardOptions
+    (target: string)
+    (product: string)
+    (gitRef: string)
+    (governance: bool)
+    (pinned: bool)
+    (profile: string)
+    (workspaceRepo: string)
+    (boardOwner: string)
+    (boardTitle: string)
+    (choreLocks: string option)
+    : Options =
+    { Target = target
+      Product = product
+      Ref = gitRef
+      Upgrade = false
+      Governance = governance
+      Pinned = pinned
+      Profile = Some profile
+      Coordinate = true
+      WorkspaceRepo = Some workspaceRepo
+      BoardOwner = boardOwner
+      BoardTitle = boardTitle
+      ChoreLocks = choreLocks }
+
 // ── Effects ──────────────────────────────────────────────────────────────────
 
 /// One lock guards every write to AnsiConsole from the process-output pump threads, so
@@ -820,8 +849,6 @@ type private Draft =
       Governance: bool option
       Ref: string option
       Pinned: bool option
-      Upgrade: bool option
-      Coordinate: bool option
       WorkspaceRepo: string option
       BoardOwner: string option
       BoardTitle: string option
@@ -834,8 +861,6 @@ let private emptyDraft =
       Governance = None
       Ref = None
       Pinned = None
-      Upgrade = None
-      Coordinate = None
       WorkspaceRepo = None
       BoardOwner = None
       BoardTitle = None
@@ -872,23 +897,14 @@ let private paramsPanel (d: Draft) =
          | Some true -> "[grey]pinned (installed CLI)[/]"
          | Some false -> "[green]update[/] [grey]fsgg-sdd first[/]"
          | None -> pendingCell)
-    row "upgrade"
-        (match d.Upgrade with
-         | Some true -> "[green]yes[/] [grey](reconcile)[/]"
-         | Some false -> "[grey]no[/]"
-         | None -> pendingCell)
     row "coordination"
-        (match d.Coordinate with
-         | Some true ->
-             let board =
-                 sprintf "board [aqua]%s/%s[/]"
-                     (Markup.Escape(d.BoardOwner |> Option.defaultValue "FS-GG"))
-                     (Markup.Escape(d.BoardTitle |> Option.defaultValue "Coordination"))
-             match d.WorkspaceRepo with
-             | Some r -> sprintf "%s [grey]· repo[/] [green]%s[/]" board (Markup.Escape r)
-             | None -> board
-         | Some false -> "[grey]none (skipped)[/]"
-         | None -> pendingCell)
+        (let board =
+             sprintf "board [aqua]%s/%s[/]"
+                 (Markup.Escape(d.BoardOwner |> Option.defaultValue "FS-GG"))
+                 (Markup.Escape(d.BoardTitle |> Option.defaultValue "Coordination"))
+         match d.WorkspaceRepo with
+         | Some r -> sprintf "%s [grey]· repo[/] [green]%s[/]" board (Markup.Escape r)
+         | None -> sprintf "%s [grey](default on)[/]" board)
     let panel = Panel(grid)
     panel.Header <- PanelHeader "[bold]parameters[/]"
     panel.Border <- BoxBorder.Rounded
@@ -897,7 +913,7 @@ let private paramsPanel (d: Draft) =
 
 /// Right card: a tree of what the run will produce, growing as the answers land. Structural
 /// nodes are always present (a workspace always has them); their annotations and the
-/// optional leaves (game-core, governance, upgrade) concretise as the draft fills in.
+/// optional leaves (game-core, governance) concretise as the draft fills in.
 let private previewPanel (d: Draft) =
     let root = d.Target |> Option.map Markup.Escape |> Option.defaultValue "[grey37]<target>[/]"
     let tree = Tree(sprintf "[bold]%s[/]  [grey]· new workspace[/]" root)
@@ -939,22 +955,13 @@ let private previewPanel (d: Draft) =
      | None -> tree.AddNode(sprintf "governance overlay  %s" pendingCell))
     |> ignore
 
-    (match d.Coordinate with
-     | Some true ->
-         let board =
-             sprintf "%s/%s"
-                 (d.BoardOwner |> Option.defaultValue "FS-GG")
-                 (d.BoardTitle |> Option.defaultValue "Coordination")
-         let node = tree.AddNode(sprintf "[green]coordination kit[/]  [grey](board [/][aqua]%s[/][grey])[/]" (Markup.Escape board))
-         node.AddNode "[grey37].claude+.agents/skills · scripts/fsgg-coord · .config/dotnet-tools.json · .claude/settings.json env[/]" |> ignore
-         node
-     | Some false -> tree.AddNode "[grey37]coordination — skipped[/]"
-     | None -> tree.AddNode(sprintf "coordination  %s" pendingCell))
-    |> ignore
-
-    match d.Upgrade with
-    | Some true -> tree.AddNode "[green]fsgg-sdd upgrade[/]  [grey](reconcile to the coherent set)[/]" |> ignore
-    | _ -> ()
+    let board =
+        sprintf "%s/%s"
+            (d.BoardOwner |> Option.defaultValue "FS-GG")
+            (d.BoardTitle |> Option.defaultValue "Coordination")
+    let coordination =
+        tree.AddNode(sprintf "[green]coordination kit[/]  [grey](board [/][aqua]%s[/][grey])[/]" (Markup.Escape board))
+    coordination.AddNode "[grey37].claude+.agents/skills · scripts/fsgg-coord · .config/dotnet-tools.json · .claude/settings.json env[/]" |> ignore
 
     let panel = Panel(tree)
     panel.Header <- PanelHeader "[bold]scaffold preview[/]"
@@ -971,20 +978,15 @@ let private equivalentCommand (d: Draft) =
     parts.Add(d.Product |> Option.defaultValue "<product>")
     (match d.Profile with Some p when p <> "game" -> parts.Add(sprintf "--profile %s" p) | _ -> ())
     (match d.Ref with Some r when r <> "main" -> parts.Add(sprintf "--ref %s" r) | _ -> ())
-    (match d.Coordinate with
-     | Some false -> parts.Add "--no-coordination"
-     | Some true ->
-         let owner = d.BoardOwner |> Option.defaultValue "FS-GG"
-         let title = d.BoardTitle |> Option.defaultValue "Coordination"
-         if owner <> "FS-GG" || title <> "Coordination" then parts.Add(sprintf "--board %s/%s" owner title)
-         (match d.WorkspaceRepo with
-          | Some r when r <> sprintf "FS-GG/%s" (d.Product |> Option.defaultValue "") -> parts.Add(sprintf "--repo %s" r)
-          | _ -> ())
-         (match d.ChoreLocks with Some cl -> parts.Add(sprintf "--chore-locks %s" cl) | None -> ())
-     | None -> ())
+    let owner = d.BoardOwner |> Option.defaultValue "FS-GG"
+    let title = d.BoardTitle |> Option.defaultValue "Coordination"
+    if owner <> "FS-GG" || title <> "Coordination" then parts.Add(sprintf "--board %s/%s" owner title)
+    (match d.WorkspaceRepo with
+     | Some r when r <> sprintf "FS-GG/%s" (d.Product |> Option.defaultValue "") -> parts.Add(sprintf "--repo %s" r)
+     | _ -> ())
+    (match d.ChoreLocks with Some cl -> parts.Add(sprintf "--chore-locks %s" cl) | None -> ())
     (match d.Pinned with Some true -> parts.Add "--pinned" | _ -> ())
     (match d.Governance with Some false -> parts.Add "--no-governance" | _ -> ())
-    (match d.Upgrade with Some true -> parts.Add "--upgrade" | _ -> ())
     String.Join(" ", parts)
 
 /// Clear and repaint the whole preview — the "getting fuller and fuller" frame the prompts
@@ -1002,9 +1004,10 @@ let private draftView (d: Draft) =
 
 /// When invoked with no arguments on an interactive terminal, walk the user through the
 /// scaffold parameters with Spectre.Console prompts instead of failing with a usage error.
-/// The surface mirrors the CLI exactly: product + target (text), profile + governance + ref
-/// (selection), upgrade (confirm). A live preview grows beside the prompts. A non-interactive
-/// stdin never reaches here (see `main`), so the piped/CI usage-error contract is unchanged.
+/// The surface follows the CLI defaults: product + target (text), profile + governance + ref
+/// (selection), then the non-default coordination values. A live preview grows beside the prompts.
+/// A non-interactive stdin never reaches here (see `main`), so the piped/CI usage-error contract
+/// is unchanged.
 /// Returns None if the user declines the final confirmation.
 let private interactive () : Options option =
     let mutable draft = emptyDraft
@@ -1069,46 +1072,34 @@ let private interactive () : Options option =
     draft <- { draft with Pinned = Some pinned }
 
     draftView draft
-    let upgrade =
-        AnsiConsole.Confirm("Also run [green]fsgg-sdd upgrade[/] after scaffolding (reconcile if behind)?", false)
-    draft <- { draft with Upgrade = Some upgrade }
-
-    draftView draft
-    // Coordination is an explicit sequence — org, board, this workspace's repo, chore-locks — each a
-    // step with FS-GG defaults, so the common case is still Enter-through but a product org is never
-    // buried behind a sub-choice. The repo's owner defaults the board org (a prompt default, no magic).
-    let coordinate, workspaceRepo, boardOwner, boardTitle, choreLocks =
-        if not (AnsiConsole.Confirm("Wire this workspace to a [green]coordination board[/]?", true)) then
-            false, sprintf "FS-GG/%s" product, "FS-GG", "Coordination", None
-        else
-            let repo =
-                AnsiConsole.Prompt(
-                    TextPrompt<string>("  This workspace's [green]repo[/] [grey](owner/repo)[/]?")
-                        .DefaultValue(sprintf "FS-GG/%s" product)
-                        .Validate(fun (s: string) -> required "repo" s)).Trim()
-            let owner =
-                AnsiConsole.Prompt(
-                    TextPrompt<string>("  Coordination board [green]org[/] [grey](owner)[/]?")
-                        .DefaultValue(fst (parseBoard repo))
-                        .Validate(fun (s: string) -> required "org" s)).Trim()
-            let title =
-                AnsiConsole
-                    .Prompt(TextPrompt<string>("  Board [green]title[/]?").DefaultValue("Coordination"))
-                    .Trim()
-            let cl =
-                let raw =
-                    AnsiConsole
-                        .Prompt(
-                            TextPrompt<string>(
-                                "  [green]Chore-locks[/] [grey](owner/repo#n,… — non-FS-GG boards; blank to skip)[/]?"
-                            )
-                                .AllowEmpty())
-                        .Trim()
-                if String.IsNullOrWhiteSpace raw then None else Some raw
-            true, repo, owner, title, cl
+    // Coordination remains default-on. Ask only for its meaningful values; scripted callers retain
+    // `--no-coordination` when they intentionally want to skip the whole step.
+    let workspaceRepo =
+        AnsiConsole.Prompt(
+            TextPrompt<string>("  This workspace's [green]repo[/] [grey](owner/repo)[/]?")
+                .DefaultValue(sprintf "FS-GG/%s" product)
+                .Validate(fun (s: string) -> required "repo" s)).Trim()
+    let boardOwner =
+        AnsiConsole.Prompt(
+            TextPrompt<string>("  Coordination board [green]org[/] [grey](owner)[/]?")
+                .DefaultValue(fst (parseBoard workspaceRepo))
+                .Validate(fun (s: string) -> required "org" s)).Trim()
+    let boardTitle =
+        AnsiConsole
+            .Prompt(TextPrompt<string>("  Board [green]title[/]?").DefaultValue("Coordination"))
+            .Trim()
+    let choreLocks =
+        let raw =
+            AnsiConsole
+                .Prompt(
+                    TextPrompt<string>(
+                        "  [green]Chore-locks[/] [grey](owner/repo#n,… — non-FS-GG boards; blank to skip)[/]?"
+                    )
+                        .AllowEmpty())
+                .Trim()
+        if String.IsNullOrWhiteSpace raw then None else Some raw
     draft <-
         { draft with
-            Coordinate = Some coordinate
             WorkspaceRepo = Some workspaceRepo
             BoardOwner = Some boardOwner
             BoardTitle = Some boardTitle
@@ -1117,19 +1108,7 @@ let private interactive () : Options option =
     // Final full preview, then a go/no-go before anything touches disk.
     draftView draft
     if AnsiConsole.Confirm("[bold]Create this scaffold now?[/]", true) then
-        Some
-            { Options.Target = target
-              Product = product
-              Ref = gitRef
-              Upgrade = upgrade
-              Governance = governance
-              Pinned = pinned
-              Profile = Some profile
-              Coordinate = coordinate
-              WorkspaceRepo = Some workspaceRepo
-              BoardOwner = boardOwner
-              BoardTitle = boardTitle
-              ChoreLocks = choreLocks }
+        Some(assembleWizardOptions target product gitRef governance pinned profile workspaceRepo boardOwner boardTitle choreLocks)
     else
         None
 

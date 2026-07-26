@@ -26,9 +26,12 @@ Requires the `fsgg-sdd` CLI on PATH (`dotnet tool install --global FS.GG.SDD.Cli
 new-sdd-workspace ./Pong Pong          # <target-dir> <product-name>
 ```
 
-Run it with **no arguments** on an interactive terminal and it walks you through the same
-parameters with prompts (product → target → profile → governance → descriptor ref → currency → upgrade →
-coordination — an explicit org / board / this-workspace's-repo / chore-locks sequence, defaulting to FS-GG).
+Run it with **no arguments** on an interactive terminal and it walks you through the meaningful
+parameters with prompts (product → target → profile → governance → descriptor ref → currency →
+this workspace's repo / coordination org / board / chore-locks, defaulting to FS-GG).
+The wizard follows the established defaults without asking redundant confirmations: coordination is
+on and an immediate post-scaffold `fsgg-sdd upgrade` is off. Scripted callers can still opt out with
+`--no-coordination` or intentionally request reconciliation with `--upgrade`.
 Beside the prompts a live preview fills in as you answer — a **parameters** card next to a
 **scaffold preview** tree of what the run will produce — and a final go/no-go confirmation
 guards the disk. When stdin is redirected (pipes, CI), it skips the wizard and keeps the
@@ -54,9 +57,9 @@ work out of the box: it vendors the coordination kit (the four coordination skil
 tool manifest — fetched from `FS-GG/.github` over HTTP, no checkout, like the descriptor) and writes
 `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (and `FSGG_COORD_CHORE_LOCKS` when given) into the workspace's
 `.claude/settings.json` `env`. The board defaults to **FS-GG/Coordination**; `--board` retargets it and
-`--no-coordination` skips the step. In the **no-arg wizard** this is an explicit input sequence — org,
-board title, this workspace's repo, and chore-locks are each their own prompt (Enter-through gives
-FS-GG/Coordination), and the repo's owner defaults the board-org prompt. This opens the product-mirror slice ADR-0019 §Consequences deferred
+`--no-coordination` skips the step. The **no-arg wizard** does not reconfirm this default; it asks only
+for the wiring values — this workspace's repo, org, board title, and chore-locks — with Enter-through
+giving FS-GG/Coordination, and the repo's owner defaulting the board-org prompt. This opens the product-mirror slice ADR-0019 §Consequences deferred
 (distribution had been framework-repos-only); the engine is env-multi-tenant, so any board works (#1140).
 
 Best-effort and non-blocking, like the governance overlay: a kit file that fails to fetch warns and the
