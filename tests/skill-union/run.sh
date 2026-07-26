@@ -262,11 +262,12 @@ expect_fail "a kit-coherent subset cannot green the union when a co-tenant PRODU
 # the defect is missing projections, not divergent bytes, so a checker that only compared bytes across
 # the roots that HAVE a skill would report green on all three real trees.
 if bash "$ASSERT" --product "$KITSUB_PROD" --roots "$ROOTS" >"$WORK/out" 2>&1; then
-  echo "FAIL  a byte-identical partition must still fail"; failcount=$((failcount+1))
+  echo "FAIL  (expected [partitioned] failure, got pass) a byte-identical partition must still fail"
+  sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
 elif grep -q 'divergent' "$WORK/out"; then
   echo "FAIL  a MISSING projection was reported as divergent bytes"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
 else
-  echo "PASS  (expected pass) a partition of byte-identical skills is [partitioned], never [divergent]"
+  echo "PASS  (expected [partitioned] fail) a partition of byte-identical skills is [partitioned], never [divergent]"
   pass=$((pass+1))
 fi
 

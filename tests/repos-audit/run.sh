@@ -219,8 +219,21 @@ wire_materializer_and_workflow() {
 # composition product — what FS.GG.Templates legitimately does) and `narrow-roots` (a smaller audit than
 # the capability claims). Those two are the reason this capability is not `workflow: skill-union-assert.yml`.
 #
+# EVERY MODE HERE IS A YAML DIALECT AS WELL AS A WIRING SHAPE, and that is the point. The first version
+# of this detector was two line-oriented awk scanners, and every mode in this fixture was block-style,
+# `uses:`-before-`with:`, whole-line-comments, list-items-deeper-than-their-key. All eighteen legs passed
+# while FIVE legal YAML shapes walked straight through — `with: {product-path: …}`, `with:` before
+# `uses:`, a trailing inline comment carrying the `uses:`, `on: {pull_request: {paths: […]}}`, and a
+# `paths:` sequence at its key's own indentation. One fixture dialect is how a detector passes its own
+# suite and fails on the org, so the modes below deliberately spread across dialects: flow mappings,
+# inline sequences, reversed key order, aliases, negated globs, CRLF.
+#
 # modes: true (default) · default-inputs · unfiltered · product · narrow-roots · no-codex-trigger
 #        ignore-root · push-only · commented · local · split
+#        flow-with-product · flow-with-narrow-roots · with-before-uses · inline-comment-uses
+#        flow-on-narrow · flow-pr-narrow · paths-at-key-indent · inline-paths
+#        broad-paths · alias-paths · negated-root · ignore-nonroot · archive-lookalike
+#        pr-target · step-level-uses · two-calls · crlf · expression-product · unparseable
 wire_caller() {
   clearfail "$1"
   local slug="${1//\//__}" mode="${2:-true}"
@@ -289,6 +302,89 @@ wire_caller() {
       printf '%s\n%s\n' "skill-union.yml" "roots-watch.yml" > "$FIX/$slug.list"
       printf 'on:\n  pull_request:\n    paths:\n      - "src/**"\n%s' "$call_root" > "$FIX/$slug/skill-union.yml"
       printf '%sjobs:\n  watch:\n    runs-on: ubuntu-latest\n' "$trigger_all" > "$FIX/$slug/roots-watch.yml" ;;
+
+    # --- FLOW MAPPINGS. A flow `with:` puts the key mid-line, so an anchored `/^[ ]*product-path:/`
+    #     never matched and the input read as ABSENT — i.e. as the default "." — certifying a
+    #     generated-product call as the committed-root gate. The fail-open this capability exists for.
+    flow-with-product)
+      printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with: {product-path: "artifacts/generated-product"}\n' \
+        "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
+    flow-with-narrow-roots)
+      printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with: { product-path: ".", roots: ".claude/skills .agents/skills" }\n' \
+        "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
+    # YAML mappings are UNORDERED and Actions accepts either order. A scanner that collected inputs only
+    # AFTER the `uses:` line saw none of them.
+    with-before-uses)
+      printf '%sjobs:\n  skill-union:\n    with:\n      product-path: "artifacts/generated-product"\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n' \
+        "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
+    # PROSE IS NOT WIRING, and an INLINE comment is prose too. A repo that DELETED its caller and left a
+    # note behind must read as a gap — the whole-line `commented` mode above did not cover this.
+    inline-comment-uses)
+      printf '%sjobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: "true"   # removed: uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n' \
+        "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
+
+    # --- FLOW `on:`. Both spellings were read as "inline form, therefore unfiltered, therefore armed",
+    #     so a filter that excludes every skill root passed.
+    flow-on-narrow)
+      printf 'on: {pull_request: {paths: ["src/**"]}}\n%s' "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+    flow-pr-narrow)
+      printf 'on:\n  pull_request: {paths: ["src/**"]}\n%s' "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+
+    # --- SEQUENCE SHAPES. A sequence at its key's own indentation is ordinary YAML; requiring entries
+    #     strictly deeper reported a correctly-armed gate as a gap and told the operator to add the
+    #     filter that was already there.
+    paths-at-key-indent)
+      printf 'on:\n  pull_request:\n    paths:\n    - ".claude/skills/**"\n    - ".codex/skills/**"\n    - ".agents/skills/**"\n%s' \
+        "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+    inline-paths)
+      printf 'on:\n  pull_request:\n    paths: [".claude/skills/**", ".codex/skills/**", ".agents/skills/**"]\n%s' \
+        "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+    alias-paths)
+      printf 'x-roots: &roots\n  - ".claude/skills/**"\n  - ".codex/skills/**"\n  - ".agents/skills/**"\non:\n  pull_request:\n    paths: *roots\n%s' \
+        "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+
+    # --- GLOB SEMANTICS. Coverage is glob MATCHING, not a prefix test: a broader filter genuinely fires
+    #     on a root change and must pass, a lookalike directory must not, and `!` SUBTRACTS.
+    broad-paths)
+      printf 'on:\n  pull_request:\n    paths: [".claude/**", ".codex/**", ".agents/**"]\n%s' \
+        "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+    negated-root)
+      printf 'on:\n  pull_request:\n    paths: ["**", "!.codex/skills/**"]\n%s' \
+        "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+    ignore-nonroot)
+      printf 'on:\n  pull_request:\n    paths-ignore: ["docs/**"]\n%s' \
+        "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+    archive-lookalike)
+      printf 'on:\n  pull_request:\n    paths: [".claude/skills-archive/**", ".codex/skills-archive/**", ".agents/skills-archive/**"]\n%s' \
+        "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+
+    # `pull_request_target` checks out the BASE ref, so the assertion would audit the tree the change is
+    # NOT in — a gate that reports on the PR and proves nothing about it.
+    pr-target)
+      printf 'on: [pull_request_target]\n%s' "$call_root" > "$FIX/$slug/skill-union.yml" ;;
+    # A reusable workflow is called by a JOB's `uses:`. Actions rejects a step-level `uses:` of one; a
+    # text grep counted it.
+    step-level-uses)
+      printf '%sjobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n' \
+        "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
+    # The realistic FS.GG.Templates end state: a generated-product call AND an own-root call in one file.
+    # The own-root one is what the capability is about, and one job must not mask the other either way.
+    two-calls)
+      printf '%sjobs:\n  product:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with:\n      product-path: "artifacts/generated-product"\n  own-roots:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with:\n      product-path: "."\n' \
+        "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
+    crlf)
+      printf '%s%s' "$trigger_all" "$call_root" | sed 's/$/\r/' > "$FIX/$slug/skill-union.yml" ;;
+    # An expression is not a value this detector can resolve, so it must NOT satisfy the call: unknown
+    # fails CLOSED (#266). Pinned so the choice is deliberate rather than incidental.
+    expression-product)
+      printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with:\n      product-path: "${{ inputs.where }}"\n' \
+        "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
+    # A workflow GitHub itself cannot parse cannot be the live gate, so it contributes no caller tokens —
+    # and it must not take the whole repo's verdict down with it either.
+    unparseable)
+      printf '%s\n%s\n' "skill-union.yml" "broken.yml" > "$FIX/$slug.list"
+      printf '%s%s' "$trigger_all" "$call_root" > "$FIX/$slug/skill-union.yml"
+      printf 'on: [pull_request\njobs: {{{\n' > "$FIX/$slug/broken.yml" ;;
   esac
 }
 unwired(){ clearfail "$1"; local slug="${1//\//__}"; mkdir -p "$FIX/$slug"; printf '%s\n' "ci.yml" > "$FIX/$slug.list";
@@ -1321,6 +1417,63 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$MULTICALLER" --repos-sh "$R
     && printf '%s' "$out" | grep -q "ok: FS-GG/FS.GG.Rendering wires .*coordination-coherence.yml"; } \
   && ok "caller: the detector id is capability-local alongside a workflow row" \
   || bad "caller state leaked from the capability parse loop" "rc=$rc: $out"
+
+# ---------------------------------------------------------------------------------------------------
+# (26b) THE YAML DIALECTS. Every leg below is legal YAML that GitHub Actions accepts, and every one of
+#       the first five walked straight through the line-oriented scanner this detector replaced — while
+#       all eighteen legs above passed. That is why the detector now PARSES: `paths:` and `with:` are
+#       structure, and the question "what was the assertion pointed at?" is a question about structure.
+wire_caller FS-GG/FS.GG.SDD                       # the honest caller, unchanged, in every leg below
+
+# A flow `with:` hides the key mid-line. This is FS.GG.Templates' legitimate generated-product call being
+# certified as the committed-root gate — the fail-open the whole `caller:` kind exists to close.
+for mode in flow-with-product with-before-uses flow-with-narrow-roots expression-product; do
+  wire_caller FS-GG/FS.GG.Rendering "$mode"
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'"; } \
+    && ok "caller/yaml: '$mode' does not satisfy the call half" \
+    || bad "caller/yaml: '$mode' must not certify the committed-root gate" "rc=$rc: $out"
+done
+
+# PROSE IS NOT WIRING, and an inline comment is prose. A repo that DELETED its caller and left the line
+# in a trailing comment must read as a gap — the whole-line `commented` leg above never covered this.
+for mode in inline-comment-uses step-level-uses local commented; do
+  wire_caller FS-GG/FS.GG.Rendering "$mode"
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'nothing in its workflows calls'; } \
+    && ok "caller/yaml: '$mode' is not a job-level call of the authority's workflow" \
+    || bad "caller/yaml: '$mode' must not satisfy the call half" "rc=$rc: $out"
+done
+
+# Flow-style triggers, and a `!`-negated or lookalike filter: each is a gate that does not run when a
+# root changes, and each read as armed under the scanner.
+for mode in flow-on-narrow flow-pr-narrow negated-root archive-lookalike pr-target; do
+  wire_caller FS-GG/FS.GG.Rendering "$mode"
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'"; } \
+    && ok "caller/yaml: '$mode' is not an armed gate over the three roots" \
+    || bad "caller/yaml: '$mode' must not satisfy the trigger half" "rc=$rc: $out"
+done
+
+# ...and the mirror: every one of these IS armed, and reporting it as a gap would tell an operator to add
+# a filter that is already there — the #320 lesson (a red whose remedy is already satisfied teaches that
+# the gate is broken). `broad-paths` and `ignore-nonroot` are WIDER than covered, which passes.
+for mode in paths-at-key-indent inline-paths alias-paths broad-paths ignore-nonroot two-calls crlf; do
+  wire_caller FS-GG/FS.GG.Rendering "$mode"
+  out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+  { [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)'; } \
+    && ok "caller/yaml: '$mode' is a correctly wired gate and audits green" \
+    || bad "caller/yaml: '$mode' must not be reported as a gap" "rc=$rc: $out"
+done
+
+# A workflow GitHub cannot parse cannot be the live gate — but it must not take the repo's verdict with
+# it either. The sibling workflow in the same repo IS the gate, and the verdict is about that.
+wire_caller FS-GG/FS.GG.Rendering unparseable
+out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '2 wired, 0 gap(s)' \
+    && printf '%s' "$out" | grep -q '0 undetermined'; } \
+  && ok "caller/yaml: an unparseable sibling workflow yields no caller token and no no-verdict" \
+  || bad "an unparseable workflow must not decide the repo's verdict" "rc=$rc: $out"
 
 # An unsupported caller id is a PERMANENT no-verdict (exit 3), not a gap: it is a deterministic read of
 # the roster, so a re-run reproduces it and only a commit fixes it. `repos.sh validate` refuses it too —

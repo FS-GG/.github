@@ -200,10 +200,16 @@ capabilities:
   # tell "this repo gates its OWN committed roots" from "this repo gates an artifact it produced", so it
   # would hand this capability a green off a call that never looks at the receiver's roots. For this row
   # the detector's subject is not the workflow, it is what the workflow was POINTED AT — so both halves
-  # are required, in ONE workflow file: a call with `product-path` absent-or-`.` and `roots` absent-or-
-  # all-three, and a `pull_request` trigger that fires when any of the three roots changes. An unarmed
-  # gate is not a gate (#332/#334/#880 are four hand-repairs of that exact shape), and a narrowed
+  # are required, in ONE workflow file: a call with `product-path` absent (or `.`/`./`) and `roots`
+  # absent-or-all-three, and a `pull_request` trigger that fires when any of the three roots changes. An
+  # unarmed gate is not a gate (#332/#334/#880 are four hand-repairs of that exact shape), and a narrowed
   # `roots:` is a smaller audit than this capability claims. Either half alone is drift, not adoption.
+  #
+  # The detector PARSES the receiver's workflow YAML — it does not grep it. It began as a line scanner and
+  # a review broke it with five legal YAML shapes in one sitting, two of them fail-open (a flow
+  # `with: {product-path: …}`, and `with:` written before `uses:`, both of which made the subject read as
+  # "absent, therefore the default, therefore the repository root"). `paths:` and `with:` are STRUCTURE,
+  # and so is the question this row asks.
   #
   # THE AUTHORITY IS NOT A RECEIVER, and that is the same asymmetry as `coordination-kit`: `.github` is
   # the SOURCE of the assertion, and it asserts its own roots with `skill-roots-selfcheck.yml` — its own

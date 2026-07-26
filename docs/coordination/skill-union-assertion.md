@@ -268,6 +268,15 @@ class, where the check is correct and its trigger is what fails open.
 Both halves must be in the *same* file, because a trigger cannot arm a workflow it is not in: the roots
 change, the other workflow runs, and the one that audits them does not.
 
+**Write it however YAML lets you.** `repos-audit` **parses** the workflow (`yq`, else `python3`+PyYAML)
+rather than grepping it, so key order, flow mappings (`with: {product-path: "."}`), inline sequences
+(`paths: [".claude/skills/**", …]`), anchors/aliases, comments and indentation style are all equivalent.
+`paths:` coverage is real glob matching, so a *broader* filter passes — `.claude/**` and `**/skills/**`
+arm the gate — while `.claude/skills-archive/**` does not, and a `!`-negated entry subtracts. This is not
+a convenience: the detector began as a line scanner, and five legal YAML shapes went through it in one
+review, two of them fail-open. `product-path: ${{ … }}` is *not* accepted — an expression is not a value
+the detector can resolve, and an unresolvable subject fails closed.
+
 **Make the resulting context required** on the receiver's default branch. GitHub names it
 `skill-union / skill-union` (`<caller job> / <callee job>`) — see
 [reusable-workflow-contract](reusable-workflow-contract.md), and note that the callee job id is
@@ -331,9 +340,18 @@ is complete only when `scripts/skill-union-assert.sh --product <fresh origin/mai
 tree above **and** every receiver check is green.
 
 Four of the seven — Templates, Game, Audio, Net — are already root-coherent and need only the caller
-above. Three must **rematerialize from their authoritative producers first** (not copy an arbitrary
-root, and proving an idempotent second materialization), and those repairs are filed and sequenced as
-cross-repo requests against Governance, Rendering and SDD.
+above. Three must **rematerialize from their authoritative producers first** (not copy an arbitrary root,
+and proving an idempotent second materialization), and those repairs are filed and sequenced as cross-repo
+requests: [Governance#326](https://github.com/FS-GG/FS.GG.Governance/issues/326),
+[Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080) and
+[SDD#716](https://github.com/FS-GG/FS.GG.SDD/issues/716). Each is independent of the other two — a repo's
+roots are its own — and each depends on this repo only for the caller shape above and the roster row.
+
+One tree sits outside this capability's subject and outside the composition gate's, so nothing audits it:
+`FS.GG.Rendering`'s `template/base/`, which carries `.claude/skills` and `.agents/skills` and no `.codex/`.
+It is neither a committed runtime root nor a generated product, and ADR-0011 §3 confines a provider to
+`.agents/skills/` — so the correct repair may be to *remove* the `.claude/` copy rather than add a root.
+Filed as a decision item: [Rendering#1081](https://github.com/FS-GG/FS.GG.Rendering/issues/1081).
 
 ### Standalone fetch — supported, and it is `dist/`, not `scripts/`
 

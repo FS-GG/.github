@@ -287,6 +287,39 @@ expect_fail "caller plus another detector is rejected as ambiguous" 1 "more than
   "$(capreg cap_twodet_caller "labels, skill-union" \
      "- { id: skill-union, caller: skill-union, workflow: coordination-coherence.yml }")"
 
+# `.yaml` is as valid a spelling as `.yml`, and the DETECTOR matches `skill-union-assert.ya?ml`. A
+# validator that accepted only one would call the roster invalid over a rename the audit handles fine.
+mv "$ROOT/.github/workflows/skill-union-assert.yml" "$ROOT/.github/workflows/skill-union-assert.yaml"
+expect_pass "caller detector subject may be spelled .yaml, as the detector's own regex allows" \
+  "$(capreg cap_caller_yaml "labels, skill-union" \
+     "- { id: skill-union, caller: skill-union, reason: subject spelled .yaml }")"
+mv "$ROOT/.github/workflows/skill-union-assert.yaml" "$ROOT/.github/workflows/skill-union-assert.yml"
+
+# THE AUTHORITY MAY NOT RECEIVE A CAPABILITY IT IS THE SOURCE OF — and this is the INVARIANT, not the
+# roster row. `repos-audit` detects a receiver by a `uses:` of the AUTHORITY's copy and deliberately never
+# matches a repo running its own, so a rostered authority produces a gap no edit to `.github` can ever
+# close, whose diagnostic ("nothing calls it") is false about the repo that IS it. `coordination-kit` has
+# been guarded since the roster existed; `skill-union` needs the same guard for the same reason (#1504).
+authreg() { # <name> <cap-id> — the authority rostered as a receiver of <cap-id>
+  local f="$WORK/$1.yml"
+  { printf 'schemaVersion: 8\nupdated: 2026-07-27\nauthority: FS-GG/.github\nrepos:\n'
+    printf '  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels, %s] }\n' "$2"
+    printf '  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, %s] }\n' "$2"
+    printf 'kit:\n'
+    printf '  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }\n'
+    printf '  - { id: democlient, kind: client, source: scripts/democlient }\n'
+    printf 'capabilities:\n'
+    printf '  - { id: skill-union, caller: skill-union }\n'
+    printf '  - { id: coordination-kit, workflow: coordination-coherence.yml }\n'
+    printf '%s\n' "$LABELS_CAP"; } > "$f"
+  relock "$f"
+  printf '%s' "$f"
+}
+expect_fail "the authority may not RECEIVE skill-union — it is the source" 1 \
+  "must not RECEIVE skill-union" "$(authreg auth_skillunion skill-union)"
+expect_fail "...and the coordination-kit guard still holds, from the same list" 1 \
+  "must not RECEIVE coordination-kit" "$(authreg auth_kit coordination-kit)"
+
 # Two detectors is ambiguous: repos-audit would have to pick one, and a receiver satisfying the loose
 # one would mask a gap in the strict one.
 expect_fail "capability declaring two detectors" 1 "more than one detector" \
@@ -605,6 +638,12 @@ def matches(path, pat):                       # GitHub glob: ** spans /, * does 
                  for p in re.split(r"(\*\*|\*)", pat))
     return re.fullmatch(rx, path) is not None
 
+# A `caller:` row's subject is a reusable workflow too — validate proves it exists and is callable, so it
+# carries EXACTLY the `workflow:` exposure and must be covered the same way. The detector-id → subject
+# mapping lives in scripts/repos.sh; this guard has to be TAUGHT each id rather than letting an unknown
+# one fall through to a silent `continue`, which is how build-config came to be ungated (#628).
+CALLER_SUBJECT = {"skill-union": ".github/workflows/skill-union-assert.yml"}
+
 gaps = []
 for trigger in want:
     if trigger not in triggers:
@@ -626,11 +665,6 @@ for trigger in want:
     # written as a `.get()`, would have silently skipped it: the fail-open one level up, in the guard
     # against the fail-open. A `push:` capability has NO subject in this repo (the authority pushes it
     # via a script that is not the detector), so it has nothing to cover.
-    # A `caller:` row's subject is a reusable workflow too — validate proves it exists and is callable,
-    # so it carries EXACTLY the `workflow:` exposure and must be covered the same way. The mapping from
-    # detector id to subject lives in scripts/repos.sh; the audit and this guard both read it, so a new
-    # caller id has to be taught here as well rather than falling through to a silent `continue`.
-    CALLER_SUBJECT = {"skill-union": ".github/workflows/skill-union-assert.yml"}
     for cap in reg.get("capabilities", []):
         if "workflow" in cap:  probe = f".github/workflows/{cap['workflow']}"
         elif "script" in cap:  probe = f"scripts/{cap['script']}"

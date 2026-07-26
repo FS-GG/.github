@@ -392,10 +392,22 @@ cmd_validate() {
     local authfull; authfull="$(echo "$json" | jq -r '.repos[] | select(.role=="authority") | .full')"
     [ "$authfull" = "$authority" ] || err "authority repo '$authfull' != top-level authority '$authority'."
   fi
-  if echo "$json" | jq -e --arg a "$authority" \
-      '.repos[] | select(.full==$a and ((.receives // []) | index("coordination-kit")))' >/dev/null; then
-    err "authority repo '$authority' must not RECEIVE coordination-kit — it is the source."
-  fi
+  # THE AUTHORITY MAY NOT RECEIVE A CAPABILITY IT IS THE SOURCE OF, and this is a LIST because the
+  # failure it prevents is not cosmetic. `repos-audit` detects a receiver by looking for a `uses:` of the
+  # AUTHORITY's copy, and deliberately does not match a repo running its own — so for these capabilities
+  # `.github` can never satisfy the detector by any edit to `.github`. Rostering it therefore produces a
+  # gap that is permanent, unfixable, and describes the repo falsely ("nothing calls it" when the repo IS
+  # it). `coordination-kit` has been guarded since the roster existed; `skill-union` needs it for exactly
+  # the same reason — `.github` asserts its own roots with skill-roots-selfcheck.yml, its own workflow.
+  # A string-equality fixture over today's roster is not this guard: it pins the DATA, and this pins the
+  # INVARIANT (#1504 review).
+  local srccap
+  for srccap in coordination-kit skill-union; do
+    if echo "$json" | jq -e --arg a "$authority" --arg c "$srccap" \
+        '.repos[] | select(.full==$a and ((.receives // []) | index($c)))' >/dev/null; then
+      err "authority repo '$authority' must not RECEIVE $srccap — it is the SOURCE. repos-audit detects a receiver by a 'uses:' of the authority's own workflow and never matches a repo running its own, so this row can only ever be an unfixable gap."
+    fi
+  done
 
   # --- outside-fabric: the reviewed opt-out list (.github#269) ---
   # An exemption is a standing licence for every fabric to ignore a repo, so it must be shaped and
@@ -512,10 +524,15 @@ cmd_validate() {
     case "$ccaller" in
       "") ;;
       skill-union)
-        if [ ! -f "$root/.github/workflows/skill-union-assert.yml" ]; then
+        # `.yml` OR `.yaml`, because the detector matches `skill-union-assert.ya?ml` — a validator that
+        # accepted only one spelling would call the roster invalid over a rename the audit handles fine.
+        local csubj=""
+        [ -f "$root/.github/workflows/skill-union-assert.yml" ]  && csubj="skill-union-assert.yml"
+        [ -n "$csubj" ] || { [ -f "$root/.github/workflows/skill-union-assert.yaml" ] && csubj="skill-union-assert.yaml"; }
+        if [ -z "$csubj" ]; then
           err "capability '$cid' names caller detector 'skill-union', whose subject .github/workflows/skill-union-assert.yml is not in .github/workflows/ — the audit greps receivers for a 'uses:' of it, so a subject that does not exist reports every receiver unwired."
-        elif ! grep -qE '^[[:space:]]*workflow_call:' "$root/.github/workflows/skill-union-assert.yml"; then
-          err "capability '$cid' names caller detector 'skill-union', but .github/workflows/skill-union-assert.yml has no 'workflow_call:' trigger — it is not reusable, so no repo can wire it."
+        elif ! grep -qE '^[[:space:]]*workflow_call:' "$root/.github/workflows/$csubj"; then
+          err "capability '$cid' names caller detector 'skill-union', but .github/workflows/$csubj has no 'workflow_call:' trigger — it is not reusable, so no repo can wire it."
         fi ;;
       *) err "capability '$cid' names unsupported caller detector '$ccaller' (supported: skill-union)." ;;
     esac
