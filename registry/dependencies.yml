@@ -312,13 +312,12 @@ contracts:
     consumers: [templates]   # Templates#14 overlay drift gate (git diff --exit-code)
     bundles: [governance-policy, governance-capabilities, governance-tooling, governance-descriptor]
   - id: fs-gg-ui-template
-    # CURRENT PACKAGE — FRAMEWORK 0.21.1 (Rendering#1072/PR#1077, merge 9b1824e1):
-    # binds representative performance evidence to opaque Game runner receipts, closes routing and
-    # scale observation over shipped inventories, and emits a separately bound critic request.
-    # The full FS.GG.UI BOM plus 16 member libraries and Template moved coherently.
+    # CURRENT PACKAGE — TEMPLATE 0.22.0 / FRAMEWORK PIN 0.21.1
+    # (Rendering#1066/PR#1068, merge 186254dd): adds independently critiqued, evidence-bound
+    # feedback actionability audits. This is a template-only cut; no FS.GG.UI framework member moved.
     version: "0.21.1"   # FRAMEWORK PATCH 0.21.1 (Rendering#1072/PR#1077, merge 9b1824e1): fail-closed representative-workload provenance and independent critic binding. PRIOR — 0.21.0.
-    package-version: "0.22.0" # Full coherent set published by green release run 30215060187; org-feed detection and nuget.org independently show FS.GG.UI.Template 0.21.1 live. PRIOR — 0.21.0.
-    package-tag: "fs-gg-ui-template/v0.22.0" # Ordered framework tag triple fs-gg-ui/v0.21.1 -> fs-gg-ui-template/v0.21.1 -> v0.21.1, all at merge 9b1824e12f92fe53bb4fecd9c556a8f0d49a05f1. PRIOR — fs-gg-ui-template/v0.21.0.
+    package-version: "0.22.0" # Template-only package published from merge 186254dd863bcd38005a520ac1bcf0da4dcecd01 by green release-tags run 30217711932; GitHub Packages record 1068517684 and nuget.org independently serve byte-identical non-signature payloads. The packed template pins the framework at 0.21.1. PRIOR — 0.21.1.
+    package-tag: "fs-gg-ui-template/v0.22.0" # Ordered template-only tags fs-gg-ui-template/v0.22.0 -> v0.22.0 both resolve to merge 186254dd863bcd38005a520ac1bcf0da4dcecd01; the unchanged framework snapshot remains fs-gg-ui/v0.21.1 at 9b1824e12f92fe53bb4fecd9c556a8f0d49a05f1. PRIOR — fs-gg-ui-template/v0.21.1.
     # visibility: PUBLIC — Feature 218 (FS.GG.Rendering#26): the whole coherent set (template + 16 FS.GG.UI.* libs) flipped private→PUBLIC so consumer-CI tokens install+restore without exit-103 (internal unavailable — FS-GG is a free, non-enterprise org; public matches the FS.GG.*.Cli norm)
     owner: rendering
     surface: "dotnet new fs-gg-ui (template/base) + FS.GG.UI.* framework packages"
