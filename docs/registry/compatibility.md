@@ -45,6 +45,11 @@ release run 30186060627 published package record 1067036038, and independent dow
 GitHub Packages and nuget.org have identical payload bytes after excluding only the public
 feed's `.signature.p7s`.
 
+The same SDD merge advances the emitted `governance-handoff` contract from 1.1.0 to
+1.2.0. The registry and the emitter's single `governanceHandoffContractVersion` literal
+now agree at 1.2.0; source-coherence run 30186679362 first exposed the inseparable drift,
+and the atomic registry merge `a8aa56f47625016085c30ed1d91bcfc820ae2694` resolved it.
+
 | Contract | Version | Owner | Surface | Consumers |
 |---|---|---|---|---|
 | `scaffold-provider` | 1.1.0 | SDD | `.fsgg/providers.yml` + invocation protocol (canonical product-name param `name`, ADR-0005). **1.1.0** (2026-07-05, additive; SDD feature 080, [Rendering#142](https://github.com/FS-GG/FS.GG.Rendering/issues/142)): optional **`identifierParameter`** sink — a descriptor can name the param that receives an SDD-derived valid-F# identifier, so a product whose name is an illegal F# identifier (hyphenated `Roquelike-DungeonCrawler`) compiles; `None` ⇒ identical to 1.0.0. Rendering declares `identifierParameter: rootNamespace`. Released in `FS.GG.UI.Template 0.1.66-preview.1` (2026-07-05) — see coherence `scaffold-provider-identifier`. | Templates, Rendering |
