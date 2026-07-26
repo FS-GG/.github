@@ -602,9 +602,10 @@ row is `coherent: true`. A behind-CLI scaffold is verified to warn
 (`scaffold.cliBehindMinimum`) and stamp used+minimum into `scaffold-provenance`
 (original axis resolution closed epic #85).
 
-**The skill union is content-verified in every lane (ADR-0014).** Skills are
-content-addressed data: each producer declares a skill-manifest (`{id, scope,
-sha256}`, canonical SKILL.md-body digest); ONE `mirror`/`verify` library
+**The skill union is content-verified in every lane (ADR-0014/ADR-0065).** Skills are
+content-addressed **directory** data: each producer manifest retains the canonical
+`SKILL.md` body digest for compatibility and additionally records every directory member's
+relative path, digest, executable mode, and the whole-tree digest. ONE `mirror`/`verify` library
 (`Fsgg.SkillMirror`, FS.GG.Contracts ≥ 1.4.0) owns all orchestrated fan-out, and the
 standalone spec-kit lane runs a vendored byte-equivalent as its single materialize
 step. The invariant — three byte-identical union roots, nothing dangling — is
@@ -614,6 +615,11 @@ enforces it hard in both lanes via the reusable `skill-union-assert.sh`
 (`skill-mirror-verified` coherence row, `coherent: true` since 2026-07-02).
 ADR-0065 applies the same `.claude/.codex/.agents` default to framework coordination-kit receivers:
 `FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
+That three-root declaration is the **transport/parity** contract, not a command to expose three
+duplicate catalog entries in one runtime. Claude and Codex catalog their supported roots; Codex
+installations that also expose `.codex/skills` suppress only that duplicate runtime entry and keep
+the materialized mirror intact. `agents/openai.yaml` carries host selection policy, including
+explicit-only autonomous drivers, without changing which directory bytes are delivered.
 
 **Skill *absence* is checkable too (ADR-0017).** The manifest is a superset catalog —
 a producer declares every skill it *can* emit, but emission is profile/lifecycle-gated,
