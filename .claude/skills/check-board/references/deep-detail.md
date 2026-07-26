@@ -62,12 +62,15 @@ Four constraints keep that from becoming a hole big enough to drive #561 through
 
 ## Run it
 
+Select the skill with the current host's supported selector. The examples below use Codex's `$name`
+form; use the host's skill picker or equivalent elsewhere.
+
 ```sh
 scripts/fsgg-coord budget                      # free; are we near the GraphQL cap?
-/check-board                                   # DRY RUN — report every finding, ask nothing, write nothing
-/check-board --apply                           # ...fix the board-side ones, and ASK the §5 questions
-/check-board --repo rendering                  # scope to one repo (registry short-id)
-/check-board --apply --no-ask                  # apply the mechanical fixes; leave every judgement report-only
+$check-board                                   # DRY RUN — report every finding, ask nothing, write nothing
+$check-board --apply                           # ...fix the board-side ones, and ASK the §5 questions
+$check-board --repo rendering                  # scope to one repo (registry short-id)
+$check-board --apply --no-ask                  # apply the mechanical fixes; leave every judgement report-only
 ```
 
 Dry run is the default, as it is for `reap` and `coordination-sync --check`. Read the findings
@@ -135,7 +138,7 @@ rule wants, so take the default. Note the cost lands on the budget the **claim l
 the **scheduler's** read, so it is served from a 90s shared cache (`FSGG_COORD_SCAN_TTL_SEC`) — that
 cache is why N looping workers cost one board scan instead of N. But this pass is a **truth** read,
 and the kit is explicit about the difference: the cached reads are `next`/`take`, while
-`ready`/`lint`/`who`/`reap` and *the `/check-board` snapshot* scan fresh, **"because a reconciler
+`ready`/`lint`/`who`/`reap` and *the `$check-board` snapshot* scan fresh, **"because a reconciler
 serving a cached 'truth' reports drift that was already fixed."** Omit `--fresh` and you can
 reconcile against a board up to 90 seconds stale — inventing findings a co-worker just repaired, and
 missing an item added moments ago. That is not theoretical: a cached scan taken seconds after an
@@ -473,7 +476,7 @@ jq -r '.items[]
 `Paths:` cannot be scheduled — `take`/`batch` refuse it, because an undeclared touch-set cannot be
 proven disjoint from another worker's — so it sits on the board *looking* startable while every
 worker who asks for work is told there is none. `.github` reached **twelve** such items at once, all
-filed through the org's own recipe, and `/pnext-item` reported a dead queue over a full one
+filed through the org's own recipe, and `$pnext-item` reported a dead queue over a full one
 ([#442](https://github.com/FS-GG/.github/issues/442)). The board is not wrong here — the *issue* is —
 so the remedy is an issue-body edit, which is why this class **asks** (§5) rather than fixing itself:
 what the touch-set should be is a fact about work nobody has done yet, and the pass has no way to
@@ -711,7 +714,7 @@ state has no recorded reason. **The roll-up's refusals evaporate for precisely t
 reproduce the defect in the fix for it.
 
 So every applied answer gets a comment on the issue, naming what was decided, by whom, on what
-evidence, and that `/check-board` was the instrument:
+evidence, and that `$check-board` was the instrument:
 
 ```sh
 # 1. board first, then the issue — #613: a parent stamped Done on the board with the issue left OPEN
@@ -729,7 +732,7 @@ gh api -X PATCH repos/FS-GG/FS.GG.Game/issues/211 -f state=closed
 
 The comment says what was judged, not that a tool ran:
 
-> **Closed by `/check-board`** — epic roll-up adjudicated by @ehotwagner on 2026-07-17.
+> **Closed by `$check-board`** — epic roll-up adjudicated by @ehotwagner on 2026-07-17.
 > All 3 children resolved: #204 (merged PR #219), #205 (merged PR #221), #206 (closed as duplicate of
 > #205). Acceptance in the body is fully delegated to those three; no un-delegated criterion.
 > Judged: these children **discharge** this epic (#614). Roll-up never ran because #206 was closed by
@@ -776,7 +779,7 @@ snapshot. Reclassify from the fresh scan, then apply any newly-earned status fli
 Do **not** re-run `lint` after step 4 hunting for epics that became `ROLLUP-READY` because you just
 closed their children. That is the climb, and §4 says why it is not yours to make: the next hop is a
 new judgement, on evidence a human has not seen, and taking it inside the same pass is how one `yes`
-becomes four closes. Those epics surface on the next `/check-board`, which is the correct rate.
+becomes four closes. Those epics surface on the next `$check-board`, which is the correct rate.
 
 ## 7. Confirm, and report what you did not touch
 

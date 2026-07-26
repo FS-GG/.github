@@ -303,9 +303,10 @@ mergeable, transfers the claim to you, and hands you the merge; the original com
 and you are the **lander**. It refuses a live claim (that is a steal), an item with no PR (nothing to
 land), and any PR that is not green and mergeable (that is *authoring*, not landing).
 
-Work on `item/<n>-<slug>` in its **own git worktree**. Agents: prefer the harness's built-in
-worktree isolation (`isolation: "worktree"`) — the same discipline, managed for you. Commit with the
-trailer `claim` prints (`FSGG-Worker: <id>`) so attribution survives into history.
+Work on `item/<n>-<slug>` in its **own git worktree**. Request the current host's worktree isolation
+when supported; otherwise create the worktree explicitly. Do not copy another host's tool name or
+isolation option. Commit with the trailer `claim` prints (`FSGG-Worker: <id>`) so attribution survives
+into history.
 
 **Always name the base ref** — `git worktree add … -b item/<n>-<slug> origin/main`. With no
 commit-ish, `-b` branches from the *shared checkout's* `HEAD`, and this protocol's whole premise is

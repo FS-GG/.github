@@ -167,6 +167,29 @@ proves a scaffolded workspace's agent-skill roots are the **byte-identical union
 product skills — content, not presence (ADR-0014's consumer-side check; the composition gate is its
 first caller).
 
+### Skill runtime exposure
+
+`.agent-skill-roots` is the transport/parity declaration: `.claude/skills`, `.codex/skills`, and
+`.agents/skills` must remain complete byte-identical mirrors. It is not a request for every host to
+catalog every root. Invoke a skill through the selector the active host supports (Codex CLI/IDE uses
+`$skill-name` or `/skills`; other hosts may provide a picker). Do not treat a literal `/skill-name`
+in historical prose as universally executable syntax.
+
+Codex natively discovers repository skills from `.agents/skills`. An installation or wrapper that
+also exposes `.codex/skills` will therefore show a duplicate name, because Codex does not merge
+same-named skills. Keep both directories synchronized and suppress only the duplicate catalog entry
+with Codex's supported per-skill override in `~/.codex/config.toml`:
+
+```toml
+[[skills.config]]
+path = "/absolute/path/to/repository/.codex/skills/drive-board/SKILL.md"
+enabled = false
+```
+
+Repeat the entry for each duplicated `.codex/skills/*/SKILL.md`, using resolved absolute paths, then
+restart Codex. The `.agents` copy remains enabled. Suppression is runtime configuration only: never
+delete, omit, or desynchronize the `.codex` mirror to hide a duplicate.
+
 Where that gate checks a *consumer's* tree, `skill-registry-coherence` checks this repo's *catalog*:
 `scripts/fsgg-skill-registry-check` asserts every `registry/skills.yml` row against the producer body
 it names — `source:` exists, `sha256:` equals that body's canonical digest, and a `fs-gg-game`-owned

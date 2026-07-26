@@ -4,7 +4,7 @@
     {
       "id": "check-board",
       "supplied-by": ".claude/skills/check-board",
-      "tree-sha256": "2328952d12e674fc298e771c9046844dc55fdec126fd671a603ff34aaadb8a84",
+      "tree-sha256": "6eebf25e0702164aaff1dc40cbc65aabb01ed65daaf7605ac6c92d709d2017a7",
       "files": [
         {
           "path": "SKILL.md",
@@ -12,8 +12,13 @@
           "executable": false
         },
         {
+          "path": "agents/openai.yaml",
+          "sha256": "ce496dbe4554189ab811f644c23d82019dba330c7a0449bdcc3973f46966bcf0",
+          "executable": false
+        },
+        {
           "path": "references/deep-detail.md",
-          "sha256": "3a774b01b439e4ac64802bac7b5f81365a50215d415fb52440d7880288524b3e",
+          "sha256": "138b871f106e9e03d7cd9fd8d7878c6a288829dc571120ac9d6552a78b12ce6d",
           "executable": false
         },
         {
@@ -31,11 +36,16 @@
     {
       "id": "cross-repo-coordination",
       "supplied-by": ".claude/skills/cross-repo-coordination",
-      "tree-sha256": "4e03ce46799e5b31f95a9ce900273e795810271d0204bed9a6f6de7dda0cedb2",
+      "tree-sha256": "537596ca4f8ac39e4bc12fcae92fb7cd970bbddd2db0127aea57d0afc126e1f0",
       "files": [
         {
           "path": "SKILL.md",
           "sha256": "c857dab77484ebebdb60d88bd5b7259b5b7f7f489a8e310a66502637359802c0",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "796390eed1239e8f0ba6d982fe0efc19412e21513ca5fd0600bffdcf52bef8cb",
           "executable": false
         },
         {
@@ -50,7 +60,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "91a17479023973cf674092875bec55090e048f10643fe92e6a50c15ed87a024c",
+          "sha256": "ab5c0ca7ec064e22362015dff7471ff7725bc966903c0986c8159cdc9517b5e9",
           "executable": false
         },
         {
@@ -63,7 +73,7 @@
     {
       "id": "intra-repo-parallel-work",
       "supplied-by": ".claude/skills/intra-repo-parallel-work",
-      "tree-sha256": "ab3b19ce4c1e9bf574656b0eb64997413f5ddd02ede2b9e0d3e4701609647b25",
+      "tree-sha256": "27fa7ba513cb92921535dacef88011321e3164e2967e6d1aa2c6f455f0f063a6",
       "files": [
         {
           "path": "SKILL.md",
@@ -71,8 +81,13 @@
           "executable": false
         },
         {
+          "path": "agents/openai.yaml",
+          "sha256": "8b0d364a19639d166ac2648b58bbc824881b8fdfb4c1c691730364ddff186974",
+          "executable": false
+        },
+        {
           "path": "references/deep-detail.md",
-          "sha256": "22c091812ae18bdccea853ce582734297954552c24a3e781c1e73a28844ec5ae",
+          "sha256": "6a62763c81aca77ffb9b2df1e08fd2494a2efd0de1d7e5ac70d3dac3f63f2237",
           "executable": false
         },
         {
@@ -90,11 +105,16 @@
     {
       "id": "pnext-item",
       "supplied-by": ".claude/skills/pnext-item",
-      "tree-sha256": "0b8ee262d7b2416e77ad01cd93b2044272ef5b1c70fdc6c32f335fb285c30e8b",
+      "tree-sha256": "9358653773bf4fe9dd7f429ad9e46bc649592639a99f607a57582d5e121c5622",
       "files": [
         {
           "path": "SKILL.md",
           "sha256": "107c998b5946ed8b50ccaffd1aa972b038f136488d6a583e8b09f211b11c02ac",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "4386e592dec3f185120a1495204cdd15679d9a72ca18852d9819fa029fadeda3",
           "executable": false
         },
         {
@@ -104,7 +124,7 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "b359bf58ac04fdc563546bce9da5ccfcdd2923aa1745ac6a072f6bc4bf3d44ec",
+          "sha256": "e8fd867c4d9f0a029e5d865f8f5e5bcfd034bbdfecd26c3ea5cf01d32add92a7",
           "executable": false
         },
         {

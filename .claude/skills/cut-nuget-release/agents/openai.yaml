@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cut NuGet Release"
+  short_description: "Release every stale FS-GG NuGet producer"
+  default_prompt: "Use $cut-nuget-release to audit and publish every stale FS-GG NuGet producer in dependency order."
+
+policy:
+  allow_implicit_invocation: false

@@ -19,11 +19,14 @@ Safe to run N times concurrently in one repo. That is the whole point: the claim
 server-side total order over comment ids, so exactly one worker wins each item, and `take`
 re-schedules a loser rather than sending it home.
 
+Select the skill with the current host's supported selector. The examples below use Codex's `$name`
+form; use the host's skill picker or equivalent elsewhere.
+
 ```sh
-/pnext-item                     # claim + work the next schedulable item in this repo
-/pnext-item --repo game         # ...in another repo (registry short-id)
-/pnext-item 186                 # ...that specific item (uses `claim`, not `take`)
-/pnext-item FS-GG/game#186      # ...qualified — takes whatever `claim` takes, and §6 pops this form
+$pnext-item                     # claim + work the next schedulable item in this repo
+$pnext-item --repo game         # ...in another repo (registry short-id)
+$pnext-item 186                 # ...that specific item (uses `claim`, not `take`)
+$pnext-item FS-GG/game#186      # ...qualified — takes whatever `claim` takes, and §6 pops this form
 ```
 
 **The third form is how §6 takes your own follow-up, and it buys that with the scheduler's guarantee.**
@@ -39,10 +42,10 @@ lock, the channel, and attribution all key on a **worker id** instead.
 scripts/fsgg-coord whoami       # your id, and which rule produced it
 ```
 
-**If `whoami` warns, stop and fix it.** It warns when the id came from a shared checkout or from a
-harness session id — and on Claude Code every subagent of a session shares one
-`CLAUDE_CODE_SESSION_ID`, so a fan-out silently collapses onto **one id**. That is the same-account
-bug one level down, and it defeats the lock you are about to take.
+**If `whoami` warns, stop and fix it.** It warns when the id came from a shared checkout or a host
+session id. Some hosts share one parent/session identity across every worker, so a fan-out silently
+collapses onto **one id**. That is the same-account bug one level down, and it defeats the lock you
+are about to take.
 
 **Mint the id with the tool. Do not invent one, and do not copy one out of a document** — run this
 verbatim, before anything else:
@@ -211,7 +214,7 @@ scripts/fsgg-coord next  --repo <r>                     # prints WHY each candid
 Common causes, in order of frequency: every candidate is in `Backlog` (not `Ready`); every candidate
 declares no `Paths:` and is therefore **unschedulable**; every candidate is blocked. If the board
 itself looks wrong — items `Blocked` behind closed issues, claims past their lease — run
-[`/check-board`](../../check-board/SKILL.md) and try again.
+[`$check-board`](../../check-board/SKILL.md) and try again.
 
 ### You hold it. Now read its COMMENTS — before the worktree, not after
 
@@ -352,9 +355,10 @@ two hours (#878). Another came one push from reverting a 76-line rewrite of **th
 2h earlier, with a clean diff and no conflict (#892). Nothing inside the tree can tell you; by the time
 any gate runs, the evidence is gone.
 
-Agents: prefer the harness's built-in worktree isolation (`isolation: "worktree"`) — same
-discipline, managed for you. Fetch anyway: whatever cuts the worktree can only cut it from the refs
-**this checkout has already fetched**.
+Use the isolation mechanism the current host exposes. Request a dedicated worktree when supported;
+otherwise create one explicitly from the fetched default branch before starting work. Do not copy a
+tool name or isolation option from another host. Fetch anyway: whatever cuts the worktree can only cut
+it from the refs **this checkout has already fetched**.
 
 ## 3. Work it
 
@@ -466,7 +470,7 @@ still yours; you just do it in the right order. (If it needs an issue to be clai
 you are filing it *to work it*, not to be rid of it.)
 
 > **"It is still yours" is a promise the recipe could not keep, and the number is why**
-> ([#1061](https://github.com/FS-GG/.github/issues/1061)). §6's last line was a bare `/pnext-item`,
+> ([#1061](https://github.com/FS-GG/.github/issues/1061)). §6's last line was a bare `$pnext-item`,
 > which re-scans the board and lets `take` pick — and **`take` is not bound by what you filed.** So the
 > follow-up you promised to take was handed to a scheduler that never heard the promise.
 >
@@ -714,7 +718,7 @@ ref is *for*.
 with no declared touch-set — correctly, since an undeclared one cannot be proven disjoint from
 another worker's — so the item lands on the board *looking* like work and is invisible to every
 worker who asks for work. This is not theoretical: `.github` reached **twelve** open items, all
-filed by this very recipe, **none** of them schedulable, and `/pnext-item` reported a dead queue
+filed by this very recipe, **none** of them schedulable, and `$pnext-item` reported a dead queue
 over a full one ([#442](https://github.com/FS-GG/.github/issues/442)). You are the one holding the
 context — you can name the files better than the eventual claimant can.
 
@@ -779,7 +783,7 @@ preserving release reports `released <ref> (column left at Blocked)` rather than
 You may still write `release <this-issue> --status Blocked` — it is equivalent here, and it is the honest
 form when you are parking an item whose column you have *not* already set.
 
-Then `/pnext-item` again — take something startable while the other repo responds.
+Then `$pnext-item` again — take something startable while the other repo responds.
 
 **If it doesn't block you, and it is genuinely not yours to fix (§4), file it and keep going.**
 `Status: Backlog` is the honest resting place for a finding nobody has scheduled yet.
@@ -1356,18 +1360,18 @@ scripts/fsgg-coord inbox --repo <r>         # anything arrive while you were hea
 # (#266/#585). Only 0 hands you a ref.
 next="$(scripts/fsgg-coord followup pop)"; rc=$?
 case "$rc" in
-  0) echo "follow-up -> $next" ;;                 # then: /pnext-item $next (CLAIMS), then set-paths
-  5) echo "queue empty -> the board" ;;           # then: /pnext-item
+  0) echo "follow-up -> $next" ;;                 # then: $pnext-item $next (CLAIMS), then set-paths
+  5) echo "queue empty -> the board" ;;           # then: $pnext-item
   *) echo "queue UNREADABLE (exit $rc) — NOT empty; fix it before you walk away"; exit "$rc" ;;
 esac
 ```
 
 **Then do EXACTLY ONE of these — the `case` is the whole point, and it is not decoration:**
 
-| the queue had one (exit 0) | `/pnext-item <that ref>` — which CLAIMS it — **then** `scripts/fsgg-coord set-paths <that ref> --paths <your set>`, and believe a non-zero set-paths |
-| the queue was empty (exit 5) | `/pnext-item` — back to the board |
+| the queue had one (exit 0) | `$pnext-item <that ref>` — which CLAIMS it — **then** `scripts/fsgg-coord set-paths <that ref> --paths <your set>`, and believe a non-zero set-paths |
+| the queue was empty (exit 5) | `$pnext-item` — back to the board |
 
-**Claim FIRST, then `set-paths` — and that order is not interchangeable.** `/pnext-item <ref>` uses `claim`,
+**Claim FIRST, then `set-paths` — and that order is not interchangeable.** `$pnext-item <ref>` uses `claim`,
 and **`set-paths` rewrites the touch-set of a lock you must be holding, so it refuses an item you do not
 hold** ([#706](https://github.com/FS-GG/.github/issues/706)). This step told you to `widen` *before* the
 claim for a day, and that cannot run: the refusal is a non-zero exit, and "believe a non-zero exit" then
@@ -1422,7 +1426,7 @@ the four guards that stop a loop from becoming the churn §4's own box warns abo
   item, **then** claim that one* — and this is the line that executes them. **One item in flight, ever.**
   Depth-first is how you turn a board full of observations into a worker who never merges, which is the
   same disease one level down.
-- **2. `claim` does NOT check disjointness — and this loop aims straight at that.** `/pnext-item <n>`
+- **2. `claim` does NOT check disjointness — and this loop aims straight at that.** `$pnext-item <n>`
   claims by number, and **only `take` checks a touch-set against live claims.** So the scheduler's
   overlap guarantee is simply absent here, and your `set-paths` exit code is the only collision check you
   get. That is not a general caution: it is pointed. Your follow-up's paths are, by construction, the
@@ -1440,7 +1444,7 @@ the four guards that stop a loop from becoming the churn §4's own box warns abo
   the work got done, which was the point. `claim` will exit non-zero and tell you who holds it. Drop the
   line and pop the next one; do not race them for an item you filed.
 
-**And if the queue is empty, the bare `/pnext-item` is not a consolation prize.** The board is the
+**And if the queue is empty, the bare `$pnext-item` is not a consolation prize.** The board is the
 default and the loop is the exception: it exists only so that a decision you made **with** the context is
 not thrown away and re-derived by a scheduler that has none. When you have no follow-up, you have no
 decision to carry, and `take` is exactly right.

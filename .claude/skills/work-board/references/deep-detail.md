@@ -105,7 +105,7 @@ dropped it, so "each worker gets its own worktree" does **not** by itself give i
 be made distinct deliberately. This skill uses the mint-per-worker path:
 
 - **Each worker mints its own id, inside its own isolated worktree.** The host spawns each subagent with
-  `isolation: "worktree"` (a fresh tree, so the per-checkout mint persists to *that* tree, not the shared
+  the host's isolated-worktree option when supported (a fresh tree, so the per-checkout mint persists to *that* tree, not the shared
   one) and the worker's very first act is the one mint idiom:
 
   ```sh
@@ -119,7 +119,7 @@ see inside their trees), so it verifies the **outcome** instead (§4).
 
 ## 2. The loop (what the HOST does)
 
-The host is the agent that invoked `/work-board`. It **schedules; it never implements.** `<this-repo>` is
+The host is the agent that invoked `$work-board`. It **schedules; it never implements.** `<this-repo>` is
 this one workspace's repo, resolved from the git remote — every `fsgg-coord` read below is scoped to it.
 Repeat until §5 says the board is genuinely done:
 
@@ -142,7 +142,7 @@ Repeat until §5 says the board is genuinely done:
    shared rate budget (§6). Do **not** pass the item numbers to the workers — `batch` is the host's
    *sizing* read and `take` is the worker's *claiming* read, and keeping them separate is what preserves
    `take`'s lost-race guarantee (drive-board §2).
-3. **Spawn a fresh subagent per slot** (Agent tool, `isolation: "worktree"`), one per slot, each running
+3. **Spawn a fresh subagent per slot** (using the host's available worker/subagent mechanism; request an isolated worktree when supported), one per slot, each running
    the worker brief (§3). One subagent, one `take`-loop-of-one: it takes an item, works it to done-stamp,
    and returns. Concurrency is bounded — one repo, one shared account (§6).
 4. **Collect each worker as it returns, and verify — do not trust (§4).** A worker reports the item it
@@ -271,7 +271,7 @@ per request, un-batchable — and **five workers looping `take` drained GraphQL 
 (#418). So concurrency is a cap, and the cap is a rate-limit decision. Three rules keep the fan-out from
 taking the board down (identical discipline to drive-board §3):
 
-- **Cap in-flight workers conservatively** (`/work-board --workers N`, default low). A board with 40
+- **Cap in-flight workers conservatively** (`$work-board --workers N`, default low). A board with 40
   schedulable items does not mean 40 workers; it means the cap's worth, then the next wave.
 - **Let the workers share the 90s scan cache.** The host's own planning reads (`check-board`, `batch`)
   scan **fresh** — a reconciler on a stale board invents drift — but the *workers'* `take`/`next` reads
