@@ -9,6 +9,8 @@ Burn down a markdown roadmap milestone by milestone. The roadmap—not a project
 
 1. Read the complete roadmap and select the next unchecked, dependency-ready milestone.
 2. Spawn one fresh disposable worker from current default branch and give it only that milestone.
+   During worker setup, interactive/game work must explicitly invoke the [performance-first planning
+   gate](../pnext-item/references/performance-first.md) before implementation begins.
 3. The worker follows the repository's SDD lifecycle and item/PR merge discipline, updates the roadmap
    with evidence, and lands the milestone.
 4. Verify the merge, tests, roadmap checkbox/evidence, release obligations, and feedback externally.

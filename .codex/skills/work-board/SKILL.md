@@ -12,7 +12,9 @@ Burn down one coordination-wired workspace's board. The local board is both plan
    guessing human judgement and promoting only evidenced actionable work to `Ready`.
 3. Compute local disjoint lanes and bounded concurrency through the normal scheduler.
 4. Spawn one fresh disposable worker per lane; each owns one item through claim, implementation,
-   review, green merge, obligations, and verified done.
+   review, green merge, obligations, and verified done. During worker setup, interactive/game work
+   must explicitly invoke the [performance-first planning
+   gate](../pnext-item/references/performance-first.md) before implementation begins.
 5. Report live item state immediately. Whenever the host changes or observes a material transition
    (`Ready`, `In progress`, review, CI, merged, release, downstream adoption, `Blocked`, or `Done`),
    emit exactly two concise user-facing lines:

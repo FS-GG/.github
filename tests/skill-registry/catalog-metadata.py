@@ -119,3 +119,67 @@ for board_driver in ("drive-board", "work-board"):
     assert_live_status_contract(board_driver)
 
 print("board-driver live status contract: ok")
+
+
+def mirrored_skill_files(skill_name: str, relative_path: str) -> list[pathlib.Path]:
+    return [
+        REPO / root / skill_name / relative_path
+        for root in module.SKILL_ROOTS
+    ]
+
+
+def assert_performance_first_contract() -> None:
+    reference_paths = mirrored_skill_files(
+        "pnext-item", "references/performance-first.md"
+    )
+    reference_bodies = [path.read_bytes() for path in reference_paths]
+    assert len(set(reference_bodies)) == 1, (
+        "performance-first guidance must remain byte-identical across all skill roots"
+    )
+    reference = " ".join(reference_bodies[0].decode().split())
+
+    phases = ["PERF-PLAN", "PERF-SMOKE", "PERF-IMPLEMENT", "PERF-RELEASE", "PERF-REPORT"]
+    offsets = [reference.index(phase) for phase in phases]
+    assert offsets == sorted(offsets), "performance phases must remain ordered before implementation"
+
+    required = [
+        "A non-interactive product with no active typed performance intent has no performance gate",
+        "Invoke each focused product or subsystem skill by name",
+        "A `Placeholder`, synthetic-only, missing, or stale workload cannot pass this gate.",
+        "State expected scale and structural budgets before code changes.",
+        "Smoke is iteration evidence only; it is never ship evidence.",
+        "If worker-created scope changes the route, workload, expected scale, budget, or touched subsystem, return to PERF-PLAN",
+        "scene nodes, search expansions, blocker-index builds, allocation/update counts, raw-input-to-applied ratio, and moving-versus-interpolated actors.",
+        "full Release `Test`/`Verify` performance route against the exact candidate",
+        "independent Governance verdict",
+        "linked blocking performance-debt issue.",
+        "Surface a human decision or environment/capability blocker once with the next action and stop retrying it; do not spin.",
+    ]
+    missing = [fragment for fragment in required if fragment not in reference]
+    assert not missing, f"performance-first worker contract lost required behavior: {missing}"
+
+    for driver in ("work-board", "work-roadmap"):
+        driver_paths = mirrored_skill_files(driver, "SKILL.md")
+        driver_bodies = [path.read_bytes() for path in driver_paths]
+        assert len(set(driver_bodies)) == 1, (
+            f"{driver} must remain byte-identical across all skill roots"
+        )
+        text = " ".join(driver_bodies[0].decode().split())
+        assert "During worker setup, interactive/game work must explicitly invoke" in text
+        assert "../pnext-item/references/performance-first.md" in text
+        assert text.index("performance-first planning") < text.index(
+            "before implementation begins"
+        )
+
+    pnext_paths = mirrored_skill_files("pnext-item", "SKILL.md")
+    pnext_bodies = [path.read_bytes() for path in pnext_paths]
+    assert len(set(pnext_bodies)) == 1, (
+        "pnext-item must remain byte-identical across all skill roots"
+    )
+    pnext = " ".join(pnext_bodies[0].decode().split())
+    assert "Before implementing interactive/game work" in pnext
+    assert "references/performance-first.md" in pnext
+
+
+assert_performance_first_contract()
+print("performance-first driver contract: ok")
