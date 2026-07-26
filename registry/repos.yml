@@ -29,6 +29,7 @@
 #   build-config       — the org-shared .NET build config from FS.GG.Kit [materializer: build-config]
 #   lockfile-sync      — the reusable lockfile-sync workflow                          [workflow: lockfile-sync.yml]
 #   contract-coherence — the reusable contract-coherence gate                         [workflow: contract-coherence.yml]
+#   skill-union        — the FULL three-root skill union over the repo's OWN committed roots [caller: skill-union]
 #
 # A `receives` row is a CLAIM ABOUT REALITY, and it goes stale silently. `lockfile-sync` is the
 # proof: six repos really wired the reusable workflow, nobody added the rows, and `repos-audit`
@@ -51,19 +52,19 @@
 # Legal only on a coordination-kit receiver, and only ever WRITTEN as `package` (absent == byte-copy).
 # `repos.sh validate` enforces the vocabulary and the receiver requirement.
 
-schemaVersion: 7
-updated: 2026-07-23
+schemaVersion: 8
+updated: 2026-07-27
 authority: FS-GG/.github
 
 repos:
-  - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }
-  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package }
-  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package }
-  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package }
-  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package }               # NOT build-config — see below.
-  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence], kit-delivery: package }
-  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package }               # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
-  - { id: net,         full: FS-GG/FS.GG.Net,        role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence], kit-delivery: package }               # NOT build-config — has its OWN hand-authored Directory.Build.props, like audio/templates. The org's 8th repo: a render-independent transport component (protobuf over WebSocket/gRPC), onboarded under ADR-0052. Rostered at creation (unlike audio, which sat unrostered for weeks — the exact gap #269 closed). No dependencies.yml contract row yet: publish-before-flip (FR-007) — it ships one when it cuts its first release + the wire-contract schema lands (SDD#589).
+  - { id: .github,     full: FS-GG/.github,          role: authority, receives: [labels] }                                                                                          # NOT skill-union — the AUTHORITY asserts its own roots with skill-roots-selfcheck.yml, its own workflow. See the capability row.
+  - { id: sdd,         full: FS-GG/FS.GG.SDD,        role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
+  - { id: rendering,   full: FS-GG/FS.GG.Rendering,  role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
+  - { id: governance,  full: FS-GG/FS.GG.Governance, role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
+  - { id: templates,   full: FS-GG/FS.GG.Templates,  role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }  # NOT build-config — see below.
+  - { id: game,        full: FS-GG/FS.GG.Game,       role: framework, receives: [labels, coordination-kit, build-config, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }
+  - { id: audio,       full: FS-GG/FS.GG.Audio,      role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }  # NOT build-config — see below. (The org's 7th repo: in dependencies.yml since its transfer, but never rostered — so no fabric ever iterated it and no gate could say so.)
+  - { id: net,         full: FS-GG/FS.GG.Net,        role: framework, receives: [labels, coordination-kit, lockfile-sync, contract-coherence, skill-union], kit-delivery: package }  # NOT build-config — has its OWN hand-authored Directory.Build.props, like audio/templates. The org's 8th repo: a render-independent transport component (protobuf over WebSocket/gRPC), onboarded under ADR-0052. Rostered at creation (unlike audio, which sat unrostered for weeks — the exact gap #269 closed). No dependencies.yml contract row yet: publish-before-flip (FR-007) — it ships one when it cuts its first release + the wire-contract schema lands (SDD#589).
 
 # `build-config` was a legal word in `KNOWN_CAPS` that NO repo said (#626).
 #
@@ -134,6 +135,9 @@ repos:
 #              to `uses:`, so the workflow detector cannot see it at all
 #   materializer: the receiver explicitly opts into an FS.GG.Kit materializer AND CI reruns it and
 #                 fails on generated-file drift; `build-config` is the supported compound detector
+#   caller:    the receiver calls one of .github's reusable workflows AGAINST A PARTICULAR SUBJECT,
+#              and the `uses:` alone cannot say which subject; `skill-union` is the supported compound
+#              detector. Use it when a `workflow:` row would certify a call aimed somewhere else.
 #   push:      the AUTHORITY writes it into the receiver; nothing is wired receiver-side to detect
 #
 # AND NOTHING MAY BE `receives:`d THAT HAS NO ROW HERE. That closure is what makes the promise above
@@ -172,6 +176,67 @@ capabilities:
       what DRIVES the push, so it cannot go stale the way a pull capability's can — add a repo here and
       it gets labels. Recorded rather than omitted, because an omission is indistinguishable from the
       build-config hole that #628 exists to close.
+
+  # THE FULL SKILL UNION (#1504, ADR-0065, ADR-0011). `coordination-kit`'s detector above proves the
+  # KIT-OWNED SUBSET of the three-root invariant — the four skills the `kit:` block names, and only
+  # those. This row is the capability that proves the WHOLE runtime-visible union: every skill in a
+  # repo's committed `.claude/skills`, `.codex/skills` and `.agents/skills`, present in every root and
+  # byte-identical across them. The two are not the same claim, and the gap between them was invisible.
+  #
+  # MEASURED ON `origin/main`, 2026-07-27, and this is why the row exists: Governance holds
+  # `.claude=15 .codex=4 .agents=4`; Rendering `.claude=50 .codex=4 .agents=50`; SDD
+  # `.claude=32 .codex=21 .agents=4`. Every skill present in more than one root is byte-identical, so
+  # nothing had DRIFTED — projections were simply MISSING, for 11, 46 and 28 skills respectively. Codex
+  # and agent runtimes were handed materially smaller instruction sets than Claude while
+  # `coordination-coherence` stayed green on all three, because the four kit skills really are coherent
+  # in all three roots. ADR-0065's receiver rollout (#1016, Governance#298, SDD#669) then described that
+  # subset result as restored three-root coherence: the co-tenant process and product skills those trees
+  # were populated with by earlier writers were outside the materializer AND outside its acceptance
+  # check, so they survived the migration unexamined.
+  #
+  # WHY `caller:` AND NOT `workflow: skill-union-assert.yml`. The reusable assertion is
+  # SUBJECT-PARAMETERISED — it audits whatever `product-path:` names — and FS.GG.Templates legitimately
+  # calls it against GENERATED composition products (FS.GG.Templates#49). A bare `uses:` detector cannot
+  # tell "this repo gates its OWN committed roots" from "this repo gates an artifact it produced", so it
+  # would hand this capability a green off a call that never looks at the receiver's roots. For this row
+  # the detector's subject is not the workflow, it is what the workflow was POINTED AT — so both halves
+  # are required, in ONE workflow file: a call with `product-path` absent (or `.`/`./`) and `roots`
+  # absent-or-all-three, and a `pull_request` trigger that fires when any of the three roots changes. An
+  # unarmed gate is not a gate (#332/#334/#880 are four hand-repairs of that exact shape), and a narrowed
+  # `roots:` is a smaller audit than this capability claims. Either half alone is drift, not adoption.
+  #
+  # The detector PARSES the receiver's workflow YAML — it does not grep it. It began as a line scanner and
+  # a review broke it with five legal YAML shapes in one sitting, two of them fail-open (a flow
+  # `with: {product-path: …}`, and `with:` written before `uses:`, both of which made the subject read as
+  # "absent, therefore the default, therefore the repository root"). `paths:` and `with:` are STRUCTURE,
+  # and so is the question this row asks.
+  #
+  # THE AUTHORITY IS NOT A RECEIVER, and that is the same asymmetry as `coordination-kit`: `.github` is
+  # the SOURCE of the assertion, and it asserts its own roots with `skill-roots-selfcheck.yml` — its own
+  # workflow, running the bare command a worker runs. Running your own gate is not participating in
+  # somebody else's fabric, so the detector deliberately does not match it and this roster does not
+  # claim it. `.github`'s own coherence is proven, it is simply proven HERE.
+  #
+  # THIS ROW GOES RED BEFORE IT GOES GREEN, AND THAT IS THE POINT. No framework repo has wired the
+  # receiver caller yet (measured 2026-07-27: zero `uses:` of skill-union-assert.yml in any of the
+  # seven), so the scheduled `repos-audit` reports seven gaps until they do — and three of them cannot
+  # even go green on a caller alone, because Governance, Rendering and SDD must first rematerialize
+  # their partitioned roots from their authoritative producers. Those three repairs are filed and
+  # sequenced as cross-repo requests; #1504's own completion bar says the rollout is not complete until
+  # `scripts/skill-union-assert.sh --product <fresh tree>` passes for every audited tree AND every
+  # receiver check is green. Rostering the receivers is what makes that bar VISIBLE instead of a
+  # sentence in a closed issue. The alternative — `receivers: none` until somebody wires it — would have
+  # recorded that nobody receives the full union, which is exactly the claim the org has now rejected.
+  - id: skill-union
+    caller: skill-union
+    reason: >-
+      The FULL three-root union over a repo's OWN committed skill roots, asserted by a
+      skill-union-assert.yml caller aimed at the repository root with all three ADR-0011 roots, on a
+      trigger that fires when any of them changes. Compound because the assertion is
+      subject-parameterised: a call aimed at a generated product, or narrowed with roots:, proves
+      nothing about the committed roots, so a bare uses: detector would be a green nobody earned
+      (#628). Distinct from coordination-kit, which proves only the kit-owned four-skill subset — the
+      subset was green on three partitioned trees for as long as they existed (#1504).
 
   # ADOPTED (#519). Was `receivers: none` + a reason, on the grounds that "whether the six
   # framework repos SHOULD adopt it is a live org question". That question was decided YES, and

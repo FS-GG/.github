@@ -217,6 +217,60 @@ rm -rf "$PART/.agents/skills/beta"
 expect_fail "partitioned root (skill absent from one root)" partitioned "$PART"
 expect_fail "partitioned root (declared skill absent from one root, manifest supplied)" partitioned "$PART" --manifest "$MANIFEST"
 
+# --- 4b. THE KIT-COHERENT SUBSET IS NOT THE UNION (#1504) ----------------------------------------
+#
+# This is the negative fixture behind the `skill-union` receiver capability, and it reproduces the exact
+# state three real trees were in on `origin/main`: Governance `.claude=15 .codex=4 .agents=4`, Rendering
+# `.claude=50 .codex=4 .agents=50`, SDD `.claude=32 .codex=21 .agents=4`. Nothing had DRIFTED — every
+# skill present in more than one root was byte-identical. Projections were MISSING, and the four
+# kit-owned coordination skills (`registry/repos.yml`'s `kit:` block: cross-repo-coordination,
+# intra-repo-parallel-work, check-board, pnext-item) were coherent in all three roots the whole time.
+#
+# So `coordination-coherence` — whose subject IS that four-skill subset — was green, correctly, on trees
+# where codex and agent runtimes received a fraction of Claude's instruction set. ADR-0065's receiver
+# rollout then read that subset green as restored three-root coherence, and the co-tenant process and
+# product skills those trees were populated with by earlier writers survived the migration unexamined.
+#
+# The two legs are one claim, and it only holds because BOTH are asserted: the kit subset alone PASSES,
+# and adding a partitioned co-tenant to that same coherent subset FAILS. Assert only the failure and the
+# fixture proves nothing about the subset; assert only the pass and it proves nothing about the union.
+KITSUB="$WORK/kit-subset"
+for r in $ROOTS; do
+  mk_skill "$KITSUB/$r" cross-repo-coordination  "# cross-repo-coordination"
+  mk_skill "$KITSUB/$r" intra-repo-parallel-work "# intra-repo-parallel-work"
+  mk_skill "$KITSUB/$r" check-board              "# check-board"
+  mk_skill "$KITSUB/$r" pnext-item               "# pnext-item"
+done
+expect_pass "kit-owned four-skill subset is coherent across all three roots" "$KITSUB"
+
+# A CO-TENANT PROCESS skill, in .claude only — Governance's eleven partitioned Speckit skills.
+KITSUB_PROC="$WORK/kit-subset-partitioned-process"
+cp -R "$KITSUB" "$KITSUB_PROC"
+mk_skill "$KITSUB_PROC/.claude/skills" speckit-plan "# co-tenant process skill, .claude only"
+expect_fail "a kit-coherent subset cannot green the union when a co-tenant PROCESS skill is partitioned" \
+  partitioned "$KITSUB_PROC"
+
+# A co-tenant PRODUCT skill in .claude + .agents but not .codex — Rendering's forty-six.
+KITSUB_PROD="$WORK/kit-subset-partitioned-product"
+cp -R "$KITSUB" "$KITSUB_PROD"
+mk_skill "$KITSUB_PROD/.claude/skills" fs-gg-scene "# co-tenant product skill"
+mk_skill "$KITSUB_PROD/.agents/skills" fs-gg-scene "# co-tenant product skill"
+expect_fail "a kit-coherent subset cannot green the union when a co-tenant PRODUCT skill is partitioned" \
+  partitioned "$KITSUB_PROD"
+
+# And the partition is found even when the partitioned skill's bytes are IDENTICAL wherever it appears —
+# the defect is missing projections, not divergent bytes, so a checker that only compared bytes across
+# the roots that HAVE a skill would report green on all three real trees.
+if bash "$ASSERT" --product "$KITSUB_PROD" --roots "$ROOTS" >"$WORK/out" 2>&1; then
+  echo "FAIL  (expected [partitioned] failure, got pass) a byte-identical partition must still fail"
+  sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+elif grep -q 'divergent' "$WORK/out"; then
+  echo "FAIL  a MISSING projection was reported as divergent bytes"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+else
+  echo "PASS  (expected [partitioned] fail) a partition of byte-identical skills is [partitioned], never [divergent]"
+  pass=$((pass+1))
+fi
+
 # --- 5. dangling: an extra skill present + identical in EVERY root but not declared by the
 #        manifest → FAIL (exercises the [dangling] branch, not the earlier partition check) ---
 DANG="$WORK/dangling"; build_good "$DANG"

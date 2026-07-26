@@ -34,6 +34,11 @@ printf 'on:\n  workflow_call:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
 # A workflow that is NOT reusable: no `workflow_call:` trigger, so no repo could ever `uses:` it.
 printf 'on:\n  push:\njobs:\n  x:\n    runs-on: ubuntu-latest\n' \
   > "$ROOT/.github/workflows/not-reusable.yml"
+# A `caller:` capability's SUBJECT is a reusable workflow too, and validate proves it exists and is
+# callable for exactly the `workflow:` reason: the audit greps receivers for a `uses:` of it, so a
+# missing or non-reusable subject reports every receiver unwired forever (#1504).
+printf 'on:\n  workflow_call:\njobs:\n  skill-union:\n    runs-on: ubuntu-latest\n' \
+  > "$ROOT/.github/workflows/skill-union-assert.yml"
 # A SCRIPT-delivered capability names a script in scripts/, and validate proves it is really there —
 # the audit greps receivers for a reference to it, so a script that does not exist would report every
 # receiver unwired (#628). Same guarantee the `workflow:` detector already gets.
@@ -254,6 +259,67 @@ expect_fail "capability naming an unsupported materializer detector" 1 "unsuppor
   "$(capreg cap_badmaterializer "labels, build-config" \
      "- { id: build-config, materializer: imaginary, reason: no audit implementation exists }")"
 
+# The CALLER detector (#1504). Same closed vocabulary as `materializer:`, and the same subject-exists
+# rule as `workflow:`/`script:` — because the audit greps receivers for a `uses:` of the named reusable
+# workflow, so a subject that is gone or not callable reports every receiver unwired forever.
+expect_pass "a caller-detected capability passes on the supported compound detector" \
+  "$(capreg cap_caller "labels, skill-union" \
+     "- { id: skill-union, caller: skill-union, reason: own-root call plus a trigger over those roots }")"
+
+expect_fail "capability naming an unsupported caller detector" 1 "unsupported caller detector" \
+  "$(capreg cap_badcaller "labels, skill-union" \
+     "- { id: skill-union, caller: imaginary, reason: no audit implementation exists }")"
+
+# The subject of `caller: skill-union` is skill-union-assert.yml. Delete it and the roster is invalid —
+# which is what makes the selftest paths:-coverage leg below load-bearing rather than decorative.
+mv "$ROOT/.github/workflows/skill-union-assert.yml" "$ROOT/.github/workflows/skill-union-assert.yml.bak"
+expect_fail "caller detector whose subject workflow does not exist" 1 "is not in .github/workflows/" \
+  "$(capreg cap_caller_nosubject "labels, skill-union" \
+     "- { id: skill-union, caller: skill-union, reason: subject deleted }")"
+printf 'on:\n  push:\njobs:\n  skill-union:\n    runs-on: ubuntu-latest\n' \
+  > "$ROOT/.github/workflows/skill-union-assert.yml"
+expect_fail "caller detector whose subject workflow is not reusable" 1 "no 'workflow_call:' trigger" \
+  "$(capreg cap_caller_notreusable "labels, skill-union" \
+     "- { id: skill-union, caller: skill-union, reason: subject cannot be called }")"
+mv "$ROOT/.github/workflows/skill-union-assert.yml.bak" "$ROOT/.github/workflows/skill-union-assert.yml"
+
+expect_fail "caller plus another detector is rejected as ambiguous" 1 "more than one detector" \
+  "$(capreg cap_twodet_caller "labels, skill-union" \
+     "- { id: skill-union, caller: skill-union, workflow: coordination-coherence.yml }")"
+
+# `.yaml` is as valid a spelling as `.yml`, and the DETECTOR matches `skill-union-assert.ya?ml`. A
+# validator that accepted only one would call the roster invalid over a rename the audit handles fine.
+mv "$ROOT/.github/workflows/skill-union-assert.yml" "$ROOT/.github/workflows/skill-union-assert.yaml"
+expect_pass "caller detector subject may be spelled .yaml, as the detector's own regex allows" \
+  "$(capreg cap_caller_yaml "labels, skill-union" \
+     "- { id: skill-union, caller: skill-union, reason: subject spelled .yaml }")"
+mv "$ROOT/.github/workflows/skill-union-assert.yaml" "$ROOT/.github/workflows/skill-union-assert.yml"
+
+# THE AUTHORITY MAY NOT RECEIVE A CAPABILITY IT IS THE SOURCE OF — and this is the INVARIANT, not the
+# roster row. `repos-audit` detects a receiver by a `uses:` of the AUTHORITY's copy and deliberately never
+# matches a repo running its own, so a rostered authority produces a gap no edit to `.github` can ever
+# close, whose diagnostic ("nothing calls it") is false about the repo that IS it. `coordination-kit` has
+# been guarded since the roster existed; `skill-union` needs the same guard for the same reason (#1504).
+authreg() { # <name> <cap-id> — the authority rostered as a receiver of <cap-id>
+  local f="$WORK/$1.yml"
+  { printf 'schemaVersion: 8\nupdated: 2026-07-27\nauthority: FS-GG/.github\nrepos:\n'
+    printf '  - { id: .github, full: FS-GG/.github,   role: authority, receives: [labels, %s] }\n' "$2"
+    printf '  - { id: sdd,     full: FS-GG/FS.GG.SDD, role: framework, receives: [labels, %s] }\n' "$2"
+    printf 'kit:\n'
+    printf '  - { id: demo-skill, kind: skill,  source: .claude/skills/demo-skill }\n'
+    printf '  - { id: democlient, kind: client, source: scripts/democlient }\n'
+    printf 'capabilities:\n'
+    printf '  - { id: skill-union, caller: skill-union }\n'
+    printf '  - { id: coordination-kit, workflow: coordination-coherence.yml }\n'
+    printf '%s\n' "$LABELS_CAP"; } > "$f"
+  relock "$f"
+  printf '%s' "$f"
+}
+expect_fail "the authority may not RECEIVE skill-union — it is the source" 1 \
+  "must not RECEIVE skill-union" "$(authreg auth_skillunion skill-union)"
+expect_fail "...and the coordination-kit guard still holds, from the same list" 1 \
+  "must not RECEIVE coordination-kit" "$(authreg auth_kit coordination-kit)"
+
 # Two detectors is ambiguous: repos-audit would have to pick one, and a receiver satisfying the loose
 # one would mask a gap in the strict one.
 expect_fail "capability declaring two detectors" 1 "more than one detector" \
@@ -328,9 +394,12 @@ expect_fail "'receivers:' with a value other than none" 1 "is invalid" \
 
 # --- caps query (repos-audit.sh reads its mandate through this) ---
 caps_tsv="$(bash "$REPOS_SH" caps --registry "$BASE")"
-[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t\t\t\t\nlabels\t\t\t\ttrue\t\tauthority-pushed by apply-labels.sh; nothing is wired at the receiver')" ] \
-  && ok "caps -> a TSV row per capability: id, workflow, script, materializer, push, receivers, reason" \
+[ "$caps_tsv" = "$(printf 'coordination-kit\tcoordination-coherence.yml\t\t\t\t\t\t\nlabels\t\t\t\t\ttrue\t\tauthority-pushed by apply-labels.sh; nothing is wired at the receiver')" ] \
+  && ok "caps -> a TSV row per capability: id, workflow, script, materializer, caller, push, receivers, reason" \
   || bad "caps TSV" "got: $(printf '%s' "$caps_tsv" | cat -A | head -2)"
+[ -z "$(bash "$REPOS_SH" caps --field caller --registry "$BASE")" ] \
+  && ok "caps --field caller -> empty for non-caller rows" \
+  || bad "caps --field caller" "got: $(bash "$REPOS_SH" caps --field caller --registry "$BASE")"
 caps_ids="$(bash "$REPOS_SH" caps --field id --registry "$BASE")"
 [ "$caps_ids" = "$(printf 'coordination-kit\nlabels')" ] && ok "caps --field id -> the capability ids" \
   || bad "caps --field id" "got: $caps_ids"
@@ -569,6 +638,12 @@ def matches(path, pat):                       # GitHub glob: ** spans /, * does 
                  for p in re.split(r"(\*\*|\*)", pat))
     return re.fullmatch(rx, path) is not None
 
+# A `caller:` row's subject is a reusable workflow too — validate proves it exists and is callable, so it
+# carries EXACTLY the `workflow:` exposure and must be covered the same way. The detector-id → subject
+# mapping lives in scripts/repos.sh; this guard has to be TAUGHT each id rather than letting an unknown
+# one fall through to a silent `continue`, which is how build-config came to be ungated (#628).
+CALLER_SUBJECT = {"skill-union": ".github/workflows/skill-union-assert.yml"}
+
 gaps = []
 for trigger in want:
     if trigger not in triggers:
@@ -593,6 +668,13 @@ for trigger in want:
     for cap in reg.get("capabilities", []):
         if "workflow" in cap:  probe = f".github/workflows/{cap['workflow']}"
         elif "script" in cap:  probe = f"scripts/{cap['script']}"
+        elif "caller" in cap:
+            probe = CALLER_SUBJECT.get(cap["caller"])
+            if probe is None:
+                gaps.append(f"{trigger}: capability '{cap['id']}' names caller detector "
+                            f"{cap['caller']!r}, whose subject this guard does not know — teach it, "
+                            f"or the detector is ungated exactly as build-config was (#628)")
+                continue
         else:                  continue                     # push: nothing detectable to gate
         if not any(matches(probe, p) for p in pats):
             gaps.append(f"{trigger}: capability '{cap['id']}' subject {probe}")
@@ -633,6 +715,29 @@ else
 expected: game,governance,rendering,sdd,
 A repo that ENFORCES but does not RECEIVE can only go red and stay red.
 A repo that RECEIVES but never ADOPTED gets build files written into it by a bot."
+fi
+
+# ---- skill-union: the reviewed receiver set, and the authority's deliberate absence (#1504) -------
+# The full three-root union is claimed by EVERY framework repo and by no authority row. Both halves are
+# decisions, and both are the kind that rot silently, so they are pinned here rather than left to prose:
+#
+#   every framework repo receives it — ADR-0065 gives framework repos and scaffolded products the same
+#     three runtime roots, so a framework repo that does not gate its committed roots is a repo whose
+#     codex/agent runtimes can be handed a smaller instruction set than Claude with nothing to say so.
+#     That is not hypothetical: it was true of Governance, Rendering and SDD when this row landed.
+#   `.github` does NOT — it is the SOURCE of the assertion and asserts its own roots with
+#     skill-roots-selfcheck.yml. Rostering the authority would demand a `uses:` of its own reusable
+#     workflow, which is the phantom-adopter failure repos-audit refuses by name. Its coherence is
+#     proven, it is simply proven here rather than by this capability.
+su_receivers="$(bash "$REPOS_SH" list --receives skill-union --field id | sort | tr '\n' ',')"
+if [ "$su_receivers" = "audio,game,governance,net,rendering,sdd,templates," ]; then
+  ok "skill-union: every framework repo receives it, and the authority (which asserts itself) does not"
+else
+  bad "skill-union: the receiver set is not the seven framework repos (#1504)" \
+      "declared: $su_receivers
+expected: audio,game,governance,net,rendering,sdd,templates,
+A framework repo left out is a tree whose non-Claude runtimes can be silently partitioned.
+The AUTHORITY must stay out: it is the assertion's source and dogfoods it via skill-roots-selfcheck.yml."
 fi
 
 # The byte-copy PUSH arm (build-config-propagate.yml) was RETIRED in #1262 (ADR-0062): build config now

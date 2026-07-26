@@ -180,7 +180,114 @@ so honouring a declaration found *inside the subject* would let a template bug t
 silently switch `.codex/skills` off and turn the gate green on a partitioned product. The roots come
 from the caller; the declaration serves the bare local run and a repo's own selfcheck.
 
+## Subset coherence is not union coherence (#1504)
+
+Two org gates check the three-root invariant, they are **not** the same claim, and reading one as the
+other cost the org three partitioned repositories:
+
+| gate | subject | what a green means |
+| --- | --- | --- |
+| [`coordination-coherence.yml`](../../.github/workflows/coordination-coherence.yml) (`receives: coordination-kit`) | the **kit-owned subset** — exactly the skills `registry/repos.yml`'s `kit:` block names (today: `cross-repo-coordination`, `intra-repo-parallel-work`, `check-board`, `pnext-item`) | those four skills are materialized, in every root, byte-identical to canonical |
+| this assertion, wired as `receives: skill-union` | the **complete runtime-visible union** — every skill in the repo's committed `.claude/skills`, `.codex/skills`, `.agents/skills` | *every* skill in the union is present in every root and byte-identical across them |
+
+`coordination-coherence` cannot see a co-tenant skill: it is not in the `kit:` block, so it is not in
+that gate's subject. **Measured on `origin/main`, 2026-07-27** — Governance `.claude=15 .codex=4
+.agents=4`; Rendering `.claude=50 .codex=4 .agents=50`; SDD `.claude=32 .codex=21 .agents=4` — with
+every multi-root skill byte-identical. Nothing had *drifted*; projections were **missing**, for 11, 46
+and 28 skills. All three were green on `coordination-coherence` throughout, because the four kit skills
+really are coherent in all three of their roots.
+
+[ADR-0065](../adr/0065-one-agent-skill-root-contract.md)'s receiver rollout
+([#1016](https://github.com/FS-GG/FS.GG.Rendering/issues/1016),
+[Governance#298](https://github.com/FS-GG/FS.GG.Governance/issues/298),
+[SDD#669](https://github.com/FS-GG/FS.GG.SDD/issues/669)) proved `coordination-coherence` and described
+that subset result as restored three-root coherence. The co-tenant process and product skills those
+trees had been populated with by earlier writers were outside the materializer **and** outside its
+acceptance check, so they survived the migration unexamined. So: **a `coordination-coherence` green is
+evidence about four skills. Only a `skill-union` green is evidence about the tree.**
+
+`tests/skill-union/run.sh` pins the distinction as a pair of legs — the kit-owned four-skill subset
+passes on its own, and the *same* coherent subset plus one partitioned co-tenant (process **or**
+product) fails `[partitioned]` — including when the partitioned skill's bytes are identical wherever it
+does appear, because the defect is a missing projection and not a divergent byte.
+
 ## Adoption — wiring it into a consumer repo's CI
+
+There are **two** kinds of caller, and the roster's `caller: skill-union` detector deliberately tells
+them apart. Passing `product-path: <subdir>` audits a **generated product**; leaving it at its default
+audits the **repository's own committed roots**. A `uses:` of this workflow does not say which, which is
+exactly why the [repo roster](../../registry/repos.yml) declares this capability with a compound
+`caller:` detector rather than a bare `workflow:` one — the latter would certify the full-union
+capability off a call that never looks at the receiver's roots ([#628](https://github.com/FS-GG/.github/issues/628)).
+
+### The required receiver caller — a framework repo's own committed roots
+
+This is the shape `receives: skill-union` means, and `scripts/repos-audit.sh` requires **both halves in
+one workflow file**. Copy it verbatim:
+
+```yaml
+# .github/workflows/skill-union.yml
+name: skill-union
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - ".github/workflows/skill-union.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - ".github/workflows/skill-union.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  skill-union:
+    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main
+    # No `with:` at all is the most correct form: `product-path` defaults to "." (the repository root)
+    # and `roots` to ADR-0011's three. Writing them out is equivalent, and narrowing either is not.
+```
+
+**Half 1 — the call is aimed at your own roots.** `product-path` absent or `.`; `roots` absent or naming
+all three. A call aimed at a subdirectory is a generated-product audit and does not satisfy this
+capability; a narrowed `roots:` is a smaller audit than the capability claims.
+
+**Half 2 — the gate is armed.** The `pull_request` trigger must fire when any of the three roots
+changes: either it carries `paths:` covering all three, or it carries no `paths:` filter at all (wider,
+and therefore fine). A `paths-ignore:` naming a root disarms it. A `push`-only workflow reports nothing
+on a pull request, so it can never be the required check. **An unarmed gate is not a gate** — the
+[#332](https://github.com/FS-GG/.github/issues/332)/[#334](https://github.com/FS-GG/.github/issues/334)/[#880](https://github.com/FS-GG/.github/issues/880)
+class, where the check is correct and its trigger is what fails open.
+
+Both halves must be in the *same* file, because a trigger cannot arm a workflow it is not in: the roots
+change, the other workflow runs, and the one that audits them does not.
+
+**Write it however YAML lets you.** `repos-audit` **parses** the workflow (`yq`, else `python3`+PyYAML)
+rather than grepping it, so key order, flow mappings (`with: {product-path: "."}`), inline sequences
+(`paths: [".claude/skills/**", …]`), anchors/aliases, comments and indentation style are all equivalent.
+`paths:` coverage is real glob matching, so a *broader* filter passes — `.claude/**` and `**/skills/**`
+arm the gate — while `.claude/skills-archive/**` does not, and a `!`-negated entry subtracts. This is not
+a convenience: the detector began as a line scanner, and five legal YAML shapes went through it in one
+review, two of them fail-open. `product-path: ${{ … }}` is *not* accepted — an expression is not a value
+the detector can resolve, and an unresolvable subject fails closed.
+
+**Make the resulting context required** on the receiver's default branch. GitHub names it
+`skill-union / skill-union` (`<caller job> / <callee job>`) — see
+[reusable-workflow-contract](reusable-workflow-contract.md), and note that the callee job id is
+**public API** the authority may not rename without sequencing it.
+
+**`FS-GG/.github` is not a receiver.** It is the *source* of the assertion and asserts its own roots with
+[`skill-roots-selfcheck.yml`](../../.github/workflows/skill-roots-selfcheck.yml), running the bare
+command a worker runs. Running your own gate is not participating in your own fabric, so the detector
+does not match it and the roster does not claim it.
+
+### Auditing a generated product
 
 ```yaml
 permissions:
@@ -200,7 +307,51 @@ jobs:
 
 The [FS.GG.Templates composition gate](https://github.com/FS-GG/FS.GG.Templates/issues/49)
 (roadmap **T3.2**) is the first caller — it invokes this for the orchestrated **and** standalone
-lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2, consumer half).
+lanes, replacing the current "grep for the failure string and skip" (ADR-0014 F2, consumer half). It is
+a generated-product caller, so it does **not** satisfy Templates' own `receives: skill-union` row: those
+are different subjects, and the roster's detector says so out loud rather than counting one as the other.
+
+### Rollout state (as of 2026-07-27)
+
+**The audited trees are the org's rostered repositories — eight of them**, one committed tree each, and
+enumerating them here is deliberate: "how many trees are audited?" must have an answer that is *read*
+rather than counted from memory. Measured over `main` per repo, comparing every blob under the three
+roots:
+
+| tree | union | `.claude` / `.codex` / `.agents` | verdict |
+| --- | --- | --- | --- |
+| `.github` (authority — asserts itself) | 13 | 13 / 13 / 13 | coherent |
+| `FS.GG.Templates` | 4 | 4 / 4 / 4 | coherent |
+| `FS.GG.Game` | 21 | 21 / 21 / 21 | coherent |
+| `FS.GG.Audio` | 20 | 20 / 20 / 20 | coherent |
+| `FS.GG.Net` | 4 | 4 / 4 / 4 | coherent |
+| `FS.GG.Governance` | 15 | 15 / 4 / 4 | **11 partitioned** (the `speckit-*` set) |
+| `FS.GG.SDD` | 32 | 32 / 21 / 4 | **28 partitioned** (`fs-gg-sdd-*` + `speckit-*`) |
+| `FS.GG.Rendering` | 50 | 50 / 4 / 50 | **46 partitioned** (the product/Speckit set, absent from `.codex`) |
+
+Nothing is `[divergent]`: every skill present in more than one root is byte-identical. The defect is
+**missing projections**, which is why a byte-comparison-only checker sees nothing wrong.
+
+`skill-union` is rostered on all seven framework repos and wired by none of them yet, so the scheduled
+[`repos-audit`](../../.github/workflows/repos-audit.yml) reports **7 gaps** (measured: 32
+receiver-capability pairs, 25 wired, 7 gaps, 0 unrostered adopters — every other capability green). That
+is the ratchet [#1504](https://github.com/FS-GG/.github/issues/1504) asks for, not a defect: the rollout
+is complete only when `scripts/skill-union-assert.sh --product <fresh origin/main tree>` passes for every
+tree above **and** every receiver check is green.
+
+Four of the seven — Templates, Game, Audio, Net — are already root-coherent and need only the caller
+above. Three must **rematerialize from their authoritative producers first** (not copy an arbitrary root,
+and proving an idempotent second materialization), and those repairs are filed and sequenced as cross-repo
+requests: [Governance#326](https://github.com/FS-GG/FS.GG.Governance/issues/326),
+[Rendering#1080](https://github.com/FS-GG/FS.GG.Rendering/issues/1080) and
+[SDD#716](https://github.com/FS-GG/FS.GG.SDD/issues/716). Each is independent of the other two — a repo's
+roots are its own — and each depends on this repo only for the caller shape above and the roster row.
+
+One tree sits outside this capability's subject and outside the composition gate's, so nothing audits it:
+`FS.GG.Rendering`'s `template/base/`, which carries `.claude/skills` and `.agents/skills` and no `.codex/`.
+It is neither a committed runtime root nor a generated product, and ADR-0011 §3 confines a provider to
+`.agents/skills/` — so the correct repair may be to *remove* the `.claude/` copy rather than add a root.
+Filed as a decision item: [Rendering#1081](https://github.com/FS-GG/FS.GG.Rendering/issues/1081).
 
 ### Standalone fetch — supported, and it is `dist/`, not `scripts/`
 

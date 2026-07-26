@@ -21,6 +21,24 @@
 # adds [missing] (declared∧true∧absent) / [unexpected] (present∧false). Without `params` the gate
 # keeps the superset semantics of check 3 exactly, so adoption is opt-in per caller.
 #
+# TWO KINDS OF CALLER, AND THE ROSTER TELLS THEM APART (.github#1504). This workflow is
+# SUBJECT-PARAMETERISED — it audits whatever `product-path:` names — so a `uses:` of it says nothing at
+# all about WHAT was audited:
+#
+#   * a GENERATED-PRODUCT caller passes `product-path: <subdir>` and audits a scaffolded artifact the
+#     repo produced (FS.GG.Templates#49, the composition gate). Legitimate, and it proves nothing about
+#     the caller's OWN committed skill roots.
+#   * a COMMITTED-ROOT caller — the receiver contract behind `receives: skill-union` — leaves
+#     `product-path` at its default (or writes `.`), leaves `roots` at ADR-0011's three, and lives in a
+#     workflow whose `pull_request` trigger fires when any of those roots changes. The canonical shape is
+#     in docs/coordination/skill-union-assertion.md; `repos-audit`'s `caller: skill-union` detector
+#     requires both halves in ONE workflow file, because a trigger cannot arm a workflow it is not in.
+#
+# The roster capability is therefore `caller:`, not `workflow:`: a bare `uses:` detector would certify
+# the full-union capability off the first kind of call, which is a green nobody earned (#628) with the
+# receiver's own roots left ungated. Do NOT add an input that lets a caller narrow the audited root set
+# without saying so — narrowing is a declared decision (see #517 below), not a default.
+#
 # ROOTS ARE ALWAYS PASSED EXPLICITLY (.github#517). skill-union-assert.sh will read a product's own
 # checked-in `.agent-skill-roots` declaration when no roots are given — right for a repo asserting
 # ITSELF (a kit repo; see skill-roots-selfcheck.yml), wrong here. The tree this gate audits is

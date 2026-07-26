@@ -28,6 +28,11 @@
 #   materializer: <id>  the receiver explicitly opts into a package materializer AND CI reruns it and
 #                       fails on drift. `build-config` requires both the FS.GG.Kit receiver-project
 #                       opt-in and workflow enforcement; either half alone is incomplete adoption.
+#   caller:   <id>      the receiver calls one of the authority's reusable workflows AGAINST A
+#                       PARTICULAR SUBJECT, and the `uses:` alone cannot say which subject. Compound:
+#                       `skill-union` requires a call pointed at the receiver's OWN repository root
+#                       over all three ADR-0011 roots, AND a trigger that fires when any of those
+#                       roots changes. Either half alone is not a gate on the committed roots (#1504).
 #   push:     true      the AUTHORITY writes it into the receiver (apply-labels.sh reads this roster
 #                       and pushes the labels in). Nothing is wired at the receiver, so there is
 #                       nothing to detect there and this sweep skips it.
@@ -106,6 +111,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 command -v gh >/dev/null 2>&1 || die "gh not found (required to read receiver workflows)."
+# The `caller:` detector reads a receiver's workflow STRUCTURALLY — YAML to JSON via yq-or-PyYAML, then a
+# stdlib verdict program — because the question it asks ("what was the assertion pointed at, and does the
+# gate run when the roots change?") is a question about structure and a line-grep got it wrong five ways
+# (#1504). So python3 is a hard dependency, and it is asserted UP FRONT rather than discovered per
+# workflow: a missing interpreter must be a permanent no-verdict about the audit, never a fabricated
+# "this receiver is not wired" about eight repos at once (#320).
+command -v python3 >/dev/null 2>&1 \
+  || die "python3 not found (required to evaluate a caller: detector against a receiver's workflows)."
+command -v yq >/dev/null 2>&1 || python3 -c 'import yaml' >/dev/null 2>&1 \
+  || die "need yq or python3+pyyaml to read a receiver's workflow YAML (the same ladder scripts/repos.sh uses)."
 [ -x "$REPOS_SH" ] || [ -f "$REPOS_SH" ] || die "repos.sh not found at $REPOS_SH."
 
 # The capabilities and their detectors come from the ROSTER (`capabilities:`), not from a constant
@@ -265,6 +280,227 @@ workflow_enforces_build_config() {
     }'
 }
 
+# THE DETECTOR PARSES YAML STRUCTURALLY, AND THAT IS NOT A STYLE CHOICE (#1504 review).
+#
+# This started as two line-oriented awk scanners, and a review broke them five ways in one sitting —
+# every one of them legal YAML that GitHub Actions accepts:
+#
+#   with: {product-path: "artifacts/x"}     a FLOW mapping puts the key mid-line, so the anchored
+#                                           `/^[ ]*product-path:/` never matched: "absent ⇒ defaults ⇒
+#                                           pass", and a GENERATED-PRODUCT call certified as the
+#                                           committed-root gate. The exact fail-open this row exists for.
+#   with: … then uses: …                    YAML mappings are UNORDERED. A scanner that collects inputs
+#                                           only AFTER the `uses:` line saw none. Same fail-open.
+#   - run: "true"   # was: uses: FS-GG/…    an INLINE comment is not a whole-line comment, so a repo that
+#                                           DELETED its caller and left a note audited as wired — the one
+#                                           thing the `commented` fixture leg exists to catch.
+#   on: {pull_request: {paths: [src/**]}}   flow again: read as "inline form, therefore unfiltered,
+#                                           therefore armed". An unarmed gate, green.
+#   paths:                                  a sequence at its KEY's indentation is ordinary YAML, and the
+#   - ".claude/skills/**"                   scanner required entries strictly deeper — so it reported a
+#                                           correctly-armed gate as a gap, and told the operator to add
+#                                           the filter that was already there.
+#
+# Those are not five bugs; they are one. A `paths:` filter and a `with:` block are STRUCTURE, and the
+# question this detector asks — *what was the assertion pointed at, and does the gate run when the roots
+# change?* — is a question about structure. A line-grep cannot express it, and each patch to the scanner
+# would have bought one more dialect. So the YAML is parsed (`yq`, else `python3`+PyYAML — the ladder
+# scripts/repos.sh already uses) and the verdict is computed over the parsed document, where key order,
+# flow style, comments, anchors and indentation are the parser's problem and not ours.
+#
+# `paths:` COVERAGE IS GLOB MATCHING, not a prefix test. `.claude/**` and `**/skills/**` genuinely fire
+# on a root change and must pass; `.claude/skills-archive/**` genuinely does not and must fail; a
+# `!`-negated entry SUBTRACTS. A prefix test got all four wrong, two of them fail-open.
+#
+# --- the CALLER detector: skill-union (#1504) -----------------------------------------------------
+#
+# `skill-union-assert.yml` is SUBJECT-PARAMETERISED, and that is what makes a bare `uses:` detector
+# fail open here. The reusable assertion audits whatever `product-path:` names: FS.GG.Templates
+# legitimately calls it against GENERATED composition products (FS.GG.Templates#49), and that call
+# says nothing at all about Templates' own committed `.claude/.codex/.agents` roots. A `wf:` token
+# would count it anyway — certifying the full-union capability off a call that never looks at the
+# repository's own roots. That is #628's "a green nobody earned", one layer in: for this capability the
+# detector's subject is not the workflow, it is what the workflow was POINTED AT.
+#
+# So the receiver contract is compound, and both halves must live in ONE workflow file:
+#
+#   1. THE CALL is aimed at the receiver's own repository root, over all three ADR-0011 roots.
+#      `product-path:` absent (the input's default is ".") or `.`/`./`; `roots:` absent (the workflow's
+#      default is ADR-0011's three) or naming all three as whitespace-separated tokens. A narrowed
+#      `roots:` is a smaller audit than the capability claims — a tree that intentionally supports fewer
+#      runtimes is a different, DECLARED thing (docs/coordination/skill-union-assertion.md), not this
+#      capability. A `product-path` that is an EXPRESSION (`${{ … }}`) is not a value this detector can
+#      resolve, so it does not satisfy the call: unknown fails CLOSED, deliberately (#266).
+#   2. THE TRIGGER fires when any committed root changes, ON A PULL REQUEST. A gate that never runs is
+#      not a gate, and #332/#334/#880 are four hand-repairs of exactly that shape in this repo alone:
+#      the check is fine and its `paths:` filter is what fails open. `pull_request` and not `push`,
+#      because only a PR check can be a REQUIRED context (check-required-contexts.py states the same
+#      rule for the same reason); `pull_request_target` is NOT it either — it checks out the BASE ref,
+#      so the assertion would audit the tree the change is not in.
+#
+# YAML on stdin -> JSON on stdout. Same ladder as scripts/repos.sh (yq first, PyYAML second), because
+# this script already depends on that script's ability to read YAML — there is no new dependency here,
+# only a second caller of the one that existed.
+yaml_text2json() {
+  if command -v yq >/dev/null 2>&1; then
+    yq -o=json '.' - 2>/dev/null
+  else
+    python3 -c 'import sys,yaml,json; json.dump(yaml.safe_load(sys.stdin), sys.stdout, default=str)' 2>/dev/null
+  fi
+}
+
+# The verdict program. Stdin: one workflow as JSON. Argv: the authority repo. Stdout, always exactly
+# one line: `call=<0|1> trigger=<0|1>`.
+#
+# `python3` and STDLIB ONLY — no PyYAML. The YAML was already turned into JSON by the ladder above, so
+# this half runs on a box where only `yq` can read YAML. That split is why the ladder is not simply
+# "use python for everything".
+CALLER_VERDICT_PY="$(cat <<'PY'
+import json, re, sys
+
+AUTHORITY = sys.argv[1]
+ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
+# One representative CHANGED FILE per root. GitHub matches a `paths:` filter against changed file
+# paths, so "does this filter fire when a skill changes?" is "does it match a file inside a skill".
+# A skill's SKILL.md is the minimal such file, and it is two levels down — which is exactly why
+# `.claude/skills/*` (a single `*` does not span `/`) correctly does NOT arm this gate.
+PROBES = tuple(r + "/probe-skill/SKILL.md" for r in ROOTS)
+
+USES_RE = re.compile(
+    r"^" + re.escape(AUTHORITY) + r"/\.github/workflows/skill-union-assert\.ya?ml(@.*)?$")
+
+
+def norm(p):
+    p = str(p).strip()
+    return p[2:] if p.startswith("./") else p
+
+
+def glob_re(pat):
+    """GitHub filter glob -> regex. `**` spans `/`, `*` and `?` do not."""
+    out, i = [], 0
+    while i < len(pat):
+        if pat[i] == "*":
+            if pat[i:i + 2] == "**":
+                out.append(".*")
+                i += 2
+            else:
+                out.append("[^/]*")
+                i += 1
+        elif pat[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pat[i]))
+            i += 1
+    return re.compile("^" + "".join(out) + "$")
+
+
+def hits(pattern, path):
+    try:
+        return glob_re(norm(pattern)).match(path) is not None
+    except re.error:
+        return False
+
+
+def on_block(wf):
+    # YAML 1.1 reads a bare `on:` as the BOOLEAN true (PyYAML does; yq, being YAML 1.2, keeps the
+    # string). JSON keys are strings either way, so both spellings have to be looked for — the same
+    # `wf.get(True, wf.get("on"))` dance tests/repos-registry/run.sh already does.
+    for key in ("on", "true", "True"):
+        if isinstance(wf, dict) and key in wf:
+            return wf[key]
+    return None
+
+
+def triggers_on_roots(wf):
+    on = on_block(wf)
+    if isinstance(on, str):                      # `on: pull_request`
+        return on.strip() == "pull_request"
+    if isinstance(on, list):                     # `on: [pull_request, push]`
+        return any(isinstance(e, str) and e.strip() == "pull_request" for e in on)
+    if not isinstance(on, dict) or "pull_request" not in on:
+        return False                             # no PR trigger: it reports nothing on a PR
+    cfg = on["pull_request"] or {}
+    if not isinstance(cfg, dict):
+        return False
+    paths = cfg.get("paths")
+    if paths is not None:
+        if not isinstance(paths, list) or not paths:
+            return False                         # an empty filter matches nothing
+        keep = [p for p in paths if isinstance(p, str) and not p.startswith("!")]
+        drop = [p[1:] for p in paths if isinstance(p, str) and p.startswith("!")]
+        for probe in PROBES:
+            if not any(hits(p, probe) for p in keep):
+                return False
+            if any(hits(p, probe) for p in drop):
+                return False                     # a `!` entry SUBTRACTS the root
+    # A `paths-ignore:` is not a coverage claim — unfiltered is WIDER than covered, so it passes unless
+    # an entry actually names a root. (GitHub rejects paths + paths-ignore on one event; handling both
+    # costs nothing and assumes nothing.)
+    ignore = cfg.get("paths-ignore")
+    if isinstance(ignore, list):
+        for probe in PROBES:
+            if any(hits(p, probe) for p in ignore if isinstance(p, str)):
+                return False
+    return True
+
+
+def calls_own_roots(wf):
+    jobs = wf.get("jobs") if isinstance(wf, dict) else None
+    if not isinstance(jobs, dict):
+        return False
+    for job in jobs.values():
+        # A reusable workflow is called by a JOB's `uses:`, never a step's — so reading the structure
+        # also refuses a `- uses:` inside `steps:`, which Actions rejects and a text grep counted.
+        if not isinstance(job, dict) or not isinstance(job.get("uses"), str):
+            continue
+        if not USES_RE.match(job["uses"].strip()):
+            continue
+        with_ = job.get("with")
+        with_ = with_ if isinstance(with_, dict) else {}
+        if "product-path" in with_:
+            pp = with_["product-path"]
+            if not isinstance(pp, str) or norm(pp).rstrip("/") not in ("", "."):
+                continue                         # a subdirectory, or an expression we cannot resolve
+        if "roots" in with_:
+            rt = with_["roots"]
+            if not isinstance(rt, str):
+                continue
+            if not set(ROOTS) <= {norm(t) for t in rt.split()}:
+                continue                         # a narrowed root set is a smaller audit
+        return True
+    return False
+
+
+try:
+    doc = json.load(sys.stdin)
+except Exception:
+    print("call=0 trigger=0")
+    sys.exit(0)
+if not isinstance(doc, dict):
+    print("call=0 trigger=0")
+    sys.exit(0)
+print("call=%d trigger=%d" % (calls_own_roots(doc), triggers_on_roots(doc)))
+PY
+)"
+
+# caller_verdict — workflow TEXT on stdin -> `call=<0|1> trigger=<0|1>` on stdout.
+#
+# A workflow this cannot PARSE yields `call=0 trigger=0` and a warning, not a no-verdict for the whole
+# repo. That is a deliberate reading of #320's rule rather than an exception to it: GitHub will not run a
+# workflow it cannot parse, so an unparseable file cannot be the live gate this capability requires —
+# "not the gate" is an ANSWER about it, not a failure to look. It is also still swept textually by the
+# `wf:` and `script:` detectors, so nothing about it goes unexamined.
+caller_verdict() {
+  local json
+  json="$(yaml_text2json)" || json=""
+  if [ -z "$json" ] || [ "$json" = "null" ]; then
+    printf 'call=0 trigger=0'
+    return 0
+  fi
+  python3 -c "$CALLER_VERDICT_PY" "$AUTHORITY" <<< "$json" 2>/dev/null || printf 'call=0 trigger=0'
+}
+
 # Which of the AUTHORITY's reusable workflows does <repo> call? Prints one filename per line (the set
 # may legitimately be empty). 0 = read it, 2 = could not determine (reason in $CALLS_ERR_FILE).
 #
@@ -280,6 +516,7 @@ workflow_enforces_build_config() {
 #   wf:<file>.yml      a `uses:` of the AUTHORITY's reusable workflow  (the `workflow:` detector)
 #   script:<file>.sh   a reference to one of the AUTHORITY's scripts   (the `script:` detector)
 #   materializer:<id>  BOTH package opt-in and CI enforcement          (the `materializer:` detector)
+#   caller:<id>        BOTH an own-subject call and a trigger over it  (the `caller:` detector)
 #
 # One pass, all kinds. Re-walking a repo's workflows once per detector kind would multiply the API
 # traffic against the rate limit this script already treats as its main adversary — the same reasoning
@@ -287,6 +524,7 @@ workflow_enforces_build_config() {
 repo_calls() {
   local repo="$1" f rc=0 frc files text
   local build_config_enforced=0 build_config_opted_in=0 project prc=0 project_code
+  local su_verdict su_any_call=0 su_both=0
   : > "$CALLS_ERR_FILE"
 
   files="$(list_workflows "$repo")" || rc=$?
@@ -407,8 +645,40 @@ repo_calls() {
       if workflow_enforces_build_config <<< "$text"; then
         build_config_enforced=1
       fi
+
+      # The CALLER detector (#1504). BOTH halves are evaluated on THIS file, because a trigger in one
+      # workflow cannot arm a call in another: a partitioned root that changes must re-run the workflow
+      # that AUDITS it. Only a file carrying both counts as the gate; a file carrying one is reported as
+      # the half it has, so the diagnostic can name what is missing instead of "not wired".
+      #
+      # `$text`, NOT the comment-stripped `$body`. Comments do not have to be stripped here and must not
+      # be: the YAML PARSER discards them, including the inline ones a line-filter leaves behind — and a
+      # trailing `# was: uses: FS-GG/…` is exactly how the old scanner certified a repo that had DELETED
+      # its caller. Blanking whole lines before a parse would also, on its own, be able to change the
+      # document's meaning rather than only its comments.
+      if [ "${NEEDS_CALLER_ID:-}" = skill-union ]; then
+        su_verdict="$(caller_verdict <<< "$text")"
+        case "$su_verdict" in
+          *"call=1"*) su_any_call=1
+                      case "$su_verdict" in *"trigger=1"*) su_both=1 ;; esac ;;
+        esac
+      fi
     fi
   done <<< "$files"
+
+  # A trigger on its own is NOT reported. Half 2 is satisfied by any unfiltered `pull_request:`
+  # workflow, which nearly every repo has — so emitting it alone would make every repo in the org an
+  # apparent partial adopter of this capability, and the reverse-direction sweep would report the whole
+  # roster as drift. The CALL is what makes a repo an adopter at all; the trigger only says whether the
+  # call is armed. So the partial token is the call, and a call with no trigger is the reportable half.
+  #
+  # The token is keyed on the DETECTOR ID the roster asked for, never on a literal: the sweep reads it
+  # back as `caller-call:${CAP_CALLER[$cap]}`, so a hardcoded `skill-union` here would emit one id while
+  # the reader looked for another the day a second caller kind exists — wired forever reported unwired.
+  if [ -n "${NEEDS_CALLER_ID:-}" ] && [ "$repo" != "$AUTHORITY" ]; then
+    [ "$su_any_call" -eq 0 ] || echo "caller-call:$NEEDS_CALLER_ID"
+    [ "$su_both" -eq 0 ]     || echo "caller:$NEEDS_CALLER_ID"
+  fi
 
   # The opt-in is not a workflow fact: it lives in the package receiver project. Read the project
   # directly rather than grepping the whole repository (which the contents API cannot do and which
@@ -447,7 +717,7 @@ all_repos_list() {  # every rostered repo, receives or not — the drift check's
   else bash "$REPOS_SH" list --all; fi
 }
 
-caps_list() {  # id<TAB>workflow<TAB>script<TAB>materializer<TAB>push<TAB>receivers<TAB>reason
+caps_list() {  # id<TAB>workflow<TAB>script<TAB>materializer<TAB>caller<TAB>push<TAB>receivers<TAB>reason
   if [ -n "$REGISTRY" ]; then bash "$REPOS_SH" caps --registry "$REGISTRY"
   else bash "$REPOS_SH" caps; fi
 }
@@ -470,10 +740,14 @@ caps="$(caps_list)" \
 [ -n "$caps" ] \
   || die "the roster declares no audited capabilities (registry 'capabilities:' is missing or empty). This audit's entire mandate comes from there, so it would examine nothing. Examining nothing is a failure to audit, not a clean audit."
 
-declare -A CAP_TOKEN CAP_SUBJ CAP_KIND CAP_MATERIALIZER CAP_PUSH CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS CAP_UNDET
+declare -A CAP_TOKEN CAP_SUBJ CAP_ARM CAP_NOTE CAP_KIND CAP_MATERIALIZER CAP_CALLER CAP_PUSH CAP_NONE CAP_ROSTER CAP_N CAP_WIRED CAP_GAPS CAP_UNDET
 CAPS_ORDER=""
 rostered_total=0
 NEEDS_BUILD_CONFIG_MATERIALIZER=0
+# Empty, or the caller-detector ID the roster asked for. It carries the ID rather than a 0/1 flag so the
+# token repo_calls emits and the token the sweep greps for are the SAME string by construction, read off
+# the roster once — never two literals that agree today.
+NEEDS_CALLER_ID=""
 # TAB IS IFS-*WHITESPACE* IN BASH: `IFS=$'\t' read` collapses runs of tabs and DROPS empty fields, so
 # a capability with an empty `workflow` (every script:/push: row) would shift its `script` left into
 # `wf` and be audited as a reusable workflow that does not exist. Re-delimit with a unit separator,
@@ -481,7 +755,7 @@ NEEDS_BUILD_CONFIG_MATERIALIZER=0
 # substitution cannot corrupt a `reason:`.
 while IFS= read -r capline; do
   [ -n "$capline" ] || continue
-  IFS=$'\x1f' read -r cap wf script materializer push recv reason <<< "${capline//$'\t'/$'\x1f'}"
+  IFS=$'\x1f' read -r cap wf script materializer caller push recv reason <<< "${capline//$'\t'/$'\x1f'}"
   [ -n "$cap" ] || continue
   # `repos.sh validate` already enforces exactly-one-detector, and CI runs it — but this script must
   # not INFER that it ran. An unvalidated roster reaching a gate that assumes validation is how a
@@ -505,6 +779,20 @@ while IFS= read -r capline; do
     CAP_TOKEN["$cap"]="materializer:$materializer"
     CAP_SUBJ["$cap"]="FS.GG.Kit '$materializer' materializer opt-in plus CI regeneration/diff enforcement"
     NEEDS_BUILD_CONFIG_MATERIALIZER=1
+  elif [ -n "$caller" ]; then
+    [ "$caller" = skill-union ] \
+      || die "capability '$cap' names unsupported caller detector '$caller' (supported: skill-union; repos.sh validate catches this)."
+    CAP_KIND["$cap"]="caller"
+    CAP_CALLER["$cap"]="$caller"
+    CAP_TOKEN["$cap"]="caller:$caller"
+    # THREE strings, not one, because a compound detector has two halves that fail for different reasons
+    # and a red must name its own subject (#327/#335). CAP_SUBJ is the CALL, CAP_ARM is the TRIGGER, and
+    # CAP_NOTE says what deliberately does NOT count — so the diagnostics below stay kind-generic while
+    # still being specific enough to act on.
+    CAP_SUBJ["$cap"]="a $AUTHORITY/.github/workflows/skill-union-assert.yml caller aimed at this repo's OWN committed .claude/.codex/.agents skill roots"
+    CAP_ARM["$cap"]="a pull_request trigger covering .claude/skills/**, .codex/skills/** and .agents/skills/** (or no paths: filter at all)"
+    CAP_NOTE["$cap"]="A call aimed at a GENERATED product (product-path: <subdir>), or narrowed with roots:, is a different subject and deliberately does not count."
+    NEEDS_CALLER_ID="$caller"
   elif [ "$push" = true ]; then
     # PUSH: the authority writes this INTO the receiver, so there is NOTHING receiver-side to detect
     # and both sweep directions are meaningless for it. This is the one honest way to be unauditable,
@@ -515,7 +803,7 @@ while IFS= read -r capline; do
     CAP_TOKEN["$cap"]=""
     CAP_SUBJ["$cap"]="(pushed by the authority — nothing to detect at the receiver)"
   else
-    die "capability '$cap' declares no detector (workflow:/script:/materializer:/push:) — there is nothing to audit it by, so it would be swept in NEITHER direction while remaining a legal 'receives' word. That is #628 exactly. Fix registry/repos.yml (repos.sh validate catches this)."
+    die "capability '$cap' declares no detector (workflow:/script:/materializer:/caller:/push:) — there is nothing to audit it by, so it would be swept in NEITHER direction while remaining a legal 'receives' word. That is #628 exactly. Fix registry/repos.yml (repos.sh validate catches this)."
   fi
   CAPS_ORDER="$CAPS_ORDER $cap"
   CAP_WIRED["$cap"]=0; CAP_GAPS["$cap"]=0; CAP_UNDET["$cap"]=0
@@ -588,7 +876,7 @@ while IFS= read -r recvline; do
   [ -n "$cap" ] || continue
   case " $CAPS_ORDER " in
     *" $cap "*) ;;
-    *) die "repo(s) [$by] receive '$cap', but the roster declares no 'capabilities:' row for it — so this audit has no detector for it and sweeps it in NEITHER direction: it can be found neither unwired nor adopted-but-unrostered. A capability that is legal to receive and impossible to check is a green nobody earned (#628). Give '$cap' a detector row (workflow:/script:/materializer:/push:) in registry/repos.yml." ;;
+    *) die "repo(s) [$by] receive '$cap', but the roster declares no 'capabilities:' row for it — so this audit has no detector for it and sweeps it in NEITHER direction: it can be found neither unwired nor adopted-but-unrostered. A capability that is legal to receive and impossible to check is a green nobody earned (#628). Give '$cap' a detector row (workflow:/script:/materializer:/caller:/push:) in registry/repos.yml." ;;
   esac
 done <<< "$received"
 
@@ -640,6 +928,11 @@ while IFS= read -r repo; do
              || grep -qxF "materializer-enforcement:$materializer" <<< "$calls"; }; then
       partial_it=1
     fi
+    detector_caller="${CAP_CALLER[$cap]:-}"
+    if [ "${CAP_KIND[$cap]:-}" = caller ] \
+        && grep -qxF "caller-call:$detector_caller" <<< "$calls"; then
+      partial_it=1
+    fi
 
     if [ "$declared" -eq 1 ] && [ "$calls_it" -eq 1 ]; then
       echo "ok: $repo wires $subj (receives: $cap)"
@@ -652,6 +945,15 @@ while IFS= read -r repo; do
         grep -qxF "materializer-enforcement:$materializer" <<< "$calls" \
           || missing="${missing} CI FsggKitMaterialize + managed-props diff enforcement;"
         echo "::error::repos-audit: $repo receives '$cap' but is missing:${missing}"
+      elif [ "${CAP_KIND[$cap]:-}" = caller ]; then
+        # Name the half. "Not wired" is the wrong diagnostic for a repo that DOES call the assertion and
+        # merely points it somewhere else, or arms it on nothing — the remedy is different in each case,
+        # and #327/#335's rule is that a red must name its own subject.
+        if grep -qxF "caller-call:$detector_caller" <<< "$calls"; then
+          echo "::error::repos-audit: $repo receives '$cap' and calls ${CAP_SUBJ[$cap]}, but that workflow does not RUN when a committed skill root changes — add ${CAP_ARM[$cap]}. An unarmed gate is not a gate."
+        else
+          echo "::error::repos-audit: $repo receives '$cap' but nothing in its workflows calls ${CAP_SUBJ[$cap]}. ${CAP_NOTE[$cap]}"
+        fi
       else
         echo "::error::repos-audit: $repo receives '$cap' but nothing in its workflows references $subj"
       fi
@@ -665,18 +967,18 @@ while IFS= read -r repo; do
       # This is the direction that would have caught #628 the day it started: `build-config` was
       # enforced by four repos and rostered by none. It could not fire, because a capability with no
       # detector row was not swept at all.
+      # A compound detector is ADOPTED, not merely REFERENCED: the receiver enabled something, rather
+      # than naming a file the authority owns. The verb is chosen off the kind so a new compound kind
+      # cannot silently fall back to the wrong one, which is what a second `= materializer` test would
+      # have kept inviting.
+      case "${CAP_KIND[$cap]:-}" in
+        materializer|caller) verb="adopts" ;;
+        *)                   verb="references" ;;
+      esac
       if [ -n "${CAP_NONE[$cap]:-}" ]; then
-        if [ "${CAP_KIND[$cap]:-}" = materializer ]; then
-          echo "::error::repos-audit: $repo adopts $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
-        else
-          echo "::error::repos-audit: $repo references $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
-        fi
+        echo "::error::repos-audit: $repo $verb $subj, but registry/repos.yml records capability '$cap' as having NO receivers. That recorded claim is now FALSE — roster $repo under 'receives: $cap' and delete the 'receivers: none' claim."
       else
-        if [ "${CAP_KIND[$cap]:-}" = materializer ]; then
-          echo "::error::repos-audit: $repo adopts $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
-        else
-          echo "::error::repos-audit: $repo references $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
-        fi
+        echo "::error::repos-audit: $repo $verb $subj but does not declare 'receives: $cap' — an adopted-but-unrostered capability. Every org fabric iterates the roster, so an unrostered adopter is invisible to all of them. Add '$cap' to $repo's receives in registry/repos.yml."
       fi
       drift=$((drift + 1))
     fi
