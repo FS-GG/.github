@@ -4,12 +4,12 @@
     {
       "id": "work-roadmap",
       "scope": "driver",
-      "sha256": "715609ab4d97337ee5250fb31e57159fb5d7b99a8c4ead0b712fd8c8c50b1677",
-      "tree-sha256": "bbd9c36b67dfc31de5175e727015214c6abe90449df6f9b8913329e9fd65b109",
+      "sha256": "c629a3e5d4948dc2c33ae87196ff5aa2a96208d634e54255ebfd64ad9b204cfc",
+      "tree-sha256": "a8c177a13c1a3781348a824c0627b96a44a62441d2391f35d25ba0d6bf4741f5",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "715609ab4d97337ee5250fb31e57159fb5d7b99a8c4ead0b712fd8c8c50b1677",
+          "sha256": "c629a3e5d4948dc2c33ae87196ff5aa2a96208d634e54255ebfd64ad9b204cfc",
           "executable": false
         },
         {
@@ -23,13 +23,23 @@
           "executable": false
         },
         {
+          "path": "references/feedback-contract.md",
+          "sha256": "2baee136dbcad2e40a51d28b8389feb7dfe7e1f7c85774c04ad78b0230012f02",
+          "executable": false
+        },
+        {
           "path": "references/host-loop.md",
-          "sha256": "5df9da3afcdbb7f1242e9e5a28b1ea7bd7366a428143834ee06807138844b6b8",
+          "sha256": "daac46a07bc1eece70cf60c89d8739ec9c9c0899ddff26b25ed9afd163a04b44",
           "executable": false
         },
         {
           "path": "references/roadmap-ledger.md",
           "sha256": "1c06635c0a51dc5d1decae33231b93157647672d2c5c3ae791fb6b750682981f",
+          "executable": false
+        },
+        {
+          "path": "scripts/validate-feedback-state.py",
+          "sha256": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07",
           "executable": false
         }
       ],
@@ -39,12 +49,12 @@
     {
       "id": "work-board",
       "scope": "driver",
-      "sha256": "7b3668c5137e6dc9de9f008f45aa55623abb8b4bc8ea18715fcd9ce584ce694b",
-      "tree-sha256": "a651f407bdcbb804f4f9b99c2d0ae8ce02ac70b992d5b6009a7f763997de8f30",
+      "sha256": "de7ff457f24482bcbb58aa6e97c8286225bc67b0c1df8c79ef5a495cf034eb86",
+      "tree-sha256": "feb831eb676f2ac98a154472686abf90dd17a7f77fa9e28439fdd4c6e5023a3d",
       "files": [
         {
           "path": "SKILL.md",
-          "sha256": "7b3668c5137e6dc9de9f008f45aa55623abb8b4bc8ea18715fcd9ce584ce694b",
+          "sha256": "de7ff457f24482bcbb58aa6e97c8286225bc67b0c1df8c79ef5a495cf034eb86",
           "executable": false
         },
         {
@@ -59,17 +69,27 @@
         },
         {
           "path": "references/deep-detail.md",
-          "sha256": "92ee09da8ba7e3822a8e15a6891f674953b0257d0895cb47ebe5497d57d8221f",
+          "sha256": "9fc5fe209d9ba94d606db690be247e317b09e3551d7e0e1d92210f382d965b17",
+          "executable": false
+        },
+        {
+          "path": "references/feedback-contract.md",
+          "sha256": "cca471febecbd3f63cd29a5ec81c3af3ea1542a4e40ba1075208ec8416632f86",
           "executable": false
         },
         {
           "path": "references/host-loop.md",
-          "sha256": "d75f4e3ba80e6cf75b3f3fef5fe3d26eec86c117c0f21d8eeb4d8aed5982d325",
+          "sha256": "705bb66e37c9304f09370413dd3cc7937b8d04a72a789124377574bbd2d6bdbf",
           "executable": false
         },
         {
           "path": "references/workspace-scope.md",
           "sha256": "9435aa1fcc975aba3c3f22066b708a3061b13e9181f4c03fce6dc0526807e245",
+          "executable": false
+        },
+        {
+          "path": "scripts/validate-feedback-state.py",
+          "sha256": "8a28ff24719a11204f168456974b4941026111d498039bf88a679cbca5f11a07",
           "executable": false
         }
       ],

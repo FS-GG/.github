@@ -10,19 +10,22 @@ the complete four-part `check-board` result, classify the current workspace Back
 [backlog-triage](backlog-triage.md), then size the Ready wave with `batch`. Never size before triage.
 Allocate only schedulable touch-set-disjoint lanes and never exceed the host's available worker slots.
 Every worker must mint its own `FSGG_WORKER` identity and hold its own claim: a host session, account,
-or parent identity is not a substitute. Give it one bounded item and the complete item-driver contract,
-including the simple-versus-complex SDD lifecycle branch and schema-v2 feedback envelope. Do not reuse
-its context for another item.
+or parent identity is not a substitute. Give it one bounded item, a stable feedback cycle id, and the
+complete item-driver contract, including the simple-versus-complex SDD lifecycle branch and schema-v2
+feedback envelope. Do not reuse its context for another item.
 
 Invoke skills through the selector supported by the current host: for example, `$work-board` in Codex
 or the host's skill picker. A literal `/skill` is documentation only unless that host explicitly
 supports slash-based skill selection.
 
 Verify PR state/head/checks/review, merge reachability, post-merge obligations, done stamp, issue/board
-state, claim release, pending writes, feedback, and newly filed work. Reconcile and re-triage after
-every wave because completion can clear blockers or create Backlog follow-ups; a snapshot taken before
-worker dispatch cannot plan the next wave.
+state, claim release, pending writes, feedback, and newly filed work. Apply the exact fail-closed
+commands in [feedback-contract](feedback-contract.md) to merged paths before accepting an item; worker
+prose is not verification. Reconcile and re-triage after every wave because completion can clear
+blockers or create Backlog follow-ups; a snapshot taken before worker dispatch cannot plan the next
+wave.
 
 Terminate only from a fresh read. Distinguish empty from blocked, contended, stale, or unreadable state.
-An empty Ready batch is not completion while Backlog is actionable or untriaged. Report deliberately
-parked and human-blocked Backlog without repeatedly dispatching or spinning on it.
+An empty Ready batch is not completion while Backlog is actionable or untriaged, or while any completed
+cycle lacks validated feedback and roll-up disposition. Report deliberately parked and human-blocked
+Backlog without repeatedly dispatching or spinning on it.

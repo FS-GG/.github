@@ -66,6 +66,8 @@ module SkillProgressiveDisclosureTests =
         Assert.Contains("contract-changes", body "cross-repo-coordination")
         Assert.Contains("coherent-releases", body "cross-repo-coordination")
         Assert.Contains("backlog-triage", body "work-board")
+        Assert.Contains("feedback-contract", body "work-board")
+        Assert.Contains("feedback-contract", body "work-roadmap")
 
         for host in [ "drive-board"; "work-board"; "work-roadmap" ] do
             Assert.Contains("host-loop", body host)

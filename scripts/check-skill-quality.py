@@ -337,6 +337,40 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
         if required not in work_triage:
             fail(errors, f"work-board: backlog planning contract lost {required!r}")
 
+    feedback_contracts = {
+        "work-board": (
+            "item-<issue-number>-<slug>",
+            "validate-checkpoints feedback/checkpoints/<cycle-id>.jsonl",
+            "no cycle feedback artifacts is incomplete",
+        ),
+        "work-roadmap": (
+            "roadmap-<roadmap-slug>-m<milestone>-<slug>",
+            "validate-checkpoints feedback/checkpoints/<cycle-id>.jsonl",
+            "final roll-up",
+        ),
+    }
+    for driver, required in feedback_contracts.items():
+        driver_root = root / ROOTS[0] / driver
+        body = (driver_root / "SKILL.md").read_text(encoding="utf-8")
+        contract = (driver_root / "references/feedback-contract.md").read_text(encoding="utf-8")
+        gate = driver_root / "scripts/validate-feedback-state.py"
+        if "feedback-contract" not in body:
+            fail(errors, f"{driver}: triggered body does not route through the feedback contract")
+        if not gate.is_file():
+            fail(errors, f"{driver}: feedback-state validator is missing")
+        for statement in required:
+            if statement not in contract:
+                fail(errors, f"{driver}: feedback completion contract lost {statement!r}")
+        for statement in (
+            "fs-gg-feedback-report",
+            "schema-v2 report",
+            "--audit feedback/audits/<report-stem>.audit.json",
+            "unbound-audit",
+            "Do not create a fake defect or positive pattern",
+        ):
+            if statement not in contract:
+                fail(errors, f"{driver}: feedback completion contract lost {statement!r}")
+
 
 def validate_forward_corpus(root: Path, names: set[str], errors: list[str]) -> None:
     path = root / "tests/skill-quality/forward-triggers.json"
