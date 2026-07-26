@@ -92,14 +92,14 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `governance-tooling` | FS.GG.Governance | `1` | — |
 | `governance-descriptor` | FS.GG.Governance | `1` | — |
 | `governance-reference-gate-set` | FS.GG.Governance | `1.4.0` | `1.4.0` |
-| `fs-gg-ui-template` | FS.GG.Rendering | `0.19.0` | `0.19.0` |
+| `fs-gg-ui-template` | FS.GG.Rendering | `0.19.0` | `0.19.1` |
 | `shared-build-config` | FS-GG/.github | `1.1.0` | — |
 | `registry-schema` | FS.GG.SDD | `2` | — |
 | `skill-registry` | FS-GG/.github | `3` | — |
 | `game-sim-core` | FS.GG.Game | `0.10.1` | `0.10.1` |
 | `game-scene-adapter` | FS.GG.Game | `0.10.1` | `0.10.1` |
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
-| `fs-gg-net` | FS.GG.Net | `0.3.2` | `0.3.2` |
+| `fs-gg-net` | FS.GG.Net | `0.3.2` | `0.4.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
 | `coord-engine` | FS-GG/.github | `0.11.0` | `0.11.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.6.0` | `0.6.0` |
