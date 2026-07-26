@@ -84,9 +84,9 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | Contract | Owner | version | package-version |
 |---|---|---|---|
 | `scaffold-provider` | FS.GG.SDD | `1.1.0` | — |
-| `fsgg-contracts` | FS.GG.SDD | `5.0.1` | `5.0.1` |
+| `fsgg-contracts` | FS.GG.SDD | `6.0.0` | `6.0.0` |
 | `scaffold-provenance` | FS.GG.SDD | `1.1.0` | — |
-| `governance-handoff` | FS.GG.SDD | `1.1.0` | — |
+| `governance-handoff` | FS.GG.SDD | `1.2.0` | — |
 | `governance-policy` | FS.GG.Governance | `1` | — |
 | `governance-capabilities` | FS.GG.Governance | `2` | — |
 | `governance-tooling` | FS.GG.Governance | `1` | — |
@@ -99,7 +99,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `game-sim-core` | FS.GG.Game | `0.10.1` | `0.10.1` |
 | `game-scene-adapter` | FS.GG.Game | `0.10.1` | `0.10.1` |
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
-| `fs-gg-net` | FS.GG.Net | `0.4.0` | `0.4.0` |
+| `fs-gg-net` | FS.GG.Net | `0.5.0` | `0.5.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
 | `coord-engine` | FS-GG/.github | `0.11.0` | `0.11.0` |
 | `new-sdd-workspace` | FS-GG/.github | `0.6.0` | `0.6.0` |
