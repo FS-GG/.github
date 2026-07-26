@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
-EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "work-board", "work-roadmap"}
+EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "padd-item", "work-board", "work-roadmap"}
 LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 INVOCATION = re.compile(r"(?:scripts/)?fsgg-coord(?![\w-])\s+(.+)")
 INLINE = re.compile(r"`([^`]+)`")
@@ -288,6 +288,26 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
     ):
         if required not in p_add:
             fail(errors, f"p-add: filing contract lost {required!r}")
+
+    padd_item = (root / ROOTS[0] / "padd-item/SKILL.md").read_text(encoding="utf-8")
+    padd_item_order = ("Prove workspace wiring", "reconcile --repo", "ready --repo", "fsgg-coord add")
+    padd_item_positions = [padd_item.find(term) for term in padd_item_order]
+    if any(position < 0 for position in padd_item_positions) or padd_item_positions != sorted(padd_item_positions):
+        fail(errors, "padd-item: must prove wiring, reconcile, triage backlog, then add in that order")
+    for required in (
+        "FSGG_COORD_OWNER_TYPE",
+        "Never silently fall back",
+        "issues <this-repo> --state open --refresh",
+        "Reuse an existing semantic match",
+        "cross-repo-coordination",
+        "Paths:",
+        "pendingBoardWrites: 0",
+        "`<item> — <new status>: <one-line summary>`",
+        "`Active: <item> — <current activity/gate>; ...`",
+        "do not implement",
+    ):
+        if required not in padd_item:
+            fail(errors, f"padd-item: workspace filing contract lost {required!r}")
 
     work_root = root / ROOTS[0] / "work-board"
     work = (work_root / "SKILL.md").read_text(encoding="utf-8")

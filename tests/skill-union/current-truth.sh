@@ -24,7 +24,7 @@ seed() {
   for runtime in .agents/skills .codex/skills .claude/skills; do
     mkdir -p "$target/$runtime"
     for skill in check-board cross-repo-coordination cut-nuget-release drive-board \
-      intra-repo-parallel-work lane-steward pnext-item publishing-and-deployment \
+      intra-repo-parallel-work lane-steward p-add padd-item pnext-item publishing-and-deployment \
       spectre-console work-board work-roadmap; do
       cp -R "$ROOT/$runtime/$skill" "$target/$runtime/$skill"
     done
