@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
-EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "work-board", "work-roadmap"}
+EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "work-board", "work-roadmap"}
 LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 INVOCATION = re.compile(r"(?:scripts/)?fsgg-coord(?![\w-])\s+(.+)")
 INLINE = re.compile(r"`([^`]+)`")
@@ -269,6 +269,25 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
     ):
         if required not in triage:
             fail(errors, f"drive-board: backlog planning contract lost {required!r}")
+
+    p_add = (root / ROOTS[0] / "p-add/SKILL.md").read_text(encoding="utf-8")
+    p_add_order = ("check-board", "ready --status Backlog", "fsgg-coord add")
+    p_add_positions = [p_add.find(term) for term in p_add_order]
+    if any(position < 0 for position in p_add_positions) or p_add_positions != sorted(p_add_positions):
+        fail(errors, "p-add: must reconcile, triage backlog, then add the issue in that order")
+    for required in (
+        "reconcile --json",
+        "lint --json",
+        "issues <repo> --state open --refresh",
+        "reuse an existing matching issue",
+        "Paths:",
+        "pendingBoardWrites: 0",
+        "`<item> — <new status>: <one-line summary>`",
+        "`Active: <item> — <current activity/gate>; ...`",
+        "does not implement the item",
+    ):
+        if required not in p_add:
+            fail(errors, f"p-add: filing contract lost {required!r}")
 
     work_root = root / ROOTS[0] / "work-board"
     work = (work_root / "SKILL.md").read_text(encoding="utf-8")

@@ -103,6 +103,12 @@ DRIVERS = [
         "materializes-when": "false",
     },
     {
+        "id": "p-add",
+        "scope": "operator",
+        "supplied-by": ".claude/skills/p-add",
+        "materializes-when": "false",
+    },
+    {
         "id": "cut-nuget-release",
         "scope": "operator",
         "supplied-by": ".claude/skills/cut-nuget-release",

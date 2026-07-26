@@ -117,6 +117,26 @@
       "materializes-when": "false"
     },
     {
+      "id": "p-add",
+      "scope": "operator",
+      "sha256": "44de53fbacc74f6e8be0227cd45549f93a14ee9f3b12a39c63859ebf6d4a1f9e",
+      "tree-sha256": "812ba28f52899dc20d71e449f7fde77a0945003f260b09dbfaaa3da76ffc7cf2",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "sha256": "44de53fbacc74f6e8be0227cd45549f93a14ee9f3b12a39c63859ebf6d4a1f9e",
+          "executable": false
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sha256": "7f4336ec09f77399146c0b44d7767cb2342a2c288ca38ae7c405b662d676c123",
+          "executable": false
+        }
+      ],
+      "supplied-by": ".claude/skills/p-add",
+      "materializes-when": "false"
+    },
+    {
       "id": "cut-nuget-release",
       "scope": "operator",
       "sha256": "1dd3dd74f875d01330002bafd7c26f872e0167d8caaba44978187869f42459df",

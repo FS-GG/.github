@@ -41,6 +41,13 @@
     "negative": "Claim the next schedulable issue and implement it.",
     "boundary": "Diagnose path overlap and propose changes, but do not edit issue declarations."
   },
+  "p-add": {
+    "positive": "$p-add the ball should be blue when rendered",
+    "indirect": "Reconcile and triage the org backlog, then turn this short request into one routed board issue.",
+    "incomplete": "Add this described work cleanly to Coordination",
+    "negative": "Implement the next Ready item and merge its pull request.",
+    "boundary": "Draft a possible issue for this request, but do not create it or touch the board."
+  },
   "pnext-item": {
     "positive": "Claim the next schedulable item for this repo and take it through merge.",
     "indirect": "Act as one worker in this repository and keep the board protocol coherent through the done stamp.",

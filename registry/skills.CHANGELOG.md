@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-26** — ADD `p-add` operator skill (owner `.github`; [.github#1471](https://github.com/FS-GG/.github/issues/1471)): explicit `$p-add <request>` first reconciles the Coordination board and exhaustively triages Backlog, then infers the owning repository, deduplicates live issues, writes evidence-backed acceptance criteria and `Paths:`, adds the issue idempotently, chooses a supported initial status, and verifies the fresh board with zero queued writes. Added byte-identically to all three authored roots with `scope: operator` / `materializes-when: false`; registry = manifest = bytes. The same reconcile refreshed four mechanically stale Rendering producer digests discovered by the required pre-filing cleanup.
+
 - **2026-07-26** — RECONCILE (auto; .github#1451): `fsgg-skill-registry-check --write` reconciled the `work-board` and `work-roadmap` driver digests after adding their performance-first worker setup contract. registry = manifest = bytes.
 
 - **2026-07-26** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 4 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
