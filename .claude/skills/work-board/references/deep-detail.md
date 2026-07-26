@@ -15,11 +15,11 @@ repo × board ledger**:
 | | markdown ledger | board ledger |
 |---|---|---|
 | **single repo** | [work-roadmap](../../work-roadmap/SKILL.md) — `driver`, always materialized | **`work-board` — this file** |
-| **cross-repo** | (n/a) | [drive-board](../../drive-board/SKILL.md) — `operator`, never materialized |
+| **cross-repo** | (n/a) | `drive-board` — `operator`, never materialized |
 
 So it is the **board-ledger sibling of [work-roadmap](../../work-roadmap/SKILL.md)** (same parent-loop-of-
 disposable-subagents shape, but the ledger is the wired board rather than a markdown file) and the
-**single-repo sibling of [drive-board](../../drive-board/SKILL.md)** (same reconcile → size-wave → spawn →
+**single-repo sibling of `drive-board`** (same reconcile → size-wave → spawn →
 verify-against-ground-truth → re-plan shape, but the fan-out is *one repo* instead of every repo).
 
 It owns exactly one thing neither of its parts does: **the single-repo, board-driven scheduling loop**.
@@ -298,7 +298,7 @@ taking the board down (identical discipline to drive-board §3):
 ## 7. The completion report
 
 When §5 says done, the host — **itself, not a subagent** — writes a report and lands it, the same close-out
-[work-roadmap](../../work-roadmap/SKILL.md) and [drive-board](../../drive-board/SKILL.md) use. Write
+[work-roadmap](../../work-roadmap/SKILL.md) and `drive-board` use. Write
 `docs/reports/<YYYY-MM-DD>-workboard.md`, timestamped for today: what shipped this run (items, merged PRs,
 done-stamps), the blockers workers discovered and where they were filed, the follow-ups they queued, every
 rate-limit back-off, and the outstanding human-blocked items check-board named. Follow the house report
@@ -334,7 +334,7 @@ the list of items still parked on a human.
   protocol; that record is the *why*.
 - **ADR-0053** — the disposable-subagent loop this reuses (fresh subagent per unit, verify against ground
   truth, despawn, re-plan); the *why* of the shape lives there.
-- [drive-board](../../drive-board/SKILL.md) — the cross-repo sibling. Same loop; it fans across sibling repos
+- `drive-board` — the cross-repo sibling. Same loop; it fans across sibling repos
   where this fans inside one tree, so its workers cannot collide on files and this skill's must not.
   ADR-0057 (why drive-board is `operator` and never materialized — the reason this skill exists).
 - [work-roadmap](../../work-roadmap/SKILL.md) — the markdown-ledger sibling; the close-out (§7) is the same.

@@ -8,6 +8,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 # Prove the checked-in catalog passes through the exact local/CI entry point first.
 "$ROOT/scripts/check-skill-quality"
+python3 "$ROOT/tests/skill-quality/driver-feedback-delivery.py"
 
 ENGINE="$ROOT/src/FS.GG.Coord.Cli/bin/Release/net10.0/fsgg-coord-engine"
 "$ENGINE" command-contract --json >"$WORK/contract.json"

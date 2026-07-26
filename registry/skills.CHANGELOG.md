@@ -34,6 +34,8 @@ advances the pin to that CLI.
 - **YYYY-MM-DD** — HEADER (owner; refs): body
 -->
 
+- **2026-07-26** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 2 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
+
 - **2026-07-26** — RECONCILE (auto; .github#299/#1200): `fsgg-skill-registry-check --write` reconciled 1 sha256 row(s), 0 materializes-when value(s) and 0 mirrored verdict(s); homed 0 and appended 0 row(s) from the producer manifests. registry = manifest = bytes.
 
 - **2026-07-26** — ADD `padd-item` product-workspace driver + stage `FS.GG.Drivers` 0.8.0 (owner `.github`; [.github#1473](https://github.com/FS-GG/.github/issues/1473)): explicit `$padd-item <request>` uses the current workspace's configured organization, named-user, or viewer-owned Projects v2 board. It proves wiring without fallback, runs workspace-scoped reconcile plus exhaustive Backlog triage, deduplicates and files in the current repository, routes other-repo ownership through cross-repo coordination, adds/fields idempotently, and verifies fresh board truth with zero queued writes. Added byte-identically to all three authored roots with `scope: driver` / `materializes-when: always`; the additive driver grows the stable package 0.7.0→0.8.0 for dual-feed publication and subsequent SDD pin adoption. Catalog ceilings grow by one measured skill (descriptions 2500→2700, per-root authored 3000→3200, effective Codex 6000→6400) while preserving bounded headroom. registry = manifest = bytes.
