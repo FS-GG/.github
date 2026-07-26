@@ -38,6 +38,12 @@ DLL="$(find "$REPO_ROOT/scripts/NewSddWorkspace/bin/Release" -name new-sdd-works
 [ -n "$DLL" ] && [ -f "$DLL" ] || { echo "::error::could not locate built new-sdd-workspace.dll under bin/Release"; exit 1; }
 echo "new-sdd-workspace parse fixture — dll='$DLL'"
 
+# Exercise the wizard's pure decision boundary directly. The normal interactive path intentionally
+# requires a TTY; this deterministic probe proves that the removed confirmations assemble the two
+# established defaults (coordination ON, post-scaffold upgrade OFF) while preserving non-default
+# board/repo/chore-lock values.
+dotnet fsi --reference:"$DLL" "$HERE/wizard-defaults.fsx"
+
 # Scrub `fsgg-sdd` from the child's PATH by handing it only the directory the dotnet muxer lives in
 # (onPath does a non-recursive PATH scan, and fsgg-sdd is a global tool in a *different* dir). On a
 # fresh CI runner fsgg-sdd is absent anyway; this keeps the fixture hermetic on a dev box that has it.

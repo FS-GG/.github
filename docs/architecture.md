@@ -364,7 +364,10 @@ dotnet tool (F# / Spectre.Console) does the three steps — register the provide
 → apply the governance overlay *after* (so it is not flagged writing into the SDD-owned `.fsgg/` tree)
 — with no FS.GG.Templates checkout, fetching the pinned descriptor over the network. By default it
 first self-updates `fsgg-sdd` to the newest coherent set so the scaffold is built by current tooling
-(ADR-0030; `--pinned` skips it for a reproducible pin).
+(ADR-0030; `--pinned` skips it for a reproducible pin). Its interactive wizard therefore asks only
+for meaningful values: it follows default-on coordination without a second confirmation and does not
+offer the normally redundant immediate `fsgg-sdd upgrade`. The explicit CLI escape hatches remain
+`--no-coordination` and `--upgrade`.
 
 **The `fs-gg-governance` overlay** ships a **populated** gate set (real
 build/test/evidence checks wired to tooling commands), authored to Governance's
@@ -542,7 +545,7 @@ product's `FS.GG.UI.*` pin), which is a different axis from the template package
 | `fs-gg-audio` | FS.GG.Audio | `0.5.0` | `0.5.0` |
 | `fs-gg-net` | FS.GG.Net | `0.5.0` | `0.5.0` |
 | `coord-engine` | FS-GG/.github | `0.11.0` | `0.11.0` |
-| `new-sdd-workspace` | FS-GG/.github | `0.6.0` | `0.6.0` |
+| `new-sdd-workspace` | FS-GG/.github | `0.7.0` | `0.6.0` |
 
 **The orchestrator axis.** `fs-gg-ui-template` pins `minimum-fsgg-sdd` at **`0.6.0`** — the oldest published `fsgg-sdd` that seeds the artifacts a workspace on this pin is expected to contain (ADR-0008; see *The coherent set has three axes* below).
 
