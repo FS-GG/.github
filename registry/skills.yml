@@ -252,7 +252,7 @@ skills:
   # as `mirrored: true`; that is REFUSED — the owner's manifest declares no obligation, and hand-forging
   # one is exactly the FS.GG.Rendering#505 trap. If #923 ships a body it must declare it `NoCounterpart`
   # in scripts/FrozenMirrorVerdict.fs (as it does for ballistics/ai/effects/physics), not flip this byte.
-  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: f60aa51e41db3fdff0e45f72c2499ea26352edac51297058cc2930ee9574650d, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
+  - { id: fs-gg-playtest,         scope: product, owner: fs-gg-game,      source: FS.GG.Game/template/product-skills/fs-gg-playtest/SKILL.md,   sha256: 7696eaf6020f47606828a65942e5b5f7b74dd970bfe7261e022b21879f4918a6, mirrored: false, materializes-when: "profile in [game, sample-pack]" }
   # fs-gg-mapcraft supersedes the short-lived fs-gg-mapgen id, which was retired before release.
   # Reconciled verbatim from fs-gg-game's producer manifest by `--write`
   # (.github#299/.github#1200); `mirrored: false` is the manifest's declared verdict.
