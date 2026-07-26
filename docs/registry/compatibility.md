@@ -113,7 +113,7 @@ authored `Version` cells of the Versioned contracts table (#748).*
 | `fs-gg-net` | FS.GG.Net | `0.5.0` | `0.5.0` |
 | `keyboard-input` | FS.GG.Rendering | `0.5.0` | — |
 | `coord-engine` | FS-GG/.github | `0.11.0` | `0.11.0` |
-| `new-sdd-workspace` | FS-GG/.github | `0.7.0` | `0.6.0` |
+| `new-sdd-workspace` | FS-GG/.github | `0.7.0` | `0.7.0` |
 
 <!-- END GENERATED: fsgg-contract-versions -->
 
