@@ -99,15 +99,21 @@ Pinned by the `lone-cr`, `cr-cr-lf` and `trailing-lone-cr` vectors in
 
 This alignment is [#1547](https://github.com/FS-GG/.github/issues/1547): until it landed, the library
 folded CRLF and the **two** shell implementations did not, so a CRLF checkout drew a spurious
-`[drifted]` from both. See [Three implementations of one
-digest](#three-implementations-of-one-digest) for why the shells moved rather than the library.
+`[drifted]` from both. See [Five implementations of one
+digest](#five-implementations-of-one-digest--four-canonical-one-deliberately-raw) for why the shells
+moved rather than the library, and for the two **producers** #1547 did not count
+([#1585](https://github.com/FS-GG/.github/issues/1585)).
 
-Both checkers expose the algorithm as a **reference generator**, so producers and checkers never
-drift, and so the conformance harness can drive them:
+Every in-repo implementation exposes the algorithm as a **reference generator**, so producers and
+checkers never drift, and so the conformance harness can drive them. #1585 added the third — a
+*producer* seam, because "producers and checkers never drift" had been an unmeasured sentence for the
+producer half:
 
 ```sh
-scripts/skill-union-assert.sh --digest .claude/skills/<id>   # prints the canonical digest
+scripts/skill-union-assert.sh --digest .claude/skills/<id>     # prints the canonical digest
 scripts/fsgg-skill-registry-check --digest <path/to/SKILL.md>  # the Python checker's, same value
+scripts/generate-driver-manifest --digest <path/to/SKILL.md>   # the producer's, same value (#1585)
+scripts/repos.sh digest <skill-dir|file>                       # NOT this value — the raw bytes; see below
 ```
 
 **Set semantics.** The manifest is a **superset catalog** — an *upper bound*, not an exact set.
@@ -546,27 +552,56 @@ resolved it by aligning the shells to the library, so the vector still exists �
 gone. A table that kept asserting a difference which no longer existed would red, which is precisely
 why removing the block was part of the same change.
 
-### Three implementations of one digest
+### Five implementations of one digest — four canonical, one deliberately raw
 
-The `fixtures` table pins `verify`'s three facts across **two** implementations. The canonical
-**digest** has **three**, and until [#1547](https://github.com/FS-GG/.github/issues/1547) nothing
-compared them all:
+**The count is five.** The `fixtures` table pins `verify`'s three facts across **two**
+implementations; the **digest** has **five**, and until
+[#1547](https://github.com/FS-GG/.github/issues/1547) nothing compared even three of them. This
+heading said *three* from #1547 until [#1585](https://github.com/FS-GG/.github/issues/1585), because
+#1547 was scoped to the two **verifiers** and counted only what it touched. The heading is the thing a
+reader trusts, so it now states the measured number rather than the number one change happened to see.
 
-| implementation | role | folds CRLF? |
-| --- | --- | --- |
-| `Fsgg.SkillMirror.sha256` | FS.GG.Contracts — ADR-0014's **one implementation** | yes |
-| `skill_digest` (`scripts/skill-union-assert.sh`) | verifier | yes, since #1547 |
-| `canonical_digest` (`scripts/fsgg-skill-registry-check`) | verifier | yes, since #1547 |
-| `canonical_digest` (`scripts/generate-driver-manifest`) | **producer** | **no** — [#1585](https://github.com/FS-GG/.github/issues/1585) |
-| `digest` (`scripts/repos.sh`) | **producer** | **no** (nor BOM) — [#1585](https://github.com/FS-GG/.github/issues/1585) |
+| implementation | role | rule | folds CRLF? |
+| --- | --- | --- | --- |
+| `Fsgg.SkillMirror.sha256` | FS.GG.Contracts — ADR-0014's **one implementation** | canonical body | yes |
+| `skill_digest` (`scripts/skill-union-assert.sh`) | verifier | canonical body | yes, since #1547 |
+| `canonical_digest` (`scripts/fsgg-skill-registry-check`) | verifier | canonical body | yes, since #1547 |
+| `canonical_digest` (`scripts/generate-driver-manifest`) | **producer** | canonical body | yes, **since #1585** |
+| `digest` (`scripts/repos.sh`) | **producer** | **raw bytes** — deliberately not the canonical body | **no, by decision** (#1585) |
 
-**The heading says three because #1547 did; the honest count is five.** #1547 was scoped to the two
-**verifiers**, and aligning them is what its decision comment settled. The two **producers** that
-emit the `sha256` values those verifiers check were found afterwards, by an adversarial review of the
-implementing PR, and are filed rather than folded in — changing a producer changes what gets written
-into a shipped manifest, which is a different blast radius needing its own call. Today they agree
-anyway, because no tracked `SKILL.md` in this repo contains a CR; the split is latent, and it fails
-*closed* (a producer's raw digest is one no verifier reproduces, so it reads as `[drifted]`).
+**#1585's decision (2026-07-27): the two producers split apart, and both are now pinned.** They were
+found by an adversarial review of #1547's implementing PR, after #1547 had merged, and were filed
+rather than folded in — changing what a *producer* writes into a shipped manifest is a different blast
+radius from changing what a verifier accepts. Neither was a regression: no tracked `SKILL.md` in this
+repo contains a CR or a BOM, so on today's content every rule below agrees and
+`registry/driver-skill-manifest.json` and `registry/repos.lock` are **byte-unchanged** by #1585. The
+split was latent and failed *closed* (a raw producer digest is one no verifier reproduces, so it reads
+as `[drifted]`).
+
+- **`generate-driver-manifest` follows the library.** Its `sha256` lands in
+  `registry/driver-skill-manifest.json`, which the reconcile copies into `registry/skills.yml` and
+  re-derives, and which `skill-union-assert.sh` check 3 compares against its own `skill_digest`. A
+  producer of a value two verifiers re-derive must compute the verifiers' function; anything else emits
+  a manifest they cannot reproduce. It gained a `--digest PATH` seam and is now asserted against the
+  library's measured value exactly like the two verifiers.
+- **`repos.sh` deliberately stays raw**, and its header sentence claiming byte-equivalence to
+  `skill_digest` — false since #1547 — is **removed rather than repaired**, because repairing it would
+  mean folding, and folding would be wrong three ways. (1) It is a **byte-integrity** digest, not a
+  body-identity one: it writes `registry/repos.lock` and, through `src/FS.GG.Kit/stage-kit.sh` (which
+  shells out to this same command), the `sha256` column a receiver checks a **materialized file**
+  against at restore — a normalizing digest would report a CRLF-mangled delivery as intact. (2) It
+  would break a live containment check: `scripts/check-kit-published-coherence.py` requires every
+  `repos.lock` digest to appear among the canonical `kit-manifest.tsv` digests, which are per-file raw
+  digests, so folding only the skill-dir arm would invent a gate failure. (3) It is not only a skill
+  digest — the `kit:` roster's `client` and `config` rows (`scripts/fsgg-coord`,
+  `dist/dotnet/.config/dotnet-tools.json`) come through the same function, and "canonical body" is not
+  a defined notion for a shell script or a tool manifest.
+
+**The deliberate difference is asserted in both directions**, the same rule the `divergence` blocks
+apply to `verify`: `skillmirror-conformance.sh` holds `repos.sh digest` to the **raw** sha256 of every
+vector (recomputed, never transcribed), *and* fails if no vector separates raw from canonical — so
+repos.sh silently *adopting* the library's normalization, or the distinguishing vectors being tidied
+away, reds exactly as loudly as a fresh divergence.
 
 The two pins that existed were **pairwise, and both skipped the digest**: `conformance.sh` pins
 shell↔Python for the *predicate grammar* only, and `skillmirror-conformance.sh` pinned shell↔library
@@ -582,31 +617,35 @@ needs a version story it does not have. Both shells were changed — leaving one
 have relocated the disagreement.
 
 **The gate.** `digestVectors` in
-[`skillmirror.fixtures.json`](../../tests/skill-union/skillmirror.fixtures.json) carries ten vectors
-(LF, CRLF, BOM+LF, BOM+CRLF, empty, lone CR, `\r\r\n`, trailing lone CR, no trailing newline, many
-trailing newlines) with **one** expected `digest` each — deliberately not one column per
+[`skillmirror.fixtures.json`](../../tests/skill-union/skillmirror.fixtures.json) carries **eleven**
+vectors (LF, CRLF, BOM+LF, BOM+CRLF, empty, lone CR, `\r\r\n`, trailing lone CR, no trailing newline,
+NUL byte, many trailing newlines) with **one** expected `digest` each — deliberately not one column per
 implementation, so re-introducing a disagreement cannot be done by editing one side's expectations.
 Each value is **measured** by `skillmirror-oracle.sh` running the library's own `sha256`;
-`skillmirror-conformance.sh` then holds **both shells** to it hermetically on every PR, via their
-`--digest` reference seams, and compares each shell **to the library's measured value** rather than
-to the other. Inputs are stored as `bytesBase64` because these vectors turn on a BOM, on lone CRs and
+`skillmirror-conformance.sh` then holds **all four canonical implementations** to it hermetically on
+every PR (#1585 added the driver-manifest producer to the three #1547 covered), via their `--digest`
+reference seams, and compares each **to the library's measured value** rather than to one another.
+`repos.sh digest` is driven over the same vectors against its own raw rule, per the split above.
+Inputs are stored as `bytesBase64` because these vectors turn on a BOM, on lone CRs and
 on exact trailing bytes — the things a JSON string literal or a stray reformat silently normalizes
 away.
 
-**The scope of the agreement claim: valid UTF-8.** The three implementations agree for every body
-that decodes cleanly. They do **not** agree on bytes that are *not* valid UTF-8, and #1547 did not
-change that in either direction — the shells hash the raw bytes, while the library hashes text that a
-decoder has already replaced invalid sequences in with `U+FFFD`. Measured, not assumed: a file of
-`0xFF` and a file of `0xFE` are different files that the **library gives the same digest**, while both
-shells tell them apart. So on invalid UTF-8 the shells are the *stricter* pair and the library holds a
-latent collision. It is out of this repo's hands — the lossy decode is `FS.GG.Contracts` behaviour —
+**The scope of the agreement claim: valid UTF-8.** The four canonical implementations agree for every
+body that decodes cleanly. They do **not** agree on bytes that are *not* valid UTF-8, and #1547 did not
+change that in either direction — the three in-repo copies hash the raw bytes, while the library hashes
+text that a decoder has already replaced invalid sequences in with `U+FFFD`. Measured, not assumed: a
+file of `0xFF` and a file of `0xFE` are different files that the **library gives the same digest**,
+while all three in-repo copies tell them apart. So on invalid UTF-8 the in-repo copies are the
+*stricter* set and the library holds a latent collision (#1585 does not change this: the driver-manifest
+producer already hashed bytes, and adopting the CRLF fold left the decode boundary exactly where it
+was). It is out of this repo's hands — the lossy decode is `FS.GG.Contracts` behaviour —
 and it is filed rather than implied: [#1589](https://github.com/FS-GG/.github/issues/1589). The
 `digestVectors` table is deliberately all valid UTF-8, so it pins what is actually agreed rather than
 freezing a disagreement into an expectation.
 
 The same boundary covers a **UTF-16/UTF-32 BOM**: `File.ReadAllText` detects those and decodes
-accordingly, while both shells special-case only the UTF-8 BOM `EF BB BF`, so a UTF-16LE `SKILL.md`
-gets three different answers. Also pre-existing, also fails closed, and tracked with the invalid-UTF-8
+accordingly, while every in-repo copy special-cases only the UTF-8 BOM `EF BB BF`, so a UTF-16LE
+`SKILL.md` gets a different answer from the library. Also pre-existing, also fails closed, and tracked with the invalid-UTF-8
 case in [#1589](https://github.com/FS-GG/.github/issues/1589) — a `SKILL.md` that is not UTF-8 is the
 single underlying condition.
 
