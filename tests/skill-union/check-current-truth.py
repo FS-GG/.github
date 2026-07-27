@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOTS = (".agents/skills", ".codex/skills", ".claude/skills")
+ROOTS = (".agents/skills", ".claude/skills")
 SKILLS = ("lane-steward", "publishing-and-deployment", "spectre-console")
 ALL_SKILLS = (
     "check-board",

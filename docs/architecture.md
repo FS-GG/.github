@@ -616,13 +616,18 @@ asserted where skills are produced (`doctor`, per-skill `sha256` in
 `scaffold-provenance`) *and* where they are consumed: the Templates composition gate
 enforces it hard in both lanes via the reusable `skill-union-assert.sh`
 (`skill-mirror-verified` coherence row, `coherent: true` since 2026-07-02).
-ADR-0065 applies the same `.claude/.codex/.agents` default to framework coordination-kit receivers:
+ADR-0065 applies the same `.claude/.agents` default to framework coordination-kit receivers:
 `FS.GG.Kit` and `coordination-sync` are separate delivery triggers over the same root contract.
-That three-root declaration is the **transport/parity** contract, not a command to expose three
-duplicate catalog entries in one runtime. Claude and Codex catalog their supported roots; Codex
-installations that also expose `.codex/skills` suppress only that duplicate runtime entry and keep
-the materialized mirror intact. `agents/openai.yaml` carries host selection policy, including
-explicit-only autonomous drivers, without changing which directory bytes are delivered.
+That declaration is the **transport/parity** contract, not a command to expose duplicate catalog
+entries in one runtime. Claude catalogs `.claude/skills`; Codex natively discovers `.agents/skills`
+with no configuration. `agents/openai.yaml` carries host selection policy, including explicit-only
+autonomous drivers, without changing which directory bytes are delivered.
+
+The set was three until 2026-07-28 (ADR-0067 §5, `.github#1636`). The retired `.codex/skills` was
+Codex's *other* native root rather than a third runtime's, so it delivered no reachability the
+remaining two do not — it only made every skill appear twice in Codex's catalog, which each developer
+machine then had to suppress by hand in `~/.codex/config.toml`. Removing a root is a contract
+migration, never a mirror deletion: see ADR-0065 §Retiring a root.
 
 **Skill *absence* is checkable too (ADR-0017).** The manifest is a superset catalog —
 a producer declares every skill it *can* emit, but emission is profile/lifecycle-gated,

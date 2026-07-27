@@ -112,7 +112,7 @@
 set -euo pipefail
 
 PRODUCT="."
-DEFAULT_ROOTS=".claude/skills .codex/skills .agents/skills"   # ADR-0011: the scaffolded-product set
+DEFAULT_ROOTS=".claude/skills .agents/skills"   # ADR-0065 as amended by ADR-0067 §5 (#1636): TWO roots
 ROOTS_DECL_FILE=".agent-skill-roots"   # named in the missing-root hint below; lib/roots.sh reads it
 ROOTS=""
 ROOTS_ARG=""
@@ -168,10 +168,11 @@ need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
 # A SOURCED fragment, not an executable: no shebang, no top-level effects. Source it AFTER defining
 # `die`. Like lib/args.sh (#356), the guard body is shared and the per-script parts are not — here
 # that means the caller supplies its own DEFAULT. Since ADR-0065 every production caller uses the
-# same three-root default; the parameter remains for explicit fixtures and future migrations:
+# same default; the parameter remains for explicit fixtures and future migrations — and it earned
+# that keep on 2026-07-28, when ADR-0067 §5 (.github#1636) narrowed the set from three roots to two:
 #
-#   skill-union-assert.sh  product lane — ADR-0011's three (.claude/.codex/.agents), fanned out by fsgg-sdd
-#   coordination-sync      kit lane     — the same three, materialized from FS.GG.Kit
+#   skill-union-assert.sh  product lane — ADR-0065's two (.claude/.agents), fanned out by fsgg-sdd
+#   coordination-sync      kit lane     — the same two, materialized from FS.GG.Kit
 #
 # It is the PRECEDENCE and the PARSING that must be shared. Before this hoist, only
 # the asserter read the tree's `.agent-skill-roots` (#517) and the writer hardcoded its own set, so a
@@ -249,7 +250,7 @@ Options:
   --roots "<r1> ..."      space-separated skill roots, relative to --product. Resolution order:
                           --roots, then $AGENT_SKILL_ROOTS, then <product>/.agent-skill-roots (a
                           checked-in declaration, for a tree that is not a scaffolded product),
-                          then ADR-0011's three: ".claude/skills .codex/skills .agents/skills".
+                          then ADR-0065's two: ".claude/skills .agents/skills" (ADR-0067 §5).
                           An absent root is a misconfiguration (exit 2) at every level.
   --manifest <file.json>  producer skill-manifest; enables the digest cross-check (check 3)
   --co-tenants "<glob>…"  globs of undeclared co-tenant skill ids to admit (only with --manifest)

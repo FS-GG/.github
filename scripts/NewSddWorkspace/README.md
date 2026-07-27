@@ -53,7 +53,7 @@ usage-error contract, so scripted callers must still pass `<target-dir> <product
 
 By default, **step 5 wires the workspace to a coordination board** so `/pnext-item` and `/check-board`
 work out of the box: it vendors the coordination kit (the four coordination skills into `.claude`,
-`.agents` and `.codex` skill roots byte-identical, the `fsgg-coord` shim, and the `fs.gg.coord.cli`
+`.agents` skill root byte-identical, the `fsgg-coord` shim, and the `fs.gg.coord.cli`
 tool manifest — fetched from `FS-GG/.github` over HTTP, no checkout, like the descriptor) and writes
 `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT` (and `FSGG_COORD_CHORE_LOCKS` when given) into the workspace's
 `.claude/settings.json` `env`. The board defaults to **FS-GG/Coordination**; `--board` retargets it and
@@ -83,7 +83,7 @@ new-sdd-workspace retrofit ./MyApp --board acme/Roadmap --repo acme/MyApp --chor
 It is **idempotent** and never leaves partial state:
 
 - it vendors the same kit as the scaffold step (the four coordination skills into `.claude`/`.agents`/
-  `.codex` byte-identical, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest merged into any
+  `.agents` byte-identical, the `fsgg-coord` shim, the `fs.gg.coord.cli` tool manifest merged into any
   existing `.config/dotnet-tools.json`) and writes `FSGG_COORD_OWNER`/`FSGG_COORD_PROJECT`
   (+ `FSGG_COORD_CHORE_LOCKS`) merged into `.claude/settings.json` — **but writes each piece only if it
   is missing or has drifted**, leaving a coherent kit byte-for-byte untouched;

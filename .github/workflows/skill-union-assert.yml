@@ -44,8 +44,8 @@
 # ITSELF (a kit repo; see skill-roots-selfcheck.yml), wrong here. The tree this gate audits is
 # producer-GENERATED (fsgg-sdd + the fs-gg-ui template write it), while `roots:` is human-authored
 # by the consumer repo. Letting the artifact under test declare the scope of its own audit is a
-# fail-open: a template that emitted a two-root declaration into a scaffolded product would make
-# this gate skip .codex/skills and go green on a partitioned product — ADR-0011's origin bug, the
+# fail-open: a template that emitted a one-root declaration into a scaffolded product would make
+# this gate skip .agents/skills and go green on a partitioned product — ADR-0011's origin bug, the
 # exact thing this gate exists to catch. So the roots come from the caller, never from the subject.
 name: skill-union-assert
 
@@ -58,12 +58,13 @@ on:
         default: "."
       roots:
         description: >-
-          Space-separated AGENT_SKILL_ROOTS to check, relative to product-path. Defaults to ADR-0011's
-          three, and this gate ALWAYS passes it explicitly — a product's own `.agent-skill-roots` is
-          deliberately NOT consulted here (see the note above). A tree intentionally supporting fewer
-          runtimes must say so explicitly, for example: roots: ".claude/skills .agents/skills".
+          Space-separated AGENT_SKILL_ROOTS to check, relative to product-path. Defaults to ADR-0065's
+          two (as amended by ADR-0067 §5), and this gate ALWAYS passes it explicitly — a product's own
+          `.agent-skill-roots` is deliberately NOT consulted here (see the note above). A tree
+          intentionally supporting fewer runtimes must say so explicitly, for example:
+          roots: ".claude/skills".
         type: string
-        default: ".claude/skills .codex/skills .agents/skills"
+        default: ".claude/skills .agents/skills"
       manifest:
         description: "Optional path (in the caller's checkout) to a producer skill-manifest JSON; enables the digest cross-check."
         type: string

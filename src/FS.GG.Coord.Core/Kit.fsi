@@ -63,7 +63,7 @@ module Kit =
     /// registry DECLARED, so the remedy always copies FROM the digested source — the one `coordination-sync`
     /// fans out and the lock content-addresses. The scan it replaces hardcoded `.claude` → `.agents` and so
     /// ran the mirror BACKWARDS in every repo whose source root is `.agents/` (`materialize-skill-roots.fsx`
-    /// fans `.agents/` → `.claude/`/`.codex/`): its advice destroyed the source root it claimed to protect,
+    /// fans `.agents/` → `.claude/`): its advice destroyed the source root it claimed to protect,
     /// overwriting the per-agent `Codex-active` wrapper that `specs/227-layout-product-skill/data-model.md`
     /// REQUIRES, and which `skill-parity` validates by pairing rather than by byte-identity.
     val skillMirror: roots: string list -> src: string -> (string * string) option

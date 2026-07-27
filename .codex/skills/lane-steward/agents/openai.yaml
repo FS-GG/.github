@@ -1,4 +1,0 @@
-interface:
-  display_name: "Lane Steward"
-  short_description: "Diagnose and narrow blocked coordination lanes"
-  default_prompt: "Use $lane-steward to diagnose broad touch-sets and propose narrower coordination lanes."

@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNTIMES = (".claude", ".codex", ".agents")
+RUNTIMES = (".claude", ".agents")
 DRIVERS = ("work-roadmap", "work-board", "padd-item")
 LINK = re.compile(r"\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)")
 

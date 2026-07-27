@@ -442,12 +442,13 @@ let private wireCoordination (kitRef: string) (opts: Options) : Outcome =
     let problems = ResizeArray<string>()
     let _, skillFiles = coordinationSkillFiles raw
     // 1 · complete skill directories → every agent-skill root, byte- and mode-identical.
-    //     union into .claude/.agents/.codex (ADR-0011), so the coordination kit joins all three —
-    //     a codex-driven agent in the workspace sees the same skills a Claude one does.
+    //     union into .claude/.agents (ADR-0065 as amended by ADR-0067 §5), so the coordination kit
+    //     joins both — a Codex-driven agent in the workspace sees the same skills a Claude one does,
+    //     because `.agents/skills` is Codex's OWN native root and needs no pointing.
     for s, rel, executable in skillFiles do
         match fetchText (raw (sprintf ".claude/skills/%s/%s" s rel)) with
         | Ok content ->
-            for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
+            for root in [ ".claude/skills"; ".agents/skills" ] do
                 let destRel = sprintf "%s/%s/%s" root s rel
                 writeUnder opts.Target destRel content
                 try setExecutableState (Path.Combine(opts.Target, destRel)) executable with _ -> ()
@@ -633,12 +634,12 @@ let private retrofitCoordination (opts: RetrofitOptions) : RetrofitReport =
     for s, rel, executable in skillFiles do
         match fetchText (raw (sprintf ".claude/skills/%s/%s" s rel)) with
         | Ok content ->
-            for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
+            for root in [ ".claude/skills"; ".agents/skills" ] do
                 record (reconcileFile opts.Target (sprintf "%s/%s/%s" root s rel) content executable)
         | Error e -> problems.Add e
     if hasDirectoryManifest then
         let expected = skillFiles |> Seq.map (fun (id, rel, _) -> id, rel) |> Set.ofSeq
-        for root in [ ".claude/skills"; ".agents/skills"; ".codex/skills" ] do
+        for root in [ ".claude/skills"; ".agents/skills" ] do
             for id in skillFiles |> Seq.map (fun (id, _, _) -> id) |> Seq.distinct do
                 let dir = Path.Combine(opts.Target, root, id)
                 if Directory.Exists dir then

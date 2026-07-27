@@ -61,7 +61,8 @@ are — this is the write arm that replaces that copy, not a live per-build inpu
 | property | default | meaning |
 |---|---|---|
 | `FsggKitReceiverRoot` | referencing project's dir | repo root the kit materializes into |
-| `FsggKitSkillRoots` | `.claude/skills;.codex/skills;.agents/skills` | skill roots to materialize into |
+| `FsggKitSkillRoots` | `.claude/skills;.agents/skills` | skill roots to materialize into |
+| `FsggKitRetiredSkillRoots` | `.codex/skills` | roots the contract has retired — the materializer removes the kit's own skill directories from each, so a receiver never hand-deletes a mirror (ADR-0065 as amended by ADR-0067 §5) |
 | `FsggKitMaterializeOnBuild` | `true` | materialize as part of the build; `false` to run `-t:FsggKitMaterialize` explicitly |
 | `FsggKitMaterializeBuildConfig` | `false` | also materialize `Directory.Build.props` + `Directory.Packages.props` to the repo root |
 

@@ -169,26 +169,25 @@ first caller).
 
 ### Skill runtime exposure
 
-`.agent-skill-roots` is the transport/parity declaration: `.claude/skills`, `.codex/skills`, and
-`.agents/skills` must remain complete byte-identical mirrors. It is not a request for every host to
-catalog every root. Invoke a skill through the selector the active host supports (Codex CLI/IDE uses
-`$skill-name` or `/skills`; other hosts may provide a picker). Do not treat a literal `/skill-name`
-in historical prose as universally executable syntax.
+`.agent-skill-roots` is the transport/parity declaration: `.claude/skills` and `.agents/skills` must
+remain complete byte-identical mirrors. It is not a request for every host to catalog every root.
+Invoke a skill through the selector the active host supports (Codex CLI/IDE uses `$skill-name` or
+`/skills`; other hosts may provide a picker). Do not treat a literal `/skill-name` in historical prose
+as universally executable syntax.
 
-Codex natively discovers repository skills from `.agents/skills`. An installation or wrapper that
-also exposes `.codex/skills` will therefore show a duplicate name, because Codex does not merge
-same-named skills. Keep both directories synchronized and suppress only the duplicate catalog entry
-with Codex's supported per-skill override in `~/.codex/config.toml`:
+**There is nothing to configure.** Claude catalogs `.claude/skills`; Codex natively discovers
+`.agents/skills`, with no configuration at all. Each skill appears exactly once in each host.
 
-```toml
-[[skills.config]]
-path = "/absolute/path/to/repository/.codex/skills/drive-board/SKILL.md"
-enabled = false
-```
-
-Repeat the entry for each duplicated `.codex/skills/*/SKILL.md`, using resolved absolute paths, then
-restart Codex. The `.agents` copy remains enabled. Suppression is runtime configuration only: never
-delete, omit, or desynchronize the `.codex` mirror to hide a duplicate.
+> **2026-07-28 ([ADR-0067](../adr/0067-resolve-dont-copy-one-skill-source-two-runtime-roots-a-generated-view.md) §5,
+> [#1636](https://github.com/FS-GG/.github/issues/1636)) — this section used to tell you to edit
+> `~/.codex/config.toml`.** A third root, `.codex/skills`, was also a Codex-native root, and Codex does
+> not merge same-named skills across its two roots, so every kit skill showed up **twice** in Codex's
+> catalog. The documented remedy was a `[[skills.config]] … enabled = false` block per duplicated
+> skill, with absolute paths, on **every developer machine** — thirteen entries here, re-resolved for
+> each clone path, and never verifiable from inside the repo. That root is retired and the duplicate no
+> longer occurs, so the suppression is deleted rather than maintained. If you still carry those
+> `[[skills.config]]` entries from before this change, delete them: they point at a path that no longer
+> exists. Nothing replaces them.
 
 Where that gate checks a *consumer's* tree, `skill-registry-coherence` checks this repo's *catalog*:
 `scripts/fsgg-skill-registry-check` asserts every `registry/skills.yml` row against the producer body

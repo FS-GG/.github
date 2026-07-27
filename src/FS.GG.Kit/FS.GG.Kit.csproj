@@ -82,8 +82,28 @@
          and no receiver-visible file moves destination. Not patch because both changes are substantive
          content a receiver ACTS on rather than prose: the pin changes which engine binary every receiver
          `exec`s, and the projection changes the merge recipe the fleet reads. Same class as 0.11.0 and
-         0.12.0 earlier today, both of which took a minor for a pin bump. -->
-    <Version>0.13.0</Version>
+         0.12.0 earlier today, both of which took a minor for a pin bump.
+
+         0.14.0 (.github#1636, ADR-0067 §5 / ADR-0065 as amended) — RETIRE `.codex/skills`.
+         MINOR, and on a 0.x line that is how an observable change is spelled because there is no
+         major to take (registry/dependencies.yml:835's precedent, the coord-engine release). It is
+         not a patch: this is the most receiver-VISIBLE change the kit has shipped. Two things move,
+         both in the build logic rather than in the member set:
+           * `FsggKitSkillRoots` drops to `.claude/skills;.agents/skills`, so a receiver's next
+             materialize writes TWO roots instead of three.
+           * `FsggKitRetiredSkillRoots` is new, and the materialize target now SWEEPS the kit's own
+             skill directories out of each retired root. Without this the retirement could never
+             reach a receiver at all — the stale-file sweep only walks roots the manifest still maps
+             into, so a dropped root is one the materializer stops looking at, and its copies would
+             survive forever. A receiver's own skill under that root is deliberately left alone.
+         The member set is UNCHANGED at 25 and no destination moves, so it is not a major.
+
+         NOTE for the next person: `kit-published-coherence`'s PR arm was GREEN on the PR that made
+         this change, because that arm keys on the six `kit:` CONTENT sources in registry/repos.yml
+         and this diff touched none of them — it changed the package's own build logic instead. The
+         republish obligation was real anyway. Gap filed; do not read that arm's green as "no
+         republish owed". -->
+    <Version>0.14.0</Version>
 
     <Description>FS-GG coordination kit as one versioned artifact — the shared coordination skills, the fsgg-coord client shim, and the engine tool manifest, derived from registry/repos.yml. Receivers reference it and materialize the skills onto disk (ADR-0062) instead of byte-copying the kit (ADR-0058: derive, don't restate).</Description>
     <Authors>FS-GG</Authors>

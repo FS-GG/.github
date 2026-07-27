@@ -48,7 +48,7 @@ diff -q "$REPO_ROOT/scripts/fsgg-coord" "$RECV/scripts/fsgg-coord" >/dev/null \
 # these go red — where before, `--check` passed on a receiver that lacked it entirely.
 for i in "${!SKILLS[@]}"; do
   s="${SKILLS[$i]}"; src="${SKILL_SRCS[$i]}"
-  for root in .claude/skills .codex/skills .agents/skills; do
+  for root in .claude/skills .agents/skills; do
     [ -f "$RECV/$root/$s/SKILL.md" ] && ok "apply: $s in $root" \
       || bad "apply: $s in $root" "declared 'kind: skill' in repos.yml, not distributed"
   done
@@ -574,10 +574,10 @@ AGENT_SKILL_ROOTS=".claude/skills" bash "$SYNC" "$ENVR" >/dev/null
 PLAIN="$WORK/plain-receiver"; mkdir -p "$PLAIN"
 bash "$SYNC" "$PLAIN" >/dev/null
 [ -f "$PLAIN/.claude/skills/$one_skill/SKILL.md" ] \
-  && [ -f "$PLAIN/.codex/skills/$one_skill/SKILL.md" ] \
   && [ -f "$PLAIN/.agents/skills/$one_skill/SKILL.md" ] \
-  && ok "roots: a receiver declaring nothing gets ADR-0065's universal three" \
-  || bad "roots: universal default root set is incomplete" "want .claude/.codex/.agents"
+  && [ ! -e "$PLAIN/.codex/skills" ] \
+  && ok "roots: a receiver declaring nothing gets ADR-0065's universal two, and NOT the retired root" \
+  || bad "roots: universal default root set is wrong" "want .claude/.agents and no .codex"
 
 # An empty/comment-only declaration is a MISCONFIGURATION (rc 2), never a silent fall-back to the
 # default: a tree that checked the file in meant to say something, and substituting the default there
@@ -914,7 +914,7 @@ expect_out "pin roots: the receiver project's own FsggKitSkillRoots beats the pa
   "skill roots = [.]claude/skills [(]from [.]config/kit/FS[.]GG[.]Kit[.]receiver[.]proj" pin_check "$PRECV"
 # ...and it really narrowed the subject: a root the receiver no longer declares is not looked for, so
 # deleting it is NOT drift. A gate that kept the package default would call this missing.
-rm -rf "$PRECV/.codex/skills"
+rm -rf "$PRECV/.agents/skills"
 expect_rc "pin roots: ...and a root the receiver does not declare is not verified (rc 0)" 0 \
   pin_check "$PRECV"
 bash "$SYNC" "$PRECV" >/dev/null

@@ -34,9 +34,9 @@ schedules its removal, so the driver no longer ANDs against a skill that is goin
 report-only. The composition therefore reduces to `always` — the driver materializes on the `sdd` lane
 it was built for. The bytes come from the tree; only these four facts per driver are authored here.
 
-AUTHORED IN THREE ROOTS: a `.github` driver/operator skill lives byte-identically in every ADR-0011
-skill root (`.claude/skills/<id>`, `.codex/skills/<id>`, `.agents/skills/<id>`);
-`skill-roots-selfcheck.yml` asserts that identity.
+AUTHORED IN TWO ROOTS: a `.github` driver/operator skill lives byte-identically in every declared
+skill root (`.claude/skills/<id>`, `.agents/skills/<id>`); `skill-roots-selfcheck.yml` asserts that
+identity. It was three until ADR-0067 §5 (.github#1636) retired `.codex/skills`.
 The digest is read from the canonical `.claude` root (the `supplied-by` path), which the reconcile
 resolves to for `source:` too.
 
@@ -81,15 +81,22 @@ KIT_MANIFEST_PATH = "registry/coordination-kit-skill-manifest.json"
 # skill-manifest schema version (the MANIFEST document's schema — NOT skills.yml's schemaVersion).
 MANIFEST_SCHEMA_VERSION = 2
 
-SKILL_ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
-CODEX_SKILL_ROOTS = (".codex/skills", ".agents/skills")
+SKILL_ROOTS = (".claude/skills", ".agents/skills")
+# Codex's OWN native project roots. It had two — `.codex/skills` and `.agents/skills` — and it does
+# not merge same-named skills across them, so every kit skill was billed to the model-visible prompt
+# TWICE. ADR-0067 §5 (landed by .github#1636) retires `.codex/skills`; `.agents/skills` needs no
+# pointing, so Codex's effective exposure is now exactly one root. See CODEX_EFFECTIVE_CEILING.
+CODEX_SKILL_ROOTS = (".agents/skills",)
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SKILL_NAME_MAX = 64
 DESCRIPTION_MIN = 120
 DESCRIPTION_MAX = 220
 DESCRIPTION_CEILING = 2700
 ROOT_CATALOG_CEILING = 3200
-CODEX_EFFECTIVE_CEILING = 6400
+# DERIVED, not restated (ADR-0058): the effective ceiling is the per-root ceiling once per root Codex
+# actually catalogs. It was the literal 6400 while Codex had two native roots; hard-coding it would
+# now leave a ceiling that can never bind, which is a gate that always passes (#1611 category D).
+CODEX_EFFECTIVE_CEILING = ROOT_CATALOG_CEILING * len(CODEX_SKILL_ROOTS)
 TRIGGER_FIXTURES = "tests/skill-registry/catalog-triggers.json"
 TRIGGER_KINDS = ("positive", "indirect", "incomplete", "negative", "boundary")
 # The `kit:` roster `build_kit_manifest()` derives the coordination-kit rows from. Named here rather

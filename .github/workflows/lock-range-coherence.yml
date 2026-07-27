@@ -67,7 +67,7 @@
 #
 # THE LEADING SLASH IS LOAD-BEARING. Under `sparse-checkout-cone-mode: false` these are gitignore-style
 # patterns, so an unanchored `scripts/` matches a directory of that name at ANY depth — and this repo has
-# six, in the skill bundles (`.agents|.claude|.codex/skills/work-{board,roadmap}/scripts/`). Both forms
+# four, in the skill bundles (`.agents|.claude/skills/work-{board,roadmap}/scripts/`). Both forms
 # fix the bug; only `/scripts/` makes the claim "this checkout is scoped to scripts/" a true one.
 # Measured: `/scripts/` selects exactly the repo's tracked contents of scripts/, scripts/lib/* included,
 # and nothing else.

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Spectre Console"
-  short_description: "Build and diagnose Spectre.Console output"
-  default_prompt: "Use $spectre-console to build or diagnose deterministic Spectre.Console rendering."

@@ -19,7 +19,7 @@ fail=0
 seed() {
   rm -rf "$WORK/tree"
   mkdir -p "$WORK/tree/scripts" "$WORK/tree/tests"
-  cp -a "$ROOT/.claude" "$ROOT/.codex" "$ROOT/.agents" "$WORK/tree/"
+  cp -a "$ROOT/.claude" "$ROOT/.agents" "$WORK/tree/"
   cp -a "$ROOT/.github" "$ROOT/docs" "$ROOT/profile" "$WORK/tree/"
   cp -a "$ROOT/registry" "$WORK/tree/"
   cp "$ROOT/default.json" "$WORK/tree/"
@@ -52,7 +52,7 @@ import sys
 from pathlib import Path
 
 root, old, new = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-for runtime in (".claude", ".codex", ".agents"):
+for runtime in (".claude", ".agents"):
     path = root / runtime / "skills/work-board/references/backlog-triage.md"
     text = path.read_text()
     if old not in text:
@@ -90,7 +90,7 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-for runtime in (".claude", ".codex", ".agents"):
+for runtime in (".claude", ".agents"):
     path = root / runtime / "skills/drive-board/references/backlog-triage.md"
     path.write_text(path.read_text().replace("An empty Ready batch is not completion", "A dry wave may stop"))
 PY
@@ -103,7 +103,7 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-for runtime in (".claude", ".codex", ".agents"):
+for runtime in (".claude", ".agents"):
     path = root / runtime / "skills/p-add/SKILL.md"
     path.write_text(path.read_text().replace("reuse an existing matching issue", "always create a new issue"))
 PY
@@ -116,7 +116,7 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-for runtime in (".claude", ".codex", ".agents"):
+for runtime in (".claude", ".agents"):
     path = root / runtime / "skills/padd-item/SKILL.md"
     path.write_text(path.read_text().replace("Never silently fall back", "Silently fall back"))
 PY

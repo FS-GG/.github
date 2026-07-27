@@ -373,7 +373,7 @@ wire_materializer_and_workflow() {
 # suite and fails on the org, so the modes below deliberately spread across dialects: flow mappings,
 # inline sequences, reversed key order, aliases, negated globs, CRLF.
 #
-# modes: true (default) · default-inputs · unfiltered · product · narrow-roots · no-codex-trigger
+# modes: true (default) · default-inputs · unfiltered · product · narrow-roots · no-agents-trigger
 #        ignore-root · push-only · commented · local · split
 #        flow-with-product · flow-with-narrow-roots · with-before-uses · inline-comment-uses
 #        flow-on-narrow · flow-pr-narrow · paths-at-key-indent · inline-paths
@@ -385,12 +385,11 @@ wire_caller() {
   mkdir -p "$FIX/$slug"
   printf '%s\n' "skill-union.yml" > "$FIX/$slug.list"
 
-  # The three-root pull_request filter every honest mode shares.
+  # The two-root pull_request filter every honest mode shares (ADR-0067 §5).
   local trigger_all='on:
   pull_request:
     paths:
       - ".claude/skills/**"
-      - ".codex/skills/**"
       - ".agents/skills/**"
       - ".github/workflows/skill-union.yml"
 '
@@ -418,20 +417,20 @@ wire_caller() {
       printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with:\n      product-path: "artifacts/generated-product"\n' \
         "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
     narrow-roots)
-      printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with:\n      product-path: "."\n      roots: ".claude/skills .agents/skills"\n' \
+      printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with:\n      product-path: "."\n      roots: ".claude/skills"\n' \
         "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
-    # The call is right and the gate is armed on two roots of three — so a partitioned .codex/ can land
+    # The call is right and the gate is armed on one root of two — so a partitioned .agents/ can land
     # without ever re-running the workflow that would have caught it (#332/#334's shape).
-    no-codex-trigger)
-      printf 'on:\n  pull_request:\n    paths:\n      - ".claude/skills/**"\n      - ".agents/skills/**"\n%s' \
+    no-agents-trigger)
+      printf 'on:\n  pull_request:\n    paths:\n      - ".claude/skills/**"\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     ignore-root)
-      printf 'on:\n  pull_request:\n    paths-ignore:\n      - ".codex/skills/**"\n%s' \
+      printf 'on:\n  pull_request:\n    paths-ignore:\n      - ".agents/skills/**"\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     # A push-only workflow reports nothing on a pull request, so it can never be the required receiver
     # check this capability claims.
     push-only)
-      printf 'on:\n  push:\n    branches: [main]\n    paths:\n      - ".claude/skills/**"\n      - ".codex/skills/**"\n      - ".agents/skills/**"\n%s' \
+      printf 'on:\n  push:\n    branches: [main]\n    paths:\n      - ".claude/skills/**"\n      - ".agents/skills/**"\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     commented)
       printf '%sjobs:\n  skill-union:\n    # uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    runs-on: ubuntu-latest\n' \
@@ -455,7 +454,7 @@ wire_caller() {
       printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with: {product-path: "artifacts/generated-product"}\n' \
         "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
     flow-with-narrow-roots)
-      printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with: { product-path: ".", roots: ".claude/skills .agents/skills" }\n' \
+      printf '%sjobs:\n  skill-union:\n    uses: FS-GG/.github/.github/workflows/skill-union-assert.yml@main\n    with: { product-path: ".", roots: ".claude/skills" }\n' \
         "$trigger_all" > "$FIX/$slug/skill-union.yml" ;;
     # YAML mappings are UNORDERED and Actions accepts either order. A scanner that collected inputs only
     # AFTER the `uses:` line saw none of them.
@@ -479,28 +478,28 @@ wire_caller() {
     #     strictly deeper reported a correctly-armed gate as a gap and told the operator to add the
     #     filter that was already there.
     paths-at-key-indent)
-      printf 'on:\n  pull_request:\n    paths:\n    - ".claude/skills/**"\n    - ".codex/skills/**"\n    - ".agents/skills/**"\n%s' \
+      printf 'on:\n  pull_request:\n    paths:\n    - ".claude/skills/**"\n    - ".agents/skills/**"\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     inline-paths)
-      printf 'on:\n  pull_request:\n    paths: [".claude/skills/**", ".codex/skills/**", ".agents/skills/**"]\n%s' \
+      printf 'on:\n  pull_request:\n    paths: [".claude/skills/**", ".agents/skills/**"]\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     alias-paths)
-      printf 'x-roots: &roots\n  - ".claude/skills/**"\n  - ".codex/skills/**"\n  - ".agents/skills/**"\non:\n  pull_request:\n    paths: *roots\n%s' \
+      printf 'x-roots: &roots\n  - ".claude/skills/**"\n  - ".agents/skills/**"\non:\n  pull_request:\n    paths: *roots\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
 
     # --- GLOB SEMANTICS. Coverage is glob MATCHING, not a prefix test: a broader filter genuinely fires
     #     on a root change and must pass, a lookalike directory must not, and `!` SUBTRACTS.
     broad-paths)
-      printf 'on:\n  pull_request:\n    paths: [".claude/**", ".codex/**", ".agents/**"]\n%s' \
+      printf 'on:\n  pull_request:\n    paths: [".claude/**", ".agents/**"]\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     negated-root)
-      printf 'on:\n  pull_request:\n    paths: ["**", "!.codex/skills/**"]\n%s' \
+      printf 'on:\n  pull_request:\n    paths: ["**", "!.agents/skills/**"]\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     ignore-nonroot)
       printf 'on:\n  pull_request:\n    paths-ignore: ["docs/**"]\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
     archive-lookalike)
-      printf 'on:\n  pull_request:\n    paths: [".claude/skills-archive/**", ".codex/skills-archive/**", ".agents/skills-archive/**"]\n%s' \
+      printf 'on:\n  pull_request:\n    paths: [".claude/skills-archive/**", ".agents/skills-archive/**"]\n%s' \
         "$call_root" > "$FIX/$slug/skill-union.yml" ;;
 
     # `pull_request_target` checks out the BASE ref, so the assertion would audit the tree the change is
@@ -1458,16 +1457,16 @@ wire_caller FS-GG/FS.GG.Rendering narrow-roots
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'"; } \
   && ok "caller: a narrowed roots: is a smaller audit than the capability claims -> gap" \
-  || bad "a two-root call must not certify the three-root union" "rc=$rc: $out"
+  || bad "a one-root call must not certify the two-root union" "rc=$rc: $out"
 
-# The call is right and the gate is armed on two roots of three: a partitioned `.codex/` can land
+# The call is right and the gate is armed on one root of two: a partitioned `.agents/` can land
 # without ever re-running the workflow that would have caught it. The diagnostic must name the TRIGGER,
 # not report "nothing calls it" — the remedy is a different edit.
-wire_caller FS-GG/FS.GG.Rendering no-codex-trigger
+wire_caller FS-GG/FS.GG.Rendering no-agents-trigger
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q 'does not RUN when a committed skill root changes' \
     && ! printf '%s' "$out" | grep -q 'nothing in its workflows calls'; } \
-  && ok "caller: a trigger covering 2 of 3 roots -> gap, and the diagnostic names the TRIGGER half" \
+  && ok "caller: a trigger covering 1 of 2 roots -> gap, and the diagnostic names the TRIGGER half" \
   || bad "a partial root trigger must fail and blame the right half" "rc=$rc: $out"
 
 wire_caller FS-GG/FS.GG.Rendering ignore-root
@@ -1537,7 +1536,7 @@ out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --repos-sh "$R
 
 # An unrostered repo that has the CALL but not the trigger is drift too: it is an attempted adoption,
 # and leaving it unrostered makes the eventual second half invisible to the fabric.
-wire_caller FS-GG/FS.GG.Rendering no-codex-trigger
+wire_caller FS-GG/FS.GG.Rendering no-agents-trigger
 out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$DRIFTCALLER" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
 { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q '1 unrostered adopter'; } \
   && ok "caller: an unrostered call without its trigger is still drift" \
@@ -1619,7 +1618,7 @@ for mode in flow-on-narrow flow-pr-narrow negated-root archive-lookalike pr-targ
   wire_caller FS-GG/FS.GG.Rendering "$mode"
   out="$(PATH="$STUB:$PATH" bash "$AUDIT" --registry "$CALLERREG" --repos-sh "$REPOS_SH" 2>&1)" && rc=0 || rc=$?
   { [ "$rc" -eq 1 ] && printf '%s' "$out" | grep -q "FS-GG/FS.GG.Rendering receives 'skill-union'"; } \
-    && ok "caller/yaml: '$mode' is not an armed gate over the three roots" \
+    && ok "caller/yaml: '$mode' is not an armed gate over the declared roots" \
     || bad "caller/yaml: '$mode' must not satisfy the trigger half" "rc=$rc: $out"
 done
 

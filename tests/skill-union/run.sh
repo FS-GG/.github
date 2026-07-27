@@ -122,7 +122,7 @@ GOOD="$WORK/good"; build_good "$GOOD"
 digest() { bash "$ASSERT" --digest "$1"; } # <skill-dir>
 MANIFEST="$WORK/manifest.json"
 cat > "$MANIFEST" <<EOF
-{ "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+{ "roots": [".claude/skills", ".agents/skills"],
   "skills": [
     { "id": "alpha", "scope": "process", "sha256": "$(digest "$GOOD/.claude/skills/alpha")" },
     { "id": "beta",  "scope": "product", "sha256": "$(digest "$GOOD/.claude/skills/beta")" },
@@ -219,7 +219,7 @@ expect_pass "coherent union (+ v2 whole-directory manifest)" "$GOOD" --manifest 
 
 # --- 3. divergent bytes: one root's skill body differs → FAIL ---
 DIV="$WORK/divergent"; build_good "$DIV"
-printf '# alpha skill TAMPERED\n' > "$DIV/.codex/skills/alpha/SKILL.md"
+printf '# alpha skill TAMPERED\n' > "$DIV/.agents/skills/alpha/SKILL.md"
 expect_fail "divergent root (bytes differ across roots)" divergent "$DIV"
 
 # --- 3b. divergent NON-SKILL.md bytes: references/** differs in one root → FAIL (the multi-file
@@ -755,29 +755,38 @@ else
   echo "FAIL  grammar FALSE direction (want rc=1 + every construct flagged; got rc=$rc, unflagged:$notflagged)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
 fi
 
-# --- root-set resolution: --roots > $AGENT_SKILL_ROOTS > .agent-skill-roots > ADR-0011's three ----
-# (.github#517) A tree can deliberately override the universal three-root default. This fixture keeps
-# proving that override and precedence behavior; ADR-0065 removed the former automatic kit exception.
+# --- root-set resolution: --roots > $AGENT_SKILL_ROOTS > .agent-skill-roots > ADR-0065's two ------
+# (.github#517) A tree can deliberately override the universal default. This fixture keeps proving
+# that override and precedence behavior; ADR-0065 removed the former automatic kit exception, and
+# ADR-0067 §5 (.github#1636) narrowed the DEFAULT from three roots to two.
 #
-# The load-bearing case is the FIRST: it pins the product gate FAIL-CLOSED. The tempting fix for #517
-# was "drop .codex/skills from the default" — that would silently stop catching a product whose
-# producer never materialized .codex (ADR-0011's origin bug), turning this gate into the fail-OPEN
-# family of #266/#292. Declaring roots narrows WHAT IS ASKED FOR; it must never weaken the answer.
+# The load-bearing case is still the FIRST, and narrowing the default did NOT weaken it: an absent
+# root the default NAMES is a hard exit 2, never a skip. That is ADR-0011's origin bug (a producer
+# that never materialized a root) and the fail-OPEN family of #266/#292. What changed is only WHICH
+# absence proves it — `.codex/skills` is no longer asked for, so the probe is a tree missing
+# `.agents/skills`. Declaring roots narrows WHAT IS ASKED FOR; it must never weaken the answer.
 echo "--- root-set resolution (.github#517) ---"
-KIT="$WORK/kit"                                    # an intentional two-root tree, no declaration yet
+ONEROOT="$WORK/oneroot"                            # a tree missing a root the DEFAULT names
+mkdir -p "$ONEROOT/.claude/skills/alpha"
+printf '# alpha skill\n' > "$ONEROOT/.claude/skills/alpha/SKILL.md"
+
+expect_rc "roots: NO declaration ⇒ ADR-0065's two ⇒ absent .agents is a hard exit 2 (fail-CLOSED)" \
+  2 --product "$ONEROOT"
+
+KIT="$WORK/kit"                                    # the two-root tree the default now describes
 mkdir -p "$KIT/.claude/skills/alpha" "$KIT/.agents/skills/alpha"
 printf '# alpha skill\n' > "$KIT/.claude/skills/alpha/SKILL.md"
 cp "$KIT/.claude/skills/alpha/SKILL.md" "$KIT/.agents/skills/alpha/SKILL.md"
 
-expect_rc "roots: NO declaration ⇒ ADR-0011's three ⇒ absent .codex is a hard exit 2 (fail-CLOSED)" \
-  2 --product "$KIT"
+expect_rc "roots: NO declaration ⇒ ADR-0065's two ⇒ a matching tree exits 0 with no declaration" \
+  0 --product "$KIT"
 
-printf '# this tree intentionally supports two runtimes\n.claude/skills\n.agents/skills\n' \
+printf '# this tree states the roots it keeps\n.claude/skills\n.agents/skills\n' \
   > "$KIT/.agent-skill-roots"                      # comments + newline-separated must parse
 
-expect_rc "roots: .agent-skill-roots declares an intentional two-root override ⇒ BARE exits 0" \
+expect_rc "roots: .agent-skill-roots restating the two-root set ⇒ BARE exits 0" \
   0 --product "$KIT"
-expect_rc "roots: --roots still overrides the declaration (explicit wins)" \
+expect_rc "roots: --roots still overrides the declaration (explicit wins) — the RETIRED .codex root is absent, so asking for it is exit 2" \
   2 --product "$KIT" --roots ".claude/skills .codex/skills .agents/skills"
 
 rc=0; AGENT_SKILL_ROOTS=".claude/skills .codex/skills .agents/skills" \

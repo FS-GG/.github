@@ -1,4 +1,0 @@
-interface:
-  display_name: "Publishing and Deployment"
-  short_description: "Publish verified FS-GG packages and releases"
-  default_prompt: "Use $publishing-and-deployment to publish a verified FS-GG package, tool, template, or stable release."

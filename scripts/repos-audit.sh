@@ -606,7 +606,7 @@ CALLER_VERDICT_PY="$(cat <<'PY'
 import json, re, sys
 
 AUTHORITY = sys.argv[1]
-ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
+ROOTS = (".claude/skills", ".agents/skills")
 # One representative CHANGED FILE per root. GitHub matches a `paths:` filter against changed file
 # paths, so "does this filter fire when a skill changes?" is "does it match a file inside a skill".
 # A skill's SKILL.md is the minimal such file, and it is two levels down — which is exactly why
@@ -1660,8 +1660,8 @@ while IFS= read -r capline; do
     # and a red must name its own subject (#327/#335). CAP_SUBJ is the CALL, CAP_ARM is the TRIGGER, and
     # CAP_NOTE says what deliberately does NOT count — so the diagnostics below stay kind-generic while
     # still being specific enough to act on.
-    CAP_SUBJ["$cap"]="a $AUTHORITY/.github/workflows/skill-union-assert.yml caller aimed at this repo's OWN committed .claude/.codex/.agents skill roots"
-    CAP_ARM["$cap"]="a pull_request trigger covering .claude/skills/**, .codex/skills/** and .agents/skills/** (or no paths: filter at all)"
+    CAP_SUBJ["$cap"]="a $AUTHORITY/.github/workflows/skill-union-assert.yml caller aimed at this repo's OWN committed .claude/.agents skill roots"
+    CAP_ARM["$cap"]="a pull_request trigger covering .claude/skills/** and .agents/skills/** (or no paths: filter at all)"
     CAP_NOTE["$cap"]="A call aimed at a GENERATED product (product-path: <subdir>), or narrowed with roots:, is a different subject and deliberately does not count."
     NEEDS_CALLER_ID="$caller"
   elif [ "$push" = true ]; then
