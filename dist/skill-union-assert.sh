@@ -168,10 +168,11 @@ need_val() { [ $# -ge 2 ] && [ -n "${2:-}" ] || die "$1 needs a value."; }
 # A SOURCED fragment, not an executable: no shebang, no top-level effects. Source it AFTER defining
 # `die`. Like lib/args.sh (#356), the guard body is shared and the per-script parts are not — here
 # that means the caller supplies its own DEFAULT. Since ADR-0065 every production caller uses the
-# same three-root default; the parameter remains for explicit fixtures and future migrations:
+# same default; the parameter remains for explicit fixtures and future migrations — and it earned
+# that keep on 2026-07-28, when ADR-0067 §5 (.github#1636) narrowed the set from three roots to two:
 #
 #   skill-union-assert.sh  product lane — ADR-0065's two (.claude/.agents), fanned out by fsgg-sdd
-#   coordination-sync      kit lane     — the same three, materialized from FS.GG.Kit
+#   coordination-sync      kit lane     — the same two, materialized from FS.GG.Kit
 #
 # It is the PRECEDENCE and the PARSING that must be shared. Before this hoist, only
 # the asserter read the tree's `.agent-skill-roots` (#517) and the writer hardcoded its own set, so a
