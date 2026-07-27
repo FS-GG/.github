@@ -169,9 +169,13 @@ module Render =
     /// preference: this projection was an F# anonymous record, whose fields the compiler sorts, so those
     /// are the bytes existing consumers already parse. The tests pin them. Do not reorder.
     ///
-    /// `includeOutcome` is `--apply`, decided once per DOCUMENT (`renderWhoJson`'s `includeWorktree`
-    /// precedent, #959): the dry-run shape stays byte-identical, and an apply run cannot emit a ragged
-    /// array. It appends exactly the facts `--apply` adds — `field`, `value`, `outcome`, `error`.
+    /// `includeOutcome` means "these rows carry an attempt's result", decided once per DOCUMENT
+    /// (`renderWhoJson`'s `includeWorktree` precedent, #959): the dry-run shape stays byte-identical, and
+    /// an apply run cannot emit a ragged array. It appends exactly the facts an attempt adds — `field`,
+    /// `value`, `outcome`, `error`.
+    ///
+    /// It is NOT simply `--apply`: an `--apply` run with no findings passes `false`, because there is no
+    /// attempt to report and the array is empty either way.
     val renderReconcileJson: includeOutcome: bool -> rows: ReconcileRow list -> string
 
     /// `widen --json` / `set-paths --json` — one typed touch-set receipt (.github#1517). `verdict` is

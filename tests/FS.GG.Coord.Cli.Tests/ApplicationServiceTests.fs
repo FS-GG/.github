@@ -390,9 +390,10 @@ module ApplicationServiceTests =
     // the handler, and the assertion has to be "the ENTIRE stream is one document", because the defect is
     // precisely bytes arriving AFTER a correct document.
     //
-    // THE QUEUED WRITE IS THE LEG THAT MATTERS. A deferred board write is one the budget refused and
-    // NOTHING replays — so of every fact this verb reports, it is the one whose loss is unrecoverable, and
-    // it was riding on the half of the stream a parser throws away.
+    // THE QUEUED WRITE IS THE LEG THAT MATTERS. A deferred board write is one the budget refused. It is
+    // QUEUED, not lost — `flush` replays it — but nothing replays it ON ITS OWN, so a caller that never
+    // learns the write deferred is a caller that never runs `flush`. Of every fact this verb reports, that
+    // is the one whose loss costs the most, and it was riding on the half of the stream a parser discards.
 
     /// The board `reconcile` reads. Every number in `closed` is on the board as a CLOSED issue whose column
     /// still says In progress — a `CLOSED-ISSUE-NOT-DONE` chore, whose remedy is Status=Done. A number in
@@ -597,9 +598,9 @@ module ApplicationServiceTests =
         // stdout stays parseable...
         parsedArray out |> ignore
 
-        // ...and the operator remedy is not simply dropped. `run scripts/fsgg-coord flush` is a REMEDY, not
-        // a fact about the board, so it does not belong in the document — but nothing replays a queued
-        // write, so it must not vanish either. stderr is where this CLI already puts diagnostics.
+        // ...and the operator remedy is not simply dropped. `scripts/fsgg-coord flush` is a REMEDY, not a
+        // fact about the board, so it does not belong in the document — but nothing runs it on its own, so
+        // it must not vanish either. stderr is where this CLI already puts diagnostics.
         Assert.Contains("QUEUED", err)
         Assert.Contains("flush", err)
         Assert.Contains("FS.GG.SDD#102", err)
@@ -650,6 +651,57 @@ module ApplicationServiceTests =
 
         Assert.Equal(expected, out.Trim())
         Assert.Equal(0, code)
+
+    /// The four environment variables `Identity.resolve` consults, cleared and restored. Clearing ALL of
+    /// them is what makes "no worker id resolves" a property of the TEST rather than of whoever's machine
+    /// is running it — under a Claude Code or opencode harness, `CLAUDE_CODE_SESSION_ID` alone would
+    /// resolve an id and the branch under test would never be reached.
+    let private withNoIdentity (body: unit -> 'a) : 'a =
+        let names =
+            [ "FSGG_WORKER"; "CLAUDE_CODE_SESSION_ID"; "OPENCODE_SESSION_ID"; "FSGG_AGENT_SESSION_ID" ]
+
+        let saved = names |> List.map (fun n -> n, Environment.GetEnvironmentVariable n)
+
+        try
+            for n in names do
+                Environment.SetEnvironmentVariable(n, null)
+
+            body ()
+        finally
+            for (n, v) in saved do
+                Environment.SetEnvironmentVariable(n, v)
+
+    [<Fact>]
+    let ``an apply phase that cannot START still emits a document, not an empty stream`` () =
+        // The `--apply` phase refuses before it writes anything when no worker id resolves — there would be
+        // nobody to attribute a board write to. A `--json` caller must still get something PARSEABLE: an
+        // empty stream is not an answer, and it is indistinguishable from a crash.
+        //
+        // `not-attempted` is a distinct outcome for exactly this reason. Reporting these rows with no
+        // outcome, or omitting them, would let "found these and deliberately tried none" read as either a
+        // clean board or a completed run — the #266 confusion this verb exists to avoid.
+        let code, out, _ =
+            withNoIdentity (fun () ->
+                runReconcileWith
+                    (reconcileWorld [ 101; 102 ] Set.empty)
+                    [ "reconcile"; "--repo"; "FS.GG.SDD" ]
+                    (fun o ->
+                        { o with
+                            Apply = true
+                            Render = Options.Json }))
+
+        let rows = parsedArray out
+        Assert.Equal(2, List.length rows)
+
+        for r in rows do
+            Assert.Equal("not-attempted", str "outcome" r)
+            // The reason is IN the row, not only on stderr.
+            Assert.Equal(JsonValueKind.String, r.GetProperty("error").ValueKind)
+            // ...and the write it did NOT make is still named, so a caller knows what is outstanding.
+            Assert.Equal("Status", str "field" r)
+            Assert.Equal("Done", str "value" r)
+
+        Assert.NotEqual(0, code)
 
     [<Fact>]
     let ``a clean board still emits an empty array, not nothing`` () =

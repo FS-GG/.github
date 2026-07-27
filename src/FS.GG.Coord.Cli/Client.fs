@@ -767,18 +767,9 @@ module Client =
 
                 let chores = Chore.derive items
 
-                let target (chore: Chore.Chore) =
-                    match chore.Kind with
-                    | Chore.StaleClaim _ -> "reap expired claim and restore its previous Status"
-                    | Chore.ClaimStatusLag _ -> "Status=In progress"
-                    | Chore.ClosedIssueNotDone _ -> "Status=Done"
-                    | Chore.BlockerCleared _ -> "Status=Ready"
-                    | Chore.StatusNotBlocked _ -> "Status=Blocked"
-
-                // The field write a chore implies — the SINGLE source for both the write this phase
-                // performs and the `field`/`value` the receipt reports, so the document cannot describe a
-                // write other than the one attempted. `STALE-CLAIM` writes no field: its remedy is a marker
-                // collection, delegated to the `reap` verb below.
+                // The field write a chore implies — the SINGLE source for the write this phase performs,
+                // the `field`/`value` the receipt reports, AND the `remedy`/human-table prose below.
+                // `STALE-CLAIM` writes no field: its remedy is a marker collection, delegated to `reap`.
                 let write (chore: Chore.Chore) =
                     match chore.Kind with
                     | Chore.StaleClaim _ -> None
@@ -786,6 +777,16 @@ module Client =
                     | Chore.ClosedIssueNotDone _ -> Some("Status", "Done")
                     | Chore.BlockerCleared _ -> Some("Status", "Ready")
                     | Chore.StatusNotBlocked _ -> Some("Status", "Blocked")
+
+                // DERIVED from `write`, not matched a second time. These are the same fact in two
+                // renderings — the `remedy` key and the `field`/`value` pair of the SAME JSON object, plus
+                // the human table's third column — and a second hand-maintained `match` over `ChoreKind`
+                // is how one object comes to describe two different writes. That is the failure this whole
+                // change is about, and it does not get a pass for being prose.
+                let target (chore: Chore.Chore) =
+                    match write chore with
+                    | Some(field, value) -> $"%s{field}=%s{value}"
+                    | None -> "reap expired claim and restore its previous Status"
 
                 let reconcileRow (chore: Chore.Chore) (outcome: ReconcileOutcome option) : ReconcileRow =
                     { Id = chore.Id
@@ -802,7 +803,15 @@ module Client =
                 /// .github#1524: this used to run HERE, before the apply phase — which is why the phase
                 /// below then printed its `applied`/`queued` lines past a document that had already ended.
                 /// The outcome is PART of the document, so the emit has to happen after the outcome exists.
-                /// Every exit from this handler now goes through this function exactly once.
+                ///
+                /// EVERY EXIT FROM THIS POINT ON goes through it exactly once — but note what that does
+                /// NOT say. The two exits ABOVE it emit nothing at all: a `scanAndDecide` that failed and
+                /// a snapshot that would not parse. That is deliberate, and it is the honest answer rather
+                /// than a convenient one. Both mean the board was never read, so there is no findings list
+                /// to describe — and `[]` would be exactly the #266 fail-open this file argues against
+                /// everywhere else, a read that did not happen rendered as a board with nothing wrong.
+                /// A `--json` caller gets a diagnostic on stderr and a non-zero exit, which is a refusal
+                /// it can tell apart from an answer; an empty array would not be.
                 let emitJson (rows: ReconcileRow list) (includeOutcome: bool) =
                     match opts.Render with
                     | Json -> printfn "%s" (renderReconcileJson includeOutcome rows)
@@ -895,9 +904,17 @@ module Client =
                             //
                             // This child INHERITS our stdout, and `reap --apply` is not quiet on it: it
                             // prints `reaped <ref> worker <w>` and its column-restore lines there. So under
-                            // `--json` a STALE-CLAIM finding put a whole second program's prose into the
-                            // middle of our document — worse than the two `printfn`s below, because it
-                            // arrives from another process at a moment we do not control.
+                            // `--json` a STALE-CLAIM finding put a whole second program's prose on the same
+                            // stream as our document.
+                            //
+                            // BE PRECISE ABOUT WHERE. Under the OLD ordering the array was written before
+                            // this phase ran, so all three leaks were TRAILING garbage after a complete
+                            // `]` — never interleaved inside the array. Under the NEW ordering the document
+                            // is written last, so an unredirected child would put its prose IN FRONT of the
+                            // array instead. Both break a parser reading the whole stream; neither is
+                            // "inside" it. What makes this one distinct is not position but PROVENANCE: it
+                            // is another process's output, unbounded, arriving at a moment this handler
+                            // does not control — so it cannot be fixed by choosing when we print.
                             //
                             // Under `--json` we capture it and forward it to STDERR, where this CLI already
                             // puts diagnostics: the operator detail is not lost, and stdout stays one
@@ -997,10 +1014,12 @@ module Client =
                         // The human form carries `(run scripts/fsgg-coord flush)` on each queued line; the
                         // machine form carries the FACT as `outcome:"deferred"`, and a remedy sentence is
                         // not a fact, so it does not belong in the document. But it must not simply
-                        // vanish: nothing replays a queued board write, and an operator who piped stdout
-                        // into a parser would otherwise be told nothing at all. stderr is where this CLI
-                        // already puts operator diagnostics (and where `repos-audit.sh` and friends put
-                        // theirs), so that is where the remedy goes.
+                        // vanish: a queued write is not lost, and `flush` DOES replay it — nothing
+                        // replays it ON ITS OWN, which is the whole reason the remedy has to reach a
+                        // human. An operator who piped stdout into a parser would otherwise be told
+                        // nothing at all. stderr is where this CLI already puts operator diagnostics (and
+                        // where `repos-audit.sh` and friends put theirs), so that is where it goes. The
+                        // wording is the one this file already uses at the other three deferral sites.
                         //
                         // DERIVED from the rows just emitted, not counted alongside them — the #1517
                         // lesson. The advisory and the document cannot disagree about how many writes
@@ -1016,7 +1035,7 @@ module Client =
                                 let refs = String.concat ", " deferred
 
                                 eprint
-                                    $"fsgg-coord-engine: reconcile: %d{List.length deferred} board write(s) QUEUED against an exhausted budget (%s{refs}) — nothing replays them: run scripts/fsgg-coord flush."
+                                    $"fsgg-coord-engine: reconcile: %d{List.length deferred} board write(s) DEFERRED — the budget is exhausted, so they are QUEUED, not lost, and NOTHING replays them on its own (%s{refs}):  scripts/fsgg-coord flush"
                         | Text -> ()
 
                         if failed then ExitError else ExitGreen

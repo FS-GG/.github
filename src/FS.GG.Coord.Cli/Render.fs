@@ -415,9 +415,16 @@ module Render =
                 // The reason rides WITH the outcome it belongs to, derived from the same union case, so a
                 // consumer never has to pair a failure with an explanation off a second stream — which is
                 // the whole defect .github#1524 and .github#1517 are the two halves of.
+                //
+                // `NotOnBoard` is a FAILURE (it sets the handler's `failed`, so the verb exits non-zero)
+                // and it is the one case whose reason is not carried in the union — there is nothing to
+                // carry, the case IS the reason. It gets that reason spelled out anyway: the human stream
+                // prints a sentence for it, and a document that made a consumer infer "why" from a bare
+                // word while stderr said it in full would be this issue's defect in miniature.
                 match r.Outcome with
                 | Some(NotAttempted reason)
                 | Some(Failed reason) -> w.WriteString("error", reason)
+                | Some NotOnBoard -> w.WriteString("error", "the item left the board before apply")
                 | _ -> w.WriteNull("error")
 
             w.WriteEndObject()
