@@ -55,12 +55,34 @@ module TouchSet =
     /// WHICH sentinel; this is the bool for the "not a path to reserve" question `classify` asks.
     val isSentinel: token: string -> bool
 
+    /// Is this token FLAG-SHAPED — does it begin with `-`, so it can never be a touch-set path?
+    ///
+    /// Repo-relative paths do not begin with `-`; argv flags do. So this one predicate answers two
+    /// questions that turned out to be the same question, and #1507 is what it costs to answer them in
+    /// neither place: `widen <ref> --paths <tokens> --json` wrote `--json` into a `Paths:` line, exit 0.
+    ///
+    /// THE TWO CALLERS ARE THE TWO HALVES OF THAT BUG, and they must agree or the pair reopens it.
+    ///
+    ///  * `Options.parse` stops `--paths` consuming argv at the first flag-shaped token, so a following
+    ///    flag is parsed as the flag it is rather than swallowed as a path.
+    ///  * `classify` calls such a token `Unmatchable`, so `Writes.validate` refuses to WRITE it even if
+    ///    some future parser regresses. That is the half that was missing entirely: `--json` has no glob
+    ///    metacharacter, so it classified as `Matchable` and sailed through the one check standing between
+    ///    a corrupt token and the issue body.
+    ///
+    /// It is a GRAMMAR question, so it lives with the grammar. A parser that re-decided "does this look
+    /// like a flag?" with its own `StartsWith "-"` would be #485's shape (one question, two
+    /// implementations, free to drift) inside the module whose own header forbids exactly that.
+    val isFlagShaped: token: string -> bool
+
     /// Is this token one the matcher can actually reserve?
     ///
     /// Not a glob language. Exact paths, directory prefixes, and a TRAILING `/**` or `/*`. A leading
     /// `**/` — or a `*` in the middle — matches nothing, and a token that matches nothing CONFLICTS
     /// WITH NOTHING: it would read as DISJOINT against every other worker, which is ADR-0021's own
     /// failure one level down (#273). So it is refused everywhere, never tolerated.
+    ///
+    /// A FLAG-SHAPED token is not a path either, and is `Unmatchable` here (#1507) — see `isFlagShaped`.
     ///
     /// The `none` SENTINEL is not a path either, and is `Unmatchable` here (#863). `parse` answers
     /// `DeclaredNone` before it asks, so a `none` that reaches this function stands beside real paths —

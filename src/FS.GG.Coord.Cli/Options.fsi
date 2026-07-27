@@ -152,6 +152,11 @@ module Options =
           /// `--message <text>` (`say`).
           Message: string option
           /// `--paths <token>...` (`widen`/`set-paths`) — paths to add, or the explicit replacement.
+          ///
+          /// Consumes the following arguments up to the first FLAG-SHAPED one (`TouchSet.isFlagShaped`),
+          /// NOT to the end of argv. It read to the end until #1507, which made `--json` after `--paths` a
+          /// declared path token rather than the flag it is. Empty is REFUSED, so `--paths --json` is a
+          /// misconfiguration rather than a `--paths` silently satisfied by the next flag.
           Paths: string list
 
           /// `--pr <n>` (`verify-paths`) — the pull request to check.

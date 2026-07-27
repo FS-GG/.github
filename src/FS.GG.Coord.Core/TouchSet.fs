@@ -28,6 +28,13 @@ module TouchSet =
     /// both need "this is not a file to reserve"; `sentinelToken` says WHICH sentinel when that matters.
     let isSentinel (token: string) = (sentinelToken token).IsSome
 
+    /// FLAG-SHAPED: begins with `-`, so it is argv, not a repo-relative path (#1507).
+    ///
+    /// Trimmed first, because `parse` splits a declaration on commas AND spaces and hands the pieces over
+    /// with whatever whitespace the author left: ` --json` is the same mistake as `--json`, and a rule that
+    /// only caught the unpadded spelling would be a rule the next corrupt write walks around.
+    let isFlagShaped (token: string) = token.Trim().StartsWith("-", StringComparison.Ordinal)
+
     /// Lines OUTSIDE any fenced code block. A `Paths:` line inside a fence is a QUOTATION of the
     /// grammar, not a use of it (#277) — and the protocol docs quote it constantly.
     ///
@@ -46,6 +53,26 @@ module TouchSet =
         // disjoint from every other worker's touch-set, so the item would schedule AND read as
         // conflict-free with everything (#863, and #273's fail-open through the parser built to end it).
         if isSentinel token then
+            Unmatchable token
+        else
+
+        // A FLAG IS NEVER A PATH (#1507). `widen <ref> --paths <tokens> --json` swallowed `--json` into the
+        // touch-set, and THIS is the check that let the corrupt token reach the issue body: `--json` carries
+        // no glob metacharacter, so the wildcard test below called it `Matchable` and `Writes.validate` — the
+        // one gate between a bad token and the PATCH — had nothing to object to.
+        //
+        // That is worse than the unmatchable case, not milder than it. An `Unmatchable` token is at least
+        // REFUSED at the write and, if already written, makes `take` exit 3 rather than schedule; a
+        // path-shaped token that matches no file is #273's fail-open exactly — it reserves nothing, so it is
+        // DISJOINT from every other worker's touch-set, and the item schedules while the files its author
+        // meant to reserve are invisible to everyone. The reported symptom was a `DISJOINT` line that read
+        // like success.
+        //
+        // The parser stops `--paths` at the first flag-shaped token, so this arm should now be unreachable
+        // from `widen`/`set-paths`. It stays because a declaration also arrives by HAND — anyone may type a
+        // `Paths:` line into an issue body — and because "the parser is careful" is the assumption the
+        // original defect was built on.
+        if isFlagShaped token then
             Unmatchable token
         else
 

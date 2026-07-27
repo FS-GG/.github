@@ -152,6 +152,65 @@ module TouchSetTests =
         | Unmatchable _ -> ()
         | Matchable t -> failwith $"'%s{t}' can match no file — treating it as a token makes it DISJOINT against everyone"
 
+    // ---- #1507: a FLAG is never a path ---------------------------------------------------------------
+    // `widen <ref> --paths <tokens> --json` wrote `--json` into a live claim's `Paths:` line at exit 0.
+    // The parser handed it over (fixed in `Options`), but this module is why it LANDED: `--json` carries
+    // no glob metacharacter, so `classify` called it `Matchable` and `Writes.validate` — the one gate
+    // between a bad token and the PATCH — had nothing to object to.
+    //
+    // Note which way that fails. #273 above is about tokens that are REFUSED for matching nothing. This
+    // was the opposite and worse: a token ACCEPTED as matching something, which then matched nothing, so
+    // the claim read DISJOINT against every worker while reserving none of the files its author named.
+
+    [<Theory>]
+    [<InlineData("--json")>]
+    [<InlineData("--text")>]
+    [<InlineData("--lease")>]
+    [<InlineData("-n")>]
+    [<InlineData("--include-backlog")>]
+    let ``#1507 a flag-shaped token can never be a path — Matchable was the fail-open`` (token: string) =
+        Assert.True(TouchSet.isFlagShaped token, $"'%s{token}' is argv, not a path")
+
+        match TouchSet.classify token with
+        | Unmatchable _ -> ()
+        | Matchable t ->
+            failwith $"'%s{t}' is a FLAG — calling it matchable is what let `widen --paths ... --json` corrupt a live declaration"
+
+    [<Fact>]
+    let ``#1507 the flag-shape rule survives the separator whitespace parse leaves behind`` () =
+        // `parse` splits on commas AND spaces, so a token arrives with whatever padding the author left.
+        // A rule that only caught the unpadded spelling is a rule the next corrupt write walks around.
+        Assert.True(TouchSet.isFlagShaped " --json")
+        Assert.True(TouchSet.isFlagShaped "--json ")
+
+    [<Fact>]
+    let ``#1507 a real path is NOT flag-shaped — the guard must not eat the grammar`` () =
+        // The mirror. A guard that also refused real declarations would just move the defect.
+        for token in [ "src/FS.GG.Coord.Core/"; "Directory.Packages.props"; "src/Scene/**"; "-- odd/name" ] do
+            if token.StartsWith "-" then
+                Assert.True(TouchSet.isFlagShaped token)
+            else
+                Assert.False(TouchSet.isFlagShaped token, $"'%s{token}' is a path and must survive")
+
+                match TouchSet.classify token with
+                | Matchable _ -> ()
+                | Unmatchable t -> failwith $"'%s{t}' is a legitimate declaration and must stay matchable"
+
+    [<Fact>]
+    let ``#1507 a swallowed flag makes the WHOLE declaration unusable, not a quietly ignored extra`` () =
+        // THE END-TO-END SHAPE OF THE REPORTED BUG, read back through `parse`. This is the exact body
+        // `widen` wrote to FS.GG.Governance#326. Before the fix it was `Usable`: every token matchable,
+        // the item schedulable, and `--json` reserving nothing at all.
+        //
+        // `SomeUnmatchable` is the RIGHT verdict rather than merely a louder one — it is #646's worse
+        // case, where the item LOOKS declared while one token silently reserves nothing. It is what makes
+        // `take` exit 3 (EX_REFUSED) instead of handing a second worker the same files.
+        let ts =
+            TouchSet.parse
+                "Paths: .claude/skills/, .codex/skills/, scripts/materialize-skill-roots.sh, --json"
+
+        Assert.Equal(TouchSet.SomeUnmatchable [ "--json" ], TouchSet.usability ts)
+
     // ---- overlap: exact equality OR subtree containment, either direction ---------------------------
 
     [<Fact>]

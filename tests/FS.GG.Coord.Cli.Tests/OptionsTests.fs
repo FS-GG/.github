@@ -578,3 +578,128 @@ module OptionsTests =
         // `FOver -> Only [ RoomOpen ]`: any other verb accepting `--over` would swallow it silently.
         let e = parse [ "claim"; "1"; "--over"; "2" ] |> rejected
         Assert.Contains("--over", e)
+
+    // ================================================================================================
+    // #1507 — `--paths` SWALLOWED A FOLLOWING FLAG INTO THE TOUCH-SET.
+    // ================================================================================================
+    // `widen FS.GG.Governance#326 --paths <five real paths> --json` declared SIX paths, the sixth being
+    // `--json`, and exited 0 under a receipt whose `DISJOINT` line read like success.
+    //
+    // This is the residue rule at the top of this file arriving in the one argument where it costs the
+    // most. `--snapshot --json` has been "you forgot the filename" since forever; `--paths` was the one
+    // arm that opted out of the guard every other multi-token flag in the parser already had — and it
+    // opted out for the value that lands in the declaration the SCHEDULER reserves files by.
+    //
+    // It was also not an unknown flag being tolerated: `--json` is in `widen`'s own advertised surface
+    // (`command-contract` prints it). A DECLARED flag of the command was parsed as a value of the
+    // preceding one.
+
+    /// Both `--paths`-taking commands. The fix is one parser arm, so a test that only exercised `widen`
+    /// would pass for `set-paths` by luck rather than by construction — and `set-paths` is the recovery
+    /// command, the one a worker reaches for while cleaning up exactly this corruption.
+    let private pathsVerbs = [ "widen"; "set-paths" ]
+
+    [<Fact>]
+    let ``#1507 --paths LAST does not swallow the trailing flag`` () =
+        for verb in pathsVerbs do
+            let o = parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--json" ] |> ok
+            Assert.Equal<string list>([ "src/A.fs"; "src/B/" ], o.Paths)
+
+            // The other half of acceptance criterion 1: the flag is not merely absent from the touch-set,
+            // it is HONOURED. Dropping it silently would trade one ignored argument for another.
+            //
+            // ASSERT THAT WITH `--text`, NOT `--json`. Both these verbs default to `Render = Json`, so
+            // `Assert.Equal(Json, ...)` after a trailing `--json` passes whether the flag was read or
+            // thrown away — a vacuous assertion of exactly the kind #266 is about, sitting inside the
+            // regression test for a flag that was being thrown away. `--text` is the only spelling whose
+            // effect is distinguishable from the default.
+            let t = parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "src/B/"; "--text" ] |> ok
+            Assert.Equal<string list>([ "src/A.fs"; "src/B/" ], t.Paths)
+            Assert.Equal(Text, t.Render)
+
+    [<Fact>]
+    let ``#1507 --paths MID-ARGLIST keeps parsing the flags after it`` () =
+        // The order the recipes actually document is flags-then-paths, which is why the bug survived so
+        // long: `widen --json --paths ...` was always fine. Both orders must now mean the same thing.
+        for verb in pathsVerbs do
+            let after =
+                parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "--worker"; "w-1"; "--lease"; "30" ]
+                |> ok
+
+            Assert.Equal<string list>([ "src/A.fs" ], after.Paths)
+            Assert.Equal(Some "w-1", after.Worker)
+            Assert.Equal(30, after.LeaseMinutes)
+
+            let before =
+                parse [ verb; ".github#1507"; "--worker"; "w-1"; "--lease"; "30"; "--paths"; "src/A.fs" ]
+                |> ok
+
+            Assert.Equal<string list>(after.Paths, before.Paths)
+            Assert.Equal(after.Worker, before.Worker)
+            Assert.Equal(after.LeaseMinutes, before.LeaseMinutes)
+
+    [<Fact>]
+    let ``#1507 the positional ref survives a --paths that no longer eats the rest of argv`` () =
+        // `--paths` used to recurse on `[]`, discarding everything after it — positionals included. The ref
+        // is what `widen` resolves the claim by, so losing it is not a cosmetic difference.
+        for verb in pathsVerbs do
+            let o = parse [ verb; ".github#1507"; "--paths"; "src/A.fs"; "--json" ] |> ok
+            Assert.Equal<string list>([ ".github#1507" ], o.Args)
+
+    [<Fact>]
+    let ``#1507 --paths with nothing but a flag after it is REFUSED, not silently satisfied`` () =
+        // Acceptance criterion 3. The dangerous near-miss: with the stop rule in place but no empty check,
+        // `--paths --json` would parse to an EMPTY touch-set and a green exit — the same silence one step
+        // along. The refusal names the flag, so the caller sees what they typed.
+        for verb in pathsVerbs do
+            let e = parse [ verb; ".github#1507"; "--paths"; "--json" ] |> rejected
+            Assert.Contains("--paths", e)
+            Assert.Contains("--json", e)
+
+    [<Fact>]
+    let ``#1507 a trailing --paths with no tokens at all is still refused`` () =
+        for verb in pathsVerbs do
+            let e = parse [ verb; ".github#1507"; "--paths" ] |> rejected
+            Assert.Contains("--paths", e)
+
+    [<Fact>]
+    let ``#1507 a flag-shaped token after --paths is never DECLARED, whatever flag it is`` () =
+        // THE DRIFT ARGUMENT, pinned. The stop rule asks `TouchSet.isFlagShaped` — the grammar — not a copy
+        // of the flag table, so it holds for flags this test was never taught:
+        //
+        //  * `--json`  a Global flag `widen` advertises  -> parsed as the flag
+        //  * `--status` a flag of OTHER commands         -> refused by the #991 residue rule, BY NAME
+        //  * `--nonesuch` no flag at all                 -> refused as `unknown argument`
+        //
+        // All three are loud. None of them ends up in a `Paths:` line, which is the only property that
+        // matters, and none of them required this arm to know the flag's name.
+        let residue = parse [ "widen"; ".github#1507"; "--paths"; "src/A.fs"; "--status"; "Blocked" ] |> rejected
+        Assert.Contains("--status", residue)
+
+        let unknown = parse [ "widen"; ".github#1507"; "--paths"; "src/A.fs"; "--nonesuch" ] |> rejected
+        Assert.Contains("--nonesuch", unknown)
+
+    [<Fact>]
+    let ``#1507 a multi-token touch-set is still exactly what was typed`` () =
+        // The mirror test. A stop rule that also truncated honest declarations would be a worse bug than
+        // the one it replaced: silently reserving FEWER files than the worker asked for.
+        let o =
+            parse
+                [ "widen"
+                  ".github#1507"
+                  "--paths"
+                  ".claude/skills/"
+                  ".codex/skills/"
+                  ".agents/skills/"
+                  ".github/workflows/skill-union.yml"
+                  "scripts/materialize-skill-roots.sh" ]
+            |> ok
+
+        Assert.Equal<string list>(
+            [ ".claude/skills/"
+              ".codex/skills/"
+              ".agents/skills/"
+              ".github/workflows/skill-union.yml"
+              "scripts/materialize-skill-roots.sh" ],
+            o.Paths
+        )

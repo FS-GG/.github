@@ -814,13 +814,52 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
             | "--message" :: value :: t -> flags { acc with Message = Some value } t
             | [ "--message" ] -> Error "--message needs a value"
 
-            // `--paths` consumes the REST of the arguments as touch-set tokens — a `Paths:` token can begin
-            // with anything, so nothing after it is treated as a flag.
+            // `--paths` is the one CONSUME-THE-REST flag, and it used to mean that literally: it took every
+            // remaining argument as a touch-set token and recursed on `[]`, so nothing after it could ever be
+            // read as a flag. The comment justifying that said "a `Paths:` token can begin with anything".
+            // It cannot (#1507) — `TouchSet.isFlagShaped` is the grammar saying so — and the price of the
+            // claim was `widen <ref> --paths <tokens> --json` writing `--json` into the touch-set of a live
+            // claim, at exit 0, under a receipt whose `DISJOINT` line read like success.
+            //
+            // Note WHICH flag it was: `--json` is in `widen`'s own advertised surface (`command-contract`
+            // lists it). This was never an unknown flag being tolerated — it was a DECLARED flag of the
+            // command being eaten as a value of the preceding one. Every other multi-token flag in this file
+            // already guards the same way (`--snapshot`, `--repo`, `--sha`, `-n` … all refuse a value that
+            // `StartsWith "-"`); `--paths` was the single arm that opted out, and it opted out of the check
+            // for the argument that lands in the one declaration the scheduler reserves files by.
+            //
+            // So: take tokens up to the first FLAG-SHAPED one, then keep parsing from there. Two properties
+            // matter and neither is "recognise `--json`":
+            //
+            //  * The stop rule asks the GRAMMAR, not a list of flags. A rule keyed on "is it a known flag of
+            //    this command?" would need a copy of the flag table here, and a hand-maintained duplicate of
+            //    a flag list is the same defect one level along — the next flag added is swallowed exactly
+            //    like `--json`, silently, in the same place. `isFlagShaped` cannot fall out of date because
+            //    there is no list in it.
+            //  * A flag-shaped token that is NOT a flag of this command is now REFUSED rather than declared.
+            //    It falls through to the arms below and reaches either its own handler (where the #991
+            //    residue rule names it: "--status is not a flag of `widen`") or `unknown argument`. Both are
+            //    loud; being written into a `Paths:` line is not.
+            //
+            // Fully qualified deliberately: `open FS.GG.Coord` here would bring the core's `Landable` module
+            // into scope beside this module's `Landable` COMMAND case, and the name a `--paths` guard
+            // resolves to is not a thing to leave to resolution order. It also keeps the call site honest —
+            // the rule is the core grammar's, and it reads that way.
             | "--paths" :: t ->
-                if List.isEmpty t then
-                    Error "--paths needs at least one token"
+                let isPathToken (tok: string) = not (FS.GG.Coord.TouchSet.isFlagShaped tok)
+                let tokens = t |> List.takeWhile isPathToken
+                let rest = t |> List.skipWhile isPathToken
+
+                // The EMPTY case is the one that must not be "silently satisfied by the next argument".
+                // `--paths --json` has no tokens at all, and the failure to say so is what #1507's third
+                // acceptance criterion is about: absent and empty are misconfigurations, not defaults.
+                // Name the offending token, so the caller sees the flag it typed rather than a bare refusal.
+                if List.isEmpty tokens then
+                    match rest with
+                    | flag :: _ -> Error $"--paths needs at least one token (got flag '%s{flag}')"
+                    | [] -> Error "--paths needs at least one token"
                 else
-                    flags { acc with Paths = t } []
+                    flags { acc with Paths = tokens } rest
 
             | "--pr" :: value :: _ when value.StartsWith "-" -> Error $"--pr needs a value (got flag '%s{value}')"
             | "--pr" :: value :: t ->
