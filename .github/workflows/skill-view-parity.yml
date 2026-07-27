@@ -1,0 +1,96 @@
+# Run the generated skill view ALONGSIDE the existing copied-tree gate, and assert they AGREE.
+#
+# .github#1674 (phase 3 of the rewrite decided on .github#1611), ADR-0067 §9: *"build the view and the
+# absence check; run it alongside the existing gates unchanged; PORT the fixtures rather than
+# re-derive them; retire the old apparatus per repo, with the freshness sweep last."* Phase 2
+# (.github#1635) built the view and `skill-view.yml`. This is the alongside step, and its success
+# condition is AGREEMENT, NOT REPLACEMENT.
+#
+# THIS WORKFLOW RETIRES NOTHING, AND NEITHER DOES THE SCRIPT IT RUNS (ADR-0067 §9). skill-roots-
+# selfcheck, skill-union-selftest, skill-view, skillmirror-freshness, coordination-coherence and
+# kit-published-coherence all keep running unchanged beside it. `scripts/skill-view-parity.sh` RUNS
+# `scripts/skill-union-assert.sh` as a subprocess, unmodified — it holds no second copy of the
+# invariant, which is #1611's own rule 2. Retirement is phase 4 (.github#1676).
+#
+# TWO JOBS, ANSWERING TWO DIFFERENT QUESTIONS.
+#
+#   fixture   — does the comparison behave? Synthetic trees covering both live layouts, the three
+#               ported fixture classes (.github#1621 §5.7), the .github#1685 all-view limitation, and
+#               the fail-closed paths. Every red leg asserts its exit code AND its reason.
+#   dogfood   — do the two checkers agree on THIS repo's own tree? The bare command, over this repo's
+#               own declared roots, with no --roots — the same reason skill-roots-selfcheck.yml gives:
+#               a gate can never be green on a root set the worker's local run does not check.
+#
+# WHY THERE IS NO CROSS-REPO SWEEP JOB HERE, AND WHY THAT IS THE DECISION (ADR-0067 §2). The obvious
+# shape for "agreement on every rostered repo" is a job that clones the seven receivers and compares
+# each one. §2 forbids it in as many words: *"A gate's verdict MUST be a pure function of (tree under
+# test, pinned ref). A gate that reads another repository's `main` at check time has no verdict,
+# because its answer changes with no change to its subject."* That is the shape that produced six
+# receiver repairs in one day (FS.GG.SDD#731 and five siblings; see coordination-coherence.yml's own
+# header). So the ROSTER-WIDE comparison is a MEASUREMENT, taken once against recorded pins and
+# reported on .github#1674, and what is wired here is the part that is a pure function of a tree.
+# Any receiver can run the same command over its own checkout; the recipe is in the script's header.
+#
+# NOT A REQUIRED CONTEXT. Both jobs are `paths:`-filtered, and a filtered producer cannot satisfy a
+# required status check — GitHub never creates the check run, so branch protection holds every
+# unrelated PR at "Expected" forever (.github#1508). Making this required is a decision that comes
+# with dropping the filter, not before it.
+#
+# THE `paths:` FILTERS ARE IDENTICAL BETWEEN THE TWO TRIGGERS and they name the dogfood's SUBJECT as
+# well as the tool's: the two committed skill roots and `.agent-skill-roots` are what the dogfood job
+# reads, so a change to them must re-run it. `check-paths-coherence.py` asserts the set-equality half;
+# the coverage half is stated here because a filter that omits its own subject is a gate that stops
+# running on `main` without anybody noticing (.github#880/#930).
+
+name: skill-view-parity
+
+on:
+  pull_request:
+    paths:
+      - "scripts/skill-view-parity.sh"
+      - "scripts/skill-view"
+      - "scripts/skill-union-assert.sh"
+      - "scripts/lib/roots.sh"
+      - "scripts/lib/args.sh"
+      - "tests/skill-view-parity/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - ".agent-skill-roots"
+      - ".github/workflows/skill-view-parity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/skill-view-parity.sh"
+      - "scripts/skill-view"
+      - "scripts/skill-union-assert.sh"
+      - "scripts/lib/roots.sh"
+      - "scripts/lib/args.sh"
+      - "tests/skill-view-parity/**"
+      - ".claude/skills/**"
+      - ".agents/skills/**"
+      - ".agent-skill-roots"
+      - ".github/workflows/skill-view-parity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Parity fixture (both layouts, the three ported classes, and the fail-closed paths)
+        run: bash tests/skill-view-parity/run.sh
+
+  dogfood:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # No --roots: the root set comes from this tree's own .agent-skill-roots, exactly as it does for
+      # a worker, for scripts/skill-union-assert.sh and for scripts/skill-view. Exit 2 here means the
+      # two verdicts could not be compared — which is never a pass (epic #266).
+      - name: Assert the copied-tree gate and the generated-view check agree on this repo's own tree
+        run: bash scripts/skill-view-parity.sh --tree .
