@@ -226,7 +226,11 @@ IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHU
                                              every item schedulable in parallel right now — `next`
                                              uncapped, and the READ half of that pair: it makes no
                                              chore offer and takes no lock (#1535). Defaults to JSON;
-                                             --text prints what `next` prints, minus the offer.
+                                             --text gives `next`'s ANSWER without the offer — the same
+                                             words in the same order, but ALL on stdout, including the
+                                             "nothing schedulable" headline `next` keeps off it
+                                             (.github#1562). This is prose for a human; `next`'s stdout
+                                             is a ref for `$(…)`, so capture accordingly.
                                              Candidates are packed PRIORITY-GREEDILY by a derived rank
                                              (blocking count, Class, Phase, age — #1598), so the
                                              highest-ranked schedulable item is always admitted;
@@ -358,8 +362,10 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
   `next`/`batch` (.github#1562): 0 whether or not anything was schedulable — DELIBERATELY not `take`'s
   EX_NONE. `next` is `batch` capped at one and `batch --text -n 1` is its documented substitute (#1535),
   so an EX_NONE here would make that substitution change a caller's exit status; `take`'s 5 means "I
-  CLAIMED NOTHING", a fact about a write neither of these attempts. Read the ANSWER, not the code:
-  `next`'s stdout is the ref and is EMPTY when there is none, `batch --json`'s is `[]`
+  CLAIMED NOTHING", a fact about a write neither of these attempts. So read the ANSWER — `next`'s stdout
+  is the ref and is EMPTY when there is none, `batch --json`'s is `[]` — but read it ONLY AT 0. Every
+  other code above is "could not look", and it empties stdout too; an empty ref at non-zero is no answer,
+  never an empty queue (#266)
   `landable` (#720/#724): 0 green · 7 pending (the ONE verdict worth retrying) · 3 red or conflicted
   (do NOT wait) · 4 unknown (could not reach a verdict — fail-closed, never a retry)
 """

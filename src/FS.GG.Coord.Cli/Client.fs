@@ -281,10 +281,10 @@ module Client =
 
     /// `snapshot` already scoped by `--repo`; this is the SAYING half (#979).
     ///
-    /// `next`/`batch`/`take` each report an empty queue in their own words — `nothingSchedulable` on
-    /// stdout from `batch --text` and on stderr from `next` (.github#1562), `take`'s EX_NONE — and every
-    /// one of those sentences is TRUE of a `--repo` that named nothing, which is exactly what makes it
-    /// invisible. This is the verb family
+    /// `next`/`batch`/`take` each report an empty queue in their own words — `nothingSchedulable`, on
+    /// stdout from `batch --text` and `take --text` and on stderr from `next` (.github#1562), and `take`'s
+    /// EX_NONE in every projection — and every one of those sentences is TRUE of a `--repo` that named
+    /// nothing, which is exactly what makes it invisible. This is the verb family
     /// where that costs the most: `--repo <short-id>` is the documented spelling, a typo is the single
     /// likeliest thing a worker types, and `take` is the one command in a worker's loop. So the reason
     /// rides out with the verdict rather than being dropped with the receipt.
@@ -445,9 +445,11 @@ module Client =
 
     /// #440's honest headline, in ONE spelling (.github#1562).
     ///
-    /// Two verbs emit it and they emit it on DIFFERENT STREAMS — `batch --text`/`take` on stdout, `next` on
-    /// stderr — so the words had to stop being a literal typed twice. The stream is each verb's own stdout
-    /// contract; the SENTENCE is #440's, and a second copy of it is the thing that drifts (#485).
+    /// Three verbs emit it and they do NOT agree on the stream — `batch --text` and `take` put it on
+    /// stdout (both through `printChosen` below), `next` on stderr — so the words had to stop being a
+    /// literal typed twice. The stream is each verb's own stdout contract: `next`'s is a bare ref read
+    /// with `$(…)`, the other two are prose for a human. The SENTENCE is #440's, and a second copy of it
+    /// is the thing that drifts (#485).
     let private nothingSchedulable = "nothing schedulable right now."
 
     /// The human "why nothing / why less" tail of every TEXT projection: the `passed over:` header, the

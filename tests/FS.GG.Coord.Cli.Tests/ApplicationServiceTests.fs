@@ -145,7 +145,7 @@ module ApplicationServiceTests =
     /// A transport serving one board. `bodies` is issue number → issue body (its `Paths:` declaration),
     /// `holders` is issue number → the worker whose claim marker sits on it, and `sayFails` makes the
     /// courtesy-notice POST fail so the receipt's `notified:false` leg can be pinned.
-    let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) sayFails =
+    let private worldIn (status: string) (bodies: Map<int, string>) (holders: Map<int, string>) (sayFails: bool) =
         let items =
             bodies
             |> Map.toList
@@ -889,7 +889,13 @@ module ApplicationServiceTests =
                 match opts.Command with
                 | Options.Take -> Client.take (context transport) opts
                 | Options.Next -> Client.next (context transport) opts
-                | other -> failwithf "this fixture drives take/next only, got %A" other
+                // `batch` joined at .github#1562, and it is the CONTROL rather than a third subject: that
+                // item moved `next`'s headline to stderr and claims `batch --text` still puts it on
+                // stdout. Nothing in the repo could see that claim — every `batch` assertion captures the
+                // streams MERGED — so the verb this fixture refused was the one the fix's blast radius
+                // needed measuring on.
+                | Options.BatchCmd -> Client.batch (context transport) opts
+                | other -> failwithf "this fixture drives take/next/batch only, got %A" other
 
             Console.Out.Flush()
             Console.Error.Flush()
@@ -905,8 +911,16 @@ module ApplicationServiceTests =
             with _ ->
                 ()
 
-    /// A BUSY queue: #74 is startable but for the live claim `kite-469` holds on it. #428's distinction —
-    /// this is the board that "nothing schedulable" misreports as an empty backlog.
+    /// A BUSY queue: one candidate the scheduler LOOKED AT and refused (#74), against a board with none at
+    /// all. #428's distinction — this is the board that "nothing schedulable" misreports as an empty
+    /// backlog.
+    ///
+    /// WHAT REFUSES #74, CORRECTED BY .github#1562. This read "startable but for the live claim
+    /// `kite-469` holds on it", and that is not what happens: `boardItem`'s column is `In progress`, which
+    /// `columnStartability` maps to `NeverStartable`, and the column is decided BEFORE any overlap. So #74
+    /// is passed over at the COLUMN and `kite-469`'s marker is never reached. The property every leg here
+    /// turns on — one candidate looked at and refused, so `passedOver` is 1 and the reasons name #74 —
+    /// is unchanged and is what those legs assert; only the reason this docstring named was wrong.
     let private busyQueue () = disjointWorld ()
 
     /// A board with NO items at all. The other side of #428's distinction, and the reason the receipt
@@ -1047,6 +1061,25 @@ module ApplicationServiceTests =
             runQueue startable [ "next"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21" ]
 
         Assert.Equal("FS.GG.SDD#74" + Environment.NewLine, out)
+        Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``#1562 batch --text KEEPS the headline on stdout — the blast radius, pinned`` () =
+        // THE CLAIM THIS ITEM MAKES AND NOTHING COULD SEE. `next` and `batch --text` share the words
+        // (`nothingSchedulable`) and the tail (`sayPassedOver`); they differ in ONE thing, the stream the
+        // headline goes to, and .github#1562 asserts it moved for `next` ALONE. That "alone" was
+        // unfalsifiable: `runQueue` refused `batch`, and `writes.sh`'s leg — the only other place
+        // `batch --text`'s headline is checked — greps a `2>&1` merge, which is the exact blindness this
+        // item was filed about, one verb over. A change that moved BOTH would have been green everywhere.
+        //
+        // AND IT IS NOT A DUPLICATE OF `without --json take is byte-identical to today`. That pins `take`,
+        // whose empty arm also carries EX_NONE; this pins the verb `/pnext-item` prescribes as the READ
+        // substitute for `next` (#1535), which is the one a worker actually redirects.
+        let code, out, err =
+            runQueue (busyQueue ()) [ "batch"; "--text"; "--repo"; "FS.GG.SDD"; "-n"; "1" ]
+
+        Assert.Equal("nothing schedulable right now." + Environment.NewLine, out)
+        Assert.Contains("FS.GG.SDD#74", err)
         Assert.Equal(0, code)
 
     [<Fact>]
