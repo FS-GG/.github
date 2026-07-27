@@ -387,7 +387,30 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Facts -> Both Json // Program.fs `facts` — `generate-projections` reads the JSON arm
         | BatchCmd -> Both Json // Client.fs `batch`
         | Ready -> Both Json // Client.fs `ready`
-        | Reconcile -> Both Text // and `--apply --json` is refused outright, below
+        // Client.fs `reconcile` — and `--apply --json` is a REAL combination (.github#1541), which is the
+        // statement this row now has to carry, because the `parse` funnel used to contradict it.
+        //
+        // #1429 (897b83d, a skills refactor whose subject said nothing about the options surface) added a
+        // `validate` arm refusing `--apply` with `--json` on this verb. That was a WORKAROUND for a
+        // handler defect, never a contract, and the thing it removed was the machine projection of the
+        // org's one MUTATING reconciliation verb: a driver applying a reconciliation could not learn which
+        // writes landed and which QUEUED against an exhausted budget except by scraping `applied`/`queued`
+        // prose off stdout. A queued write is not lost — `flush` replays it — but nothing replays it ON ITS
+        // OWN, so a caller that never learns the write deferred is a caller that never runs `flush`. The
+        // refusal's own remedy ("inspect the JSON dry run, then apply in human-readable mode") is two
+        // passes over a board that can change between them, and the second is the unreadable one.
+        //
+        // WHAT MADE IT LIFTABLE. Until PR #1537 the `--apply` phase printed its per-write outcome to
+        // stdout PAST a document that had already ended, so opening the gate would have shipped an
+        // unparseable stream the moment it opened. #1537 moved the outcome INTO the document
+        // (`field`/`value`/`outcome`/`error`), put the deferred-write remedy on stderr, and stopped the
+        // `reap` child's stdout leaking in. The handler was correct first; only the gate remained.
+        //
+        // AND THIS ROW IS WHY THERE WAS NOTHING ELSE TO CHANGE. `Both` puts `reconcile` in `jsonReaders`,
+        // so `--json` has been in its scoped flag set — and therefore in the emitted `command-contract`
+        // row and the `--help` usage line (`reconcile [--repo NAME] [--apply] [--json]`) — the whole time
+        // the parser was refusing it. `Text` stays the bare default; nothing about `--apply` changes it.
+        | Reconcile -> Both Text
         // `who`, `budget` and `inbox` share one polarity, and it is the mirror of `ready`/`batch`: the
         // human table is what an operator or a worker reads, and `--json` opts into the machine contract
         // (case 20/25's rows, `pendingBoardWrites` — #862).
@@ -1270,10 +1293,21 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
                     | Only readers when List.contains o.Command readers -> None
                     | Only readers -> Some(f, spelling, readers))
 
-            if o.Command = Reconcile && o.Apply && o.Render = Json then
-                Error "reconcile: --apply and --json are mutually exclusive — inspect the JSON dry run, then apply the typed remedies in human-readable mode."
-            elif o.AllRepos && o.Repo.IsSome then
-                Error "who: --repo and --all-repos are mutually exclusive — choose the repository slice or the whole board."
+            // A `reconcile --apply --json` refusal used to stand HERE, ahead of this arm, and .github#1541
+            // removed it. The reasoning lives on `renderSupport`'s `Reconcile` row, next to the `Both` that
+            // makes the pair legal, rather than at a funnel it no longer has an arm in.
+            //
+            // ITS REMOVAL IS WHY THIS MESSAGE NAMES THE COMMAND (.github#1541). `--all-repos` is
+            // `Only [ Who ]`, so this arm is the ONE combination check that can be reached by a verb it
+            // does not describe — and it runs BEFORE the residue rule, so it shadows the "not a flag of"
+            // sentence that would otherwise name the real culprit. That was invisible while the deleted
+            // arm answered `reconcile --apply --json --all-repos --repo X` first; with it gone, that line
+            // reached a diagnostic prefixed `who:` about a `reconcile` command. Hardcoding one verb's name
+            // into a refusal every verb can trigger is the #611 defect this file argues against elsewhere,
+            // so the name is DERIVED — `who` still says `who`, and nothing else claims to be `who`.
+            if o.AllRepos && o.Repo.IsSome then
+                Error
+                    $"%s{commandName o.Command}: --repo and --all-repos are mutually exclusive — choose the repository slice or the whole board."
             else
                 match residue with
                 // `--json`/`--text` get their own sentence, and it is not stylistic (#1523). Naming the
