@@ -614,6 +614,27 @@ let ``#273 a matchable touch-set validates`` () =
     | Error e -> failwith $"a good touch-set must validate — got %s{e}"
 
 [<Fact>]
+let ``#1507 a FLAG-SHAPED token is refused at the write, even though the parser now stops before it`` () =
+    // THE DECLARATION BOUNDARY. `widen <ref> --paths <five real paths> --json` corrupted a live claim, and
+    // the parser is only half of why: this function is the ONE gate between a token and the PATCH, and it
+    // had nothing to say. `--json` carries no glob metacharacter, so `TouchSet.classify` called it
+    // `Matchable` and validation passed — the token then reserved no file at all, which is precisely the
+    // #273 fail-open this very check exists to close, arriving through a token shaped like a path.
+    //
+    // Belt AND braces, deliberately. The parser fix means `widen`/`set-paths` can no longer PRODUCE this
+    // input, so this test pins a path that should now be unreachable from the CLI. It stays because
+    // `validate` is also the gate for a declaration typed into an issue body by hand, and because "the
+    // caller is careful" is the assumption the original defect was built on.
+    match validate [ "src/Audio/**"; "--json" ] with
+    | Error message ->
+        Assert.Contains("reserve NOTHING", message)
+        // Name the offending token and ONLY it. The five real paths were fine; a refusal that blamed them
+        // too would send the worker rewriting a declaration that was already correct.
+        Assert.Contains("--json", message)
+        Assert.DoesNotContain("src/Audio/**.", message)
+    | Ok _ -> failwith "a flag must never validate as a touch-set token — this is how `--json` reached a live `Paths:` line"
+
+[<Fact>]
 let ``an EMPTY touch-set is refused - it reserves nothing, and 'none' is a different decision`` () =
     match validate [] with
     | Error _ -> ()
