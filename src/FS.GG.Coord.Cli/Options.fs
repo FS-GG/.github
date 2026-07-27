@@ -208,9 +208,16 @@ DECISION (pure — no board, no network):
 IO (read and write the board — $FSGG_COORD_OWNER / $FSGG_COORD_PROJECT, $GITHUB_TOKEN, $FSGG_GITHUB_API_BASE):
   scan   [--repo NAME] [--fresh] [-n N] [--include-backlog] [--lease MIN]
                                              read the board and emit the snapshot `decide` consumes
-  next   [--repo NAME]                       the next single schedulable item
+  next   [--repo NAME]                       the next single schedulable item — AND IT WRITES (#1535):
+                                             after printing that answer it offers a #733 chore, which
+                                             POSTs a claim marker TAKING this repo's chore lock. For the
+                                             same decision WITHOUT the offer use `batch --text -n 1` —
+                                             that is the read, and what a STALE engine still permits
   batch  [--repo NAME] [-n N] [--include-backlog]
-                                             every item schedulable in parallel right now
+                                             every item schedulable in parallel right now — `next`
+                                             uncapped, and the READ half of that pair: it makes no
+                                             chore offer and takes no lock (#1535). Defaults to JSON;
+                                             --text prints what `next` prints, minus the offer
   ready  [--repo NAME] [--status S] [--all]  the board as a reconciler sees it (always fresh; not-Done
                                              by default — a TRUTH read, so it shows items the scheduler
                                              will refuse; --status/--all widen past the default)

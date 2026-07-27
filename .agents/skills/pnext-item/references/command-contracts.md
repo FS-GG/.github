@@ -59,6 +59,12 @@ A claim's lease is 120 minutes by default (`FSGG_CLAIM_LEASE_MIN`), and `heartbe
 
 <!-- END GENERATED: fsgg-protocol:take-exit-codes -->
 
+**`next` is a diagnostic that WRITES — reach for `batch` when you only want the answer**
+
+The EX_NONE row above sends you to `next`, and `next` is not a read (.github#1535, DECIDED). After printing its answer it makes the #733 chore OFFER, which POSTs a claim marker TAKING this repo's chore lock (`.github#1033`, ADR-0041). That is deliberate rather than a bug: the tool has no thread of its own, so it conscripts an idle caller to reconcile the board, and `next` is the ONLY boundary that fires on a board with nothing left to schedule — `done --flip`, the other one, needs somebody to have finished an item, which on a wedged board nobody has. It is also why a STALE engine REFUSES `next` (#1528): the shim classifies it in `BOARD_WRITES_CONDITIONAL`, and a stale board write corrupts what the whole fleet shares.
+
+So when you want the DECISION without the side effect, run **`batch --text -n 1`** (add `--include-backlog` to see past the column). `batch` is `next` uncapped: it makes no offer, takes no lock, and sits in the shim's `BOARD_READS`, so it still answers on a stale engine. `--text` is not optional in that spelling — `batch` defaults to **JSON**, where a drained board prints `[]` and the reasons go to stderr. With `--text` it prints exactly what `next` prints minus the offer: the same "nothing schedulable right now.", the same per-item passed-over reasons, the same starved-queue banner — the two verbs render them through one shared helper, so they cannot drift apart. `tests/coord-engine-e2e/writes.sh` pins both halves against one board and one chore: `batch` leaves the chore lock's comment thread empty, `next` posts a marker naming its worker to it.
+
 ## `landable`
 
 Poll `scripts/fsgg-coord landable <pr> --repo <repo> --wait --sha <head>`; do not parse prose.

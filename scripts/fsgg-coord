@@ -175,6 +175,21 @@ BOARD_WRITES="add adopt child claim done flush heartbeat release room say set-fi
 #                 the repo's chore lock. `.github`'s lock is #1033, so this fires in the repo that owns this
 #                 shim. `batch` is the same decision uncapped and makes no offer, so it stays a read.
 #
+#                 AND THAT IS SETTLED, NOT PENDING (.github#1535). This row recorded a fact that `next`'s
+#                 own contract contradicted: the recipe and the exit-code table named it as the READ to run
+#                 when nothing is schedulable. #1535 decided BETWEEN declaring the write and moving the
+#                 offer elsewhere, and declared it — `AtNext` is the only chore boundary that fires on a
+#                 DRAINED board (`AfterDone` needs somebody to have finished an item, and on a board wedged
+#                 behind cleared blockers nobody has), so moving it would delete the one boundary that can
+#                 unwedge #1047's deadlock. The refusal below is therefore correct rather than a cost being
+#                 tolerated, and the "it costs the fleet its diagnostic verb" worry #1528 recorded is not
+#                 real: `batch --text -n 1` is this same decision minus the offer, it is in BOARD_READS, and
+#                 it prints the identical answer from the engine's own shared `printChosen` (`--text` is part
+#                 of the spelling — `batch` defaults to JSON, which prints `[]` and puts the reasons on
+#                 stderr). Point a worker on a stale engine at that; `tests/coord-engine-e2e/writes.sh` pins
+#                 both halves against one board (`batch` leaves #1033's thread empty, `next` posts a marker
+#                 to it), so this comment cannot quietly stop matching the engine.
+#
 # WHY VERB-LEVEL RATHER THAN ARGUMENT-AWARE. `--apply` is a bare token in the parser (no `--apply=X` form),
 # so scanning argv for it would in fact be exact today — but it buys a permitted dry run at the price of a
 # guard whose correctness depends on argv SHAPE, and the paragraph above already refuses that trade for the
