@@ -784,6 +784,13 @@ caller_verdict() {
 # `tracked_paths`). None of it is restated below — grep for the rule's own wording and it is not
 # here, which is what the fixture's first sparse leg pins.
 #
+# THE NO-VERDICT TYPES ARE PART OF THAT SURFACE, and #1599 is the cost of leaving them off this list.
+# A borrowed rule does not only return answers; it REFUSES, and the refusal arrives as an exception
+# whose class is as much of the interface as the function name. Two are borrowed: `GateError` (the
+# gate's, raised by `grade_pattern`) and `SparseRefusal` (`scripts/lib/sparse.py`'s, raised by
+# `patterns_of`/`cone_mode_of`, and deliberately NOT a subclass so each caller maps it to its own
+# exit-code contract). Both are named in `BORROWED` and both are caught at every call site below.
+#
 # What IS restated is the per-step ORCHESTRATION — roughly fifteen lines deciding `resolvable` and
 # `enumeration_checked` and keeping counts — because the gate applies its rules inline in `main()`,
 # interleaved with argparse, its own tree walk and its own printing, and there is no seam to import.
@@ -837,9 +844,13 @@ BORROWED = ("sparse_steps", "patterns_of", "cone_mode_of", "grade_pattern",
 missing = [name for name in BORROWED if not hasattr(rule, name)]
 if missing:
     sys.exit("%s no longer exposes %s. repos-audit.sh borrows the sparse-checkout closure rule from "
-             "it rather than restating it (#1529); if the rule moved — #1530 hoists the parse into "
-             "scripts/lib/sparse.py — retarget this loader at its new home. Refusing to grade, "
-             "because a missing rule must not look like a clean org."
+             "it rather than restating it (#1529). If the rule MOVED — #1530 hoisted the parse into "
+             "scripts/lib/sparse.py, and the gate re-exports it — retarget this loader at its new "
+             "home. If a no-verdict TYPE went (`GateError`, `SparseRefusal`), the fix is not a "
+             "retarget: find what the parse and the grade raise now and catch it below, because an "
+             "exception this program does not catch kills it before its `counts` record and the "
+             "sweep then reports that it found no cross-repo checkout at all (#1599). Refusing to "
+             "grade, because a missing rule must not look like a clean org."
              % (RULE, ", ".join(missing)))
 
 
@@ -994,7 +1005,21 @@ for job_id, params in rule.sparse_steps(document):
             pattern_count += 1
             step_findings.extend(rule.grade_pattern(
                 pattern, cone=cone, where=where, tracked=tracked))
-    except rule.GateError as error:
+    # THE SAME PAIR, FOR THE SAME REASON (#1599). `grade_pattern` raises only `GateError` today, and
+    # "only what it raises today" is precisely the reasoning that produced this bug one branch up: the
+    # parse block was correct on that basis right until #1530 moved the parse and changed the
+    # exception's identity. Catching both here costs nothing and is not symmetry for its own sake —
+    # the grading rules are the ones most likely to follow the parse into scripts/lib/sparse.py, and
+    # that module cannot raise `GateError` at all.
+    #
+    # The stake is higher here than the exit code suggests. The GATE's identical handler sits under
+    # `lib/gate.py`'s `run()`, whose blanket `except Exception` turns any escape into a loud
+    # no-verdict; this embedded program has no such net. Its only backstop is `sparse_grade`'s
+    # fallback, which records a refusal but LOSES the `counts` record — so `cross` reverts to 0 and
+    # the summary prints "found NO cross-repo `actions/checkout` at all" over a roster that has one.
+    # That ledger falsehood is reachable from ANY uncaught exception in this program, not just this
+    # one; closing the two known raisers is what is in scope here.
+    except (rule.GateError, rule.SparseRefusal) as error:
         emit("refusal", error)
         continue
 

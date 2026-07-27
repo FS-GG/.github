@@ -1980,7 +1980,12 @@ rm -f "$FIX/FS-GG__FS.GG.Rendering/fetch2.yml" "$FIX/FS-GG__FS.GG.Rendering/fetc
 #   2. `sparse_grade`'s generic laundering line — the one a dead subprocess produces — is ABSENT
 #   3. stderr carries no traceback at all
 #
-# Any one of them alone can be satisfied by the broken shape; together they cannot.
+# Measured against the unfixed script, EACH of the three reds on its own — the annotation carries
+# "could not be evaluated against this workflow" instead of the phrase, the laundering line is
+# present, and the traceback is on stderr. They are kept as three rather than collapsed to one
+# because they fail for three different reasons and a future partial regression need only trip one:
+# (1) is about the operator getting the RULE's sentence, (2) about `sparse_grade` not laundering a
+# death into a verdict, (3) about the program not dying in the first place.
 for spec in "negated:negated sparse pattern" "blank:supplies no pattern"; do
   mode="${spec%%:*}"; phrase="${spec#*:}"
   wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering "$mode"
@@ -2001,10 +2006,18 @@ done
 # printed, `cross` was lost, and the sweep reported "found NO cross-repo `actions/checkout` at all"
 # over a roster that demonstrably had one. The exit code was right and the LEDGER was false, which is
 # the harder half to notice; this pins the sentence that gave it away.
+#
+# ASSERTED POSITIVELY, not just as the absence of the "NO cross-repo" sentence. `sp_cross` is summed
+# across the WHOLE roster, so a bare negative would go vacuous the day any other rostered repo in
+# this fixture's state happens to carry a cross-repo checkout — the leg would still pass, while
+# asserting nothing about the refused step. Naming the counts the else-branch prints keeps it a
+# statement about THIS step: one cross-repo checkout seen, none of them graded, one refusal.
 wire FS-GG/FS.GG.SDD; wire_sparse FS-GG/FS.GG.Rendering blank
 out="$(run 2>/dev/null)" && rc=0 || rc=$?
-{ [ "$rc" -eq 3 ] && ! printf '%s' "$out" | grep -qF 'NO cross-repo'; } \
-  && ok "sparse: a REFUSED step is one the sweep examined — the roster ledger never reports it as nothing found" \
+{ [ "$rc" -eq 3 ] && ! printf '%s' "$out" | grep -qF 'NO cross-repo' \
+    && printf '%s' "$out" | grep -qF '0 of 1 cross-repo checkout(s) fully graded' \
+    && printf '%s' "$out" | grep -qF '1 refusal(s)'; } \
+  && ok "sparse: a REFUSED step is one the sweep examined — counted as a cross-repo checkout, graded 0, never 'nothing found'" \
   || bad "a refused step must still be counted as a cross-repo checkout the sweep examined" "rc=$rc: $out"
 
 # A cross-repo checkout with no `sparse-checkout:` is a full clone. It under-fetches nothing, so it
