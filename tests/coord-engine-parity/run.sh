@@ -1041,6 +1041,13 @@ if [ -n "$GPORT" ]; then
     && ok "#440: ...under the honest headline (the shape batch/decide already emit)" \
     || bad "#440: take must print the honest 'nothing schedulable right now.' headline" "got: $tA"
   # B. next carries the SAME contract — it is `batch` capped at one, so it cannot recite the list either.
+  #
+  #    AND ITS STREAMS ARE READ APART (.github#1562). `ge` merges with `2>&1`, which is right for the legs
+  #    above — `take`'s answer really is spread across both streams — and is exactly what let `next`'s
+  #    defect stand: the headline sat on STDOUT, over a contract that says stdout is one bare ref read with
+  #    `$(…)`, and a merged capture renders that identically to the fix. #440's property is asserted on the
+  #    MERGED text below, unchanged, because #440 is about WHICH WORDS are said; the stream split is
+  #    asserted separately, because that is a different question about the same output.
   nA="$(ge next --repo FS.GG.Audio --worker w440)"
   printf '%s' "$nA" | grep -qF "$GUESSED" \
     && bad "#440: next must NOT recite the guessed list either (it is batch capped at one)" "got: $nA" \
@@ -1048,6 +1055,15 @@ if [ -n "$GPORT" ]; then
   printf '%s' "$nA" | grep -q 'FS.GG.Audio#301' \
     && ok "#440: ...and next names the observed reason too" \
     || bad "#440: next must name the observed reason" "got: $nA"
+  n440_err="$(mktemp)"
+  n440_out="$(FSGG_GITHUB_API_BASE="http://127.0.0.1:$GPORT" FSGG_COORD_CACHE="$(mktemp -d)" \
+                "$ENGINE" next --repo FS.GG.Audio --worker w440 2>"$n440_err")"; n440rc=$?
+  n440_e="$(cat "$n440_err")"; rm -f "$n440_err"
+  { [ -z "$n440_out" ] && [ "$n440rc" -eq 0 ] \
+      && printf '%s' "$n440_e" | grep -q 'nothing schedulable right now.' \
+      && printf '%s' "$n440_e" | grep -q 'FS.GG.Audio#301'; } \
+    && ok ".github#1562: ...and it says ALL of it on STDERR — stdout is EMPTY at exit 0, so \$(…) reads no ref rather than a sentence" \
+    || bad ".github#1562: next's empty arm must leave the ref stream empty and keep #440's answer on stderr" "rc=$n440rc stdout: [$n440_out] / stderr: $n440_e"
   # C. A NON-STARTABLE COLUMN is a different observed reason (#302 In review), and still not the guess —
   #    proving the fix names what it saw rather than swapping one fixed sentence for another.
   tG="$(ge take --repo FS.GG.Governance --worker w440)"
@@ -1739,10 +1755,20 @@ else
   # (7) An unknown --repo has nothing schedulable — and, crucially, does NOT fall back to another repo's
   #     queue. bash prints "no startable item"; the engine re-expresses #440 (case 41 §4) as the honest
   #     "nothing schedulable right now." with NO item ref — the same property, the engine's own words.
-  n_nope="$(scoped "$CO/sdd" next --repo nope 2>/dev/null)"
-  { printf '%s' "$n_nope" | grep -q 'nothing schedulable' && ! printf '%s' "$n_nope" | grep -qE '#[0-9]'; } \
-    && ok "#480: 'next --repo nope' reports nothing schedulable and names no item — never another repo's queue" \
-    || bad "#480: an unknown repo must not borrow another's queue" "$n_nope"
+  #
+  #     THE STREAMS ARE CAPTURED APART (.github#1562). This leg read stdout ALONE and asserted the headline
+  #     was IN it, which is how it certified the defect that item was filed on: `next`'s stdout is a
+  #     machine contract — one line, the ref, read with `$(…)` — so a leg demanding prose there was pinning
+  #     `ref="$(… next --repo nope)"` to the STRING "nothing schedulable right now." at exit 0. The
+  #     PROPERTY it was written for is untouched and is what is asserted below: nothing schedulable, and no
+  #     item ref borrowed from another repo. Only the stream each half is looked for on is now stated.
+  n_nope_err="$(mktemp)"
+  n_nope="$(scoped "$CO/sdd" next --repo nope 2>"$n_nope_err")"
+  n_nope_e="$(cat "$n_nope_err")"; rm -f "$n_nope_err"
+  { [ -z "$n_nope" ] && printf '%s' "$n_nope_e" | grep -q 'nothing schedulable' \
+      && ! printf '%s' "$n_nope_e" | grep -qE '#[0-9]'; } \
+    && ok "#480/.github#1562: 'next --repo nope' says nothing schedulable ON STDERR, names no item, and leaves stdout EMPTY — never another repo's queue, and never prose a \$(…) reads as a ref" \
+    || bad "#480/.github#1562: an unknown repo must not borrow another's queue, and must not print prose on the ref stream" "stdout: [$n_nope] / stderr: $n_nope_e"
 
   kill "$SC_SRV" 2>/dev/null
 fi

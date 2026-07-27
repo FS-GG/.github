@@ -281,9 +281,10 @@ module Client =
 
     /// `snapshot` already scoped by `--repo`; this is the SAYING half (#979).
     ///
-    /// `next`/`batch`/`take` each report an empty queue in their own words — `printChosen`'s "nothing
-    /// schedulable right now.", `take`'s EX_NONE — and every one of those sentences is TRUE of a
-    /// `--repo` that named nothing, which is exactly what makes it invisible. This is the verb family
+    /// `next`/`batch`/`take` each report an empty queue in their own words — `nothingSchedulable`, on
+    /// stdout from `batch --text` and `take --text` and on stderr from `next` (.github#1562), and `take`'s
+    /// EX_NONE in every projection — and every one of those sentences is TRUE of a `--repo` that named
+    /// nothing, which is exactly what makes it invisible. This is the verb family
     /// where that costs the most: `--repo <short-id>` is the documented spelling, a typo is the single
     /// likeliest thing a worker types, and `take` is the one command in a worker's loop. So the reason
     /// rides out with the verdict rather than being dropped with the receipt.
@@ -442,13 +443,22 @@ module Client =
         for line in Batch.starvedBanner leaseMinutes result do
             eprint line
 
-    let private printChosen (leaseMinutes: int) (result: Batch.BatchResult) =
-        if List.isEmpty result.Chosen then
-            printfn "nothing schedulable right now."
-        else
-            for item in result.Chosen do
-                printfn "  → %s" item.Ref.Short
+    /// #440's honest headline, in ONE spelling (.github#1562).
+    ///
+    /// Three verbs emit it and they do NOT agree on the stream — `batch --text` and `take` put it on
+    /// stdout (both through `printChosen` below), `next` on stderr — so the words had to stop being a
+    /// literal typed twice. The stream is each verb's own stdout contract: `next`'s is a bare ref read
+    /// with `$(…)`, the other two are prose for a human. The SENTENCE is #440's, and a second copy of it
+    /// is the thing that drifts (#485).
+    let private nothingSchedulable = "nothing schedulable right now."
 
+    /// The human "why nothing / why less" tail of every TEXT projection: the `passed over:` header, the
+    /// per-item reasons, and #428's starved banner. ALL STDERR ALREADY — nothing here moved.
+    ///
+    /// Extracted from `printChosen` by .github#1562 so `next`'s empty arm can keep the whole of it while
+    /// putting its headline somewhere else. It is deliberately NOT `sayWhyNothing` above: that one is the
+    /// `--json` split and has never printed the `passed over:` header, which belongs to this projection.
+    let private sayPassedOver (leaseMinutes: int) (result: Batch.BatchResult) =
         let passed = passedOver result
 
         if not (List.isEmpty passed) then
@@ -462,6 +472,15 @@ module Client =
         // home from a repo with work in it. Silent on a healthy queue (the banner is []).
         for line in Batch.starvedBanner leaseMinutes result do
             eprint line
+
+    let private printChosen (leaseMinutes: int) (result: Batch.BatchResult) =
+        if List.isEmpty result.Chosen then
+            printfn "%s" nothingSchedulable
+        else
+            for item in result.Chosen do
+                printfn "  → %s" item.Ref.Short
+
+        sayPassedOver leaseMinutes result
 
     /// `batch --explain` (.github#1598 AC5) — STDERR, on `sayWhyNothing`'s terms and for its reason.
     ///
@@ -772,8 +791,12 @@ module Client =
     ///    stale engine while recording that it "costs the fleet its diagnostic verb whenever anyone is
     ///    mid-edit on `src/`". It does not. `batch` is this same decision uncapped, makes NO offer, and sits
     ///    in the shim's `BOARD_READS`. `batch --text -n 1` is `next` minus the write, and prints the
-    ///    identical answer: "nothing schedulable right now.", the per-item passed-over reasons and #428's
-    ///    starved banner all come out of the one `printChosen` above, which is why the two cannot drift.
+    ///    identical answer: "nothing schedulable right now." in the one `nothingSchedulable` spelling above,
+    ///    and the per-item passed-over reasons and #428's starved banner out of the one `sayPassedOver`, so
+    ///    the two cannot drift. They differ in ONE thing and .github#1562 is why: `batch --text` puts that
+    ///    headline on STDOUT, `next` on STDERR, because `next`'s stdout is a bare ref read with `$(…)` and
+    ///    `batch --text`'s is prose for a human. Same words, same streams for every other line — so a leg
+    ///    that captures them MERGED sees one output, and one that captures them apart sees the contract.
     ///    `--text` belongs in that spelling — `batch` defaults to `Json` (`renderSupport`, `Both Json`), and
     ///    the JSON arm prints `[]` with the reasons on stderr through `sayWhyNothing`, which is the same
     ///    information and NOT the same sentence. `tests/coord-engine-e2e/writes.sh` pins BOTH halves against
@@ -895,10 +918,33 @@ module Client =
                 match result.Chosen with
                 | item :: _ -> printfn "%s" item.Ref.Short
                 | [] ->
-                    // #440: name the OBSERVED reason, never a GUESSED list of causes — `printChosen` prints the
-                    // honest "nothing schedulable right now." plus the per-item passed-over reasons, the shape
-                    // `batch` already uses. The guessed list asserted causes `next` never observed (case 41).
-                    printChosen opts.LeaseMinutes result
+                    // THE EMPTY ARM SAYS NOTHING ON STDOUT — .github#1562, and it is the ONE thing this arm
+                    // owes. `next`'s stdout is a machine contract stated three lines up and in the chore
+                    // comment below: one line, the chosen item's ref, read with `$(…)`. This arm went
+                    // through `printChosen`, which writes #440's headline to STDOUT, so
+                    // `ref="$(fsgg-coord next --repo X)"` yielded the STRING "nothing schedulable right
+                    // now." AT EXIT 0 — a value no caller can tell from a ref, over the very contract the
+                    // offer below is kept off stdout to protect. An EMPTY stdout is the honest answer:
+                    // `$(…)` reads it as no ref, which is what happened.
+                    //
+                    // #440 IS UNCHANGED, only re-routed. The headline is the same sentence in the same one
+                    // spelling and the per-item passed-over reasons follow it — never a GUESSED list of
+                    // causes `next` did not observe (case 41). Every line of it was already on stderr
+                    // except the headline, so this moves ONE line and drops none.
+                    //
+                    // THE EXIT CODE STAYS 0, DELIBERATELY, and this is the second of the three shapes the
+                    // issue put on the record (`take`'s EX_NONE) declined with a reason rather than
+                    // skipped. `next` is `batch` CAPPED AT ONE — that is the only difference, asserted at
+                    // the top of this function — and `batch` answers an empty queue with `[]`/the headline
+                    // at exit 0. #1535 then made `batch --text -n 1` the DOCUMENTED substitute for `next`
+                    // when a caller wants the decision without the chore offer, in the engine's `--help`,
+                    // in `/pnext-item`'s command contracts, and in `writes.sh`. An EX_NONE here would make
+                    // that substitution change a caller's exit status — inventing a disagreement between
+                    // two verbs this file works to keep identical (#485), to replace a stdout signal that
+                    // is now honest without it. `take`'s EX_NONE means "I CLAIMED NOTHING", which is a fact
+                    // about a write `next` never attempts.
+                    eprint nothingSchedulable
+                    sayPassedOver opts.LeaseMinutes result
 
                 // AFTER the answer, and outside every failure path above: a chore is offered to a worker who
                 // already has what it came for. This is the conscription point (#733/§4.6) — the tool has no
