@@ -19,6 +19,40 @@ module Class =
 
     open Types
 
+    /// **THE CLOSED VOCABULARY, AS A VALUE THE CHECKER READS — never a list the checker restates.**
+    ///
+    /// Derived by reflection over the `ItemClass` union, on `Protocol.everyBlockerState`'s precedent: the
+    /// three cases are nullary, so there is nothing to invent, and a list nobody writes cannot omit a
+    /// case. Render each with `Types.itemClassWireName` — that is the one function that spells the words,
+    /// and reading it here is what makes `lint`'s "the legal values are…" sentence and the value
+    /// `reconcile` writes onto the board the same vocabulary by construction.
+    ///
+    /// .github#916 is why this is not a `[ Defect; Hardening; Decision ]` literal in the checker: the
+    /// copies AGREED with each other and were wrong the whole time, so agreement is not evidence. A
+    /// fourth case reaches every diagnostic the day it is declared, with no edit anywhere.
+    val legalClasses: ItemClass list
+
+    /// The values of this body's `Class:` lines that are NOT in the vocabulary — trimmed, de-duplicated,
+    /// in body order. Empty when every `Class:` line resolves, and empty when there is no `Class:` line
+    /// at all.
+    ///
+    /// **THIS IS THE FACT `fromBody` STRUCTURALLY CANNOT CARRY, and its absence was a live defect.**
+    /// `fromBody` answers `None` for "no `Class:` line" and `None` for "`Class: docs`" alike, so `lint`
+    /// reported a row that HAD written a class as one that *"records no `Class:`"* — the diagnostic named
+    /// a fault the row did not have, and a reader who went looking for a missing line found a present one
+    /// (.github#1651). Measured twice in one run, in two repos, by two workers, with two different
+    /// invented words (`docs`, `enhancement`): both wrote the line, neither forgot it.
+    ///
+    /// A line with an EMPTY value is unrecognised, not absent. The key was declared and the value could
+    /// not be read, and #266's rule is that a subject you could not evaluate is never a subject that
+    /// passed.
+    ///
+    /// It is DELIBERATELY independent of `derive`: a body that says both `Class: docs` and
+    /// `Blocked on: human/decision` resolves to `decision` AND still carries a word this engine does not
+    /// speak. Suppressing the report because some other evidence rescued the row would leave the wrong
+    /// line in the body for the next reader to trust.
+    val unrecognised: body: string -> string list
+
     /// The class this BODY declares, or `None` when it declares none.
     ///
     /// SAME GRAMMAR AS `Paths:` AND `Blocked on:` — a `Class:` line at up to three leading spaces,

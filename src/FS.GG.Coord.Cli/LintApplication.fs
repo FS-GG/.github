@@ -30,6 +30,75 @@ module LintApplication =
             Some
                 $"%s{status}, and at least one of its `Paths:` tokens is unmatchable: %s{bad}. This is WORSE than every token being so: the item looks declared and its other tokens reserve work, but an unmatchable token silently reserves NOTHING — the files it names are invisible to every other worker's overlap check, so two workers can be handed them at once. Spell the path(s) out — not a glob language: exact paths, directory prefixes, and a TRAILING `/**` or `/*`."
 
+    // ---- the CLASS vocabulary, READ rather than restated (.github#1651 AC5) ------------------------
+    //
+    // Everything below spells the three legal values EXACTLY ZERO times. `Class.legalClasses` is the
+    // union by reflection and `Types.itemClassWireName` is the one function that renders a case to a
+    // word; the only thing this module adds is the GLOSS, which the union genuinely does not carry —
+    // and that is a TOTAL match, so a fourth `ItemClass` fails the build here rather than reaching a
+    // filer's diagnostic unexplained. It is `Protocol.meaning`'s shape, for `Protocol.meaning`'s reason.
+
+    let private gloss =
+        function
+        | Defect -> "something is broken now"
+        | Hardening -> "nothing is broken; this removes a way it could break"
+        | Decision -> "a human must choose first"
+
+    /// The menu a filer picks from: every legal value, spelled as the body line they must write.
+    let classMenu: string =
+        Class.legalClasses
+        |> List.map (fun c -> $"`Class: %s{itemClassWireName c}` (%s{gloss c})")
+        |> String.concat ", "
+
+    /// The sentence `lint`'s `CLASS-INVALID` and `add`'s refusal BOTH render, spelled once.
+    ///
+    /// `None` when every `Class:` line in the body resolves — including when there is no line at all,
+    /// which is `CLASS-UNSET`'s business and not this one's.
+    let outOfVocabularyClass (body: string) : string option =
+        match Class.unrecognised body with
+        | [] -> None
+        | bad ->
+            let quoted =
+                bad
+                |> List.map (fun v -> if v = "" then "(empty)" else $"\"%s{v}\"")
+                |> String.concat ", "
+
+            // QUOTE THE OFFENDING VALUE BACK AND LIST THE LEGAL SET (AC3). Both measured authors believed
+            // they were classing the row correctly; `docs` and `enhancement` are exactly the words a
+            // reasonable person picks from the general vocabulary of issue triage when nothing says the
+            // set is closed. A diagnostic that said only "invalid" would send them to the ADR to find out
+            // what it wanted, which is the cost this rule exists to remove.
+            Some
+                $"its text DOES declare a `Class:` line and the value is not one this engine speaks: %s{quoted}. The vocabulary is CLOSED and has exactly these values — %s{classMenu}. Anything else is not a class at all: the row reads as untriaged, counts as a POSSIBLE defect under ADR-0066's stopping rule, and blocks a clean termination read for the whole board until a human reads the body (.github#1651). Value case and surrounding space are normalised, so `Class: Defect` and `class: defect` are fine; an unlisted WORD is not."
+
+    /// The CLASS axis's whole verdict over one candidate row: `Some(code, detail)`, or `None` when the
+    /// row's own text classes it.
+    ///
+    /// **THE TWO CAUSES ARE SEPARATE FINDINGS, AND THE INVALID ONE WINS.** They were one rule, and a row
+    /// carrying `Class: docs` was told it *"records no `Class:`"* — false, and false in the direction
+    /// that costs the most: the reader goes looking for a missing line, finds a present one, and has to
+    /// work out unaided that the value is the fault. Emitting BOTH would be the same collapse wearing two
+    /// hats, so an unrecognised value suppresses the absent-value rule: a body that wrote a line did not
+    /// omit one.
+    ///
+    /// The same shape as `.github#1625` one layer down — a diagnostic collapsing two causes into one
+    /// message and naming the wrong one. That item owns the projection side (`CLASS-PROJECTION-LAG`
+    /// cannot tell "this board has no `Class` field" from "this row is unclassed"); this owns the body
+    /// side. They compose and neither supersedes the other: #1625's own AC2 requires that `CLASS-UNSET`
+    /// keep firing on a field-less board precisely BECAUSE this rule reads the item's text and not the
+    /// column, and that stays true of `CLASS-INVALID` for the same reason.
+    let classVerdict (status: string) (title: string) (body: string) : (string * string) option =
+        match outOfVocabularyClass body with
+        | Some detail -> Some("CLASS-INVALID", $"%s{status}, and %s{detail}")
+        | None ->
+            if (Class.derive title body).IsNone then
+                Some(
+                    "CLASS-UNSET",
+                    $"%s{status} but its text records no `Class:` — so a driver cannot tell a live defect from deliberate hardening, and a burn-down keying on severity cannot terminate (#1588). Declare one body line: %s{classMenu}. A `[decision]` title prefix or a `Blocked on: human/decision` sentinel already derives `decision` — no second line needed."
+                )
+            else
+                None
+
     let private shortRef (ref: string) =
         match ref.IndexOf '/' with
         | i when i >= 0 -> ref.Substring(i + 1)
