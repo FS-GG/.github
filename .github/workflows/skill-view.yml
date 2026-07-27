@@ -1,0 +1,86 @@
+# The checkout-time generated skill view, and the LOUD ABSENCE CHECK ADR-0067 §8 makes mandatory.
+#
+# .github#1635 (phase 2 of the rewrite decided on .github#1611). Two jobs, and they answer two
+# different questions on purpose:
+#
+#   fixture   — does `scripts/skill-view` behave? Synthetic trees, including the three failure modes
+#               phase 1 (.github#1621) measured as exit-0-and-silent in BOTH runtimes. Every one is
+#               asserted RED. If the checker ever stops being loud, this job is what says so.
+#   dogfood   — is THIS repo's own tree actually in the state it preaches? The bare command a worker
+#               runs, over this repo's own declared roots, with no --roots. Character-for-character
+#               the same invocation the SessionStart hook runs locally (.claude/hooks/skill-view-check.sh),
+#               for the reason skill-roots-selfcheck.yml states: a gate can never be green on a root
+#               set the worker's local run does not check.
+#
+# THIS WORKFLOW RETIRES NOTHING (ADR-0067 §9). skill-roots-selfcheck, skill-union-selftest,
+# skillmirror-freshness, coordination-coherence and kit-published-coherence keep running unchanged
+# beside it. The fixture RUNS `scripts/skill-union-assert.sh` unmodified over a generated view, which
+# is the "alongside, unchanged" half of AC4 — not a replacement for those gates.
+#
+# THE `paths:` FILTERS ARE IDENTICAL BETWEEN THE TWO TRIGGERS, and they name the dogfood's SUBJECT as
+# well as the tool's: the three committed skill roots and `.agent-skill-roots` are what the dogfood
+# job reads, so a change to them must re-run it. `check-paths-coherence.py` asserts the set-equality
+# half; the coverage half is stated here because a filter that omits its own subject is a gate that
+# stops running on `main` without anybody noticing (.github#880/#930).
+#
+# NOT A REQUIRED CONTEXT. Both jobs are `paths:`-filtered, and a filtered producer cannot satisfy a
+# required status check — GitHub never creates the check run at all, so branch protection holds every
+# unrelated PR at "Expected" forever (.github#1508, and scripts/check-required-contexts.py's own
+# note). Making this required is a decision that comes with dropping the filter, not before it.
+
+name: skill-view
+
+on:
+  pull_request:
+    paths:
+      - "scripts/skill-view"
+      - "scripts/skill-union-assert.sh"
+      - "scripts/lib/roots.sh"
+      - "scripts/lib/args.sh"
+      - "tests/skill-view/**"
+      - ".claude/hooks/skill-view-check.sh"
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - ".agent-skill-roots"
+      - ".github/workflows/skill-view.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/skill-view"
+      - "scripts/skill-union-assert.sh"
+      - "scripts/lib/roots.sh"
+      - "scripts/lib/args.sh"
+      - "tests/skill-view/**"
+      - ".claude/hooks/skill-view-check.sh"
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - ".agent-skill-roots"
+      - ".github/workflows/skill-view.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generator and absence-check fixture (the three silent failure modes, asserted RED)
+        run: bash tests/skill-view/run.sh
+
+  dogfood:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # No --roots: the root set comes from this tree's own .agent-skill-roots, exactly as it does for
+      # a worker and for scripts/skill-union-assert.sh. The expected set is the canonical root's
+      # contents, never a manifest — registry/coordination-kit-skill-manifest.json declares four of
+      # this repo's thirteen skills and registry/driver-skill-manifest.json six, so either would be
+      # green over a tree that had lost the other nine (.github#1504's coherent-but-incomplete class).
+      - name: Assert this repo's own declared skills are visible at every runtime root
+        run: bash scripts/skill-view check --source .agents/skills --tree .
