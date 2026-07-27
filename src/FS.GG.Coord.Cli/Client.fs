@@ -613,6 +613,22 @@ module Client =
         let byRef =
             rows |> List.map (fun r -> r.Ref, r) |> Map.ofList
 
+        // WAS THE BODY READ AT ALL? `Snapshot.parse` renders an unreadable body as `Class = None` — the
+        // same value as "the body declares no class" — because `ItemClass option` has nowhere to put
+        // "I could not look". That collapse is safe there and lethal HERE, at the one place a SECOND source
+        // is consulted: an item whose body says `Class: defect` and whose read failed would fall through to
+        // a `[decision]` title prefix and be projected as `decision`, a SEVERITY DOWNGRADE PRODUCED BY A
+        // FAILED READ — on the one value that means "no driver may ever schedule this". That is #266
+        // exactly, and #496's `Undeclared`-vs-`Unreadable` collapse one axis over.
+        //
+        // The engine already records the fact: `TouchSet.Unreadable` IS "we did not read the body" (see
+        // `Types.fsi`), parsed off the same body on the same terms. So this asks rather than adding a
+        // second flag that could disagree with it.
+        let bodyWasRead (c: Snapshot.Candidate) =
+            match c.Item.TouchSet with
+            | Unreadable _ -> false
+            | _ -> true
+
         let enrich (c: Snapshot.Candidate) : Snapshot.Candidate =
             match Map.tryFind c.Item.Ref byRef with
             | None -> c
@@ -623,7 +639,12 @@ module Client =
                             Class =
                                 match c.Item.Class with
                                 | Some _ as declared -> declared
-                                | None -> Class.fromTitle row.Title
+                                // No title fallback over an unread body: `None` there is "unknown", and
+                                // deriving a WEAKER class from a title we could read, to stand in for a
+                                // body we could not, is a confident answer built on a failed read. `None`
+                                // yields no chore, which is the fail-closed direction.
+                                | None when bodyWasRead c -> Class.fromTitle row.Title
+                                | None -> None
                             BoardClass = row.BoardClass } }
 
         { request with
@@ -1136,7 +1157,12 @@ module Client =
                                           reconcileRow chore (Some NotOnBoard)
                                       | Error e ->
                                           eprint
-                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} failed: %s{Errors.explain e}"
+                                              // `field`, not the literal "Status" — the third of the three
+                                              // lines .github#1588 caught. This one is the worst of them:
+                                              // it is the DIAGNOSTIC, read by whoever is working out why a
+                                              // write failed, and naming the wrong column sends them to
+                                              // audit a field nothing touched.
+                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} %s{field}=%s{value} failed: %s{Errors.explain e}"
 
                                           failed <- true
                                           reconcileRow chore (Some(Failed(Errors.explain e))) ]
@@ -4733,6 +4759,15 @@ module Client =
 
                 let items = scoped.Rows
 
+                // "A WORKER COULD BE HANDED THIS ROW" — the population two rules share, spelled once.
+                //
+                // `NO-TOUCH-SET`/`BAD-TOUCH-SET` ask whether such a row is SCHEDULABLE; `CLASS-UNSET` asks
+                // whether it is TRIAGED (.github#1588). Same set, two questions, and it also decides
+                // `bodyNeeded` below — so a copy that drifted would leave one rule reading a body the pass
+                // never fetched.
+                let isSchedulableCandidate (r: Scan.Row) =
+                    r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+
                 let mk code severity (r: Scan.Row) detail =
                     { Code = code
                       Severity = severity
@@ -4744,7 +4779,7 @@ module Client =
 
                 // The schedulability rules (#496): a Ready/Backlog OPEN item no worker can pick up.
                 let touchSetFindings (r: Scan.Row) (body: string) : LintFinding list =
-                    if r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog) then
+                    if isSchedulableCandidate r then
                         match TouchSet.parse body with
                         | Undeclared ->
                             [ mk
@@ -4820,11 +4855,12 @@ module Client =
                 // not read an item must never report it clean. `lint` FAILS CLOSED. The subject of this
                 // rule is the ITEM's text, which is present on every board.
                 let classFindings (r: Scan.Row) (body: string) : LintFinding list =
-                    if
-                        r.State = IssueState.Open
-                        && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
-                        && (Class.derive r.Title body).IsNone
-                    then
+                    // `isSchedulableCandidate`, NOT a third spelling of `Open && (Ready || Backlog)`. The
+                    // two rules genuinely share this population, and a restated copy drifts in one quiet
+                    // direction: narrowing the shared predicate would make `bodyNeeded` false while this
+                    // rule kept firing over `body = ""`, reporting rows as untriaged whose bodies nobody
+                    // read. That is the #266 shape again — a finding produced by a read that did not happen.
+                    if isSchedulableCandidate r && (Class.derive r.Title body).IsNone then
                         [ mk
                               "CLASS-UNSET"
                               "error"
@@ -4871,12 +4907,7 @@ module Client =
                         let isEpic =
                             r.Title.IndexOf("[epic]", StringComparison.OrdinalIgnoreCase) >= 0
 
-                        // The SAME population the class rule scans (.github#1588), so one name serves both
-                        // and neither can be narrowed without the other. A `Ready`/`Backlog` open row is the
-                        // set "a worker could be handed this", which is exactly the set that must be both
-                        // schedulable and triaged.
-                        let isTouchSetCandidate =
-                            r.State = IssueState.Open && (r.Status = BoardStatus.Ready || r.Status = BoardStatus.Backlog)
+                        let isTouchSetCandidate = isSchedulableCandidate r
 
                         // A Blocked item with an empty `Blocked by` needs its body read too — the sentinel
                         // that would make the park deliberate lives there (#1103 leg 2).

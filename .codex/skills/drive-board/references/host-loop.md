@@ -29,7 +29,7 @@ deliberately parked and human-blocked Backlog without repeatedly redispatching o
 The stopping test is **no startable `defect`**, not an empty board: a run in which fixing one thing files
 two can never reach an empty board, and every row it files is real. `hardening` is drained deliberately as
 ordinary backlog; `decision` is surfaced and never dispatched. **An unclassed row is a possible defect, not
-a minor one** — `lint`'s `CLASS-UNSET` names each, and while any remains the class-based test cannot say
-the board is defect-free. Read the class from the item's own `Class:` line, never from the board column
-alone: the column is a projection `reconcile` writes, so a row it has not reached yet is blank on the board
-and classed in its body.
+a minor one** — you may stop with some outstanding, but report them by number and do not claim the board is
+defect-free. Read classes from `ready --json`'s `class` field *after* `reconcile --apply` (the column is a
+projection, current only as of the last reconcile) plus `lint`'s `CLASS-UNSET` for the rest; the authority
+is the item's own `Class:` body line, so never hand-edit the column.

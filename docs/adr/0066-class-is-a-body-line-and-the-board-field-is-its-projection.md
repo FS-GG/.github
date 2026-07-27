@@ -72,9 +72,17 @@ would be inexpressible, and `reconcile` would report the same finding forever.
 `scripts/project-field-options` exists to fence `updateProjectV2Field`, which has historically recreated
 options and cleared every item value. Creating `Class` is `createProjectV2Field` on a field that does not
 exist: there are no assignments to lose and no snapshot precondition is meaningful. The guarded
-`add-option` path becomes relevant only for a *later* fourth option. `check --field Class` gates the option
-set against the closed `ItemClass` vocabulary offline, so the three words cannot drift between the union,
-the board and the docs.
+`add-option` path becomes relevant only for a *later* fourth option.
+
+The option set is pinned in two places, and it is worth being exact about which does what.
+`scripts/project-field-options check --field Class` compares the table in `board-schema.md` against a
+three-value vocabulary transcribed into that script, so **the documented table cannot drift from the
+tool** — that is the leg CI runs, offline, with no Projects credential. What pins the *union* is
+`TypesTests`' three exact-spelling assertions; the round-trip test alone would stay green through a rename.
+Neither leg compares the script's transcription to `Types.fs` directly, so a rename applied consistently
+across `Types.fs` and `TypesTests.fs` would leave the script and the docs stale with every gate green. The
+workflow's `paths:` trigger on `Types.fs` is what puts the gate in front of whoever attempts one; a
+mechanical comparison would be better and is not what shipped.
 
 ## Consequences
 

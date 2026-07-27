@@ -33,9 +33,16 @@ SCHEMA_MARKERS = {"Repo Scope": "repo-scope-options", "Class": "class-options"}
 
 # The `Class` vocabulary, CLOSED at exactly three values (.github#1588).  Unlike Repo Scope there
 # is no roster file to be the authority here: this is the engine's `ItemClass` union
-# (src/FS.GG.Coord.Core/Types.fs) transcribed, and this gate exists precisely to catch that
-# transcription going stale in either direction.  A fourth value is an ADR plus a guarded
+# (src/FS.GG.Coord.Core/Types.fs) transcribed by hand.  A fourth value is an ADR plus a guarded
 # `add-option`, not an edit to the table.
+#
+# BE EXACT ABOUT WHAT THIS PINS.  It gates board-schema.md against the list BELOW, so the
+# documented table cannot drift from this tool.  It does NOT compare either to `Types.fs` — a
+# rename applied consistently across `Types.fs` and its exact-spelling assertions in
+# `tests/FS.GG.Coord.Core.Tests/TypesTests.fs` would leave this list stale and every gate green.
+# What stands between a reader and that outcome is the `Types.fs` entry in this workflow's
+# `paths:` trigger, which is a reminder rather than a proof.  Claiming more than that here would
+# be the gate-that-reports-more-than-it-checked shape (#266) inside a gate.
 CLASS_VOCABULARY = ("defect", "hardening", "decision")
 
 FIELD_QUERY = r"""

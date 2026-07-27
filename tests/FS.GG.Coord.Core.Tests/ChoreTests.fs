@@ -424,15 +424,26 @@ module ChoreTests =
         // projection on one item is two independent repairs rather than a contradiction — both land, in
         // either order, with the same result.
         //
-        // The reason for the caution in that old comment stands and is honoured: the exclusion this test
-        // once carried was for STALE-CLAIM, "on the grounds that it restores a column rather than setting
-        // one". Restoring IS writing — its remedy is `reap`, and `reap` restores `PreviousStatus` (#481) —
-        // and that exclusion is exactly what hid a real contradiction for as long as it stood: on a CLOSED
-        // issue carrying a STALE marker, STALE-CLAIM ("restore the column it overwrote") and
-        // CLOSED-ISSUE-NOT-DONE ("set Done") both fired, writing opposite columns to one item. So the
-        // partition below is keyed on `Kind.Write`, which is the ENGINE's own answer to "what does this
-        // remedy write" and the same value `reconcile` sends. STALE-CLAIM's `None` is its own bucket, not an
-        // exemption: it still cannot coexist with anything, which is what caught that defect.
+        // **AND THE PER-FIELD GROUPING ALONE WOULD HAVE LOST THE ORIGINAL DEFECT — SO IT IS NOT ALONE.**
+        // This is the trap, and it was nearly walked into: the exclusion this test once carried was for
+        // STALE-CLAIM, "on the grounds that it restores a column rather than setting one". Restoring IS
+        // writing — its remedy is `reap`, and `reap` restores `PreviousStatus` (#481) — and that exclusion
+        // is exactly what hid a real contradiction for as long as it stood: on a CLOSED issue carrying a
+        // STALE marker, STALE-CLAIM ("restore the column it overwrote") and CLOSED-ISSUE-NOT-DONE ("set
+        // Done") both fired, writing opposite columns to one item.
+        //
+        // `Kind.Write` answers "what field does `reconcile` send", and for STALE-CLAIM that is honestly
+        // `None` — its remedy is a marker collection. But `None` and `Some "Status"` are DISTINCT GROUPING
+        // KEYS, so grouping by field puts that historical pair in two groups of one and passes. MEASURED:
+        // reintroducing the old CLOSED-ISSUE-NOT-DONE exception verbatim leaves the per-field sweep GREEN
+        // and reds only two by-example tests. The generalised guard — whose entire purpose is to catch the
+        // contradiction nobody thought to write an example for — would have stopped covering the one
+        // contradiction this repo actually shipped.
+        //
+        // So the field partition is the RELAXATION, and the assertion below it is the compensation: a chore
+        // that writes NO field cannot coexist with any other chore at all. That is the true statement about
+        // STALE-CLAIM — it does not reconcile a column, it ends the reservation that owns every column, so
+        // nothing may be derived alongside it — and it restores exactly the coverage the grouping gave up.
         //
         // Every axis is DERIVED from its union (see `everyCaseOf`), so a case added tomorrow widens this
         // sweep instead of silently escaping it. Blocker sets go to every ORDERED PAIR, not a hand-picked
@@ -475,10 +486,25 @@ module ChoreTests =
                                        |> List.filter (fun c -> c.Kind.RuleId = "CLASS-PROJECTION-LAG")
                                        |> List.length)
 
+                                let axes =
+                                    $"status=%A{st} state=%A{state} claim=%A{cl |> Option.map snd} blockers=%A{bs |> List.map (fun b -> b.State)} class=%A{declared} boardClass=%A{board}"
+
                                 for field, group in derived |> List.groupBy (fun c -> c.Kind.Write |> Option.map fst) do
                                     Assert.True(
                                         List.length group <= 1,
-                                        $"status=%A{st} state=%A{state} claim=%A{cl |> Option.map snd} blockers=%A{bs |> List.map (fun b -> b.State)} class=%A{declared} boardClass=%A{board} derived %d{List.length group} chores writing %A{field}: %A{group |> List.map (fun c -> c.Kind.RuleId)}"
+                                        $"%s{axes} derived %d{List.length group} chores writing %A{field}: %A{group |> List.map (fun c -> c.Kind.RuleId)}"
+                                    )
+
+                                // A FIELDLESS CHORE IS EXCLUSIVE. `STALE-CLAIM` is the only one: it does not
+                                // reconcile a column, it collects the marker that RESERVES the item, and
+                                // while that reservation stands every column belongs to its holder (#331).
+                                // So nothing may be derived beside it — and this is the assertion that keeps
+                                // the CLOSED-issue-plus-stale-marker pair failing, which grouping by field
+                                // no longer does on its own.
+                                if derived |> List.exists (fun c -> c.Kind.Write.IsNone) then
+                                    Assert.True(
+                                        List.length derived = 1,
+                                        $"%s{axes} derived a fieldless chore ALONGSIDE others: %A{derived |> List.map (fun c -> c.Kind.RuleId)}"
                                     )
 
         // NON-VACUITY, and it is not a formality: everything above is an UPPER bound, so `derive = fun _ -> []`

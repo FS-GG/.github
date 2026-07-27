@@ -181,7 +181,8 @@ module Render =
     /// board rows. The field set is bash's `board_items` projection, the fields a consumer keys on: the
     /// `number`/`repo` that name the item, the board `status` (null when the column is unset — a modelled
     /// fact, #437), the issue `state` (which is not the column — when they disagree the issue wins, #520),
-    /// and the `title`. Written with a real JSON writer so a title carrying a quote cannot forge the array.
+    /// the `title`, and the `class` column (.github#1588 — null when unset, on `status`'s terms exactly).
+    /// Written with a real JSON writer so a title carrying a quote cannot forge the array.
     let renderReadyJson (rows: Scan.Row list) : string =
         use stream = new MemoryStream()
         use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
@@ -197,6 +198,20 @@ module Render =
             match statusWireName row.Status with
             | "" -> w.WriteNull("status")
             | s -> w.WriteString("status", s)
+
+            // `class` — the board column, as scanned (.github#1588). WITHOUT IT `drive-board`'s stopping
+            // rule is not executable: the contract is "no startable `defect`", and a driver reading this
+            // document could learn which rows are UNCLASSED (from `lint`'s CLASS-UNSET) and nothing about
+            // which are defects, so answering the question meant opening every open issue body by hand on
+            // every loop. A rule nobody can evaluate is not a rule.
+            //
+            // `null` when unset, exactly as `status` is and for #437's reason: the absence is a modelled
+            // fact, not an empty string. It is the PROJECTION, so it is only as current as the last
+            // `reconcile` — which is why the driver reconciles before it reads, and why `CLASS-UNSET`
+            // names the rows this column cannot speak for.
+            match row.BoardClass with
+            | Some c -> w.WriteString("class", itemClassWireName c)
+            | None -> w.WriteNull("class")
 
             w.WriteString(
                 "state",

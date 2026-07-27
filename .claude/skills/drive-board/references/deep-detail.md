@@ -288,15 +288,23 @@ data, so `batch`, `ready` and this stopping rule saw one undifferentiated row fo
 no row is classed `defect`".** A driver keying on `defect` over rows that carry no class reads every one of
 them as *not-a-defect* and terminates immediately — stopping early and leaving live defects, which is the
 exact failure this change exists to prevent, arriving through the change itself. So an unclassed row counts
-as a **possible defect**: `lint`'s `CLASS-UNSET` names each one, and while any remains the class test cannot
-report the board defect-free. That is #266's rule on a new axis — a subject you could not evaluate is never
-a subject that passed — and it makes this contract safe at any level of population rather than only after
+as a **possible defect**. That is #266's rule on a new axis — a subject you could not evaluate is never a
+subject that passed — and it makes this contract safe at any level of population rather than only after
 somebody has classed every row.
 
-**Read the class from the item, not from the board column.** The `Class:` body line is the authority
-(ADR-0066, preserving ADR-0045's decision to carry this kind of fact in the body rather than a Projects v2
-field); the board's `Class` column is a projection `reconcile` writes. A row `reconcile` has not reached yet
-is blank on the board and classed in its body, so the column alone under-reports.
+**It does not mean the run may never stop.** Termination and certainty are two different claims, and
+conflating them would replace one unterminating rule with another. You may stop with unclassed rows
+outstanding; what you may not do is *report the board defect-free*. Name them by number as unresolved and
+say what the run did not establish.
+
+**How to read a class.** `reconcile --apply` first, then `ready --json`'s `class` field: that column is the
+projection, so it is current exactly as of the last reconcile, and reading it before reconciling
+under-reports rows whose body is classed and whose column is not. `lint`'s `CLASS-UNSET` names every row the
+column cannot speak for. Together the two are complete; neither is alone.
+
+The authority behind that column is the item's `Class:` body line (ADR-0066, preserving ADR-0045's decision
+to carry this kind of fact in the body rather than a Projects v2 field). Do not hand-edit the column — the
+next `reconcile` overwrites it from the body, so an edit there is lost and, worse, believed until it is.
 
 ## 7. The completion report
 
