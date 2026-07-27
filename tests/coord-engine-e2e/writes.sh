@@ -254,6 +254,78 @@ br1="$(curl -fsS "$FSGG_GITHUB_API_BASE/_fixture/board-reads" | sed 's/[^0-9]//g
   && ok "#1087: an unrostered repo costs NO board read — the free question is asked first (${br0}→${br1})" \
   || bad "#1087: unrostered done spends no board read" "board reads went ${br0} → ${br1}"
 
+# ---- .github#1535: `next` TAKES THE CHORE LOCK, and `batch` does not --------------------------------
+# The decision #1535 asked for, pinned as behaviour: `next` WRITES. Its contract everywhere a caller met
+# it — `/pnext-item` §1, the take exit-code table, and `tests/coord-engine-parity/shim.sh`, which used it
+# as the canonical READ verb in the stale-engine guard's read leg for that leg's whole life until #1528 —
+# said "tell me what to work on", and after printing that answer it POSTs a claim marker taking the
+# repo's chore lock (`.github#1033`,
+# ADR-0041). The write is real, it is deliberate (#733/§4.6 conscription), and it is now DECLARED rather
+# than discovered. This leg is what stops the declaration and the code drifting apart again.
+#
+# THE MARKER IS THE ASSERTION, NOT THE PRINTED OFFER. The chore text on stderr is what a human sees, and
+# a leg that grepped only for it would pass on an engine that printed the offer and took no lock — the
+# offer is a courtesy, the LOCK is the write, and only one of them is #1535's subject. So this reads the
+# comment thread on #1033 and asserts a marker naming THIS worker appeared on it.
+#
+# THE PRECONDITION IS ESTABLISHED, NOT ASSUMED, and that is the whole reason for the release and the
+# BEFORE assertion. `snipe-733` still holds #1033 from the AfterDone legs above; a leg written without
+# this would find a marker on #1033 either way and pass WITHOUT `next` having written anything — the
+# "shaped to pass" defect this file's own #1086 note records being caught one level up. Empty before,
+# ours after, one variable.
+"$ENGINE" release "FS-GG/.github#1033" --worker snipe-733 >/dev/null 2>&1
+lk0="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/.github/issues/1033/comments")"
+printf '%s' "$lk0" | grep -q 'fsgg:claim' \
+  && bad ".github#1535: the chore lock is FREE before the probe" "a marker survives: $lk0" \
+  || ok ".github#1535: the chore lock is free before the probe (the one variable is the verb)"
+
+# THE NEGATIVE CONTROL FIRST, and it is load-bearing rather than tidy. `batch` is the same scheduling
+# decision uncapped and makes NO offer, so it is the spelling a stale engine still permits (`BOARD_READS`)
+# and the one the recipe now sends an idling worker to. If `batch` took the lock too, that advice would be
+# wrong — so this asserts the substitute really is a read, on the same board, in the same breath.
+#
+# `--text` IS PART OF THE SPELLING UNDER TEST, not decoration: `batch` defaults to JSON (`Both Json`), and
+# the recipe tells a worker to run `batch --text -n 1` precisely because the JSON arm prints `[]` rather
+# than the sentence `next` prints. Drive what the docs say to drive, or the leg guards a different command.
+#
+# THE SAME WORKER RUNS BOTH VERBS, so the pair differs in ONE variable. Two ids would leave "maybe the
+# other worker simply was not idle" as an unexcluded explanation for the empty thread — and an offer is
+# withheld from a non-idle caller (condition 3), which is exactly how this control could pass while
+# proving nothing. `teal-1535` takes no claim from `batch`, so it is still idle at the `next` below.
+bn="$("$ENGINE" batch --text --repo .github -n 1 --worker teal-1535 2>&1)"; bnrc=$?
+lkb="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/.github/issues/1033/comments")"
+[ "$bnrc" -eq 0 ] && ! printf '%s' "$lkb" | grep -q 'fsgg:claim' \
+  && ok ".github#1535: \`batch --text\` is the same decision and takes NO lock — the read half of the pair" \
+  || bad ".github#1535: batch takes no chore lock" "rc=$bnrc: $bn / lock thread: $lkb"
+
+# ...and it really is the SAME decision, not merely another quiet command: it prints the sentence `next`
+# prints. Without this the control could be satisfied by a `batch` that answered nothing at all.
+printf '%s' "$bn" | grep -q 'nothing schedulable right now.' \
+  && ok ".github#1535: ...and it is the same ANSWER — one shared \`printChosen\`, so the two cannot drift" \
+  || bad ".github#1535: batch --text prints next's answer" "rc=$bnrc: $bn"
+
+# ...AND `next`, same worker, same board, POSTS.
+nx="$("$ENGINE" next --repo .github --worker teal-1535 2>&1)"; nxrc=$?
+lk1="$(curl -fsS "$FSGG_GITHUB_API_BASE/repos/FS-GG/.github/issues/1033/comments")"
+[ "$nxrc" -eq 0 ] && printf '%s' "$lk1" | grep -q 'fsgg:claim' \
+  && printf '%s' "$lk1" | grep -q 'worker=teal-1535' \
+  && ok ".github#1535: \`next\` POSTs a claim marker to .github#1033 — it WRITES, and is declared so" \
+  || bad ".github#1535: next takes the chore lock" "rc=$nxrc: $nx / lock thread: $lk1"
+
+# ...and the offer it printed names the chore it took the lock FOR, so the write and the reason a caller
+# is given for it are the same fact. A lock taken for a chore the caller is never told about would be the
+# write with none of the conscription that justifies it.
+#
+# ANCHORED ON THE CHORE LINE, not searched for `#50` anywhere in the output: `next` also prints `#50` in
+# its passed-over list, so an unanchored grep would be satisfied by an offer naming a DIFFERENT subject —
+# a leg that cannot see the thing it claims to check.
+printf '%s' "$nx" | grep -q '^chore \[quick\] \.github#50:' \
+  && ok ".github#1535: the lock \`next\` took is the one the offer it printed names (#50)" \
+  || bad ".github#1535: next's offer names its subject" "rc=$nxrc: $nx"
+
+# Hand the lock back, so nothing downstream inherits a held chore lock from a diagnostic verb.
+"$ENGINE" release "FS-GG/.github#1033" --worker teal-1535 >/dev/null 2>&1
+
 # ---- verify-paths: a PR inside its touch-set is OK -------------------------------------------------
 vp="$("$ENGINE" verify-paths --pr 500 --repo FS.GG.SDD 2>&1)"; vprc=$?
 [ "$vprc" -eq 0 ] && printf '%s' "$vp" | grep -q 'FSGG-PATHS OK' \

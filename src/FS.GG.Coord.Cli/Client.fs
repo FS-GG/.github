@@ -630,6 +630,56 @@ module Client =
     /// `FS.GG.Governance`) and answers `None` for anything it does not know, so a typo cannot lock the wrong
     /// repo: it offers nothing, which is #979's lesson applied where a WRITE is at stake.
     ///
+    /// THIS IS A WRITE, AND IT IS NOW DECLARED ONE — .github#1535, DECIDED. `next` was documented, used and
+    /// tested as a READ (`/pnext-item` §1 and the exit-code table both name it as the diagnostic to run when
+    /// nothing is schedulable), and after printing that answer it reaches `Chores.offer` → `Writes.claim`,
+    /// POSTing a claim marker that takes the repo's chore lock. #1535 put two shapes on the record: DECLARE
+    /// the write and keep the conscription point, or MOVE the offer to a boundary that already writes so
+    /// `next` becomes a genuine read again. The first was chosen, on two facts about this code rather than a
+    /// preference:
+    ///
+    /// 1. `AtNext` IS THE ONLY BOUNDARY THAT REACHES A DRAINED BOARD. `AfterDone` fires from `done`, which
+    ///    requires an item somebody claimed and finished. On a board where every row sits `Blocked` behind
+    ///    blockers that have all resolved, `take` answers EX_NONE for everyone, nobody works, nobody stamps,
+    ///    and no `done` ever runs — so the ONLY caller left is a `next`. That is the deadlock .github#1047
+    ///    records verbatim: #733 sat `Blocked` on a condition only #733 could clear, invisible to every
+    ///    `take`, until a human reconciled it by hand. `BLOCKER-CLEARED` is the rule written to end it, and
+    ///    moving the offer off `next` would delete the one boundary that can ever fire it on a stalled board
+    ///    — spending the mechanism to preserve a sentence in a doc.
+    ///
+    /// 2. THE REFUSAL #1528 BUYS COSTS A SPELLING, NOT A DIAGNOSTIC. #1528 accepted refusing `next` on a
+    ///    stale engine while recording that it "costs the fleet its diagnostic verb whenever anyone is
+    ///    mid-edit on `src/`". It does not. `batch` is this same decision uncapped, makes NO offer, and sits
+    ///    in the shim's `BOARD_READS`. `batch --text -n 1` is `next` minus the write, and prints the
+    ///    identical answer: "nothing schedulable right now.", the per-item passed-over reasons and #428's
+    ///    starved banner all come out of the one `printChosen` above, which is why the two cannot drift.
+    ///    `--text` belongs in that spelling — `batch` defaults to `Json` (`renderSupport`, `Both Json`), and
+    ///    the JSON arm prints `[]` with the reasons on stderr through `sayWhyNothing`, which is the same
+    ///    information and NOT the same sentence. `tests/coord-engine-e2e/writes.sh` pins BOTH halves against
+    ///    one board and one chore: `batch` leaves `.github#1033`'s comment thread empty, `next` posts a
+    ///    marker naming its worker to it.
+    ///
+    /// THE THIRD SHAPE — gate the offer so that a `next` which is not going to lock is PROVABLY a read — is
+    /// unreachable at the only level that could act on it. The shim classifies by VERB and refuses to be
+    /// argument-aware (its own recorded reasoning), and `next`'s write is gated on BOARD STATE rather than on
+    /// argv at all: is there a lock, is the caller idle, is there a chore. A flag would not change what the
+    /// shim can see. A DEDICATED VERB would work mechanically and would destroy the mechanism: a conscription
+    /// somebody has to remember to invoke is #570's rule-enforced-by-whoever-remembers, which is the decay
+    /// this queue exists to stop.
+    ///
+    /// So `next` writes, and every place a caller MEETS it says so rather than only this file: the engine's
+    /// own `--help`, the emitted `command-contract` (`writes: conditional`, .github#1534), the shim's
+    /// `BOARD_WRITES_CONDITIONAL` — where it stays, and #1528's refusal is simply correct — and a note
+    /// BESIDE `/pnext-item`'s exit-code table, which is the row that sends an idling worker to `next`.
+    ///
+    /// THE NOTE SITS BESIDE THAT TABLE RATHER THAN IN IT, DELIBERATELY. The table is a GENERATED region
+    /// emitted from `Protocol.fs` by `scripts/generate-projections`, and `Protocol.fs` is the engine's WIRE
+    /// SURFACE: `check-engine-freshness.py` reds main whenever it has drifted unreleased, so editing that
+    /// cell would have turned an already-owed engine release into a red gate for a documentation fix. The
+    /// fact belongs to the verb, not to an exit code, so it is stated in hand-authored prose under the same
+    /// heading — where the reader who just read that row is standing — and the generated cell stays the
+    /// engine's own answer.
+    ///
     /// WHICH BOARD THE IDLENESS QUESTION GETS. Idleness is a fact about the whole board, so `wholeBoard`
     /// reads it UNFILTERED regardless of `--repo` (#1086). With no `--repo` that is the same board `next`
     /// just decided from, so this re-reads it — a second scan on the DIAGNOSTIC command (`/pnext-item` calls
@@ -644,8 +694,15 @@ module Client =
         let repo =
             opts.Repo |> Option.orElse ctx.DefaultRepo |> Option.defaultValue ""
 
-        // The free question first, exactly as `Chores.offer` does it and for the same reason: six of the
-        // org's seven repos have no chore lock, and none of them should buy a board read to hear so.
+        // The free question first, exactly as `Chores.offer` does it and for the same reason: a repo with no
+        // chore lock must not buy a board read to hear so.
+        //
+        // THE RULE IS UNCHANGED AND THE ARITHMETIC UNDER IT IS NOT. This read "six of the org's seven repos
+        // have no chore lock" until #1087 gave all seven one, at which point the sentence was simply false
+        // and the saving it claimed no longer existed in the common case. What is saved now is the read on a
+        // repo the map does NOT know — an unrostered one (`FS.GG.Legacy`, which the e2e fixture drives as
+        // exactly this control). Cheapest question first is right either way; the count was the part that
+        // rotted, and a stale count is how a correct rule acquires a false justification.
         match Options.choreLockRef ctx.ChoreLocks ctx.Owner repo with
         | None -> ()
         | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AtNext repo)
@@ -686,10 +743,17 @@ module Client =
         // That reasoning is exactly right and it does not survive being reached through a scan. `next` may
         // call `offer` unconditionally because `next` scans regardless — the board is already in its hand.
         // `done` does not, so ordering the question after the read would spend the scan to learn something a
-        // string match answers for free. And it would spend it in the COMMON case: `choreLockRef` knows one
-        // repo (`.github#1033`, ADR-0041), so SIX of the org's seven receivers answer `None` — most `done`
-        // calls would buy a board scan, on the budget the claim lock lives on, for a guaranteed refusal.
-        // The cheapest question first is the module's own rule; this is the call site keeping it.
+        // string match answers for free. The cheapest question first is the module's own rule; this is the
+        // call site keeping it.
+        //
+        // AND THE ARITHMETIC THAT USED TO CARRY THIS IS GONE, WHICH IS WORTH SAYING RATHER THAN DELETING.
+        // This clause read: "`choreLockRef` knows one repo (`.github#1033`, ADR-0041), so SIX of the org's
+        // seven receivers answer `None` — most `done` calls would buy a board scan for a guaranteed refusal."
+        // #1087 gave all seven repos a lock, so the majority it invoked stopped existing and the ordering's
+        // stated reason became false while the ordering stayed right. The rule survives on its own terms: a
+        // string match costs nothing and a scan costs the budget the claim lock lives on, so asking the free
+        // question first needs no majority to justify it. The saving is now real only for a repo the map does
+        // not know — which is still a case that reaches here, and is still one nobody should pay a scan for.
         match Options.choreLockRef ctx.ChoreLocks ctx.Owner ref.Repo with
         | None -> ()
         | Some _ -> wholeBoard ctx opts |> Option.iter (offerChoreAt ctx opts Chore.AfterDone ref.Repo)
