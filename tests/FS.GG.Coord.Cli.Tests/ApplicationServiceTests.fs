@@ -787,15 +787,14 @@ module ApplicationServiceTests =
         // `not-attempted` is a distinct outcome for exactly this reason. Reporting these rows with no
         // outcome, or omitting them, would let "found these and deliberately tried none" read as either a
         // clean board or a completed run — the #266 confusion this verb exists to avoid.
+        // A REAL COMMAND LINE, like every other apply-JSON leg here (.github#1541) — and note what is
+        // absent from it. `reconcileArgs` splices `--worker heron-1f20`, which is precisely the identity
+        // `withNoIdentity` exists to remove, so this argv is spelled out rather than reusing that helper.
         let code, out, _ =
             withNoIdentity (fun () ->
-                runReconcileWith
+                runReconcile
                     (reconcileWorld [ 101; 102 ] Set.empty)
-                    [ "reconcile"; "--repo"; "FS.GG.SDD" ]
-                    (fun o ->
-                        { o with
-                            Apply = true
-                            Render = Options.Json }))
+                    [ "reconcile"; "--repo"; "FS.GG.SDD"; "--apply"; "--json" ])
 
         let rows = parsedArray out
         Assert.Equal(2, List.length rows)

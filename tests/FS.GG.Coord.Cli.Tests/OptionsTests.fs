@@ -120,11 +120,11 @@ module OptionsTests =
         Assert.True(apply.Apply)
         Assert.Equal(Text, apply.Render)
 
-        // .github#1541 — THE MUTATING FORM HAS A MACHINE PROJECTION. This pair parsed to a refusal from
-        // #1429 until #1541, which deleted the machine projection of the one verb that WRITES to the
-        // board: a caller applying a reconciliation could not learn which writes landed and which QUEUED
-        // against an exhausted budget without scraping prose. Asserted as a parsed `Options`, not merely
-        // as "not an error", because both fields have to survive the funnel together.
+        // .github#1541 — THE MUTATING FORM HAS A MACHINE PROJECTION. #1429 refused this pair, which
+        // deleted the machine projection of the one verb that WRITES to the board: a caller applying a
+        // reconciliation could not learn which writes landed and which QUEUED against an exhausted budget
+        // without scraping prose. #1541 restored it. Asserted as a parsed `Options`, not merely as "not an
+        // error", because both fields have to survive the funnel together.
         let mixed = parse [ "reconcile"; "--apply"; "--json" ] |> ok
         Assert.Equal(Reconcile, mixed.Command)
         Assert.True(mixed.Apply)
@@ -234,6 +234,23 @@ module OptionsTests =
         Assert.True((parse [ "who"; "--all-repos" ] |> ok).AllRepos)
         let e = parse [ "who"; "--repo"; "sdd"; "--all-repos" ] |> rejected
         Assert.Contains("mutually exclusive", e)
+        Assert.StartsWith("who:", e)
+
+    [<Fact>]
+    let ``.github#1541 the all-repos refusal names the command it refused, not the word who`` () =
+        // THE ARM BEHIND THE DELETED GUARD. `--all-repos` is `Only [ Who ]`, so this combination check is
+        // the one refusal a verb it does not describe can reach — and it runs BEFORE the residue rule, so
+        // it shadows the "not a flag of `reconcile`" sentence that names the real culprit. While #1429's
+        // `--apply --json` arm sat ahead of it, this line was answered first and the shadowing was
+        // invisible; #1541 removed that arm, so a `reconcile` command line now reaches it. Hardcoding one
+        // verb's name into a refusal every verb can trigger sends the reader to audit the wrong command.
+        let e = parse [ "reconcile"; "--apply"; "--json"; "--all-repos"; "--repo"; "FS.GG.SDD" ] |> rejected
+        Assert.StartsWith("reconcile:", e)
+        Assert.Contains("mutually exclusive", e)
+
+        // ...and the legal pair on its own is still ACCEPTED — this arm refuses the `--all-repos` slice,
+        // not the machine projection #1541 restored.
+        Assert.Equal(Json, (parse [ "reconcile"; "--apply"; "--json" ] |> ok).Render)
 
     [<Fact>]
     let ``#636 take --include-backlog is READ, not merely tolerated`` () =
