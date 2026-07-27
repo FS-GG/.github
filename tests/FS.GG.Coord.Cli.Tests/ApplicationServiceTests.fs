@@ -146,6 +146,12 @@ module ApplicationServiceTests =
                     | None -> Error(Errors.NotFound $"the fixture serves no answer for: %s{document}")
                 | _ -> Error(Errors.NotFound "a graphql call with no document")
             | "GET", "rate_limit" -> ok """{"resources":{"graphql":{"remaining":4980,"limit":5000}}}"""
+            // The OFF-BOARD SWEEP (`Reads.openIssues`, .github#1525). `Scan.snapshot` lists a repo's open
+            // issues to find claims sitting on items the board never listed, so every scheduling verb
+            // (`take`/`next`/`batch`) makes this call and the `--paths` verbs above do not. An empty-but-
+            // PRESENT array is a real answer this layer accepts (#461 tells it from a failed read): the
+            // fixture's whole board is on the board, so there is nothing off it to sweep.
+            | "GET", "repos/FS-GG/FS.GG.SDD/issues" -> ok "[]"
             | "GET", _ when (issueNumber "/comments").IsSome ->
                 ok (commentsFor holders (issueNumber "/comments").Value)
             | "POST", _ when (issueNumber "/comments").IsSome ->
@@ -710,3 +716,203 @@ module ApplicationServiceTests =
         Assert.Equal("[]", out.Trim())
         Assert.Empty(parsedArray out)
         Assert.Equal(0, code)
+
+    // ---- .github#1525 — `take --json`'s EMPTY arm is a RECEIPT, not prose --------------------------
+    //
+    // THE DEFECT THESE PIN. `take` has no JSON renderer of its own: it delegates its success path to
+    // `claim`, which honours `opts.Render`, so `take --json` LOOKS like it has a machine projection. The
+    // one arm `take` owns — the empty queue — calls the shared `printChosen`, which never consults
+    // `opts.Render` and writes the prose line `nothing schedulable right now.` to STDOUT. So the document
+    // a driver parses is JSON or prose depending on the very fact the driver was asking about, and the
+    // projection cannot describe its own outcome without the exit code held beside it. Every other
+    // `--json` verb's can.
+    //
+    // WHY THEY DRIVE `Client.take` AND PARSE THE WHOLE OF STDOUT — the same argument #1517 and #1524 make
+    // above: the renderer was never the bug. A test over `Render` alone would pass on the broken engine,
+    // because the broken engine never CALLS a renderer here. The subject is the handler's dispatch, and
+    // the assertion is that every byte on stdout is one document.
+    //
+    // WHAT IS DELIBERATELY NOT HERE — `next --json`. The issue as filed asks for it (AC 3), and that AC
+    // was overtaken by `.github#1523` (PR #1550), which landed `Next -> TextOnly`: the flag is now REFUSED
+    // at parse time, pinned by `OptionsTests`' ``#1523 --json is REFUSED on a command with no machine
+    // projection``. Reaching AC 3 would mean reopening that classification and editing an options surface
+    // this item does not declare. The residual `next` hazard — the same prose line on STDOUT, at exit 0,
+    // from a verb whose stdout contract is a bare ref read with `$(…)` — is pinned below as the behaviour
+    // of record, and filed apart.
+
+    /// Run a queue verb against a THROWAWAY cache root, capturing stdout and stderr APART. The split IS
+    /// the assertion rather than a convenience: the skip reasons and #428's starved banner belong on
+    /// stderr in BOTH projections (that is `batch --json`'s landed dialect), and only separate streams can
+    /// show that the document on stdout is alone there.
+    let private runQueue (transport: Fake.Recorder) (args: string list) : int * string * string =
+        let dir = Path.Combine(Path.GetTempPath(), "fsgg-1525-" + Guid.NewGuid().ToString "n")
+        let previousCache = Environment.GetEnvironmentVariable "FSGG_COORD_CACHE"
+        let previousKitRoot = Environment.GetEnvironmentVariable "FSGG_KIT_ROOT"
+        let stdout = Console.Out
+        let stderr = Console.Error
+        use capturedOut = new StringWriter()
+        use capturedErr = new StringWriter()
+
+        try
+            Directory.CreateDirectory dir |> ignore
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", dir)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", dir)
+            Console.SetOut capturedOut
+            Console.SetError capturedErr
+
+            let opts = options args
+
+            let code =
+                match opts.Command with
+                | Options.Take -> Client.take (context transport) opts
+                | Options.Next -> Client.next (context transport) opts
+                | other -> failwithf "this fixture drives take/next only, got %A" other
+
+            Console.Out.Flush()
+            Console.Error.Flush()
+            code, capturedOut.ToString(), capturedErr.ToString()
+        finally
+            Console.SetOut stdout
+            Console.SetError stderr
+            Environment.SetEnvironmentVariable("FSGG_COORD_CACHE", previousCache)
+            Environment.SetEnvironmentVariable("FSGG_KIT_ROOT", previousKitRoot)
+
+            try
+                Directory.Delete(dir, true)
+            with _ ->
+                ()
+
+    /// A BUSY queue: #74 is startable but for the live claim `kite-469` holds on it. #428's distinction —
+    /// this is the board that "nothing schedulable" misreports as an empty backlog.
+    let private busyQueue () = disjointWorld ()
+
+    /// A board with NO items at all. The other side of #428's distinction, and the reason the receipt
+    /// carries a count rather than only a word.
+    let private emptyQueue () = world Map.empty Map.empty false
+
+    [<Theory>]
+    [<InlineData(true, 1)>]
+    [<InlineData(false, 0)>]
+    let ``take --json emits ONE receipt on the empty-queue arm too`` (busy: bool, passedOver: int) =
+        let code, out, err =
+            runQueue
+                (if busy then busyQueue () else emptyQueue ())
+                [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21"; "--json" ]
+
+        let receipt = parsed out
+
+        // THE FIELD A CONSUMER KEYS ON. Not an absence, not a prose line, and not the exit code fetched
+        // from somewhere else: the document says what happened.
+        Assert.Equal("none", str "kind" receipt)
+
+        // The identity keys of the claimed receipt, PRESENT and NULL. `null` is the modelled "there is no
+        // item" (#437's habit), so one consumer reads one key set in both outcomes rather than branching
+        // on which keys exist.
+        Assert.Equal(JsonValueKind.Null, receipt.GetProperty("ref").ValueKind)
+        Assert.Equal(JsonValueKind.Null, receipt.GetProperty("repo").ValueKind)
+        Assert.Equal(JsonValueKind.Null, receipt.GetProperty("number").ValueKind)
+
+        // WHO looked — the same worker id the claimed receipt carries.
+        Assert.Equal("otter-9c21", str "worker" receipt)
+
+        // #428's fact, in the machine form: HOW MANY candidates were looked at and refused. A board with
+        // items the scheduler passed over is BUSY; a board with none is EMPTY, and the two want opposite
+        // instructions (diagnose before idling vs. there is genuinely nothing here). The human form has
+        // carried the distinction on stderr since #428 — as per-item reasons a machine must not scrape —
+        // so the count is the smallest honest machine form of it, and it is a COUNT rather than a verdict
+        // because the reasons themselves stay on stderr where `batch --json` already puts them.
+        Assert.Equal(passedOver, receipt.GetProperty("passedOver").GetInt32())
+
+        // EX_NONE, unchanged, in both projections (#585).
+        Assert.Equal(5, code)
+
+        // The prose headline is GONE FROM STDOUT. `parsed` already proved stdout is one document; this
+        // says which document it stopped being.
+        Assert.DoesNotContain("nothing schedulable", out)
+
+        // A scope that named SOMETHING carries no advisory. `null`, not absent — see the misspelt-`--repo`
+        // leg below for the fact this key exists to carry.
+        Assert.Equal(JsonValueKind.Null, receipt.GetProperty("repoAdvisory").ValueKind)
+
+        // The per-item skip reasons stay on STDERR, exactly where `batch --json` puts them. A busy queue
+        // has one to give; an empty board has none.
+        if busy then
+            Assert.Contains("FS.GG.SDD#74", err)
+
+    [<Fact>]
+    let ``a misspelt --repo is IN the receipt, not only on stderr`` () =
+        // THE ONE THIS CHANGE CREATES, AND THEREFORE OWES. #979 put the "that `--repo` named nothing"
+        // advisory on stderr because the only reader was a human — `take` had no machine projection of
+        // this outcome for it to ride in. It has one now, and a typo produces EXACTLY the document an
+        // empty board produces: `kind:"none"`, `passedOver:0`. A driver reading that off `--repo
+        // FS.GG.SDDD` would conclude the repo has no work and stop dispatching to a full one, which is
+        // #979's harm arriving on the surface this item adds. So the advisory rides in the object.
+        let code, out, err =
+            runQueue (busyQueue ()) [ "take"; "--repo"; "NOPE"; "--worker"; "otter-9c21"; "--json" ]
+
+        let receipt = parsed out
+
+        Assert.Equal("none", str "kind" receipt)
+        // Indistinguishable from an empty board on every OTHER key — which is the whole argument.
+        Assert.Equal(0, receipt.GetProperty("passedOver").GetInt32())
+
+        let advisory = str "repoAdvisory" receipt
+        Assert.Contains("NOPE", advisory)
+
+        // Still on stderr as well (#979's human form is untouched), and still EX_NONE.
+        Assert.Contains("NOPE", err)
+        Assert.Equal(5, code)
+
+    [<Fact>]
+    let ``without --json take is byte-identical to today`` () =
+        let code, out, err =
+            runQueue (busyQueue ()) [ "take"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21" ]
+
+        // #1525 is an ADDITION to the machine projection and nothing else. `printChosen`'s line is the
+        // headline #440 settled on, and `batch`'s Text arm prints it too, so it is pinned as an EQUALITY
+        // over the whole stream rather than as a `Contains`.
+        Assert.Equal("nothing schedulable right now." + Environment.NewLine, out)
+        Assert.Equal(5, code)
+        Assert.Contains("FS.GG.SDD#74", err)
+
+    [<Fact>]
+    let ``next is UNCHANGED by 1525 — its empty arm still prints prose on stdout at exit 0`` () =
+        // NOT an endorsement. This is the behaviour of record after `.github#1523` removed `next --json`,
+        // and pinning it is what makes the residual defect a deliberate disposition rather than an
+        // oversight. `next`'s stdout is documented in `Client.fs` as "one line, the chosen item's ref,
+        // which a caller reads with `$(…)`" — so `ref=$(fsgg-coord next)` yields the STRING
+        // "nothing schedulable right now." at exit 0, which no caller can tell from a ref. Changing that
+        // means changing a byte contract this item's AC 5 freezes, so it is filed rather than reached for.
+        let code, out, _ =
+            runQueue (busyQueue ()) [ "next"; "--repo"; "FS.GG.SDD"; "--worker"; "otter-9c21" ]
+
+        Assert.Equal("nothing schedulable right now." + Environment.NewLine, out)
+        Assert.Equal(0, code)
+
+    [<Fact>]
+    let ``the CLAIMED receipt shape is unchanged, byte for byte`` () =
+        // AC 2. NOTHING pinned these bytes before .github#1525 — the shape `claim --json`/`take --json`
+        // emit is a landed machine contract with live consumers (every `pnext-item` worker gates startup
+        // on `.converged`), and the empty-arm receipt added beside it must not have drifted a key of it.
+        // Byte equality, in key order, because a consumer keying on position — or a human diffing a
+        // receipt log — sees the bytes and not the record.
+        let receipt: Render.ClaimReceipt =
+            { Ref =
+                { Owner = "FS-GG"
+                  Repo = ".github"
+                  Number = 1525 }
+              Worker = "snipe-6404"
+              Kind = "claimed"
+              MarkerObserved = true
+              MarkerId = Some 5087533685L
+              AssigneeObserved = None
+              Status = Some "In progress"
+              StatusRead = "observed"
+              StatusWrite = "written"
+              PendingBoardWrites = Some 0
+              Converged = true }
+
+        Assert.Equal(
+            """{"ref":".github#1525","repo":"FS-GG/.github","number":1525,"worker":"snipe-6404","kind":"claimed","markerObserved":true,"markerId":5087533685,"assigneeObserved":null,"status":"In progress","statusRead":"observed","statusWrite":"written","pendingBoardWrites":0,"converged":true}""",
+            Render.renderClaimReceiptJson receipt
+        )

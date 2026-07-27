@@ -55,6 +55,33 @@ module Render =
           PendingBoardWrites: int option
           Converged: bool }
 
+    /// The OTHER outcome of `take --json`: it looked, and it claimed nothing (.github#1525). A LOOK THAT
+    /// SUCCEEDED — `take`'s EX_NONE — so it is a receipt of its own rather than the absence of one.
+    ///
+    /// It is a separate type rather than a `ClaimReceipt` with everything optional, because the two
+    /// documents share only the question they answer. Every field of `ClaimReceipt` past `kind` is a
+    /// POSTCONDITION OF A MUTATION — a marker read back, a column written — and there was no mutation
+    /// here. Modelling them as `None` would put `"markerObserved":false` and `"converged":false` on the
+    /// wire for a command that wrote nothing and therefore observed nothing, which reads as a claim that
+    /// FAILED. `kind` tells the two apart, and it is the only key a consumer must branch on.
+    type NoItemReceipt =
+        { Worker: string
+          /// How many candidates the scheduler LOOKED AT and refused. #428's distinction in machine form:
+          /// `0` is a genuinely empty queue, and anything higher is a BUSY one whose items are behind
+          /// claims, columns or blockers — the same fact, and two opposite instructions to the caller.
+          /// The per-item REASONS stay on stderr, where `batch --json` already puts them.
+          PassedOver: int
+          /// `Scan.Receipt.RepoAdvisory` — "the `--repo` you named matched nothing on this board" (#979).
+          ///
+          /// IT RIDES IN THE DOCUMENT BECAUSE THIS DOCUMENT IS NEW. #979 put the advisory on stderr
+          /// because the only reader was a human: `take` had no machine projection of this outcome to
+          /// carry it in. Now it does, and `passedOver:0` is EXACTLY what a typo'd `--repo` produces —
+          /// indistinguishable, to a parser, from a board that is genuinely empty. A driver would read
+          /// "this repo has no work" off a misspelling and stop dispatching to a full repo, which is the
+          /// harm #979 exists to prevent, arriving on the surface this receipt creates. `None` (wire
+          /// `null`) whenever the scope named something, which is every healthy call.
+          RepoAdvisory: string option }
+
     /// A single `lint` finding, in the shape `lint --json` emits.
     type LintFinding =
         { Code: string
@@ -149,6 +176,16 @@ module Render =
 
     /// `claim --json` / `take --json` — one typed mutation receipt, safe to gate worker startup on.
     val renderClaimReceiptJson: receipt: ClaimReceipt -> string
+
+    /// `take --json` when the queue handed out nothing (.github#1525) — the SAME projection's other
+    /// outcome, so a caller parses one stream and reads `kind` rather than branching on the exit code to
+    /// decide whether stdout is JSON at all.
+    ///
+    /// `ref`/`repo`/`number` are emitted as EXPLICIT NULLS in `renderClaimReceiptJson`'s own key order.
+    /// That is the point of the shape: one key set in both outcomes, with "there is no item" MODELLED
+    /// (#437) rather than signalled by a missing key. A consumer that reads `.ref` gets `null`, not a
+    /// KeyError, and the document describes its own outcome without the exit code held beside it.
+    val renderNoItemJson: receipt: NoItemReceipt -> string
 
     /// `inbox --json` — a JSON array of the messages addressed to this worker.
     val renderInboxJson: msgs: (string * Reads.Message) list -> string
