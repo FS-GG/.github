@@ -15,6 +15,10 @@ from pathlib import Path
 import yaml
 
 ROOTS = (".claude/skills", ".codex/skills", ".agents/skills")
+# The single statement of the contract schema this gate understands. Stated ONCE on purpose
+# (.github#1574): two literals let two readers of the same contract disagree about whether they
+# are looking at a supported document, and one of them then declines to check anything.
+CONTRACT_SCHEMA = "fsgg.coord.commands/1"
 EXPLICIT_ONLY = {"cut-nuget-release", "drive-board", "p-add", "padd-item", "work-board", "work-roadmap"}
 LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 INVOCATION = re.compile(r"(?:scripts/)?fsgg-coord(?![\w-])\s+(.+)")
@@ -146,7 +150,7 @@ def validate_invocations(root: Path, contract_path: Path, errors: list[str]) -> 
     except (OSError, json.JSONDecodeError) as exc:
         fail(errors, f"command contract unreadable: {exc}")
         return
-    if contract.get("schema") != "fsgg.coord.commands/1":
+    if contract.get("schema") != CONTRACT_SCHEMA:
         fail(errors, f"command contract has unsupported schema {contract.get('schema')!r}")
         return
     commands = {
@@ -201,9 +205,18 @@ def validate_semantics(root: Path, contract_path: Path, errors: list[str]) -> No
     try:
         contract = json.loads(contract_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        # validate_invocations already emits the actionable contract diagnostic.
+        # validate_invocations already emits the actionable contract diagnostic, and this path is
+        # reached only once it has ALREADY failed. Distinct from the schema check below: that one
+        # must speak for itself, because a supported-but-newer schema is a state in which the
+        # sibling's error is repairable by editing one literal while this gate stays disarmed.
         return
-    if contract.get("schema") != "fsgg.coord.commands/1":
+    if contract.get("schema") != CONTRACT_SCHEMA:
+        fail(
+            errors,
+            f"semantic polarity gate cannot run: command contract schema "
+            f"{contract.get('schema')!r} is not {CONTRACT_SCHEMA}; the --paths/--apply/--dry-run "
+            f"polarity assertions were NOT made — port them before moving the schema id",
+        )
         return
     commands = {row["name"]: set(row["flags"]) for row in contract["commands"]}
     required_flags = {

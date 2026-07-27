@@ -32,10 +32,10 @@ seed() {
 }
 
 expect_rejection() {
-  local label="$1" evidence="$2"
+  local label="$1" evidence="$2" contract="${3:-$WORK/contract.json}"
   local rc=0
   python3 "$ROOT/scripts/check-skill-quality.py" \
-    --root "$WORK/tree" --contract "$WORK/contract.json" >"$WORK/out" 2>&1 || rc=$?
+    --root "$WORK/tree" --contract "$contract" >"$WORK/out" 2>&1 || rc=$?
   if [ "$rc" -eq 1 ] && grep -Fq -- "$evidence" "$WORK/out"; then
     echo "PASS  $label"
     pass=$((pass+1))
@@ -147,6 +147,23 @@ seed
 mutate_workboard_phrase "Do not spin" "Poll the same rows until they change"
 expect_rejection "work-board reports parked and human backlog without spinning" \
   "work-board: backlog planning contract lost 'Do not spin'"
+
+# .github#1574: a schema id the semantic gate does not support must be an ERROR from the semantic
+# gate itself. Its sibling validate_invocations already shouts, and that shout is repairable by
+# editing one literal — which is exactly how the polarity assertions got switched off unnoticed.
+seed
+python3 - "$WORK/contract.json" "$WORK/contract-unsupported-schema.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+source, target = Path(sys.argv[1]), Path(sys.argv[2])
+doc = json.loads(source.read_text())
+doc["schema"] = "fsgg.coord.commands/2"
+target.write_text(json.dumps(doc))
+PY
+expect_rejection "an unsupported contract schema cannot silently disarm the polarity gate" \
+  "semantic polarity gate cannot run" "$WORK/contract-unsupported-schema.json"
 
 seed
 sed -i '/GENERATED: fsgg-versions/{n;s/^/STALE /;}' "$WORK/tree/docs/architecture.md"
