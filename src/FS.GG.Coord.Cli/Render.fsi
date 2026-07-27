@@ -104,6 +104,39 @@ module Render =
           Paths: string list
           Collisions: PathCollision list }
 
+    /// How ONE mechanical repair went under `reconcile --apply` (.github#1524). The wire words are
+    /// `ClaimReceipt.StatusWrite`'s (`written`/`deferred`/`not-on-board`) rather than the human line's
+    /// (`applied`/`queued`), because those are the same cases of the same `Board.WriteOutcome` reported by
+    /// the same CLI — one fact, one name. `Deferred` is the QUEUED write nothing replays for you, and it is
+    /// a case of a closed union rather than a word in a sentence. `Reaped` is deliberately weaker than
+    /// `Written`: `STALE-CLAIM` is delegated to the `reap` verb once per repo, so it reports that the pass
+    /// covering this item exited green, not a per-item read-back.
+    type ReconcileOutcome =
+        | Written
+        | Deferred
+        | NotOnBoard
+        | Reaped
+        | NotAttempted of reason: string
+        | Failed of reason: string
+
+    /// The wire word for an outcome.
+    val reconcileOutcomeName: outcome: ReconcileOutcome -> string
+
+    /// One row of `reconcile --json`: a mechanical finding, plus — under `--apply` — the field write it
+    /// attempted and how that went.
+    type ReconcileRow =
+        { Id: string
+          Rule: string
+          Subject: Ref
+          Size: string
+          Remedy: string
+          Statement: string
+          /// The field and value this repair sets; `None` for `STALE-CLAIM`, which writes no field. One
+          /// option over the PAIR, so the two cannot be present independently.
+          Write: (string * string) option
+          /// `None` on a dry run — nothing was attempted, so nothing is known.
+          Outcome: ReconcileOutcome option }
+
     /// `ready --json` — the machine contract a reconciler reads: a JSON array of the startable rows. A
     /// real JSON writer, so a title or path carrying a quote cannot forge the array.
     val renderReadyJson: rows: Scan.Row list -> string
@@ -127,6 +160,23 @@ module Render =
     /// `predicate --json` — a single JSON object: the ADR-0050 verdict and its assertion (.github#1202).
     /// A real JSON writer, so a governing note carrying a quote cannot forge the object.
     val renderPredicateJson: result: PredicateResult -> string
+
+    /// `reconcile --json` / `reconcile --apply --json` — the findings array, and under `--apply` how each
+    /// repair went (.github#1524), so a mutating verb's outcome is IN its document rather than printed
+    /// past it.
+    ///
+    /// THE FIRST SIX KEYS ARE ALPHABETICAL (`id,remedy,rule,size,statement,subject`) BY CONTRACT, not by
+    /// preference: this projection was an F# anonymous record, whose fields the compiler sorts, so those
+    /// are the bytes existing consumers already parse. The tests pin them. Do not reorder.
+    ///
+    /// `includeOutcome` means "these rows carry an attempt's result", decided once per DOCUMENT
+    /// (`renderWhoJson`'s `includeWorktree` precedent, #959): the dry-run shape stays byte-identical, and
+    /// an apply run cannot emit a ragged array. It appends exactly the facts an attempt adds — `field`,
+    /// `value`, `outcome`, `error`.
+    ///
+    /// It is NOT simply `--apply`: an `--apply` run with no findings passes `false`, because there is no
+    /// attempt to report and the array is empty either way.
+    val renderReconcileJson: includeOutcome: bool -> rows: ReconcileRow list -> string
 
     /// `widen --json` / `set-paths --json` — one typed touch-set receipt (.github#1517). `verdict` is
     /// `disjoint` or `overlap`, derived from `Collisions` rather than carried beside it, so the two can
