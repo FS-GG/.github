@@ -299,6 +299,186 @@ module CommandSurfaceTests =
             + String.concat "\n  " disagreements
         )
 
+    /// The emitted rows, as `{command -> the whole row}` — the write-ness assertions below need `writes`
+    /// and `writesWhen` together, and reading the row once keeps them talking about the same object.
+    let private emittedRows () =
+        let doc = JsonDocument.Parse(renderCommandContract ())
+
+        doc.RootElement.GetProperty("commands").EnumerateArray()
+        |> Seq.map (fun row -> row.GetProperty("name").GetString(), row.Clone())
+        |> Map.ofSeq
+
+    [<Fact>]
+    let ``#1534 every verb on the Command union declares write-ness — no verb defaults to READ`` () =
+        // TOTAL OVER THE DU, NOT OVER A LIST, and that is the point of reflecting here rather than mapping
+        // `surface`: a verb the union has and `surface` does not is a verb nothing emits, and this names it.
+        //
+        // WHAT ENFORCES THE "no verb defaults to READ" HALF IS THE COMPILER, NOT THIS TEST, and the
+        // distinction is worth stating rather than blurring. `writeSurface` is a total match with NO
+        // wildcard arm and this project sets `TreatWarningsAsErrors`, so a verb added to the union with no
+        // row is FS0025 — a build error. A future `| _ -> Reads` arm would give that away, and this test
+        // would NOT catch it: the new verb would still emit a `writes` key, valued `never`, and every
+        // assertion below would pass. Nothing in a test project can see the shape of a match arm. So the
+        // guarantee is structural and its custodian is the diff — which is why the arm carries a comment
+        // in `Options.fs` naming itself the most damaging edit that file accepts.
+        //
+        // What this DOES buy, and it is the half the compiler cannot: the emitted DOCUMENT is total. A
+        // missing `writes` key and a `writes` the engine cannot spell are the same finding — a consumer
+        // that cannot read the field falls back to its own default, and "no answer" being read as "does
+        // not write" is the exact failure this field exists to end.
+        let rows = emittedRows ()
+
+        let expected =
+            FSharpType.GetUnionCases typeof<Command>
+            |> Array.toList
+            |> List.map (fun c -> c.Name)
+            |> List.except (flagDispatched |> List.map caseName)
+
+        let verbOf = surface |> List.map (fun (verb, c) -> caseName c, verb) |> Map.ofList
+
+        let bad =
+            expected
+            |> List.choose (fun case ->
+                match Map.tryFind case verbOf with
+                | None -> Some $"%s{case}: on the Command union and not on `surface` — nothing emits it"
+                | Some verb ->
+                    match Map.tryFind verb rows with
+                    | None -> Some $"%s{verb}: no row in the emitted contract"
+                    | Some row ->
+                        match row.TryGetProperty "writes" with
+                        | false, _ -> Some $"%s{verb}: emitted with NO `writes` field"
+                        | true, v ->
+                            match v.GetString() with
+                            | "always"
+                            | "never"
+                            | "conditional" -> None
+                            | other -> Some $"%s{verb}: `writes` is %s{other}, which is not a value of the field")
+
+        Assert.True(
+            List.isEmpty bad,
+            "the emitted contract does not declare write-ness for every verb (#1534):\n  "
+            + String.concat "\n  " bad
+        )
+
+    [<Fact>]
+    let ``#1534 a conditional write names its gate and an unconditional one names none`` () =
+        // `writes == "conditional"` and `has("writesWhen")` must be ONE fact asked two ways. Two independent
+        // keys are two things that can disagree, and a consumer reading the wrong one of a disagreeing pair
+        // is the shape every item this field descends from was filed against.
+        let rows = emittedRows ()
+
+        // A SUITE THAT CANNOT FAIL IS NOT A SUITE (#266/#436, and `coord-engine.yml` runs a non-vacuity
+        // step for exactly this). Every assertion below is a fold over `rows`, so an empty `rows` — an
+        // emitter that stopped emitting — would report GREEN over nothing.
+        Assert.NotEmpty rows
+
+        let bad =
+            [ for verb, row in Map.toList rows do
+                  let writes = row.GetProperty("writes").GetString()
+                  let hasGate = fst (row.TryGetProperty "writesWhen")
+
+                  match writes, hasGate with
+                  | "conditional", false -> yield $"%s{verb}: conditional, and says nothing about WHEN"
+                  | "conditional", true ->
+                      // Exactly one gate key, and it must be one this contract defines. A row carrying two
+                      // would be read by whichever key a consumer happened to look for first.
+                      let gate = row.GetProperty "writesWhen"
+                      let keys = gate.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+
+                      if keys.Count <> 1 then
+                          yield $"%s{verb}: writesWhen carries %d{keys.Count} keys (%A{keys}), not exactly one"
+                      elif not (Set.isSubset keys (set [ "flagGiven"; "flagAbsent"; "argvCannotSay" ])) then
+                          yield $"%s{verb}: writesWhen names an unknown condition %A{keys}"
+                      elif System.String.IsNullOrWhiteSpace(gate.EnumerateObject() |> Seq.head |> _.Value.GetString()) then
+                          yield $"%s{verb}: writesWhen's value is blank — a condition nobody can act on"
+                  | _, true -> yield $"%s{verb}: writes=%s{writes} and yet carries a writesWhen gate"
+                  | _, false -> () ]
+
+        Assert.True(
+            List.isEmpty bad,
+            "the emitted contract's write-ness and its condition disagree (#1534):\n  "
+            + String.concat "\n  " bad
+        )
+
+    [<Fact>]
+    let ``#1534 a flag-gated write names a flag the command can actually be GIVEN`` () =
+        // THE CROSS-CHECK THAT MAKES THE GATE MORE THAN PROSE. The condition is declared as a typed `Flag`
+        // and spelled through the one `scopedFlags` table, so this compares it against `scopeOf` — the
+        // already-derived, compiler-total flag surface — by way of the row's own `flags` array.
+        //
+        // Without it, `reap` could be declared gated on `--dry-run` and read perfectly plausibly: a guard
+        // would scan argv for a flag `reap` refuses, never find it, and permit every `reap --apply` on a
+        // stale engine. The shim's #1528 header calls exactly this "a guard whose correctness depends on
+        // argv SHAPE"; if the engine is going to hand out that shape, the shape has to be real.
+        let rows = emittedRows ()
+
+        // THE SUBJECT MUST EXIST, AND THIS TEST IS THE ONE THAT NEEDED SAYING SO. Everything below is
+        // conditional on a row HAVING a `writesWhen` with a flag key — so a contract that emitted no gates
+        // at all would satisfy it perfectly, over an empty subject. That is not hypothetical: while this
+        // change was being written, an emitter deliberately broken to drop every `writesWhen` object turned
+        // the test above red and left THIS one green. A gate that survives its own incident is the shape
+        // #266 names. So the flag-gated verbs are named: `reap` and `reconcile` are the pair #1534 was filed
+        // about, and `flush` is the opposite polarity.
+        let flagGated =
+            rows
+            |> Map.filter (fun _ row ->
+                match row.TryGetProperty "writesWhen" with
+                | false, _ -> false
+                | true, gate -> fst (gate.TryGetProperty "flagGiven") || fst (gate.TryGetProperty "flagAbsent"))
+            |> Map.keys
+            |> Set.ofSeq
+
+        Assert.Equal<Set<string>>(set [ "flush"; "reap"; "reconcile" ], flagGated)
+
+        let bad =
+            [ for verb, row in Map.toList rows do
+                  match row.TryGetProperty "writesWhen" with
+                  | false, _ -> ()
+                  | true, gate ->
+                      let flags = row.GetProperty("flags").EnumerateArray() |> Seq.map _.GetString() |> Set.ofSeq
+
+                      for key in [ "flagGiven"; "flagAbsent" ] do
+                          match gate.TryGetProperty key with
+                          | false, _ -> ()
+                          | true, spelling ->
+                              let f = spelling.GetString()
+
+                              if not (flags.Contains f) then
+                                  yield
+                                      $"%s{verb}: gated on %s{f}, which is NOT a flag the command takes "
+                                      + $"(it takes %A{Set.toList flags}) — `scopeOf` and `writeSurface` disagree" ]
+
+        Assert.True(
+            List.isEmpty bad,
+            "a conditional write is gated on a flag its command refuses (#1534):\n  "
+            + String.concat "\n  " bad
+        )
+
+    [<Fact>]
+    let ``#1534 the four classifications #1528 found WRONG stay decided`` () =
+        // NOT a restatement of the emitter. These are the exact rows a person got wrong in the shim's bash
+        // copy and nobody noticed for months (#1528): `set-paths` reached the same `Writes.widen` PATCH as
+        // `widen` through the same `updateTouchSet` helper and was called a read; `room` and `reconcile`
+        // were called reads; and `bootstrap` was called a WRITE, which would have refused a pair of GraphQL
+        // queries on a stale engine for nothing. Moving one of them now costs a line in a diff.
+        //
+        // `next` is here for the same reason one layer along: #1528 found it takes the #733 chore lock
+        // AFTER printing, so the name is not the evidence — and a later reader who "tidies" it into `never`
+        // because a scheduler read is obviously a read reds instead.
+        let rows = emittedRows ()
+        let writes verb = rows.[verb].GetProperty("writes").GetString()
+
+        Assert.Equal("always", writes "set-paths")
+        Assert.Equal("always", writes "widen")
+        Assert.Equal("always", writes "room open")
+        Assert.Equal("conditional", writes "reconcile")
+        Assert.Equal("conditional", writes "next")
+        Assert.Equal("conditional", writes "reap")
+        Assert.Equal("never", writes "bootstrap")
+        // `batch` is `next` uncapped and makes NO offer — the pair is the whole reason `next` needs a row
+        // of its own rather than "scheduler verbs write".
+        Assert.Equal("never", writes "batch")
+
     [<Fact>]
     let ``the machine contract preserves dangerous option polarities`` () =
         use doc = JsonDocument.Parse(renderCommandContract ())
