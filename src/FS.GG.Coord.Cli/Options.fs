@@ -1269,63 +1269,70 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         /// while the arm still said `Json` would have flipped the bare `widen` — the form every recipe,
         /// skill and driver in the corpus runs — from its human receipt to a JSON object. With one
         /// derivation there is no arm left to forget, and all seventeen traps are disarmed at once.
-        let start (c: Command) =
-            { defaults with
-                Command = c
-                Render = defaultRender c }
+        ///
+        /// IT TAKES THE PARTIALLY-BUILT RECORD, not the `Command`, so each arm still spells
+        /// `Command = Landable` at its own call site. That is not style. `recipe-landable.yml` and
+        /// `recipe-followup.yml` gate this file with `grep -qE 'Command[[:space:]]*=[[:space:]]*Landable'`
+        /// — a source-level assertion that the verb every recipe names is still ROUTED — and a `start
+        /// Landable` form passes the token through a helper where that grep cannot see it. The gate is
+        /// right to look: a recipe naming a verb the parser dropped is a lie told to every worker. Reading
+        /// the default off `o.Command` keeps the derivation total either way — an arm cannot name one
+        /// command and get another's default.
+        let start (o: Options) =
+            { o with Render = defaultRender o.Command }
 
         match args with
         | []
         | "--help" :: _
-        | "-h" :: _ -> Ok(start Help)
+        | "-h" :: _ -> Ok(start { defaults with Command = Help })
 
-        | "--version" :: _ -> Ok(start Version)
+        | "--version" :: _ -> Ok(start { defaults with Command = Version })
 
-        | "scan" :: rest -> flags (start Scan) rest
-        | "decide" :: rest -> flags (start Decide) rest
-        | "lanes" :: rest -> flags (start LanesView) rest
-        | "facts" :: rest -> flags (start Facts) rest
-        | "command-contract" :: rest -> flags (start CommandContractCmd) rest
+        | "scan" :: rest -> flags (start { defaults with Command = Scan }) rest
+        | "decide" :: rest -> flags (start { defaults with Command = Decide }) rest
+        | "lanes" :: rest -> flags (start { defaults with Command = LanesView }) rest
+        | "facts" :: rest -> flags (start { defaults with Command = Facts }) rest
+        | "command-contract" :: rest -> flags (start { defaults with Command = CommandContractCmd }) rest
 
-        | "whoami" :: rest -> flags (start WhoAmI) rest
-        | "budget" :: rest -> flags (start Budget) rest
-        | "next" :: rest -> flags (start Next) rest
-        | "batch" :: rest -> flags (start BatchCmd) rest
-        | "ready" :: rest -> flags (start Ready) rest
-        | "reconcile" :: rest -> flags (start Reconcile) rest
-        | "who" :: rest -> flags (start Who) rest
-        | "reap" :: rest -> flags (start Reap) rest
-        | "claim" :: rest -> flags (start Claim) rest
-        | "adopt" :: rest -> flags (start Adopt) rest
-        | "landable" :: rest -> flags (start Landable) rest
-        | "take" :: rest -> flags (start Take) rest
-        | "release" :: rest -> flags (start Release) rest
-        | "heartbeat" :: rest -> flags (start Heartbeat) rest
-        | "set-field" :: rest -> flags (start SetField) rest
-        | "child" :: rest -> flags (start Child) rest
-        | "widen" :: rest -> flags (start Widen) rest
-        | "set-paths" :: rest -> flags (start SetPaths) rest
-        | "overlap" :: rest -> flags (start Overlap) rest
-        | "say" :: rest -> flags (start Say) rest
-        | "inbox" :: rest -> flags (start Inbox) rest
-        | "done" :: rest -> flags (start DoneCmd) rest
-        | "verify-paths" :: rest -> flags (start VerifyPaths) rest
-        | "bootstrap" :: rest -> flags (start Bootstrap) rest
-        | "board" :: rest -> flags (start BoardCmd) rest
-        | "field-id" :: rest -> flags (start FieldId) rest
-        | "option-id" :: rest -> flags (start OptionId) rest
-        | "item-id" :: rest -> flags (start ItemId) rest
-        | "add" :: rest -> flags (start Add) rest
-        | "flush" :: rest -> flags (start Flush) rest
-        | "lint" :: rest -> flags (start LintCmd) rest
-        | "issues" :: rest -> flags (start Issues) rest
-        | "followup" :: rest -> flags (start Followup) rest
-        | "predicate" :: rest -> flags (start Predicate) rest
+        | "whoami" :: rest -> flags (start { defaults with Command = WhoAmI }) rest
+        | "budget" :: rest -> flags (start { defaults with Command = Budget }) rest
+        | "next" :: rest -> flags (start { defaults with Command = Next }) rest
+        | "batch" :: rest -> flags (start { defaults with Command = BatchCmd }) rest
+        | "ready" :: rest -> flags (start { defaults with Command = Ready }) rest
+        | "reconcile" :: rest -> flags (start { defaults with Command = Reconcile }) rest
+        | "who" :: rest -> flags (start { defaults with Command = Who }) rest
+        | "reap" :: rest -> flags (start { defaults with Command = Reap }) rest
+        | "claim" :: rest -> flags (start { defaults with Command = Claim }) rest
+        | "adopt" :: rest -> flags (start { defaults with Command = Adopt }) rest
+        | "landable" :: rest -> flags (start { defaults with Command = Landable }) rest
+        | "take" :: rest -> flags (start { defaults with Command = Take }) rest
+        | "release" :: rest -> flags (start { defaults with Command = Release }) rest
+        | "heartbeat" :: rest -> flags (start { defaults with Command = Heartbeat }) rest
+        | "set-field" :: rest -> flags (start { defaults with Command = SetField }) rest
+        | "child" :: rest -> flags (start { defaults with Command = Child }) rest
+        | "widen" :: rest -> flags (start { defaults with Command = Widen }) rest
+        | "set-paths" :: rest -> flags (start { defaults with Command = SetPaths }) rest
+        | "overlap" :: rest -> flags (start { defaults with Command = Overlap }) rest
+        | "say" :: rest -> flags (start { defaults with Command = Say }) rest
+        | "inbox" :: rest -> flags (start { defaults with Command = Inbox }) rest
+        | "done" :: rest -> flags (start { defaults with Command = DoneCmd }) rest
+        | "verify-paths" :: rest -> flags (start { defaults with Command = VerifyPaths }) rest
+        | "bootstrap" :: rest -> flags (start { defaults with Command = Bootstrap }) rest
+        | "board" :: rest -> flags (start { defaults with Command = BoardCmd }) rest
+        | "field-id" :: rest -> flags (start { defaults with Command = FieldId }) rest
+        | "option-id" :: rest -> flags (start { defaults with Command = OptionId }) rest
+        | "item-id" :: rest -> flags (start { defaults with Command = ItemId }) rest
+        | "add" :: rest -> flags (start { defaults with Command = Add }) rest
+        | "flush" :: rest -> flags (start { defaults with Command = Flush }) rest
+        | "lint" :: rest -> flags (start { defaults with Command = LintCmd }) rest
+        | "issues" :: rest -> flags (start { defaults with Command = Issues }) rest
+        | "followup" :: rest -> flags (start { defaults with Command = Followup }) rest
+        | "predicate" :: rest -> flags (start { defaults with Command = Predicate }) rest
 
         // `room open` — the ONLY two-word verb (ADR-0051). A `room` namespace, so `room close`/`room list`
         // have a home if they ever land; today `open` is the one subcommand, and anything else under `room`
         // is named and refused rather than swallowed.
-        | "room" :: "open" :: rest -> flags (start RoomOpen) rest
+        | "room" :: "open" :: rest -> flags (start { defaults with Command = RoomOpen }) rest
         | "room" :: sub :: _ -> Error $"unknown room subcommand: '%s{sub}' (expected: open)"
         | [ "room" ] -> Error "room needs a subcommand (open)"
 
