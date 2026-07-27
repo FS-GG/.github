@@ -2575,7 +2575,7 @@ module Client =
                             let tries = defaultArg opts.Tries 30
                             let interval = defaultArg opts.Interval 20
 
-                            let rec poll (i: int) (prev: int) : PrState * string list =
+                            let rec poll (i: int) (prev: int) : PrState * Reads.Unmet list =
                                 let v, n, missing = read ()
 
                                 if Landable.settled v n prev then v, missing
@@ -2590,16 +2590,73 @@ module Client =
 
                     printfn "%s" (Landable.name state)
 
-                    // WHY it is pending, when the reason is an assertion the CALLER added. `pending` alone is
+                    // WHY the verdict is not green, when the reason is not a red check. `pending` alone is
                     // honest but useless on the case that does not resolve: a required check absent because
                     // its job was RENAMED polls for the whole budget and then refuses, leaving the operator
                     // one word and no thread to pull. stdout — the verdict — is untouched; this is stderr.
-                    if state = PrPending && not missing.IsEmpty then
-                        for reason in missing do
+                    //
+                    // THE THREE REASONS ARE SPOKEN APART (#1575). An assertion the caller added, a context
+                    // the BASE BRANCH requires, and a required set we could not read at all have opposite
+                    // remedies, and the old single banner ("These are assertions you asked for") is simply
+                    // FALSE of the second and third — it would send an operator to look at a flag they did
+                    // not pass instead of at the branch policy that is holding their PR.
+                    let asserted =
+                        missing
+                        |> List.choose (function
+                            | Reads.Asserted reason -> Some reason
+                            | _ -> None)
+
+                    let refused =
+                        missing
+                        |> List.choose (function
+                            | Reads.Refused(state, baseRef) -> Some(state, baseRef)
+                            | _ -> None)
+
+                    let notReported =
+                        missing
+                        |> List.choose (function
+                            | Reads.NotReported(context, baseRef) -> Some(context, baseRef)
+                            | _ -> None)
+
+                    let unreadable =
+                        missing
+                        |> List.choose (function
+                            | Reads.PolicyUnreadable why -> Some why
+                            | _ -> None)
+
+                    // Gated on `pending` exactly as before: a RED verdict already names a check that failed,
+                    // and listing an absent one beneath it buries the finding under a "not yet".
+                    if state = PrPending && not asserted.IsEmpty then
+                        for reason in asserted do
                             eprint $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — %s{reason}."
 
                         eprint
                             "fsgg-coord-engine:   These are assertions you asked for, and an unmet one is `pending`, never `green` — an ABSENT check reads exactly like a passing one to any 'is anything red?' rollup (#606). Usually transient (registration, a superseded suite's replacement, GitHub catching up with a force-push). If it never resolves: the job was RENAMED, its workflow's `paths:` filter no longer matches, or --sha named the wrong commit."
+
+                    if not refused.IsEmpty then
+                        for state, baseRef in refused do
+                            eprint
+                                $"fsgg-coord-engine: landable: PR #%d{pr} is not landable — GitHub reports it as `%s{state}` against `%s{baseRef}`, so it will REFUSE this merge (`the base branch policy prohibits the merge`)."
+
+                        // NOT "a check failed" (#1575 AC2). The operator must not be sent to look at a red
+                        // check that does not exist: every check that REPORTED here is green, and the gap
+                        // is a requirement that has not reported — a different fact with a different
+                        // remedy. Only the named contexts below, if we could read them, say which.
+                        for context, baseRef in notReported do
+                            eprint
+                                $"fsgg-coord-engine:   `%s{baseRef}` REQUIRES the status check `%s{context}`, and it has NO CHECK RUN on this head — it has not reported, and it did not fail."
+
+                        for why in unreadable do
+                            // The policy read is DIAGNOSIS. Say plainly that the verdict stands without it,
+                            // so nobody reads a missing sentence as a missing verdict.
+                            eprint
+                                $"fsgg-coord-engine:   (could not say WHICH requirement is unmet: %s{why}. The refusal above is GitHub's own and stands regardless.)"
+
+                        // AC5: say when waiting cannot help. A context whose producing workflow does not
+                        // exist on this branch, or whose `paths:` filter excludes this PR, can never report
+                        // without a NEW event — no amount of polling creates a check run.
+                        eprint
+                            "fsgg-coord-engine:   Waiting fixes this ONLY if the missing run has yet to register. If the producing workflow does not exist on this branch (it was armed on the base AFTER this head was pushed), or a `paths:`/`branches:` filter excludes this PR, then no check run will EVER be created and --wait cannot help: rebase the branch onto the current base (or push a fresh commit) so the event fires, or stop requiring the context. `behind` needs a rebase; `draft` needs the PR marked ready."
 
                     match state with
                     | PrGreen -> ExitGreen

@@ -1174,13 +1174,36 @@ module Reads =
             | true, n when n >= 0 -> n
             | _ -> 1000
 
-    /// Read a PR once: its mergeability state, head SHA, and head branch ref (`None` if unreadable/absent).
-    let private prMergeAndSha
+    /// Everything ONE read of `pulls/{n}` tells the landable verdict, bound together so no two facts here
+    /// can describe different PRs. `None` on any field is "unreadable or absent", never a guess.
+    type private PrFacts =
+        { Merge: MergeState
+          /// The head commit the PR OBJECT names — eventually consistent, so not necessarily the branch's
+          /// real tip (#955/#989/#995).
+          HeadSha: string option
+          /// The head BRANCH, which is what lets a stale `head.sha` be measured against that tip.
+          HeadRef: string option
+          /// The BASE branch — the branch whose policy decides whether GitHub will take this merge (#1575).
+          /// Read from the same object as the rest, so a verdict can never be scored against one PR's head
+          /// and another PR's base.
+          BaseRef: string option
+          /// `mergeable_state` — GITHUB'S OWN ANSWER to "will I take this merge?" (#1575), and the field
+          /// that makes the whole guard below free. `mergeable` says only "does it apply cleanly"; this
+          /// says whether the BASE BRANCH POLICY is satisfied — `clean`, `blocked` (a required context has
+          /// not passed, or has not reported at all), `behind` (a strict base moved), `draft`, `unstable`
+          /// (a NON-required check failed — GitHub still merges it), `dirty`, `unknown`.
+          ///
+          /// It is computed by the same lazy background job as `mergeable` and rides in the same object,
+          /// so it costs NO extra request and needs NO extra token scope. Both matter: see the guard.
+          MergeableState: string option }
+
+    /// Read a PR once: its mergeability state, head SHA, head branch ref, and base branch ref.
+    let private prFacts
         (transport: IGitHubTransport)
         (owner: string)
         (repo: string)
         (pr: int)
-        : (MergeState * string option * string option) option =
+        : PrFacts option =
 
         let subject = $"%s{owner}/%s{repo} PR #%d{pr} landable"
 
@@ -1218,7 +1241,20 @@ module Reads =
                     | true, h when h.ValueKind = JsonValueKind.Object -> str h "sha", str h "ref"
                     | _ -> None, None
 
-                Some(merge, sha, headRef)
+                // The BASE branch, from the SAME object (#1575). Which branch a PR merges INTO is what
+                // decides which required contexts govern it, and reading it here — rather than assuming
+                // `main` — is what keeps the guard honest on a stacked or release-branch PR.
+                let baseRef =
+                    match root.TryGetProperty "base" with
+                    | true, b when b.ValueKind = JsonValueKind.Object -> str b "ref"
+                    | _ -> None
+
+                Some
+                    { Merge = merge
+                      HeadSha = sha
+                      HeadRef = headRef
+                      BaseRef = baseRef
+                      MergeableState = str root "mergeable_state" }
 
     /// The BRANCH's real tip — the commit `refs/heads/{branch}` names right now, or `None` if it cannot be
     /// read. `None` is never "the branch is empty": an unreadable ref proves nothing, and the one caller
@@ -1262,6 +1298,215 @@ module Reads =
                 | true, o when o.ValueKind = JsonValueKind.Object -> str o "sha"
                 | _ -> None
 
+    // ---- WHY the base branch refuses, when it does (#1575) -----------------------------------------
+    //
+    // THIS IS DIAGNOSIS, NOT VERDICT, AND THAT DISTINCTION IS THE WHOLE DESIGN. The verdict comes from
+    // `mergeable_state` on the PR object we already read — GitHub's own answer, free, and needing no
+    // token scope. What that field cannot do is say WHICH requirement is unmet, and "blocked" with no
+    // thread to pull is the same dead end a bare `pending` was. So these reads NAME the contexts that
+    // have not reported, and they are allowed to FAIL: an unreadable policy costs the operator a
+    // sentence, never a verdict.
+    //
+    // IT MUST BE THAT WAY ROUND, AND #463 IS WHY. Reading `branches/{b}/protection` needs
+    // `administration: read`, which **is not a valid `permissions:` scope for a workflow's
+    // GITHUB_TOKEN** — declaring it is a validation error that kills the run at startup
+    // (docs/coordination/reusable-workflow-contract.md). And `landable`'s own unattended caller,
+    // `skill-registry-autofix.yml`, "runs entirely under GITHUB_TOKEN" by that file's own words. Make
+    // the verdict depend on this read and that gate returns exit 4 forever: #463 exactly, where a
+    // protection probe 403'd on every receiver, fell through to the fail-closed arm, and stopped the kit
+    // landing anywhere. #463's ratified repair was to ask the PULL REQUEST instead — and that repair is
+    // recorded as better on its merits, not merely cheaper, because the PR's own state accounts for
+    // required reviews, a strict base, and unresolved conversations too. This follows it.
+    //
+    // So fail-closed is satisfied where it belongs — on the VERDICT, which is never green while GitHub
+    // says it will refuse — and it is not smuggled onto a read the fleet's token cannot make. A gate
+    // that fails closed on a question nobody can answer does not fail closed; it fails ALWAYS.
+
+    /// The contexts a branch REQUIRES — or why we could not name them (#1575). `RequiredUnreadable` is a
+    /// missing SENTENCE here, not a missing verdict.
+    type private RequiredSet =
+        | RequiredContexts of string list
+        | RequiredUnreadable of string
+
+    let private requiredCheckError (subject: string) (error: IoError) =
+        $"could not read %s{subject} — %s{Errors.explain error}"
+
+    /// Required contexts from CLASSIC branch protection.
+    ///
+    /// A 404 is an answer about THIS store — no classic protection on this branch — and says nothing
+    /// about rulesets, which are read separately below. A 403 is not: it means "I may not look".
+    let private classicRequired
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (branch: string)
+        : Result<string list, string> =
+
+        let subject = $"%s{owner}/%s{repo} branch %s{branch} protection"
+
+        let path =
+            $"repos/%s{owner}/%s{repo}/branches/%s{Uri.EscapeDataString branch}/protection"
+
+        // CONDITIONAL. Branch protection is the least volatile thing this tool reads, and it is read only
+        // while a PR is blocked — a state `--wait` may poll for its whole budget. It is still ASKED every
+        // poll (this is revalidation, not a TTL cache), so a policy change made mid-wait is seen at once;
+        // a poll that finds no change costs a 304, which GitHub does not bill against the REST limit.
+        match conditionalGet transport subject path [] Single with
+        | Error(NotFound _) -> Ok []
+        | Error(Unauthorized _) ->
+            Error
+                $"could not read %s{subject} — the token may not see it. Naming the unmet requirement needs `administration: read`, which a workflow's GITHUB_TOKEN cannot hold at all"
+        | Error e -> Error(requiredCheckError subject e)
+        | Ok body ->
+            match parse subject body with
+            | Error e -> Error(requiredCheckError subject e)
+            | Ok doc ->
+                use doc = doc
+
+                // GUARDED, because `TryGetProperty` THROWS on a non-object. A 200 that parses but is not
+                // an object is the proxy-error-page shape this module already has a test for, and a
+                // diagnostic that crashes the process is worse than one that says nothing.
+                if doc.RootElement.ValueKind <> JsonValueKind.Object then
+                    Error $"could not read %s{subject} — the payload is not an object"
+                else
+
+                match doc.RootElement.TryGetProperty "required_status_checks" with
+                | true, rsc when rsc.ValueKind = JsonValueKind.Object ->
+                    // `checks` is the current shape (context + app_id); `contexts` is the legacy one. Read
+                    // `checks` when it is there and fall back only when it is ABSENT — an empty `checks` is
+                    // "requires nothing", not "look somewhere else".
+                    let entries =
+                        match rsc.TryGetProperty "checks" with
+                        | true, checks when checks.ValueKind = JsonValueKind.Array ->
+                            checks.EnumerateArray()
+                            |> Seq.map (fun c ->
+                                if c.ValueKind = JsonValueKind.Object then
+                                    str c "context"
+                                else
+                                    None)
+                            |> List.ofSeq
+                            |> Some
+                        | _ ->
+                            match rsc.TryGetProperty "contexts" with
+                            | true, arr when arr.ValueKind = JsonValueKind.Array ->
+                                arr.EnumerateArray()
+                                |> Seq.map (fun c ->
+                                    if c.ValueKind = JsonValueKind.String then
+                                        Some(c.GetString())
+                                    else
+                                        None)
+                                |> List.ofSeq
+                                |> Some
+                            | _ -> None
+
+                    match entries with
+                    | None -> Ok []
+                    // A required check we cannot NAME is one we decline to name. Dropping it silently
+                    // would shorten the list from a payload we did not understand.
+                    | Some list when list |> List.exists Option.isNone ->
+                        Error
+                            $"could not read %s{subject} — a required status check has no readable `context`"
+                    | Some list -> list |> List.choose id |> List.filter (fun c -> c <> "") |> Ok
+                // Protected, but not on status checks. A real answer.
+                | _ -> Ok []
+
+    /// Required contexts from RULESETS — the OTHER, entirely separate store. `branches/<b>/protection`
+    /// does not report ruleset rules and `rules/branches/<b>` does not report classic protection; a branch
+    /// may be governed by either, both, or neither, and GitHub enforces both (#574).
+    ///
+    /// A 404 here is NOT "no rules": this endpoint answers `[]` for a branch with no rules, so a 404 means
+    /// "no such repo or branch".
+    let private rulesetRequired
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (branch: string)
+        : Result<string list, string> =
+
+        let subject = $"%s{owner}/%s{repo} branch %s{branch} rulesets"
+
+        let path =
+            $"repos/%s{owner}/%s{repo}/rules/branches/%s{Uri.EscapeDataString branch}"
+
+        match
+            conditionalGet transport subject path [ "per_page", string CollectionPageSize ] (Page(CollectionPageSize, None))
+        with
+        | Error(NotFound _) ->
+            Error
+                $"could not read %s{subject} — a branch with no rules answers `[]`, not 404, so this is 'no such repo or branch'"
+        | Error e -> Error(requiredCheckError subject e)
+        | Ok body ->
+            match parse subject body with
+            | Error e -> Error(requiredCheckError subject e)
+            | Ok doc ->
+                use doc = doc
+
+                if doc.RootElement.ValueKind <> JsonValueKind.Array then
+                    Error $"could not read %s{subject} — expected a list of rules"
+                else
+                    let contexts =
+                        doc.RootElement.EnumerateArray()
+                        |> Seq.filter (fun rule ->
+                            rule.ValueKind = JsonValueKind.Object
+                            && str rule "type" = Some "required_status_checks")
+                        |> Seq.collect (fun rule ->
+                            match rule.TryGetProperty "parameters" with
+                            | true, p when p.ValueKind = JsonValueKind.Object ->
+                                match p.TryGetProperty "required_status_checks" with
+                                | true, arr when arr.ValueKind = JsonValueKind.Array ->
+                                    arr.EnumerateArray()
+                                    |> Seq.map (fun c ->
+                                        if c.ValueKind = JsonValueKind.Object then
+                                            str c "context"
+                                        else
+                                            None)
+                                | _ -> Seq.empty
+                            | _ -> Seq.empty)
+                        |> List.ofSeq
+
+                    if contexts |> List.exists Option.isNone then
+                        Error
+                            $"could not read %s{subject} — a `required_status_checks` rule names a check with no readable `context`"
+                    else
+                        contexts |> List.choose id |> List.filter (fun c -> c <> "") |> Ok
+
+    /// Does GITHUB ITSELF say it will refuse this merge? `Some state` names the `mergeable_state` it said
+    /// so with; `None` means it did not say so — including the case where it said NOTHING (see below).
+    ///
+    /// AN ALLOW-LIST OF REFUSALS, NOT A DENY-LIST OF PERMISSIONS, and that is the fail-safe direction here.
+    /// GitHub may add a state tomorrow; an unknown state must not silently start refusing every merge in
+    /// the fleet. The three listed are the states it documents as blocking:
+    ///
+    ///   * `blocked` — the base branch policy is not satisfied. THE #1575 STATE: a required context that
+    ///     has not passed, or has not reported at all, or a required review, or an unresolved conversation.
+    ///   * `behind`  — the base moved and the branch is required to be up to date (`strict`).
+    ///   * `draft`   — a draft PR is not mergeable, whatever its checks say.
+    ///
+    /// NOT `unstable`: that is a NON-required check failing, which GitHub merges. (Our own rollup reds it
+    /// first, which is a house rule stricter than GitHub's — deliberately, and unchanged here.)
+    /// NOT `clean`, the merge path. NOT `dirty`/`unknown`, which never reach this arm — `mergeable` has
+    /// already answered for them.
+    let private refusedState (facts: PrFacts) : string option =
+        match facts.MergeableState with
+        | Some("blocked" | "behind" | "draft" as s) -> Some s
+        | _ -> None
+
+    /// The UNION of both stores. Short-circuits on the classic store's failure: a list we already cannot
+    /// complete is not worth a second request.
+    let private requiredContexts
+        (transport: IGitHubTransport)
+        (owner: string)
+        (repo: string)
+        (branch: string)
+        : RequiredSet =
+
+        match classicRequired transport owner repo branch with
+        | Error why -> RequiredUnreadable why
+        | Ok classic ->
+            match rulesetRequired transport owner repo branch with
+            | Error why -> RequiredUnreadable why
+            | Ok rules -> RequiredContexts(List.distinct (classic @ rules))
+
     /// The landable verdict AND the number of subjects it was scored over (`Landable.scoreN`). The count is
     /// what `landable --wait` polls on: a `red` over ZERO subjects is "CI has not started yet", not "CI
     /// failed" (#606/#724), and it is 0 for every verdict reached before the runs are scored (conflicted,
@@ -1278,10 +1523,30 @@ module Reads =
     /// waits for GitHub to catch up. Omit it and the PR's own head SHA is taken on trust, which is the right
     /// default for every caller that did not just push.
     ///
-    /// Returns the verdict, the subject count `--wait` settles on, and — for diagnostics only — the caller's
-    /// assertions that are NOT met, each as a human phrase. Without it a `pending` is one honest word and no
-    /// thread to pull, which is fine while the state is transient and useless on the case that never
-    /// resolves (a renamed job, a SHA the caller got wrong). The verdict never depends on this list.
+    /// Why a verdict that is not `red` is nonetheless not `green`. DIAGNOSTICS — the verdict is decided
+    /// above, and nothing here changes it — but a bare `pending` is one honest word and no thread to pull,
+    /// which is fine while the state is transient and useless on the case that never resolves.
+    ///
+    /// The three arms are held APART because their REMEDIES are opposite, and an operator handed one
+    /// sentence for all three is sent to look at the wrong thing (#1575 AC2).
+    type Unmet =
+        /// An assertion the CALLER added (`--require NAME`, `--sha SHA`). Nobody but this caller is looking
+        /// at it, and the base branch policy has no opinion about it.
+        | Asserted of string
+        /// GITHUB ITSELF WILL REFUSE THIS MERGE — its `mergeable_state` for the gated head, verbatim
+        /// (`blocked`, `behind`, `draft`). Nobody asked for this one; it is a fact about the PR (#1575).
+        | Refused of state: string * baseRef: string
+        /// …and WHICH context the base branch requires that has no check run on this head. Diagnosis only:
+        /// the verdict above already stands without it.
+        | NotReported of context: string * baseRef: string
+        /// The policy could not be read, so the refusal cannot be attributed to a named context. A missing
+        /// SENTENCE, never a missing verdict — reading it needs a scope a workflow token cannot hold, and
+        /// making the verdict depend on it is #463 (a probe that 403'd everywhere and stopped the kit
+        /// landing at all).
+        | PolicyUnreadable of string
+
+    /// Returns the verdict, the subject count `--wait` settles on, and — for diagnostics only — every
+    /// unmet reason, typed (`Unmet`). The verdict never depends on that list.
     let prLandableRequire
         (transport: IGitHubTransport)
         (owner: string)
@@ -1289,7 +1554,7 @@ module Reads =
         (pr: int)
         (required: string list)
         (expected: string option)
-        : PrState * int * string list =
+        : PrState * int * Unmet list =
 
         // THE LAZY RE-READ (#697). A null `mergeable` is neither "mergeable" nor "conflicted" — and it is the
         // NORMAL first answer for a PR GitHub has not yet tested. So a present `null` is re-read a bounded
@@ -1300,17 +1565,22 @@ module Reads =
         // A `null` that OUTLIVES the budget is `PrPending`, not `PrUnknown` (#950): the budget is ~2s and a
         // background job is not, so exhausting it says "not yet", never "unreadable". The verdict below draws
         // that line; this re-read only decides how long to hold the question open before deferring it there.
-        let rec readMerge (triesLeft: int) : MergeState * string option * string option =
-            match prMergeAndSha transport owner repo pr with
-            | None -> Absent, None, None
-            | Some(Computing, _, _) when triesLeft > 1 ->
+        let rec readMerge (triesLeft: int) : PrFacts =
+            match prFacts transport owner repo pr with
+            | None ->
+                { Merge = Absent
+                  HeadSha = None
+                  HeadRef = None
+                  BaseRef = None
+                  MergeableState = None }
+            | Some facts when facts.Merge = Computing && triesLeft > 1 ->
                 let ms = mergeableRetryMs ()
 
                 if ms > 0 then
                     System.Threading.Thread.Sleep ms
 
                 readMerge (triesLeft - 1)
-            | Some result -> result
+            | Some facts -> facts
 
         // THE HEAD-SHA RECONCILIATION, ONCE, AHEAD OF EVERY MERGEABLE VERDICT (#955).
         //
@@ -1341,11 +1611,11 @@ module Reads =
 
         // ONE read, bound once. `readMerge` spends the re-read budget (3 PR reads, ~1s apart), so asking it
         // twice would double every caller's reads to answer one question.
-        let merge = readMerge 3
+        let facts = readMerge 3
 
         let staleHead =
-            match merge with
-            | Mergeable _, Some sha, _ when expected |> Option.exists (fun e -> e <> sha) -> Some sha
+            match facts.Merge, facts.HeadSha with
+            | Mergeable _, Some sha when expected |> Option.exists (fun e -> e <> sha) -> Some sha
             | _ -> None
 
         match staleHead with
@@ -1354,7 +1624,8 @@ module Reads =
 
             PrPending,
             0,
-            [ $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
+            [ Asserted
+                  $"the PR still names head %s{sha}, not the %s{want} you asked to gate — GitHub has not caught up with the push (or --sha named a commit that is not this PR's head)" ]
         | None ->
 
         // Bound HERE, past the early return above, and matched on `expected = None` — so the read is spent on
@@ -1363,12 +1634,12 @@ module Reads =
         // reach it at all. `Option.exists` is the fail-closed half: an unreadable tip is `None`, which is
         // `false`, which leaves the conflict standing.
         let staleAgainstBranch =
-            match merge, expected with
-            | (Mergeable false, Some sha, Some headRef), None ->
+            match facts.Merge, facts.HeadSha, facts.HeadRef, expected with
+            | Mergeable false, Some sha, Some headRef, None ->
                 branchTip transport owner repo headRef |> Option.exists (fun tip -> tip <> sha)
             | _ -> false
 
-        match merge with
+        match facts.Merge, facts.HeadSha, facts.HeadRef with
         // A `false` NOBODY ASSERTED A SHA FOR — §5's own `landable <pr> --wait`, and the form every worker
         // runs (#989). #955 made the guard above reachable for a `false`; it is reachable only by a caller
         // that passes `--sha`, and the recipe passes none, so the repair could not fire on the path it was
@@ -1427,7 +1698,7 @@ module Reads =
 
                 let unmet =
                     Landable.missing required runs checks
-                    |> List.map (fun name -> $"required check `%s{name}` has not reported")
+                    |> List.map (fun name -> Asserted $"required check `%s{name}` has not reported")
 
                 // DO NOT CALL THE REPLACED COMMIT'S GREEN OURS (#995, epic #266).
                 //
@@ -1461,6 +1732,82 @@ module Reads =
                     && branchTip transport owner repo r |> Option.exists (fun tip -> tip <> sha)
                     ->
                     PrPending, 0, []
+                // A REQUIRED CONTEXT THAT NEVER REPORTED IS NOT A PASSING ONE (#1575, epic #266).
+                //
+                // The rollup above asks "is anything red?", and that question is structurally blind to a
+                // subject that is ABSENT — #606's lesson, which `--require` already closes for checks the
+                // CALLER names. What it did not close is the set GitHub itself will hold the merge on. So
+                // this command answered `green`, exit 0, for a PR GitHub then refused:
+                //
+                //     $ landable 1027 --repo FS.GG.Rendering --wait --sha 69367d92
+                //     green
+                //     $ gh pr merge 1027 --squash
+                //     X ... the base branch policy prohibits the merge.
+                //
+                // `mergeable=MERGEABLE`, `mergeStateStatus=BLOCKED`, all 18 reporting check runs SUCCESS —
+                // and the required context `skill-union / skill-union` had NO CHECK RUN AT ALL, because the
+                // workflow that produces it was added to `main` AFTER this PR's head was pushed. A context
+                // that never reports is not a context that fails, and nothing in an "is anything red?"
+                // rollup can see the difference.
+                //
+                // THE FAILURE DIRECTION WAS THE SAFE ONE — GitHub still refused — so this never merged
+                // anything bad. It is still a false verdict, and `landable` is the gate the whole worker
+                // protocol keys on (`pnext-item` §5 says merge only on this word). A verdict of `green`
+                // that GitHub refuses answers a different question from the one its caller asked.
+                //
+                // ASK THE PULL REQUEST, NOT THE BRANCH POLICY. #1575 proposed deriving the must-have-
+                // reported set from `branches/{b}/protection` and comparing it to the head's check runs.
+                // That read needs `administration: read`, which is NOT A VALID `permissions:` SCOPE for a
+                // workflow's GITHUB_TOKEN at all — and `landable`'s own unattended caller,
+                // `skill-registry-autofix.yml`, "runs entirely under GITHUB_TOKEN" in that file's own
+                // words. A verdict resting on it would 403 there forever, which is #463 restored: a
+                // protection probe that 403'd on every receiver, fell through to the fail-closed arm, and
+                // stopped the kit landing anywhere. #463's ratified repair was to ask the PR instead, and
+                // that is recorded as the better design on its merits.
+                //
+                // `mergeable_state` IS THAT ANSWER, and it is already in the object above — same lazy
+                // background job as `mergeable`, same request, no extra scope, no new failure mode. It is
+                // also strictly WIDER than the derived set: it accounts for a required context that never
+                // reported, for one satisfied by a legacy commit STATUS rather than a check run, for
+                // app-id mismatch, for a strict base the branch has fallen behind, for required reviews
+                // and unresolved conversations. Every one of those refuses a merge this command was about
+                // to call finished.
+                //
+                // ONLY THE STATES GITHUB ACTUALLY REFUSES. `unstable` is NOT among them — it means a
+                // NON-required check failed, which GitHub merges (our own rollup reds it first anyway, and
+                // that is a deliberate house rule, not GitHub's). `clean` is the merge path and must stay
+                // exactly as fast as it was. An ABSENT field is NO OPINION, not a refusal: it is not a
+                // permission-gated read but part of a body we already hold, so its absence means the
+                // payload is not what github.com serves — and manufacturing a refusal from it would
+                // strand every caller against a fixture or a GHES that omits it.
+                //
+                // `PrPending`, NOT `PrRed` — the same call `scoreRequired` makes for a missing required
+                // check, for the same reason. "It has not reported" is literally the pending sentence, and
+                // it is usually transient. `pending` never settles, so `--wait` rides out the transient
+                // case and refuses the permanent one when its tries run out — the same no-merge, reached
+                // honestly, and never a green.
+                //
+                // THE POLICY READ BELOW IS DIAGNOSIS AND MAY FAIL. It names WHICH context has not
+                // reported, which is the difference between a diagnosis and a mystery — but the verdict is
+                // already decided, so a 403 or a rate limit costs a sentence, not a merge. That is what
+                // keeps the fail-closed rule on the question the fleet can answer.
+                | PrGreen, _ when refusedState facts |> Option.isSome ->
+                    let refusal = (refusedState facts).Value
+                    let baseRef = defaultArg facts.BaseRef "the base branch"
+
+                    let named =
+                        match facts.BaseRef with
+                        | None ->
+                            [ PolicyUnreadable
+                                  "the PR object named no base branch, so its policy could not be read to say which requirement is unmet" ]
+                        | Some b ->
+                            match requiredContexts transport owner repo b with
+                            | RequiredUnreadable why -> [ PolicyUnreadable why ]
+                            | RequiredContexts contexts ->
+                                Landable.missing contexts runs checks
+                                |> List.map (fun c -> NotReported(c, b))
+
+                    PrPending, n, (Refused(refusal, baseRef) :: named) @ unmet
                 | _ -> state, n, unmet
             | _ -> PrUnknown, 0, []
 

@@ -1008,7 +1008,13 @@ let ``a CONFLICTED about the commit you replaced is pending, not a verdict — t
 
     // `--sha` is an assertion the CALLER added, so — unlike the #950 arm — it earns a reason on the unmet
     // channel. A `pending` that never resolves is otherwise one honest word and no thread to pull.
-    Assert.Contains(unmet, fun (r: string) -> r.Contains "sha-OLD" && r.Contains "sha-NEW")
+    Assert.Contains(
+        unmet,
+        fun (r: Reads.Unmet) ->
+            match r with
+            | Reads.Asserted reason -> reason.Contains "sha-OLD" && reason.Contains "sha-NEW"
+            | _ -> false
+    )
 
 [<Fact>]
 let ``a CONFLICTED about the commit you ASKED to gate is still terminal — the guard widens reach, not claim`` () =
@@ -1340,3 +1346,306 @@ let ``a ref we cannot read leaves the GREEN standing — fail-closed must not st
     let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
 
     Assert.Equal(PrGreen, state)
+
+// ---- #1575: a required context that never REPORTED is not a passing one ----------------------------
+//
+// `landable` returned `green`, exit 0, for FS.GG.Rendering#1027 — which GitHub then refused to merge
+// ("the base branch policy prohibits the merge"). `mergeable=MERGEABLE`, `mergeStateStatus=BLOCKED`, all
+// 18 reporting check runs SUCCESS, and the required context `skill-union / skill-union` had NO CHECK RUN
+// AT ALL: the workflow that produces it was armed on `main` after that PR's head was pushed, so GitHub
+// never created the run. A context that never reports is not a context that fails, and an "is anything
+// red?" rollup cannot see the difference (#606).
+//
+// #1575 PRESCRIBED DERIVING THE REQUIRED SET FROM `branches/{b}/protection`. That read needs
+// `administration: read`, which is not a valid `permissions:` scope for a workflow's GITHUB_TOKEN at all
+// — and `landable`'s unattended caller runs entirely under one. A verdict resting on it would 403 there
+// forever: #463, where a protection probe 403'd on every receiver and stopped the kit landing anywhere.
+// So the VERDICT comes from `mergeable_state`, which rides in the PR object already read, and the policy
+// read is DIAGNOSIS that is allowed to fail. The `403 still refuses` leg below is that whole argument.
+
+/// The two stores GitHub keeps required status checks in — the DIAGNOSTIC read, reached only when GitHub
+/// has already said it will refuse.
+let private protectionRequiring (contexts: string list) =
+    let checks =
+        contexts
+        |> List.map (fun c -> $"""{{"context":"%s{c}","app_id":15368}}""")
+        |> String.concat ","
+
+    $"""{{"required_status_checks":{{"strict":false,"checks":[%s{checks}]}}}}"""
+
+let private isProtectionRead (path: string) =
+    path.Contains "/branches/" && path.EndsWith "/protection"
+
+let private isRulesetRead (path: string) = path.Contains "/rules/branches/"
+
+/// A green, mergeable PR into `main` at `sha-head` whose branch tip agrees (so the #995 guard is
+/// satisfied), carrying whatever `mergeable_state` the test names and whatever check runs it lists.
+/// Counts the POLICY reads, so the cost bound is measured rather than asserted.
+type private MergeStatePrServer
+    (
+        state: string,
+        reported: string list,
+        ?demanded: string list,
+        ?rules: string,
+        ?protection: IoError,
+        ?conclusion: string
+    ) =
+    let mutable policyReads = 0
+    let concl = defaultArg conclusion "success"
+
+    member _.PolicyReads = policyReads
+
+    member _.Recorder =
+        Fake.Recorder(fun (req: Request) ->
+            if isProtectionRead req.Path then
+                policyReads <- policyReads + 1
+
+                match protection with
+                | Some e -> Error e
+                | None ->
+                    Ok
+                        { Status = 200
+                          Body = protectionRequiring (defaultArg demanded [])
+                          ETag = None
+                          NextLink = None }
+            elif isRulesetRead req.Path then
+                policyReads <- policyReads + 1
+                Ok { Status = 200; Body = defaultArg rules "[]"; ETag = None; NextLink = None }
+            else
+
+            let body =
+                if req.Path.Contains "git/ref/heads/" then
+                    """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                elif req.Path.EndsWith "pulls/801" then
+                    // `mergeable_state` rides in the SAME object as `mergeable` — same lazy background
+                    // job, same request. That is what makes the guard free.
+                    $"""{{"number":801,"state":"open","mergeable":true,"mergeable_state":"%s{state}","base":{{"ref":"main"}},"head":{{"ref":"item/42-x","sha":"sha-head"}}}}"""
+                elif req.Path.EndsWith "actions/runs" then
+                    $"""{{"total_count":1,"workflow_runs":[{{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"%s{concl}","check_suite_id":1,"pull_requests":[{{"number":801}}]}}]}}"""
+                else
+                    let runs =
+                        reported
+                        |> List.map (fun n ->
+                            $"""{{"name":"%s{n}","check_suite":{{"id":1}},"status":"completed","conclusion":"%s{concl}"}}""")
+                        |> String.concat ","
+
+                    $"""{{"total_count":%d{List.length reported},"check_runs":[%s{runs}]}}"""
+
+            Ok { Status = 200; Body = body; ETag = None; NextLink = None })
+
+[<Fact>]
+let ``#1575 a BLOCKED PR whose reporting checks are all green is pending — the green GitHub refused`` () =
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        MergeStatePrServer(
+            state = "blocked",
+            reported = [ "build"; "test" ],
+            demanded = [ "skill-union / skill-union" ]
+        )
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrPending, state)
+
+    // The refusal is GitHub's own, and it is typed apart from `--require`'s assertions: an operator must
+    // not be told that the base branch's policy is something they asked for (AC2).
+    match unmet with
+    | Reads.Refused("blocked", "main") :: rest ->
+        // ...and the DIAGNOSIS names the context, so `pending` is not one word with no thread to pull.
+        match rest with
+        | [ Reads.NotReported("skill-union / skill-union", "main") ] -> ()
+        | other -> failwith $"expected the unreported context to be named — got %A{other}"
+    | other -> failwith $"expected a Refused naming the state and the base branch first — got %A{other}"
+
+    // AC5: `--wait` must WAIT here. `pending` never settles, so the loop rides out the registration case
+    // and refuses the permanent one — where the defect returned immediately, because from the rollup's
+    // point of view nothing was pending.
+    Assert.False(Landable.settled state 2 2, "a refused merge must NEVER settle — --wait must poll it")
+
+[<Fact>]
+let ``#1575 ...and the SAME world reported CLEAN is green — the gate must still let work land`` () =
+    // THE COUNTERWEIGHT, and the one that matters most: this arm is how every item merges.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        MergeStatePrServer(
+            state = "clean",
+            reported = [ "build"; "test"; "skill-union / skill-union" ],
+            demanded = [ "skill-union / skill-union" ]
+        )
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+    Assert.Empty unmet
+
+    // And the merge path pays NOTHING for the guard. `mergeable_state` was already in the PR object; the
+    // policy read happens only where GitHub has said it will refuse.
+    Assert.Equal(0, server.PolicyReads)
+
+[<Fact>]
+let ``#1575 a policy we may not READ still REFUSES — the verdict never rested on it (#463)`` () =
+    // THE LOAD-BEARING LEG, and the reason this does not derive the verdict from branch protection.
+    // Reading `branches/{b}/protection` needs `administration: read`, which is not a valid `permissions:`
+    // scope for a workflow's GITHUB_TOKEN — and `landable`'s unattended caller runs entirely under one.
+    // A verdict resting on that read would 403 forever, which is #463: a protection probe that 403'd on
+    // every receiver, fell through to the fail-closed arm, and stopped the kit landing ANYWHERE. A gate
+    // that fails closed on a question nobody can answer does not fail closed; it fails always.
+    //
+    // So the 403 costs a SENTENCE, not a verdict. The refusal still stands, on GitHub's own word.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        MergeStatePrServer(
+            state = "blocked",
+            reported = [ "build" ],
+            protection = Unauthorized "FS-GG/FS.GG.SDD branch main protection"
+        )
+
+    let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrPending, state)
+
+    match unmet with
+    | [ Reads.Refused("blocked", "main"); Reads.PolicyUnreadable why ] ->
+        Assert.Contains("administration: read", why)
+    | other -> failwith $"a 403 must degrade the SENTENCE and leave the refusal standing — got %A{other}"
+
+[<Fact>]
+let ``#1575 a RULESET's required check is named too — protection and rulesets are two stores`` () =
+    // #574's lesson, on the diagnosis. `branches/<b>/protection` does not report ruleset rules and
+    // `rules/branches/<b>` does not report classic protection; a branch may be governed by either.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        MergeStatePrServer(
+            state = "blocked",
+            reported = [ "build" ],
+            demanded = [],
+            rules =
+                """[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"coherence","integration_id":15368}]}}]"""
+        )
+
+    let _, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Contains(
+        unmet,
+        fun (r: Reads.Unmet) ->
+            match r with
+            | Reads.NotReported("coherence", "main") -> true
+            | _ -> false
+    )
+
+[<Fact>]
+let ``#1575 UNSTABLE is not a refusal — a non-required check failing is a merge GitHub takes`` () =
+    // The allow-list is of REFUSALS, not of permissions. `unstable` means a NON-required check failed,
+    // which GitHub merges; treating it as a refusal would demote a landable PR on GitHub's own reading.
+    // (Our own rollup reds a failing check first — a house rule stricter than GitHub's, and unchanged.)
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeStatePrServer(state = "unstable", reported = [ "build" ])
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+    Assert.Equal(0, server.PolicyReads)
+
+[<Fact>]
+let ``#1575 an ABSENT mergeable_state is NO OPINION, not a refusal — it must not strand every caller`` () =
+    // The compatibility half of the allow-list. `mergeable_state` is not a permission-gated read; it is
+    // part of a body we already hold. A payload that omits it is not github.com, and manufacturing a
+    // refusal from it would demote every verdict against such a payload — the fail-always direction.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let recorder =
+        Fake.Recorder(fun (req: Request) ->
+            if isProtectionRead req.Path || isRulesetRead req.Path then
+                failwith "a PR GitHub has no opinion about must not cost a policy read"
+            elif req.Path.Contains "git/ref/heads/" then
+                Ok
+                    { Status = 200
+                      Body = """{"ref":"refs/heads/item/42-x","object":{"sha":"sha-head","type":"commit"}}"""
+                      ETag = None
+                      NextLink = None }
+            elif req.Path.EndsWith "pulls/801" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"number":801,"state":"open","mergeable":true,"base":{"ref":"main"},"head":{"ref":"item/42-x","sha":"sha-head"}}"""
+                      ETag = None
+                      NextLink = None }
+            elif req.Path.EndsWith "actions/runs" then
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"workflow_runs":[{"path":".github/workflows/gate.yml","event":"pull_request","head_branch":"item/42-x","run_number":1,"status":"completed","conclusion":"success","check_suite_id":1,"pull_requests":[{"number":801}]}]}"""
+                      ETag = None
+                      NextLink = None }
+            else
+                Ok
+                    { Status = 200
+                      Body =
+                        """{"total_count":1,"check_runs":[{"name":"build","check_suite":{"id":1},"status":"completed","conclusion":"success"}]}"""
+                      ETag = None
+                      NextLink = None })
+
+    let state, _, _ = Reads.prLandableRequire recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrGreen, state)
+
+[<Fact>]
+let ``#1575 BEHIND and DRAFT refuse too — the other two states GitHub will not merge`` () =
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    for refusing in [ "behind"; "draft" ] do
+        let server = MergeStatePrServer(state = refusing, reported = [ "build" ])
+        let state, _, unmet = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+        Assert.Equal(PrPending, state)
+
+        Assert.Contains(
+            unmet,
+            fun (r: Reads.Unmet) ->
+                match r with
+                | Reads.Refused(s, "main") -> s = refusing
+                | _ -> false
+        )
+
+[<Fact>]
+let ``#1575 a RED never reads the policy — a PR that is not merging need not be diagnosed`` () =
+    // The cost bound, MEASURED on the recorder actually being driven. The policy read happens only where
+    // the rollup is otherwise green and GitHub has said it will refuse; a red PR is already not merging.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+
+    let server =
+        MergeStatePrServer(state = "blocked", reported = [ "build" ], conclusion = "failure")
+
+    let state, _, _ = Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [] None
+
+    Assert.Equal(PrRed, state)
+    Assert.Equal(0, server.PolicyReads)
+
+[<Fact>]
+let ``#1575 --require still binds a context the base branch does NOT require`` () =
+    // The flag keeps its whole reason for existing (#737): `registry-coherence` decides the autofix bot's
+    // PR and branch protection cannot require it, so nothing but this assertion will ever look at it.
+    use _cache = new IssuesCache()
+    use _fast = new NoMergeableRetryDelay()
+    let server = MergeStatePrServer(state = "clean", reported = [ "build" ])
+
+    let state, _, unmet =
+        Reads.prLandableRequire server.Recorder "FS-GG" "FS.GG.SDD" 801 [ "registry-coherence" ] None
+
+    Assert.Equal(PrPending, state)
+
+    match unmet with
+    | [ Reads.Asserted reason ] -> Assert.Contains("registry-coherence", reason)
+    | other -> failwith $"a --require the caller named stays an ASSERTION, not a branch policy — got %A{other}"

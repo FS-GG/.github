@@ -248,6 +248,23 @@ module Reads =
     /// `prLandable`.
     val prLandableN: transport: IGitHubTransport -> owner: string -> repo: string -> pr: int -> PrState * int
 
+    /// Why a verdict that is not `red` is nonetheless not `green` — the diagnostic channel `prLandableRequire`
+    /// returns beside its verdict. The arms are held APART because their remedies are opposite: one is a
+    /// preference the caller expressed, one is a fact about what GitHub will refuse, and one is the absence
+    /// of any observation at all. One sentence for all three sends the operator to the wrong place (#1575).
+    type Unmet =
+        /// An assertion the CALLER added (`--require NAME`, `--sha SHA`). The base branch policy has no
+        /// opinion about it and nothing else will ever look at it.
+        | Asserted of string
+        /// GITHUB ITSELF will refuse this merge — its `mergeable_state` for the gated head, verbatim
+        /// (`blocked`, `behind`, `draft`). Nobody asked for this one.
+        | Refused of state: string * baseRef: string
+        /// …and WHICH context the base branch requires that has no check run on this head. Diagnosis only.
+        | NotReported of context: string * baseRef: string
+        /// The policy could not be read, so the refusal cannot be attributed to a named context. A missing
+        /// SENTENCE, never a missing verdict.
+        | PolicyUnreadable of string
+
     /// `prLandableN`, plus the two assertions a caller may add to it (#737). `prLandableN` is this with
     /// `required = []` and `expected = None`.
     ///
@@ -261,9 +278,35 @@ module Reads =
     /// say so; a disagreement is `PrPending` (a read taken too early — never a verdict about the wrong
     /// commit), which `--wait` rides out. Callers that did not just push should omit it.
     ///
-    /// The third element is the caller's assertions that are NOT met, each as a human phrase — DIAGNOSTICS
-    /// ONLY, so a `pending` can say what it is waiting for instead of being one word with no thread to pull.
-    /// The verdict never depends on it. Same single-page caveat as `prLandable`.
+    /// IT ALSO ASKS WHETHER GITHUB WILL TAKE THE MERGE (#1575), and a `mergeable_state` of `blocked`,
+    /// `behind` or `draft` is `PrPending`, never `PrGreen`. The rollup asks "is anything red?", which is
+    /// blind to a subject that is ABSENT — so this command answered `green`, exit 0, for a PR GitHub then
+    /// refused to merge ("the base branch policy prohibits the merge"), because a required context whose
+    /// workflow was armed on `main` after the PR's head was pushed had never reported at all.
+    ///
+    /// IT ASKS THE PULL REQUEST, NOT THE BRANCH POLICY, and that is a correction to #1575's own prescribed
+    /// remedy. Deriving the must-have-reported set from `branches/{b}/protection` needs
+    /// `administration: read` — not a valid `permissions:` scope for a workflow's GITHUB_TOKEN at all —
+    /// and `landable`'s unattended caller runs entirely under one. A verdict resting on that read would
+    /// 403 forever there: #463, where a protection probe 403'd on every receiver and stopped the kit
+    /// landing anywhere. #463's ratified repair was to ask the PR instead, recorded as better on its
+    /// merits. `mergeable_state` rides in the PR object this function ALREADY reads, so the guard costs no
+    /// request and no scope — and it is strictly wider than the derived set, covering a context satisfied
+    /// by a legacy commit STATUS, an app-id mismatch, a strict base fallen behind, and required reviews.
+    ///
+    /// `unstable` is NOT among the refusing states: it means a non-required check failed, which GitHub
+    /// merges. An ABSENT `mergeable_state` is NO OPINION, not a refusal — it is part of a body we already
+    /// hold rather than a permission-gated read, so manufacturing a refusal from it would strand every
+    /// caller against a payload that omits it.
+    ///
+    /// The base branch's required contexts are then read — from BOTH stores GitHub keeps them in, classic
+    /// protection and rulesets (#574) — to say WHICH context has not reported. That read is DIAGNOSIS: it
+    /// happens only on the refusing path, and a failure costs a sentence, never a verdict.
+    ///
+    /// The third element is every unmet reason, TYPED (`Unmet`) — so a `pending` can say what it is waiting
+    /// for instead of being one word with no thread to pull, and so an operator is not told that a refusal
+    /// by the base branch is "an assertion you asked for". The verdict never depends on it. Same
+    /// single-page caveat as `prLandable`.
     val prLandableRequire:
         transport: IGitHubTransport ->
         owner: string ->
@@ -271,7 +314,7 @@ module Reads =
         pr: int ->
         required: string list ->
         expected: string option ->
-            PrState * int * string list
+            PrState * int * Unmet list
 
     /// The FIRST issue a pull request declares it closes (`closingIssuesReferences`), if any.
     ///
