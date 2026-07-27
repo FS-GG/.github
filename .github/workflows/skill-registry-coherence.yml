@@ -19,6 +19,35 @@
 # detected drift no longer waits for a human to run the reconcile by hand.
 name: skill-registry-coherence
 
+# THE FILTER CARRIES TWO SUBJECTS, BECAUSE THIS WORKFLOW RUNS TWO GATES (.github#1606).
+#
+# The trigger set below was authored around the ORIGINAL subject — the `registry/skills.yml`
+# reconcile — and the `generate-driver-manifest --check` step was added later without widening it.
+# This is the only workflow anywhere that runs that check, and its filter named NONE of the check's
+# inputs and NEITHER of its outputs. So the manifest went stale in silence and the red surfaced on
+# an unrelated PR: `edc8404b` staled it by editing `.claude/skills/pnext-item/references/`, ran four
+# workflows and none of them asked; the failure then landed on #1590, which touches no skill at all
+# and merely happened to match `registry/skills.yml`. The repair PR #1605 had the mirror-image blind
+# spot — it regenerated the manifest and did not run the gate it was repairing, because neither
+# output path was in the filter either.
+#
+# The second subject below is MEASURED from the emitter rather than restated from the issue, and the
+# measurement is wider than the report was. `generate-driver-manifest --check` reads:
+#   * ALL THREE skill roots — `validate_catalog()` walks `SKILL_ROOTS` and compares the three
+#     directory manifests for byte identity, so a `.codex/skills/**`-only edit fails `--check` while
+#     changing no output. `.codex` was in neither the issue nor any filter that runs the check.
+#   * `tests/skill-registry/catalog-triggers.json` — already selected by `tests/skill-registry/**`.
+#   * `registry/repos.yml` — `build_kit_manifest()` derives the coordination-kit rows from its `kit:`
+#     section, so adding or removing a `kind: skill` row restales that manifest with no skill edit.
+# and it WRITES `registry/driver-skill-manifest.json` and `registry/coordination-kit-skill-manifest.json`,
+# which are here for the #1605 direction: a PR that FIXES a stale manifest must run the gate too.
+#
+# The list is not maintained by memory. `scripts/generate-driver-manifest` declares its surface as
+# `PATHS_SUBJECT`, and `tests/skill-registry/run.sh` asserts that BOTH copies below select every
+# entry of it — so widening what the emitter walks reds this filter until it is widened to match.
+# That assertion lives in the fixture rather than in `check-paths-coherence.py`'s rule (c), which
+# would be its natural home and cannot reach: `named_scripts()` requires a `.py` suffix, and this
+# emitter — like `scripts/fsgg-skill-registry-check` beside it — has none. That is `.github#1639`.
 on:
   pull_request:
     paths:
@@ -26,6 +55,15 @@ on:
       - "scripts/fsgg-skill-registry-check"
       - "tests/skill-registry/**"
       - ".github/workflows/skill-registry-coherence.yml"
+      # `generate-driver-manifest --check`'s inputs …
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - "registry/repos.yml"
+      - "scripts/generate-driver-manifest"
+      # … and its outputs.
+      - "registry/driver-skill-manifest.json"
+      - "registry/coordination-kit-skill-manifest.json"
   push:
     branches: [main]
     paths:
@@ -33,6 +71,15 @@ on:
       - "scripts/fsgg-skill-registry-check"
       - "tests/skill-registry/**"
       - ".github/workflows/skill-registry-coherence.yml"
+      # `generate-driver-manifest --check`'s inputs …
+      - ".claude/skills/**"
+      - ".codex/skills/**"
+      - ".agents/skills/**"
+      - "registry/repos.yml"
+      - "scripts/generate-driver-manifest"
+      # … and its outputs.
+      - "registry/driver-skill-manifest.json"
+      - "registry/coordination-kit-skill-manifest.json"
   # A producer body change stales the registry with no .github commit — only the schedule catches it.
   schedule:
     - cron: "17 6 * * *"
