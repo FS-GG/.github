@@ -22,6 +22,31 @@ module LintApplication =
 
     val badTouchSetDetail: status: string -> usability: TouchSet.Usability -> string option
 
+    /// Every legal `Class:` body line with its gloss, rendered from `Class.legalClasses` and
+    /// `Types.itemClassWireName` — the vocabulary is READ from the typed core here, never restated
+    /// (.github#1651 AC5, on #916's receipt that agreeing copies are still copies).
+    val classMenu: string
+
+    /// The refusal sentence for a body whose `Class:` line carries a word this engine does not speak —
+    /// `None` when every line resolves, or when there is no line.
+    ///
+    /// ONE SENTENCE, TWO CALLERS. `lint` renders it as `CLASS-INVALID` and `add` renders it as the
+    /// refusal that stops the row reaching the board misclassed. Two hand-written sentences for one
+    /// fault would be the drift this repo keeps paying for, and the `add` one is the one a filer
+    /// actually reads — it arrives while they are still standing there.
+    val outOfVocabularyClass: body: string -> string option
+
+    /// `lint`'s whole CLASS verdict for one `Ready`/`Backlog` open row: `Some(code, detail)` where the
+    /// code is `CLASS-INVALID` (a `Class:` line whose value is out of vocabulary) or `CLASS-UNSET` (no
+    /// class declared or derivable at all), and `None` when the row is classed.
+    ///
+    /// Both codes are severity `error`; the caller supplies that, on `badTouchSetDetail`'s terms.
+    ///
+    /// **ABSENT AND INVALID ARE DIFFERENT FAULTS AND MUST NEVER RENDER ALIKE** — a row carrying
+    /// `Class: docs` described as recording no `Class:` is a diagnostic naming a fault the row does not
+    /// have. An unrecognised value SUPPRESSES `CLASS-UNSET`: a body that wrote a line did not omit one.
+    val classVerdict: status: string -> title: string -> body: string -> (string * string) option
+
     val epicVerdict:
         state: IssueState ->
         status: BoardStatus ->

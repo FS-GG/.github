@@ -2642,18 +2642,21 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
     && ok "case14: ...and that clean scope produced zero findings (a real item, really scanned)" \
     || bad "case14: --repo game must be clean+empty" "$(lt --repo game --json 2>/dev/null)"
 
-  # ---- CLASS-UNSET (.github#1588) --------------------------------------------------------------------
+  # ---- the CLASS axis: CLASS-UNSET (.github#1588) and CLASS-INVALID (.github#1651) ----------------
   #
   # The SIXTH lint rule, certified HERE on the day it lands. .github#1609 was filed because two rules —
   # BLOCKED-NO-REASON (ADR-0045's whole enforcement mechanism) and BLOCKER-CYCLE — shipped with zero
   # coverage, and a rule nothing exercises is a rule nobody can tell apart from one that never fires.
   cus() { jq -r '[.[] | select(.code=="CLASS-UNSET") | .id | sub("^[^/]+/";"")] | sort | join(",")' <<<"$ljson"; }
+  civ() { jq -r '[.[] | select(.code=="CLASS-INVALID") | .id | sub("^[^/]+/";"")] | sort | join(",")' <<<"$ljson"; }
 
   # Fires on EXACTLY the Ready/Backlog OPEN rows whose own TEXT records no class. #423 is In progress and
-  # #424 is closed, so neither is a candidate; #500 is classed and lives in the other scope.
-  [ "$(cus)" = "FS.GG.SDD#400,FS.GG.SDD#407,FS.GG.SDD#420,FS.GG.SDD#421,FS.GG.SDD#422,FS.GG.SDD#430,FS.GG.SDD#431,FS.GG.SDD#435" ] \
+  # #424 is closed, so neither is a candidate; #500 is classed and lives in the other scope. #435 is NOT
+  # here — it wrote a `Class:` line, and .github#1651 is precisely that a row which wrote one must never
+  # be told it recorded none. #436 wrote a legal value in the wrong case, and that is a declaration.
+  [ "$(cus)" = "FS.GG.SDD#400,FS.GG.SDD#407,FS.GG.SDD#420,FS.GG.SDD#421,FS.GG.SDD#422,FS.GG.SDD#430,FS.GG.SDD#431" ] \
     && ok "#1588: CLASS-UNSET fires on exactly the Ready/Backlog OPEN rows whose text declares no class" \
-    || bad "#1588: CLASS-UNSET must fire on exactly 400,407,420,421,422,430,431,435" "$(cus)"
+    || bad "#1588: CLASS-UNSET must fire on exactly 400,407,420,421,422,430,431" "$(cus)"
 
   # The three derivations, as NEGATIVES — the half that proves the rule is not simply always-red.
   case "$(cus)" in *432*) bad "#1588: an explicit 'Class: hardening' body line must suppress CLASS-UNSET" "$(cus)" ;;
@@ -2664,25 +2667,50 @@ if [ -z "$LINT_PORT" ]; then bad "lint fixture bound a port"; else
                    *)     ok "#1588: ADR-0045's human/decision sentinel derives 'decision' — no second line (AC5)" ;; esac
 
   # AC3's refusal, and the one worth stating loudest: an unknown word is NOT a declaration. If `Class: bug`
-  # resolved to the nearest of three, #435 would drop out of the set above and look triaged — a guess
-  # carrying a parser's authority, invisible precisely because it succeeded.
-  case "$(cus)" in *435*) ok "#1588: an unrecognised class word is NO declaration — never the nearest of three (AC3)" ;;
-                   *)     bad "#1588: 'Class: bug' must not resolve to a class" "$(cus)" ;; esac
+  # resolved to the nearest of three, #435 would go clean and look triaged — a guess carrying a parser's
+  # authority, invisible precisely because it succeeded. It is REFUSED; what .github#1651 changed is only
+  # which fault the refusal names.
+  [ "$(civ)" = "FS.GG.SDD#435" ] \
+    && ok "#1588/#1651: an unrecognised class word is refused — and reported as CLASS-INVALID, not as a missing line" \
+    || bad "#1651: CLASS-INVALID must fire on exactly 435" "$(civ)"
 
-  # It is an ERROR, not a note: untriaged severity is exactly as invisible as an untriaged status, and a
-  # note would not fail the gate that makes anybody fix it.
-  [ "$(jq -r '[.[] | select(.code=="CLASS-UNSET") | .severity] | unique | join(",")' <<<"$ljson")" = "error" ] \
-    && ok "#1588: CLASS-UNSET is an error — untriaged severity is as invisible as an untriaged status" \
-    || bad "#1588: CLASS-UNSET must be severity error" "$ljson"
+  # THE DEFECT, AS THE SENTENCE THAT MUST NOT APPEAR (.github#1651). `FS.GG.Templates#321` (`Class: docs`)
+  # and `FS.GG.SDD#747` (`Class: enhancement`) were both told their text records no `Class:` over a body
+  # that had one, and both had to be corrected by hand after a human read the body.
+  d435="$(jq -r '.[] | select(.code=="CLASS-INVALID" and (.id|test("435"))) | .detail' <<<"$ljson")"
+  printf '%s' "$d435" | grep -q 'records no `Class:`' \
+    && bad "#1651: a row that DID write a Class: line must never be told it records none" "$d435" \
+    || ok "#1651: the invalid-value diagnostic does not claim the row records no \`Class:\`"
 
-  # The detail names the three words a filer must choose between. A gate that says "wrong" without saying
-  # what right looks like is the gate #698 names — noise, merge anyway.
-  d435="$(jq -r '.[] | select(.code=="CLASS-UNSET" and (.id|test("435"))) | .detail' <<<"$ljson")"
-  printf '%s' "$d435" | grep -q 'Class: defect' \
-    && printf '%s' "$d435" | grep -q 'Class: hardening' \
-    && printf '%s' "$d435" | grep -q 'Class: decision' \
-    && ok "#1588: CLASS-UNSET's detail names all three body-line values by name" \
-    || bad "#1588: CLASS-UNSET detail must name the three values" "$d435"
+  # AC3: quote the offending value back AND list the legal set. Both measured authors believed they were
+  # classing the row correctly, so "invalid" alone sends them to the ADR to find out what was wanted.
+  printf '%s' "$d435" | grep -q '"bug"' \
+    && ok "#1651 AC3: the invalid-value diagnostic quotes the offending value back" \
+    || bad "#1651 AC3: CLASS-INVALID must quote the offending value" "$d435"
+
+  # AC4: a case/whitespace variant of a legal value is ACCEPTED — ADR-0066's "value normalised for case
+  # and space", which is `Types.itemClassOfWireName`, which is the same normalisation `reconcile` reads the
+  # board column back with. #436 must be clean of BOTH class codes.
+  case "$(cus),$(civ)" in *436*) bad "#1651 AC4: 'Class:   Defect  ' is a legal declaration" "$(cus) / $(civ)" ;;
+                          *)     ok "#1651 AC4: a case/whitespace variant of a legal value is ACCEPTED" ;; esac
+
+  # Both codes are ERRORS, not notes: untriaged severity is exactly as invisible as an untriaged status,
+  # and a note would not fail the gate that makes anybody fix it.
+  [ "$(jq -r '[.[] | select(.code=="CLASS-UNSET" or .code=="CLASS-INVALID") | .severity] | unique | join(",")' <<<"$ljson")" = "error" ] \
+    && ok "#1588: the class rules are errors — untriaged severity is as invisible as an untriaged status" \
+    || bad "#1588: CLASS-UNSET/CLASS-INVALID must be severity error" "$ljson"
+
+  # BOTH details name every word a filer must choose between, and neither spells them by hand: they are
+  # rendered from `Class.legalClasses` (the union, by reflection) through `Types.itemClassWireName`
+  # (.github#1651 AC5, on #916's receipt that agreeing copies are still copies).
+  dcu420="$(jq -r '.[] | select(.code=="CLASS-UNSET" and (.id|test("420"))) | .detail' <<<"$ljson")"
+  for d in "$dcu420" "$d435"; do
+    printf '%s' "$d" | grep -q 'Class: defect' \
+      && printf '%s' "$d" | grep -q 'Class: hardening' \
+      && printf '%s' "$d" | grep -q 'Class: decision' \
+      || bad "#1588/#1651: every class diagnostic must name all three body-line values" "$d"
+  done
+  ok "#1588/#1651: both class diagnostics name all three body-line values by name"
 
   kill "$LINT_SRV" 2>/dev/null
 fi

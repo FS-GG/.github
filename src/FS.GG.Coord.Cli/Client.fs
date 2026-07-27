@@ -37,6 +37,13 @@ module Client =
     /// test can drive every case the core can produce.
     let badTouchSetDetail = LintApplication.badTouchSetDetail
 
+    /// lint's CLASS verdict (`CLASS-INVALID` / `CLASS-UNSET` / nothing), on `badTouchSetDetail`'s terms:
+    /// module-level so a test can drive every shape the grammar can produce (.github#1651).
+    let classVerdict = LintApplication.classVerdict
+
+    /// The out-of-vocabulary-`Class:` refusal `add` renders before it boards a row (.github#1651 AC1).
+    let outOfVocabularyClass = LintApplication.outOfVocabularyClass
+
     [<Literal>]
     let ExitGreen = 0
 
@@ -4852,6 +4859,38 @@ module Client =
                 eprint $"fsgg-coord-engine: %s{msg}"
                 ExitError
             | Ok ref ->
+                // THE CLASS GATE, BEFORE THE ROW EXISTS (.github#1651 AC1).
+                //
+                // `add` is the engine's FIRST sight of an item: the issue itself is written with `gh`, so
+                // there is no earlier place a closed vocabulary can be enforced. Two workers in one run,
+                // in two repos, wrote `Class: docs` and `Class: enhancement` — both believed they were
+                // classing the row, nothing told them the set was closed, and each row then sat on the
+                // board reading as UNCLASSED, which ADR-0066 counts as a POSSIBLE defect and which
+                // therefore blocked a clean termination read until a human read the body by hand.
+                //
+                // IT REFUSES; IT DOES NOT CORRECT. Mapping `docs` onto the nearest of three would be the
+                // guess #1588's AC3 forbids, wearing a writer's authority instead of a parser's.
+                //
+                // AND IT FAILS CLOSED (#266): a body we could not READ is not a body we may declare
+                // clean. `add` costs one REST read it did not cost before, which is the price of the
+                // check being at the only moment the author is still standing there. Nothing has been
+                // written when this refuses, so the remedy is: fix the line, re-run `add`. `add` is
+                // idempotent (already-on-board is a success), so a retry is free.
+                //
+                // IT DOES NOT REQUIRE A CLASS. An item with no `Class:` line boards, and `lint`'s
+                // `CLASS-UNSET` reports it — refusing THAT would turn "filed but never boarded" into a
+                // routine outcome, and an unboarded row is invisible to every scheduler rather than
+                // merely untriaged.
+                match Reads.issueBody ctx.Transport ref.Owner ref.Repo ref.Number with
+                | Error e -> fail e
+                | Ok body ->
+
+                match outOfVocabularyClass body with
+                | Some detail ->
+                    eprint $"fsgg-coord-engine: refusing to board %s{ref.Short} — %s{detail} Fix the body line and re-run `add`."
+                    ExitError
+                | None ->
+
                 match Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
                 | Error e -> fail e
                 | Ok board ->
@@ -5132,9 +5171,16 @@ module Client =
                     else
                         []
 
-                // CLASS-UNSET (.github#1588 AC2/AC3). A `Ready`/`Backlog` OPEN item whose own text says
-                // nothing about HOW BAD it is — no `Class:` line, no `[decision]` title prefix, and no
-                // ADR-0045 `Blocked on: human/decision` sentinel to derive one from.
+                // The CLASS axis (.github#1588 AC2/AC3, .github#1651). A `Ready`/`Backlog` OPEN item whose
+                // own text does not class it — either because it says nothing about HOW BAD it is (no
+                // `Class:` line, no `[decision]` title prefix, no ADR-0045 `Blocked on: human/decision`
+                // sentinel), or because it DID write a `Class:` line and the word is not one of the three.
+                //
+                // THOSE ARE TWO FAULTS AND THEY USED TO RENDER AS ONE. `Class.derive` answers `None` for
+                // both, so a row carrying `Class: docs` was reported as recording no `Class:` — a
+                // diagnostic naming a fault the row did not have, measured twice in one run on two repos
+                // with two different invented words. The verdict is `LintApplication.classVerdict`'s now,
+                // for `badTouchSetDetail`'s reason: a rule nothing can call is a rule no test can drive.
                 //
                 // UNTRIAGED SEVERITY IS EXACTLY AS INVISIBLE AS AN UNTRIAGED STATUS, which is why this is
                 // an `error` on `NO-TOUCH-SET`'s terms rather than a note. The board went from 5 non-Done
@@ -5159,12 +5205,10 @@ module Client =
                     // direction: narrowing the shared predicate would make `bodyNeeded` false while this
                     // rule kept firing over `body = ""`, reporting rows as untriaged whose bodies nobody
                     // read. That is the #266 shape again — a finding produced by a read that did not happen.
-                    if isSchedulableCandidate r && (Class.derive r.Title body).IsNone then
-                        [ mk
-                              "CLASS-UNSET"
-                              "error"
-                              r
-                              $"%s{statusWireName r.Status} but its text records no `Class:` — so a driver cannot tell a live defect from deliberate hardening, and a burn-down keying on severity cannot terminate (#1588). Declare one body line: `Class: defect` (something is broken now), `Class: hardening` (nothing is broken; this removes a way it could break), or `Class: decision` (a human must choose first). A `[decision]` title prefix or a `Blocked on: human/decision` sentinel already derives `decision` — no second line needed." ]
+                    if isSchedulableCandidate r then
+                        match classVerdict (statusWireName r.Status) r.Title body with
+                        | Some(code, detail) -> [ mk code "error" r detail ]
+                        | None -> []
                     else
                         []
 

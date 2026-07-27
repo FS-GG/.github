@@ -31,7 +31,15 @@ with no bash in sight. The board lives in FS-GG/FS.GG.SDD, plus one clean FS-GG/
     #432  SDD   Ready         Class: hardening           -> clean of CLASS-UNSET (an explicit body line)
     #433  SDD   Ready         [decision] title prefix    -> clean of CLASS-UNSET (derived from the TITLE)
     #434  SDD   Ready         Blocked on: human/decision -> clean of CLASS-UNSET (derived, ADR-0045, AC5)
-    #435  SDD   Ready         Class: bug                 -> CLASS-UNSET (an unknown word is NO declaration)
+    #435  SDD   Ready         Class: bug                 -> CLASS-INVALID (a word, and NOT a declaration)
+    #436  SDD   Ready         Class: Defect  (case)      -> clean (ADR-0066 normalises case and space)
+
+    #435 CHANGED CODE HERE, AND THE CHANGE IS THE POINT (.github#1651). It used to assert CLASS-UNSET,
+    which was true of the engine and false of the row: #435 DOES record a `Class:` line. Two live rows
+    were reported that way in one run — `FS.GG.Templates#321` (`Class: docs`) and `FS.GG.SDD#747`
+    (`Class: enhancement`) — and in both cases the author had written the line and believed it. An
+    unknown word is still NO declaration (the refusal #1588 AC3 bought is intact, and #435 is still an
+    error); what changed is that the diagnostic now names the fault the row actually has.
 """
 
 import json
@@ -66,6 +74,7 @@ NODES = [
     node(433, "Ready", SDD, title="[decision] should we do X or Y"),
     node(434, "Ready", SDD, title="Parked on a human decision"),
     node(435, "Ready", SDD, title="Declares a class word nobody speaks"),
+    node(436, "Ready", SDD, title="Declares a legal class in the wrong case"),
 ]
 
 # #421's ONLY `Paths:` line is fenced — the scheduler cannot see it, so it declares nothing (#277).
@@ -103,8 +112,14 @@ BODIES = {
     # already says "a human must choose" does not have to say it twice.
     434: "Paths: none\n\nBlocked on: human/decision",
     # An unknown word is NOT a declaration. Mapping `bug` onto `defect` would be a guess wearing a parser's
-    # authority, and the row would look triaged — so CLASS-UNSET must still fire here.
+    # authority, and the row would look triaged — so this row must still be an ERROR. It is CLASS-INVALID
+    # rather than CLASS-UNSET (.github#1651): the row wrote a line, so telling it that it "records no
+    # `Class:`" named a fault it did not have.
     435: "Paths: src/Real/**\n\nClass: bug",
+    # ADR-0066: *"value normalised for case and space"*. The AC4 decision made explicit — a case variant of
+    # a legal value is ACCEPTED, because `Types.itemClassOfWireName` is the same normalisation `reconcile`
+    # reads the board column back with, and refusing it would report a correctly-triaged row as untriaged.
+    436: "Paths: src/Real/**\n\nClass:   Defect  ",
     # 423 (In progress) and 424 (closed) are NOT candidates, so the engine must never read their bodies.
 }
 
