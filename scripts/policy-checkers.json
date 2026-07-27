@@ -42,6 +42,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/sparse-checkout-closure/run.sh",
       "workflow": ".github/workflows/sparse-checkout-closure.yml"
+    },
+    {
+      "source": "scripts/check-ignored-author-coherence.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/ignored-author-coherence/run.sh",
+      "workflow": ".github/workflows/ignored-author-coherence.yml"
     }
   ]
 }

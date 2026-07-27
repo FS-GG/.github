@@ -1,0 +1,104 @@
+# Gate: the preset's `gitIgnoredAuthors` and the workflows' push identity are ONE fact (.github#1538).
+#
+# #1533 added `gitIgnoredAuthors` to the org-shared preset after a day of hand-repair, and left one
+# string that must stay equal to the `git config user.email` line in every workflow that pushes under
+# the org App — with NOTHING in CI comparing them. #1538 named two such workflows; there are FOUR
+# (kit-materialize, lockfile-sync, skill-registry-autofix, feed-autofix), which is the "copy-paste
+# into a third pushing workflow" hazard already realised twice before this gate existed.
+#
+# A DRIFT HERE IS INVISIBLE, WHICH IS WHY IT NEEDS A GATE RATHER THAN CARE. The workflows keep
+# pushing, Renovate keeps reading those pushes as user edits, and every `renovate/*` branch in every
+# receiver parks. Nothing errors. The only symptom is a bump PR that never opens, and a non-proposal
+# shows up nowhere — that is what froze FS.GG.Kit 0.3.0-0.7.0 across the org.
+#
+# THE SUBJECT IS EVERY WORKFLOW, WHICH IS WHY THE FILTER IS `.github/workflows/**`. The gate derives
+# its subjects — any workflow that configures a commit identity — rather than reading a list of
+# workflow names, so a NEW pushing workflow is graded the day it is written. A narrower filter would
+# mean the gate does not run on the very file that introduces instance three.
+#
+# `default.json` is in the filter because it is the other half of the comparison, and
+# `scripts/lib/gate.py` because the gate IMPORTS it at load. Both are also declared in the gate's
+# own `PATHS_SUBJECT`, which `check-paths-coherence.py` rule (c) reds this file against.
+#
+# The two `paths:` lists are identical on purpose — `check-paths-coherence.py` rule (a) reds any
+# divergence, and a push-copy that quietly omits an entry is how a gate stops running on `main`.
+name: ignored-author-coherence
+
+on:
+  pull_request:
+    paths:
+      - "scripts/check-ignored-author-coherence.py"
+      - "scripts/lib/gate.py"
+      - "tests/ignored-author-coherence/**"
+      - "default.json"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/check-ignored-author-coherence.py"
+      - "scripts/lib/gate.py"
+      - "tests/ignored-author-coherence/**"
+      - "default.json"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ignored-author-coherence-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # PINNED, and it is the version every claim in this gate was MEASURED against — the real
+  # `isBranchModified` in `dist/util/git/index.js`, and the validator's blind spots. Taking
+  # `renovate@latest` would make the verdict f(tree, whatever Mend shipped this morning), which is
+  # the false-accusation this org refuses (#238) — and worse here, because a validator that changed
+  # what it accepts would silently change what this file asserts about the preset.
+  RENOVATE_VERSION: 43.281.1
+
+jobs:
+  coherence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-policy-python
+
+      # `renovate-config-validator` ships only inside the `renovate` package; there is no standalone
+      # distribution. `--no-save` so no lockfile or manifest is written into the checkout.
+      - name: Install the pinned renovate config validator
+        run: |
+          set -euo pipefail
+          npm install --no-save --no-audit --no-fund "renovate@${RENOVATE_VERSION}"
+          echo "RENOVATE_CONFIG_VALIDATOR=$PWD/node_modules/.bin/renovate-config-validator" >> "$GITHUB_ENV"
+
+      # THE SCHEMA RUN THIS ORG-SHARED PRESET HAS NEVER HAD (#1538 criterion 3). `default.json` is
+      # the file every FS-GG repo extends, so a config error here breaks dependency management
+      # everywhere at once, reported only inside each repo's Dependency Dashboard.
+      #
+      # It is FIRST because it is the cheapest real finding, and it is NOT the gate: measured
+      # against this very binary, the validator is GREEN on the bot login in place of the email, on
+      # `gitIgnoredAuthors` deleted outright, on a re-cased address, and on an `extends:` naming a
+      # preset that does not exist (it does not resolve presets — FS.GG.Net#33). Every one of the
+      # first three parks every Renovate branch in the org. A validator pass is evidence about
+      # SHAPE, and nothing else; the fixture below asserts that blind spot rather than assuming it.
+      - name: Validate the org-shared Renovate preset against its schema
+        run: |
+          set -euo pipefail
+          "$RENOVATE_CONFIG_VALIDATOR" --no-global default.json
+
+      # The gate on the real tree, before the fixture, so a genuine drift is not buried under
+      # fixture output.
+      - name: Assert every workflow push identity is named in gitIgnoredAuthors
+        run: python3 scripts/check-ignored-author-coherence.py --root .
+
+      # The fixture drives the gate through every state it must tell apart — the workflow email
+      # drifting, the preset changed to the bot LOGIN, a re-cased entry, and the vacuous-pass family
+      # (key absent, list empty, preset unreadable, nothing graded), each of which is a tree where
+      # "every configured identity is declared" is TRUE and the whole org is parked. It also runs
+      # the validator's own negative control: a binary that reds nothing reads exactly like a clean
+      # preset, so its green is never taken on trust.
+      - name: Run the ignored-author-coherence fixture
+        run: bash tests/ignored-author-coherence/run.sh
