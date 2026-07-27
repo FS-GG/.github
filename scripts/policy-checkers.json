@@ -48,6 +48,12 @@
       "owner": "FS-GG/.github maintainers",
       "fixture": "tests/ignored-author-coherence/run.sh",
       "workflow": ".github/workflows/ignored-author-coherence.yml"
+    },
+    {
+      "source": "scripts/check-kit-published-coherence.py",
+      "owner": "FS-GG/.github maintainers",
+      "fixture": "tests/kit-published-coherence/run.sh",
+      "workflow": ".github/workflows/kit-published-coherence.yml"
     }
   ]
 }
