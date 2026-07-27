@@ -92,14 +92,46 @@
 # `stale_guard` compares the ARTIFACT to the source; `dirty_guard` compares that SOURCE to HEAD. Neither
 # subsumes the other, and a build satisfies the first while defeating the second (see #709 below).
 #
-# NEITHER ASKS "IS IT ON MAIN?", AND THIS COMMENT MUST NOT IMPLY THEY DO. Both compare against the local
-# checkout — the artifact to `src/`, `src/` to HEAD — so a worker who COMMITS kit WIP on a branch here,
-# or whose shared checkout simply sits behind `origin/main`, defeats both while running code the fleet
-# never merged. That gap is real and deliberately unclosed: the honest comparison is against
-# `origin/main`, which is a network read this resolver must not do on every invocation, and which would
-# fire on every checkout that is merely BEHIND — the normal state of a shared checkout nobody fetches. What is
-# left is a guard that catches the observed bug (#709's ` M scripts/fsgg-coord`) and does not pretend to
-# be a merge check.
+# `stale_guard` NOW ASKS "IS IT ON MAIN?" — IN ONE SCOPED DIRECTION, AND `dirty_guard` STILL DOES NOT
+# (.github#1549). This paragraph used to say NEITHER did, and recorded the gap as deliberately unclosed:
+# *"the honest comparison is against `origin/main`, which is a network read this resolver must not do on
+# every invocation, and which would fire on every checkout that is merely BEHIND — the normal state of a
+# shared checkout nobody fetches."* Both objections were right. Neither was fatal, and the bill for
+# treating them as fatal came due: #1549 REPRODUCED #1507 — a `--json` token written into a live claim's
+# `Paths:` line — ninety minutes after this repo closed #1507, with the fix (`ff088fe`, #1516) sitting on
+# `main` the whole time. The shared checkout every worker's engine resolves through was 14 commits behind
+# `origin/main`; its built engine was a FAITHFUL build of that older source. Artifact and source agreed.
+# Both lagged `main`. The guard was silent, and it was silent *correctly* — it was asked the wrong
+# question. A second worker hit the same defect on the same board the same day (#1549's first comment).
+#
+# So the question below is no longer "is this binary older than the source next to it?" alone. It is also
+# "has the default branch moved past the commit this engine was built from, IN THE ENGINE'S OWN SOURCE
+# TREES?" — and the two objections above are ANSWERED rather than dodged:
+#
+#   NO NETWORK, EVER. `upstream_drift` reads the ALREADY-FETCHED remote-tracking ref and never runs
+#   `git fetch`. That is not a compromise on the honest comparison, it is how the honest comparison is
+#   affordable: a linked worktree SHARES the common dir's refs, so every worker's own `git fetch origin
+#   main` — which pnext-item §2 makes them run to branch off it — refreshes the SHARED checkout's
+#   `origin/main` for free, from a different working tree, before they do any work. #1549's corroborating
+#   comment measured exactly that and preferred it for exactly this reason.
+#
+#   NOT "MERELY BEHIND". The bar is drift under `src/FS.GG.Coord.{Cli,Core,GitHub}` — the trees whose
+#   commits ship in the engine, scoped as `scripts/check-engine-freshness.py`'s ENGINE_SOURCE already
+#   scopes them. A checkout behind on docs, workflows, skills or registry rows is not running different
+#   code and is not stopped. "Halting every worker whenever `main` moves" was the thing to avoid, and
+#   avoiding it is a question of SUBJECT, not of refusing to ask.
+#
+# WHAT IT COSTS, SAID PLAINLY, BECAUSE SOMEBODY WILL PAY IT MID-ITEM. This engine is edited often —
+# `check-engine-freshness.py` measured 33 engine commits in the 8 hours after one release — so a worker
+# whose item outlives an engine merge WILL be refused a `heartbeat` or a `done` and told to update and
+# rebuild. That is a stall of about a minute, on a remedy that is local, cheap and theirs, and it is the
+# same trade #929 already made for the mtime half. The alternative is #1507's defect recurring on a live
+# claim, which is what happened while this comment said the gap was deliberately unclosed.
+#
+# `dirty_guard` is unchanged and still asks only about the local checkout, so half of the retired sentence
+# survives verbatim: a worker who COMMITS kit WIP on a branch here defeats it, and that gap stays open.
+# What does not survive is the claim that a shared checkout sitting behind `origin/main` is invisible to
+# both — it was the observed bug, twice in one day, and it is now refused.
 set -uo pipefail
 
 die() { echo "fsgg-coord: $*" >&2; exit 69; }  # EX_UNAVAILABLE — the engine is not here
@@ -229,8 +261,25 @@ BOARD_READS="batch board bootstrap budget command-contract decide facts field-id
 #
 # THE CLI's .dll IS THE WHOLE GRAPH'S BUILD STAMP. Cli references Core and GitHub, so a change anywhere
 # under `src/` forces its recompile (verified: touching Core/Protocol.fs alone moves it). So comparing
-# every `src/**/*.fs` against it neither false-greens on a Core-only edit nor false-STALEs after a real
-# build — the false-stale being the one that would halt the fleet.
+# every HAND-WRITTEN `src/**/*.fs` against it neither false-greens on a Core-only edit nor false-STALEs
+# after a real build — the false-stale being the one that would halt the fleet.
+#
+# "HAND-WRITTEN" IS THE WORD THAT WAS MISSING, AND ITS ABSENCE WAS THE FALSE-STALE THE SENTENCE ABOVE
+# CLAIMS TO PREVENT (.github#1572). MSBuild GENERATES `.fs` under `src/` — one pair per project per
+# configuration: `<proj>/obj/<cfg>/net10.0/<proj>.AssemblyInfo.fs` and, beside it,
+# `.NETCoreApp,Version=v10.0.AssemblyAttributes.fs`. They are `*.fs`, they live under `src/`, and an
+# unfiltered `find` counted them. So building or testing in a configuration OTHER than the one this guard
+# measures re-stamped them, and a plain `dotnet test` made the guard report STALE against a CURRENT
+# Release binary over a tree with zero edited sources — REFUSING every board write at exit 69, citing an
+# assembly-attribute stub no human wrote (measured on this host: `heartbeat` refused). It landed on
+# precisely the worker following pnext-item §2, because running the tests is what re-stamps them; and the
+# remedy it printed cleared it only until the next `dotnet test`, which teaches the fleet to ignore the
+# one instruction REAL staleness depends on being obeyed. A comment asserting a property the code does
+# not have is itself the defect (#1059's class), so both are repaired here rather than only the prose.
+#
+# The repair is to measure only files that are INPUTS to the build: `obj/` and `bin/` are OUTPUTS, and
+# nothing under them is a source the engine could be behind. PRUNED, not filtered afterwards — the scan
+# stays bounded, and `-prune` must sit on the LEFT of the `-o` or it prunes nothing.
 #
 # PORTABLE `find`, AND THAT IS NOT PEDANTRY — IT IS THIS GUARD'S OWN FAILURE MODE. The obvious spelling
 # ends `-print -quit`, stopping at the first hit. `-quit` is GNU-only: BSD/macOS find REFUSES it, and
@@ -238,20 +287,155 @@ BOARD_READS="batch board bootstrap budget command-contract decide facts field-id
 # is invisible — the probe yields nothing, "nothing" reads as "not stale", and the guard SILENTLY never
 # fires. Measured: with a -quit-refusing find on PATH, a board write ran on a genuinely stale engine, no
 # warning, no refusal. That is the #266 signature this guard exists to END, rebuilt inside the guard. So
-# no `-quit`: `head -1` bounds it instead, and the scan is ~30 files.
+# no `-quit`: `head -1` bounds it instead, and the scan is ~30 files. `\( … \) -type d -prune -o … -print`
+# is the same POSIX vocabulary and adds no GNU extension, so the pruning cannot resurrect that hole.
+
+# THE TREES WHOSE COMMITS SHIP IN THE ENGINE (.github#1549) — the same three
+# `scripts/check-engine-freshness.py`'s ENGINE_SOURCE names, and deliberately so: #1549's criterion is
+# drift "in the engine's source trees, as `check-engine-freshness.py` already scopes it". A commit
+# outside them cannot change the IL the fleet execs, so counting it would halt board writes for noise.
+#
+# NARROWER THAN `dirty_guard`'s PATHSPEC, AND THE ASYMMETRY IS DECIDED RATHER THAN OVERLOOKED. That guard
+# also watches `Directory.Build.props`, `Directory.Packages.props`, `global.json` and this shim, and those
+# genuinely do reach the compiled engine. They are absent here because the two guards spend different
+# money: `dirty_guard` WARNS, so a wide subject costs a line of stderr, while this one REFUSES every board
+# write in the fleet, so a wide subject costs an outage on the morning somebody bumps a package pin on
+# main. `check-engine-freshness.py` draws the same line for the same reason and REPORTS sub-threshold
+# drift instead of reddening on it. Stated as a miss rather than left implied: a shared checkout behind
+# ONLY on a package pin or an SDK band is not caught here, and `dirty_guard` will not see it either once
+# it is committed upstream.
+ENGINE_SOURCE_TREES="src/FS.GG.Coord.Cli src/FS.GG.Coord.Core src/FS.GG.Coord.GitHub"
+
+# HAS THE DEFAULT BRANCH MOVED PAST THE COMMIT THIS ENGINE WAS BUILT FROM? (.github#1549)
+#
+# THE REF IS READ, NEVER FETCHED — see the header. A `git fetch` on every invocation is the cost this
+# resolver refused for a year, and it is not needed: worktrees share the common dir's refs, so the fleet's
+# own §2 fetches keep the shared checkout's `origin/*` current from the outside.
+#
+# THE DEFAULT BRANCH IS ASKED FOR, NOT ASSUMED. `refs/remotes/origin/HEAD` is the recorded answer (git
+# clone writes it); `main` and `master` are the fallbacks, because a repo initialised locally and given a
+# remote may never have had it written. Each candidate must RESOLVE TO A COMMIT before it is believed — a
+# dangling symref is not a comparison point, and taking its name on faith would put the whole verdict
+# behind a `rev-list` that silently fails.
+#
+# NO SUBJECT vs NO ANSWER, AND A REMOTE IS THE DIFFERENCE. A checkout with no `origin` has no recorded
+# default branch to be behind — the parity fixtures, a `git init` scratch tree, an air-gapped clone — and
+# that is the same shape as "no IL to measure against" above and `dirty_guard`'s "no HEAD, no baseline":
+# nothing to assert, so say nothing. A checkout that HAS an `origin` and no resolvable default-branch ref
+# is a different fact: the question was asked and could not be answered, and #1549's fourth criterion is
+# explicit that an unanswerable staleness question must not read as freshness (#266). That is a
+# `noverdict`, and the caller REFUSES writes on it. It costs a stall; the alternative cost a corrupt
+# touch-set.
+#
+# AND THE MISS IS NAMED, because "no `origin`" is a slightly weaker claim than "no upstream": a checkout
+# whose remote is called `upstream`, or `fs-gg`, is silent here. That is a deliberate floor rather than an
+# oversight — every FS-GG checkout is a clone with `origin`, and probing every configured remote for a
+# plausible default branch would put a heuristic where this file keeps concrete answers (`shared_toplevel`
+# and `engine_path` are equally literal). If a fleet checkout ever stops using `origin`, this guard goes
+# quiet and nothing says so.
+#
+# A PATHSPEC THAT MATCHES NOTHING COUNTS ZERO, AND ZERO READS AS FRESH — so it is checked, not assumed.
+# This is the same fail-open `check-engine-freshness.py` guards with `_assert_exists`, and it is a live
+# risk rather than a theoretical one: `ENGINE_SOURCE_TREES` is three hard-coded directory names, and a
+# renamed or moved project would leave `rev-list --count` answering `0` forever, over nothing, silently —
+# a guard reporting fresh about a subject it can no longer see. So a `HEAD` with NO commit under those
+# trees is a `noverdict`, not a pass.
+#
+# MEASURED: ~5 ms for the whole probe on this repo (4 `git` calls, 20 runs), against `dirty_guard`'s ~3 ms
+# on the same host. It is on the hot path of every tier-2 invocation, reads only already-fetched refs, and
+# performs no network I/O.
+#
+# Prints ONE tab-separated line, or nothing at all:
+#   behind<TAB><n><TAB><ref>   — <ref> carries <n> commits under the engine's source trees that $1 lacks
+#   noverdict<TAB><why>        — the question could not be answered, which is not an answer
+upstream_drift() {
+  local top="$1" ref="" cand c n
+  cand="$(git -C "$top" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null)"
+  for c in "$cand" refs/remotes/origin/main refs/remotes/origin/master; do
+    [ -n "$c" ] || continue
+    if git -C "$top" rev-parse --verify -q "$c^{commit}" >/dev/null 2>&1; then ref="$c"; break; fi
+  done
+  if [ -z "$ref" ]; then
+    git -C "$top" config --get remote.origin.url >/dev/null 2>&1 || return 0
+    printf 'noverdict\tit has an origin remote, but refs/remotes/origin/{HEAD,main,master} all fail to resolve\n'
+    return 0
+  fi
+  git -C "$top" rev-parse --verify -q HEAD >/dev/null 2>&1 \
+    || { printf 'noverdict\tit has no HEAD to compare against %s\n' "$ref"; return 0; }
+  # WORD SPLITTING IS THE POINT: `$ENGINE_SOURCE_TREES` is a pathspec LIST, and one spelling of it is
+  # what keeps this in step with the comment above rather than duplicating three literals.
+  # shellcheck disable=SC2086
+  if [ -z "$(git -C "$top" rev-list -1 HEAD -- $ENGINE_SOURCE_TREES 2>/dev/null)" ]; then
+    printf 'noverdict\tno commit reachable from HEAD touches %s, so this guard would be measuring nothing\n' \
+           "$ENGINE_SOURCE_TREES"
+    return 0
+  fi
+  # shellcheck disable=SC2086
+  n="$(git -C "$top" rev-list --count "HEAD..$ref" -- $ENGINE_SOURCE_TREES 2>/dev/null)"
+  case "$n" in
+    '' | *[!0-9]*)
+      printf 'noverdict\tgit rev-list --count HEAD..%s over the engine source trees did not answer\n' "$ref"
+      return 0 ;;
+    0) return 0 ;;
+  esac
+  printf 'behind\t%s\t%s\n' "$n" "$ref"
+}
+
+# THE TWO QUESTIONS ARE ONE VERDICT, AND ONE MESSAGE. Both mean "the IL you are about to exec is not the
+# code that decides this board", they have overlapping remedies (a pull subsumes a rebuild), and a worker
+# who is told only the nearer one goes and rebuilds a checkout that is still behind. So `$detail`
+# ACCUMULATES: whichever fired is reported, and if both fired the reader sees both, in the order a fix
+# would be applied.
 stale_guard() {
-  local top="$1" dll="$2" verb="$3" newer built changed detail
+  local top="$1" dll="$2" verb="$3" newer built changed drift kind a b detail=""
   [ -f "$dll" ] || return 0   # no IL to measure against; the exec below fails honestly on its own
-  newer="$(find "$top/src" -name '*.fs' -newer "$dll" -print 2>/dev/null | head -1)"
-  [ -n "$newer" ] || return 0                                        # the engine is current — say nothing
-  # `date -r FILE` is GNU; BSD's `-r` takes SECONDS. A failure here must not blank the message, so fall
-  # back to '?': the timestamps are evidence, but the VERDICT above is what has to survive a foreign date.
-  built="$(date -r "$dll" '+%Y-%m-%d %H:%M' 2>/dev/null || echo '?')"
-  changed="$(date -r "$newer" '+%Y-%m-%d %H:%M' 2>/dev/null || echo '?')"
-  detail="            engine built $built
+
+  # (1) IS THE ARTIFACT BEHIND THE SOURCE BESIDE IT? The mtime question (#929), over build INPUTS only.
+  newer="$(find "$top/src" \( -name obj -o -name bin \) -type d -prune \
+             -o -name '*.fs' -newer "$dll" -print 2>/dev/null | head -1)"
+  if [ -n "$newer" ]; then
+    # `date -r FILE` is GNU; BSD's `-r` takes SECONDS. A failure here must not blank the message, so fall
+    # back to '?': the timestamps are evidence, but the VERDICT is what has to survive a foreign date.
+    built="$(date -r "$dll" '+%Y-%m-%d %H:%M' 2>/dev/null || echo '?')"
+    changed="$(date -r "$newer" '+%Y-%m-%d %H:%M' 2>/dev/null || echo '?')"
+    # THE PATHS ARE ABSOLUTE, AND #931 IS WHY. At tier 2b `$top` is the SHARED checkout while the reader
+    # is standing in a worktree, so the old relative `dotnet build src/FS.GG.Coord.Cli -c Release` named
+    # the WRONG tree — it rebuilds the caller's own source, which was never the stale one, and leaves the
+    # refusal in place. #1549's third criterion asks for the remedy to name which checkout to update; a
+    # relative path cannot.
+    detail="            engine built $built
             ${newer#"$top/"} changed $changed
-            You are about to run code that is NOT in this checkout (#929). Rebuild it:
-              dotnet build src/FS.GG.Coord.Cli -c Release"
+            You are about to run code that is NOT in the checkout that built it (#929). Rebuild it:
+              dotnet build $top/src/FS.GG.Coord.Cli -c Release"
+  fi
+
+  # (2) HAS `main` MOVED PAST IT? The merge question (.github#1549), scoped to the engine's own trees.
+  drift="$(upstream_drift "$top")"
+  IFS="$(printf '\t')" read -r kind a b <<<"$drift"
+  case "$kind" in
+    behind)
+      detail="${detail:+$detail
+}            BEHIND $b by $a commit(s) under the engine's own source trees — the checkout
+            this engine was built from does not contain them (.github#1549):
+              $top
+            You can be standing in a CURRENT worktree and still be about to exec an engine
+            that is not. Update the checkout that OWNS this build, then rebuild it:
+              git -C $top pull --ff-only
+              dotnet build $top/src/FS.GG.Coord.Cli -c Release" ;;
+    noverdict)
+      detail="${detail:+$detail
+}            Whether this engine is behind the default branch could NOT be decided —
+            $a, in the checkout this engine was built from:
+              $top
+            An unanswerable staleness question is not freshness (#266, .github#1549), so board
+            writes fail closed here rather than being permitted on a guess. Give that checkout
+            a default-branch ref, then rebuild it:
+              git -C $top fetch origin
+              dotnet build $top/src/FS.GG.Coord.Cli -c Release" ;;
+  esac
+
+  [ -n "$detail" ] || return 0                                       # the engine is current — say nothing
+
   # ONE SPACE BETWEEN THE SETS, spaces added once around the whole — see the note above the sets. A padded
   # concatenation would put a DOUBLE space here and refuse the empty verb of a bare invocation.
   case " $BOARD_WRITES $BOARD_WRITES_CONDITIONAL " in
@@ -287,20 +471,24 @@ $detail" ;;
       esac ;;
   esac
 
-  echo "fsgg-coord: WARNING — the engine is STALE, so it need not behave as this checkout reads." >&2
+  echo "fsgg-coord: WARNING — the engine is STALE, so it need not behave as the code you are reading does." >&2
   printf '%s\n' "$detail" >&2
   echo "            Board writes are refused until you do." >&2
 }
 
-# AND THE SOURCE IS NOT A REF EITHER (#709). `stale_guard` asks one question — "is the ARTIFACT behind
-# the source?" — and it is an mtime question. It cannot ask the other one: "is the SOURCE ITSELF on
-# main?" So the two states it separates are not the two that matter:
+# AND UNCOMMITTED SOURCE IS STILL NOT A REF (#709). `stale_guard`'s mtime half asks "is the ARTIFACT
+# behind the source beside it?", and its .github#1549 half asks "has the DEFAULT BRANCH moved past the
+# commit that source sits on?". Neither can ask the third question — "is that source COMMITTED at all?"
+# — because an uncommitted edit is on no ref for a rev-list to find. So the two states the mtime half
+# separates are still not the two that matter:
 #
 #   edited, NOT built   → .fs newer than .dll  → stale_guard fires.  The engine is the OLD, merged code.
 #   edited AND built    → .dll newer than .fs  → stale_guard SILENT. The engine is somebody's WIP.
 #
-# The guard is loudest in the safe case and mute in the dangerous one. Building is what a worker does
-# NEXT, so #929's window closes itself: the warning decays into silence exactly as the risk arrives.
+# The mtime half is loudest in the safe case and mute in the dangerous one. Building is what a worker
+# does NEXT, so #929's window closes itself: the warning decays into silence exactly as the risk arrives.
+# #1549's half does not help here either — WIP built on top of a current checkout is not BEHIND anything,
+# so `upstream_drift` is silent by construction and correctly so. That is this guard's whole subject.
 #
 # THE RISK IS THIS REPO'S ALONE, AND IT IS THE WHOLE FLEET'S. Every worker on this board runs the
 # SHARED checkout's engine. Under `src/` live the scheduler, the claim CAS and the board writer. So one
