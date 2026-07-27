@@ -712,3 +712,237 @@ module OptionsTests =
               "scripts/materialize-skill-roots.sh" ],
             o.Paths
         )
+
+    // ---- #1523 — `--json` is HONOURED or REFUSED, and there is no third state ----------------------
+    //
+    // `--json` was `Global` in `scopeOf`, so `command-contract` advertised it on all 40 commands and the
+    // #991 residue rule refused it nowhere. Fourteen commands branched on `opts.Render`; four printed a
+    // machine document regardless; the other TWENTY printed the same prose with the flag as without and
+    // exited 0. #991 exempted it by construction — `Render` has a non-optional default, so "given" and
+    // "defaulted" were the same state and there was nothing to detect — and that exemption was true of
+    // the PARSER and silent about the RENDERER.
+    //
+    // THE REPAIR IS SCOPING, NOT HONOURING, and the twenty are the argument. Teaching twenty handlers to
+    // read `opts.Render` is twenty chances to flip a bare form, with no way to prove none of them did; and
+    // two of the twenty decide whether this fleet runs at all. `whoami --mint` prints
+    // `export FSGG_WORKER=…` for `eval`, and `done` prints the `FSGG-DONE` stamp every driver greps.
+    // A JSON projection nobody asked for, on either, is an outage bought for nothing. Refusal is also
+    // #991's own remedy: it makes `scopeOf` the gate rather than adding a new checker beside it.
+
+    /// The render mode a BARE invocation of every verb parses to — criterion 3's pin.
+    ///
+    /// THE ASSERTION THAT MATTERS IS THIS ONE, not "`--json` works". The regression risk in scoping a
+    /// render flag is entirely in the NO-FLAG path: #1517 measured that honouring `opts.Render` in
+    /// `widen` while its parse arm still inherited the module default of `Json` would have flipped the
+    /// bare `widen` — the form every recipe, skill and driver runs — from a human receipt to a JSON
+    /// object, and sixteen more arms were sitting in that same configuration.
+    ///
+    /// FIFTEEN OF THESE ROWS CHANGED VALUE IN #1523, from `Json` to `Text`: `whoami`, `next`, `landable`,
+    /// `release`, `heartbeat`, `set-field`, `child`, `say`, `done`, `verify-paths`, `bootstrap`,
+    /// `field-id`, `option-id`, `item-id`, `add`. Every one of them is a handler that reads `opts.Render`
+    /// NOWHERE, so the field it was left at could not be observed — which is exactly why they were left
+    /// wrong. Their stdout is byte-identical before and after; what changed is that the declared default
+    /// now states what the handler has always printed, so the next edit that teaches one of them to
+    /// honour the field finds it already set to the right mode. That is the trap being disarmed rather
+    /// than re-armed.
+    ///
+    /// EVERY ROW WHOSE COMMAND *DOES* BRANCH ON `Render` IS UNCHANGED. That is the non-regression claim,
+    /// and it is the one this table exists to keep true.
+    let private bareRender: (string * Render) list =
+        [
+          // Both projections — the handler branches. NONE of these values moved in #1523.
+          "decide", Json
+          "lanes", Json
+          "facts", Json
+          "batch", Json
+          "ready", Json
+          "reconcile", Text
+          "who", Text
+          "budget", Text
+          "claim", Text
+          "adopt", Text
+          "take", Text
+          "widen", Text // #1517
+          "set-paths", Text // #1517
+          "inbox", Text
+          "predicate", Text
+          "lint", Text
+
+          // JSON only — stdout is a machine document whatever the flag says. Unchanged.
+          "scan", Json
+          "command-contract", Json
+          "board", Json
+          "issues", Json
+
+          // TEXT only — prose, a bare id, or one verdict word. These are the fifteen that moved, plus the
+          // five (`reap`, `overlap`, `say`… ) whose arms had already pinned `Text` by hand.
+          "whoami", Text
+          "next", Text
+          "reap", Text
+          "landable", Text
+          "release", Text
+          "heartbeat", Text
+          "set-field", Text
+          "child", Text
+          "overlap", Text
+          "say", Text
+          "room open", Text
+          "done", Text
+          "verify-paths", Text
+          "followup", Text
+          "bootstrap", Text
+          "field-id", Text
+          "option-id", Text
+          "item-id", Text
+          "add", Text
+          "flush", Text ]
+
+    [<Fact>]
+    let ``#1523 the BARE form of every verb parses to the mode that verb actually prints in`` () =
+        let wrong =
+            bareRender
+            |> List.choose (fun (verb, expected) ->
+                match parse (verb.Split(' ') |> Array.toList) with
+                | Ok o when o.Render = expected -> None
+                | Ok o -> Some $"%s{verb}: bare render is %A{o.Render}, expected %A{expected}"
+                | Error e -> Some $"%s{verb}: REFUSED: %s{e}")
+
+        Assert.True(
+            List.isEmpty wrong,
+            "a BARE invocation changed render mode — this is the #1517 trap, and every caller that parses "
+            + "the un-flagged output is downstream of it (#1523):\n  "
+            + String.concat "\n  " wrong
+        )
+
+    [<Fact>]
+    let ``#1523 the pinned bare form IS the declared one — one fact, not two`` () =
+        // The table above is a snapshot, and a snapshot beside a declaration is two copies. This binds
+        // them: the pin must equal what `renderSupport` says, so a `Both` default edited in `Options.fs`
+        // goes RED here and costs a line in the diff rather than costing nothing. It is also what makes
+        // the table above a REGRESSION test rather than a restatement — the value is asserted twice, from
+        // the parser and from the declaration, and only agreement passes.
+        let declared c =
+            match renderSupport c with
+            | Both d -> d
+            | JsonOnly -> Json
+            | TextOnly -> Text
+
+        let wrong =
+            bareRender
+            |> List.choose (fun (verb, expected) ->
+                match parse (verb.Split(' ') |> Array.toList) with
+                | Ok o when declared o.Command = expected -> None
+                | Ok o -> Some $"%s{verb}: declared %A{declared o.Command}, pinned %A{expected}"
+                | Error e -> Some $"%s{verb}: REFUSED: %s{e}")
+
+        Assert.True(List.isEmpty wrong, "the pin and the declaration disagree:\n  " + String.concat "\n  " wrong)
+
+    [<Fact>]
+    let ``#1523 the pin covers every verb — a new one cannot slip past it`` () =
+        // Same argument `CommandSurfaceTests` makes about the verb inventory: a table nobody is forced to
+        // extend describes last year's engine. `Command` is the only source of truth this table cannot
+        // drift from, and it is reached through the PARSER — the pin names verbs, and what a verb means
+        // is the parser's answer, not a second mapping kept here.
+        let pinned =
+            bareRender
+            |> List.map (fun (verb, _) -> (parse (verb.Split(' ') |> Array.toList) |> ok).Command)
+            |> Set.ofList
+
+        let dispatched =
+            Microsoft.FSharp.Reflection.FSharpType.GetUnionCases typeof<Command>
+            |> Array.toList
+            |> List.choose (fun case ->
+                match Microsoft.FSharp.Reflection.FSharpValue.MakeUnion(case, [||]) :?> Command with
+                // `--help`/`--version` are reached by flag, not by a verb, so there is no bare form to pin.
+                | Help
+                | Version -> None
+                | c -> Some c)
+            |> Set.ofList
+
+        Assert.Equal<Set<Command>>(dispatched, pinned)
+
+    [<Fact>]
+    let ``#1523 --json is REFUSED on a command with no machine projection`` () =
+        // Including the two that decide whether this fleet can run. A refusal is loud and fixable; the
+        // silence it replaces is neither.
+        for verb, args in
+            [ "whoami", [ "--mint" ]
+              "done", [ ".github#1523"; "--flip" ]
+              "next", []
+              "landable", [ "801"; "--repo"; ".github" ]
+              "release", [ ".github#1523" ]
+              "heartbeat", [ ".github#1523" ]
+              "add", [ ".github#1523" ]
+              "flush", []
+              "reap", []
+              "verify-paths", [ "--pr"; "801" ] ] do
+            let e = parse ([ verb ] @ args @ [ "--json" ]) |> rejected
+            Assert.Contains("--json is not a flag of", e)
+            Assert.Contains(verb, e)
+            // The message must say WHY, not just no. The caller reached for a machine projection; the
+            // useful answer is that there is not one, and where the ones that exist are listed.
+            Assert.Contains("no machine projection", e.Replace("NO machine projection", "no machine projection"))
+            Assert.Contains("command-contract", e)
+
+    [<Fact>]
+    let ``#1523 --text is REFUSED on a command whose stdout is always a machine document`` () =
+        // The other half of the same rule, and the reason `--json`/`--text` are two `Flag` cases rather
+        // than two spellings of one: `issues` and `board` keep the JSON promise and cannot keep the text
+        // one, and a single row could not have said both.
+        for verb, args in [ "issues", [ "sdd" ]; "board", []; "command-contract", []; "scan", [] ] do
+            let e = parse ([ verb ] @ args @ [ "--text" ]) |> rejected
+            Assert.Contains("--text is not a flag of", e)
+            Assert.Contains(verb, e)
+
+    [<Fact>]
+    let ``#1523 the fourteen commands that BRANCH on Render still take both spellings`` () =
+        // The non-regression leg. Scoping a flag is only correct if it stays where it is honoured, and
+        // every one of these is a live caller in this repo's own recipes and CI (`ready --json`,
+        // `lint --json`, `batch --json`, `take --json`, `who --json`, `reconcile --json`, `budget --json`,
+        // `lanes --text`, `decide --text`, `ready --text`).
+        for verb, args in
+            [ "decide", []
+              "lanes", []
+              "facts", []
+              "batch", []
+              "ready", []
+              "who", []
+              "budget", []
+              "claim", [ ".github#1523" ]
+              "adopt", [ ".github#1523" ]
+              "take", []
+              "widen", [ ".github#1523"; "--paths"; "src/A.fs" ]
+              "set-paths", [ ".github#1523"; "--paths"; "src/A.fs" ]
+              "inbox", []
+              "lint", [] ] do
+            Assert.Equal(Json, (parse ([ verb ] @ args @ [ "--json" ]) |> ok).Render)
+            Assert.Equal(Text, (parse ([ verb ] @ args @ [ "--text" ]) |> ok).Render)
+
+        // `reconcile` honours both too, but `--apply --json` is a refusal of its own (and it is checked
+        // BEFORE the residue rule, so scoping must not have swallowed its message).
+        Assert.Equal(Json, (parse [ "reconcile"; "--json" ] |> ok).Render)
+        Assert.Equal(Text, (parse [ "reconcile"; "--text" ] |> ok).Render)
+        Assert.Contains("mutually exclusive", parse [ "reconcile"; "--apply"; "--json" ] |> rejected)
+
+    [<Fact>]
+    let ``#1523 RenderGiven separates the ACT from the EFFECT`` () =
+        // The modelling criterion, and the whole reason the flag can be scoped at all. `Render` alone
+        // cannot answer "was it given?" — it has a non-optional default, so a defaulted `Text` and an
+        // explicit `--text` are the same value. `RenderGiven` is the missing bit, and `flagsGiven` reads
+        // it. Without this field the residue rule has nothing to name and `--json` stays `Global` by
+        // necessity rather than by choice, which is exactly the state #991 recorded and #1523 measured.
+        let bare = parse [ "who" ] |> ok
+        Assert.Equal(Text, bare.Render)
+        Assert.Equal(None, bare.RenderGiven)
+
+        let explicitText = parse [ "who"; "--text" ] |> ok
+        Assert.Equal(Text, explicitText.Render)
+        Assert.Equal(Some Text, explicitText.RenderGiven)
+
+        let explicitJson = parse [ "who"; "--json" ] |> ok
+        Assert.Equal(Some Json, explicitJson.RenderGiven)
+
+        // LAST WINS, and the record of the act follows the effect rather than remembering the first.
+        let both = parse [ "who"; "--json"; "--text" ] |> ok
+        Assert.Equal(Text, both.Render)
+        Assert.Equal(Some Text, both.RenderGiven)
