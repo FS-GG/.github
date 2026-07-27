@@ -393,6 +393,163 @@ else
   echo "FAIL  single-root root set accounting (rc=$rc)"; echo "    | want: … — $want_sum"; echo "    | got:  $sumline"; failcount=$((failcount+1))
 fi
 
+# --- 4e. CHECK 3 IS THE THIRD INDEPENDENT FACT, AND IT IS PER-ROOT (#1513) ------------------------
+#
+# THE DEFECT THIS PINS, and it is #1506's exactly one check further down. Checks 1-2 SHORT-CIRCUITED
+# past check 3: `if [ -n "$partitioned" ] || [ -n "$differing" ]; then continue; fi`. So an id that was
+# BOTH partitioned AND digest-mismatched reported only `[partitioned]`, and its declared digest was
+# never read at all. Measured on `main` at 22461b4, on exactly the tree below:
+#
+#     ::error::[partitioned] skill 'beta' is absent from root(s): .agents/skills
+#     skill-union-assert: 2 skill(s) — … | manifest-matched=1 co-tenant=0 declared-absent=0
+#
+# `Fsgg.SkillMirror.verify` — ADR-0014's one implementation, which this script is defined to FOLLOW
+# (#120) — returns `MissingRoots`, `Divergent` and `HashMismatchRoots` on ONE record, computed
+# INDEPENDENTLY. A follower that computes them in a chain can only ever report a prefix. And
+# `manifest-matched=1` is the bare-count defect #1506 fixed for the byte counts and left here: a count
+# with no population, over a 2-id union, when one of the two was never examined against the manifest.
+BOTH3="$WORK/partitioned-and-drifted"; build_good "$BOTH3"
+rm -rf "$BOTH3/.agents/skills/beta"                       # beta: partitioned…
+MAN_BOTH3="$WORK/man-partitioned-and-drifted.json"
+cat > "$MAN_BOTH3" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$BOTH3/.claude/skills/alpha")" },
+  { "id": "beta",  "scope": "product", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" }
+] }
+EOF
+rc=0; bash "$ASSERT" --product "$BOTH3" --roots "$ROOTS" --manifest "$MAN_BOTH3" >"$WORK/out" 2>&1 || rc=$?
+sumline="$(grep -m1 'skill(s) —' "$WORK/out" || true)"
+
+# (a) BOTH facts, for the SAME id, and the drift names EVERY root it was found in — the shape of
+# `HashMismatchRoots`, not one representative root's answer.
+if [ "$rc" -eq 1 ] \
+   && grep -q "::error::\[partitioned\] skill 'beta' is absent from root(s): .agents/skills" "$WORK/out" \
+   && grep -q "::error::\[drifted\] skill 'beta' SKILL.md digest != manifest 1111111111111111111111111111111111111111111111111111111111111111 in root(s): .claude/skills=.* .codex/skills=" "$WORK/out"; then
+  echo "PASS  (expected [partitioned]+[drifted]) a partitioned skill whose declared digest mismatches reports BOTH facts, per root"; pass=$((pass+1))
+else
+  echo "FAIL  (want rc=1 + [partitioned] AND per-root [drifted] on the same id) got rc=$rc"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# (b) …and the MANIFEST counts carry their populations, asserted on the exact bytes for the same reason
+# the byte counts are: `manifest-matched=1` beside an unexamined id is a coverage claim the reader
+# supplies for themselves. `manifest-comparable` beside `manifest-examined` is what makes a
+# re-introduced short-circuit visible rather than silent.
+want_sum="in-every-root=1/2 partitioned=1 | byte-comparable=2 byte-compared=2 byte-identical=2/2 byte-differing=0 single-root=0 | manifest-declared=2/2 manifest-comparable=2 manifest-examined=2 manifest-matched=1/2 manifest-no-reference=0 undeclared-rejected=0/0 co-tenant=0/0 declared-absent=0/2"
+if [ "$(printf '%s' "$sumline" | sed 's/.*— //')" = "$want_sum" ]; then
+  echo "PASS  manifest counts state examined-vs-total: manifest-matched=1/2, not a bare 1"; pass=$((pass+1))
+else
+  echo "FAIL  manifest counts must state their populations"; echo "    | want: … — $want_sum"; echo "    | got:  $sumline"; failcount=$((failcount+1))
+fi
+
+# (c) …and a DENOMINATOR-FREE manifest-match count must never reach the summary again, on any tree —
+# the same regex guard #1506 put on `byte-identical=`, which is the count this one was left behind by.
+if printf '%s' "$sumline" | grep -qE 'manifest-matched=[0-9]+([^0-9/]|$)'; then
+  echo "FAIL  summary printed a denominator-free manifest-match count — #1506's defect, one check over"; echo "    | $sumline"; failcount=$((failcount+1))
+else
+  echo "PASS  no denominator-free manifest-match count can reach the summary"; pass=$((pass+1))
+fi
+
+# (d) THE PER-ROOT DECISION, ASSERTED AS THE FAIL-OPEN IT PREVENTS. Two roots match the manifest and the
+# third has DRIFTED. Check 3 used to digest the first PRESENT root as representative of the id — and
+# here that root is one of the clean ones, so a representative-root check reports no drift AT ALL and
+# `.agents` is invisible. The library returns `HashMismatchRoots=[".agents"]`. This is #266's family
+# again: a check that was not made, rendered as a check that passed. Measured against the real library
+# in tests/skill-union/skillmirror.fixtures.json (vector `divergent-and-the-REFERENCE-root-is-the-clean-one`).
+REFCLEAN="$WORK/ref-root-clean"; build_good "$REFCLEAN"
+printf '# alpha skill DRIFTED\n' > "$REFCLEAN/.agents/skills/alpha/SKILL.md"
+rc=0; bash "$ASSERT" --product "$REFCLEAN" --roots "$ROOTS" --manifest "$MANIFEST" >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 1 ] \
+   && grep -q "::error::\[divergent\] skill 'alpha'" "$WORK/out" \
+   && grep -q "::error::\[drifted\] skill 'alpha' SKILL.md digest != manifest .* in root(s): .agents/skills=" "$WORK/out" \
+   && ! grep -q "in root(s): .claude/skills" "$WORK/out"; then
+  echo "PASS  (expected [divergent]+[drifted]) a drift in a NON-reference root is caught and named (pre-fix: reported nothing)"; pass=$((pass+1))
+else
+  echo "FAIL  per-root digest: a drift outside the reference root must still be found and named (rc=$rc)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# (e) …and the converse, which is the half a "report more drifts" change would break: a partition whose
+# present copies DO match the manifest must emit NO [drifted] at all. Independence must not become
+# manufacture — the same discipline as "a byte-identical partition is [partitioned], never [divergent]".
+PARTOK="$WORK/partitioned-but-matching"; build_good "$PARTOK"
+rm -rf "$PARTOK/.agents/skills/beta"
+rc=0; bash "$ASSERT" --product "$PARTOK" --roots "$ROOTS" --manifest "$MANIFEST" >"$WORK/out" 2>&1 || rc=$?
+if [ "$rc" -eq 1 ] && grep -q "::error::\[partitioned\] skill 'beta'" "$WORK/out" \
+   && ! grep -q '\[drifted\]' "$WORK/out" && ! grep -q '\[divergent\]' "$WORK/out"; then
+  echo "PASS  (expected [partitioned] only) a partition of manifest-MATCHING copies manufactures no [drifted]"; pass=$((pass+1))
+else
+  echo "FAIL  a partition of matching copies must not manufacture a drift (rc=$rc)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# (f) A declared id with NEITHER a `files` array NOR a `sha256` has nothing to compare against, and must
+# be counted apart rather than folded into `manifest-matched`. "Nothing to compare" must not render as
+# "compared, and matching" — the #266 substitution #1506 closed for byte-identity, closed here too.
+NOREF="$WORK/manifest-no-reference"; build_good "$NOREF"
+MAN_NOREF="$WORK/man-no-reference.json"
+cat > "$MAN_NOREF" <<EOF
+{ "skills": [
+  { "id": "alpha", "scope": "process", "sha256": "$(digest "$NOREF/.claude/skills/alpha")" },
+  { "id": "beta",  "scope": "product", "sha256": "" }
+] }
+EOF
+rc=0; bash "$ASSERT" --product "$NOREF" --roots "$ROOTS" --manifest "$MAN_NOREF" >"$WORK/out" 2>&1 || rc=$?
+sumline="$(grep -m1 'skill(s) —' "$WORK/out" || true)"
+if [ "$rc" -eq 0 ] && printf '%s' "$sumline" | grep -q 'manifest-matched=1/1 manifest-no-reference=1'; then
+  echo "PASS  a declared id with no reference digest counts as no-reference, never as manifest-matched"; pass=$((pass+1))
+else
+  echo "FAIL  no-reference accounting (rc=$rc)"; echo "    | got:  $sumline"; failcount=$((failcount+1))
+fi
+
+# (g) THE v2 ARM IS PER-ROOT TOO, AND ITS PER-ROOT STATE MUST NOT LEAK BETWEEN ROOTS. The declared-file
+# table is consumed destructively (each matched path is `unset` as it is found), so the roots after the
+# first see a copy, not the original. Nothing in the suite proved that: every other v2 fixture applies
+# its defect to EVERY root, so a table that leaked would produce the same verdict and pass. Here exactly
+# ONE root drifts. Two things are asserted, and the second is the leak:
+#   * the extra file is reported against `.agents/skills` BY NAME — per-root, not "somewhere in the id";
+#   * the whole run emits EXACTLY ONE `[drifted]` line for the id, so the two clean roots said nothing.
+#
+# THE TOTAL IS THE ASSERTION, and the first draft of this leg got it wrong in a way worth recording. It
+# counted `is missing declared file` lines, reasoning that an emptied table would report the declared
+# files as missing. A mutation test (sharing the table instead of copying it) said otherwise: the walk
+# consumes the table on the FIRST root, so the later roots find their real files UNDECLARED and report
+# `has extra undeclared file` — a different message entirely, and the leg passed over the live defect.
+# Counting every diagnostic for the id closes both symptoms and any third one.
+V2ONEROOT="$WORK/v2-one-root-drift"; build_good "$V2ONEROOT"
+printf 'undeclared\n' > "$V2ONEROOT/.agents/skills/alpha/extra.txt"
+rc=0; bash "$ASSERT" --product "$V2ONEROOT" --roots "$ROOTS" --manifest "$V2_MANIFEST" >"$WORK/out" 2>&1 || rc=$?
+extra_n="$(grep -c "::error::\[drifted\] skill 'alpha' in root '.agents/skills' has extra undeclared file 'extra.txt'" "$WORK/out" || true)"
+alpha_drift_n="$(grep -c "::error::\[drifted\] skill 'alpha' " "$WORK/out" || true)"
+if [ "$rc" -eq 1 ] && [ "$extra_n" -eq 1 ] && [ "$alpha_drift_n" -eq 1 ]; then
+  echo "PASS  v2 per-root: only the drifting root is named, and the clean roots say nothing (no table leak)"; pass=$((pass+1))
+else
+  echo "FAIL  v2 per-root (rc=$rc, extra-in-agents=$extra_n, total [drifted] for alpha=$alpha_drift_n, want 1/1)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
+# (h) …and a MANIFEST-level fault is reported ONCE, not once per root. An unsafe declared path is a
+# property of the manifest, not of a tree, and printing it three times would be the same category error
+# this change fixes, pointed the other way: a per-id fact dressed as a per-root finding.
+UNSAFE="$WORK/v2-unsafe-path"; build_good "$UNSAFE"
+MAN_UNSAFE="$WORK/man-unsafe.json"
+cat > "$MAN_UNSAFE" <<EOF
+{ "schemaVersion": 2, "skills": [
+  { "id": "alpha", "sha256": "$alpha_skill", "files": [
+    { "path": "SKILL.md", "sha256": "$alpha_skill", "executable": false },
+    { "path": "references/notes.md", "sha256": "$alpha_ref", "executable": false },
+    { "path": "../escape.md", "sha256": "$alpha_ref", "executable": false }
+  ] },
+  { "id": "beta", "sha256": "$beta_skill", "files": [
+    { "path": "SKILL.md", "sha256": "$beta_skill", "executable": false },
+    { "path": "references/notes.md", "sha256": "$beta_ref", "executable": false }
+  ] }
+] }
+EOF
+rc=0; bash "$ASSERT" --product "$UNSAFE" --roots "$ROOTS" --manifest "$MAN_UNSAFE" >"$WORK/out" 2>&1 || rc=$?
+unsafe_n="$(grep -c "manifest contains unsafe file path" "$WORK/out" || true)"
+if [ "$rc" -eq 1 ] && [ "$unsafe_n" -eq 1 ]; then
+  echo "PASS  a manifest-level unsafe path is reported ONCE, not once per root"; pass=$((pass+1))
+else
+  echo "FAIL  unsafe-path reporting (rc=$rc, lines=$unsafe_n, want exactly 1)"; sed 's/^/    | /' "$WORK/out"; failcount=$((failcount+1))
+fi
+
 # --- 5. dangling: an extra skill present + identical in EVERY root but not declared by the
 #        manifest → FAIL (exercises the [dangling] branch, not the earlier partition check) ---
 DANG="$WORK/dangling"; build_good "$DANG"
@@ -651,6 +808,22 @@ if bash "$HERE/conformance.sh"; then
   echo "PASS  (cross-impl conformance) shell eval == normalize_when round-trip across the fixture table"; pass=$((pass+1))
 else
   echo "FAIL  materializes-when cross-impl conformance diverged (see above)"; failcount=$((failcount+1))
+fi
+
+# --- cross-impl conformance against Fsgg.SkillMirror (#120, .github#1513) -----------------------
+# #120 settled that `Fsgg.SkillMirror` is ADR-0014's ONE implementation and that this shell assertion
+# FOLLOWS it. NOTHING ENFORCED THAT SENTENCE, and the two diverged three times — #1506 twice, #1513 once
+# — each found by a person reading the code after it had misdirected real work. `verify` returns THREE
+# INDEPENDENT FACTS on one record (`MissingRoots`, `Divergent`, `HashMismatchRoots`), so a follower that
+# computes them in a chain can only report a prefix of them, and no single-fact fixture notices.
+# skillmirror-conformance.sh drives a SHARED VECTOR TABLE whose expectations were MEASURED by running
+# the library's own source (skillmirror-oracle.sh), and compares each fact independently. Delegated to
+# its own harness, folded in here so CI's single entrypoint runs it — the #398 arrangement exactly.
+echo "--- Fsgg.SkillMirror three-facts conformance (#120, .github#1513) ---"
+if bash "$HERE/skillmirror-conformance.sh"; then
+  echo "PASS  (cross-impl conformance) the shell reports all three of SkillMirror.verify's facts, per root"; pass=$((pass+1))
+else
+  echo "FAIL  shell vs Fsgg.SkillMirror three-facts conformance diverged (see above)"; failcount=$((failcount+1))
 fi
 
 echo "--- skill guidance current-truth regression (.github#1410) ---"

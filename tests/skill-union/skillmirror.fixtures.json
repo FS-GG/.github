@@ -1,0 +1,245 @@
+{
+  "_comment": [
+    "SHARED VECTOR TABLE pinning scripts/skill-union-assert.sh against Fsgg.SkillMirror.verify —",
+    "FS-GG/.github#1513, the #398 pattern applied to the second unpinned two-implementation pair.",
+    "",
+    "#120 settled that Fsgg.SkillMirror (FS.GG.Contracts) is ADR-0014's ONE implementation and that the",
+    "shell assertion FOLLOWS it. Nothing enforced that claim, and the two diverged three times: the shell",
+    "short-circuited check 1 past check 2 (#1506), counted byte-identity without a denominator (#1506),",
+    "and short-circuited checks 1-2 past check 3 (#1513). Each was found by a person reading the code,",
+    "after it had already misdirected real work.",
+    "",
+    "verify() returns THREE INDEPENDENT FACTS on one SkillDrift record — MissingRoots, Divergent,",
+    "HashMismatchRoots — and every vector below states all three, so a shell that can only produce a",
+    "SUBSET of them fails a gate instead of being noticed two issues later.",
+    "",
+    "`library` is MEASURED, not transcribed: skillmirror-oracle.sh #loads the library's own source and",
+    "runs verify() over these exact vectors. `shell` is what scripts/skill-union-assert.sh must report.",
+    "A vector with a `divergence` block is an INTENTIONAL difference between the two implementations, and",
+    "it is asserted in BOTH directions (the shell must match `shell`, and `shell` must differ from",
+    "`library`) so a documented difference can neither vanish nor silently grow."
+  ],
+
+  "derivedFrom": {
+    "library": "Fsgg.SkillMirror.verify (FS.GG.Contracts)",
+    "repo": "FS-GG/FS.GG.SDD",
+    "path": "src/FS.GG.Contracts/SkillMirror.fs",
+    "commit": "a066e0bc433233f6c82f02690bcb3ac06f5c2d0e",
+    "skillMirrorFsSha256": "b1c7e94d0fa6a1cc8c7ff7e9aa3043cd570632425d3f76bb85982e0ee82afeed",
+    "derivedOn": "2026-07-27",
+    "howToRedrive": "bash tests/skill-union/skillmirror-oracle.sh --lib <checkout>/src/FS.GG.Contracts",
+    "residualGap": [
+      "This block records WHICH library revision the `library` column was measured against. Re-deriving",
+      "is a command, and a maintainer holding the library can run it as a check. What nothing here does",
+      "is NOTICE a future library change on its own: this repo's CI holds neither the source nor the",
+      "package, so the conformance leg proves shell==table, and the table proves table==library ONLY at",
+      "the commit named above. That residual gap is stated rather than implied, and is tracked as an",
+      "issue — see docs/coordination/skill-union-assertion.md, 'What pins the alignment claim'."
+    ]
+  },
+
+  "bodies": {
+    "_comment": "Named once so a vector's `bodies` map and its `sha256` cannot drift apart by a typo.",
+    "B1": "# beta skill\n",
+    "B2": "# beta skill DRIFTED\n",
+    "B3": "# beta skill THIRD\n",
+    "B1_CRLF": "# beta skill\r\n"
+  },
+
+  "digests": {
+    "B1": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1",
+    "B2": "6c68a42806baf2ed8b15685be07eb94a52715cf15f0836b85ef55b0444a92c08",
+    "B3": "6b685d80f9902297bba77139d571fe495bb603adf339b28d0909b36d9a490ba1",
+    "B1_CRLF_RAW": "ad7b23affae5627b789f0344349e614a91210750cd4fc5a777aa1b944a960b2b"
+  },
+
+  "fixtures": [
+    {
+      "name": "whole-and-coherent-and-matching",
+      "note": "The all-clean case. verify() returns NOTHING for it, so all three facts are empty.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\n",
+        ".codex/skills": "# beta skill\n",
+        ".agents/skills": "# beta skill\n"
+      },
+      "sha256": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1",
+      "library": { "missingRoots": [], "divergent": false, "hashMismatchRoots": [] },
+      "shell": { "missingRoots": [], "divergent": false, "hashMismatchRoots": [] }
+    },
+    {
+      "name": "whole-and-coherent-but-digest-mismatched",
+      "note": "Every root holds the same body and none of them matches the manifest. HashMismatchRoots names EVERY root, not one representative — the per-root shape this vector exists to pin.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\n",
+        ".codex/skills": "# beta skill\n",
+        ".agents/skills": "# beta skill\n"
+      },
+      "sha256": "6c68a42806baf2ed8b15685be07eb94a52715cf15f0836b85ef55b0444a92c08",
+      "library": {
+        "missingRoots": [],
+        "divergent": false,
+        "hashMismatchRoots": [".claude/skills", ".codex/skills", ".agents/skills"]
+      },
+      "shell": {
+        "missingRoots": [],
+        "divergent": false,
+        "hashMismatchRoots": [".claude/skills", ".codex/skills", ".agents/skills"]
+      }
+    },
+    {
+      "name": "partitioned-but-matching",
+      "note": "A partition of copies that DO match the manifest. The digest fact must stay empty — a partition may not manufacture a drift, which is the #1506 lesson pointed the other way.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\n",
+        ".codex/skills": "# beta skill\n"
+      },
+      "sha256": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1",
+      "library": { "missingRoots": [".agents/skills"], "divergent": false, "hashMismatchRoots": [] },
+      "shell": { "missingRoots": [".agents/skills"], "divergent": false, "hashMismatchRoots": [] }
+    },
+    {
+      "name": "partitioned-AND-digest-mismatched",
+      "note": "THE #1513 DEFECT, measured on main at 22461b4: an id that is BOTH partitioned AND digest-mismatched. The shell reported only [partitioned]; the library returns both facts on the same record. This is the vector that fails against the pre-fix script.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\n",
+        ".codex/skills": "# beta skill\n"
+      },
+      "sha256": "6c68a42806baf2ed8b15685be07eb94a52715cf15f0836b85ef55b0444a92c08",
+      "library": {
+        "missingRoots": [".agents/skills"],
+        "divergent": false,
+        "hashMismatchRoots": [".claude/skills", ".codex/skills"]
+      },
+      "shell": {
+        "missingRoots": [".agents/skills"],
+        "divergent": false,
+        "hashMismatchRoots": [".claude/skills", ".codex/skills"]
+      }
+    },
+    {
+      "name": "partitioned-AND-divergent-AND-digest-mismatched",
+      "note": "All three facts true at once, which no short-circuiting implementation can express. Both present copies differ from each other and from the manifest.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\n",
+        ".codex/skills": "# beta skill DRIFTED\n"
+      },
+      "sha256": "6b685d80f9902297bba77139d571fe495bb603adf339b28d0909b36d9a490ba1",
+      "library": {
+        "missingRoots": [".agents/skills"],
+        "divergent": true,
+        "hashMismatchRoots": [".claude/skills", ".codex/skills"]
+      },
+      "shell": {
+        "missingRoots": [".agents/skills"],
+        "divergent": true,
+        "hashMismatchRoots": [".claude/skills", ".codex/skills"]
+      }
+    },
+    {
+      "name": "divergent-and-the-REFERENCE-root-is-the-clean-one",
+      "note": "THE VECTOR THAT DECIDES per-root vs representative-root, and it decides it as a FAIL-OPEN. Two roots match the manifest and the third has drifted. A digest taken from the first present root (.claude) matches, so a representative-root check reports NO mismatch at all and .agents' drift is invisible. HashMismatchRoots names .agents. This is #266's shape: a check that was not made, rendered as a check that passed.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\n",
+        ".codex/skills": "# beta skill\n",
+        ".agents/skills": "# beta skill DRIFTED\n"
+      },
+      "sha256": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1",
+      "library": { "missingRoots": [], "divergent": true, "hashMismatchRoots": [".agents/skills"] },
+      "shell": { "missingRoots": [], "divergent": true, "hashMismatchRoots": [".agents/skills"] }
+    },
+    {
+      "name": "divergent-and-the-REFERENCE-root-is-the-drifted-one",
+      "note": "The same tree with the drift moved onto the reference root. A representative-root check gets the right VERDICT here by luck and still cannot say WHICH root drifted — and it is the same code path that fails open in the vector above.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill DRIFTED\n",
+        ".codex/skills": "# beta skill\n",
+        ".agents/skills": "# beta skill\n"
+      },
+      "sha256": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1",
+      "library": { "missingRoots": [], "divergent": true, "hashMismatchRoots": [".claude/skills"] },
+      "shell": { "missingRoots": [], "divergent": true, "hashMismatchRoots": [".claude/skills"] }
+    },
+    {
+      "name": "no-reference-digest-skips-the-hash-fact-only",
+      "note": "An empty Sha256 means 'no reference digest' (SkillMirror.fsi, ExpectedSkill). The hash fact is skipped; presence and cross-root identity still hold. Pinned so a blank digest can never be read as a passing digest.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\n",
+        ".codex/skills": "# beta skill DRIFTED\n"
+      },
+      "sha256": "",
+      "library": { "missingRoots": [".agents/skills"], "divergent": true, "hashMismatchRoots": [] },
+      "shell": { "missingRoots": [".agents/skills"], "divergent": true, "hashMismatchRoots": [] }
+    },
+
+    {
+      "name": "KNOWN-DIVERGENCE-crlf-body-against-an-lf-digest",
+      "note": "SkillMirror.sha256 replaces CRLF with LF BEFORE hashing (feature 070, so an LF-authored body does not spuriously drift on a Windows checkout). The shell's skill_digest does NOT, and neither does the Python registry checker's canonical_digest — two of the three implementations agree and the library is the odd one out. The shell therefore reports a drift the library does not. It fails CLOSED (a spurious [drifted], never a missed one), which is why this vector pins the difference rather than changing one implementation of three inside a fixture-scoped item.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {
+        ".claude/skills": "# beta skill\r\n",
+        ".codex/skills": "# beta skill\r\n",
+        ".agents/skills": "# beta skill\r\n"
+      },
+      "sha256": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1",
+      "library": { "missingRoots": [], "divergent": false, "hashMismatchRoots": [] },
+      "shell": {
+        "missingRoots": [],
+        "divergent": false,
+        "hashMismatchRoots": [".claude/skills", ".codex/skills", ".agents/skills"]
+      },
+      "divergence": {
+        "fact": "hashMismatchRoots",
+        "direction": "shell is STRICTER (fails closed)",
+        "why": "SkillMirror.sha256 CRLF-normalizes; skill_digest and fsgg-skill-registry-check's canonical_digest do not.",
+        "decision": "documented and pinned here, not silently aligned — changing one of three implementations needs an org decision, filed as a follow-up."
+      }
+    },
+    {
+      "name": "KNOWN-DIVERGENCE-declared-but-absent-from-every-root",
+      "note": "verify() iterates the EXPECTED (manifest) set, so an id materialized nowhere is drift with MissingRoots = every root. The shell iterates the ON-DISK union, so such an id is not a union member at all and reaches the manifest-to-disk sweep instead: without --params it is the superset catalog's legitimate 'declared-absent' (#120), and with --params and a true condition it is [missing] (ADR-0017). The two implementations answer different questions here and both are right; asserting it stops the difference being rediscovered as a bug.",
+      "id": "beta",
+      "scope": "product",
+      "roots": [".claude/skills", ".codex/skills", ".agents/skills"],
+      "bodies": {},
+      "sha256": "792155897165923589566c63e701f95bc2fd8050f5df66c86716a92d48a879d1",
+      "library": {
+        "missingRoots": [".claude/skills", ".codex/skills", ".agents/skills"],
+        "divergent": false,
+        "hashMismatchRoots": []
+      },
+      "shell": { "missingRoots": [], "divergent": false, "hashMismatchRoots": [] },
+      "divergence": {
+        "fact": "missingRoots",
+        "direction": "shell is LOOSER, by design (#120 superset-catalog semantics)",
+        "why": "The manifest is an upper bound: emission is lifecycle/profile-conditioned, so declared-and-absent-everywhere is legitimate without --params. ADR-0017's --params turns it into [missing] when the condition is true.",
+        "decision": "settled by #120 and ADR-0017; asserted here so it stays a decision rather than an accident."
+      }
+    }
+  ]
+}
