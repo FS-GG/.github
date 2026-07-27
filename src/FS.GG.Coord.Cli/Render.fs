@@ -115,6 +115,61 @@ module Render =
           Paths: string list
           Collisions: PathCollision list }
 
+    /// HOW ONE MECHANICAL REPAIR WENT under `reconcile --apply` (.github#1524).
+    ///
+    /// THE WIRE WORDS ARE `renderClaimReceiptJson`'s, NOT the human line's. `ClaimReceipt.StatusWrite`
+    /// already names `Board.Written`/`Board.Deferred`/`Board.NotOnBoard` as `written`/`deferred`/
+    /// `not-on-board`, and those are the same three cases of the same `Board.WriteOutcome`, reported by the
+    /// same CLI, about the same kind of act — a Status write this process just attempted. `reconcile`'s
+    /// HUMAN line says `applied` and `queued`; minting those as wire words too would give one tool two
+    /// names for one fact, which is a dialect rather than a contract. So the human form keeps its words and
+    /// the machine form reuses the ones already on the wire.
+    ///
+    /// `Deferred` is the case that matters most and the reason .github#1524 was filed: it is a board write
+    /// QUEUED against an exhausted budget, and NOTHING replays it for you. It is a distinct case of a
+    /// closed union — never a substring a consumer greps a sentence for.
+    ///
+    /// `Reaped` is `STALE-CLAIM`, whose remedy is not a field write at all: `reconcile` re-enters its own
+    /// `reap` verb once per affected repo. So this outcome is HONESTLY per-REPO — it says the reap pass
+    /// covering this item exited green, not that this item's marker was read back collected. That is
+    /// weaker than `Written`, and it is named separately so a consumer cannot mistake it for the stronger
+    /// claim.
+    ///
+    /// `NotAttempted` is the apply phase never starting (no worker id resolved, the board did not
+    /// bootstrap). The rows still ship — a `--json` caller gets a document describing what was found and
+    /// explicitly not tried, rather than an empty stream it cannot parse.
+    type ReconcileOutcome =
+        | Written
+        | Deferred
+        | NotOnBoard
+        | Reaped
+        | NotAttempted of reason: string
+        | Failed of reason: string
+
+    let reconcileOutcomeName (outcome: ReconcileOutcome) =
+        match outcome with
+        | Written -> "written"
+        | Deferred -> "deferred"
+        | NotOnBoard -> "not-on-board"
+        | Reaped -> "reaped"
+        | NotAttempted _ -> "not-attempted"
+        | Failed _ -> "failed"
+
+    /// ONE row of `reconcile --json` — a mechanical finding, and (under `--apply`) how repairing it went.
+    type ReconcileRow =
+        { Id: string
+          Rule: string
+          Subject: Ref
+          Size: string
+          Remedy: string
+          Statement: string
+          /// The field this repair sets and the value it sets it to — `None` for `STALE-CLAIM`, whose
+          /// remedy is a marker collection delegated to `reap`, not a field write. ONE option over the
+          /// PAIR, so "which field" and "which value" cannot be present independently of each other.
+          Write: (string * string) option
+          /// `None` on a DRY RUN, where nothing was attempted and therefore nothing is known.
+          Outcome: ReconcileOutcome option }
+
     /// `ready --json` — THE MACHINE CONTRACT a reconciler (`/check-board`) and `next` read, an array of
     /// board rows. The field set is bash's `board_items` projection, the fields a consumer keys on: the
     /// `number`/`repo` that name the item, the board `status` (null when the column is unset — a modelled
@@ -305,6 +360,69 @@ module Render =
         writeOpt "note" result.Note
         writeOpt "reason" result.Reason
         w.WriteEndObject()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    /// `reconcile --json` / `reconcile --apply --json` (.github#1524) — the array of mechanical findings,
+    /// and under `--apply` how each repair went.
+    ///
+    /// **THE FIRST SIX KEYS ARE IN ALPHABETICAL ORDER, AND THAT IS LOAD-BEARING.** This projection used to
+    /// be `JsonSerializer.Serialize` over an F# ANONYMOUS RECORD, and the compiler sorts an anonymous
+    /// record's fields alphabetically — so the bytes every existing consumer parses are
+    /// `id,remedy,rule,size,statement,subject`, NOT the `id,rule,subject,size,remedy,statement` its source
+    /// literal read as. Rewriting this as a real `Utf8JsonWriter` in the order a human would naturally
+    /// choose would have silently rewritten the wire contract. `ApplicationServiceTests` pins these bytes.
+    /// Do not "tidy" this order.
+    ///
+    /// `includeOutcome` is `--apply`, and it is a DOCUMENT-level decision rather than a per-row one, on
+    /// `renderWhoJson`'s `includeWorktree` precedent (#959): the dry-run shape stays byte-identical, and an
+    /// apply run cannot emit a ragged array where some rows carry the outcome and others do not.
+    ///
+    /// The four appended keys are exactly the facts `--apply` ADDS — what was attempted (`field`/`value`)
+    /// and how it went (`outcome`/`error`). Identity facts are NOT re-spelled here: `subject` already IS
+    /// this row's ref, and a second key carrying the same string would be one fact with two names.
+    let renderReconcileJson (includeOutcome: bool) (rows: ReconcileRow list) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+
+        w.WriteStartArray()
+
+        for r in rows do
+            w.WriteStartObject()
+
+            // Alphabetical — see above. This is the pre-existing wire order, reproduced deliberately.
+            w.WriteString("id", r.Id)
+            w.WriteString("remedy", r.Remedy)
+            w.WriteString("rule", r.Rule)
+            w.WriteString("size", r.Size)
+            w.WriteString("statement", r.Statement)
+            w.WriteString("subject", r.Subject.Short)
+
+            if includeOutcome then
+                match r.Write with
+                | Some(field, value) ->
+                    w.WriteString("field", field)
+                    w.WriteString("value", value)
+                // `STALE-CLAIM` sets no field. Null is the modelled fact (#437's argument), not an omission.
+                | None ->
+                    w.WriteNull("field")
+                    w.WriteNull("value")
+
+                match r.Outcome with
+                | Some outcome -> w.WriteString("outcome", reconcileOutcomeName outcome)
+                | None -> w.WriteNull("outcome")
+
+                // The reason rides WITH the outcome it belongs to, derived from the same union case, so a
+                // consumer never has to pair a failure with an explanation off a second stream — which is
+                // the whole defect .github#1524 and .github#1517 are the two halves of.
+                match r.Outcome with
+                | Some(NotAttempted reason)
+                | Some(Failed reason) -> w.WriteString("error", reason)
+                | _ -> w.WriteNull("error")
+
+            w.WriteEndObject()
+
+        w.WriteEndArray()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())
 

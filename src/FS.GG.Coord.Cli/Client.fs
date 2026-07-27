@@ -775,19 +775,41 @@ module Client =
                     | Chore.BlockerCleared _ -> "Status=Ready"
                     | Chore.StatusNotBlocked _ -> "Status=Blocked"
 
-                match opts.Render with
-                | Json ->
-                    let rows =
-                        chores
-                        |> List.map (fun chore ->
-                            {| id = chore.Id
-                               rule = chore.Kind.RuleId
-                               subject = chore.Subject.Short
-                               size = chore.Size.Label
-                               remedy = target chore
-                               statement = chore.Statement |})
+                // The field write a chore implies — the SINGLE source for both the write this phase
+                // performs and the `field`/`value` the receipt reports, so the document cannot describe a
+                // write other than the one attempted. `STALE-CLAIM` writes no field: its remedy is a marker
+                // collection, delegated to the `reap` verb below.
+                let write (chore: Chore.Chore) =
+                    match chore.Kind with
+                    | Chore.StaleClaim _ -> None
+                    | Chore.ClaimStatusLag _ -> Some("Status", "In progress")
+                    | Chore.ClosedIssueNotDone _ -> Some("Status", "Done")
+                    | Chore.BlockerCleared _ -> Some("Status", "Ready")
+                    | Chore.StatusNotBlocked _ -> Some("Status", "Blocked")
 
-                    printfn "%s" (JsonSerializer.Serialize rows)
+                let reconcileRow (chore: Chore.Chore) (outcome: ReconcileOutcome option) : ReconcileRow =
+                    { Id = chore.Id
+                      Rule = chore.Kind.RuleId
+                      Subject = chore.Subject
+                      Size = chore.Size.Label
+                      Remedy = target chore
+                      Statement = chore.Statement
+                      Write = write chore
+                      Outcome = outcome }
+
+                /// Emit the machine document, ONCE, and only under `--json`.
+                ///
+                /// .github#1524: this used to run HERE, before the apply phase — which is why the phase
+                /// below then printed its `applied`/`queued` lines past a document that had already ended.
+                /// The outcome is PART of the document, so the emit has to happen after the outcome exists.
+                /// Every exit from this handler now goes through this function exactly once.
+                let emitJson (rows: ReconcileRow list) (includeOutcome: bool) =
+                    match opts.Render with
+                    | Json -> printfn "%s" (renderReconcileJson includeOutcome rows)
+                    | Text -> ()
+
+                match opts.Render with
+                | Json -> ()
                 | Text ->
                     if List.isEmpty chores then
                         printfn "clean — no mechanical board repairs"
@@ -800,13 +822,28 @@ module Client =
                     printfn "judgement findings are report-only: scripts/fsgg-coord lint%s" (if opts.Repo.IsSome then " --repo " + opts.Repo.Value else "")
 
                 if not opts.Apply || List.isEmpty chores then
+                    // The DRY RUN, and the nothing-to-do apply. No outcome exists, so none is claimed: the
+                    // six-key rows here are byte-identical to what this verb has always emitted.
+                    emitJson (chores |> List.map (fun c -> reconcileRow c None)) false
                     ExitGreen
                 else
+                    // The apply phase could not START. A `--json` caller still gets a document — an empty
+                    // stream is not a parseable answer, and "found these, attempted none" is a real state
+                    // rather than a gap (#266: never let an unmade observation read as a clean one).
+                    let notAttempted (reason: string) =
+                        emitJson (chores |> List.map (fun c -> reconcileRow c (Some(NotAttempted reason)))) true
+
                     match worker opts, Board.bootstrapCached ctx.Transport ctx.Owner ctx.Title with
-                    | Error code, _ -> code
-                    | _, Error e -> fail e
+                    | Error code, _ ->
+                        notAttempted "no worker id resolved, so no board write could be attributed"
+                        code
+                    | _, Error e ->
+                        let code = fail e
+                        notAttempted $"the board could not be resolved: %s{Errors.explain e}"
+                        code
                     | Ok w, Ok board ->
                         let mutable failed = false
+                        let reapExit = Collections.Generic.Dictionary<string, int>()
 
                         // `reap` owns the marker CAS and its column-restore rule. Run it once per affected
                         // repo; the same fresh derivation means every additional stale marker it safely
@@ -853,45 +890,134 @@ module Client =
                             psi.ArgumentList.Add "--apply"
                             psi.ArgumentList.Add "--worker"
                             psi.ArgumentList.Add w.Id
+
+                            // .github#1524, THE THIRD LEAK — and the one the filed root cause did not name.
+                            //
+                            // This child INHERITS our stdout, and `reap --apply` is not quiet on it: it
+                            // prints `reaped <ref> worker <w>` and its column-restore lines there. So under
+                            // `--json` a STALE-CLAIM finding put a whole second program's prose into the
+                            // middle of our document — worse than the two `printfn`s below, because it
+                            // arrives from another process at a moment we do not control.
+                            //
+                            // Under `--json` we capture it and forward it to STDERR, where this CLI already
+                            // puts diagnostics: the operator detail is not lost, and stdout stays one
+                            // document. Under `--text` the child keeps writing straight through to our
+                            // stdout, which is what makes the human projection byte-identical.
+                            psi.RedirectStandardOutput <- (opts.Render = Json)
+
                             use child = Process.Start psi
+
+                            // Drain BEFORE waiting. A redirected pipe that fills while we block in
+                            // `WaitForExit` deadlocks both processes.
+                            if opts.Render = Json then
+                                let inherited = child.StandardOutput.ReadToEnd()
+
+                                for line in inherited.Split('\n') do
+                                    let line = line.TrimEnd '\r'
+
+                                    if not (String.IsNullOrWhiteSpace line) then
+                                        eprint $"fsgg-coord-engine: reconcile: reap: %s{line}"
+
                             child.WaitForExit()
+                            reapExit[repo] <- child.ExitCode
 
                             if child.ExitCode <> ExitGreen then failed <- true)
 
-                        for chore in chores do
-                            let status =
-                                match chore.Kind with
-                                | Chore.StaleClaim _ -> None
-                                | Chore.ClaimStatusLag _ -> Some "In progress"
-                                | Chore.ClosedIssueNotDone _ -> Some "Done"
-                                | Chore.BlockerCleared _ -> Some "Ready"
-                                | Chore.StatusNotBlocked _ -> Some "Blocked"
+                        let applied =
+                            [ for chore in chores do
+                                  match write chore with
+                                  | None ->
+                                      // `STALE-CLAIM` — no field write; the `reap` pass above owns it. Its
+                                      // outcome is that pass's exit code, per REPO, and it is reported as
+                                      // `reaped` rather than `written` precisely because it is the weaker
+                                      // observation. A repo with no recorded pass never happens (the pass
+                                      // is driven off these same chores), so an absent entry is honestly
+                                      // "not attempted" rather than a guess at success.
+                                      match reapExit.TryGetValue chore.Subject.Repo with
+                                      | true, code when code = ExitGreen -> reconcileRow chore (Some Reaped)
+                                      | true, code ->
+                                          reconcileRow
+                                              chore
+                                              (Some(
+                                                  Failed
+                                                      $"`reap --repo %s{chore.Subject.Repo} --apply` exited %d{code}"
+                                              ))
+                                      | _ ->
+                                          reconcileRow chore (Some(NotAttempted "no reap pass ran for this repo"))
+                                  | Some(field, value) ->
+                                      match
+                                          Board.boardWrite
+                                              ctx.Transport
+                                              board
+                                              chore.Subject.Owner
+                                              chore.Subject.Repo
+                                              chore.Subject.Number
+                                              field
+                                              (Board.Set value)
+                                              w.Id
+                                      with
+                                      // The two lines .github#1524 is about. They are the HUMAN projection
+                                      // and they are unchanged, byte for byte — every recipe reads them.
+                                      // Under `--json` the same two facts ride in the row instead, which is
+                                      // the whole fix: `opts.Render` was consulted for the report above and
+                                      // then ignored here, so the document ended and the prose kept going.
+                                      | Ok Board.Written ->
+                                          match opts.Render with
+                                          | Text -> printfn "applied  %s  Status=%s" chore.Subject.Short value
+                                          | Json -> ()
 
-                            match status with
-                            | None -> ()
-                            | Some value ->
-                                match
-                                    Board.boardWrite
-                                        ctx.Transport
-                                        board
-                                        chore.Subject.Owner
-                                        chore.Subject.Repo
-                                        chore.Subject.Number
-                                        "Status"
-                                        (Board.Set value)
-                                        w.Id
-                                with
-                                | Ok Board.Written -> printfn "applied  %s  Status=%s" chore.Subject.Short value
-                                | Ok Board.Deferred ->
-                                    printfn "queued   %s  Status=%s (run scripts/fsgg-coord flush)" chore.Subject.Short value
-                                | Ok Board.NotOnBoard ->
-                                    eprint $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} left the board before apply."
-                                    failed <- true
-                                | Error e ->
-                                    eprint
-                                        $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} failed: %s{Errors.explain e}"
+                                          reconcileRow chore (Some Written)
+                                      | Ok Board.Deferred ->
+                                          match opts.Render with
+                                          | Text ->
+                                              printfn
+                                                  "queued   %s  Status=%s (run scripts/fsgg-coord flush)"
+                                                  chore.Subject.Short
+                                                  value
+                                          | Json -> ()
 
-                                    failed <- true
+                                          reconcileRow chore (Some Deferred)
+                                      | Ok Board.NotOnBoard ->
+                                          eprint
+                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} left the board before apply."
+
+                                          failed <- true
+                                          reconcileRow chore (Some NotOnBoard)
+                                      | Error e ->
+                                          eprint
+                                              $"fsgg-coord-engine: reconcile: %s{chore.Subject.Short} Status=%s{value} failed: %s{Errors.explain e}"
+
+                                          failed <- true
+                                          reconcileRow chore (Some(Failed(Errors.explain e))) ]
+
+                        emitJson applied true
+
+                        // The DEFERRED writes, said out loud ONCE, on stderr, under `--json` only.
+                        //
+                        // The human form carries `(run scripts/fsgg-coord flush)` on each queued line; the
+                        // machine form carries the FACT as `outcome:"deferred"`, and a remedy sentence is
+                        // not a fact, so it does not belong in the document. But it must not simply
+                        // vanish: nothing replays a queued board write, and an operator who piped stdout
+                        // into a parser would otherwise be told nothing at all. stderr is where this CLI
+                        // already puts operator diagnostics (and where `repos-audit.sh` and friends put
+                        // theirs), so that is where the remedy goes.
+                        //
+                        // DERIVED from the rows just emitted, not counted alongside them — the #1517
+                        // lesson. The advisory and the document cannot disagree about how many writes
+                        // queued, because there is only one place that number is computed.
+                        match opts.Render with
+                        | Json ->
+                            let deferred =
+                                applied
+                                |> List.filter (fun r -> r.Outcome = Some Deferred)
+                                |> List.map (fun r -> r.Subject.Short)
+
+                            if not (List.isEmpty deferred) then
+                                let refs = String.concat ", " deferred
+
+                                eprint
+                                    $"fsgg-coord-engine: reconcile: %d{List.length deferred} board write(s) QUEUED against an exhausted budget (%s{refs}) — nothing replays them: run scripts/fsgg-coord flush."
+                        | Text -> ()
 
                         if failed then ExitError else ExitGreen
 
