@@ -73,6 +73,13 @@ module Render =
           PendingBoardWrites: int option
           Converged: bool }
 
+    /// `take --json`'s other outcome (.github#1525) — see the `.fsi` for why it is not a `ClaimReceipt`
+    /// with everything optional.
+    type NoItemReceipt =
+        { Worker: string
+          PassedOver: int
+          RepoAdvisory: string option }
+
     type LintFinding =
         { Code: string
           Severity: string
@@ -298,6 +305,42 @@ module Render =
         | Some n -> w.WriteNumber("pendingBoardWrites", n)
         | None -> w.WriteNull("pendingBoardWrites")
         w.WriteBoolean("converged", receipt.Converged)
+        w.WriteEndObject()
+        w.Flush()
+        Text.Encoding.UTF8.GetString(stream.ToArray())
+
+    /// `take --json`'s EMPTY arm (.github#1525) — a receipt for the outcome where nothing was claimed.
+    ///
+    /// THE FIRST FIVE KEYS ARE `renderClaimReceiptJson`'S, IN ITS ORDER, and that is deliberate rather
+    /// than decorative: `ref`, `repo` and `number` are the identity a consumer reads, and emitting them as
+    /// explicit `null` is what lets ONE parse handle both outcomes. `kind` sits where it sits in the
+    /// claimed receipt, so the key a caller branches on is in the same place in both documents. It is a
+    /// LITERAL here, not a field: `ClaimReceipt.Kind` varies (`claimed`/`adopted`) because two verbs share
+    /// that document, and this outcome has exactly one name. A field would be an invitation to mint a
+    /// second word for it.
+    ///
+    /// The shared keys stop there. The claimed receipt's remaining ones are read-backs of a mutation this
+    /// command did not make, and inventing `false`/`null` values for them would describe a claim that was
+    /// attempted and failed. Nothing was attempted.
+    ///
+    /// `passedOver` and `repoAdvisory` are the two facts this outcome has that the other does not, so they
+    /// come last, after the shared identity — a consumer reading both documents meets the common keys in
+    /// the same places and the divergence in one place.
+    let renderNoItemJson (receipt: NoItemReceipt) : string =
+        use stream = new MemoryStream()
+        use w = new Utf8JsonWriter(stream, JsonWriterOptions(Indented = false, SkipValidation = false))
+        w.WriteStartObject()
+        w.WriteNull "ref"
+        w.WriteNull "repo"
+        w.WriteNull "number"
+        w.WriteString("worker", receipt.Worker)
+        w.WriteString("kind", "none")
+        w.WriteNumber("passedOver", receipt.PassedOver)
+        // #979's advisory, in the document rather than only on stderr — `passedOver:0` is what a MISSPELT
+        // `--repo` looks like to a parser, and it is also what an empty board looks like.
+        match receipt.RepoAdvisory with
+        | Some a -> w.WriteString("repoAdvisory", a)
+        | None -> w.WriteNull "repoAdvisory"
         w.WriteEndObject()
         w.Flush()
         Text.Encoding.UTF8.GetString(stream.ToArray())

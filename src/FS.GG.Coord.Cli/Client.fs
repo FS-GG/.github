@@ -317,6 +317,29 @@ module Client =
                 eprint $"UNDETERMINED — %s{reason}"
                 Result.Error ExitNoVerdict
 
+    /// The candidates the scheduler LOOKED AT and refused. One spelling, because two call sites print this
+    /// list and a third reports its COUNT on the wire (`take --json`'s `passedOver`, .github#1525) — a
+    /// receipt whose number disagreed with the reasons printed beside it would be worse than no number.
+    let private passedOver (result: Batch.BatchResult) =
+        result.Decisions |> List.filter (fun d -> d.Result <> Schedulability.Startable)
+
+    /// THE `--json` STDERR SPLIT, shared by `batch --json` and `take --json` (.github#1525).
+    ///
+    /// stdout is the machine document; the "why nothing / why less" is stderr, exactly as bash splits them.
+    /// `take`'s empty arm needed the identical split, and a second copy of it is the thing that drifts
+    /// (#485) — the per-item reasons and #428's banner are ONE answer to "why did I get nothing", so the
+    /// two verbs must not be able to start giving different halves of it.
+    ///
+    /// NO `passed over:` HEADER. That header belongs to the human projection below; the JSON arm has never
+    /// printed it, and this is the extraction of what `batch --json` already emitted, not a reformat of it.
+    let private sayWhyNothing (leaseMinutes: int) (result: Batch.BatchResult) =
+        for d in passedOver result do
+            eprint $"  %s{Batch.explainDecision leaseMinutes d}"
+
+        // The starved-queue banner rides on stderr too (#428).
+        for line in Batch.starvedBanner leaseMinutes result do
+            eprint line
+
     let private printChosen (leaseMinutes: int) (result: Batch.BatchResult) =
         if List.isEmpty result.Chosen then
             printfn "nothing schedulable right now."
@@ -324,8 +347,7 @@ module Client =
             for item in result.Chosen do
                 printfn "  → %s" item.Ref.Short
 
-        let passed =
-            result.Decisions |> List.filter (fun d -> d.Result <> Schedulability.Startable)
+        let passed = passedOver result
 
         if not (List.isEmpty passed) then
             eprint "passed over:"
@@ -360,18 +382,10 @@ module Client =
                         |> String.concat ","
 
                     printfn "[%s]" ids
-                    // The skip reasons still go to stderr — a caller reads the array on stdout, the "why
-                    // nothing / why less" on stderr, exactly as bash does.
-                    let passed =
-                        result.Decisions |> List.filter (fun d -> d.Result <> Schedulability.Startable)
-
-                    for d in passed do
-                        eprint $"  %s{Batch.explainDecision opts.LeaseMinutes d}"
-
-                    // The starved-queue banner rides on stderr too (#428) — stdout is the machine array a
-                    // `take` parses, stderr the "why nothing", exactly as bash splits them.
-                    for line in Batch.starvedBanner opts.LeaseMinutes result do
-                        eprint line
+                    // The skip reasons and #428's banner go to stderr — a caller reads the array on stdout,
+                    // the "why nothing / why less" on stderr, exactly as bash does. `take --json` emits the
+                    // same split from the same helper (.github#1525).
+                    sayWhyNothing opts.LeaseMinutes result
                 | Text ->
                     if not (List.isEmpty result.Chosen) then
                         printfn "schedulable in parallel (%d):" (List.length result.Chosen)
@@ -2501,7 +2515,37 @@ module Client =
                         // candidate is blocked, claimed, overlapping, or undeclared" asserts causes we did not
                         // observe (case 41); over a starved queue half of them are false, which is the #440
                         // defect wearing a headline.
-                        printChosen opts.LeaseMinutes result
+                        //
+                        // .github#1525 — AND IT HONOURS `--json`, WHICH IS THE ONE ARM THIS VERB OWNS.
+                        // `take`'s success path delegates to `claim`, which has honoured `opts.Render`
+                        // since it was written; so `take --json` INHERITED a machine projection rather
+                        // than choosing one, and the arm nobody inherited escaped. The result was a
+                        // `--json` document that was JSON or prose depending on the fact the caller was
+                        // asking about — a projection that cannot describe its own outcome without the
+                        // exit code held beside it, which no other `--json` verb requires.
+                        //
+                        // EX_NONE IS NOT AN ERROR. It is a look that succeeded and found nothing, and the
+                        // recipe's documented response is to DIAGNOSE before idling. A driver deciding
+                        // that must be able to read the answer, so the empty outcome gets a receipt of its
+                        // own rather than an unparseable stream.
+                        match opts.Render with
+                        | Json ->
+                            printfn
+                                "%s"
+                                (Render.renderNoItemJson
+                                    { Worker = w.Id
+                                      PassedOver = List.length (passedOver result)
+                                      // #979's advisory rides IN the document too. `sayRepoAdvisory`
+                                      // above still prints it for the human; to a PARSER, a misspelt
+                                      // `--repo` and an empty board are the same `passedOver:0`, and
+                                      // this is the only place that can tell them apart.
+                                      RepoAdvisory = receipt.RepoAdvisory })
+
+                            // The reasons and #428's banner stay on stderr, from the same helper
+                            // `batch --json` uses — stdout is the document, stderr is the "why nothing".
+                            sayWhyNothing opts.LeaseMinutes result
+                        | Text -> printChosen opts.LeaseMinutes result
+
                         ExitNone
                     | item :: _ ->
                         // Claim the chosen item. `claim` re-reads and runs the CAS, so a stale scan cannot

@@ -354,11 +354,14 @@ EXIT CODES — the engine's own (the shim translates them for a caller that stil
         | Who -> Both Text
         | Budget -> Both Text
         | Claim -> Both Text
-        // `adopt` and `take` produce no stdout of their own — both delegate to `claim`, passing `opts`
-        // through, so `claim`'s receipt is theirs. CAVEAT, and it is a real one: `take`'s EMPTY-QUEUE arm
-        // prints prose regardless of `Render`, so `take --json` is honoured only when it actually claims
-        // something. That is a defect in the handler, not in this row — it is #1525, and this item's
-        // touch-set is the options surface, not `Client.fs`.
+        // `adopt` produces no stdout of its own — it delegates to `claim`, passing `opts` through, so
+        // `claim`'s receipt is its receipt.
+        //
+        // `take` delegated the same way and INHERITED the row rather than earning it: the one arm it owns,
+        // the empty queue, printed prose regardless of `Render`, so `take --json` was honoured only when it
+        // actually claimed something. `.github#1525` closed that in `Client.fs` — the empty arm now emits
+        // its own `kind:"none"` receipt — so the row is true of BOTH arms rather than of one, and this
+        // comment records a caveat that was real and is now discharged, not one still standing.
         | Adopt -> Both Text
         | Take -> Both Text
         | Widen -> Both Text // both reach the shared `updateTouchSet` (#1517)
